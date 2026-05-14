@@ -1,0 +1,42 @@
+[Unit]
+Description=CaptchaX Behavior Verification System
+Documentation=https://github.com/hjtpx/captchax
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=captchax
+Group=captchax
+WorkingDirectory=/opt/captchax
+
+Environment="GIN_MODE=release"
+Environment="TZ=Asia/Shanghai"
+
+ExecStart=/opt/captchax/captchax-server
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/captchax/logs /opt/captchax/config /var/run
+
+LogDirectory=/var/log/captchax
+LogsDirectory=/var/log/captchax
+LogsDirectoryMode=0755
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=captchax
+
+[Install]
+WantedBy=multi-user.target

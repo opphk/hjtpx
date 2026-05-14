@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptchaX SDK 使用示例</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f5f5f5;
+        }
+        .demo-section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        h2 {
+            margin-top: 0;
+            color: #262626;
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 12px;
+        }
+        .demo-btn {
+            padding: 12px 24px;
+            background: #1890ff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 12px;
+            margin-bottom: 12px;
+        }
+        .demo-btn:hover {
+            background: #096dd9;
+        }
+        .demo-btn:disabled {
+            background: #d9d9d9;
+            cursor: not-allowed;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .result {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .result.success {
+            background: #f6ffed;
+            border: 1px solid #b7eb8f;
+            color: #52c41a;
+        }
+        .result.error {
+            background: #fff2f0;
+            border: 1px solid #ffccc7;
+            color: #ff4d4f;
+        }
+        .result.info {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            color: #1890ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>CaptchaX SDK 使用示例</h1>
+
+    <div class="demo-section">
+        <h2>1. 基础使用</h2>
+        <p>点击按钮显示滑块验证码</p>
+        <button class="demo-btn" id="btn-slider">滑块验证</button>
+        <button class="demo-btn" id="btn-click">点选验证</button>
+        <button class="demo-btn" id="btn-rotate">旋转验证</button>
+        <div id="result-slider" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>2. Promise 方式</h2>
+        <pre>CaptchaX.verify({
+    type: 'slider',
+    container: '#captcha-container'
+}).then(function(result) {
+    console.log('验证成功:', result);
+    // 提交表单等操作
+}).catch(function(error) {
+    console.log('验证失败:', error);
+});</pre>
+        <button class="demo-btn" id="btn-promise">Promise 方式</button>
+        <div id="result-promise" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>3. 回调方式</h2>
+        <pre>CaptchaX.onSuccess(function(result) {
+    console.log('验证成功:', result.token);
+    document.getElementById('token').value = result.token;
+});
+
+CaptchaX.onError(function(error) {
+    console.log('验证失败:', error.error);
+});
+
+CaptchaX.verify({ type: 'click' });</pre>
+        <button class="demo-btn" id="btn-callback">回调方式</button>
+        <div id="token-display"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>4. 嵌入指定容器</h2>
+        <div id="inline-container" style="min-height: 320px; border: 1px dashed #d9d9d9; border-radius: 8px; padding: 20px;">
+            <p style="color: #8c8c8c;">点击按钮后验证码将显示在这里</p>
+        </div>
+        <br>
+        <button class="demo-btn" id="btn-inline">嵌入容器</button>
+    </div>
+
+    <div class="demo-section">
+        <h2>5. 自定义配置</h2>
+        <pre>CaptchaX.init({
+    serverUrl: 'https://your-captchax-server.com',
+    appId: 'your-app-id',
+    timeout: 10000,
+    retryAttempts: 3,
+    loadingText: '加载中...',
+    successText: '验证成功',
+    failText: '验证失败'
+});
+
+CaptchaX.verify({
+    type: 'slider',
+    theme: 'dark',
+    autoClose: true
+});</pre>
+        <button class="demo-btn" id="btn-config">自定义配置</button>
+    </div>
+
+    <div class="demo-section">
+        <h2>6. 完整表单示例</h2>
+        <form id="login-form" style="max-width: 400px;">
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px;">用户名</label>
+                <input type="text" name="username" style="width: 100%; padding: 10px; border: 1px solid #d9d9d9; border-radius: 6px;" required>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px;">密码</label>
+                <input type="password" name="password" style="width: 100%; padding: 10px; border: 1px solid #d9d9d9; border-radius: 6px;" required>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 8px;">验证码</label>
+                <input type="hidden" id="captcha-token" name="captcha_token">
+                <div id="form-captcha-container"></div>
+            </div>
+            <button type="submit" class="demo-btn">登录</button>
+        </form>
+    </div>
+
+    <script src="/static/captchax.js"></script>
+    <script>
+        CaptchaX.init({
+            serverUrl: window.location.origin,
+            timeout: 30000
+        });
+
+        CaptchaX.onSuccess(function(result) {
+            console.log('[CaptchaX] 验证成功:', result);
+            document.getElementById('token-display').innerHTML =
+                '<div class="result success">Token: ' + result.token + '</div>';
+        });
+
+        CaptchaX.onError(function(error) {
+            console.log('[CaptchaX] 验证失败:', error);
+        });
+
+        document.getElementById('btn-slider').onclick = function() {
+            CaptchaX.verify({ type: 'slider' }).then(function(result) {
+                document.getElementById('result-slider').style.display = 'block';
+                document.getElementById('result-slider').className = 'result success';
+                document.getElementById('result-slider').innerHTML = '验证成功! Token: ' + result.token;
+            }).catch(function(error) {
+                document.getElementById('result-slider').style.display = 'block';
+                document.getElementById('result-slider').className = 'result error';
+                document.getElementById('result-slider').innerHTML = '验证失败: ' + (error.error || '未知错误');
+            });
+        };
+
+        document.getElementById('btn-click').onclick = function() {
+            CaptchaX.verify({ type: 'click' });
+        };
+
+        document.getElementById('btn-rotate').onclick = function() {
+            CaptchaX.verify({ type: 'rotate' });
+        };
+
+        document.getElementById('btn-promise').onclick = function() {
+            CaptchaX.verify({ type: 'slider' }).then(function(result) {
+                document.getElementById('result-promise').style.display = 'block';
+                document.getElementById('result-promise').className = 'result success';
+                document.getElementById('result-promise').innerHTML = 'Promise 验证成功! Token: ' + result.token;
+            }).catch(function(error) {
+                document.getElementById('result-promise').style.display = 'block';
+                document.getElementById('result-promise').className = 'result error';
+                document.getElementById('result-promise').innerHTML = 'Promise 验证失败: ' + (error.error || '未知错误');
+            });
+        };
+
+        document.getElementById('btn-callback').onclick = function() {
+            CaptchaX.verify({ type: 'click' });
+        };
+
+        document.getElementById('btn-inline').onclick = function() {
+            CaptchaX.create({
+                type: 'slider',
+                container: '#inline-container'
+            });
+        };
+
+        document.getElementById('btn-config').onclick = function() {
+            CaptchaX.verify({
+                type: 'click',
+                theme: 'dark',
+                autoClose: true
+            });
+        };
+
+        document.getElementById('login-form').onsubmit = function(e) {
+            e.preventDefault();
+            var token = document.getElementById('captcha-token').value;
+            if (!token) {
+                CaptchaX.verify({
+                    type: 'slider',
+                    container: '#form-captcha-container'
+                }).then(function(result) {
+                    document.getElementById('captcha-token').value = result.token;
+                    alert('表单提交成功!\nToken: ' + result.token);
+                });
+            } else {
+                alert('表单提交成功!\nToken: ' + token);
+            }
+        };
+    </script>
+</body>
+</html>
