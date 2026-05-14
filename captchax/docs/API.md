@@ -3,9 +3,21 @@
 ## 基础信息
 
 - **基础URL**: `http://localhost:8080`
-- **API版本**: v1
+- **API版本**: v1, v2
 - **数据格式**: JSON
 - **字符编码**: UTF-8
+
+## 版本说明
+
+### v1 vs v2 差异
+
+| 功能 | v1 | v2 |
+|------|----|----|
+| 基础验证码生成/验证 | ✅ | ✅ |
+| 批量验证 | ❌ | ✅ |
+| 自定义验证场景 | ❌ | ✅ |
+| Webhook 回调 | ❌ | ✅ |
+| 响应缓存策略 | ❌ | ✅ |
 
 ## 通用响应格式
 
@@ -31,22 +43,47 @@
 
 ### 错误码说明
 
-| 错误码 | 说明 |
-|--------|------|
-| 200 | 成功 |
-| 400 | 请求参数错误 |
-| 401 | 未授权/认证失败 |
-| 404 | 资源不存在 |
-| 429 | 请求过于频繁（限流） |
-| 500 | 服务器内部错误 |
+| 错误码 | HTTP状态 | 说明 |
+|--------|----------|------|
+| 0 | 200 | 成功 |
+| 400 | 400 | 请求参数错误 |
+| 401 | 401 | 未授权/认证失败 |
+| 404 | 404 | 资源不存在 |
+| 409 | 409 | 重复请求 |
+| 429 | 429 | 请求过于频繁（限流） |
+| 500 | 500 | 服务器内部错误 |
 
 ---
 
-## 验证码 API
+## 通用请求头
+
+| 请求头 | 必填 | 说明 |
+|--------|------|------|
+| Content-Type | 是 | application/json |
+| X-Request-ID | 否 | 请求唯一标识，用于请求去重和追踪 |
+| X-Deduplication-ID | 否 | 去重标识，支持幂等操作 |
+| X-App-ID | 否 | 应用标识 |
+| Accept-Encoding | 否 | 支持 gzip, br 压缩 |
+
+## 通用响应头
+
+| 响应头 | 说明 |
+|--------|------|
+| X-Request-ID | 请求追踪标识 |
+| X-Deduplication-ID | 去重标识 |
+| X-Duplicate-Request | 是否为重复请求 (true/false) |
+| X-RateLimit-Limit | 速率限制上限 |
+| X-RateLimit-Remaining | 剩余请求次数 |
+| X-RateLimit-Reset | 限流重置时间戳 |
+| ETag | 资源标识，用于缓存验证 |
+| Cache-Control | 缓存控制策略 |
+| Content-Encoding | 响应编码 (gzip, br) |
+
+---
+
+## API v1
 
 ### 1. 生成滑块验证码
-
-生成滑块缺口验证码，用户需要拖动滑块到正确位置完成验证。
 
 **请求**
 
@@ -64,48 +101,19 @@ Content-Type: application/json
 | height | int | 否 | 图片高度（默认80） |
 | client_info | string | 否 | 客户端信息（用于风控） |
 
-**请求示例**
-
-```json
-{
-  "app_id": "my-app-001",
-  "width": 200,
-  "height": 80,
-  "client_info": "Mozilla/5.0..."
-}
-```
-
 **响应参数**
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| id | string | 验证码ID，用于后续验证 |
-| background_b64 | string | 背景图（Base64编码） |
-| slider_b64 | string | 滑块图（Base64编码） |
+| id | string | 验证码ID |
+| background_b64 | string | 背景图（Base64） |
+| slider_b64 | string | 滑块图（Base64） |
 | target_x | int | 目标位置X坐标 |
 | target_y | int | 目标位置Y坐标 |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "cap_abc123def456",
-    "background_b64": "data:image/png;base64,iVBORw0KGgo...",
-    "slider_b64": "data:image/png;base64,iVBORw0KGgo...",
-    "target_x": 156,
-    "target_y": 25
-  }
-}
-```
 
 ---
 
 ### 2. 验证滑块验证码
-
-验证用户拖动的滑块位置是否正确。
 
 **请求**
 
@@ -122,16 +130,6 @@ Content-Type: application/json
 | target_x | int | 是 | 用户拖动的X坐标 |
 | target_y | int | 否 | 用户拖动的Y坐标 |
 
-**请求示例**
-
-```json
-{
-  "captcha_id": "cap_abc123def456",
-  "target_x": 154,
-  "target_y": 25
-}
-```
-
 **响应参数**
 
 | 参数 | 类型 | 说明 |
@@ -139,24 +137,9 @@ Content-Type: application/json
 | success | bool | 验证是否成功 |
 | message | string | 验证结果描述 |
 
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "success": true,
-    "message": "验证通过"
-  }
-}
-```
-
 ---
 
 ### 3. 生成点选验证码
-
-生成图片点选验证码，用户需要按正确顺序点击指定字符。
 
 **请求**
 
@@ -171,17 +154,7 @@ Content-Type: application/json
 |------|------|------|------|
 | app_id | string | 是 | 应用标识 |
 | char_count | int | 否 | 需要点击的字符数量（默认4） |
-| client_info | string | 否 | 客户端信息（用于风控） |
-
-**请求示例**
-
-```json
-{
-  "app_id": "my-app-001",
-  "char_count": 4,
-  "client_info": "Mozilla/5.0..."
-}
-```
+| client_info | string | 否 | 客户端信息 |
 
 **响应参数**
 
@@ -192,31 +165,9 @@ Content-Type: application/json
 | target_chars | string[] | 需要点击的字符列表 |
 | char_positions | object[] | 字符位置信息 |
 
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "cap_xyz789ghi012",
-    "image": "data:image/png;base64,iVBORw0KGgo...",
-    "target_chars": ["中", "国", "天", "安"],
-    "char_positions": [
-      {"char": "中", "x": 45, "y": 30, "width": 20, "height": 25},
-      {"char": "国", "x": 120, "y": 25, "width": 20, "height": 25},
-      {"char": "天", "x": 80, "y": 55, "width": 20, "height": 25},
-      {"char": "安", "x": 160, "y": 50, "width": 20, "height": 25}
-    ]
-  }
-}
-```
-
 ---
 
 ### 4. 验证点选验证码
-
-验证用户点击的位置是否正确。
 
 **请求**
 
@@ -240,47 +191,9 @@ Content-Type: application/json
 | x | int | 点击的X坐标 |
 | y | int | 点击的Y坐标 |
 
-**请求示例**
-
-```json
-{
-  "captcha_id": "cap_xyz789ghi012",
-  "clicks": [
-    {"char": "中", "x": 45, "y": 32},
-    {"char": "国", "x": 122, "y": 28},
-    {"char": "天", "x": 82, "y": 57},
-    {"char": "安", "x": 162, "y": 52}
-  ]
-}
-```
-
-**响应参数**
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| success | bool | 验证是否成功 |
-| score | float | 匹配分数（0-1） |
-| message | string | 验证结果描述 |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "success": true,
-    "score": 0.95,
-    "message": "验证通过"
-  }
-}
-```
-
 ---
 
 ### 5. 生成拼图验证码
-
-生成拼图缺口验证码，类似滑块但使用拼图块。
 
 **请求**
 
@@ -294,9 +207,9 @@ Content-Type: application/json
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | app_id | string | 是 | 应用标识 |
-| width | int | 否 | 图片宽度（默认200） |
-| height | int | 否 | 图片高度（默认80） |
-| client_info | string | 否 | 客户端信息（用于风控） |
+| width | int | 否 | 图片宽度 |
+| height | int | 否 | 图片高度 |
+| client_info | string | 否 | 客户端信息 |
 
 **响应参数**
 
@@ -307,22 +220,6 @@ Content-Type: application/json
 | puzzle_b64 | string | 拼图块（Base64） |
 | target_x | int | 目标位置X坐标 |
 | target_y | int | 目标位置Y坐标 |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "id": "cap_puz456jkl789",
-    "background_b64": "data:image/png;base64,iVBORw0KGgo...",
-    "puzzle_b64": "data:image/png;base64,iVBORw0KGgo...",
-    "target_x": 150,
-    "target_y": 20
-  }
-}
-```
 
 ---
 
@@ -343,16 +240,364 @@ Content-Type: application/json
 | target_x | int | 是 | 用户放置的X坐标 |
 | target_y | int | 否 | 用户放置的Y坐标 |
 
+---
+
+## API v2
+
+### 验证码接口 (v2)
+
+v2 版本接口与 v1 类似，但增加了以下特性：
+- 支持 scenario_id 参数指定验证场景
+- 响应包含 difficulty 和 expires_in 字段
+- 验证结果自动触发 webhook 回调
+
+---
+
+### 1. 批量验证
+
+一次请求验证多个验证码。
+
+**请求**
+
+```http
+POST /api/v2/captcha/batch/verify
+Content-Type: application/json
+X-Deduplication-ID: <unique-id>
+```
+
+**请求参数**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| items | array | 是 | 验证项列表（最多100个） |
+
+**items 参数结构**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| captcha_id | string | 是 | 验证码ID |
+| type | string | 是 | 验证码类型 (slider/click/puzzle) |
+| target_x | int | 是 | X坐标 |
+| target_y | int | 否 | Y坐标 |
+| clicks | array | 否 | 点选验证码的点击位置 |
+
+**请求示例**
+
+```json
+{
+  "items": [
+    {
+      "captcha_id": "cap_123",
+      "type": "slider",
+      "target_x": 150,
+      "target_y": 25
+    },
+    {
+      "captcha_id": "cap_456",
+      "type": "click",
+      "clicks": [
+        {"char": "中", "x": 45, "y": 30},
+        {"char": "国", "x": 120, "y": 25}
+      ]
+    }
+  ]
+}
+```
+
 **响应参数**
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| success | bool | 验证是否成功 |
-| message | string | 验证结果描述 |
+| results | array | 每个验证码的验证结果 |
+| summary | object | 汇总统计 |
+
+**响应示例**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "results": [
+      {
+        "captcha_id": "cap_123",
+        "success": true,
+        "message": "verification successful"
+      },
+      {
+        "captcha_id": "cap_456",
+        "success": true,
+        "score": 0.95,
+        "message": "verification successful"
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "success": 2,
+      "failed": 0,
+      "skipped": 0
+    }
+  }
+}
+```
 
 ---
 
-### 7. 健康检查
+### 2. 验证场景管理
+
+#### 2.1 创建验证场景
+
+**请求**
+
+```http
+POST /api/v2/captcha/scenarios
+Content-Type: application/json
+```
+
+**请求参数**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| name | string | 是 | 场景名称 |
+| description | string | 否 | 场景描述 |
+| difficulty | string | 否 | 难度等级 (easy/medium/hard) |
+| config | object | 否 | 自定义配置 |
+
+**请求示例**
+
+```json
+{
+  "name": "登录验证",
+  "description": "用于用户登录时的验证码验证",
+  "difficulty": "medium",
+  "config": {
+    "tolerance": 5,
+    "timeout": 300,
+    "max_attempts": 3
+  }
+}
+```
+
+**响应示例**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "sce_abc123",
+    "name": "登录验证",
+    "description": "用于用户登录时的验证码验证",
+    "difficulty": "medium",
+    "config": {
+      "tolerance": 5,
+      "timeout": 300,
+      "max_attempts": 3
+    },
+    "created_at": "2026-05-14T10:00:00Z",
+    "updated_at": "2026-05-14T10:00:00Z"
+  }
+}
+```
+
+#### 2.2 获取场景列表
+
+**请求**
+
+```http
+GET /api/v2/captcha/scenarios
+```
+
+**响应参数**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| scenarios | array | 场景列表 |
+| total | int | 场景总数 |
+
+#### 2.3 获取单个场景
+
+**请求**
+
+```http
+GET /api/v2/captcha/scenarios/:id
+```
+
+#### 2.4 更新场景
+
+**请求**
+
+```http
+PUT /api/v2/captcha/scenarios/:id
+Content-Type: application/json
+```
+
+**可更新字段**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| name | string | 场景名称 |
+| description | string | 场景描述 |
+| difficulty | string | 难度等级 |
+| config | object | 自定义配置 |
+
+#### 2.5 删除场景
+
+**请求**
+
+```http
+DELETE /api/v2/captcha/scenarios/:id
+```
+
+---
+
+### 3. Webhook 回调
+
+#### 3.1 注册 Webhook
+
+**请求**
+
+```http
+POST /api/v2/captcha/webhook/register
+Content-Type: application/json
+```
+
+**请求参数**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| app_id | string | 是 | 应用标识 |
+| url | string | 是 | 回调URL |
+| secret | string | 否 | 签名密钥 |
+| events | array | 是 | 订阅的事件 |
+| headers | object | 否 | 自定义请求头 |
+
+**events 支持的事件**
+
+| 事件 | 说明 |
+|------|------|
+| verification.completed | 验证完成 |
+| batch.verification.completed | 批量验证完成 |
+| * | 订阅所有事件 |
+
+**请求示例**
+
+```json
+{
+  "app_id": "my-app-001",
+  "url": "https://example.com/webhook/captcha",
+  "secret": "my-secret-key",
+  "events": ["verification.completed", "batch.verification.completed"],
+  "headers": {
+    "Authorization": "Bearer token123"
+  }
+}
+```
+
+**响应示例**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "id": "wh_xyz789",
+    "app_id": "my-app-001",
+    "url": "https://example.com/webhook/captcha",
+    "secret": "my-secret-key",
+    "events": ["verification.completed", "batch.verification.completed"],
+    "enabled": true,
+    "headers": {
+      "Authorization": "Bearer token123"
+    },
+    "created_at": "2026-05-14T10:00:00Z",
+    "updated_at": "2026-05-14T10:00:00Z"
+  }
+}
+```
+
+#### 3.2 获取 Webhook 列表
+
+**请求**
+
+```http
+GET /api/v2/captcha/webhook?app_id=my-app-001
+```
+
+**查询参数**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| app_id | string | 按应用筛选 |
+
+#### 3.3 更新 Webhook
+
+**请求**
+
+```http
+PUT /api/v2/captcha/webhook/:id
+Content-Type: application/json
+```
+
+#### 3.4 删除 Webhook
+
+**请求**
+
+```http
+DELETE /api/v2/captcha/webhook/:id
+```
+
+---
+
+### 4. Webhook 回调格式
+
+当验证事件触发时，系统会向已注册的 URL 发送 POST 请求。
+
+**回调请求头**
+
+| 请求头 | 说明 |
+|--------|------|
+| Content-Type | application/json |
+| X-Webhook-Event | 事件类型 |
+| X-Webhook-ID | Webhook ID |
+| X-Webhook-Signature | 签名（如果配置了secret） |
+
+**回调请求体 (verification.completed)**
+
+```json
+{
+  "captcha_id": "cap_abc123",
+  "type": "slider",
+  "success": true,
+  "message": "verification successful",
+  "timestamp": "2026-05-14T10:00:00Z"
+}
+```
+
+**回调请求体 (batch.verification.completed)**
+
+```json
+{
+  "results": [
+    {
+      "captcha_id": "cap_abc123",
+      "success": true,
+      "message": "verification successful"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "success": 1,
+    "failed": 0,
+    "skipped": 0
+  },
+  "timestamp": "2026-05-14T10:00:00Z"
+}
+```
+
+---
+
+## 健康检查
 
 **请求**
 
@@ -360,7 +605,7 @@ Content-Type: application/json
 GET /health
 ```
 
-**响应示例**
+**响应示例 (v2)**
 
 ```json
 {
@@ -368,363 +613,11 @@ GET /health
   "message": "success",
   "data": {
     "status": "healthy",
-    "service": "captchax-api"
+    "service": "captchax-api",
+    "timestamp": "2026-05-14T10:00:00Z",
+    "version": "2.0.0"
   }
 }
-```
-
----
-
-## 管理 API
-
-管理 API 需要在请求头中携带 JWT Token：
-
-```http
-Authorization: Bearer <jwt_token>
-```
-
-### 1. 管理员登录
-
-**请求**
-
-```http
-POST /admin/api/login
-Content-Type: application/json
-```
-
-**请求参数**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| username | string | 是 | 用户名 |
-| password | string | 是 | 密码 |
-
-**请求示例**
-
-```json
-{
-  "username": "admin",
-  "password": "admin123"
-}
-```
-
-**响应参数**
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| token | string | JWT Token |
-| expires_at | string | 过期时间 |
-| username | string | 用户名 |
-| role | string | 角色 |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIs...",
-    "expires_at": "2026-05-15T12:00:00Z",
-    "username": "admin",
-    "role": "admin"
-  }
-}
-```
-
----
-
-### 2. 管理员登出
-
-**请求**
-
-```http
-POST /admin/api/logout
-Authorization: Bearer <jwt_token>
-```
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "logged out successfully",
-  "data": null
-}
-```
-
----
-
-### 3. 获取仪表盘数据
-
-**请求**
-
-```http
-GET /admin/api/dashboard
-Authorization: Bearer <jwt_token>
-```
-
-**响应参数**
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| captcha_stats | object | 验证码统计 |
-| whitelist_count | int | 白名单数量 |
-| blacklist_count | int | 黑名单数量 |
-| admin_count | int | 管理员数量 |
-| system_config | object | 系统配置 |
-| recent_logs | array | 最近验证日志 |
-| admin_id | int | 当前管理员ID |
-| username | string | 当前用户名 |
-| role | string | 当前角色 |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "captcha_stats": {
-      "total": 1000,
-      "success": 950,
-      "failed": 50,
-      "success_rate": 95.0
-    },
-    "whitelist_count": 10,
-    "blacklist_count": 25,
-    "admin_count": 3,
-    "system_config": { ... },
-    "recent_logs": [ ... ],
-    "admin_id": 1,
-    "username": "admin",
-    "role": "admin"
-  }
-}
-```
-
----
-
-### 4. 获取统计数据
-
-**请求**
-
-```http
-GET /admin/api/stats?period=7d
-Authorization: Bearer <jwt_token>
-```
-
-**查询参数**
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| period | string | 7d | 时间范围：24h, 7d, 30d, 90d |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "period": "7d",
-    "start_date": "2026-05-07T00:00:00Z",
-    "end_date": "2026-05-14T00:00:00Z",
-    "captcha_stats": {
-      "total": 5000,
-      "success": 4800,
-      "failed": 200,
-      "success_rate": 96.0
-    },
-    "whitelist_count": 10,
-    "blacklist_count": 25
-  }
-}
-```
-
----
-
-### 5. 获取配置列表
-
-**请求**
-
-```http
-GET /admin/api/config
-Authorization: Bearer <jwt_token>
-```
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "configs": [
-      {
-        "id": 1,
-        "key": "max_attempts_per_ip",
-        "value": "10",
-        "description": "Maximum verification attempts per IP per hour",
-        "updated_at": "2026-05-14T10:00:00Z"
-      }
-    ]
-  }
-}
-```
-
----
-
-### 6. 更新配置
-
-**请求**
-
-```http
-POST /admin/api/config
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**请求参数**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| key | string | 是 | 配置键名 |
-| value | string | 是 | 配置值 |
-
-**请求示例**
-
-```json
-{
-  "key": "max_attempts_per_ip",
-  "value": "20"
-}
-```
-
----
-
-### 7. 获取白名单
-
-**请求**
-
-```http
-GET /admin/api/whitelist?page=1&page_size=20
-Authorization: Bearer <jwt_token>
-```
-
-**查询参数**
-
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| page | int | 页码（默认1） |
-| page_size | int | 每页数量（默认20） |
-| ip | string | 按IP筛选 |
-| domain | string | 按域名筛选 |
-
-**响应示例**
-
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "ip": "192.168.1.100",
-        "domain": "example.com",
-        "reason": "可信内部系统",
-        "created_at": "2026-05-14T10:00:00Z"
-      }
-    ],
-    "total": 10,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 1
-  }
-}
-```
-
----
-
-### 8. 添加白名单
-
-**请求**
-
-```http
-POST /admin/api/whitelist
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**请求参数**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| ip | string | 是 | IP地址 |
-| domain | string | 否 | 关联域名 |
-| reason | string | 否 | 添加原因 |
-
----
-
-### 9. 删除白名单
-
-**请求**
-
-```http
-DELETE /admin/api/whitelist/{id}
-Authorization: Bearer <jwt_token>
-```
-
----
-
-### 10. 获取黑名单
-
-**请求**
-
-```http
-GET /admin/api/blacklist?page=1&page_size=20
-Authorization: Bearer <jwt_token>
-```
-
-**查询参数**
-
-| 参数 | 类型 | 说明 |
-|------|------|------|------|
-| page | int | 页码 |
-| page_size | int | 每页数量 |
-| ip | string | 按IP筛选 |
-| active_only | bool | 仅显示生效中 |
-
----
-
-### 11. 添加黑名单
-
-**请求**
-
-```http
-POST /admin/api/blacklist
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**请求参数**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| ip | string | 是 | IP地址 |
-| reason | string | 否 | 封禁原因 |
-| expire_at | string | 否 | 过期时间（ISO8601格式） |
-
----
-
-### 12. 删除黑名单
-
-**请求**
-
-```http
-DELETE /admin/api/blacklist/{id}
-Authorization: Bearer <jwt_token>
 ```
 
 ---
@@ -742,4 +635,73 @@ Authorization: Bearer <jwt_token>
 | 3002 | 401 | Token无效 | 重新登录 |
 | 3003 | 403 | 无权限 | 联系管理员 |
 | 4001 | 429 | 请求过于频繁 | 降低请求频率 |
+| 4091 | 409 | 重复请求 | 使用相同的 X-Deduplication-ID |
 | 5001 | 500 | 服务器内部错误 | 联系技术支持 |
+
+---
+
+## 缓存策略
+
+### ETag 支持
+
+v2 API 支持 HTTP 缓存机制：
+
+1. **ETag**: 服务端返回 ETag 响应头
+2. **If-None-Match**: 客户端可在后续请求中携带此头
+3. **Last-Modified**: 资源最后修改时间
+4. **If-Modified-Since**: 条件请求头
+
+### 缓存响应示例
+
+```http
+GET /api/v2/captcha/scenarios HTTP/1.1
+Accept: application/json
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+ETag: "abc123"
+Cache-Control: private, max-age=300
+Last-Modified: Wed, 14 May 2026 10:00:00 GMT
+```
+
+---
+
+## 请求去重
+
+### 工作原理
+
+1. 客户端在请求头中设置 `X-Deduplication-ID`
+2. 服务端在配置的窗口时间内记录该 ID
+3. 如果收到相同 ID 的请求，返回 409 Conflict
+
+### 去重响应
+
+```http
+HTTP/1.1 409 Conflict
+X-Duplicate-Request: true
+Retry-After: 60
+```
+
+---
+
+## 压缩支持
+
+### 支持的编码
+
+- **gzip**: 最广泛支持
+- **br**: Brotli，更高压缩率
+
+### 请求示例
+
+```http
+GET /api/v2/captcha/scenarios HTTP/1.1
+Accept-Encoding: gzip, br
+```
+
+### 响应示例
+
+```http
+HTTP/1.1 200 OK
+Content-Encoding: gzip
+Vary: Accept-Encoding
+```

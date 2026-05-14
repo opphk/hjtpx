@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CaptchaX 登录示例</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-container {
+      background: white;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .login-header h1 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .login-header p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group input.error {
+      border-color: #ff4d4f;
+    }
+
+    .error-text {
+      color: #ff4d4f;
+      font-size: 12px;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .error-text.show {
+      display: block;
+    }
+
+    .captcha-container {
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn.loading {
+      position: relative;
+      color: transparent;
+    }
+
+    .btn.loading::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      top: 50%;
+      left: 50%;
+      margin-top: -10px;
+      margin-left: -10px;
+      border: 2px solid white;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .message.show {
+      display: block;
+    }
+
+    .message.success {
+      background: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #52c41a;
+    }
+
+    .message.error {
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      color: #ff4d4f;
+    }
+
+    .footer {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 1000;
+    }
+
+    .loading-overlay.show {
+      display: flex;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <h1>欢迎登录</h1>
+      <p>请完成安全验证后登录</p>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">用户名</label>
+        <input type="text" id="username" name="username" required autocomplete="username">
+        <p class="error-text" id="username-error">请输入用户名</p>
+      </div>
+
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input type="password" id="password" name="password" required autocomplete="current-password">
+        <p class="error-text" id="password-error">请输入密码</p>
+      </div>
+
+      <div class="captcha-container">
+        <div id="captcha-widget"></div>
+      </div>
+
+      <button type="submit" class="btn" id="submit-btn" disabled>登录</button>
+    </form>
+
+    <div class="footer">
+      <p>还没有账号？<a href="#">立即注册</a></p>
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loading">
+    <div class="loading-spinner"></div>
+    <p>登录中...</p>
+  </div>
+
+  <script src="/static/captchax.js"></script>
+  <script>
+    const config = {
+      serverUrl: 'http://localhost:8080',
+      appId: 'example-app',
+      container: '#captcha-widget',
+      onReady: function() {
+        console.log('验证码已就绪');
+      },
+      onSuccess: function(result) {
+        console.log('验证成功:', result);
+        document.getElementById('submit-btn').disabled = false;
+        document.getElementById('message').className = 'message';
+      },
+      onError: function(error) {
+        console.error('验证失败:', error);
+        showMessage('验证失败，请重试', 'error');
+      },
+      onClose: function() {
+        console.log('验证码已关闭');
+        document.getElementById('submit-btn').disabled = true;
+      }
+    };
+
+    const captcha = new CaptchaX(config);
+    captcha.render();
+
+    function showMessage(text, type) {
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = text;
+      messageEl.className = 'message show ' + type;
+      setTimeout(function() {
+        messageEl.className = 'message';
+      }, 5000);
+    }
+
+    document.getElementById('login-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const submitBtn = document.getElementById('submit-btn');
+      const loading = document.getElementById('loading');
+
+      let hasError = false;
+
+      if (!username) {
+        document.getElementById('username').classList.add('error');
+        document.getElementById('username-error').classList.add('show');
+        hasError = true;
+      } else {
+        document.getElementById('username').classList.remove('error');
+        document.getElementById('username-error').classList.remove('show');
+      }
+
+      if (!password) {
+        document.getElementById('password').classList.add('error');
+        document.getElementById('password-error').classList.add('show');
+        hasError = true;
+      } else {
+        document.getElementById('password').classList.remove('error');
+        document.getElementById('password-error').classList.remove('show');
+      }
+
+      if (hasError) return;
+
+      loading.classList.add('show');
+      submitBtn.classList.add('loading');
+
+      try {
+        const formData = {
+          username: username,
+          password: password
+        };
+
+        console.log('提交登录请求:', formData);
+
+        await new Promise(function(resolve) {
+          setTimeout(resolve, 1500);
+        });
+
+        showMessage('登录成功！', 'success');
+
+        console.log('登录成功，跳转中...');
+
+      } catch (error) {
+        console.error('登录失败:', error);
+        showMessage('登录失败，请重试', 'error');
+        captcha.reset();
+      } finally {
+        loading.classList.remove('show');
+        submitBtn.classList.remove('loading');
+      }
+    });
+
+    document.getElementById('username').addEventListener('input', function() {
+      this.classList.remove('error');
+      document.getElementById('username-error').classList.remove('show');
+    });
+
+    document.getElementById('password').addEventListener('input', function() {
+      this.classList.remove('error');
+      document.getElementById('password-error').classList.remove('show');
+    });
+  </script>
+</body>
+</html>

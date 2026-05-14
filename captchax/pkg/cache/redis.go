@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 )
+
+var ErrCacheMiss = errors.New("cache miss")
 
 type RedisClient struct {
 	client *redis.Client
@@ -83,4 +86,41 @@ func (r *RedisClient) Close() error {
 
 func (r *RedisClient) Client() *redis.Client {
 	return r.client
+}
+
+func (r *RedisClient) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	result, err := r.client.SetNX(ctx, key, value, expiration).Result()
+	return result, err
+}
+
+func (r *RedisClient) SAdd(ctx context.Context, key string, members ...interface{}) (int64, error) {
+	return r.client.SAdd(ctx, key, members...).Result()
+}
+
+func (r *RedisClient) SRem(ctx context.Context, key string, members ...interface{}) (int64, error) {
+	return r.client.SRem(ctx, key, members...).Result()
+}
+
+func (r *RedisClient) SMembers(ctx context.Context, key string) ([]string, error) {
+	return r.client.SMembers(ctx, key).Result()
+}
+
+func (r *RedisClient) HSet(ctx context.Context, key string, values ...interface{}) error {
+	return r.client.HSet(ctx, key, values...).Err()
+}
+
+func (r *RedisClient) HGet(ctx context.Context, key, field string) (string, error) {
+	return r.client.HGet(ctx, key, field).Result()
+}
+
+func (r *RedisClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
+	return r.client.HGetAll(ctx, key).Result()
+}
+
+func (r *RedisClient) HDel(ctx context.Context, key string, fields ...string) error {
+	return r.client.HDel(ctx, key, fields...).Err()
+}
+
+func (r *RedisClient) ExistsByFunc(ctx context.Context, keys ...string) (int64, error) {
+	return r.client.Exists(ctx, keys...).Result()
 }

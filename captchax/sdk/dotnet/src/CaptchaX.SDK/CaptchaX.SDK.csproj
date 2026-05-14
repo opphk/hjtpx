@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>CaptchaX.SDK</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>CaptchaX Team</Authors>
+    <Company>CaptchaX</Company>
+    <Product>CaptchaX SDK</Product>
+    <Description>CaptchaX Multi-language SDK - .NET client for CaptchaX verification service</Description>
+    <Copyright>Copyright (c) 2024 CaptchaX</Copyright>
+    <License>MIT</License>
+    <RepositoryUrl>https://github.com/hjtpx/captchax</RepositoryUrl>
+    <PackageTags>captcha;verification;slider;click;puzzle;security</PackageTags>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Net.Http.Json" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

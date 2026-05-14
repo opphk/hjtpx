@@ -3,6 +3,7 @@ package slider
 import (
 	"bytes"
 	"captchax/config"
+	"captchax/internal/imageutil"
 	"captchax/pkg/cache"
 	"context"
 	"encoding/base64"
@@ -102,7 +103,13 @@ func (s *Slider) GenerateCaptcha(ctx context.Context) (*CaptchaResult, error) {
 func (s *Slider) generateBackground(targetX, targetY int) image.Image {
 	bg := image.NewRGBA(image.Rect(0, 0, s.cfg.Width, s.cfg.Height))
 
-	draw.Draw(bg, bg.Bounds(), &solidColor{uint8(200 + rand.Intn(40)), uint8(200 + rand.Intn(40)), uint8(200 + rand.Intn(40)), 255}, image.ZP, draw.Src)
+	bgColor := &imageutil.SolidColor{
+		R: uint8(200 + rand.Intn(40)),
+		G: uint8(200 + rand.Intn(40)),
+		B: uint8(200 + rand.Intn(40)),
+		A: 255,
+	}
+	draw.Draw(bg, bg.Bounds(), bgColor, image.ZP, draw.Src)
 
 	s.drawPattern(bg)
 	s.drawPuzzlePiece(bg, targetX, targetY)
@@ -127,11 +134,11 @@ func (s *Slider) drawPattern(bg *image.RGBA) {
 
 		switch r.Intn(3) {
 		case 0:
-			drawCircle(bg, x, y, size, patternColor)
+			imageutil.DrawCircle(bg, x, y, size, patternColor)
 		case 1:
-			drawRect(bg, x, y, size, size, patternColor)
+			imageutil.DrawRect(bg, x, y, size, size, patternColor)
 		case 2:
-			drawLine(bg, x, y, x+size, y+size, patternColor)
+			imageutil.DrawLine(bg, x, y, x+size, y+size, patternColor)
 		}
 	}
 }
@@ -144,9 +151,9 @@ func (s *Slider) drawPuzzlePiece(bg *image.RGBA, targetX, targetY int) {
 	halfSize := size / 2
 
 	pieceColor := color.RGBA{
-		R: uint8(180),
-		G: uint8(180),
-		B: uint8(180),
+		R: 180,
+		G: 180,
+		B: 180,
 		A: 255,
 	}
 
@@ -156,25 +163,25 @@ func (s *Slider) drawPuzzlePiece(bg *image.RGBA, targetX, targetY int) {
 	rightX := targetX + halfSize
 
 	if topY >= 0 {
-		drawRect(bg, leftX, topY, size, 3, pieceColor)
+		imageutil.DrawRect(bg, leftX, topY, size, 3, pieceColor)
 	}
 	if bottomY < s.cfg.Height {
-		drawRect(bg, leftX, bottomY-3, size, 3, pieceColor)
+		imageutil.DrawRect(bg, leftX, bottomY-3, size, 3, pieceColor)
 	}
 	if leftX >= 0 {
-		drawRect(bg, leftX, topY, 3, size, pieceColor)
+		imageutil.DrawRect(bg, leftX, topY, 3, size, pieceColor)
 	}
 	if rightX < s.cfg.Width {
-		drawRect(bg, rightX-3, topY, 3, size, pieceColor)
+		imageutil.DrawRect(bg, rightX-3, topY, 3, size, pieceColor)
 	}
 
 	arcRadius := 8
 	if targetY-arcRadius >= topY && targetY+arcRadius <= bottomY {
 		if leftX-arcRadius >= 0 {
-			drawArc(bg, leftX, targetY, arcRadius, pieceColor)
+			imageutil.DrawCircle(bg, leftX, targetY, arcRadius, pieceColor)
 		}
 		if rightX+arcRadius < s.cfg.Width {
-			drawArc(bg, rightX, targetY, arcRadius, pieceColor)
+			imageutil.DrawCircle(bg, rightX, targetY, arcRadius, pieceColor)
 		}
 	}
 }
@@ -186,32 +193,33 @@ func (s *Slider) generateSlider(targetX, targetY int, backgroundImg image.Image)
 	}
 	slider := image.NewRGBA(image.Rect(0, 0, size, size))
 
-	draw.Draw(slider, slider.Bounds(), &solidColor{240, 240, 245, 255}, image.ZP, draw.Src)
+	sliderBg := &imageutil.SolidColor{R: 240, G: 240, B: 245, A: 255}
+	draw.Draw(slider, slider.Bounds(), sliderBg, image.ZP, draw.Src)
 
 	halfSize := size / 2
 	minX := targetX - halfSize
 	minY := targetY - halfSize
 
 	srcRect := image.Rect(
-		maxInt(0, minX),
-		maxInt(0, minY),
-		minInt(s.cfg.Width, targetX+halfSize),
-		minInt(s.cfg.Height, targetY+halfSize),
+		max(0, minX),
+		max(0, minY),
+		min(s.cfg.Width, targetX+halfSize),
+		min(s.cfg.Height, targetY+halfSize),
 	)
 
 	dstOffset := image.Point{
-		X: maxInt(0, -minX),
-		Y: maxInt(0, -minY),
+		X: max(0, -minX),
+		Y: max(0, -minY),
 	}
 	_ = dstOffset
 
 	draw.Draw(slider, slider.Bounds(), backgroundImg, srcRect.Min, draw.Over)
 
 	borderColor := color.RGBA{R: 150, G: 150, B: 155, A: 255}
-	drawRect(slider, 0, 0, size, 2, borderColor)
-	drawRect(slider, 0, size-2, size, 2, borderColor)
-	drawRect(slider, 0, 0, 2, size, borderColor)
-	drawRect(slider, size-2, 0, 2, size, borderColor)
+	imageutil.DrawRect(slider, 0, 0, size, 2, borderColor)
+	imageutil.DrawRect(slider, 0, size-2, size, 2, borderColor)
+	imageutil.DrawRect(slider, 0, 0, 2, size, borderColor)
+	imageutil.DrawRect(slider, size-2, 0, 2, size, borderColor)
 
 	s.drawSliderPattern(slider)
 
@@ -235,7 +243,7 @@ func (s *Slider) drawSliderPattern(slider *image.RGBA) {
 	centerX := size / 2
 	centerY := size / 2
 	radius := size / 4
-	drawCircle(slider, centerX, centerY, radius, patternColor)
+	imageutil.DrawCircle(slider, centerX, centerY, radius, patternColor)
 
 	innerRadius := radius / 2
 	innerColor := color.RGBA{
@@ -244,7 +252,7 @@ func (s *Slider) drawSliderPattern(slider *image.RGBA) {
 		B: uint8(220 + r.Intn(30)),
 		A: 80,
 	}
-	drawCircle(slider, centerX, centerY, innerRadius, innerColor)
+	imageutil.DrawCircle(slider, centerX, centerY, innerRadius, innerColor)
 }
 
 func (s *Slider) imageToBase64(img image.Image) (string, error) {
@@ -255,112 +263,14 @@ func (s *Slider) imageToBase64(img image.Image) (string, error) {
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-func drawCircle(img *image.RGBA, cx, cy, radius int, col color.RGBA) {
-	x, y, d := 0, radius, 3-2*radius
-	for x <= y {
-		drawPixel(img, cx+x, cy+y, col)
-		drawPixel(img, cx+y, cy+x, col)
-		drawPixel(img, cx-y, cy+x, col)
-		drawPixel(img, cx-x, cy+y, col)
-		drawPixel(img, cx+x, cy-y, col)
-		drawPixel(img, cx+y, cy-x, col)
-		drawPixel(img, cx-y, cy-x, col)
-		drawPixel(img, cx-x, cy-y, col)
-		if d < 0 {
-			d = d + 4*x + 6
-		} else {
-			d = d + 4*(x-y) + 10
-			y--
-		}
-		x++
-	}
-}
-
-func drawPixel(img *image.RGBA, x, y int, col color.RGBA) {
-	if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
-		img.Set(x, y, col)
-	}
-}
-
-func drawRect(img *image.RGBA, x, y, w, h int, col color.RGBA) {
-	for i := x; i < x+w && i < img.Bounds().Dx(); i++ {
-		for j := y; j < y+h && j < img.Bounds().Dy(); j++ {
-			if i >= 0 && j >= 0 {
-				img.Set(i, j, col)
-			}
-		}
-	}
-}
-
-func drawLine(img *image.RGBA, x1, y1, x2, y2 int, col color.RGBA) {
-	dx := absInt(x2 - x1)
-	dy := absInt(y2 - y1)
-	sx := -1
-	if x1 < x2 {
-		sx = 1
-	}
-	sy := -1
-	if y1 < y2 {
-		sy = 1
-	}
-	err := dx - dy
-
-	for {
-		drawPixel(img, x1, y1, col)
-		if x1 == x2 && y1 == y2 {
-			break
-		}
-		e2 := 2 * err
-		if e2 > -dy {
-			err -= dy
-			x1 += sx
-		}
-		if e2 < dx {
-			err += dx
-			y1 += sy
-		}
-	}
-}
-
-func drawArc(img *image.RGBA, cx, cy, radius int, col color.RGBA) {
-	drawCircle(img, cx, cy, radius, col)
-}
-
-type solidColor struct {
-	r, g, b, a uint8
-}
-
-func (sc *solidColor) RGBA() (r, g, b, a uint32) {
-	return uint32(sc.r) * 0x101, uint32(sc.g) * 0x101, uint32(sc.b) * 0x101, uint32(sc.a) * 0x101
-}
-
-func (sc *solidColor) ColorModel() color.Model {
-	return color.RGBAModel
-}
-
-func (sc *solidColor) Bounds() image.Rectangle {
-	return image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: 0xffffffff, Y: 0xffffffff}}
-}
-
-func (sc *solidColor) At(x, y int) color.Color {
-	return sc
-}
-
-func absInt(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-func maxInt(a, b int) int {
+func max(a, b int) int {
 	if a > b {
 		return a
 	}
 	return b
 }
 
-func minInt(a, b int) int {
+func min(a, b int) int {
 	if a < b {
 		return a
 	}

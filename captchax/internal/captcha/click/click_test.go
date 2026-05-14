@@ -64,11 +64,18 @@ func TestAbs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := abs(tt.input)
+		result := absInt(tt.input)
 		if result != tt.expected {
-			t.Errorf("abs(%d) = %d, want %d", tt.input, result, tt.expected)
+			t.Errorf("absInt(%d) = %d, want %d", tt.input, result, tt.expected)
 		}
 	}
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func TestGenerateID(t *testing.T) {

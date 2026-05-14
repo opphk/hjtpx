@@ -35,6 +35,17 @@
             background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
             border-left: 3px solid #3b82f6;
         }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .error-message {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+        input.border-red-500, select.border-red-500 {
+            border-color: #ef4444;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -124,14 +135,41 @@
                         </svg>
                     </button>
                     <h2 class="text-xl font-semibold text-gray-800">白名单管理</h2>
-                    <button id="add-whitelist-btn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center transition">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
-                        添加白名单
-                    </button>
+                    <div class="flex items-center space-x-3">
+                        <button id="export-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            导出
+                        </button>
+                        <button id="add-whitelist-btn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center transition">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            添加白名单
+                        </button>
+                    </div>
                 </div>
             </header>
+
+            <div id="batch-action-bar" class="hidden bg-blue-50 border-b border-blue-100 px-6 py-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-700">
+                            已选择 <span id="selected-count" class="font-semibold text-blue-600">0</span> 项
+                        </span>
+                        <button id="clear-selection-btn" class="text-sm text-gray-500 hover:text-gray-700">清空选择</button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="batch-delete-btn" class="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg text-sm transition flex items-center">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            批量删除
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <main class="flex-1 p-6">
                 <div class="bg-white rounded-xl shadow-sm mb-6">
@@ -163,9 +201,12 @@
                     </div>
 
                     <div class="overflow-x-auto">
-                        <table class="w-full">
+                        <table id="whitelist-table-element" class="w-full">
                             <thead>
                                 <tr class="text-left text-sm text-gray-500 bg-gray-50">
+                                    <th class="px-6 py-3 font-medium w-12">
+                                        <input type="checkbox" class="master-checkbox w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-500">
+                                    </th>
                                     <th class="px-6 py-3 font-medium">类型</th>
                                     <th class="px-6 py-3 font-medium">值</th>
                                     <th class="px-6 py-3 font-medium">备注</th>
@@ -243,13 +284,12 @@
                 <h3 class="text-lg font-semibold text-gray-800">添加白名单</h3>
                 <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></svg>
+                    </button>
             </div>
 
             <form id="add-whitelist-form" class="space-y-4">
-                <div>
+                <div class="form-group">
                     <label class="block text-sm font-medium text-gray-700 mb-2">类型</label>
                     <select id="wl-type" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <option value="ip">单个IP地址</option>
@@ -258,19 +298,20 @@
                     </select>
                 </div>
 
-                <div id="ip-input-group">
+                <div class="form-group" id="ip-input-group">
                     <label class="block text-sm font-medium text-gray-700 mb-2">IP地址</label>
-                    <input type="text" id="wl-value" required placeholder="例如: 192.168.1.1 或 192.168.1.0/24"
+                    <input type="text" id="wl-value" required placeholder="例如: 192.168.1.1"
+                        data-validate='["required", "ip"]'
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
 
-                <div>
+                <div class="form-group">
                     <label class="block text-sm font-medium text-gray-700 mb-2">备注</label>
-                    <input type="text" id="wl-remark" placeholder="请输入备注信息（可选）"
+                    <input type="text" id="wl-remark" placeholder="请输入备注信息（可选）" maxlength="200"
                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
 
-                <div>
+                <div class="form-group">
                     <label class="block text-sm font-medium text-gray-700 mb-2">过期时间</label>
                     <div class="flex items-center space-x-2">
                         <input type="datetime-local" id="wl-expire-time"
@@ -286,7 +327,11 @@
                     <button type="button" id="cancel-btn" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
                         取消
                     </button>
-                    <button type="submit" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
+                    <button type="submit" id="submit-btn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition flex items-center">
+                        <svg class="w-4 h-4 mr-2 hidden animate-spin" id="submit-spinner" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
                         添加
                     </button>
                 </div>
@@ -298,16 +343,19 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             let currentPage = 1;
-            const pageSize = 20;
+            let pageSize = 20;
             let searchKeyword = '';
             let typeFilter = '';
+            let tableData = [];
+
+            BatchOperations.init('whitelist-table-element', 'row-checkbox');
 
             function renderTable(data) {
                 const tbody = document.getElementById('whitelist-table');
                 if (!data || data.length === 0) {
                     tbody.innerHTML = `
                         <tr>
-                            <td colspan="7" class="px-6 py-12 text-center text-gray-500">
+                            <td colspan="8" class="px-6 py-12 text-center text-gray-500">
                                 <svg class="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                 </svg>
@@ -317,6 +365,8 @@
                     `;
                     return;
                 }
+
+                tableData = data;
 
                 tbody.innerHTML = data.map(item => {
                     const typeMap = {
@@ -330,14 +380,17 @@
 
                     return `
                         <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <input type="checkbox" class="row-checkbox w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-500" data-id="${item.id}">
+                            </td>
                             <td class="px-6 py-4">${typeMap[item.type] || item.type}</td>
                             <td class="px-6 py-4 font-mono text-sm">${item.value}</td>
-                            <td class="px-6 py-4 text-gray-600">${item.remark || '-'}</td>
+                            <td class="px-6 py-4 text-gray-600 max-w-xs truncate" title="${item.remark || ''}">${item.remark || '-'}</td>
                             <td class="px-6 py-4">${item.created_by || '系统'}</td>
                             <td class="px-6 py-4 text-gray-500">${AdminUI.formatDate(item.created_at)}</td>
                             <td class="px-6 py-4 text-gray-500 ${expireClass}">${expireText}</td>
                             <td class="px-6 py-4">
-                                <button onclick="deleteWhitelist(${item.id})" class="text-red-500 hover:text-red-700 transition">
+                                <button onclick="deleteWhitelist(${item.id})" class="text-red-500 hover:text-red-700 transition" title="删除">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                     </svg>
@@ -346,19 +399,23 @@
                         </tr>
                     `;
                 }).join('');
+
+                BatchOperations.updateMasterCheckbox();
             }
 
             async function loadWhitelist() {
                 try {
-                    const result = await AdminApi.whitelist.list(currentPage, pageSize, searchKeyword);
-                    renderTable(result.items || result.data || []);
+                    const result = await AdminApi.whitelist.list(currentPage, pageSize, searchKeyword, typeFilter);
+                    const data = result.items || result.data || [];
+                    renderTable(data);
+
                     AdminUI.Pagination.init('whitelist-pagination', pageSize, (page) => {
                         currentPage = page;
                         loadWhitelist();
                     });
                     AdminUI.Pagination.setTotal(result.total || 0);
 
-                    updateStats(result.items || result.data || []);
+                    updateStats(data);
                 } catch (error) {
                     console.error('Failed to load whitelist:', error);
                     renderTable(generateMockData());
@@ -410,21 +467,48 @@
                 }
             };
 
-            document.getElementById('add-whitelist-btn').addEventListener('click', function() {
+            async function batchDeleteSelected() {
+                const selected = BatchOperations.getSelected();
+                if (selected.length === 0) return;
+
+                const confirmed = await AdminUI.confirm(`确定要删除选中的 ${selected.length} 条记录吗？此操作不可撤销。`, '批量删除确认');
+                if (confirmed) {
+                    try {
+                        const submitBtn = document.getElementById('submit-btn');
+                        AdminUI.showLoading(submitBtn, '删除中...');
+
+                        await AdminApi.whitelist.batchDelete(selected);
+                        AdminUI.showToast(`成功删除 ${selected.length} 条记录`, 'success');
+                        BatchOperations.clearSelection();
+                        loadWhitelist();
+                    } catch (error) {
+                        AdminUI.showToast('批量删除失败: ' + error.message, 'error');
+                    } finally {
+                        const submitBtn = document.getElementById('submit-btn');
+                        AdminUI.hideLoading(submitBtn);
+                    }
+                }
+            }
+
+            function openAddModal() {
                 document.getElementById('add-modal').classList.remove('hidden');
-            });
+                document.getElementById('add-whitelist-form').reset();
+                document.getElementById('wl-no-expire').checked = true;
+                document.getElementById('wl-expire-time').disabled = true;
+                FormValidator.initFormValidation(document.getElementById('add-whitelist-form'));
+            }
 
-            document.getElementById('close-modal-btn').addEventListener('click', function() {
+            function closeAddModal() {
                 document.getElementById('add-modal').classList.add('hidden');
-            });
+            }
 
-            document.getElementById('cancel-btn').addEventListener('click', function() {
-                document.getElementById('add-modal').classList.add('hidden');
-            });
+            document.getElementById('add-whitelist-btn').addEventListener('click', openAddModal);
+            document.getElementById('close-modal-btn').addEventListener('click', closeAddModal);
+            document.getElementById('cancel-btn').addEventListener('click', closeAddModal);
 
             document.getElementById('add-modal').addEventListener('click', function(e) {
                 if (e.target === this) {
-                    this.classList.add('hidden');
+                    closeAddModal();
                 }
             });
 
@@ -435,20 +519,35 @@
             document.getElementById('wl-type').addEventListener('change', function() {
                 const label = document.querySelector('label[for="wl-value"]');
                 const input = document.getElementById('wl-value');
+                const inputGroup = document.getElementById('ip-input-group');
+
                 if (this.value === 'ip') {
                     label.textContent = 'IP地址';
                     input.placeholder = '例如: 192.168.1.1';
+                    input.dataset.validate = '["required", "ipv4"]';
+                    inputGroup.classList.remove('hidden');
                 } else if (this.value === 'ip_range') {
                     label.textContent = 'IP段';
                     input.placeholder = '例如: 192.168.1.0/24';
+                    input.dataset.validate = '["required", "ipv4Cidr"]';
+                    inputGroup.classList.remove('hidden');
                 } else {
                     label.textContent = '用户ID';
                     input.placeholder = '请输入用户ID';
+                    input.dataset.validate = '["required"]';
+                    inputGroup.classList.add('hidden');
                 }
+                FormValidator.initFormValidation(document.getElementById('add-whitelist-form'));
             });
 
             document.getElementById('add-whitelist-form').addEventListener('submit', async function(e) {
                 e.preventDefault();
+
+                const form = this;
+                if (!FormValidator.validateForm(form)) {
+                    AdminUI.showToast('请检查表单输入', 'warning');
+                    return;
+                }
 
                 const type = document.getElementById('wl-type').value;
                 const value = document.getElementById('wl-value').value.trim();
@@ -460,19 +559,26 @@
                     expireTime = document.getElementById('wl-expire-time').value;
                 }
 
-                if (!value) {
+                if (type !== 'user_id' && !value) {
                     AdminUI.showToast('请输入值', 'error');
                     return;
                 }
 
+                const submitBtn = document.getElementById('submit-btn');
+                const spinner = document.getElementById('submit-spinner');
+                submitBtn.disabled = true;
+                spinner.classList.remove('hidden');
+
                 try {
                     await AdminApi.whitelist.add({ type, value, remark, expire_time: expireTime });
                     AdminUI.showToast('添加成功', 'success');
-                    document.getElementById('add-modal').classList.add('hidden');
-                    this.reset();
+                    closeAddModal();
                     loadWhitelist();
                 } catch (error) {
                     AdminUI.showToast('添加失败: ' + error.message, 'error');
+                } finally {
+                    submitBtn.disabled = false;
+                    spinner.classList.add('hidden');
                 }
             });
 
@@ -493,6 +599,25 @@
             });
 
             document.getElementById('refresh-btn').addEventListener('click', loadWhitelist);
+
+            document.getElementById('clear-selection-btn').addEventListener('click', function() {
+                BatchOperations.clearSelection();
+            });
+
+            document.getElementById('batch-delete-btn').addEventListener('click', batchDeleteSelected);
+
+            document.getElementById('export-btn').addEventListener('click', function() {
+                const columns = [
+                    { key: 'type', title: '类型', formatter: (val) => ({ 'ip': 'IP地址', 'ip_range': 'IP段', 'user_id': '用户ID' }[val] || val) },
+                    { key: 'value', title: '值' },
+                    { key: 'remark', title: '备注' },
+                    { key: 'created_by', title: '添加人' },
+                    { key: 'created_at', title: '添加时间', formatter: (val) => AdminUI.formatDate(val) },
+                    { key: 'expire_time', title: '过期时间', formatter: (val) => val ? AdminUI.formatDate(val) : '永不过期' }
+                ];
+
+                ExportHelper.exportTable('whitelist-table-element', 'whitelist_export', columns);
+            });
 
             loadWhitelist();
         });

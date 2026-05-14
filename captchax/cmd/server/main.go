@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"captchax/config"
+	"captchax/internal/api"
 	"captchax/internal/log"
+	"captchax/internal/service"
 	"captchax/pkg/cache"
 	"captchax/pkg/database"
 
@@ -21,13 +23,13 @@ import (
 )
 
 type metrics struct {
-	requestsTotal    atomic.Int64
-	requestsSuccess atomic.Int64
-	requestsFailed  atomic.Int64
-	activeRequests  atomic.Int64
-	requestDuration atomic.Int64
-	imageGenerated  atomic.Int64
-	imageCacheHits  atomic.Int64
+	requestsTotal     atomic.Int64
+	requestsSuccess   atomic.Int64
+	requestsFailed    atomic.Int64
+	activeRequests   atomic.Int64
+	requestDuration   atomic.Int64
+	imageGenerated    atomic.Int64
+	imageCacheHits   atomic.Int64
 	imageCacheMisses atomic.Int64
 }
 
@@ -57,8 +59,8 @@ func recordMetrics() {
 
 			logger := log.Default()
 			logger.Info("metrics_sample", map[string]interface{}{
-				"requests_delta":   reqDelta,
-				"avg_duration_ms": avgDuration / 1e6,
+				"requests_delta":    reqDelta,
+				"avg_duration_ms":  avgDuration / 1e6,
 			})
 		}
 	}
@@ -95,13 +97,13 @@ func setupMetrics(router *gin.Engine) {
 
 	router.GET("/metrics/counters", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"requests_total":   appMetrics.requestsTotal.Load(),
-			"requests_success": appMetrics.requestsSuccess.Load(),
-			"requests_failed": appMetrics.requestsFailed.Load(),
-			"active_requests":  appMetrics.activeRequests.Load(),
-			"images_generated": appMetrics.imageGenerated.Load(),
-			"cache_hits":      appMetrics.imageCacheHits.Load(),
-			"cache_misses":    appMetrics.imageCacheMisses.Load(),
+			"requests_total":    appMetrics.requestsTotal.Load(),
+			"requests_success":  appMetrics.requestsSuccess.Load(),
+			"requests_failed":   appMetrics.requestsFailed.Load(),
+			"active_requests":   appMetrics.activeRequests.Load(),
+			"images_generated":  appMetrics.imageGenerated.Load(),
+			"cache_hits":        appMetrics.imageCacheHits.Load(),
+			"cache_misses":      appMetrics.imageCacheMisses.Load(),
 		})
 	})
 
@@ -111,27 +113,27 @@ func setupMetrics(router *gin.Engine) {
 
 		c.JSON(http.StatusOK, gin.H{
 			"go_version":        runtime.Version(),
-			"go_routines":       runtime.NumGoroutine(),
+			"go_routines":      runtime.NumGoroutine(),
 			"mem_alloc":         m.Alloc,
 			"mem_total_alloc":   m.TotalAlloc,
-			"mem_sys":           m.Sys,
-			"mem_lookups":       m.Lookups,
-			"mem_mallocs":       m.Mallocs,
-			"mem_frees":         m.Frees,
-			"mem_heap_alloc":    m.HeapAlloc,
-			"mem_heap_sys":      m.HeapSys,
-			"mem_heap_idle":     m.HeapIdle,
-			"mem_heap_inuse":    m.HeapInuse,
+			"mem_sys":          m.Sys,
+			"mem_lookups":      m.Lookups,
+			"mem_mallocs":      m.Mallocs,
+			"mem_frees":        m.Frees,
+			"mem_heap_alloc":   m.HeapAlloc,
+			"mem_heap_sys":     m.HeapSys,
+			"mem_heap_idle":    m.HeapIdle,
+			"mem_heap_inuse":   m.HeapInuse,
 			"mem_heap_released": m.HeapReleased,
 			"mem_heap_objects":  m.HeapObjects,
-			"mem_stack_inuse":   m.StackInuse,
-			"mem_stack_sys":     m.StackSys,
-			"mem_mspan_inuse":   m.MSpanInuse,
-			"mem_mspan_sys":     m.MSpanSys,
-			"mem_mcache_inuse":  m.MCacheInuse,
-			"mem_mcache_sys":    m.MCacheSys,
-			"gc_count":          m.NumGC,
-			"gc_pause_total":    m.PauseTotalNs,
+			"mem_stack_inuse":  m.StackInuse,
+			"mem_stack_sys":    m.StackSys,
+			"mem_mspan_inuse":  m.MSpanInuse,
+			"mem_mspan_sys":    m.MSpanInuse,
+			"mem_mcache_inuse": m.MCacheInuse,
+			"mem_mcache_sys":   m.MCacheInuse,
+			"gc_count":         m.NumGC,
+			"gc_pause_total":   m.PauseTotalNs,
 		})
 	})
 }
@@ -242,17 +244,26 @@ func main() {
 		"addr": cfg.Redis.Addr(),
 	})
 
-	db, err := database.NewPostgres(&cfg.Database)
+	dbWrapper, err := database.NewPostgres(&cfg.Database)
 	if err != nil {
 		logger.Fatal("failed to connect to postgres", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
-	defer db.Close()
+	defer dbWrapper.Close()
 	logger.Info("connected to postgres", map[string]interface{}{
 		"host": cfg.Database.Host,
 		"db":   cfg.Database.DBName,
 	})
+
+	captchaService, err := service.NewCaptchaService(cfg, redisClient, dbWrapper.DB())
+	if err != nil {
+		logger.Fatal("failed to create captcha service", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	captchaAPI := api.NewServer(captchaService)
 
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -260,7 +271,6 @@ func main() {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
-
 	router.Use(MetricsMiddleware())
 
 	setupPPROF(router)
@@ -268,8 +278,8 @@ func main() {
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status":  "healthy",
 			"service": "captchax",
+			"status":  "healthy",
 		})
 	})
 
@@ -297,6 +307,19 @@ func main() {
 			"version": "1.0.0",
 		})
 	})
+
+	apiGroup := router.Group("")
+	{
+		captchaAPI.Router().Use(MetricsMiddleware())
+		apiGroup.Any("/api/v1/*path", func(c *gin.Context) {
+			c.Request.URL.Path = "/api/v1" + c.Param("path")
+			captchaAPI.Router().HandleContext(c)
+		})
+		apiGroup.Any("/api/v2/*path", func(c *gin.Context) {
+			c.Request.URL.Path = "/api/v2" + c.Param("path")
+			captchaAPI.Router().HandleContext(c)
+		})
+	}
 
 	server := &http.Server{
 		Addr:           cfg.Server.Addr(),

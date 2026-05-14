@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CaptchaX i18n Demo - Internationalization</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+        .code-block .keyword { color: #c084fc; }
+        .code-block .string { color: #86efac; }
+        .code-block .comment { color: #64748b; }
+        .lang-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: #eff6ff;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #2563eb;
+        }
+        .lang-badge.active {
+            background: #2563eb;
+            color: white;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .rtl-demo {
+            background: #fef3c7;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="max-w-4xl mx-auto px-6 py-12">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">🌍 CaptchaX i18n Demo</h1>
+            <p class="text-gray-600 text-lg">Internationalization & RTL Support</p>
+            <div class="flex justify-center gap-2 mt-6 flex-wrap" id="language-badges"></div>
+        </header>
+
+        <div class="demo-card">
+            <h2 class="section-title">📍 Current Language Detection</h2>
+            <p class="text-gray-600 mb-4">The system automatically detects your language preference from:</p>
+            <ol class="list-decimal list-inside text-gray-600 space-y-1 mb-4">
+                <li>localStorage (user's previous selection)</li>
+                <li>URL parameter (<code class="bg-gray-100 px-1 rounded">?lang=ja</code>)</li>
+                <li>Accept-Language header (browser settings)</li>
+                <li>HTML lang attribute</li>
+                <li>Default fallback language</li>
+            </ol>
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <p><strong>Detected Language:</strong> <span id="current-lang" class="text-blue-600 font-mono">-</span></p>
+                <p><strong>Direction:</strong> <span id="current-dir" class="text-blue-600 font-mono">-</span></p>
+            </div>
+        </div>
+
+        <div class="demo-card">
+            <h2 class="section-title">🔤 Translation Examples</h2>
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-semibold text-gray-700 mb-3">Captcha Translations</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li><strong data-i18n="captcha.title">安全验证</strong></li>
+                        <li><span data-i18n="captcha.slider.title">滑块验证</span></li>
+                        <li><span data-i18n="captcha.slider.tip">拖动滑块完成验证</span></li>
+                        <li><span data-i18n="captcha.click.title">点选验证</span></li>
+                        <li><span data-i18n="captcha.rotate.title">旋转验证</span></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-700 mb-3">Admin Translations</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li><span data-i18n="admin.dashboard">仪表盘</span></li>
+                        <li><span data-i18n="admin.stats">统计分析</span></li>
+                        <li><span data-i18n="admin.config">系统配置</span></li>
+                        <li><span data-i18n="admin.whitelist">白名单</span></li>
+                        <li><span data-i18n="admin.blacklist">黑名单</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-card">
+            <h2 class="section-title">⏱️ Time Formatting</h2>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span class="text-gray-600">Just now:</span>
+                    <span class="font-mono bg-gray-100 px-2 py-1 rounded" id="time-just-now">-</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span class="text-gray-600">5 minutes ago:</span>
+                    <span class="font-mono bg-gray-100 px-2 py-1 rounded" id="time-5-min">-</span>
+                </div>
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span class="text-gray-600">2 hours ago:</span>
+                    <span class="font-mono bg-gray-100 px-2 py-1 rounded" id="time-2-hours">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-card">
+            <h2 class="section-title">📐 RTL Support (Arabic)</h2>
+            <p class="text-gray-600 mb-4">When switching to Arabic, the entire page direction changes to RTL:</p>
+            <div class="rtl-demo">
+                <p class="mb-2"><strong>Arabic text example:</strong></p>
+                <p dir="rtl" lang="ar" class="text-2xl font-bold text-amber-700 mb-2" data-i18n="captcha.title">التحقق الأمني</p>
+                <p dir="rtl" lang="ar" class="text-gray-600" data-i18n="captcha.slider.tip">اسحب المؤشر لإكمال التحقق</p>
+            </div>
+            <p class="text-sm text-gray-500 mt-3">💡 Notice how the page layout mirrors when Arabic is selected</p>
+        </div>
+
+        <div class="demo-card">
+            <h2 class="section-title">🎛️ Interactive Language Switcher</h2>
+            <p class="text-gray-600 mb-4">Click the floating language button in the top-right corner to switch languages. The switcher supports:</p>
+            <ul class="list-disc list-inside text-gray-600 space-y-1 mb-4">
+                <li>Click outside to close</li>
+                <li>Keyboard navigation (Escape to close)</li>
+                <li>Automatic RTL layout adjustment</li>
+                <li>Persistent selection via localStorage</li>
+            </ul>
+            <div class="bg-gray-100 p-4 rounded-lg">
+                <p class="text-sm text-gray-600 mb-2">Quick switch:</p>
+                <div class="flex flex-wrap gap-2" id="quick-switcher"></div>
+            </div>
+        </div>
+
+        <div class="demo-card">
+            <h2 class="section-title">💻 JavaScript API Usage</h2>
+            <p class="text-gray-600 mb-4">Example code for programmatic language switching:</p>
+            <div class="code-block">
+<span class="comment">// Initialize i18n</span>
+<span class="keyword">await</span> CaptchaXI18n.init({
+    defaultLocale: <span class="string">'en'</span>
+});
+
+<span class="comment">// Get translations</span>
+<span class="keyword">const</span> title = CaptchaXI18n.t(<span class="string">'captcha.title'</span>);
+<span class="keyword">const</span> timeText = CaptchaXI18n.t(<span class="string">'time.minutesAgo'</span>, { n: <span class="string">5</span> });
+
+<span class="comment">// Switch language</span>
+<span class="keyword">await</span> CaptchaXI18n.setLocale(<span class="string">'ja'</span>);
+
+<span class="comment">// Listen for changes</span>
+CaptchaXI18n.onLocaleChange((locale) => {
+    console.log(<span class="string">'Language changed to:'</span>, locale);
+});
+            </div>
+        </div>
+
+        <div class="demo-card">
+            <h2 class="section-title">🧪 Test All Languages</h2>
+            <p class="text-gray-600 mb-4">Click each language to see translations and layout changes:</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="language-tester"></div>
+        </div>
+
+        <footer class="text-center text-gray-500 text-sm mt-12 pt-8 border-t border-gray-200">
+            <p>CaptchaX Internationalization System</p>
+            <p class="mt-2">Supports: zh-CN, zh-TW, en, ja, ko, ar</p>
+        </footer>
+    </div>
+
+    <script src="/static/i18n.js"></script>
+    <script src="/static/language-switcher.js"></script>
+    <script src="/static/i18n-integration.js"></script>
+    <script>
+        const supportedLocales = [
+            { code: 'zh-CN', name: '简体中文', flag: '🇨🇳' },
+            { code: 'zh-TW', name: '繁體中文', flag: '🇹🇼' },
+            { code: 'en', name: 'English', flag: '🇺🇸' },
+            { code: 'ja', name: '日本語', flag: '🇯🇵' },
+            { code: 'ko', name: '한국어', flag: '🇰🇷' },
+            { code: 'ar', name: 'العربية', flag: '🇸🇦' }
+        ];
+
+        function renderLanguageBadges(currentLocale) {
+            const container = document.getElementById('language-badges');
+            container.innerHTML = supportedLocales.map(function(locale) {
+                const isActive = locale.code === currentLocale;
+                return '<span class="lang-badge' + (isActive ? ' active' : '') + '" data-lang="' + locale.code + '">' +
+                       locale.flag + ' ' + locale.name + '</span>';
+            }).join('');
+        }
+
+        function renderQuickSwitcher(currentLocale) {
+            const container = document.getElementById('quick-switcher');
+            container.innerHTML = supportedLocales.map(function(locale) {
+                const isActive = locale.code === currentLocale;
+                return '<button class="px-4 py-2 rounded-lg text-sm font-medium transition ' +
+                       (isActive ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200') +
+                       '" data-lang="' + locale.code + '">' +
+                       locale.flag + ' ' + locale.code.toUpperCase() + '</button>';
+            }).join('');
+
+            container.querySelectorAll('button').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var locale = this.getAttribute('data-lang');
+                    CaptchaXI18n.setLocale(locale);
+                });
+            });
+        }
+
+        function renderLanguageTester() {
+            const container = document.getElementById('language-tester');
+            container.innerHTML = supportedLocales.map(function(locale) {
+                return '<button class="p-4 rounded-lg border-2 border-gray-200 hover:border-blue-500 transition text-center" ' +
+                       'data-lang="' + locale.code + '" dir="' + (locale.code === 'ar' ? 'rtl' : 'ltr') + '">' +
+                       '<div class="text-3xl mb-2">' + locale.flag + '</div>' +
+                       '<div class="font-medium text-gray-800">' + locale.name + '</div>' +
+                       '<div class="text-xs text-gray-500">' + locale.code + '</div>' +
+                       '<div class="text-xs text-gray-400 mt-1">' + (locale.code === 'ar' ? 'RTL' : 'LTR') + '</div>' +
+                       '</button>';
+            }).join('');
+
+            container.querySelectorAll('button').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var locale = this.getAttribute('data-lang');
+                    CaptchaXI18n.setLocale(locale);
+                });
+            });
+        }
+
+        function updateTimeExamples() {
+            document.getElementById('time-just-now').textContent = CaptchaXI18n.t('time.justNow');
+            document.getElementById('time-5-min').textContent = CaptchaXI18n.t('time.minutesAgo', { n: 5 });
+            document.getElementById('time-2-hours').textContent = CaptchaXI18n.t('time.hoursAgo', { n: 2 });
+        }
+
+        function updateCurrentLocaleDisplay() {
+            var locale = CaptchaXI18n.getLocale();
+            var info = I18n.getLocaleInfo(locale);
+            document.getElementById('current-lang').textContent = locale;
+            document.getElementById('current-dir').textContent = info && info.dir ? info.dir.toUpperCase() : 'LTR';
+
+            renderLanguageBadges(locale);
+            renderQuickSwitcher(locale);
+            updateTimeExamples();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            renderLanguageTester();
+
+            CaptchaXI18n.init({
+                defaultLocale: 'en'
+            }).then(function() {
+                updateCurrentLocaleDisplay();
+
+                LanguageSwitcher.init({
+                    position: 'top-right',
+                    onChange: function(locale) {
+                        updateCurrentLocaleDisplay();
+                    }
+                });
+
+                I18n.onLocaleChange(function() {
+                    updateCurrentLocaleDisplay();
+                });
+            });
+        });
+    </script>
+</body>
+</html>

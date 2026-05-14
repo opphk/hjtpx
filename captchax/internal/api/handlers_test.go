@@ -58,7 +58,7 @@ func (m *MockCaptchaService) LogVerification(ctx context.Context, appID, captcha
 func setupRouter(handler *Handler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/health", handler.healthCheck)
+	r.GET("/health", handler.HealthCheck)
 	r.POST("/api/v1/captcha/slider/generate", handler.getSliderCaptcha)
 	r.POST("/api/v1/captcha/slider/verify", handler.verifySliderCaptcha)
 	r.POST("/api/v1/captcha/click/generate", handler.getClickCaptcha)
@@ -70,7 +70,7 @@ func TestHealthEndpoint(t *testing.T) {
 	handler := &Handler{}
 
 	router := gin.New()
-	router.GET("/health", handler.healthCheck)
+	router.GET("/health", handler.HealthCheck)
 
 	t.Run("Health check returns 200", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/health", nil)

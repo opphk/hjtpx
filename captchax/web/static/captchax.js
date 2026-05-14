@@ -1,13 +1,13 @@
 /**
  * CaptchaX Client SDK
- * @version 1.0.0
+ * @version 1.1.0
  * @license MIT
  */
 (function(global) {
     'use strict';
 
     const CaptchaX = {
-        version: '1.0.0',
+        version: '1.1.0',
         config: {
             serverUrl: '',
             appId: '',
@@ -125,6 +125,19 @@
             element.style.display = 'none';
             addClass(element, 'captchax-hidden');
         }
+    }
+
+    function announceToScreenReader(message, politeness = 'polite') {
+        const liveRegion = document.createElement('div');
+        liveRegion.setAttribute('role', 'status');
+        liveRegion.setAttribute('aria-live', politeness);
+        liveRegion.setAttribute('aria-atomic', 'true');
+        liveRegion.className = 'captchax-sr-announce';
+        liveRegion.textContent = message;
+        document.body.appendChild(liveRegion);
+        setTimeout(() => {
+            liveRegion.remove();
+        }, 1000);
     }
 
     function request(url, options) {
@@ -253,6 +266,14 @@
         addClass(container, 'captchax-container');
         container.dataset.captchaxId = instanceId;
 
+        if (instance.config.theme === 'auto') {
+            addClass(container, 'captchax-auto');
+        } else if (instance.config.theme === 'dark') {
+            addClass(container, 'captchax-dark');
+        } else if (instance.config.theme === 'light') {
+            addClass(container, 'captchax-light');
+        }
+
         CaptchaX.instances.set(instanceId, instance);
         CaptchaX.defaultInstance = instance;
 
@@ -335,7 +356,7 @@
         return '<div class="captchax-widget">' +
             '<div class="captchax-header">' +
             '<span class="captchax-title">安全验证</span>' +
-            '<button type="button" class="captchax-close">&times;</button>' +
+            '<button type="button" class="captchax-close" aria-label="关闭">×</button>' +
             '</div>' +
             '<div class="captchax-body"></div>' +
             '<div class="captchax-footer"></div>' +
@@ -354,11 +375,12 @@
         instance.elements.footer = container.querySelector('.captchax-footer');
         instance.elements.closeBtn = container.querySelector('.captchax-close');
 
-        if (instance.config.theme === 'dark') {
-            addClass(container, 'captchax-dark');
-        } else if (instance.config.theme === 'light') {
-            addClass(container, 'captchax-light');
-        }
+        const liveRegion = document.createElement('div');
+        liveRegion.setAttribute('role', 'status');
+        liveRegion.setAttribute('aria-live', 'polite');
+        liveRegion.className = 'captchax-live-region';
+        container.appendChild(liveRegion);
+        instance.elements.liveRegion = liveRegion;
 
         showLoading(instance);
 
@@ -366,16 +388,28 @@
             instance.state.captchaId = data.id;
             instance.state.loading = false;
             renderCaptcha(instance, data);
+            updateLiveRegion(instance, '验证码已加载完成');
         }).catch(err => {
             instance.state.loading = false;
             renderError(instance, err.message || CaptchaX.config.errorText);
+            updateLiveRegion(instance, '验证码加载失败');
         });
+    }
+
+    function updateLiveRegion(instance, message) {
+        if (instance.elements.liveRegion) {
+            instance.elements.liveRegion.textContent = message;
+        }
     }
 
     function showLoading(instance) {
         const { body } = instance.elements;
-        body.innerHTML = '<div class="captchax-loading">' +
-            '<div class="captchax-spinner"></div>' +
+        body.innerHTML = '<div class="captchax-loading" role="status" aria-label="加载中">' +
+            '<div class="captchax-loading-spinner" aria-hidden="true">' +
+            '<div class="captchax-spinner-ring"></div>' +
+            '<div class="captchax-spinner-ring"></div>' +
+            '<div class="captchax-spinner-ring"></div>' +
+            '</div>' +
             '<span class="captchax-loading-text">' + CaptchaX.config.loadingText + '</span>' +
             '</div>';
         show(body);
@@ -424,30 +458,52 @@
         container.innerHTML = '';
 
         const sliderContainer = createElement('div', 'captchax-slider-container');
+        const bgWrapper = createElement('div', 'captchax-slider-bg-wrapper');
         const background = createElement('img', 'captchax-slider-bg', {
             src: `data:image/png;base64,${data.background_b64}`,
-            alt: '验证码背景',
-            draggable: 'false'
+            alt: '验证码背景图片',
+            draggable: 'false',
+            role: 'img'
         });
-        const slider = createElement('img', 'captchax-slider-img', {
+        const puzzleWrapper = createElement('div', 'captchax-slider-puzzle-wrapper');
+        const slider = createElement('img', 'captchax-slider-puzzle', {
             src: `data:image/png;base64,${data.slider_b64}`,
-            alt: '滑块',
+            alt: '拖动滑块',
             draggable: 'false'
         });
         const sliderTrack = createElement('div', 'captchax-slider-track');
         const sliderBar = createElement('div', 'captchax-slider-bar');
-        const sliderThumb = createElement('div', 'captchax-slider-thumb');
+        const sliderProgress = createElement('div', 'captchax-slider-progress');
+        const trackPattern = createElement('div', 'captchax-track-pattern');
+        const sliderThumb = createElement('div', 'captchax-slider-thumb', {
+            role: 'slider',
+            'aria-label': '拖动滑块完成验证',
+            'aria-valuemin': 0,
+            'aria-valuemax': 100,
+            'aria-valuenow': 0,
+            tabindex: 0
+        });
+        const sliderArrow = createElement('div', 'captchax-slider-arrow');
+        sliderArrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 0L12 6L6 12L0 6L6 0Z"/></svg>';
         const sliderTip = createElement('span', 'captchax-slider-tip');
-        const message = createElement('div', 'captchax-message');
+        const message = createElement('div', 'captchax-message', {
+            role: 'alert',
+            'aria-live': 'assertive'
+        });
 
-        sliderTip.textContent = '拖动滑块完成验证';
-        sliderThumb.appendChild(sliderTip);
+        sliderTip.innerHTML = '<span class="captchax-tip-icon">🔓</span><span class="captchax-tip-text">拖动滑块完成验证</span>';
+        sliderThumb.appendChild(sliderArrow);
+        sliderBar.appendChild(sliderProgress);
+        sliderBar.appendChild(trackPattern);
         sliderBar.appendChild(sliderThumb);
         sliderTrack.appendChild(sliderBar);
 
-        sliderContainer.appendChild(background);
-        sliderContainer.appendChild(slider);
+        bgWrapper.appendChild(background);
+        puzzleWrapper.appendChild(slider);
+        sliderContainer.appendChild(bgWrapper);
+        sliderContainer.appendChild(puzzleWrapper);
         sliderContainer.appendChild(sliderTrack);
+        sliderContainer.appendChild(sliderTip);
         container.appendChild(sliderContainer);
         container.appendChild(message);
 
@@ -456,6 +512,7 @@
         instance.elements.sliderImg = slider;
         instance.elements.sliderTrack = sliderTrack;
         instance.elements.sliderBar = sliderBar;
+        instance.elements.sliderProgress = sliderProgress;
         instance.elements.sliderThumb = sliderThumb;
         instance.elements.message = message;
 
@@ -463,7 +520,9 @@
     }
 
     function initSliderInteraction(instance, data) {
-        const { sliderImg, sliderThumb, sliderTrack, message } = instance.elements;
+        const { sliderImg, sliderThumb, sliderTrack, sliderProgress, message } = instance.elements;
+
+        if (!sliderThumb) return;
 
         let isDragging = false;
         let startX = 0;
@@ -471,33 +530,49 @@
         let track = [];
         let startTime = 0;
 
-        const sliderSize = instance.config.sliderSize || 50;
+        const sliderSize = instance.config.sliderSize || 44;
         const maxX = sliderTrack.offsetWidth - sliderSize;
+
+        function getClientX(e) {
+            if (e.touches && e.touches.length > 0) {
+                return e.touches[0].clientX;
+            }
+            return e.clientX;
+        }
 
         function onMouseDown(e) {
             if (instance.state.verified) return;
 
+            e.preventDefault();
             isDragging = true;
-            startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            startX = getClientX(e);
             startTime = Date.now();
             track = [];
             instance.track = [];
 
             addClass(sliderThumb, 'captchax-dragging');
+            addClass(sliderTrack, 'captchax-captcha-area');
+            addClass(sliderTrack, 'captchax-area-active');
             document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'grabbing';
+
+            sliderThumb.setAttribute('aria-valuenow', 0);
+            sliderThumb.focus();
+            updateLiveRegion(instance, '开始拖动滑块');
         }
 
         function onMouseMove(e) {
             if (!isDragging) return;
 
-            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            const clientX = getClientX(e);
             currentX = clientX - startX;
             currentX = Math.max(0, Math.min(currentX, maxX));
 
-            const percent = currentX / maxX;
+            const percent = Math.round((currentX / maxX) * 100);
 
             sliderImg.style.left = currentX + 'px';
             sliderThumb.style.left = currentX + 'px';
+            sliderProgress.style.width = percent + '%';
 
             const now = Date.now();
             const timeDiff = now - (track.length > 0 ? track[track.length - 1].t : startTime);
@@ -509,6 +584,8 @@
             });
 
             instance.track = track;
+            sliderThumb.setAttribute('aria-valuenow', percent);
+            sliderThumb.setAttribute('aria-valuetext', `进度 ${percent}%`);
         }
 
         function onMouseUp(e) {
@@ -516,7 +593,9 @@
 
             isDragging = false;
             removeClass(sliderThumb, 'captchax-dragging');
+            removeClass(sliderTrack, 'captchax-area-active');
             document.body.style.userSelect = '';
+            document.body.style.cursor = '';
 
             if (track.length > 0) {
                 const duration = Date.now() - startTime;
@@ -529,25 +608,100 @@
                 instance.track.duration = duration;
             }
 
+            updateLiveRegion(instance, '验证中...');
             verifySlider(instance, data, currentX);
         }
 
+        function onKeyDown(e) {
+            if (instance.state.verified) return;
+            if (document.activeElement !== sliderThumb) return;
+
+            const step = maxX / 20;
+            let newX = currentX;
+
+            switch (e.key) {
+                case 'ArrowRight':
+                case 'ArrowUp':
+                    e.preventDefault();
+                    newX = Math.min(currentX + step, maxX);
+                    break;
+                case 'ArrowLeft':
+                case 'ArrowDown':
+                    e.preventDefault();
+                    newX = Math.max(currentX - step, 0);
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    newX = 0;
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    newX = maxX;
+                    break;
+                default:
+                    return;
+            }
+
+            if (newX !== currentX) {
+                currentX = newX;
+                const percent = Math.round((currentX / maxX) * 100);
+
+                sliderImg.style.left = currentX + 'px';
+                sliderThumb.style.left = currentX + 'px';
+                sliderProgress.style.width = percent + '%';
+
+                track.push({
+                    x: currentX,
+                    y: 0,
+                    t: Date.now() - startTime,
+                    dt: 50
+                });
+                instance.track = track;
+
+                sliderThumb.setAttribute('aria-valuenow', percent);
+                sliderThumb.setAttribute('aria-valuetext', `进度 ${percent}%`);
+            }
+        }
+
+        function onKeyUp(e) {
+            if (instance.state.verified) return;
+            if (document.activeElement !== sliderThumb) return;
+
+            if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                if (track.length > 0) {
+                    const duration = Date.now() - startTime;
+                    instance.track = track.map(p => ({
+                        x: p.x,
+                        y: p.y,
+                        t: p.t,
+                        dt: p.dt
+                    }));
+                    instance.track.duration = duration;
+                }
+                updateLiveRegion(instance, '验证中...');
+                verifySlider(instance, data, currentX);
+            }
+        }
+
         sliderThumb.addEventListener('mousedown', onMouseDown);
-        sliderThumb.addEventListener('touchstart', onMouseDown, { passive: true });
+        sliderThumb.addEventListener('touchstart', onMouseDown, { passive: false });
+        sliderThumb.addEventListener('keydown', onKeyDown);
+        sliderThumb.addEventListener('keyup', onKeyUp);
 
         document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('touchmove', onMouseMove, { passive: true });
+        document.addEventListener('touchmove', onMouseMove, { passive: false });
 
         document.addEventListener('mouseup', onMouseUp);
         document.addEventListener('touchend', onMouseUp);
-
-        sliderThumb.addEventListener('touchcancel', onMouseUp);
+        document.addEventListener('touchcancel', onMouseUp);
     }
 
     function verifySlider(instance, data, position) {
-        const { message } = instance.elements;
+        const { message, sliderThumb, sliderTrack, sliderProgress } = instance.elements;
 
         message.innerHTML = '<span class="captchax-loading-inline">验证中...</span>';
+        message.className = 'captchax-message captchax-message-show';
         show(message);
         removeClass(message, 'captchax-message-success captchax-message-error');
 
@@ -576,19 +730,36 @@
         container.innerHTML = '';
 
         const clickContainer = createElement('div', 'captchax-click-container');
+        const imageWrapper = createElement('div', 'captchax-click-image-wrapper captchax-captcha-area');
         const image = createElement('img', 'captchax-click-img', {
             src: `data:image/png;base64,${data.image}`,
-            alt: '点选验证码',
-            draggable: 'false'
+            alt: '点选验证码图片',
+            draggable: 'false',
+            role: 'img'
         });
+        const clickMarkers = createElement('div', 'captchax-click-markers');
         const instruction = createElement('div', 'captchax-click-instruction');
-        const message = createElement('div', 'captchax-message');
+        const message = createElement('div', 'captchax-message', {
+            role: 'alert',
+            'aria-live': 'assertive'
+        });
         const clickIndicators = createElement('div', 'captchax-click-indicators');
 
-        instruction.innerHTML = `<span>请依次点击：</span><strong class="captchax-target-chars">${(data.target_chars || []).join(' ')}</strong>`;
-        instruction.innerHTML += '<button type="button" class="captchax-refresh-btn" title="刷新">&#8635;</button>';
+        const targetChars = data.target_chars || [];
+        const instructionText = instruction.innerHTML = `
+            <span class="captchax-instruction-text">请依次点击：</span>
+            <span class="captchax-target-chars" aria-label="目标字符">${targetChars.join(' ')}</span>
+            <button type="button" class="captchax-refresh-btn" title="刷新" aria-label="刷新验证码">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M14 8c0-3.314-2.686-6-6-6v2l-4-4 4-4v2c4.418 0 8 3.582 8 8s-3.582 8-8 8c-1.5 0-2.898-.42-4.08-1.14l1.44-1.44A5.98 5.98 0 0 0 8 14c3.314 0 6-2.686 6-6z"/>
+                    <path d="M2 8c0 1.5.42 2.898 1.14 4.08l-1.44 1.44A5.98 5.98 0 0 0 2 8z"/>
+                </svg>
+            </button>
+        `;
 
-        clickContainer.appendChild(image);
+        imageWrapper.appendChild(image);
+        imageWrapper.appendChild(clickMarkers);
+        clickContainer.appendChild(imageWrapper);
         clickContainer.appendChild(instruction);
         container.appendChild(clickContainer);
         container.appendChild(message);
@@ -596,30 +767,67 @@
 
         instance.elements.clickContainer = clickContainer;
         instance.elements.clickImage = image;
+        instance.elements.clickImageWrapper = imageWrapper;
         instance.elements.clickInstruction = instruction;
         instance.elements.clickIndicators = clickIndicators;
         instance.elements.message = message;
 
+        updateLiveRegion(instance, `点选验证：请依次点击 ${targetChars.join('、')}`);
         initClickInteraction(instance, data);
     }
 
     function initClickInteraction(instance, data) {
-        const { clickImage, clickIndicators, clickInstruction, message } = instance.elements;
+        const { clickImage, clickImageWrapper, clickIndicators, clickInstruction, message } = instance.elements;
+
+        if (!clickImage) return;
 
         let clicks = [];
         let clickElements = [];
+        let rippleElements = [];
         const targetChars = data.target_chars || [];
+        const totalClicks = targetChars.length;
+        const startTime = Date.now();
 
-        if (targetChars.length === 0) {
-            message.textContent = '配置错误：未找到目标字符';
-            show(message);
-            addClass(message, 'captchax-message-error');
-            return;
+        instance.track = [];
+
+        function updateInstruction() {
+            const clickedChars = targetChars.slice(0, clicks.length);
+            const remainingChars = targetChars.slice(clicks.length);
+            const charsContainer = clickInstruction.querySelector('.captchax-target-chars');
+
+            if (charsContainer) {
+                charsContainer.innerHTML = clickedChars.map(c => `<span class="captchax-chars-clicked">${c}</span>`).join(' ') + ' ' + remainingChars.join(' ');
+            }
+
+            const progressFill = instance.container.querySelector('.captchax-progress-fill');
+            const clickedCount = instance.container.querySelector('.captchax-clicked-count');
+
+            if (progressFill) {
+                const progress = totalClicks > 0 ? (clicks.length / totalClicks) * 100 : 0;
+                progressFill.style.width = progress + '%';
+            }
+
+            if (clickedCount) {
+                clickedCount.textContent = clicks.length;
+            }
+        }
+
+        function createRipple(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'captchax-ripple';
+            ripple.style.left = x + 'px';
+            ripple.style.top = y + 'px';
+            clickIndicators.appendChild(ripple);
+            rippleElements.push(ripple);
+            setTimeout(() => {
+                ripple.remove();
+                rippleElements = rippleElements.filter(r => r !== ripple);
+            }, 600);
         }
 
         function onImageClick(e) {
             if (instance.state.verified) return;
-            if (clicks.length >= targetChars.length) return;
+            if (clicks.length >= totalClicks) return;
 
             const rect = clickImage.getBoundingClientRect();
             const scaleX = clickImage.naturalWidth / rect.width;
@@ -627,58 +835,76 @@
 
             const x = Math.round((e.clientX - rect.left) * scaleX);
             const y = Math.round((e.clientY - rect.top) * scaleY);
-
-            const time = Date.now() - instance.clickStartTime;
+            const time = Date.now() - startTime;
 
             clicks.push({ x, y, t: time });
             instance.track = clicks;
 
-            const indicator = createElement('span', 'captchax-click-indicator');
+            const indicator = document.createElement('span');
+            indicator.className = 'captchax-click-indicator';
             indicator.textContent = clicks.length;
             indicator.style.left = (e.clientX - rect.left) + 'px';
             indicator.style.top = (e.clientY - rect.top) + 'px';
+            indicator.setAttribute('role', 'img');
+            indicator.setAttribute('aria-label', `第${clicks.length}个点击位置`);
             clickIndicators.appendChild(indicator);
             clickElements.push(indicator);
 
-            addClass(indicator, 'captchax-click-indicator-animate');
+            createRipple(e.clientX - rect.left, e.clientY - rect.top);
 
-            if (clicks.length === targetChars.length) {
+            requestAnimationFrame(() => {
+                addClass(indicator, 'captchax-click-indicator-animate');
+            });
+
+            updateInstruction();
+            updateLiveRegion(instance, `已点击 ${clicks.length} 个，还需点击 ${totalClicks - clicks.length} 个`);
+
+            if (clicks.length === totalClicks) {
+                addClass(clickImageWrapper, 'captchax-area-active');
                 verifyClick(instance, data, clicks);
             }
         }
 
-        instance.clickStartTime = Date.now();
         clickImage.addEventListener('click', onImageClick);
 
         const refreshBtn = clickInstruction.querySelector('.captchax-refresh-btn');
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => {
                 instance.state.captchaId = null;
+                clicks = [];
+                clickElements.forEach(el => el.remove());
+                clickElements = [];
+                rippleElements.forEach(el => el.remove());
+                rippleElements = [];
+                instance.track = [];
                 showLoading(instance);
                 fetchCaptcha(instance).then(captchaData => {
                     instance.state.captchaId = captchaData.id;
-                    clicks = [];
-                    clickElements.forEach(el => el.remove());
-                    clickElements = [];
-                    instance.track = [];
                     renderCaptcha(instance, captchaData);
                 }).catch(err => {
                     handleError(instance, err.message);
                 });
             });
         }
+
+        instance.clickStartTime = startTime;
     }
 
     function verifyClick(instance, data, clicks) {
-        const { message } = instance.elements;
+        const { message, clickImageWrapper } = instance.elements;
 
         message.innerHTML = '<span class="captchax-loading-inline">验证中...</span>';
+        message.className = 'captchax-message captchax-message-show';
         show(message);
         removeClass(message, 'captchax-message-success captchax-message-error');
+        removeClass(clickImageWrapper, 'captchax-area-active');
 
         const verifyData = {
             captcha_id: instance.state.captchaId,
-            clicks: clicks
+            clicks: clicks,
+            click_count: clicks.length,
+            target_chars: data.target_chars || [],
+            duration: Date.now() - (instance.clickStartTime || Date.now())
         };
 
         request(getAbsoluteUrl('/api/captcha/click/verify'), {
@@ -699,31 +925,48 @@
         container.innerHTML = '';
 
         const rotateContainer = createElement('div', 'captchax-rotate-container');
-        const imageWrapper = createElement('div', 'captchax-rotate-image-wrapper');
+        const imageWrapper = createElement('div', 'captchax-rotate-image-wrapper captchax-captcha-area');
         const image = createElement('img', 'captchax-rotate-img', {
             src: `data:image/png;base64,${data.image}`,
-            alt: '旋转验证码',
-            draggable: 'false'
+            alt: '旋转验证码图片',
+            draggable: 'false',
+            role: 'img'
         });
-        const handle = createElement('div', 'captchax-rotate-handle');
-        const control = createElement('div', 'captchax-rotate-control');
+        const handle = createElement('div', 'captchax-rotate-handle', {
+            role: 'slider',
+            'aria-label': '旋转角度',
+            'aria-valuemin': 0,
+            'aria-valuemax': 360,
+            'aria-valuenow': 0,
+            tabindex: 0
+        });
+        const control = createElement('div', 'captchax-rotate-controls');
+        const sliderWrapper = createElement('div', 'captchax-rotate-slider-wrapper');
         const slider = createElement('input', 'captchax-rotate-slider', {
             type: 'range',
             min: '0',
             max: '360',
-            value: '0'
+            value: '0',
+            'aria-label': '旋转角度滑块'
         });
-        const valueDisplay = createElement('span', 'captchax-rotate-value');
-        const verifyBtn = createElement('button', 'captchax-rotate-verify-btn', {
-            type: 'button'
+        const valueDisplay = createElement('div', 'captchax-rotate-value-display');
+        const valueSpan = createElement('span', 'captchax-rotate-value');
+        valueSpan.textContent = '0';
+        const unitSpan = createElement('span', 'captchax-rotate-unit');
+        unitSpan.textContent = '°';
+        const verifyBtn = createElement('button', 'captchax-rotate-verify-btn');
+        verifyBtn.textContent = '确认旋转';
+        verifyBtn.setAttribute('aria-label', '确认旋转角度');
+        const message = createElement('div', 'captchax-message', {
+            role: 'alert',
+            'aria-live': 'assertive'
         });
-        const message = createElement('div', 'captchax-message');
 
-        valueDisplay.textContent = '0°';
-        verifyBtn.textContent = '确认';
-
-        control.appendChild(slider);
-        control.appendChild(valueDisplay);
+        valueDisplay.appendChild(valueSpan);
+        valueDisplay.appendChild(unitSpan);
+        sliderWrapper.appendChild(slider);
+        sliderWrapper.appendChild(valueDisplay);
+        control.appendChild(sliderWrapper);
         control.appendChild(verifyBtn);
 
         imageWrapper.appendChild(image);
@@ -736,39 +979,92 @@
 
         instance.elements.rotateContainer = rotateContainer;
         instance.elements.rotateImage = image;
+        instance.elements.rotateImageWrapper = imageWrapper;
         instance.elements.rotateHandle = handle;
         instance.elements.rotateSlider = slider;
-        instance.elements.rotateValue = valueDisplay;
+        instance.elements.rotateValue = valueSpan;
         instance.elements.rotateVerifyBtn = verifyBtn;
         instance.elements.message = message;
 
+        updateLiveRegion(instance, '旋转验证：将图片旋转到正确角度');
         initRotateInteraction(instance, data);
     }
 
     function initRotateInteraction(instance, data) {
-        const { rotateImage, rotateSlider, rotateValue, rotateVerifyBtn, message } = instance.elements;
+        const { rotateImage, rotateHandle, rotateSlider, rotateValue, rotateVerifyBtn, message } = instance.elements;
+
+        if (!rotateSlider) return;
 
         let currentAngle = 0;
         let isDragging = false;
         let startAngle = 0;
+        let startX = 0;
 
         function updateRotation(angle) {
             currentAngle = angle % 360;
             if (currentAngle < 0) currentAngle += 360;
             rotateImage.style.transform = `rotate(${currentAngle}deg)`;
             rotateSlider.value = currentAngle;
-            rotateValue.textContent = `${Math.round(currentAngle)}°`;
+            rotateValue.textContent = Math.round(currentAngle);
+            rotateHandle.setAttribute('aria-valuenow', Math.round(currentAngle));
+            rotateHandle.setAttribute('aria-valuetext', `${Math.round(currentAngle)}度`);
         }
 
         function onSliderInput(e) {
             updateRotation(parseInt(e.target.value, 10));
         }
 
+        function onHandleMouseDown(e) {
+            e.preventDefault();
+            isDragging = true;
+            startX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            startAngle = currentAngle;
+            addClass(rotateHandle, 'captchax-dragging');
+            document.body.style.cursor = 'grabbing';
+        }
+
+        function onHandleMouseMove(e) {
+            if (!isDragging) return;
+
+            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            const deltaX = clientX - startX;
+            const newAngle = startAngle + deltaX * 0.5;
+            updateRotation(newAngle);
+        }
+
+        function onHandleMouseUp() {
+            isDragging = false;
+            removeClass(rotateHandle, 'captchax-dragging');
+            document.body.style.cursor = '';
+        }
+
+        function onKeyDown(e) {
+            if (document.activeElement !== rotateHandle && document.activeElement !== rotateSlider) return;
+
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                updateRotation(currentAngle + 5);
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                updateRotation(currentAngle - 5);
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                updateRotation(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                updateRotation(360);
+            }
+        }
+
         function onVerifyClick() {
             if (instance.state.verified) return;
 
             message.innerHTML = '<span class="captchax-loading-inline">验证中...</span>';
+            message.className = 'captchax-message captchax-message-show';
             show(message);
+            removeClass(message, 'captchax-message-success captchax-message-error');
+
+            updateLiveRegion(instance, '验证中...');
 
             const verifyData = {
                 captcha_id: instance.state.captchaId,
@@ -790,11 +1086,23 @@
         }
 
         rotateSlider.addEventListener('input', onSliderInput);
+        rotateHandle.addEventListener('mousedown', onHandleMouseDown);
+        rotateHandle.addEventListener('touchstart', onHandleMouseDown, { passive: false });
+        document.addEventListener('mousemove', onHandleMouseMove);
+        document.addEventListener('touchmove', onHandleMouseMove, { passive: false });
+        document.addEventListener('mouseup', onHandleMouseUp);
+        document.addEventListener('touchend', onHandleMouseUp);
+        rotateHandle.addEventListener('keydown', onKeyDown);
+        rotateSlider.addEventListener('keydown', onKeyDown);
         rotateVerifyBtn.addEventListener('click', onVerifyClick);
+
+        rotateVerifyBtn.addEventListener('click', () => {
+            updateLiveRegion(instance, '已确认旋转角度');
+        });
     }
 
     function handleSuccess(instance, response) {
-        const { message, elements } = instance;
+        const { message, sliderThumb, sliderTrack, sliderProgress, clickImageWrapper, clickElements, rotateVerifyBtn } = instance.elements;
 
         instance.state.verified = true;
 
@@ -803,9 +1111,38 @@
         }
 
         message.textContent = CaptchaX.config.successText;
+        message.className = 'captchax-message captchax-message-show captchax-message-success';
         show(message);
-        removeClass(message, 'captchax-message-error');
-        addClass(message, 'captchax-message-success');
+
+        if (sliderThumb) {
+            addClass(sliderThumb, 'captchax-slider-success');
+            sliderThumb.style.cursor = 'default';
+            sliderThumb.setAttribute('aria-valuetext', '验证成功');
+        }
+
+        if (sliderTrack) {
+            addClass(sliderTrack, 'captchax-slider-track-success captchax-captcha-area captchax-area-success');
+        }
+
+        if (sliderProgress) {
+            sliderProgress.style.background = 'linear-gradient(90deg, rgba(82, 196, 26, 0.3) 0%, rgba(82, 196, 26, 0.2) 100%)';
+        }
+
+        if (clickImageWrapper) {
+            addClass(clickImageWrapper, 'captchax-area-success');
+            addClass(clickImageWrapper, 'captchax-click-image-success');
+            clickElements.forEach(el => {
+                removeClass(el, 'captchax-click-indicator-animate');
+                addClass(el, 'captchax-click-indicator-success');
+            });
+        }
+
+        if (rotateVerifyBtn) {
+            addClass(rotateVerifyBtn, 'captchax-rotate-verify-success');
+        }
+
+        showSuccessOverlay(instance);
+        updateLiveRegion(instance, '验证成功');
 
         CaptchaX.callbacks.onSuccess.forEach(cb => {
             try {
@@ -834,19 +1171,69 @@
         if (instance.config.autoClose !== false) {
             setTimeout(() => {
                 if (!instance.state.destroyed) {
-                    destroyInstance(instance);
+                    closeWithAnimation(instance);
                 }
             }, 1500);
         }
     }
 
+    function showSuccessOverlay(instance) {
+        const overlay = document.createElement('div');
+        overlay.className = 'captchax-success-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+
+        const area = instance.elements.sliderContainer || instance.elements.clickContainer || instance.elements.rotateContainer;
+        if (area) {
+            area.appendChild(overlay);
+            setTimeout(() => overlay.remove(), 600);
+        }
+    }
+
+    function showFailOverlay(instance) {
+        const overlay = document.createElement('div');
+        overlay.className = 'captchax-fail-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+
+        const area = instance.elements.sliderContainer || instance.elements.clickContainer || instance.elements.rotateContainer;
+        if (area) {
+            area.appendChild(overlay);
+            setTimeout(() => overlay.remove(), 400);
+        }
+    }
+
     function handleError(instance, errorMessage) {
-        const { message, elements } = instance;
+        const { message, sliderThumb, sliderTrack, sliderProgress, clickImageWrapper, clickElements, rotateVerifyBtn } = instance.elements;
 
         message.textContent = errorMessage || CaptchaX.config.failText;
+        message.className = 'captchax-message captchax-message-show captchax-message-error';
         show(message);
-        removeClass(message, 'captchax-message-success');
-        addClass(message, 'captchax-message-error');
+
+        if (sliderThumb) {
+            addClass(sliderThumb, 'captchax-slider-error');
+            setTimeout(() => {
+                removeClass(sliderThumb, 'captchax-slider-error');
+            }, 500);
+        }
+
+        if (sliderTrack) {
+            addClass(sliderTrack, 'captchax-captcha-area captchax-area-error');
+        }
+
+        if (sliderProgress) {
+            sliderProgress.style.background = 'linear-gradient(90deg, rgba(255, 77, 79, 0.3) 0%, rgba(255, 77, 79, 0.2) 100%)';
+        }
+
+        if (clickImageWrapper) {
+            addClass(clickImageWrapper, 'captchax-area-error');
+            addClass(clickImageWrapper, 'captchax-click-image-error');
+        }
+
+        if (rotateVerifyBtn) {
+            addClass(rotateVerifyBtn, 'captchax-rotate-verify-error');
+        }
+
+        showFailOverlay(instance);
+        updateLiveRegion(instance, `验证失败: ${errorMessage}`);
 
         CaptchaX.callbacks.onError.forEach(cb => {
             try {
@@ -859,14 +1246,10 @@
             }
         });
 
-        const errorType = errorMessage || '';
-        if (errorType.includes('过期') || errorType.includes('expired')) {
-            setTimeout(() => {
-                if (!instance.state.destroyed && !instance.state.verified) {
-                    reload(instance);
-                }
-            }, 2000);
-        } else if (errorType.includes('验证失败') || errorType.includes('incorrect')) {
+        const isExpired = errorMessage.includes('过期') || errorMessage.includes('expired');
+        const isFailed = errorMessage.includes('验证失败') || errorMessage.includes('incorrect');
+
+        if (isExpired || isFailed) {
             setTimeout(() => {
                 if (!instance.state.destroyed && !instance.state.verified) {
                     reload(instance);
@@ -875,20 +1258,39 @@
         }
     }
 
-    function renderError(instance, message) {
-        const { body, elements } = instance;
+    function closeWithAnimation(instance) {
+        const container = instance.container;
+        addClass(container, 'closing');
 
-        body.innerHTML = '<div class="captchax-error">' +
-            '<span class="captchax-error-icon">&#9888;</span>' +
-            `<span class="captchax-error-text">${message}</span>` +
-            '<button type="button" class="captchax-retry-btn">重试</button>' +
-            '</div>';
+        setTimeout(() => {
+            destroyInstance(instance);
+        }, 250);
+    }
+
+    function renderError(instance, errorMessage) {
+        const { body, liveRegion } = instance.elements;
+
+        body.innerHTML = `
+            <div class="captchax-error" role="alert">
+                <div class="captchax-error-icon" aria-hidden="true">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="#ff4d4f">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                </div>
+                <span class="captchax-error-text">${errorMessage}</span>
+                <button type="button" class="captchax-retry-btn" aria-label="重新加载验证码">重新加载</button>
+            </div>
+        `;
 
         const retryBtn = body.querySelector('.captchax-retry-btn');
         if (retryBtn) {
             retryBtn.addEventListener('click', () => {
                 reload(instance);
             });
+        }
+
+        if (liveRegion) {
+            liveRegion.textContent = `错误: ${errorMessage}`;
         }
     }
 
@@ -897,6 +1299,15 @@
         instance.state.verified = false;
         instance.track = [];
         showLoading(instance);
+
+        if (instance.elements.sliderThumb) {
+            instance.elements.sliderThumb.style.left = '0';
+            instance.elements.sliderThumb.className = 'captchax-slider-thumb';
+        }
+
+        if (instance.elements.sliderProgress) {
+            instance.elements.sliderProgress.style.width = '0';
+        }
 
         fetchCaptcha(instance).then(data => {
             instance.state.captchaId = data.id;
@@ -917,22 +1328,29 @@
 
         if (instance.container) {
             instance.container.innerHTML = '';
-            removeClass(instance.container, 'captchax-container captchax-dark captchax-light');
+            removeClass(instance.container, 'captchax-container captchax-dark captchax-light captchax-auto');
         }
     }
 
     function bindEvents(instance) {
-        const { closeBtn } = instance.elements;
+        const { closeBtn, container } = instance.elements;
 
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
-                destroyInstance(instance);
+                closeWithAnimation(instance);
+            });
+
+            closeBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    closeWithAnimation(instance);
+                }
             });
         }
 
-        instance.container.addEventListener('click', (e) => {
-            if (e.target === instance.container && instance.config.closeOnBackdrop !== false) {
-                destroyInstance(instance);
+        container.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && instance.config.closeOnBackdrop !== false) {
+                closeWithAnimation(instance);
             }
         });
     }

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type GzipConfig struct {
@@ -409,4 +411,78 @@ func (bf *BufferedFlusher) Flush() error {
 func (bf *BufferedFlusher) Stop() {
 	close(bf.stopCh)
 	bf.Flush()
+}
+
+func (gm *GzipMiddleware) Handler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !gm.shouldCompress(c.Request) {
+			c.Next()
+			return
+		}
+
+		gz, err := gzip.NewWriterLevel(c.Writer, gm.compression)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Header("Content-Encoding", "gzip")
+		c.Header("Vary", "Accept-Encoding")
+
+		c.Writer = &gzipResponseWriterAdapter{
+			ResponseWriter: c.Writer,
+			gz:            gz,
+			wroteHeader:   false,
+			minSize:       gm.config.MinSize,
+			compressed:    false,
+		}
+
+		c.Next()
+		gz.Close()
+	}
+}
+
+type gzipResponseWriterAdapter struct {
+	gin.ResponseWriter
+	gz           *gzip.Writer
+	wroteHeader  bool
+	minSize      int
+	compressed   bool
+	headerWrote  bool
+}
+
+func (w *gzipResponseWriterAdapter) WriteHeader(code int) {
+	if w.wroteHeader {
+		return
+	}
+	w.wroteHeader = true
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Vary", "Accept-Encoding")
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *gzipResponseWriterAdapter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	if !w.compressed && len(b) < w.minSize {
+		w.gz.Close()
+		return w.ResponseWriter.Write(b)
+	}
+
+	if !w.compressed {
+		w.compressed = true
+	}
+
+	return w.gz.Write(b)
+}
+
+func (w *gzipResponseWriterAdapter) Close() error {
+	return w.gz.Close()
+}
+
+func GzipHandler(cfg *GzipConfig) gin.HandlerFunc {
+	mw := NewGzipMiddleware(cfg)
+	return mw.Handler()
 }

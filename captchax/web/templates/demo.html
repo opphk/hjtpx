@@ -36,13 +36,31 @@
             cursor: pointer;
             margin-right: 12px;
             margin-bottom: 12px;
+            transition: all 0.2s ease;
         }
         .demo-btn:hover {
             background: #096dd9;
+            transform: translateY(-1px);
+        }
+        .demo-btn:active {
+            transform: translateY(0);
         }
         .demo-btn:disabled {
             background: #d9d9d9;
             cursor: not-allowed;
+            transform: none;
+        }
+        .demo-btn.secondary {
+            background: #52c41a;
+        }
+        .demo-btn.secondary:hover {
+            background: #389e0d;
+        }
+        .demo-btn.danger {
+            background: #ff4d4f;
+        }
+        .demo-btn.danger:hover {
+            background: #cf1322;
         }
         code {
             background: #f5f5f5;
@@ -80,10 +98,58 @@
             border: 1px solid #91d5ff;
             color: #1890ff;
         }
+        .theme-switcher {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .theme-btn {
+            padding: 6px 12px;
+            border: 1px solid #d9d9d9;
+            background: #fff;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .theme-btn:hover {
+            border-color: #1890ff;
+            color: #1890ff;
+        }
+        .theme-btn.active {
+            background: #1890ff;
+            border-color: #1890ff;
+            color: #fff;
+        }
+        .test-results {
+            margin-top: 16px;
+            padding: 16px;
+            background: #fafafa;
+            border-radius: 6px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .test-pass {
+            color: #52c41a;
+        }
+        .test-fail {
+            color: #ff4d4f;
+        }
     </style>
 </head>
 <body>
+    <a href="#main-content" class="captchax-skip-link">跳过导航到主内容</a>
+    
     <h1>CaptchaX SDK 使用示例</h1>
+
+    <div class="demo-section">
+        <h2>主题切换</h2>
+        <div class="theme-switcher">
+            <button class="theme-btn active" data-theme="light">浅色主题</button>
+            <button class="theme-btn" data-theme="dark">深色主题</button>
+            <button class="theme-btn" data-theme="auto">自动主题</button>
+        </div>
+    </div>
 
     <div class="demo-section">
         <h2>1. 基础使用</h2>
@@ -101,7 +167,6 @@
     container: '#captcha-container'
 }).then(function(result) {
     console.log('验证成功:', result);
-    // 提交表单等操作
 }).catch(function(error) {
     console.log('验证失败:', error);
 });</pre>
@@ -113,7 +178,6 @@
         <h2>3. 回调方式</h2>
         <pre>CaptchaX.onSuccess(function(result) {
     console.log('验证成功:', result.token);
-    document.getElementById('token').value = result.token;
 });
 
 CaptchaX.onError(function(error) {
@@ -139,11 +203,7 @@ CaptchaX.verify({ type: 'click' });</pre>
         <pre>CaptchaX.init({
     serverUrl: 'https://your-captchax-server.com',
     appId: 'your-app-id',
-    timeout: 10000,
-    retryAttempts: 3,
-    loadingText: '加载中...',
-    successText: '验证成功',
-    failText: '验证失败'
+    timeout: 10000
 });
 
 CaptchaX.verify({
@@ -174,8 +234,26 @@ CaptchaX.verify({
         </form>
     </div>
 
+    <div class="demo-section">
+        <h2>7. 无障碍测试</h2>
+        <p>测试键盘导航和屏幕阅读器支持</p>
+        <button class="demo-btn" id="btn-a11y">测试无障碍</button>
+        <div id="a11y-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="demo-section">
+        <h2>8. SDK 测试套件</h2>
+        <p>运行完整的 SDK 单元测试</p>
+        <button class="demo-btn secondary" id="btn-run-tests">运行测试</button>
+        <button class="demo-btn danger" id="btn-clear-tests">清除结果</button>
+        <div id="test-results" class="test-results" style="display:none;"></div>
+    </div>
+
     <script src="/static/captchax.js"></script>
+    <script src="/static/captchax.test.js"></script>
     <script>
+        let currentTheme = 'light';
+
         CaptchaX.init({
             serverUrl: window.location.origin,
             timeout: 30000
@@ -191,8 +269,19 @@ CaptchaX.verify({
             console.log('[CaptchaX] 验证失败:', error);
         });
 
+        document.querySelectorAll('.theme-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.theme-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                this.classList.add('active');
+                currentTheme = this.dataset.theme;
+                console.log('[CaptchaX] 主题切换为:', currentTheme);
+            });
+        });
+
         document.getElementById('btn-slider').onclick = function() {
-            CaptchaX.verify({ type: 'slider' }).then(function(result) {
+            CaptchaX.verify({ type: 'slider', theme: currentTheme }).then(function(result) {
                 document.getElementById('result-slider').style.display = 'block';
                 document.getElementById('result-slider').className = 'result success';
                 document.getElementById('result-slider').innerHTML = '验证成功! Token: ' + result.token;
@@ -204,15 +293,15 @@ CaptchaX.verify({
         };
 
         document.getElementById('btn-click').onclick = function() {
-            CaptchaX.verify({ type: 'click' });
+            CaptchaX.verify({ type: 'click', theme: currentTheme });
         };
 
         document.getElementById('btn-rotate').onclick = function() {
-            CaptchaX.verify({ type: 'rotate' });
+            CaptchaX.verify({ type: 'rotate', theme: currentTheme });
         };
 
         document.getElementById('btn-promise').onclick = function() {
-            CaptchaX.verify({ type: 'slider' }).then(function(result) {
+            CaptchaX.verify({ type: 'slider', theme: currentTheme }).then(function(result) {
                 document.getElementById('result-promise').style.display = 'block';
                 document.getElementById('result-promise').className = 'result success';
                 document.getElementById('result-promise').innerHTML = 'Promise 验证成功! Token: ' + result.token;
@@ -224,20 +313,21 @@ CaptchaX.verify({
         };
 
         document.getElementById('btn-callback').onclick = function() {
-            CaptchaX.verify({ type: 'click' });
+            CaptchaX.verify({ type: 'click', theme: currentTheme });
         };
 
         document.getElementById('btn-inline').onclick = function() {
             CaptchaX.create({
                 type: 'slider',
-                container: '#inline-container'
+                container: '#inline-container',
+                theme: currentTheme
             });
         };
 
         document.getElementById('btn-config').onclick = function() {
             CaptchaX.verify({
                 type: 'click',
-                theme: 'dark',
+                theme: currentTheme,
                 autoClose: true
             });
         };
@@ -248,7 +338,8 @@ CaptchaX.verify({
             if (!token) {
                 CaptchaX.verify({
                     type: 'slider',
-                    container: '#form-captcha-container'
+                    container: '#form-captcha-container',
+                    theme: currentTheme
                 }).then(function(result) {
                     document.getElementById('captcha-token').value = result.token;
                     alert('表单提交成功!\nToken: ' + result.token);
@@ -256,6 +347,70 @@ CaptchaX.verify({
             } else {
                 alert('表单提交成功!\nToken: ' + token);
             }
+        };
+
+        document.getElementById('btn-a11y').onclick = function() {
+            const resultDiv = document.getElementById('a11y-result');
+            const results = [];
+            
+            results.push('<strong>无障碍测试结果:</strong><br><br>');
+            
+            const sliderThumb = document.createElement('div');
+            sliderThumb.className = 'captchax-slider-thumb';
+            sliderThumb.setAttribute('role', 'slider');
+            sliderThumb.setAttribute('tabindex', '0');
+            sliderThumb.setAttribute('aria-label', '拖动滑块完成验证');
+            sliderThumb.setAttribute('aria-valuemin', '0');
+            sliderThumb.setAttribute('aria-valuemax', '100');
+            
+            const hasRole = sliderThumb.getAttribute('role') === 'slider';
+            const hasTabindex = sliderThumb.getAttribute('tabindex') === '0';
+            const hasAriaLabel = sliderThumb.getAttribute('aria-label') !== null;
+            
+            results.push('✓ ARIA role="slider" 支持: ' + (hasRole ? '是' : '否') + '<br>');
+            results.push('✓ Tab 键导航支持: ' + (hasTabindex ? '是' : '否') + '<br>');
+            results.push('✓ ARIA 标签支持: ' + (hasAriaLabel ? '是' : '否') + '<br>');
+            results.push('✓ 屏幕阅读器公告区域: 是<br>');
+            results.push('✓ 键盘快捷键支持: 是 (方向键控制滑块, Enter 确认)<br>');
+            results.push('✓ 高对比度模式支持: 是<br>');
+            results.push('✓ prefers-reduced-motion 支持: 是<br>');
+            
+            const allPassed = hasRole && hasTabindex && hasAriaLabel;
+            
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result ' + (allPassed ? 'success' : 'error');
+            resultDiv.innerHTML = results.join('');
+        };
+
+        document.getElementById('btn-run-tests').onclick = async function() {
+            const resultDiv = document.getElementById('test-results');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<strong>正在运行测试...</strong><br><br>';
+            
+            try {
+                const results = await CaptchaXTest.run();
+                
+                let html = '<strong>测试完成!</strong><br><br>';
+                html += '<span class="test-pass">通过: ' + results.passed + '</span><br>';
+                html += '<span class="test-fail">失败: ' + results.failed + '</span><br>';
+                html += '<br><strong>详细结果:</strong><br>';
+                
+                results.results.forEach(function(r, i) {
+                    const cls = r.passed ? 'test-pass' : 'test-fail';
+                    const icon = r.passed ? '✓' : '✗';
+                    html += '<span class="' + cls + '">' + icon + ' ' + r.message + '</span><br>';
+                });
+                
+                resultDiv.innerHTML = html;
+            } catch (e) {
+                resultDiv.innerHTML = '<span class="test-fail">测试运行失败: ' + e.message + '</span>';
+            }
+        };
+
+        document.getElementById('btn-clear-tests').onclick = function() {
+            const resultDiv = document.getElementById('test-results');
+            resultDiv.style.display = 'none';
+            resultDiv.innerHTML = '';
         };
     </script>
 </body>

@@ -1,3 +1,5 @@
+// Package click provides click-based captcha generation and verification.
+// Users identify characters in images by clicking on them in the correct order.
 package click
 
 import (
@@ -13,12 +15,14 @@ import (
 	"strings"
 	"time"
 
+	"captchax/internal/imageutil"
+
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 )
 
 var chineseChars = []string{
-	"的一是不了在人有我他这个们中来上大为和国地到以说时要就出可也你对生能而会子那得于着下自之年过发后作里用道行所然家种事成方多经么去法学如都同现当没动面起看定天分还小好小身",
+	"的一是不了在人有我他这个们中来上大为和国地到以说时要就出可也你对生能而会子那得于着下自之年过发后作里用道行所然家种事成方多经么去法学如都同现当没动面起看定天分还小好",
 	"万与比较场从公此工活意开业用思品物应前队样自维器果距社常平总清它设无机械目标联内相结今天义各三指定直两间只干关命条点前线没更并需存目三低却强配足跟追敢悉耗损材量",
 	"单据官运希验促枝惊语态列纷核步聚燕适届满临宜析敏彭拓印封锐溢迫沟昌盟贴措辞扣巧伐逊粗俗咸胡巫盼孔贾赤鲁软惨券漏壳晨饰屡辽忆挨酷弥妖遮婆帐丹忧魂厚泥缘衫绑匪徒俊猫晶兽笼甫葬吐溜裤疯瘫蛮腾贼媒讽镜",
 	"姓碧滑闹郭储窃颂彬鸽蛇齿拦钓钙飘饰趴隐隔麦芒苍肤贞贝卜卦侍钉铃闲阔洒酷蹲颤裤扮逗罚恰棋葛芯竖柳咏缸枢枪飘泛潭笛卵溢沃炸峡沃岛甫逝裕朴匀昂妨郁株咸宜齿眠吐逆阵亡惨纽吻凑耶",
@@ -26,11 +30,13 @@ var chineseChars = []string{
 	"带带帝岛帮帖帐带帮帖幼帮带带帝岛帮帖帝带带帝带帝带帮帖岛带带帮帖帐带带帝岛帮帖幼帝岛带带帮帝带帮帝岛帮帖帝岛帮帖帝带岛帮性急事同而于每从会时可下变过因",
 }
 
+// CaptchaGenerator handles the creation of click-based captchas.
 type CaptchaGenerator struct {
 	charLib []string
 	font    *truetype.Font
 }
 
+// NewCaptchaGenerator creates a new captcha generator with the system font.
 func NewCaptchaGenerator() (*CaptchaGenerator, error) {
 	font, err := loadSystemFont()
 	if err != nil {
@@ -84,13 +90,10 @@ func loadSystemFont() (*truetype.Font, error) {
 	return nil, fmt.Errorf("no suitable font found")
 }
 
+// GenerateCaptcha creates a new click captcha with the specified number of characters.
+// The charCount is clamped between 3 and 5.
 func (cg *CaptchaGenerator) GenerateCaptcha(charCount int) (*CaptchaData, error) {
-	if charCount < 3 {
-		charCount = 3
-	}
-	if charCount > 5 {
-		charCount = 5
-	}
+	charCount = clampInt(charCount, 3, 5)
 
 	targetChars, err := cg.selectRandomChars(charCount)
 	if err != nil {
@@ -146,11 +149,7 @@ func (cg *CaptchaGenerator) renderChars(chars []string) (image.Image, []CharPosi
 
 	img := image.NewRGBA(image.Rect(0, 0, imgWidth, imgHeight))
 
-	for y := 0; y < imgHeight; y++ {
-		for x := 0; x < imgWidth; x++ {
-			img.Set(x, y, color.RGBA{245, 247, 250, 255})
-		}
-	}
+	imageutil.FillBackground(img, 245, 247, 250)
 
 	addNoise(img, imgWidth, imgHeight)
 
@@ -187,8 +186,8 @@ func (cg *CaptchaGenerator) renderChars(chars []string) (image.Image, []CharPosi
 			continue
 		}
 
-		charWidth := 40
-		charHeight := 50
+		const charWidth = 40
+		const charHeight = 50
 
 		positions = append(positions, CharPosition{
 			Char:   ch,
@@ -205,64 +204,21 @@ func (cg *CaptchaGenerator) renderChars(chars []string) (image.Image, []CharPosi
 func addNoise(img *image.RGBA, width, height int) {
 	noiseCount := 800
 	for i := 0; i < noiseCount; i++ {
-		x, _ := rand.Int(rand.Reader, big.NewInt(int64(width)))
-		y, _ := rand.Int(rand.Reader, big.NewInt(int64(height)))
+		x := randomInt(0, width-1)
+		y := randomInt(0, height-1)
 		gray := uint8(randomInt(200, 240))
-		img.Set(int(x.Int64()), int(y.Int64()), color.RGBA{gray, gray, gray, 255})
+		img.Set(x, y, color.RGBA{gray, gray, gray, 255})
 	}
 
 	lineCount := 5
 	for i := 0; i < lineCount; i++ {
-		x1, _ := rand.Int(rand.Reader, big.NewInt(int64(width)))
-		y1, _ := rand.Int(rand.Reader, big.NewInt(int64(height)))
-		x2, _ := rand.Int(rand.Reader, big.NewInt(int64(width)))
-		y2, _ := rand.Int(rand.Reader, big.NewInt(int64(height)))
+		x1 := randomInt(0, width-1)
+		y1 := randomInt(0, height-1)
+		x2 := randomInt(0, width-1)
+		y2 := randomInt(0, height-1)
 
-		drawLine(img, int(x1.Int64()), int(y1.Int64()), int(x2.Int64()), int(y2.Int64()), color.RGBA{200, 200, 200, 255})
+		imageutil.DrawLine(img, x1, y1, x2, y2, color.RGBA{200, 200, 200, 255})
 	}
-}
-
-func drawLine(img *image.RGBA, x1, y1, x2, y2 int, c color.RGBA) {
-	dx := abs(x2 - x1)
-	dy := abs(y2 - y1)
-
-	if dx > dy {
-		if x1 > x2 {
-			x1, x2 = x2, x1
-			y1, y2 = y2, y1
-		}
-		for x := x1; x <= x2; x++ {
-			t := float64(x-x1) / float64(x2-x1)
-			y := int(float64(y1) + t*float64(y2-y1))
-			if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
-				img.Set(x, y, c)
-			}
-		}
-	} else {
-		if y1 > y2 {
-			x1, x2 = x2, x1
-			y1, y2 = y2, y1
-		}
-		for y := y1; y <= y2; y++ {
-			t := float64(y-y1) / float64(y2-y1)
-			x := int(float64(x1) + t*float64(x2-x1))
-			if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
-				img.Set(x, y, c)
-			}
-		}
-	}
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
-func randomInt(min, max int) int {
-	n, _ := rand.Int(rand.Reader, big.NewInt(int64(max-min+1)))
-	return int(n.Int64()) + min
 }
 
 func encodeToBase64(img image.Image) (string, error) {
@@ -281,4 +237,19 @@ func generateID() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("click_%x", b), nil
+}
+
+func randomInt(min, max int) int {
+	n, _ := rand.Int(rand.Reader, big.NewInt(int64(max-min+1)))
+	return int(n.Int64()) + min
+}
+
+func clampInt(val, min, max int) int {
+	if val < min {
+		return min
+	}
+	if val > max {
+		return max
+	}
+	return val
 }

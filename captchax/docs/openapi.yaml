@@ -1,0 +1,1442 @@
+openapi: 3.0.3
+info:
+  title: CaptchaX API
+  description: |
+    CaptchaX 行为验证系统 API 文档
+
+    ## 概述
+    CaptchaX 提供滑块验证、点选验证和拼图验证三种验证方式，支持高性能、高可用的验证码服务。
+
+    ## 认证
+    管理后台 API 需要通过 JWT Token 进行认证。
+
+    ## 限流
+    API 默认限流为 1000 请求/分钟，可通过配置调整。
+
+    ## 错误处理
+    所有错误响应都遵循统一格式：
+    ```json
+    {
+      "code": 错误码,
+      "message": "错误描述",
+      "data": null
+    }
+    ```
+  version: 2.0.0
+  contact:
+    name: CaptchaX Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: 开发环境
+  - url: https://api.captchax.example.com
+    description: 生产环境
+
+tags:
+  - name: 健康检查
+    description: 服务健康状态检查
+  - name: 滑块验证
+    description: 滑块验证码生成与验证
+  - name: 点选验证
+    description: 点选验证码生成与验证
+  - name: 拼图验证
+    description: 拼图验证码生成与验证
+  - name: 批量验证
+    description: 批量验证接口 (v2)
+  - name: 场景管理
+    description: 验证场景管理 (v2)
+  - name: Webhook
+    description: Webhook 回调管理 (v2)
+  - name: 管理后台
+    description: 管理后台接口
+
+paths:
+  /health:
+    get:
+      tags:
+        - 健康检查
+      summary: 健康检查
+      description: 检查服务健康状态
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 服务健康
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  status: healthy
+                  service: captchax-api
+                  timestamp: "2026-05-14T10:00:00Z"
+                  version: "2.0.0"
+
+  /api/v1/captcha/slider:
+    post:
+      tags:
+        - 滑块验证
+      summary: 生成滑块验证码
+      description: |
+        生成一个新的滑块验证码，返回背景图和滑块图。
+
+        验证码有效期默认 5 分钟，最大验证次数默认 3 次。
+      operationId: createSliderCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SliderCaptchaRequest'
+            examples:
+              default:
+                summary: 默认参数
+                value:
+                  app_id: "my-app-001"
+              withOptions:
+                summary: 自定义参数
+                value:
+                  app_id: "my-app-001"
+                  width: 300
+                  height: 100
+                  client_info: "Mozilla/5.0..."
+      responses:
+        '200':
+          description: 验证码生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SliderCaptchaResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  id: "cap_abc123xyz"
+                  background_b64: "data:image/png;base64,iVBORw0KGgo..."
+                  slider_b64: "data:image/png;base64,iVBORw0KGgo..."
+                  target_x: 150
+                  target_y: 25
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/captcha/slider/verify:
+    post:
+      tags:
+        - 滑块验证
+      summary: 验证滑块验证码
+      description: |
+        验证用户拖动的滑块位置是否正确。
+
+        容差范围默认 5 像素。
+      operationId: verifySliderCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SliderVerifyRequest'
+            example:
+              captcha_id: "cap_abc123xyz"
+              target_x: 148
+              target_y: 25
+      responses:
+        '200':
+          description: 验证结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  success: true
+                  message: "verification successful"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/captcha/click:
+    post:
+      tags:
+        - 点选验证
+      summary: 生成点选验证码
+      description: |
+        生成一个新的点选验证码，返回背景图和需要点击的字符列表。
+
+        用户需要按正确顺序点击指定字符。
+      operationId: createClickCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClickCaptchaRequest'
+            example:
+              app_id: "my-app-001"
+              char_count: 4
+              client_info: "Mozilla/5.0..."
+      responses:
+        '200':
+          description: 验证码生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClickCaptchaResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  id: "cap_def456uvw"
+                  image: "data:image/png;base64,iVBORw0KGgo..."
+                  target_chars: ["中", "国", "福", "田"]
+                  char_positions:
+                    - char: "中"
+                      x: 45
+                      y: 30
+                    - char: "国"
+                      x: 120
+                      y: 25
+                    - char: "福"
+                      x: 200
+                      y: 40
+                    - char: "田"
+                      x: 280
+                      y: 35
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/captcha/click/verify:
+    post:
+      tags:
+        - 点选验证
+      summary: 验证点选验证码
+      description: |
+        验证用户点击的位置是否正确。
+
+        字符点击顺序必须与指定顺序一致。
+      operationId: verifyClickCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClickVerifyRequest'
+            example:
+              captcha_id: "cap_def456uvw"
+              clicks:
+                - char: "中"
+                  x: 45
+                  y: 30
+                - char: "国"
+                  x: 120
+                  y: 25
+                - char: "福"
+                  x: 200
+                  y: 40
+                - char: "田"
+                  x: 280
+                  y: 35
+      responses:
+        '200':
+          description: 验证结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/captcha/puzzle:
+    post:
+      tags:
+        - 拼图验证
+      summary: 生成拼图验证码
+      description: |
+        生成一个新的拼图验证码，返回背景图和拼图块。
+
+        用户需要将拼图块拖动到正确位置。
+      operationId: createPuzzleCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PuzzleCaptchaRequest'
+            example:
+              app_id: "my-app-001"
+              width: 300
+              height: 150
+      responses:
+        '200':
+          description: 验证码生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PuzzleCaptchaResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/captcha/puzzle/verify:
+    post:
+      tags:
+        - 拼图验证
+      summary: 验证拼图验证码
+      description: 验证用户放置的拼图位置是否正确。
+      operationId: verifyPuzzleCaptcha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PuzzleVerifyRequest'
+      responses:
+        '200':
+          description: 验证结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v2/captcha/batch/verify:
+    post:
+      tags:
+        - 批量验证
+      summary: 批量验证验证码
+      description: |
+        一次请求验证多个验证码，最多支持 100 个。
+
+        支持幂等操作，使用 X-Deduplication-ID 头避免重复验证。
+      operationId: batchVerifyCaptcha
+      headers:
+        X-Deduplication-ID:
+          description: 去重标识，用于幂等操作
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchVerifyRequest'
+            example:
+              items:
+                - captcha_id: "cap_abc123xyz"
+                  type: "slider"
+                  target_x: 150
+                  target_y: 25
+                - captcha_id: "cap_def456uvw"
+                  type: "click"
+                  clicks:
+                    - char: "中"
+                      x: 45
+                      y: 30
+      responses:
+        '200':
+          description: 批量验证结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchVerifyResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  results:
+                    - captcha_id: "cap_abc123xyz"
+                      success: true
+                      message: "verification successful"
+                    - captcha_id: "cap_def456uvw"
+                      success: true
+                      score: 0.95
+                      message: "verification successful"
+                  summary:
+                    total: 2
+                    success: 2
+                    failed: 0
+                    skipped: 0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 重复请求
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v2/captcha/scenarios:
+    get:
+      tags:
+        - 场景管理
+      summary: 获取场景列表
+      description: 获取所有验证场景配置
+      operationId: listScenarios
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 场景列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - 场景管理
+      summary: 创建验证场景
+      description: 创建一个新的验证场景配置
+      operationId: createScenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioCreateRequest'
+            example:
+              name: "登录验证"
+              description: "用于用户登录时的验证码验证"
+              difficulty: "medium"
+              config:
+                tolerance: 5
+                timeout: 300
+                max_attempts: 3
+      responses:
+        '200':
+          description: 场景创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v2/captcha/scenarios/{id}:
+    get:
+      tags:
+        - 场景管理
+      summary: 获取单个场景
+      description: 根据 ID 获取验证场景详情
+      operationId: getScenario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 场景 ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 场景详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - 场景管理
+      summary: 更新场景
+      description: 更新指定验证场景的配置
+      operationId: updateScenario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 场景 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioUpdateRequest'
+      responses:
+        '200':
+          description: 场景更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - 场景管理
+      summary: 删除场景
+      description: 删除指定的验证场景
+      operationId: deleteScenario
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 场景 ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 场景删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v2/captcha/webhook/register:
+    post:
+      tags:
+        - Webhook
+      summary: 注册 Webhook
+      description: |
+        注册一个 Webhook 回调地址，用于接收验证事件通知。
+
+        支持的事件类型：
+        - verification.completed: 单个验证完成
+        - batch.verification.completed: 批量验证完成
+        - *: 订阅所有事件
+      operationId: registerWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRegisterRequest'
+            example:
+              app_id: "my-app-001"
+              url: "https://example.com/webhook/captcha"
+              secret: "my-secret-key"
+              events:
+                - "verification.completed"
+                - "batch.verification.completed"
+              headers:
+                Authorization: "Bearer token123"
+      responses:
+        '200':
+          description: Webhook 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v2/captcha/webhook:
+    get:
+      tags:
+        - Webhook
+      summary: 获取 Webhook 列表
+      description: 获取已注册的 Webhook 列表
+      operationId: listWebhooks
+      parameters:
+        - name: app_id
+          in: query
+          description: 按应用筛选
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookListResponse'
+
+  /api/v2/captcha/webhook/{id}:
+    put:
+      tags:
+        - Webhook
+      summary: 更新 Webhook
+      description: 更新已注册的 Webhook 配置
+      operationId: updateWebhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Webhook ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookUpdateRequest'
+      responses:
+        '200':
+          description: Webhook 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+    delete:
+      tags:
+        - Webhook
+      summary: 删除 Webhook
+      description: 删除已注册的 Webhook
+      operationId: deleteWebhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Webhook ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook 删除成功
+
+  /admin/api/login:
+    post:
+      tags:
+        - 管理后台
+      summary: 管理员登录
+      description: 使用用户名密码登录管理后台
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                password:
+                  type: string
+                  description: 密码
+            example:
+              username: "admin"
+              password: "admin123"
+      responses:
+        '200':
+          description: 登录成功
+          headers:
+            Set-Cookie:
+              description: JWT Token Cookie
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /admin/api/stats:
+    get:
+      tags:
+        - 管理后台
+      summary: 获取统计数据
+      description: 获取验证码使用统计
+      operationId: getStats
+      parameters:
+        - name: start_date
+          in: query
+          description: 开始日期 (YYYY-MM-DD)
+          schema:
+            type: string
+        - name: end_date
+          in: query
+          description: 结束日期 (YYYY-MM-DD)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 统计数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+
+  /admin/api/whitelist:
+    get:
+      tags:
+        - 管理后台
+      summary: 获取白名单
+      description: 获取 IP 白名单列表
+      operationId: getWhitelist
+      responses:
+        '200':
+          description: 白名单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WhitelistResponse'
+
+    post:
+      tags:
+        - 管理后台
+      summary: 添加白名单
+      description: 添加 IP 到白名单
+      operationId: addWhitelist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WhitelistItem'
+      responses:
+        '200':
+          description: 添加成功
+
+  /admin/api/blacklist:
+    get:
+      tags:
+        - 管理后台
+      summary: 获取黑名单
+      description: 获取 IP 黑名单列表
+      operationId: getBlacklist
+      responses:
+        '200':
+          description: 黑名单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlacklistResponse'
+
+    post:
+      tags:
+        - 管理后台
+      summary: 添加黑名单
+      description: 添加 IP 到黑名单
+      operationId: addBlacklist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlacklistItem'
+      responses:
+        '200':
+          description: 添加成功
+
+    delete:
+      tags:
+        - 管理后台
+      summary: 删除黑名单
+      description: 从黑名单中移除 IP
+      operationId: removeBlacklist
+      parameters:
+        - name: ip
+          in: query
+          required: true
+          description: IP 地址
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Token 认证
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, unhealthy]
+            service:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+            version:
+              type: string
+
+    SliderCaptchaRequest:
+      type: object
+      required:
+        - app_id
+      properties:
+        app_id:
+          type: string
+          description: 应用标识
+          example: "my-app-001"
+        width:
+          type: integer
+          description: 图片宽度
+          default: 200
+          minimum: 100
+          maximum: 500
+        height:
+          type: integer
+          description: 图片高度
+          default: 80
+          minimum: 50
+          maximum: 300
+        client_info:
+          type: string
+          description: 客户端信息（用于风控）
+
+    SliderCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: 验证码 ID
+            background_b64:
+              type: string
+              description: 背景图 (Base64)
+              format: byte
+            slider_b64:
+              type: string
+              description: 滑块图 (Base64)
+              format: byte
+            target_x:
+              type: integer
+              description: 目标位置 X 坐标
+            target_y:
+              type: integer
+              description: 目标位置 Y 坐标
+
+    SliderVerifyRequest:
+      type: object
+      required:
+        - captcha_id
+        - target_x
+      properties:
+        captcha_id:
+          type: string
+          description: 验证码 ID
+        target_x:
+          type: integer
+          description: 用户拖动的 X 坐标
+        target_y:
+          type: integer
+          description: 用户拖动的 Y 坐标
+          default: 0
+
+    ClickCaptchaRequest:
+      type: object
+      required:
+        - app_id
+      properties:
+        app_id:
+          type: string
+          description: 应用标识
+        char_count:
+          type: integer
+          description: 需要点击的字符数量
+          default: 4
+          minimum: 2
+          maximum: 6
+        client_info:
+          type: string
+          description: 客户端信息
+
+    ClickCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            image:
+              type: string
+              format: byte
+            target_chars:
+              type: array
+              items:
+                type: string
+            char_positions:
+              type: array
+              items:
+                $ref: '#/components/schemas/CharPosition'
+
+    CharPosition:
+      type: object
+      properties:
+        char:
+          type: string
+        x:
+          type: integer
+        y:
+          type: integer
+
+    ClickVerifyRequest:
+      type: object
+      required:
+        - captcha_id
+        - clicks
+      properties:
+        captcha_id:
+          type: string
+        clicks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClickItem'
+          minItems: 1
+
+    ClickItem:
+      type: object
+      properties:
+        char:
+          type: string
+        x:
+          type: integer
+        y:
+          type: integer
+
+    PuzzleCaptchaRequest:
+      type: object
+      required:
+        - app_id
+      properties:
+        app_id:
+          type: string
+        width:
+          type: integer
+          default: 300
+        height:
+          type: integer
+          default: 150
+        client_info:
+          type: string
+
+    PuzzleCaptchaResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            background_b64:
+              type: string
+              format: byte
+            puzzle_b64:
+              type: string
+              format: byte
+            target_x:
+              type: integer
+            target_y:
+              type: integer
+
+    PuzzleVerifyRequest:
+      type: object
+      required:
+        - captcha_id
+        - target_x
+      properties:
+        captcha_id:
+          type: string
+        target_x:
+          type: integer
+        target_y:
+          type: integer
+          default: 0
+
+    VerifyResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+            score:
+              type: number
+              format: float
+              description: 置信度分数 (0-1)
+
+    BatchVerifyRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchVerifyItem'
+          maxItems: 100
+
+    BatchVerifyItem:
+      type: object
+      required:
+        - captcha_id
+        - type
+        - target_x
+      properties:
+        captcha_id:
+          type: string
+        type:
+          type: string
+          enum: [slider, click, puzzle]
+        target_x:
+          type: integer
+        target_y:
+          type: integer
+        clicks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClickItem'
+
+    BatchVerifyResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/BatchVerifyResult'
+            summary:
+              $ref: '#/components/schemas/BatchVerifySummary'
+
+    BatchVerifyResult:
+      type: object
+      properties:
+        captcha_id:
+          type: string
+        success:
+          type: boolean
+        message:
+          type: string
+        score:
+          type: number
+          format: float
+
+    BatchVerifySummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        success:
+          type: integer
+        failed:
+          type: integer
+        skipped:
+          type: integer
+
+    Scenario:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        config:
+          type: object
+          properties:
+            tolerance:
+              type: integer
+            timeout:
+              type: integer
+            max_attempts:
+              type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ScenarioCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+          default: medium
+        config:
+          type: object
+          properties:
+            tolerance:
+              type: integer
+              default: 5
+            timeout:
+              type: integer
+              default: 300
+            max_attempts:
+              type: integer
+              default: 3
+
+    ScenarioUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        config:
+          type: object
+
+    ScenarioListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            scenarios:
+              type: array
+              items:
+                $ref: '#/components/schemas/Scenario'
+            total:
+              type: integer
+            page:
+              type: integer
+            page_size:
+              type: integer
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        app_id:
+          type: string
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookRegisterRequest:
+      type: object
+      required:
+        - app_id
+        - url
+        - events
+      properties:
+        app_id:
+          type: string
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    WebhookUpdateRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        secret:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+
+    WebhookListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            webhooks:
+              type: array
+              items:
+                $ref: '#/components/schemas/Webhook'
+
+    LoginResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+
+    StatsResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            total:
+              type: integer
+            success:
+              type: integer
+            failed:
+              type: integer
+            success_rate:
+              type: number
+              format: float
+            by_type:
+              type: object
+              properties:
+                slider:
+                  type: integer
+                click:
+                  type: integer
+                puzzle:
+                  type: integer
+
+    WhitelistResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/WhitelistItem'
+
+    WhitelistItem:
+      type: object
+      required:
+        - ip
+      properties:
+        ip:
+          type: string
+          description: IP 地址
+        domain:
+          type: string
+          description: 关联域名
+        reason:
+          type: string
+          description: 添加原因
+        created_at:
+          type: string
+          format: date-time
+
+    BlacklistResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/BlacklistItem'
+
+    BlacklistItem:
+      type: object
+      required:
+        - ip
+      properties:
+        ip:
+          type: string
+        reason:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          description: 过期时间 (null 表示永久)
+        created_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: 'null'
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: "参数缺失: app_id"
+            data: null
+
+    Unauthorized:
+      description: 未授权
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: "认证失败"
+            data: null
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: "验证码不存在"
+            data: null
+
+    RateLimited:
+      description: 请求过于频繁
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 429
+            message: "请求过于频繁，请稍后再试"
+            data: null
+
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 500
+            message: "服务器内部错误"
+            data: null
+
+security:
+  - bearerAuth: []

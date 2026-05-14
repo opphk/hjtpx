@@ -1,555 +1,1028 @@
-# CaptchaX SDK 接入文档
+# CaptchaX 多语言 SDK 使用指南
 
-## 概述
+本文档提供 CaptchaX 各语言 SDK 的详细接入指南。
 
-CaptchaX SDK 提供简单易用的前端接入方式，支持滑块验证、点选验证和拼图验证三种模式。通过 SDK，您可以快速将行为验证码集成到您的 Web 应用中。
+## 目录
 
-## 快速接入
+- [JavaScript/TypeScript SDK](#javascripttypescript-sdk)
+- [Go SDK](#go-sdk)
+- [Python SDK](#python-sdk)
+- [Java SDK](#java-sdk)
+- [.NET SDK](#net-sdk)
+- [PHP SDK](#php-sdk)
+- [Ruby SDK](#ruby-sdk)
 
-### 1. 引入 SDK
+---
 
-#### 方式一：CDN 引入（推荐）
+## JavaScript/TypeScript SDK
 
-```html
-<script src="https://your-captchax-server.com/static/captchax.js"></script>
+### 安装
+
+```bash
+npm install @captchax/js-sdk
+# 或
+yarn add @captchax/js-sdk
+# 或
+pnpm add @captchax/js-sdk
 ```
 
-#### 方式二：下载本地
+### 基础使用
 
-从 Release 页面下载 `captchax.min.js`，然后引入：
+```typescript
+import { CaptchaXClient } from '@captchax/js-sdk';
 
-```html
-<script src="/path/to/captchax.min.js"></script>
-```
-
-### 2. HTML 结构
-
-```html
-<!-- 验证码容器 -->
-<div id="captcha-container"></div>
-
-<!-- 表单 -->
-<form id="login-form">
-  <input type="text" name="username" required>
-  <input type="password" name="password" required>
-  <button type="submit">登录</button>
-</form>
-```
-
-### 3. 初始化并使用
-
-```javascript
-// 初始化 CaptchaX
-const captcha = new CaptchaX({
+const client = new CaptchaXClient({
   appId: 'your-app-id',
-  serverUrl: 'https://your-captchax-server.com',
-  type: 'slider', // 可选: slider, click, puzzle
-  container: '#captcha-container',
+  serverUrl: 'https://captchax.example.com',
+  timeout: 10000,
+});
 
-  onSuccess: function(result) {
+async function example() {
+  // 生成滑块验证码
+  const slider = await client.createSliderCaptcha({
+    width: 200,
+    height: 80,
+  });
+
+  console.log('验证码ID:', slider.id);
+  console.log('目标位置:', slider.targetX, slider.targetY);
+
+  // 验证滑块
+  const result = await client.verifySlider({
+    captchaId: slider.id,
+    targetX: 150,
+    targetY: 25,
+  });
+
+  if (result.success) {
+    console.log('验证成功!');
+  }
+}
+```
+
+### React 集成示例
+
+```tsx
+import React, { useState } from 'react';
+import { CaptchaX } from '@captchax/js-sdk';
+
+interface CaptchaVerifyProps {
+  onVerify: (token: string) => void;
+}
+
+export const CaptchaVerify: React.FC<CaptchaVerifyProps> = ({ onVerify }) => {
+  const [captcha, setCaptcha] = useState<CaptchaX | null>(null);
+  const [verified, setVerified] = useState(false);
+
+  const handleReady = () => {
+    console.log('验证码已加载');
+  };
+
+  const handleSuccess = (result: { token: string }) => {
     console.log('验证成功:', result);
-    // 在此处提交表单，附带 token
-  },
+    setVerified(true);
+    onVerify(result.token);
+  };
 
-  onError: function(error) {
+  const handleError = (error: Error) => {
     console.error('验证失败:', error);
-  },
+  };
 
-  onReady: function() {
-    console.log('验证码已准备好');
-  }
-});
-
-// 渲染验证码
-captcha.render();
+  return (
+    <div>
+      {!verified ? (
+        <CaptchaX
+          appId="your-app-id"
+          serverUrl="https://captchax.example.com"
+          container="#captcha-container"
+          onReady={handleReady}
+          onSuccess={handleSuccess}
+          onError={handleError}
+        />
+      ) : (
+        <div className="captcha-success">验证成功</div>
+      )}
+    </div>
+  );
+};
 ```
 
----
+### Vue 3 集成示例
 
-## 配置选项
+```typescript
+import { createApp, ref, onMounted } from 'vue';
+import { CaptchaX } from '@captchax/js-sdk';
 
-### 全局配置
+export const useCaptcha = (options: {
+  appId: string;
+  serverUrl: string;
+  onSuccess: (token: string) => void;
+}) => {
+  const containerRef = ref<HTMLElement | null>(null);
+  const verified = ref(false);
+  let captchaInstance: CaptchaX | null = null;
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| appId | string | - | 应用标识（必填） |
-| serverUrl | string | - | CaptchaX 服务器地址（必填） |
-| type | string | 'slider' | 验证类型：slider / click / puzzle |
-| container | string | - | 验证码容器选择器或元素 |
-| width | number | 300 | 验证组件宽度 |
-| height | number | 200 | 验证组件高度 |
-| lang | string | 'zh-CN' | 语言：zh-CN / en |
-| theme | string | 'light' | 主题：light / dark |
-| timeout | number | 10000 | 请求超时时间（毫秒） |
-| retryTimes | number | 3 | 重试次数 |
-
-### 回调函数
-
-| 参数 | 说明 |
-|------|------|
-| onSuccess | 验证成功回调，参数为验证结果对象 |
-| onError | 验证失败回调，参数为错误信息 |
-| onReady | 验证码加载完成回调 |
-| onClose | 用户关闭验证码回调 |
-| onRefresh | 用户刷新验证码回调 |
-
----
-
-## 验证类型详解
-
-### 滑块验证 (Slider)
-
-用户通过拖动滑块到正确位置完成验证。
-
-```javascript
-const captcha = new CaptchaX({
-  appId: 'my-app',
-  serverUrl: 'https://captchax.example.com',
-  type: 'slider',
-  container: '#slider-container',
-
-  onSuccess: function(result) {
-    // result = { token: 'xxx', captchaId: 'xxx' }
-    submitForm(result.token);
-  }
-});
-
-captcha.render();
-```
-
-### 点选验证 (Click)
-
-用户需要按正确顺序点击指定字符。
-
-```javascript
-const captcha = new CaptchaX({
-  appId: 'my-app',
-  serverUrl: 'https://captchax.example.com',
-  type: 'click',
-  container: '#click-container',
-  charCount: 4, // 需要点击的字符数量
-
-  onSuccess: function(result) {
-    submitForm(result.token);
-  }
-});
-
-captcha.render();
-```
-
-### 拼图验证 (Puzzle)
-
-用户将拼图块拖动到正确位置。
-
-```javascript
-const captcha = new CaptchaX({
-  appId: 'my-app',
-  serverUrl: 'https://captchax.example.com',
-  type: 'puzzle',
-  container: '#puzzle-container',
-
-  onSuccess: function(result) {
-    submitForm(result.token);
-  }
-});
-
-captcha.render();
-```
-
----
-
-## 完整示例
-
-### 登录表单集成
-
-```html
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <title>登录示例</title>
-  <script src="https://captchax.example.com/static/captchax.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      background: #f5f5f5;
-    }
-
-    .login-container {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      width: 350px;
-    }
-
-    .form-group {
-      margin-bottom: 15px;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 500;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      box-sizing: border-box;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 12px;
-      background: #1890ff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    .btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
-    #captcha-container {
-      margin-bottom: 15px;
-    }
-
-    .error {
-      color: #ff4d4f;
-      font-size: 12px;
-      margin-top: 5px;
-    }
-  </style>
-</head>
-<body>
-  <div class="login-container">
-    <h2 style="text-align:center;margin-bottom:20px;">用户登录</h2>
-
-    <form id="login-form">
-      <div class="form-group">
-        <label>用户名</label>
-        <input type="text" name="username" required>
-      </div>
-
-      <div class="form-group">
-        <label>密码</label>
-        <input type="password" name="password" required>
-      </div>
-
-      <div id="captcha-container"></div>
-
-      <button type="submit" class="btn" id="submit-btn" disabled>登录</button>
-    </form>
-  </div>
-
-  <script>
-    let captchaToken = null;
-
-    const captcha = new CaptchaX({
-      appId: 'login-app',
-      serverUrl: 'https://captchax.example.com',
-      container: '#captcha-container',
-
-      onSuccess: function(result) {
-        captchaToken = result.token;
-        document.getElementById('submit-btn').disabled = false;
-        console.log('验证成功，token:', captchaToken);
-      },
-
-      onError: function(error) {
-        console.error('验证失败:', error);
-        document.getElementById('submit-btn').disabled = true;
-        captchaToken = null;
-      },
-
-      onReady: function() {
-        console.log('验证码已就绪');
-      }
-    });
-
-    captcha.render();
-
-    document.getElementById('login-form').addEventListener('submit', function(e) {
-      e.preventDefault();
-
-      if (!captchaToken) {
-        alert('请先完成验证');
-        return;
-      }
-
-      const formData = new FormData(this);
-      const data = Object.fromEntries(formData);
-      data.captchaToken = captchaToken;
-
-      console.log('提交数据:', data);
-
-      // 发送登录请求到后端
-      fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
+  onMounted(() => {
+    if (containerRef.value) {
+      captchaInstance = new CaptchaX({
+        ...options,
+        container: containerRef.value,
+        onSuccess: (result) => {
+          verified.value = true;
+          options.onSuccess(result.token);
         },
-        body: JSON.stringify(data)
-      })
-      .then(res => res.json())
-      .then(result => {
-        if (result.success) {
-          alert('登录成功');
-          location.href = '/dashboard';
-        } else {
-          alert('登录失败: ' + result.message);
-          captcha.reset();
-        }
-      })
-      .catch(err => {
-        console.error('请求失败:', err);
-        alert('网络错误');
       });
-    });
-  </script>
-</body>
-</html>
+
+      captchaInstance.render();
+    }
+  });
+
+  const reset = () => {
+    verified.value = false;
+    captchaInstance?.reset();
+  };
+
+  return {
+    containerRef,
+    verified,
+    reset,
+  };
+};
 ```
 
 ---
 
-## 后端验证
+## Go SDK
 
-前端获取 token 后，需要在后端验证 token 的有效性。
+### 安装
 
-### 验证流程
+```bash
+go get github.com/captchax/sdk/go/captchax
+```
 
-1. 前端完成验证，获取 token
-2. 前端将 token 伴随表单提交到后端
-3. 后端调用 CaptchaX 验证接口确认 token 有效
-4. 验证通过后处理业务逻辑
+### 基础使用
 
-### 后端验证示例
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/captchax/sdk/go/captchax"
+)
+
+func main() {
+    client := captchax.NewClient(
+        captchax.WithAppID("your-app-id"),
+        captchax.WithServerURL("https://captchax.example.com"),
+        captchax.WithTimeout(10*time.Second),
+    )
+
+    ctx := context.Background()
+
+    // 生成滑块验证码
+    slider, err := client.CreateSliderCaptcha(ctx, &captchax.SliderCaptchaRequest{
+        Width:  200,
+        Height: 80,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("验证码ID: %s\n", slider.ID)
+    fmt.Printf("目标位置: (%d, %d)\n", slider.TargetX, slider.TargetY)
+
+    // 验证滑块
+    result, err := client.VerifySlider(ctx, &captchax.VerifyRequest{
+        CaptchaID: slider.ID,
+        TargetX:   150,
+        TargetY:   25,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    if result.Success {
+        fmt.Println("验证成功!")
+    }
+}
+```
+
+### 验证中间件 (Gin 框架)
+
+```go
+package middleware
+
+import (
+    "net/http"
+    "strings"
+
+    "github.com/captchax/sdk/go/captchax"
+    "github.com/gin-gonic/gin"
+)
+
+func CaptchaVerify(client *captchax.Client) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        token := c.GetHeader("X-Captcha-Token")
+        if token == "" {
+            c.JSON(http.StatusBadRequest, gin.H{
+                "code":    400,
+                "message": "验证码 Token 不能为空",
+            })
+            c.Abort()
+            return
+        }
+
+        // 验证 token
+        valid, err := client.VerifyToken(c.Request.Context(), token)
+        if err != nil || !valid {
+            c.JSON(http.StatusBadRequest, gin.H{
+                "code":    400,
+                "message": "验证码验证失败",
+            })
+            c.Abort()
+            return
+        }
+
+        c.Next()
+    }
+}
+
+// 使用示例
+func main() {
+    r := gin.Default()
+
+    client := captchax.NewClient(
+        captchax.WithAppID("your-app-id"),
+        captchax.WithServerURL("https://captchax.example.com"),
+    )
+
+    r.POST("/login",
+        middleware.CaptchaVerify(client),
+        loginHandler,
+    )
+}
+```
+
+### 点选验证
+
+```go
+// 生成点选验证码
+click, err := client.CreateClickCaptcha(ctx, &captchax.ClickCaptchaRequest{
+    CharCount: 4,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println("需要点击的字符:", click.TargetChars)
+
+// 验证点选
+result, err := client.VerifyClick(ctx, &captchax.ClickVerifyRequest{
+    CaptchaID: click.ID,
+    Clicks: []captchax.ClickItem{
+        {Char: "中", X: 45, Y: 30},
+        {Char: "国", X: 120, Y: 25},
+        {Char: "福", X: 200, Y: 40},
+        {Char: "田", X: 280, Y: 35},
+    },
+})
+```
+
+---
+
+## Python SDK
+
+### 安装
+
+```bash
+pip install captchax
+# 或
+poetry add captchax
+```
+
+### 基础使用
 
 ```python
-# Python Flask 示例
-from flask import Flask, request, jsonify
-import httpx
+from captchax import CaptchaXClient
 
-app = Flask(__name__)
+client = CaptchaXClient(
+    app_id="your-app-id",
+    server_url="https://captchax.example.com",
+    timeout=10.0,
+)
 
+# 生成滑块验证码
+slider = client.create_slider_captcha(width=200, height=80)
+
+print(f"验证码ID: {slider.id}")
+print(f"目标位置: ({slider.target_x}, {slider.target_y})")
+
+# 验证滑块
+result = client.verify_slider(
+    captcha_id=slider.id,
+    target_x=150,
+    target_y=25,
+)
+
+if result.success:
+    print("验证成功!")
+```
+
+### Django 中间件
+
+```python
+# middleware.py
+from django.http import JsonResponse
+from captchax import CaptchaXClient
+
+client = CaptchaXClient(
+    app_id="your-app-id",
+    server_url="https://captchax.example.com",
+)
+
+class CaptchaVerifyMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path.startswith('/api/'):
+            token = request.headers.get('X-Captcha-Token')
+
+            if not token:
+                return JsonResponse({
+                    'code': 400,
+                    'message': '验证码 Token 不能为空',
+                }, status=400)
+
+            valid = client.verify_token(token)
+            if not valid:
+                return JsonResponse({
+                    'code': 400,
+                    'message': '验证码验证失败',
+                }, status=400)
+
+        response = self.get_response(request)
+        return response
+```
+
+```python
+# settings.py
+MIDDLEWARE = [
+    # ...
+    'yourapp.middleware.CaptchaVerifyMiddleware',
+]
+```
+
+### Flask 装饰器
+
+```python
+from functools import wraps
+from flask import request, jsonify
+from captchax import CaptchaXClient
+
+client = CaptchaXClient(
+    app_id="your-app-id",
+    server_url="https://captchax.example.com",
+)
+
+def require_captcha(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('X-Captcha-Token')
+
+        if not token:
+            return jsonify({'code': 400, 'message': '验证码 Token 不能为空'}), 400
+
+        valid = client.verify_token(token)
+        if not valid:
+            return jsonify({'code': 400, 'message': '验证码验证失败'}), 400
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+# 使用
 @app.route('/api/login', methods=['POST'])
+@require_captcha
 def login():
-    data = request.json
-    captcha_token = data.get('captchaToken')
-
-    if not captcha_token:
-        return jsonify({'success': False, 'message': '请先完成验证'}), 400
-
-    # 验证 captcha token
-    is_valid = verify_captcha_token(captcha_token)
-    if not is_valid:
-        return jsonify({'success': False, 'message': '验证失败'}), 400
-
-    # 验证通过，处理登录逻辑
-    username = data.get('username')
-    password = data.get('password')
-
-    # ... 验证用户名密码 ...
-
-    return jsonify({'success': True, 'message': '登录成功'})
-
-def verify_captcha_token(token):
-    # 调用 CaptchaX 验证接口
-    # 这里需要实现 token 验证逻辑
-    # 可以缓存验证结果避免重复请求
-    return True
+    # 登录逻辑
+    return jsonify({'success': True})
 ```
 
-```javascript
-// Node.js Express 示例
-const express = require('express');
-const app = express();
+### 异步使用 (asyncio)
 
-app.post('/api/login', async (req, res) => {
-  const { username, password, captchaToken } = req.body;
+```python
+import asyncio
+from captchax import CaptchaXClient
 
-  if (!captchaToken) {
-    return res.status(400).json({ success: false, message: '请先完成验证' });
-  }
+client = CaptchaXClient(
+    app_id="your-app-id",
+    server_url="https://captchax.example.com",
+)
 
-  // 验证 captcha token
-  const isValid = await verifyCaptchaToken(captchaToken);
-  if (!isValid) {
-    return res.status(400).json({ success: false, message: '验证失败' });
-  }
+async def main():
+    slider = await client.create_slider_captcha_async(width=200, height=80)
+    print(f"验证码ID: {slider.id}")
 
-  // 处理登录逻辑
-  // ...
+    result = await client.verify_slider_async(
+        captcha_id=slider.id,
+        target_x=150,
+        target_y=25,
+    )
+    print(f"验证结果: {result.success}")
 
-  res.json({ success: true, message: '登录成功' });
-});
+asyncio.run(main())
+```
 
-async function verifyCaptchaToken(token) {
-  // 实现 token 验证逻辑
-  return true;
+---
+
+## Java SDK
+
+### Maven 依赖
+
+```xml
+<dependency>
+    <groupId>com.captchax</groupId>
+    <artifactId>captchax-sdk</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+### Gradle 依赖
+
+```groovy
+implementation 'com.captchax:captchax-sdk:1.0.0'
+```
+
+### 基础使用
+
+```java
+package com.example;
+
+import com.captchax.sdk.CaptchaXClient;
+import com.captchax.sdk.ApiModels.*;
+
+public class Example {
+    public static void main(String[] args) {
+        CaptchaXClient client = new CaptchaXClient(
+            "your-app-id",
+            "https://captchax.example.com"
+        );
+
+        try {
+            // 生成滑块验证码
+            SliderCaptchaResponse slider = client.createSliderCaptcha(
+                new CaptchaConfig(200, 80)
+            );
+
+            System.out.println("验证码ID: " + slider.getId());
+            System.out.println("目标位置: " + slider.getTargetX() + ", " + slider.getTargetY());
+
+            // 验证滑块
+            VerifyResponse result = client.verifySlider(
+                slider.getId(),
+                150,  // targetX
+                25    // targetY
+            );
+
+            if (result.isSuccess()) {
+                System.out.println("验证成功!");
+            }
+
+        } catch (CaptchaXException e) {
+            System.err.println("错误: " + e.getMessage());
+        }
+    }
+}
+```
+
+### Spring Boot 集成
+
+```java
+package com.example.config;
+
+import com.captchax.sdk.CaptchaXClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class CaptchaXConfig {
+
+    @Value("${captchax.app-id}")
+    private String appId;
+
+    @Value("${captchax.server-url}")
+    private String serverUrl;
+
+    @Bean
+    public CaptchaXClient captchaXClient() {
+        return new CaptchaXClient(appId, serverUrl);
+    }
+}
+```
+
+```java
+package com.example.interceptor;
+
+import com.captchax.sdk.CaptchaXClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+@Component
+public class CaptchaVerifyInterceptor implements HandlerInterceptor {
+
+    @Autowired
+    private CaptchaXClient client;
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        String token = request.getHeader("X-Captcha-Token");
+
+        if (token == null || token.isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("{\"code\":400,\"message\":\"验证码 Token 不能为空\"}");
+            return false;
+        }
+
+        try {
+            boolean valid = client.verifyToken(token);
+            if (!valid) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.getWriter().write("{\"code\":400,\"message\":\"验证码验证失败\"}");
+                return false;
+            }
+        } catch (Exception e) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"code\":500,\"message\":\"验证码服务错误\"}");
+            return false;
+        }
+
+        return true;
+    }
 }
 ```
 
 ---
 
-## 方法 API
+## .NET SDK
 
-CaptchaX 实例提供以下方法：
+### 安装
 
-### render()
-
-渲染验证码到页面。
-
-```javascript
-captcha.render();
+```bash
+dotnet add package CaptchaX.SDK
 ```
 
-### reset()
+### 基础使用
 
-重置验证码，重新生成。
+```csharp
+using CaptchaX.SDK;
 
-```javascript
-captcha.reset();
-```
+var client = new CaptchaXClient(
+    appId: "your-app-id",
+    serverUrl: "https://captchax.example.com"
+);
 
-### destroy()
-
-销毁验证码实例。
-
-```javascript
-captcha.destroy();
-```
-
-### show()
-
-显示验证码。
-
-```javascript
-captcha.show();
-```
-
-### hide()
-
-隐藏验证码。
-
-```javascript
-captcha.hide();
-```
-
-### verify()
-
-手动触发验证。
-
-```javascript
-captcha.verify().then(result => {
-  console.log(result);
+// 生成滑块验证码
+var slider = await client.CreateSliderCaptchaAsync(new SliderCaptchaRequest
+{
+    Width = 200,
+    Height = 80
 });
+
+Console.WriteLine($"验证码ID: {slider.Id}");
+Console.WriteLine($"目标位置: ({slider.TargetX}, {slider.TargetY})");
+
+// 验证滑块
+var result = await client.VerifySliderAsync(new VerifySliderRequest
+{
+    CaptchaId = slider.Id,
+    TargetX = 150,
+    TargetY = 25
+});
+
+if (result.Success)
+{
+    Console.WriteLine("验证成功!");
+}
+```
+
+### ASP.NET Core 中间件
+
+```csharp
+// CaptchaVerifyMiddleware.cs
+using CaptchaX.SDK;
+
+public class CaptchaVerifyMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly CaptchaXClient _client;
+
+    public CaptchaVerifyMiddleware(RequestDelegate next, CaptchaXClient client)
+    {
+        _next = next;
+        _client = client;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+        {
+            var token = context.Request.Headers["X-Captcha-Token"].FirstOrDefault();
+
+            if (string.IsNullOrEmpty(token))
+            {
+                context.Response.StatusCode = 400;
+                await context.Response.WriteAsJsonAsync(new { code = 400, message = "验证码 Token 不能为空" });
+                return;
+            }
+
+            try
+            {
+                var valid = await _client.VerifyTokenAsync(token);
+                if (!valid)
+                {
+                    context.Response.StatusCode = 400;
+                    await context.Response.WriteAsJsonAsync(new { code = 400, message = "验证码验证失败" });
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                context.Response.StatusCode = 500;
+                await context.Response.WriteAsJsonAsync(new { code = 500, message = "验证码服务错误" });
+                return;
+            }
+        }
+
+        await _next(context);
+    }
+}
+
+// Program.cs
+builder.Services.AddSingleton(new CaptchaXClient(
+    appId: builder.Configuration["CaptchaX:AppId"]!,
+    serverUrl: builder.Configuration["CaptchaX:ServerUrl"]!
+));
+
+app.UseMiddleware<CaptchaVerifyMiddleware>();
 ```
 
 ---
 
-## 事件监听
+## PHP SDK
 
-```javascript
-const captcha = new CaptchaX({ ... });
+### 安装
 
-captcha.on('ready', function() {
-  console.log('验证码已就绪');
-});
+```bash
+composer require captchax/sdk
+```
 
-captcha.on('success', function(result) {
-  console.log('验证成功', result);
-});
+### 基础使用
 
-captcha.on('error', function(error) {
-  console.log('验证失败', error);
-});
+```php
+<?php
 
-captcha.on('close', function() {
-  console.log('验证码已关闭');
-});
+require_once 'vendor/autoload.php';
 
-captcha.on('refresh', function() {
-  console.log('验证码已刷新');
-});
+use CaptchaX\CaptchaXClient;
 
-captcha.render();
+$client = new CaptchaXClient([
+    'app_id' => 'your-app-id',
+    'server_url' => 'https://captchax.example.com',
+    'timeout' => 10.0,
+]);
+
+// 生成滑块验证码
+$slider = $client->createSliderCaptcha([
+    'width' => 200,
+    'height' => 80,
+]);
+
+echo "验证码ID: " . $slider['id'] . "\n";
+echo "目标位置: " . $slider['target_x'] . ", " . $slider['target_y'] . "\n";
+
+// 验证滑块
+$result = $client->verifySlider([
+    'captcha_id' => $slider['id'],
+    'target_x' => 150,
+    'target_y' => 25,
+]);
+
+if ($result['success']) {
+    echo "验证成功!\n";
+}
+```
+
+### Laravel 集成
+
+```php
+<?php
+// config/captchax.php
+
+return [
+    'app_id' => env('CAPTCHA_APP_ID'),
+    'server_url' => env('CAPTCHA_SERVER_URL'),
+    'timeout' => 10.0,
+];
+```
+
+```php
+<?php
+// app/Providers/CaptchaXServiceProvider.php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use CaptchaX\CaptchaXClient;
+
+class CaptchaXServiceProvider extends ServiceProvider
+{
+    public function register()
+    {
+        $this->app->singleton(CaptchaXClient::class, function ($app) {
+            return new CaptchaXClient([
+                'app_id' => config('captchax.app_id'),
+                'server_url' => config('captchax.server_url'),
+                'timeout' => config('captchax.timeout'),
+            ]);
+        });
+    }
+
+    public function boot()
+    {
+        //
+    }
+}
+```
+
+```php
+<?php
+// app/Http/Middleware/VerifyCaptcha.php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use CaptchaX\CaptchaXClient;
+use Illuminate\Http\Request;
+
+class VerifyCaptcha
+{
+    protected CaptchaXClient $client;
+
+    public function __construct(CaptchaXClient $client)
+    {
+        $this->client = $client;
+    }
+
+    public function handle(Request $request, Closure $next)
+    {
+        $token = $request->header('X-Captcha-Token');
+
+        if (empty($token)) {
+            return response()->json([
+                'code' => 400,
+                'message' => '验证码 Token 不能为空',
+            ], 400);
+        }
+
+        try {
+            $valid = $this->client->verifyToken($token);
+
+            if (!$valid) {
+                return response()->json([
+                    'code' => 400,
+                    'message' => '验证码验证失败',
+                ], 400);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => 500,
+                'message' => '验证码服务错误',
+            ], 500);
+        }
+
+        return $next($request);
+    }
+}
+```
+
+```php
+// app/Http/Kernel.php
+protected $routeMiddleware = [
+    'captcha' => \App\Http\Middleware\VerifyCaptcha::class,
+];
+
+// routes/api.php
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('captcha');
 ```
 
 ---
 
-## 样式定制
+## Ruby SDK
 
-通过 CSS 自定义验证码样式：
+### 安装
 
-```css
-/* 自定义容器样式 */
-.captchax-container {
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
+```ruby
+# Gemfile
+gem 'captchax', '~> 1.0.0'
 
-/* 自定义滑块样式 */
-.captchax-slider {
-  background: #f0f0f0;
-}
+# 或命令行
+gem install captchax
+```
 
-/* 自定义成功状态 */
-.captchax-success {
-  background: #52c41a;
-}
+### 基础使用
 
-/* 自定义错误状态 */
-.captchax-error {
-  background: #ff4d4f;
-}
+```ruby
+require 'captchax'
+
+client = CaptchaX::Client.new(
+  app_id: 'your-app-id',
+  server_url: 'https://captchax.example.com',
+  timeout: 10
+)
+
+# 生成滑块验证码
+slider = client.create_slider_captcha(width: 200, height: 80)
+
+puts "验证码ID: #{slider.id}"
+puts "目标位置: #{slider.target_x}, #{slider.target_y}"
+
+# 验证滑块
+result = client.verify_slider(
+  captcha_id: slider.id,
+  target_x: 150,
+  target_y: 25
+)
+
+if result.success
+  puts "验证成功!"
+end
+```
+
+### Rails 集成
+
+```ruby
+# config/initializers/captchax.rb
+
+CaptchaX.configure do |config|
+  config.app_id = ENV['CAPTCHA_APP_ID']
+  config.server_url = ENV['CAPTCHA_SERVER_URL']
+  config.timeout = 10
+end
+```
+
+```ruby
+# app/middleware/captcha_verify.rb
+
+class CaptchaVerify
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    if env['PATH_INFO'].start_with?('/api/')
+      token = env['HTTP_X_CAPTCHA_TOKEN']
+
+      if token.nil? || token.empty?
+        return [400, { 'Content-Type' => 'application/json' },
+          [{ code: 400, message: '验证码 Token 不能为空' }.to_json]]
+      end
+
+      begin
+        client = CaptchaX::Client.new(
+          app_id: ENV['CAPTCHA_APP_ID'],
+          server_url: ENV['CAPTCHA_SERVER_URL']
+        )
+        valid = client.verify_token(token)
+
+        unless valid
+          return [400, { 'Content-Type' => 'application/json' },
+            [{ code: 400, message: '验证码验证失败' }.to_json]]
+        end
+      rescue => e
+        Rails.logger.error("CaptchaX error: #{e.message}")
+        return [500, { 'Content-Type' => 'application/json' },
+          [{ code: 500, message: '验证码服务错误' }.to_json]]
+      end
+    end
+
+    @app.call(env)
+  end
+end
+```
+
+```ruby
+# config/application.rb
+
+module YourApp
+  class Application < Rails::Application
+    config.middleware.use CaptchaVerify
+  end
+end
 ```
 
 ---
 
-## 常见问题
+## 错误处理
 
-### Q: 验证码加载缓慢？
+所有 SDK 都遵循统一的错误处理机制：
 
-A: 检查网络连接，确保 serverUrl 配置正确。可以使用 CDN 加速静态资源。
+```python
+from captchax.exceptions import (
+    CaptchaXException,
+    CaptchaNotFoundError,
+    CaptchaExpiredError,
+    CaptchaVerifyFailedError,
+    NetworkError,
+    APIError,
+)
 
-### Q: 验证总是失败？
-
-A: 检查：
-1. 验证码是否过期（默认5分钟）
-2. 服务端是否正常运行
-3. 坐标容差是否设置合理
-
-### Q: 如何处理移动端适配？
-
-A: CaptchaX 自动适配移动端。确保容器宽度足够（建议至少 280px）。
-
-### Q: 如何实现无感知验证？
-
-A: 可以在页面加载完成后预加载验证码，但暂时隐藏，等用户提交时再显示。
-
-### Q: 验证码图片显示异常？
-
-A: 检查浏览器是否支持 Base64 图片格式，或配置服务端返回完整图片 URL。
+try:
+    result = client.verify_slider(...)
+except CaptchaNotFoundError:
+    print("验证码不存在")
+except CaptchaExpiredError:
+    print("验证码已过期")
+except CaptchaVerifyFailedError:
+    print("验证失败")
+except NetworkError as e:
+    print(f"网络错误: {e}")
+except APIError as e:
+    print(f"API 错误: {e.code} - {e.message}")
+except CaptchaXException as e:
+    print(f"未知错误: {e}")
+```
 
 ---
 
-## 浏览器兼容性
+## 最佳实践
 
-- Chrome 50+
-- Firefox 45+
-- Safari 11+
-- Edge 79+
-- IE 不支持（需要 polyfill）
+### 1. 客户端初始化
+
+```python
+# 推荐：单例模式
+_client = None
+
+def get_client():
+    global _client
+    if _client is None:
+        _client = CaptchaXClient(...)
+    return _client
+```
+
+### 2. 超时配置
+
+```python
+client = CaptchaXClient(
+    timeout=5.0,      # 请求超时
+    connect_timeout=3.0,  # 连接超时
+    retry_times=3,        # 重试次数
+)
+```
+
+### 3. 缓存验证结果
+
+```python
+# 验证成功后缓存 token，有效期内无需重复验证
+cache_key = f"captcha:verified:{user_id}"
+if not redis.exists(cache_key):
+    valid = client.verify_token(token)
+    if valid:
+        redis.setex(cache_key, 1800, "1")  # 30分钟有效期
+```
+
+### 4. 日志记录
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('captchax')
+
+client = CaptchaXClient(
+    logger=logger,
+    log_level='debug',
+)
+```
+
+---
+
+## SDK 对照表
+
+| 功能 | JS/TS | Go | Python | Java | .NET | PHP | Ruby |
+|------|-------|-----|--------|------|------|-----|------|
+| 滑块验证 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 点选验证 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 拼图验证 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 批量验证 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Webhook | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 异步支持 | ✅ | ✅ | ✅ | - | - | - | - |
+| 框架中间件 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |

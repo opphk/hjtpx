@@ -40,6 +40,23 @@
             transform: translateY(-2px);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
         }
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        .pulse-indicator {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .data-refresh {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0.7; }
+            to { opacity: 1; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -107,7 +124,10 @@
                             </div>
                             <div>
                                 <p class="text-sm font-medium text-gray-700">管理员</p>
-                                <p class="text-xs text-gray-500">在线</p>
+                                <p class="text-xs text-green-500 flex items-center">
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></span>
+                                    在线
+                                </p>
                             </div>
                         </div>
                         <button id="logout-btn" class="p-2 text-gray-400 hover:text-red-500 transition">
@@ -130,23 +150,32 @@
                     </button>
                     <h2 class="text-xl font-semibold text-gray-800">仪表盘</h2>
                     <div class="flex items-center space-x-4">
+                        <div id="realtime-indicator" class="flex items-center space-x-2 px-3 py-1.5 bg-green-50 rounded-full">
+                            <span class="w-2 h-2 bg-green-500 rounded-full pulse-indicator"></span>
+                            <span class="text-sm text-green-600">实时更新中</span>
+                        </div>
+                        <button id="refresh-btn" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition" title="刷新数据">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                        </button>
                         <span class="text-sm text-gray-500" id="current-time"></span>
                     </div>
                 </div>
             </header>
 
             <main class="flex-1 p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm transition duration-300">
+                <div id="stats-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-sm text-gray-500 mb-1">今日验证</p>
                                 <p class="text-2xl font-bold text-gray-800" id="stat-today-verifications">0</p>
-                                <p class="text-xs text-green-500 mt-1 flex items-center">
+                                <p class="text-xs mt-1 flex items-center" id="stat-verifications-change">
                                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
                                     </svg>
-                                    较昨日
+                                    <span class="change-text">较昨日</span>
                                 </p>
                             </div>
                             <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -157,16 +186,16 @@
                         </div>
                     </div>
 
-                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm transition duration-300">
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-sm text-gray-500 mb-1">验证成功率</p>
-                                <p class="text-2xl font-bold text-gray-800" id="stat-success-rate">0%</p>
-                                <p class="text-xs text-green-500 mt-1 flex items-center">
-                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <p class="text-2xl font-bold text-green-600" id="stat-success-rate">0%</p>
+                                <p class="text-xs mt-1 flex items-center">
+                                    <svg class="w-3 h-3 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
                                     </svg>
-                                    正常范围
+                                    <span class="text-green-500">正常范围</span>
                                 </p>
                             </div>
                             <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -177,16 +206,16 @@
                         </div>
                     </div>
 
-                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm transition duration-300">
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
                         <div class="flex items-center justify-between">
                             <div>
                                 <p class="text-sm text-gray-500 mb-1">拦截攻击</p>
-                                <p class="text-2xl font-bold text-gray-800" id="stat-blocked-attacks">0</p>
-                                <p class="text-xs text-red-500 mt-1 flex items-center">
+                                <p class="text-2xl font-bold text-red-600" id="stat-blocked-attacks">0</p>
+                                <p class="text-xs mt-1 flex items-center text-red-500">
                                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
                                     </svg>
-                                    今日拦截
+                                    <span>今日拦截</span>
                                 </p>
                             </div>
                             <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
@@ -197,16 +226,16 @@
                         </div>
                     </div>
 
-                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm transition duration-300">
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm text-gray-500 mb-1">系统状态</p>
-                                <p class="text-2xl font-bold text-green-600" id="stat-system-status">正常</p>
-                                <p class="text-xs text-gray-500 mt-1">所有服务运行中</p>
+                                <p class="text-sm text-gray-500 mb-1">活跃用户</p>
+                                <p class="text-2xl font-bold text-purple-600" id="stat-active-users">0</p>
+                                <p class="text-xs text-gray-500 mt-1">本周期内</p>
                             </div>
-                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                 </svg>
                             </div>
                         </div>
@@ -217,23 +246,44 @@
                     <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
                         <div class="flex items-center justify-between mb-6">
                             <h3 class="text-lg font-semibold text-gray-800">24小时验证趋势</h3>
-                            <select id="trend-period" class="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="24">最近24小时</option>
-                                <option value="48">最近48小时</option>
-                                <option value="72">最近72小时</option>
-                            </select>
+                            <div class="flex items-center space-x-3">
+                                <select id="trend-period" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="24">最近24小时</option>
+                                    <option value="48">最近48小时</option>
+                                    <option value="72">最近72小时</option>
+                                </select>
+                                <button id="export-trend-btn" class="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition flex items-center">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                    导出
+                                </button>
+                            </div>
                         </div>
-                        <div class="h-64">
+                        <div class="h-64 relative">
                             <canvas id="trend-chart"></canvas>
+                            <div id="trend-loading" class="absolute inset-0 bg-white/80 flex items-center justify-center hidden">
+                                <svg class="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
                         </div>
                     </div>
 
                     <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-6">验证码类型分布</h3>
-                        <div class="h-52">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">验证码类型分布</h3>
+                            <button id="export-distribution-btn" class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="导出">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="h-52 relative">
                             <canvas id="distribution-chart"></canvas>
                         </div>
-                        <div class="mt-4 space-y-2">
+                        <div class="mt-4 space-y-2" id="distribution-legend">
                             <div class="flex items-center justify-between text-sm">
                                 <span class="flex items-center"><span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>滑动验证码</span>
                                 <span class="font-medium" id="dist-slider">0</span>
@@ -309,22 +359,7 @@
                                 </thead>
                                 <tbody id="ip-ranking-list" class="text-sm">
                                     <tr class="border-b border-gray-50">
-                                        <td class="py-3">1</td>
-                                        <td class="py-3 font-mono">192.168.1.xxx</td>
-                                        <td class="py-3">1,234</td>
-                                        <td class="py-3"><span class="px-2 py-1 bg-green-100 text-green-600 rounded text-xs">正常</span></td>
-                                    </tr>
-                                    <tr class="border-b border-gray-50">
-                                        <td class="py-3">2</td>
-                                        <td class="py-3 font-mono">10.0.0.xxx</td>
-                                        <td class="py-3">856</td>
-                                        <td class="py-3"><span class="px-2 py-1 bg-yellow-100 text-yellow-600 rounded text-xs">频繁</span></td>
-                                    </tr>
-                                    <tr class="border-b border-gray-50">
-                                        <td class="py-3">3</td>
-                                        <td class="py-3 font-mono">172.16.0.xxx</td>
-                                        <td class="py-3">423</td>
-                                        <td class="py-3"><span class="px-2 py-1 bg-red-100 text-red-600 rounded text-xs">已封禁</span></td>
+                                        <td class="py-3" colspan="4" class="text-center text-gray-400">加载中...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -346,28 +381,36 @@
                     month: '2-digit',
                     day: '2-digit',
                     hour: '2-digit',
-                    minute: '2-digit'
+                    minute: '2-digit',
+                    second: '2-digit'
                 });
             }
             updateTime();
             setInterval(updateTime, 1000);
 
+            let currentTrendData = null;
+            let currentDistributionData = null;
+
             async function loadDashboardData() {
+                const loadingEl = document.getElementById('trend-loading');
+                loadingEl.classList.remove('hidden');
+
                 try {
                     const [dashboard, trend, distribution] = await Promise.all([
                         AdminApi.stats.getDashboard().catch(() => ({
                             today_verifications: 12847,
                             success_rate: 94.2,
                             blocked_attacks: 234,
-                            active_users: 3421
+                            active_users: 3421,
+                            verifications_change: 12.5
                         })),
                         AdminApi.stats.getTrend(24).catch(() => generateMockTrendData()),
                         AdminApi.stats.getCaptchaDistribution().catch(() => generateMockDistribution())
                     ]);
 
-                    document.getElementById('stat-today-verifications').textContent = AdminUI.formatNumber(dashboard.today_verifications || 0);
-                    document.getElementById('stat-success-rate').textContent = (dashboard.success_rate || 0).toFixed(1) + '%';
-                    document.getElementById('stat-blocked-attacks').textContent = AdminUI.formatNumber(dashboard.blocked_attacks || 0);
+                    updateStats(dashboard);
+                    currentTrendData = trend;
+                    currentDistributionData = distribution;
 
                     AdminCharts.initTrendChart('trend-chart', trend);
                     AdminCharts.initDistributionChart('distribution-chart', distribution);
@@ -381,9 +424,72 @@
                     document.getElementById('dist-rotate').textContent = AdminUI.formatNumber(
                         distribution.find(d => d.type === 'rotate')?.count || 0
                     );
+
+                    loadIpRanking();
+
+                    document.getElementById('stats-container').classList.add('data-refresh');
+                    setTimeout(() => {
+                        document.getElementById('stats-container').classList.remove('data-refresh');
+                    }, 300);
                 } catch (error) {
                     console.error('Failed to load dashboard data:', error);
+                    AdminUI.showToast('数据加载失败', 'error');
+                } finally {
+                    loadingEl.classList.add('hidden');
                 }
+            }
+
+            function updateStats(dashboard) {
+                document.getElementById('stat-today-verifications').textContent = AdminUI.formatNumber(dashboard.today_verifications || 0);
+                document.getElementById('stat-success-rate').textContent = (dashboard.success_rate || 0).toFixed(1) + '%';
+                document.getElementById('stat-blocked-attacks').textContent = AdminUI.formatNumber(dashboard.blocked_attacks || 0);
+                document.getElementById('stat-active-users').textContent = AdminUI.formatNumber(dashboard.active_users || 0);
+
+                const changeEl = document.getElementById('stat-verifications-change');
+                const change = dashboard.verifications_change || 0;
+                const isPositive = change >= 0;
+                changeEl.className = `text-xs mt-1 flex items-center ${isPositive ? 'text-green-500' : 'text-red-500'}`;
+                changeEl.innerHTML = `
+                    <svg class="w-3 h-3 mr-1 transform ${isPositive ? '' : 'rotate-180'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                    </svg>
+                    <span class="change-text">${isPositive ? '+' : ''}${change.toFixed(1)}% 较昨日</span>
+                `;
+            }
+
+            async function loadIpRanking() {
+                try {
+                    const ranking = await AdminApi.stats.getIpRanking(10).catch(() => generateMockIpRanking());
+                    renderIpRanking(ranking);
+                } catch (error) {
+                    console.error('Failed to load IP ranking:', error);
+                }
+            }
+
+            function renderIpRanking(data) {
+                const tbody = document.getElementById('ip-ranking-list');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-gray-400">暂无数据</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.slice(0, 5).map((item, index) => {
+                    const statusMap = {
+                        '正常': '<span class="px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs">正常</span>',
+                        '可疑': '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-600 rounded text-xs">可疑</span>',
+                        '已封禁': '<span class="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">已封禁</span>'
+                    };
+                    return `
+                        <tr class="border-b border-gray-50 hover:bg-gray-50">
+                            <td class="py-3">
+                                <span class="w-6 h-6 rounded-full ${index < 3 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'} flex items-center justify-center text-xs font-medium">${index + 1}</span>
+                            </td>
+                            <td class="py-3 font-mono text-sm text-blue-500">${item.ip || item.value || '-'}</td>
+                            <td class="py-3">${AdminUI.formatNumber(item.total || item.count || 0)}</td>
+                            <td class="py-3">${statusMap[item.status] || statusMap['正常']}</td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
             function generateMockTrendData() {
@@ -408,17 +514,73 @@
                 ];
             }
 
+            function generateMockIpRanking() {
+                const ips = [];
+                const statuses = ['正常', '正常', '正常', '可疑', '可疑', '已封禁'];
+                for (let i = 0; i < 10; i++) {
+                    const total = Math.floor(Math.random() * 5000) + 100;
+                    ips.push({
+                        ip: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+                        total: total,
+                        status: statuses[Math.floor(Math.random() * statuses.length)]
+                    });
+                }
+                return ips.sort((a, b) => b.total - a.total);
+            }
+
+            function exportTrendData() {
+                if (!currentTrendData || currentTrendData.length === 0) {
+                    AdminUI.showToast('没有数据可导出', 'warning');
+                    return;
+                }
+
+                ExportHelper.downloadCSV(currentTrendData, 'verification_trend_' + new Date().toISOString().split('T')[0], [
+                    { key: 'time', title: '时间' },
+                    { key: 'verified', title: '验证成功' },
+                    { key: 'rejected', title: '拦截' }
+                ]);
+            }
+
+            function exportDistributionData() {
+                if (!currentDistributionData || currentDistributionData.length === 0) {
+                    AdminUI.showToast('没有数据可导出', 'warning');
+                    return;
+                }
+
+                ExportHelper.downloadCSV(currentDistributionData, 'captcha_distribution_' + new Date().toISOString().split('T')[0], [
+                    { key: 'type', title: '类型' },
+                    { key: 'count', title: '数量' }
+                ]);
+            }
+
             loadDashboardData();
+
+            RealtimeUpdater.start('dashboard', loadDashboardData, 30000);
 
             document.getElementById('trend-period').addEventListener('change', async function() {
                 const hours = parseInt(this.value);
+                const loadingEl = document.getElementById('trend-loading');
+                loadingEl.classList.remove('hidden');
+
                 try {
                     const trend = await AdminApi.stats.getTrend(hours);
+                    currentTrendData = trend;
                     AdminCharts.initTrendChart('trend-chart', trend);
                 } catch (error) {
                     AdminCharts.initTrendChart('trend-chart', generateMockTrendData());
+                    AdminUI.showToast('数据加载失败', 'error');
+                } finally {
+                    loadingEl.classList.add('hidden');
                 }
             });
+
+            document.getElementById('refresh-btn').addEventListener('click', function() {
+                RealtimeUpdater.refresh('dashboard');
+                AdminUI.showToast('数据已刷新', 'success');
+            });
+
+            document.getElementById('export-trend-btn').addEventListener('click', exportTrendData);
+            document.getElementById('export-distribution-btn').addEventListener('click', exportDistributionData);
         });
     </script>
 </body>

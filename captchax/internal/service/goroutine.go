@@ -11,6 +11,15 @@ import (
 
 type Task func() error
 
+type PoolStats struct {
+	ActiveWorkers  int32
+	TotalTasks     int64
+	CompletedTasks int64
+	FailedTasks    int64
+	PendingTasks   int32
+	QueueCapacity  int
+}
+
 type GoroutinePool struct {
 	workers    int
 	taskQueue  chan Task
@@ -22,15 +31,9 @@ type GoroutinePool struct {
 	stats      PoolStats
 	spawnCond  *sync.Cond
 	shouldStop atomic.Bool
-}
-
-type PoolStats struct {
-	ActiveWorkers  int32
-	TotalTasks     int64
-	CompletedTasks int64
-	FailedTasks    int64
-	PendingTasks   int32
-	QueueCapacity  int
+	autoScale  atomic.Bool
+	minWorkers int
+	maxWorkers int
 }
 
 func NewGoroutinePool(workers, queueSize int) *GoroutinePool {
@@ -48,6 +51,8 @@ func NewGoroutinePool(workers, queueSize int) *GoroutinePool {
 		taskQueue: make(chan Task, queueSize),
 		ctx:       ctx,
 		cancel:    cancel,
+		minWorkers: workers,
+		maxWorkers: workers * 4,
 		stats: PoolStats{
 			QueueCapacity: queueSize,
 		},
@@ -143,9 +148,36 @@ func (p *GoroutinePool) SubmitWithTimeout(task Task, timeout time.Duration) bool
 	}
 }
 
+func (p *GoroutinePool) SubmitAndWait(task Task) error {
+	if p.shouldStop.Load() {
+		return fmt.Errorf("pool is stopped")
+	}
+
+	done := make(chan error, 1)
+
+	select {
+	case p.taskQueue <- func() error {
+		err := task()
+		done <- err
+		return nil
+	}:
+		atomic.AddInt32(&p.stats.PendingTasks, 1)
+		return <-done
+	case <-p.ctx.Done():
+		return p.ctx.Err()
+	}
+}
+
 func (p *GoroutinePool) Scale(workers int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if workers < p.minWorkers {
+		workers = p.minWorkers
+	}
+	if workers > p.maxWorkers {
+		workers = p.maxWorkers
+	}
 
 	current := p.workers
 	p.workers = workers
@@ -156,13 +188,45 @@ func (p *GoroutinePool) Scale(workers int) {
 			p.wg.Add(1)
 			go p.worker(current + i)
 		}
-	} else if diff < 0 {
-		for i := 0; i < -diff; i++ {
-			select {
-			case p.taskQueue <- func() error { return nil }:
-			default:
-			}
+	}
+}
+
+func (p *GoroutinePool) AutoScale(enabled bool, minWorkers, maxWorkers int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.autoScale.Store(enabled)
+	if minWorkers > 0 {
+		p.minWorkers = minWorkers
+	}
+	if maxWorkers > 0 {
+		p.maxWorkers = maxWorkers
+	}
+}
+
+func (p *GoroutinePool) AdjustScale() {
+	if !p.autoScale.Load() {
+		return
+	}
+
+	queueLen := int32(len(p.taskQueue))
+	activeWorkers := atomic.LoadInt32(&p.stats.ActiveWorkers)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if queueLen > int32(p.workers) && p.workers < p.maxWorkers {
+		newWorkers := min(p.workers*2, p.maxWorkers)
+		for i := p.workers; i < newWorkers; i++ {
+			p.wg.Add(1)
+			go p.worker(i)
 		}
+		p.workers = newWorkers
+	}
+
+	if queueLen == 0 && activeWorkers == 0 && p.workers > p.minWorkers {
+		reduceCount := min(p.workers/2, p.workers-p.minWorkers)
+		p.workers -= reduceCount
 	}
 }
 
@@ -181,6 +245,22 @@ func (p *GoroutinePool) Stop() {
 
 func (p *GoroutinePool) Await() {
 	p.wg.Wait()
+}
+
+func (p *GoroutinePool) AwaitWithTimeout(timeout time.Duration) bool {
+	done := make(chan struct{})
+
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
 }
 
 func (p *GoroutinePool) Stats() PoolStats {
@@ -202,11 +282,31 @@ func (p *GoroutinePool) QueueLength() int {
 	return len(p.taskQueue)
 }
 
+func (p *GoroutinePool) QueueCapacity() int {
+	return p.stats.QueueCapacity
+}
+
+func (p *GoroutinePool) WorkerCount() int {
+	return p.workers
+}
+
+func (p *GoroutinePool) Utilization() float64 {
+	active := atomic.LoadInt32(&p.stats.ActiveWorkers)
+	return float64(active) / float64(p.workers)
+}
+
 func (p *GoroutinePool) TryDecrementPending() {
 	pending := atomic.LoadInt32(&p.stats.PendingTasks)
 	if pending > 0 {
 		atomic.AddInt32(&p.stats.PendingTasks, -1)
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 type Semaphore struct {
@@ -220,10 +320,12 @@ func NewSemaphore(maxValue int) *Semaphore {
 	if maxValue <= 0 {
 		maxValue = 1
 	}
-	return &Semaphore{
+	s := &Semaphore{
 		value:    maxValue,
 		maxValue: maxValue,
 	}
+	s.cond = sync.NewCond(&s.mu)
+	return s
 }
 
 func (s *Semaphore) Acquire() {
@@ -237,6 +339,17 @@ func (s *Semaphore) Acquire() {
 }
 
 func (s *Semaphore) TryAcquire() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.value <= 0 {
+		return false
+	}
+	s.value--
+	return true
+}
+
+func (s *Semaphore) TryAcquireWithTimeout(timeout time.Duration) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -261,6 +374,12 @@ func (s *Semaphore) WithAcquire(fn func()) {
 	s.Acquire()
 	defer s.Release()
 	fn()
+}
+
+func (s *Semaphore) Available() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.value
 }
 
 type OnceRunner struct {
@@ -296,9 +415,47 @@ func (o *OnceRunner) Run(fn func()) (ran bool, err error) {
 	return true, nil
 }
 
+type OnceRunnerWithResult struct {
+	mu       sync.Mutex
+	ran      bool
+	panicked bool
+}
+
+func NewOnceRunnerWithResult() *OnceRunnerWithResult {
+	return &OnceRunnerWithResult{}
+}
+
+func (o *OnceRunnerWithResult) Run(fn func() error) (ran bool, err error) {
+	o.mu.Lock()
+	if o.ran {
+		o.mu.Unlock()
+		return false, nil
+	}
+	o.ran = true
+	o.mu.Unlock()
+
+	defer func() {
+		if r := recover(); r != nil {
+			o.mu.Lock()
+			o.ran = false
+			o.mu.Unlock()
+			o.panicked = true
+		}
+	}()
+
+	err = fn()
+	if err != nil {
+		o.mu.Lock()
+		o.ran = false
+		o.mu.Unlock()
+	}
+	return true, err
+}
+
 type BatchExecutor struct {
 	pool      *GoroutinePool
 	batchSize int
+	semaphore *Semaphore
 }
 
 func NewBatchExecutor(workers, batchSize int) *BatchExecutor {
@@ -312,6 +469,7 @@ func NewBatchExecutor(workers, batchSize int) *BatchExecutor {
 	return &BatchExecutor{
 		pool:      pool,
 		batchSize: batchSize,
+		semaphore: NewSemaphore(batchSize),
 	}
 }
 
@@ -333,7 +491,6 @@ func (be *BatchExecutor) ExecuteBatch(items []interface{}, handler func(item int
 	close(itemChan)
 
 	var wg sync.WaitGroup
-	sem := NewSemaphore(be.batchSize)
 
 	for i, item := range items {
 		wg.Add(1)
@@ -342,9 +499,9 @@ func (be *BatchExecutor) ExecuteBatch(items []interface{}, handler func(item int
 
 		be.pool.Submit(func() error {
 			defer wg.Done()
-			defer sem.Release()
 
-			sem.Acquire()
+			be.semaphore.Acquire()
+			defer be.semaphore.Release()
 
 			err := handler(it)
 			if err != nil {
@@ -369,10 +526,61 @@ func (be *BatchExecutor) ExecuteBatch(items []interface{}, handler func(item int
 	return results
 }
 
+func (be *BatchExecutor) ExecuteBatchAsync(items []interface{}, handler func(item interface{}) error, resultChan chan<- []error) {
+	if len(items) == 0 {
+		resultChan <- nil
+		return
+	}
+
+	go func() {
+		results := be.ExecuteBatch(items, handler)
+		resultChan <- results
+	}()
+}
+
 func (be *BatchExecutor) Stop() {
 	be.pool.Stop()
 }
 
 func (be *BatchExecutor) Stats() PoolStats {
 	return be.pool.Stats()
+}
+
+type PoolMetrics struct {
+	TotalTasks      int64
+	CompletedTasks int64
+	FailedTasks     int64
+	ActiveWorkers  int32
+	QueueLength    int
+	Utilization    float64
+}
+
+func (p *GoroutinePool) Metrics() PoolMetrics {
+	return PoolMetrics{
+		TotalTasks:      atomic.LoadInt64(&p.stats.TotalTasks),
+		CompletedTasks:  atomic.LoadInt64(&p.stats.CompletedTasks),
+		FailedTasks:     atomic.LoadInt64(&p.stats.FailedTasks),
+		ActiveWorkers:   atomic.LoadInt32(&p.stats.ActiveWorkers),
+		QueueLength:     len(p.taskQueue),
+		Utilization:     p.Utilization(),
+	}
+}
+
+var defaultPool *GoroutinePool
+var defaultPoolOnce sync.Once
+
+func GetDefaultPool() *GoroutinePool {
+	defaultPoolOnce.Do(func() {
+		defaultPool = NewGoroutinePool(runtime.NumCPU()*2, 10000)
+		defaultPool.Start()
+	})
+	return defaultPool
+}
+
+func SubmitToDefault(task Task) bool {
+	return GetDefaultPool().Submit(task)
+}
+
+func SubmitAndWaitDefault(task Task) error {
+	return GetDefaultPool().SubmitAndWait(task)
 }

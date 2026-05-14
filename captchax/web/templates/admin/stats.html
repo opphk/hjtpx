@@ -36,8 +36,9 @@
             background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
             border-left: 3px solid #3b82f6;
         }
-        .tab-btn.active {
-            @apply bg-blue-500 text-white;
+        .chart-container {
+            position: relative;
+            height: 300px;
         }
     </style>
 </head>
@@ -128,51 +129,115 @@
                         </svg>
                     </button>
                     <h2 class="text-xl font-semibold text-gray-800">统计分析</h2>
-                    <div class="flex items-center space-x-4">
-                        <div class="flex bg-gray-100 rounded-lg p-1">
-                            <button class="tab-btn active px-4 py-1.5 text-sm rounded-md transition" data-period="today">今日</button>
-                            <button class="tab-btn px-4 py-1.5 text-sm rounded-md transition" data-period="week">本周</button>
-                            <button class="tab-btn px-4 py-1.5 text-sm rounded-md transition" data-period="month">本月</button>
-                        </div>
+                    <div class="flex items-center space-x-3">
+                        <select id="export-format" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="csv">导出 CSV</option>
+                            <option value="json">导出 JSON</option>
+                            <option value="excel">导出 Excel</option>
+                        </select>
+                        <button id="export-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            导出数据
+                        </button>
                     </div>
                 </div>
             </header>
 
             <main class="flex-1 p-6">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-white rounded-xl p-4 shadow-sm">
-                        <p class="text-sm text-gray-500 mb-1">总验证次数</p>
-                        <p class="text-xl font-bold text-gray-800" id="total-verifications">0</p>
-                        <p class="text-xs text-gray-400 mt-1">累计</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">总验证量</p>
+                                <p class="text-2xl font-bold text-gray-800" id="stat-total">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-white rounded-xl p-4 shadow-sm">
-                        <p class="text-sm text-gray-500 mb-1">验证成功率</p>
-                        <p class="text-xl font-bold text-green-600" id="success-rate">0%</p>
-                        <p class="text-xs text-gray-400 mt-1">本周期</p>
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">验证成功率</p>
+                                <p class="text-2xl font-bold text-green-600" id="stat-success-rate">0%</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-white rounded-xl p-4 shadow-sm">
-                        <p class="text-sm text-gray-500 mb-1">拦截次数</p>
-                        <p class="text-xl font-bold text-red-600" id="blocked-count">0</p>
-                        <p class="text-xs text-gray-400 mt-1">本周期</p>
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">总拦截量</p>
+                                <p class="text-2xl font-bold text-red-600" id="stat-blocked">0</p>
+                            </div>
+                            <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-white rounded-xl p-4 shadow-sm">
-                        <p class="text-sm text-gray-500 mb-1">活跃IP数</p>
-                        <p class="text-xl font-bold text-blue-600" id="active-ips">0</p>
-                        <p class="text-xs text-gray-400 mt-1">本周期</p>
+                    <div class="bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500">平均响应时间</p>
+                                <p class="text-2xl font-bold text-purple-600" id="stat-avg-time">0ms</p>
+                            </div>
+                            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl p-6 shadow-sm mb-6">
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                        <h3 class="text-lg font-semibold text-gray-800">验证趋势</h3>
+                        <div class="flex items-center space-x-3">
+                            <select id="trend-period" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="24">最近24小时</option>
+                                <option value="48">最近48小时</option>
+                                <option value="72">最近72小时</option>
+                                <option value="168">最近7天</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="trend-chart"></canvas>
                     </div>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">验证码类型分布</h3>
-                        <div class="h-72">
-                            <canvas id="type-chart"></canvas>
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">验证码类型分布</h3>
+                            <button id="export-distribution-btn" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="distribution-chart"></canvas>
                         </div>
                     </div>
 
                     <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">验证结果统计</h3>
-                        <div class="h-72">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">验证结果统计</h3>
+                        </div>
+                        <div class="chart-container">
                             <canvas id="result-chart"></canvas>
                         </div>
                     </div>
@@ -180,16 +245,9 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-semibold text-gray-800">IP访问排行 TOP 20</h3>
-                            <div class="flex items-center space-x-2">
-                                <select id="ip-rank-filter" class="text-sm border border-gray-300 rounded-lg px-3 py-1">
-                                    <option value="all">全部</option>
-                                    <option value="blocked">已封禁</option>
-                                    <option value="suspicious">可疑</option>
-                                    <option value="normal">正常</option>
-                                </select>
-                            </div>
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">IP访问排行 TOP 10</h3>
+                            <a href="/admin/blacklist" class="text-sm text-blue-500 hover:text-blue-600">查看全部</a>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full">
@@ -198,58 +256,24 @@
                                         <th class="pb-3 font-medium">排名</th>
                                         <th class="pb-3 font-medium">IP地址</th>
                                         <th class="pb-3 font-medium">验证次数</th>
-                                        <th class="pb-3 font-medium">失败次数</th>
                                         <th class="pb-3 font-medium">成功率</th>
                                         <th class="pb-3 font-medium">状态</th>
                                     </tr>
                                 </thead>
-                                <tbody id="ip-ranking-body" class="text-sm divide-y divide-gray-100">
+                                <tbody id="ip-ranking-table" class="text-sm">
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-semibold text-gray-800">每日验证趋势</h3>
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800">每日验证量对比</h3>
                         </div>
-                        <div class="h-64">
-                            <canvas id="daily-trend-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl p-6 shadow-sm mt-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800">验证日志</h3>
-                        <div class="flex items-center space-x-2">
-                            <input type="text" id="log-search" placeholder="搜索IP地址或验证码ID"
-                                class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <select id="log-filter" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5">
-                                <option value="">全部类型</option>
-                                <option value="slider">滑动验证</option>
-                                <option value="click">点选验证</option>
-                                <option value="rotate">旋转验证</option>
-                            </select>
+                        <div class="chart-container">
+                            <canvas id="daily-chart"></canvas>
                         </div>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead>
-                                <tr class="text-left text-sm text-gray-500 border-b">
-                                    <th class="pb-3 font-medium">时间</th>
-                                    <th class="pb-3 font-medium">验证码ID</th>
-                                    <th class="pb-3 font-medium">类型</th>
-                                    <th class="pb-3 font-medium">IP地址</th>
-                                    <th class="pb-3 font-medium">结果</th>
-                                    <th class="pb-3 font-medium">耗时</th>
-                                </tr>
-                            </thead>
-                            <tbody id="log-body" class="text-sm divide-y divide-gray-100">
-                            </tbody>
-                        </table>
-                    </div>
-                    <div id="log-pagination" class="mt-4"></div>
                 </div>
             </main>
         </div>
@@ -258,178 +282,239 @@
     <script src="/static/admin.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            let currentPeriod = 'today';
+            let currentTrendData = null;
+            let currentDistributionData = null;
+            let currentResultData = null;
 
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    currentPeriod = this.dataset.period;
-                    loadStatsData();
-                });
-            });
-
-            async function loadStatsData() {
+            async function loadStats() {
                 try {
-                    const [distribution, results, ipRanking] = await Promise.all([
+                    const [dashboard, trend, distribution, results] = await Promise.all([
+                        AdminApi.stats.getDashboard().catch(() => generateMockDashboard()),
+                        AdminApi.stats.getTrend(24).catch(() => generateMockTrendData()),
                         AdminApi.stats.getCaptchaDistribution().catch(() => generateMockDistribution()),
-                        AdminApi.stats.getResultStats().catch(() => generateMockResults()),
-                        AdminApi.stats.getIpRanking(20).catch(() => generateMockIpRanking())
+                        AdminApi.stats.getResultStats().catch(() => generateMockResultStats())
                     ]);
 
-                    AdminCharts.initDistributionChart('type-chart', distribution);
+                    updateSummaryStats(dashboard);
+                    currentTrendData = trend;
+                    currentDistributionData = distribution;
+                    currentResultData = results;
+
+                    AdminCharts.initTrendChart('trend-chart', trend, {
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        borderWidth: 2
+                    });
+
+                    AdminCharts.initDistributionChart('distribution-chart', distribution, {
+                        legendPosition: 'bottom',
+                        colors: ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
+                    });
+
                     AdminCharts.initResultChart('result-chart', results);
 
-                    const total = distribution.reduce((sum, d) => sum + d.count, 0);
-                    const success = results.find(r => r.result === '通过')?.count || 0;
-                    const blocked = results.find(r => r.result === '拦截')?.count || 0;
+                    loadIpRanking();
+                    loadDailyStats();
 
-                    document.getElementById('total-verifications').textContent = AdminUI.formatNumber(total);
-                    document.getElementById('success-rate').textContent = total > 0 ? ((success / total) * 100).toFixed(1) + '%' : '0%';
-                    document.getElementById('blocked-count').textContent = AdminUI.formatNumber(blocked);
-                    document.getElementById('active-ips').textContent = AdminUI.formatNumber(ipRanking.length);
-
-                    renderIpRanking(ipRanking);
-                    renderLogTable();
                 } catch (error) {
                     console.error('Failed to load stats:', error);
+                    AdminUI.showToast('数据加载失败', 'error');
+                }
+            }
+
+            function updateSummaryStats(dashboard) {
+                document.getElementById('stat-total').textContent = AdminUI.formatNumber(dashboard.total_verifications || 0);
+                document.getElementById('stat-success-rate').textContent = (dashboard.success_rate || 0).toFixed(1) + '%';
+                document.getElementById('stat-blocked').textContent = AdminUI.formatNumber(dashboard.total_blocked || 0);
+                document.getElementById('stat-avg-time').textContent = (dashboard.avg_response_time || 0) + 'ms';
+            }
+
+            async function loadIpRanking() {
+                try {
+                    const ranking = await AdminApi.stats.getIpRanking(10).catch(() => generateMockIpRanking());
+                    renderIpRanking(ranking);
+                } catch (error) {
+                    console.error('Failed to load IP ranking:', error);
                 }
             }
 
             function renderIpRanking(data) {
-                const tbody = document.getElementById('ip-ranking-body');
-                tbody.innerHTML = data.map((item, index) => {
+                const tbody = document.getElementById('ip-ranking-table');
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400">暂无数据</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.slice(0, 10).map((item, index) => {
                     const statusMap = {
                         '正常': '<span class="px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs">正常</span>',
                         '可疑': '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-600 rounded text-xs">可疑</span>',
                         '已封禁': '<span class="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">已封禁</span>'
                     };
+                    const successRate = item.success_rate || ((item.verified / item.total) * 100).toFixed(1);
+                    const successClass = successRate >= 90 ? 'text-green-600' : successRate >= 70 ? 'text-yellow-600' : 'text-red-600';
+
                     return `
-                        <tr class="hover:bg-gray-50">
-                            <td class="py-3">${index + 1}</td>
-                            <td class="py-3 font-mono text-blue-500">${item.ip}</td>
-                            <td class="py-3">${AdminUI.formatNumber(item.total)}</td>
-                            <td class="py-3">${AdminUI.formatNumber(item.failed)}</td>
-                            <td class="py-3">${item.rate}%</td>
+                        <tr class="border-b border-gray-50 hover:bg-gray-50">
+                            <td class="py-3">
+                                <span class="w-6 h-6 rounded-full ${index < 3 ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'} flex items-center justify-center text-xs font-medium">${index + 1}</span>
+                            </td>
+                            <td class="py-3 font-mono text-sm">${item.ip}</td>
+                            <td class="py-3">${AdminUI.formatNumber(item.total || 0)}</td>
+                            <td class="py-3 ${successClass}">${successRate}%</td>
                             <td class="py-3">${statusMap[item.status] || statusMap['正常']}</td>
                         </tr>
                     `;
                 }).join('');
             }
 
-            function renderLogTable() {
-                const tbody = document.getElementById('log-body');
-                const mockLogs = generateMockLogs();
-                tbody.innerHTML = mockLogs.map(log => {
-                    const typeMap = {
-                        'slider': '滑动验证',
-                        'click': '点选验证',
-                        'rotate': '旋转验证'
-                    };
-                    const resultMap = {
-                        'success': '<span class="px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs">通过</span>',
-                        'failed': '<span class="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">失败</span>',
-                        'blocked': '<span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">拦截</span>'
-                    };
-                    return `
-                        <tr class="hover:bg-gray-50">
-                            <td class="py-3 text-gray-500">${log.time}</td>
-                            <td class="py-3 font-mono text-xs">${log.id}</td>
-                            <td class="py-3">${typeMap[log.type] || log.type}</td>
-                            <td class="py-3 font-mono text-xs">${log.ip}</td>
-                            <td class="py-3">${resultMap[log.result] || log.result}</td>
-                            <td class="py-3 text-gray-500">${log.duration}ms</td>
-                        </tr>
-                    `;
-                }).join('');
+            function loadDailyStats() {
+                const dailyData = [];
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date();
+                    date.setDate(date.getDate() - i);
+                    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+                    dailyData.push({
+                        label: dateStr,
+                        value: Math.floor(Math.random() * 5000) + 3000
+                    });
+                }
+
+                AdminCharts.initBarChart('daily-chart', {
+                    labels: dailyData.map(d => d.label),
+                    values: dailyData.map(d => d.value)
+                }, {
+                    label: '验证量',
+                    colors: 'rgba(59, 130, 246, 0.5)',
+                    borderColors: 'rgba(59, 130, 246, 1)'
+                });
+            }
+
+            function generateMockDashboard() {
+                return {
+                    total_verifications: 128456,
+                    success_rate: 94.2,
+                    total_blocked: 2345,
+                    avg_response_time: 125
+                };
+            }
+
+            function generateMockTrendData() {
+                const data = [];
+                for (let i = 23; i >= 0; i--) {
+                    const time = new Date();
+                    time.setHours(time.getHours() - i);
+                    data.push({
+                        time: time.getHours() + ':00',
+                        verified: Math.floor(Math.random() * 500) + 200,
+                        rejected: Math.floor(Math.random() * 50) + 10
+                    });
+                }
+                return data;
             }
 
             function generateMockDistribution() {
                 return [
-                    { type: 'slider', count: 12540 },
-                    { type: 'click', count: 8930 },
-                    { type: 'rotate', count: 4560 }
+                    { type: 'slider', label: '滑动验证码', count: 5420 },
+                    { type: 'click', label: '点选验证码', count: 3890 },
+                    { type: 'rotate', label: '旋转验证码', count: 2560 },
+                    { type: 'number', label: '数字验证码', count: 1240 },
+                    { type: 'math', label: '算术验证码', count: 890 }
                 ];
             }
 
-            function generateMockResults() {
+            function generateMockResultStats() {
                 return [
-                    { result: '通过', count: 22450 },
-                    { result: '失败', count: 2100 },
-                    { result: '拦截', count: 2480 }
+                    { result: '通过', count: 10500 },
+                    { result: '失败', count: 450 },
+                    { result: '拦截', count: 320 }
                 ];
             }
 
             function generateMockIpRanking() {
                 const ips = [];
                 const statuses = ['正常', '正常', '正常', '可疑', '可疑', '已封禁'];
-                for (let i = 0; i < 20; i++) {
+                for (let i = 0; i < 10; i++) {
                     const total = Math.floor(Math.random() * 5000) + 100;
-                    const failed = Math.floor(Math.random() * total * 0.3);
+                    const verified = Math.floor(total * (0.8 + Math.random() * 0.2));
                     ips.push({
                         ip: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
                         total: total,
-                        failed: failed,
-                        rate: ((1 - failed / total) * 100).toFixed(1),
+                        verified: verified,
+                        success_rate: ((verified / total) * 100).toFixed(1),
                         status: statuses[Math.floor(Math.random() * statuses.length)]
                     });
                 }
                 return ips.sort((a, b) => b.total - a.total);
             }
 
-            function generateMockLogs() {
-                const logs = [];
-                const types = ['slider', 'click', 'rotate'];
-                const results = ['success', 'failed', 'blocked'];
-                for (let i = 0; i < 20; i++) {
-                    const now = new Date();
-                    now.setMinutes(now.getMinutes() - i * 5);
-                    logs.push({
-                        time: now.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
-                        id: `cap_${Math.random().toString(36).substr(2, 12)}`,
-                        type: types[Math.floor(Math.random() * types.length)],
-                        ip: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-                        result: results[Math.floor(Math.random() * results.length)],
-                        duration: Math.floor(Math.random() * 2000) + 200
-                    });
-                }
-                return logs;
-            }
-
-            loadStatsData();
-
-            const dailyData = {
-                labels: [],
-                datasets: [{
-                    label: '验证次数',
-                    data: [],
-                    backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    borderWidth: 2
-                }]
-            };
-
-            for (let i = 6; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                dailyData.labels.push(date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }));
-                dailyData.datasets[0].data.push(Math.floor(Math.random() * 10000) + 5000);
-            }
-
-            new Chart(document.getElementById('daily-trend-chart'), {
-                type: 'bar',
-                data: dailyData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
+            function exportData() {
+                const format = document.getElementById('export-format').value;
+                const data = {
+                    summary: {
+                        total: document.getElementById('stat-total').textContent,
+                        successRate: document.getElementById('stat-success-rate').textContent,
+                        blocked: document.getElementById('stat-blocked').textContent,
+                        avgTime: document.getElementById('stat-avg-time').textContent
                     },
-                    scales: {
-                        y: { beginAtZero: true }
+                    trend: currentTrendData,
+                    distribution: currentDistributionData,
+                    results: currentResultData
+                };
+
+                if (format === 'json') {
+                    ExportHelper.downloadJSON(data, 'captchax_stats_' + new Date().toISOString().split('T')[0]);
+                } else if (format === 'csv') {
+                    const csvRows = [['指标', '数值']];
+                    csvRows.push(['总验证量', data.summary.total]);
+                    csvRows.push(['验证成功率', data.summary.successRate]);
+                    csvRows.push(['总拦截量', data.summary.blocked]);
+                    csvRows.push(['平均响应时间', data.summary.avgTime]);
+                    csvRows.push([], ['时间', '验证成功', '拦截']);
+
+                    if (currentTrendData) {
+                        currentTrendData.forEach(d => {
+                            csvRows.push([d.time, d.verified, d.rejected]);
+                        });
                     }
+
+                    const BOM = '\uFEFF';
+                    const csvContent = BOM + csvRows.map(r => r.join(',')).join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+                    ExportHelper.downloadBlob(blob, 'captchax_stats_' + new Date().toISOString().split('T')[0] + '.csv');
+                } else {
+                    AdminUI.showToast('Excel导出功能开发中', 'info');
+                    return;
+                }
+
+                AdminUI.showToast('导出成功', 'success');
+            }
+
+            document.getElementById('trend-period').addEventListener('change', async function() {
+                const hours = parseInt(this.value);
+                try {
+                    const trend = await AdminApi.stats.getTrend(hours);
+                    currentTrendData = trend;
+                    AdminCharts.initTrendChart('trend-chart', trend);
+                } catch (error) {
+                    AdminCharts.initTrendChart('trend-chart', generateMockTrendData());
+                    AdminUI.showToast('数据加载失败', 'error');
                 }
             });
+
+            document.getElementById('export-btn').addEventListener('click', exportData);
+            document.getElementById('export-distribution-btn').addEventListener('click', function() {
+                if (currentDistributionData) {
+                    ExportHelper.downloadCSV(currentDistributionData, 'captcha_distribution', [
+                        { key: 'label', title: '类型' },
+                        { key: 'count', title: '数量' }
+                    ]);
+                }
+            });
+
+            loadStats();
+
+            RealtimeUpdater.start('stats', loadStats, 60000);
         });
     </script>
 </body>
