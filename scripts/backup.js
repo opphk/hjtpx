@@ -250,6 +250,10 @@ async function verifyBackup(backupPath = null) {
     
     if (!isValid) {
       console.warn('⚠️ Checksum mismatch detected!');
+      sentryService?.captureMessage('Backup verification failed', 'error', {
+        tags: { backup_id: backupToVerify.id },
+        extra: verificationReport,
+      });
     }
     
     const verifyReportPath = path.join(BACKUP_DIR, 'verify', `verify_${Date.now()}.json`);

@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+Disallow: /*.json$
+
+Sitemap: https://hjtpx.example.com/sitemap.xml
+
+Crawl-delay: 1
