@@ -10,6 +10,7 @@ const performanceRoutes = require('./performance');
 const usersRoutes = require('./users');
 const versionsRoutes = require('./versions');
 const cacheRoutes = require('./cache');
+const poolMonitoringRoutes = require('./poolMonitoring');
 
 router.use('/health', healthRoutes);
 router.use('/users', usersRoutes);
@@ -19,6 +20,7 @@ router.use('/performance', performanceRoutes);
 router.use('/admin', adminRoutes);
 router.use('/versions', versionsRoutes);
 router.use('/cache', cacheRoutes);
+router.use('/pool', poolMonitoringRoutes);
 
 router.get('/', (req, res) => {
   res.json({
@@ -35,7 +37,8 @@ router.get('/', (req, res) => {
         performance: '/api/v1/performance',
         admin: '/api/v1/admin',
         versions: '/api/v1/versions',
-        cache: '/api/v1/cache'
+        cache: '/api/v1/cache',
+        pool: '/api/v1/pool'
       },
       timestamp: new Date().toISOString()
     }

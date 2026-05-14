@@ -4,9 +4,14 @@
   "description": "现代化全栈应用程序 - HJTPX 系统",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f5f5",
+  "background_color": "#ffffff",
   "theme_color": "#1890ff",
   "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/favicon.png",
@@ -21,23 +26,76 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["productivity", "business"],
-  "screenshots": [],
+  "screenshots": [
+    {
+      "src": "/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dashboard 概览"
+    },
+    {
+      "src": "/screenshot-narrow.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "移动端界面"
+    }
+  ],
   "shortcuts": [
     {
-      "name": "首页",
-      "short_name": "首页",
-      "description": "进入系统首页",
-      "url": "/dashboard",
+      "name": "健康检查",
+      "short_name": "健康",
+      "description": "查看系统健康状态",
+      "url": "/api/v1/health",
       "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
     },
     {
       "name": "用户管理",
       "short_name": "用户",
-      "description": "管理用户列表",
+      "description": "管理用户账户",
       "url": "/users",
+      "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "通知中心",
+      "short_name": "通知",
+      "description": "查看系统通知",
+      "url": "/notifications",
       "icons": [{ "src": "/favicon.png", "sizes": "96x96" }]
     }
   ],
-  "prefer_related_applications": false
+  "related_applications": [],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "file_handlers": [
+    {
+      "action": "/import",
+      "accept": {
+        "text/csv": [".csv"],
+        "application/json": [".json"]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": ["image/*", "application/pdf"]
+        }
+      ]
+    }
+  }
 }
