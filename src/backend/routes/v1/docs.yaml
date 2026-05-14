@@ -1,0 +1,913 @@
+# HJTPX API 文档
+
+## 1. 项目概述
+
+### 1.1 项目简介
+
+HJTPX 是一个现代化的全栈应用程序，提供 RESTful API 接口服务。本文档详细描述了 API 的架构设计、端点定义、中间件功能、验证规则以及安全特性。
+
+### 1.2 技术架构
+
+本项目采用以下技术栈构建：
+
+| 组件 | 技术 | 版本 | 说明 |
+|------|------|------|------|
+| 后端框架 | Express.js | ^4.18.2 | 轻量级 Node.js Web 框架 |
+| 数据库 | PostgreSQL | 8.11.0 | 关系型数据库 |
+| 缓存 | Redis | ^4.6.0 | 内存数据库与缓存 |
+| 认证 | JWT | ^9.0.0 | JSON Web Token 认证 |
+| 验证 | Joi | ^17.11.0 | 数据验证库 |
+| 限流 | express-rate-limit | ^7.1.5 | API 请求限流 |
+| 密码加密 | bcrypt | ^5.1.1 | 密码哈希处理 |
+
+### 1.3 项目结构
+
+```
+src/
+├── index.js                          # 应用入口
+└── backend/
+    ├── middleware/                   # 中间件
+    │   ├── auth.js                   # 认证中间件
+    │   ├── cors.js                   # CORS 配置
+    │   ├── errorHandler.js           # 错误处理
+    │   ├── logger.js                 # 日志记录
+    │   ├── rateLimiter.js            # 限流控制
+    │   ├── responseFormatter.js      # 响应格式化
+    │   └── validator.js              # 数据验证
+    ├── routes/                       # 路由定义
+    │   ├── v1/                       # API v1 版本
+    │   │   ├── index.js              # 路由聚合
+    │   │   ├── health.js             # 健康检查
+    │   │   ├── users.js              # 用户管理
+    │   │   └── auth.js               # 认证接口
+    │   └── users.js                  # 旧版用户路由
+    ├── services/                     # 业务逻辑
+    │   ├── authService.js            # 认证服务
+    │   └── userService.js            # 用户服务
+    └── utils/                        # 工具函数
+        └── validationRules.js         # 验证规则
+```
+
+## 2. API 端点
+
+### 2.1 API 版本控制
+
+所有 API 端点统一使用版本控制，当前版本为 **v1**。
+
+**基础 URL**: `/api/v1`
+
+### 2.2 健康检查
+
+#### GET /api/v1/health
+
+基础健康检查接口，用于验证服务是否正常运行。
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "service": "HJTPX API",
+    "version": "1.0.0",
+    "timestamp": "2026-05-14T10:30:00.000Z",
+    "uptime": 3600.5,
+    "environment": "development"
+  }
+}
+```
+
+#### GET /api/v1/health/detailed
+
+详细健康检查接口，返回所有依赖服务的状态。
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "timestamp": "2026-05-14T10:30:00.000Z",
+    "service": "HJTPX API",
+    "version": "1.0.0",
+    "uptime": 3600.5,
+    "environment": "development",
+    "checks": {
+      "database": {
+        "status": "healthy",
+        "message": "Database connection is healthy",
+        "responseTime": "15ms"
+      },
+      "redis": {
+        "status": "healthy",
+        "message": "Redis connection is healthy",
+        "responseTime": "5ms"
+      },
+      "memory": {
+        "status": "healthy",
+        "message": "Memory usage is normal",
+        "usage": {
+          "used": 45,
+          "total": 128,
+          "unit": "MB"
+        }
+      },
+      "cpu": {
+        "status": "healthy",
+        "message": "CPU usage is normal",
+        "loadAverage": [1.2, 0.8, 0.5]
+      }
+    },
+    "responseTime": "25ms"
+  }
+}
+```
+
+**健康状态说明**：
+
+| 状态 | HTTP 状态码 | 说明 |
+|------|-------------|------|
+| healthy | 200 | 所有服务正常运行 |
+| degraded | 200 | 部分服务降级，但核心功能可用 |
+| unhealthy | 503 | 关键服务不可用 |
+
+### 2.3 认证接口
+
+#### POST /api/v1/auth/login
+
+用户登录接口。
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | string | 是 | 用户邮箱地址 |
+| password | string | 是 | 用户密码 |
+
+**请求示例**：
+
+```json
+{
+  "email": "user@example.com",
+  "password": "SecurePass123"
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "John Doe",
+      "role": "user"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": "7d"
+  },
+  "message": "Login successful",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+**错误响应**：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid email or password"
+  },
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### POST /api/v1/auth/register
+
+用户注册接口。
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | string | 是 | 用户邮箱（必须是有效邮箱格式） |
+| name | string | 是 | 用户名称（2-100个字符） |
+| password | string | 是 | 用户密码（至少8个字符，包含大小写字母和数字） |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "John Doe",
+      "role": "user"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": "7d"
+  },
+  "message": "Registration successful",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### POST /api/v1/auth/verify
+
+验证 JWT Token 有效性。
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token | string | 是 | JWT Token |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "role": "user"
+    }
+  },
+  "message": "Token is valid",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### POST /api/v1/auth/refresh
+
+刷新 JWT Token。
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| token | string | 是 | 当前有效的 JWT Token |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": "7d"
+  },
+  "message": "Token refreshed successfully",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### POST /api/v1/auth/logout
+
+用户登出接口。
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Logout successful"
+  },
+  "message": "Logout successful",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+### 2.4 用户管理接口
+
+#### GET /api/v1/users
+
+获取所有用户列表。
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "John Doe",
+      "role": "user",
+      "created_at": "2026-05-14T10:30:00.000Z"
+    }
+  ],
+  "message": "Users retrieved successfully",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### GET /api/v1/users/:id
+
+根据 ID 获取指定用户。
+
+**路径参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 用户 ID |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "email": "user@example.com",
+    "name": "John Doe",
+    "role": "user",
+    "created_at": "2026-05-14T10:30:00.000Z"
+  },
+  "message": "User retrieved successfully",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### POST /api/v1/users
+
+创建新用户。
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| email | string | 是 | 用户邮箱 |
+| name | string | 是 | 用户名称 |
+| password | string | 是 | 用户密码 |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "email": "user@example.com",
+    "name": "John Doe",
+    "role": "user",
+    "created_at": "2026-05-14T10:30:00.000Z"
+  },
+  "message": "User created successfully",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### PUT /api/v1/users/:id
+
+更新指定用户信息。
+
+**路径参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 用户 ID |
+
+**请求参数**（至少提供一项）：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| email | string | 用户邮箱 |
+| name | string | 用户名称 |
+| password | string | 用户密码 |
+| role | string | 用户角色 |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "email": "user@example.com",
+    "name": "John Doe Updated",
+    "role": "moderator",
+    "created_at": "2026-05-14T10:30:00.000Z"
+  },
+  "message": "User updated successfully",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+#### DELETE /api/v1/users/:id
+
+删除指定用户。
+
+**路径参数**：
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 用户 ID |
+
+**响应**：HTTP 204 No Content
+
+## 3. 中间件
+
+### 3.1 响应格式化中间件
+
+**文件位置**: `src/backend/middleware/responseFormatter.js`
+
+统一 API 响应格式，提供便捷的响应方法。
+
+**使用方法**：
+
+```javascript
+// 成功响应
+res.success(data, message, statusCode);
+
+// 错误响应
+res.error(message, statusCode, code, details);
+
+// 创建资源响应
+res.created(data, message);
+
+// 无内容响应
+res.noContent();
+
+// 404 响应
+res.notFound(message);
+
+// 401 响应
+res.unauthorized(message);
+
+// 403 响应
+res.forbidden(message);
+
+// 400 响应
+res.badRequest(message, details);
+
+// 429 响应
+res.tooManyRequests(message, retryAfter);
+```
+
+**响应格式**：
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "data": {},
+  "message": "Success",
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+错误响应：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Error message",
+    "details": {}
+  },
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+### 3.2 日志中间件
+
+**文件位置**: `src/backend/middleware/logger.js`
+
+记录所有 HTTP 请求和响应信息。
+
+**功能特性**：
+
+- 自动生成请求 ID
+- 记录请求方法、URL、路径、查询参数
+- 记录客户端 IP 和 User-Agent
+- 记录响应时间
+- 记录用户 ID（如果已认证）
+- 支持不同日志级别（info、warn、error）
+
+**日志格式**：
+
+```json
+{
+  "requestId": "req_1620987600000_abc123",
+  "timestamp": "2026-05-14T10:30:00.000Z",
+  "method": "POST",
+  "url": "/api/v1/auth/login",
+  "path": "/api/v1/auth/login",
+  "query": {},
+  "params": {},
+  "ip": "192.168.1.1",
+  "userAgent": "Mozilla/5.0...",
+  "userId": 1,
+  "contentType": "application/json",
+  "contentLength": "125",
+  "duration": "150ms",
+  "statusCode": 200
+}
+```
+
+**导出函数**：
+
+```javascript
+const { logger, logError, logWarning, logInfo } = require('./middleware/logger');
+
+// 应用到 Express 应用
+app.use(logger);
+
+// 记录错误
+logError(error, req, { context: 'additional info' });
+
+// 记录警告
+logWarning('Something needs attention', { detail: 'value' });
+
+// 记录信息
+logInfo('Operation completed', { id: 123 });
+```
+
+### 3.3 限流中间件
+
+**文件位置**: `src/backend/middleware/rateLimiter.js`
+
+提供多层次限流保护。
+
+**限流策略**：
+
+| 中间件 | 窗口时间 | 最大请求数 | 适用场景 |
+|--------|----------|------------|----------|
+| ipRateLimiter | 15 分钟 | 100 | 通用 API 保护 |
+| userRateLimiter | 15 分钟 | 200 | 已认证用户 |
+| strictRateLimiter | 1 分钟 | 10 | 敏感操作 |
+| authRateLimiter | 15 分钟 | 5 | 登录尝试（仅计数失败请求） |
+
+**使用方法**：
+
+```javascript
+const { ipRateLimiter, userRateLimiter, strictRateLimiter, authRateLimiter } = require('./middleware/rateLimiter');
+
+// 应用到路由
+app.use('/api', ipRateLimiter);
+app.use('/api/v1/users', userRateLimiter);
+app.post('/api/v1/auth/login', authRateLimiter);
+app.post('/api/v1/admin/delete-all', strictRateLimiter);
+```
+
+**限流响应**：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "TOO_MANY_REQUESTS",
+    "message": "Too many requests, please try again later.",
+    "retryAfter": 60
+  }
+}
+```
+
+### 3.4 CORS 中间件
+
+**文件位置**: `src/backend/middleware/cors.js`
+
+配置跨域资源共享策略。
+
+**配置选项**：
+
+| 选项 | 值 | 说明 |
+|------|-----|------|
+| credentials | true | 允许携带凭证 |
+| methods | GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD | 允许的 HTTP 方法 |
+| allowedHeaders | Content-Type, Authorization, X-Requested-With 等 | 允许的请求头 |
+| exposedHeaders | X-Request-ID, X-Response-Time, X-Total-Count 等 | 允许的响应头 |
+| maxAge | 86400 | 预检请求缓存时间（秒） |
+
+**允许的来源**：
+
+- 开发环境：所有 localhost 地址
+- 生产环境：由 `ALLOWED_ORIGINS` 环境变量配置
+
+**使用方法**：
+
+```javascript
+const { corsMiddleware } = require('./middleware/cors');
+app.use(corsMiddleware);
+```
+
+### 3.5 验证中间件
+
+**文件位置**: `src/backend/middleware/validator.js`
+
+使用 Joi 进行请求数据验证。
+
+**使用方法**：
+
+```javascript
+const validator = require('./middleware/validator');
+
+// 验证请求体
+router.post('/endpoint', validator('userSchema', 'body'), handler);
+
+// 验证查询参数
+router.get('/endpoint', validator('updateUserSchema', 'query'), handler);
+
+// 验证路径参数
+router.get('/endpoint/:id', validator('idSchema', 'params'), handler);
+```
+
+## 4. 验证规则
+
+### 4.1 用户注册规则
+
+**Schema 名称**: `userSchema`
+
+| 字段 | 类型 | 必填 | 约束 | 错误信息 |
+|------|------|------|------|----------|
+| email | string | 是 | 有效的邮箱格式 | "请提供有效的邮箱地址" |
+| name | string | 是 | 2-100 个字符 | "名称必须至少2个字符" / "名称不能超过100个字符" |
+| password | string | 是 | 8-128 个字符，包含大小写字母和数字 | "密码必须至少8个字符" / "密码必须包含至少一个大写字母、一个小区字母和一个数字" |
+
+### 4.2 登录规则
+
+**Schema 名称**: `loginSchema`
+
+| 字段 | 类型 | 必填 | 约束 | 错误信息 |
+|------|------|------|------|----------|
+| email | string | 是 | 有效的邮箱格式 | "请提供有效的邮箱地址" |
+| password | string | 是 | 1-128 个字符 | "密码是必填项" |
+
+### 4.3 用户更新规则
+
+**Schema 名称**: `updateUserSchema`
+
+所有字段均为可选，但至少需要提供一个字段进行更新。
+
+| 字段 | 类型 | 约束 | 错误信息 |
+|------|------|------|----------|
+| email | string | 有效的邮箱格式 | "请提供有效的邮箱地址" |
+| name | string | 2-100 个字符 | "名称必须至少2个字符" / "名称不能超过100个字符" |
+| password | string | 8-128 个字符，包含大小写字母和数字 | "密码必须至少8个字符" / "密码必须包含至少一个大写字母、一个小区字母和一个数字" |
+
+## 5. 错误处理
+
+### 5.1 HTTP 状态码
+
+| 状态码 | 名称 | 使用场景 |
+|--------|------|----------|
+| 200 | OK | 请求成功 |
+| 201 | Created | 资源创建成功 |
+| 204 | No Content | 请求成功，无返回内容 |
+| 400 | Bad Request | 请求参数错误 |
+| 401 | Unauthorized | 未认证或认证失败 |
+| 403 | Forbidden | 无访问权限 |
+| 404 | Not Found | 资源不存在 |
+| 429 | Too Many Requests | 请求过于频繁 |
+| 500 | Internal Server Error | 服务器内部错误 |
+| 503 | Service Unavailable | 服务不可用 |
+
+### 5.2 错误码
+
+| 错误码 | 说明 | HTTP 状态码 |
+|--------|------|-------------|
+| VALIDATION_ERROR | 请求验证失败 | 400 |
+| UNAUTHORIZED | 未授权访问 | 401 |
+| FORBIDDEN | 禁止访问 | 403 |
+| NOT_FOUND | 资源未找到 | 404 |
+| TOO_MANY_REQUESTS | 请求频率超限 | 429 |
+| INTERNAL_ERROR | 服务器内部错误 | 500 |
+| BAD_REQUEST | 错误的请求 | 400 |
+| AUTH_ERROR | 认证错误 | 401 |
+| REGISTRATION_ERROR | 注册错误 | 400 |
+| FETCH_USERS_ERROR | 获取用户列表错误 | 500 |
+| FETCH_USER_ERROR | 获取用户信息错误 | 500 |
+| CREATE_USER_ERROR | 创建用户错误 | 400 |
+| UPDATE_USER_ERROR | 更新用户错误 | 400 |
+| DELETE_USER_ERROR | 删除用户错误 | 500 |
+
+### 5.3 错误响应格式
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "错误描述信息",
+    "details": [
+      {
+        "field": "email",
+        "message": "请提供有效的邮箱地址",
+        "type": "string.email"
+      }
+    ]
+  },
+  "timestamp": "2026-05-14T10:30:00.000Z"
+}
+```
+
+## 6. 安全特性
+
+### 6.1 认证机制
+
+- 使用 JWT (JSON Web Token) 进行身份认证
+- Token 默认有效期为 7 天
+- 支持 Token 刷新机制
+- 密码使用 bcrypt 进行哈希存储
+
+### 6.2 限流保护
+
+- IP 级别限流：防止恶意 IP 攻击
+- 用户级别限流：防止单个用户过度使用
+- 认证限流：防止暴力破解登录
+
+### 6.3 CORS 配置
+
+- 支持跨域请求
+- 可配置允许的源
+- 支持凭证传递
+
+### 6.4 输入验证
+
+- 所有输入数据使用 Joi 进行验证
+- 防止 SQL 注入
+- 防止 XSS 攻击
+
+## 7. 环境变量
+
+### 7.1 必需变量
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| PORT | 服务端口 | 3000 |
+| NODE_ENV | 运行环境 | development / production |
+| JWT_SECRET | JWT 密钥 | your-secret-key |
+| JWT_EXPIRES_IN | Token 有效期 | 7d |
+
+### 7.2 数据库变量
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| DB_HOST | 数据库主机 | localhost |
+| DB_PORT | 数据库端口 | 5432 |
+| DB_NAME | 数据库名称 | hjtpx |
+| DB_USER | 数据库用户 | postgres |
+| DB_PASSWORD | 数据库密码 | password |
+
+### 7.3 Redis 变量
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| REDIS_HOST | Redis 主机 | localhost |
+| REDIS_PORT | Redis 端口 | 6379 |
+| REDIS_PASSWORD | Redis 密码 | password |
+
+### 7.4 可选变量
+
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| ALLOWED_ORIGINS | 允许的 CORS 源（逗号分隔） | http://localhost:3000,http://example.com |
+
+## 8. 测试指南
+
+### 8.1 运行测试
+
+```bash
+# 运行所有测试
+npm test
+
+# 运行测试覆盖率
+npm run test:coverage
+
+# 运行单元测试
+npm run test:unit
+
+# 运行 API 测试
+npm run test:api
+
+# 监听模式运行测试
+npm run test:watch
+```
+
+### 8.2 测试文件结构
+
+```
+tests/
+├── unit/
+│   └── basic.test.js           # 基础单元测试
+└── api/
+    └── health.test.js          # 健康检查 API 测试
+```
+
+### 8.3 测试示例
+
+```javascript
+const request = require('supertest');
+const app = require('../../src/index');
+
+describe('Health API', () => {
+  test('GET /api/v1/health should return healthy status', async () => {
+    const response = await request(app)
+      .get('/api/v1/health')
+      .expect('Content-Type', /json/)
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.status).toBe('healthy');
+  });
+
+  test('GET /api/v1/health/detailed should return detailed status', async () => {
+    const response = await request(app)
+      .get('/api/v1/health/detailed')
+      .expect('Content-Type', /json/)
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(response.body.data).toHaveProperty('checks');
+  });
+});
+```
+
+## 9. 部署指南
+
+### 9.1 开发环境
+
+```bash
+# 安装依赖
+npm install
+
+# 复制环境变量文件
+cp config/.env.example .env
+
+# 启动开发服务器
+npm run dev
+```
+
+### 9.2 生产环境
+
+```bash
+# 安装生产依赖
+npm install --production
+
+# 设置环境变量
+export NODE_ENV=production
+export PORT=3000
+
+# 启动服务
+npm start
+```
+
+### 9.3 使用 PM2 部署
+
+```bash
+# 安装 PM2
+npm install -g pm2
+
+# 启动服务
+pm2 start src/index.js --name hjtpx
+
+# 查看日志
+pm2 logs hjtpx
+
+# 重启服务
+pm2 restart hjtpx
+```
+
+## 10. 维护说明
+
+### 10.1 日志管理
+
+- 所有日志以 JSON 格式输出到标准输出
+- 生产环境建议使用日志收集服务（如 ELK、CloudWatch）
+- 日志包含请求 ID，便于追踪
+
+### 10.2 性能监控
+
+- 监控 API 响应时间
+- 监控数据库连接状态
+- 监控 Redis 连接状态
+- 监控内存和 CPU 使用情况
+
+### 10.3 故障排查
+
+1. 检查健康检查端点状态
+2. 查看应用日志
+3. 检查数据库连接
+4. 检查 Redis 连接
+5. 验证环境变量配置
+
+---
+
+**文档版本**: 1.0.0  
+**最后更新**: 2026-05-14  
+**维护团队**: HJTPX Development Team
