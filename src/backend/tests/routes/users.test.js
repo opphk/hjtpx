@@ -1,9 +1,21 @@
+jest.mock('../../../../src/config/database/db', () => ({
+  query: jest.fn(),
+  pool: {
+    on: jest.fn(),
+    query: jest.fn(),
+    connect: jest.fn(),
+    totalCount: 0,
+    idleCount: 0,
+    waitingCount: 0
+  }
+}));
+
 const express = require('express');
 const request = require('supertest');
 
-const userService = require('../../services/userService');
-
 jest.mock('../../services/userService');
+
+const userService = require('../../services/userService');
 
 const usersRouter = require('../../routes/users');
 

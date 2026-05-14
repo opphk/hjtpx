@@ -1,5 +1,13 @@
 const mockPool = {
-  query: jest.fn()
+  query: jest.fn(),
+  pool: {
+    on: jest.fn(),
+    query: jest.fn(),
+    connect: jest.fn(),
+    totalCount: 0,
+    idleCount: 0,
+    waitingCount: 0
+  }
 };
 
 const mockBcrypt = {
@@ -12,7 +20,7 @@ const mockJwt = {
   verify: jest.fn()
 };
 
-jest.mock('../../../../config/database/db', () => mockPool);
+jest.mock('../../../../src/config/database/db', () => mockPool);
 jest.mock('bcrypt', () => mockBcrypt);
 jest.mock('jsonwebtoken', () => mockJwt);
 

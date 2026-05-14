@@ -156,12 +156,13 @@ class DatabasePoolManager {
   }
 
   getQueryStats() {
+    const hitRate = this.stats.queries > 0
+      ? ((1 - this.stats.slowQueries / this.stats.queries) * 100).toFixed(2) + '%'
+      : '100%';
     return {
       ...this.stats,
       avgQueryTime: Math.round(this.stats.avgQueryTime * 100) / 100,
-      hitRate: this.stats.queries > 0
-        ? ((1 - this.stats.slowQueries / this.stats.queries) * 100).toFixed(2) + '%'
-        : '100%'
+      hitRate
     };
   }
 

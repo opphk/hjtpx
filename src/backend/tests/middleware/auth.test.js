@@ -1,14 +1,27 @@
-const jwt = require('jsonwebtoken');
-
-jest.mock('../../../../src/config/database/db', () => ({
-  query: jest.fn()
+jest.mock('../../../config/database/db', () => ({
+  query: jest.fn(),
+  pool: {
+    on: jest.fn(),
+    query: jest.fn(),
+    connect: jest.fn(),
+    totalCount: 0,
+    idleCount: 0,
+    waitingCount: 0
+  },
+  getClient: jest.fn(),
+  transaction: jest.fn(),
+  healthCheck: jest.fn(),
+  getPoolStats: jest.fn(),
+  close: jest.fn()
 }));
 
-jest.mock('../../../../src/backend/services/sessionService', () => ({
+jest.mock('../../services/sessionService', () => ({
   validateSession: jest.fn(),
   getActiveSessionsCount: jest.fn(),
   enforceMaxSessions: jest.fn()
 }));
+
+const jwt = require('jsonwebtoken');
 
 const { auth } = require('../../middleware/auth');
 

@@ -1,12 +1,20 @@
-jest.mock('../../../../config/database/db', () => ({
-  query: jest.fn()
+jest.mock('../../../../src/config/database/db', () => ({
+  query: jest.fn(),
+  pool: {
+    on: jest.fn(),
+    query: jest.fn(),
+    connect: jest.fn(),
+    totalCount: 0,
+    idleCount: 0,
+    waitingCount: 0
+  }
 }));
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn()
 }));
 
-const pool = require('../../../../config/database/db');
+const pool = require('../../../../src/config/database/db');
 const {
   checkPermission,
   requirePermission,
