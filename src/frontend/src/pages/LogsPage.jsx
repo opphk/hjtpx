@@ -19,12 +19,68 @@ const LogsPage = () => {
     search: ''
   });
   const [selectedLog, setSelectedLog] = useState(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    byLevel: {},
+    byType: {},
+    last24h: 0
+  });
+  const [showStats, setShowStats] = useState(true);
 
   const pageSize = 20;
 
   useEffect(() => {
     fetchLogs();
+    fetchStats();
   }, [currentPage, filters]);
+
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const queryParams = new URLSearchParams({
+        ...Object.fromEntries(
+          Object.entries(filters).filter(([_, value]) => value !== '')
+        ),
+        limit: '1000'
+      });
+
+      const response = await fetch(`/api/v1/admin/logs?${queryParams}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const logData = data.logs || [];
+
+        const byLevel = {};
+        const byType = {};
+        let last24h = 0;
+        const now = Date.now();
+        const dayAgo = now - 24 * 60 * 60 * 1000;
+
+        logData.forEach(log => {
+          byLevel[log.level] = (byLevel[log.level] || 0) + 1;
+          byType[log.type] = (byType[log.type] || 0) + 1;
+
+          const logTime = new Date(log.timestamp).getTime();
+          if (logTime > dayAgo) {
+            last24h++;
+          }
+        });
+
+        setStats({
+          total: data.total || 0,
+          byLevel,
+          byType,
+          last24h
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch stats:', err);
+    }
+  };
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -66,14 +122,14 @@ const LogsPage = () => {
     setCurrentPage(1);
   };
 
-  const handleExportLogs = async () => {
+  const handleExportLogs = async (format = 'csv') => {
     try {
       const token = localStorage.getItem('authToken');
       const queryParams = new URLSearchParams({
         ...Object.fromEntries(
           Object.entries(filters).filter(([_, value]) => value !== '')
         ),
-        format: 'csv'
+        format
       });
 
       const response = await fetch(`/api/v1/admin/logs/export?${queryParams}`, {
@@ -83,11 +139,23 @@ const LogsPage = () => {
       });
 
       if (response.ok) {
-        const blob = await response.blob();
+        const contentType = response.headers.get('Content-Type');
+        let blob;
+        let filename;
+
+        if (format === 'json' || contentType.includes('application/json')) {
+          const data = await response.json();
+          blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          filename = `logs_${new Date().toISOString().split('T')[0]}.json`;
+        } else {
+          blob = await response.blob();
+          filename = `logs_${new Date().toISOString().split('T')[0]}.csv`;
+        }
+
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `logs_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -99,6 +167,9 @@ const LogsPage = () => {
       setError('导出失败，请稍后重试');
     }
   };
+
+  const handleExportJSON = () => handleExportLogs('json');
+  const handleExportCSV = () => handleExportLogs('csv');
 
   const handleClearOldLogs = async () => {
     if (!window.confirm('确定要清除30天前的日志吗？此操作不可撤销。')) return;
@@ -134,9 +205,18 @@ const LogsPage = () => {
           <p>查看和搜索系统操作日志、错误日志</p>
         </div>
         <div className="header-actions">
-          <button className="btn btn-secondary" onClick={handleExportLogs}>
-            导出日志
+          <button className="btn btn-secondary" onClick={() => setShowStats(!showStats)}>
+            {showStats ? '隐藏统计' : '显示统计'}
           </button>
+          <div className="export-dropdown">
+            <button className="btn btn-secondary dropdown-toggle">
+              导出日志 ▾
+            </button>
+            <div className="export-dropdown-menu">
+              <button onClick={handleExportCSV}>导出 CSV</button>
+              <button onClick={handleExportJSON}>导出 JSON</button>
+            </div>
+          </div>
           <button className="btn btn-danger" onClick={handleClearOldLogs}>
             清除旧日志
           </button>
@@ -150,6 +230,35 @@ const LogsPage = () => {
           closable
           onClose={() => setError('')}
         />
+      )}
+
+      {showStats && (
+        <div className="log-stats">
+          <div className="stat-card">
+            <div className="stat-value">{stats.total}</div>
+            <div className="stat-label">总日志数</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.last24h}</div>
+            <div className="stat-label">24小时内</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.byLevel.error || 0}</div>
+            <div className="stat-label">错误数</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.byLevel.warn || 0}</div>
+            <div className="stat-label">警告数</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.byType.error || 0}</div>
+            <div className="stat-label">错误类型</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-value">{stats.byType.security || 0}</div>
+            <div className="stat-label">安全类型</div>
+          </div>
+        </div>
       )}
 
       <LogFilter filters={filters} onFilterChange={handleFilterChange} />

@@ -19,8 +19,11 @@ const SystemConfig = ({ onSuccess, onError }) => {
     email_verification_required: true,
     password_min_length: 6
   });
+  const [originalConfig, setOriginalConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     fetchConfig();
@@ -39,6 +42,7 @@ const SystemConfig = ({ onSuccess, onError }) => {
       if (response.ok) {
         const data = await response.json();
         setConfig(data.config || config);
+        setOriginalConfig(data.config || config);
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);
@@ -47,14 +51,83 @@ const SystemConfig = ({ onSuccess, onError }) => {
     }
   };
 
+  const validate = () => {
+    const newErrors = {};
+
+    if (!config.site_name.trim()) {
+      newErrors.site_name = '网站名称不能为空';
+    }
+
+    if (!config.site_url.trim()) {
+      newErrors.site_url = '网站URL不能为空';
+    } else {
+      try {
+        new URL(config.site_url);
+      } catch {
+        newErrors.site_url = '请输入有效的URL地址';
+      }
+    }
+
+    if (config.max_users < 1) {
+      newErrors.max_users = '最大用户数必须大于0';
+    }
+
+    if (config.session_timeout < 60) {
+      newErrors.session_timeout = '会话超时时间至少60秒';
+    }
+
+    if (config.password_min_length < 6) {
+      newErrors.password_min_length = '密码最小长度不能小于6';
+    }
+
+    if (config.api_rate_limit < 1) {
+      newErrors.api_rate_limit = 'API速率限制必须大于0';
+    }
+
+    if (config.log_retention_days < 1) {
+      newErrors.log_retention_days = '日志保留天数必须大于0';
+    }
+
+    if (config.cache_ttl < 60) {
+      newErrors.cache_ttl = '缓存TTL至少60秒';
+    }
+
+    if (config.upload_max_size < 1024) {
+      newErrors.upload_max_size = '上传文件大小至少1KB';
+    }
+
+    if (!config.allowed_file_types.trim()) {
+      newErrors.allowed_file_types = '请输入允许的文件类型';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleChange = (key, value) => {
     setConfig(prev => ({
       ...prev,
       [key]: value
     }));
+
+    if (errors[key]) {
+      setErrors(prev => ({
+        ...prev,
+        [key]: ''
+      }));
+    }
+
+    if (originalConfig) {
+      setHasChanges(JSON.stringify(config) !== JSON.stringify(originalConfig));
+    }
   };
 
   const handleSave = async () => {
+    if (!validate()) {
+      onError('请修正表单错误后再保存');
+      return;
+    }
+
     setSaving(true);
     try {
       const token = localStorage.getItem('authToken');
@@ -68,6 +141,8 @@ const SystemConfig = ({ onSuccess, onError }) => {
       });
 
       if (response.ok) {
+        setOriginalConfig(config);
+        setHasChanges(false);
         onSuccess('系统配置已保存');
       } else {
         const errorData = await response.json();
@@ -86,6 +161,12 @@ const SystemConfig = ({ onSuccess, onError }) => {
 
   return (
     <div className="config-section">
+      {hasChanges && (
+        <div className="config-changes-indicator">
+          <span>配置已修改，但尚未保存</span>
+        </div>
+      )}
+
       <div className="config-card">
         <h3>基本信息</h3>
         <div className="config-form">
@@ -95,8 +176,9 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="text"
               value={config.site_name}
               onChange={(e) => handleChange('site_name', e.target.value)}
-              className="form-input"
+              className={`form-input ${errors.site_name ? 'input-error' : ''}`}
             />
+            {errors.site_name && <span className="error-text">{errors.site_name}</span>}
           </div>
           <div className="form-group">
             <label className="form-label">网站URL</label>
@@ -104,8 +186,9 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="url"
               value={config.site_url}
               onChange={(e) => handleChange('site_url', e.target.value)}
-              className="form-input"
+              className={`form-input ${errors.site_url ? 'input-error' : ''}`}
             />
+            {errors.site_url && <span className="error-text">{errors.site_url}</span>}
           </div>
           <div className="config-item">
             <div className="config-item-info">
@@ -131,9 +214,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.max_users}
               onChange={(e) => handleChange('max_users', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.max_users ? 'input-error' : ''}`}
               min="1"
             />
+            {errors.max_users && <span className="error-text">{errors.max_users}</span>}
           </div>
           <div className="form-group">
             <label className="form-label">会话超时 (秒)</label>
@@ -141,9 +225,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.session_timeout}
               onChange={(e) => handleChange('session_timeout', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.session_timeout ? 'input-error' : ''}`}
               min="60"
             />
+            {errors.session_timeout && <span className="error-text">{errors.session_timeout}</span>}
           </div>
           <div className="form-group">
             <label className="form-label">密码最小长度</label>
@@ -151,9 +236,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.password_min_length}
               onChange={(e) => handleChange('password_min_length', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.password_min_length ? 'input-error' : ''}`}
               min="6"
             />
+            {errors.password_min_length && <span className="error-text">{errors.password_min_length}</span>}
           </div>
           <div className="config-item">
             <div className="config-item-info">
@@ -179,9 +265,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.api_rate_limit}
               onChange={(e) => handleChange('api_rate_limit', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.api_rate_limit ? 'input-error' : ''}`}
               min="1"
             />
+            {errors.api_rate_limit && <span className="error-text">{errors.api_rate_limit}</span>}
           </div>
         </div>
       </div>
@@ -208,9 +295,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.log_retention_days}
               onChange={(e) => handleChange('log_retention_days', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.log_retention_days ? 'input-error' : ''}`}
               min="1"
             />
+            {errors.log_retention_days && <span className="error-text">{errors.log_retention_days}</span>}
           </div>
         </div>
       </div>
@@ -236,10 +324,11 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.cache_ttl}
               onChange={(e) => handleChange('cache_ttl', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.cache_ttl ? 'input-error' : ''}`}
               min="60"
               disabled={!config.cache_enabled}
             />
+            {errors.cache_ttl && <span className="error-text">{errors.cache_ttl}</span>}
           </div>
         </div>
       </div>
@@ -253,9 +342,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="number"
               value={config.upload_max_size}
               onChange={(e) => handleChange('upload_max_size', parseInt(e.target.value))}
-              className="form-input"
+              className={`form-input ${errors.upload_max_size ? 'input-error' : ''}`}
               min="1024"
             />
+            {errors.upload_max_size && <span className="error-text">{errors.upload_max_size}</span>}
           </div>
           <div className="form-group">
             <label className="form-label">允许的文件类型</label>
@@ -263,9 +353,10 @@ const SystemConfig = ({ onSuccess, onError }) => {
               type="text"
               value={config.allowed_file_types}
               onChange={(e) => handleChange('allowed_file_types', e.target.value)}
-              className="form-input"
+              className={`form-input ${errors.allowed_file_types ? 'input-error' : ''}`}
               placeholder=".jpg,.png,.pdf"
             />
+            {errors.allowed_file_types && <span className="error-text">{errors.allowed_file_types}</span>}
           </div>
         </div>
       </div>
@@ -275,9 +366,24 @@ const SystemConfig = ({ onSuccess, onError }) => {
           variant="primary"
           onClick={handleSave}
           loading={saving}
+          disabled={!hasChanges}
         >
           保存配置
         </Button>
+        {hasChanges && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (originalConfig) {
+                setConfig(originalConfig);
+                setHasChanges(false);
+                setErrors({});
+              }
+            }}
+          >
+            放弃更改
+          </Button>
+        )}
       </div>
     </div>
   );

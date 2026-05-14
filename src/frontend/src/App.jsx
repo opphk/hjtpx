@@ -4,6 +4,10 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminUsersPage from './pages/AdminUsersPage';
+import LogsPage from './pages/LogsPage';
+import SettingsPage from './pages/SettingsPage';
+import AuditDashboard from './pages/AuditDashboard';
 import UserList from './components/UserList';
 import DashboardLayout from './components/DashboardLayout';
 import Loading from './components/ui/Loading';
@@ -69,6 +73,46 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <DashboardLayout>
               <UserList />
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/users" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <AdminUsersPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/logs" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <LogsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/settings" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/audit" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <AuditDashboard />
             </DashboardLayout>
           </ProtectedRoute>
         } 

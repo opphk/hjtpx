@@ -20,6 +20,9 @@ const AdminUsersPage = () => {
     status: '',
     search: ''
   });
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [bulkAction, setBulkAction] = useState('');
 
   const pageSize = 10;
 
@@ -183,6 +186,79 @@ const AdminUsersPage = () => {
     handleFilterChange('search', searchTerm);
   };
 
+  const handleSelectAll = (checked) => {
+    setSelectAll(checked);
+    if (checked) {
+      setSelectedUsers(users.map(u => u.id));
+    } else {
+      setSelectedUsers([]);
+    }
+  };
+
+  const handleSelectUser = (userId, checked) => {
+    if (checked) {
+      setSelectedUsers(prev => [...prev, userId]);
+    } else {
+      setSelectedUsers(prev => prev.filter(id => id !== userId));
+    }
+  };
+
+  const handleBulkAction = async () => {
+    if (!bulkAction) {
+      setError('请选择批量操作');
+      return;
+    }
+
+    if (selectedUsers.length === 0) {
+      setError('请选择要操作的用户');
+      return;
+    }
+
+    if (bulkAction === 'delete') {
+      if (!window.confirm(`确定要删除选中的 ${selectedUsers.length} 个用户吗？此操作不可撤销。`)) {
+        return;
+      }
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const userId of selectedUsers) {
+        if (bulkAction === 'status') {
+          const response = await fetch(`/api/v1/admin/users/${userId}/status`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ status: 'inactive' })
+          });
+          if (response.ok) successCount++;
+          else failCount++;
+        } else if (bulkAction === 'delete') {
+          const response = await fetch(`/api/v1/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) successCount++;
+          else failCount++;
+        }
+      }
+
+      setSuccess(`批量操作完成：成功 ${successCount} 个，失败 ${failCount} 个`);
+      setSelectedUsers([]);
+      setSelectAll(false);
+      setBulkAction('');
+      fetchUsers();
+    } catch (err) {
+      setError('批量操作失败，请稍后重试');
+    }
+  };
+
   if (loading && users.length === 0) {
     return <Loading text="加载用户列表..." />;
   }
@@ -253,6 +329,39 @@ const AdminUsersPage = () => {
         </div>
       </div>
 
+      {selectedUsers.length > 0 && (
+        <div className="bulk-actions">
+          <span className="selected-count">已选择 {selectedUsers.length} 个用户</span>
+          <select
+            value={bulkAction}
+            onChange={(e) => setBulkAction(e.target.value)}
+            className="form-select bulk-action-select"
+          >
+            <option value="">选择批量操作</option>
+            <option value="status">批量禁用</option>
+            <option value="delete">批量删除</option>
+          </select>
+          <Button
+            variant="primary"
+            size="small"
+            onClick={handleBulkAction}
+          >
+            应用
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => {
+              setSelectedUsers([]);
+              setSelectAll(false);
+              setBulkAction('');
+            }}
+          >
+            取消选择
+          </Button>
+        </div>
+      )}
+
       <AdminUserTable
         users={users}
         loading={loading}
@@ -260,6 +369,10 @@ const AdminUsersPage = () => {
         onDelete={handleDelete}
         onStatusChange={handleStatusChange}
         onRoleChange={handleRoleChange}
+        selectedUsers={selectedUsers}
+        onSelectUser={handleSelectUser}
+        onSelectAll={handleSelectAll}
+        selectAll={selectAll}
       />
 
       {!loading && users.length > 0 && (

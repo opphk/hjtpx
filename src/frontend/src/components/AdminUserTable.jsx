@@ -8,7 +8,11 @@ const AdminUserTable = ({
   onEdit,
   onDelete,
   onStatusChange,
-  onRoleChange
+  onRoleChange,
+  selectedUsers = [],
+  onSelectUser,
+  onSelectAll,
+  selectAll = false
 }) => {
   const getStatusBadge = (status) => {
     const statusMap = {
@@ -47,6 +51,13 @@ const AdminUserTable = ({
       <table className="admin-table">
         <thead>
           <tr>
+            <th>
+              <input
+                type="checkbox"
+                checked={selectAll && selectedUsers.length === users.length}
+                onChange={(e) => onSelectAll(e.target.checked)}
+              />
+            </th>
             <th>ID</th>
             <th>用户名</th>
             <th>邮箱</th>
@@ -60,6 +71,13 @@ const AdminUserTable = ({
         <tbody>
           {users.map((user) => (
             <tr key={user.id}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.includes(user.id)}
+                  onChange={(e) => onSelectUser(user.id, e.target.checked)}
+                />
+              </td>
               <td>{user.id}</td>
               <td>{user.username}</td>
               <td>{user.email}</td>
