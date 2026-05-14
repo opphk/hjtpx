@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import UsersPage from './pages/UsersPage';
 import Loading from './components/Loading';
+import { createLazyComponent } from './utils/optimization';
+
+const LoginPage = createLazyComponent(() => import('./pages/LoginPage'), <Loading />);
+const RegisterPage = createLazyComponent(() => import('./pages/RegisterPage'), <Loading />);
+const DashboardPage = createLazyComponent(() => import('./pages/DashboardPage'), <Loading />);
+const UsersPage = createLazyComponent(() => import('./pages/UsersPage'), <Loading />);
 
 function ErrorBoundary({ children }) {
   const [hasError, setHasError] = React.useState(false);

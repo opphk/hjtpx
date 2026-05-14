@@ -1,62 +1,49 @@
 import React, { useEffect } from 'react';
 
-function Modal({
-  isOpen,
-  onClose,
-  title,
-  children,
+const Modal = ({ 
+  isOpen, 
+  onClose, 
+  title, 
+  children, 
   footer,
-  size = 'medium',
-  closeOnOverlayClick = true,
-  className = ''
-}) {
+  size = 'medium'
+}) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
     }
-
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
+    
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isOpen) {
         onClose();
       }
     };
-
+    
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
-  const handleOverlayClick = (e) => {
-    if (closeOnOverlayClick && e.target === e.currentTarget) {
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
-  const modalClass = `modal modal-${size} ${className}`.trim();
-
   return (
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className={modalClass} role="dialog" aria-modal="true">
+    <div className="modal-overlay" onClick={handleBackdropClick}>
+      <div className={`modal-container modal-${size}`}>
         <div className="modal-header">
-          <h2 className="modal-title">{title}</h2>
-          <button
-            type="button"
-            className="modal-close"
+          <h3 className="modal-title">{title}</h3>
+          <button 
+            className="modal-close" 
             onClick={onClose}
-            aria-label="Close"
+            aria-label="关闭"
           >
-            &times;
+            ×
           </button>
         </div>
         <div className="modal-body">
@@ -70,6 +57,6 @@ function Modal({
       </div>
     </div>
   );
-}
+};
 
-export default React.memo(Modal);
+export default Modal;

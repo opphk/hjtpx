@@ -21,4 +21,4 @@ function Loading({ size = 'medium', fullScreen = false, text = 'Loading...' }) {
   );
 }
 
-export default Loading;
+export default React.memo(Loading);
