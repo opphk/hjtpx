@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import Input from '../ui/Input';
-import Button from '../ui/Button';
+import Input from './ui/Input';
+import Button from './ui/Button';
 
 const RegisterForm = ({ onSubmit, loading }) => {
   const [formData, setFormData] = useState({
-    username: '',
+    name: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -29,10 +29,10 @@ const RegisterForm = ({ onSubmit, loading }) => {
   const validate = () => {
     const newErrors = {};
     
-    if (!formData.username.trim()) {
-      newErrors.username = '用户名不能为空';
-    } else if (formData.username.length < 3) {
-      newErrors.username = '用户名至少3个字符';
+    if (!formData.name.trim()) {
+      newErrors.name = '用户名不能为空';
+    } else if (formData.name.length < 2) {
+      newErrors.name = '用户名至少2个字符';
     }
     
     if (!formData.email.trim()) {
@@ -43,8 +43,10 @@ const RegisterForm = ({ onSubmit, loading }) => {
     
     if (!formData.password) {
       newErrors.password = '密码不能为空';
-    } else if (formData.password.length < 6) {
-      newErrors.password = '密码至少6个字符';
+    } else if (formData.password.length < 8) {
+      newErrors.password = '密码至少8个字符';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
+      newErrors.password = '密码必须包含至少一个大写字母、一个小写字母和一个数字';
     }
     
     if (formData.password !== formData.confirmPassword) {
@@ -60,7 +62,7 @@ const RegisterForm = ({ onSubmit, loading }) => {
     
     if (validate()) {
       onSubmit({
-        username: formData.username,
+        name: formData.name,
         email: formData.email,
         password: formData.password
       });
@@ -71,11 +73,11 @@ const RegisterForm = ({ onSubmit, loading }) => {
     <form onSubmit={handleSubmit} className="auth-form">
       <Input
         label="用户名"
-        name="username"
-        value={formData.username}
+        name="name"
+        value={formData.name}
         onChange={handleChange}
         placeholder="请输入用户名"
-        error={errors.username}
+        error={errors.name}
         required
       />
       

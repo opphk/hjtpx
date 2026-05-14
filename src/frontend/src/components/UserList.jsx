@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import Table from '../ui/Table';
-import Button from '../ui/Button';
-import Loading from '../ui/Loading';
-import Pagination from '../ui/Pagination';
-import Alert from '../ui/Alert';
+import Table from './ui/Table';
+import Button from './ui/Button';
+import Loading from './ui/Loading';
+import Pagination from './ui/Pagination';
+import Alert from './ui/Alert';
 import UserEditModal from './UserEditModal';
 
 const UserList = () => {

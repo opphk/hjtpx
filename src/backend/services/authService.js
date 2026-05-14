@@ -146,9 +146,9 @@ function validatePassword(password) {
   if (!password || password.length < 8) {
     throw new Error('Password must be at least 8 characters long');
   }
-  if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*])/.test(password)) {
+  if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
     throw new Error(
-      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (!@#$%^&*)'
+      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
     );
   }
   return true;
