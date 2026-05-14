@@ -19,7 +19,13 @@
     "test:e2e:debug": "playwright test --debug",
     "lint": "eslint src/",
     "format:check": "prettier --check src/",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "audit": "npm audit",
+    "audit:json": "npm audit --json",
+    "audit:fix": "npm audit fix",
+    "security:scan": "npm audit && npm run security:vulnerability-check",
+    "security:vulnerability-check": "node -e \"const audit = require('./src/backend/services/securityAudit'); audit.runVulnerabilityScan();\"",
+    "security:report": "npm audit --json > security-audit-report.json && echo 'Security audit report generated: security-audit-report.json'"
   },
   "keywords": [
     "hjtpx",
