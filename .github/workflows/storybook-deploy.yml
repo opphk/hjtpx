@@ -1,0 +1,64 @@
+name: Deploy Storybook Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/frontend/src/stories/**'
+      - 'src/frontend/.storybook/**'
+      - 'src/frontend/package.json'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  deploy-storybook:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install Storybook dependencies
+        run: npm install @storybook/addon-a11y @storybook/addon-actions @storybook/addon-backgrounds @storybook/addon-controls @storybook/addon-docs @storybook/addon-essentials @storybook/addon-jest @storybook/addon-links @storybook/addon-viewport @storybook/react-vite @storybook/testing-library
+        
+      - name: Build Storybook
+        run: npm run build-storybook
+        env:
+          NODE_ENV: production
+      
+      - name: Upload Storybook artifact
+        uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: storybook
+          path: src/frontend/storybook-static/
+          retention-days: 30
+      
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./src/frontend/storybook-static
+          publish_branch: gh-pages
+          user_name: 'GitHub Actions'
+          user_email: 'actions@github.com'
+          commit_message: 'Deploy Storybook - ${{ github.event.head_commit.message }}'

@@ -136,6 +136,20 @@ jobs:
         run: npm run test:ci
         continue-on-error: true
 
+      - name: Run branch coverage requirements check
+        run: |
+          if [ -f "coverage/lcov.info" ]; then
+            node scripts/check-branch-coverage.js || true
+          fi
+        continue-on-error: true
+
+      - name: Run coverage trend analysis
+        run: |
+          if [ -f "coverage/lcov.info" ]; then
+            node scripts/coverage-check.js || true
+          fi
+        continue-on-error: true
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -370,10 +384,56 @@ jobs:
           fi
           echo "✅ Quality gate passed"
 
+  coverage-gate:
+    name: Coverage Gate
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: Check branch coverage requirements
+        run: |
+          echo "🔍 Checking coverage requirements for PR..."
+          node scripts/check-branch-coverage.js
+        continue-on-error: true
+
+      - name: Check coverage trend
+        run: |
+          echo "📊 Analyzing coverage trends..."
+          node scripts/coverage-check.js
+        continue-on-error: true
+
+      - name: Coverage report summary
+        run: |
+          if [ -f "coverage/coverage-summary.json" ]; then
+            echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            cat coverage/coverage-summary.json >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f "coverage/lcov.info" ]; then
+            echo "## Detailed Coverage Report" >> $GITHUB_STEP_SUMMARY
+            npx cobertura-parse coverage/lcov.info || echo "Coverage parsing skipped"
+          fi
+        continue-on-error: true
+
   notify:
     name: Notify Status
     runs-on: ubuntu-latest
-    needs: [lint, test, security, build, quality-gate]
+    needs: [lint, test, security, build, quality-gate, coverage-gate]
     if: always()
     steps:
       - name: Prepare status message
