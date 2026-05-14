@@ -1,7 +1,10 @@
 require('dotenv').config();
 
 const express = require('express');
+const http = require('http');
+const compression = require('compression');
 const app = express();
+const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -11,6 +14,7 @@ const { logger, logError } = require('./backend/middleware/logger');
 const { corsMiddleware } = require('./backend/middleware/cors');
 const { ipRateLimiter } = require('./backend/middleware/rateLimiter');
 const errorHandler = require('./backend/middleware/errorHandler');
+const websocketService = require('./backend/services/websocketService');
 
 const v1Routes = require('./backend/routes/v1');
 
@@ -19,6 +23,17 @@ app.use((req, res, next) => {
   res.setHeader('X-Request-ID', req.requestId);
   next();
 });
+
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -85,8 +100,12 @@ const server = app.listen(PORT, () => {
   console.log('========================================\n');
 });
 
+websocketService.initialize(server);
+console.log('✅ WebSocket service initialized');
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
+  websocketService.close();
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);
@@ -95,6 +114,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('SIGINT signal received: closing HTTP server');
+  websocketService.close();
   server.close(() => {
     console.log('HTTP server closed');
     process.exit(0);

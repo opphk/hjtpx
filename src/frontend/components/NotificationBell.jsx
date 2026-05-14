@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import axios from 'axios';
+import socketService from '../../services/socketService';
 
 const NotificationBell = ({ userId, maxVisible = 5, onNotificationClick }) => {
   const [notifications, setNotifications] = useState([]);
@@ -62,6 +63,29 @@ const NotificationBell = ({ userId, maxVisible = 5, onNotificationClick }) => {
       fetchNotifications();
     }
   }, [isOpen, fetchNotifications]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    socketService.connect(token);
+
+    socketService.onNotification((notification) => {
+      setNotifications((prev) => [notification, ...prev]);
+      setUnreadCount((prev) => prev + 1);
+
+      if (onNotificationClick) {
+        onNotificationClick(notification);
+      }
+    });
+
+    socketService.onPresenceUpdate((update) => {
+      console.log('Presence update received:', update);
+    });
+
+    return () => {
+    };
+  }, [onNotificationClick]);
 
   const handleMarkAsRead = async (notificationId) => {
     try {
