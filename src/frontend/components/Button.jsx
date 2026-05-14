@@ -10,6 +10,8 @@ function Button({
   disabled = false,
   onClick,
   className = '',
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
   ...props
 }) {
   const baseClass = 'btn';
@@ -17,9 +19,21 @@ function Button({
   const sizeClass = `btn-${size}`;
   const classes = [baseClass, variantClass, sizeClass, className].filter(Boolean).join(' ');
 
+  const isDisabled = disabled || loading;
+  const buttonLabel = ariaLabel || (typeof children === 'string' ? children : null);
+
   const handleClick = (e) => {
-    if (!loading && !disabled && onClick) {
+    if (!isDisabled && onClick) {
       onClick(e);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      if (!isDisabled && onClick) {
+        e.preventDefault();
+        onClick(e);
+      }
     }
   };
 
@@ -28,10 +42,16 @@ function Button({
       type={type}
       className={classes}
       onClick={handleClick}
-      disabled={disabled || loading}
+      onKeyDown={handleKeyDown}
+      disabled={isDisabled}
+      aria-label={buttonLabel}
+      aria-describedby={ariaDescribedBy}
+      aria-disabled={isDisabled}
+      aria-busy={loading}
+      tabIndex={isDisabled ? -1 : 0}
       {...props}
     >
-      {loading ? <Loading size="small" /> : children}
+      {loading ? <Loading size="small" aria-hidden="true" /> : children}
     </button>
   );
 }

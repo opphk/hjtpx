@@ -26,15 +26,42 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
   clearMocks: true,
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'clover'],
+  coverageReporters: ['text', 'lcov', 'clover', 'html'],
   coverageThreshold: {
     global: {
-      branches: 30,
-      functions: 30,
-      lines: 30,
-      statements: 30
+      branches: 50,
+      functions: 50,
+      lines: 50,
+      statements: 50
+    },
+    './src/backend/': {
+      branches: 60,
+      functions: 60,
+      lines: 60,
+      statements: 60
+    },
+    './src/services/': {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70
+    },
+    './src/api/': {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
     }
   },
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+    '/frontend/node_modules/',
+    '/dist/',
+    '/build/',
+    '/coverage/'
+  ],
+  coverageProvider: 'v8',
+  collectCoverage: process.env.COLLECT_COVERAGE === 'true',
   testPathIgnorePatterns: ['/node_modules/', '/frontend/node_modules/'],
   verbose: true,
   modulePathIgnorePatterns: ['<rootDir>/src/config/database/db.js'],
