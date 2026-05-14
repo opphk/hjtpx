@@ -1,0 +1,229 @@
+name: API Documentation CI Check
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+    paths:
+      - 'src/backend/routes/**'
+      - 'src/backend/config/swagger.js'
+      - 'src/backend/config/swagger.yaml'
+      - 'src/backend/utils/**'
+      - 'src/backend/middleware/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/backend/routes/**'
+      - 'src/backend/config/swagger.js'
+      - 'src/backend/config/swagger.yaml'
+      - 'src/backend/utils/**'
+      - 'src/backend/middleware/**'
+  workflow_dispatch:
+
+jobs:
+  api-documentation-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/backend/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install API documentation tools
+        run: npm install swagger-jsdoc swagger-ui-express js-yaml
+      
+      - name: Validate OpenAPI specification
+        id: validate
+        run: |
+          node -e "
+            const swaggerSpec = require('./config/swagger');
+            const swaggerJsdoc = require('swagger-jsdoc');
+            
+            console.log('Validating OpenAPI specification...');
+            
+            if (!swaggerSpec.openapi) {
+              console.error('ERROR: Missing OpenAPI version');
+              process.exit(1);
+            }
+            
+            if (!swaggerSpec.info) {
+              console.error('ERROR: Missing API info');
+              process.exit(1);
+            }
+            
+            const paths = swaggerSpec.paths || {};
+            const endpointCount = Object.keys(paths).length;
+            
+            console.log('API Version:', swaggerSpec.info.version);
+            console.log('Total endpoints:', endpointCount);
+            console.log('OpenAPI Version:', swaggerSpec.openapi);
+            
+            for (const [path, methods] of Object.entries(paths)) {
+              for (const [method, details] of Object.entries(methods)) {
+                if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
+                  if (!details.summary) {
+                    console.warn('WARNING: Missing summary for', method.toUpperCase(), path);
+                  }
+                }
+              }
+            }
+            
+            console.log('OpenAPI specification is valid!');
+          "
+      
+      - name: Check for breaking changes
+        id: breaking-changes
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            
+            console.log('Checking for breaking changes...');
+            
+            const diffDetector = require('./utils/apiDiffDetector');
+            
+            diffDetector.detectChanges(require('./config/swagger')).then(changes => {
+              if (changes.hasChanges) {
+                console.log('Changes detected:');
+                changes.changes.forEach(c => console.log('  -', c));
+                
+                if (changes.isBreaking) {
+                  console.log('\\n⚠️  WARNING: Breaking changes detected!');
+                  console.log('This may require a major version bump.');
+                  process.exit(1);
+                }
+              } else {
+                console.log('No changes detected in API documentation.');
+              }
+            }).catch(err => {
+              console.error('Error checking changes:', err.message);
+              process.exit(1);
+            });
+          "
+      
+      - name: Generate documentation coverage report
+        id: coverage
+        run: |
+          node -e "
+            const swaggerSpec = require('./config/swagger');
+            
+            console.log('Generating documentation coverage report...');
+            
+            const paths = swaggerSpec.paths || {};
+            const endpoints = [];
+            
+            for (const [path, methods] of Object.entries(paths)) {
+              for (const [method, details] of Object.entries(methods)) {
+                if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
+                  endpoints.push({
+                    path,
+                    method: method.toUpperCase(),
+                    summary: details.summary || 'No summary',
+                    description: details.description || '',
+                    hasResponse: !!details.responses,
+                    hasParameters: !!(details.parameters && details.parameters.length > 0)
+                  });
+                }
+              }
+            }
+            
+            const total = endpoints.length;
+            const documented = endpoints.filter(e => e.summary && e.summary !== 'No summary').length;
+            const withDescription = endpoints.filter(e => e.description).length;
+            const withResponse = endpoints.filter(e => e.hasResponse).length;
+            
+            console.log('Total endpoints:', total);
+            console.log('With summary:', documented, '(' + ((documented/total)*100).toFixed(1) + '%)');
+            console.log('With description:', withDescription, '(' + ((withDescription/total)*100).toFixed(1) + '%)');
+            console.log('With response:', withResponse, '(' + ((withResponse/total)*100).toFixed(1) + '%)');
+            
+            if (documented < total * 0.8) {
+              console.warn('\\n⚠️  WARNING: Less than 80% endpoints have summaries');
+              process.exit(1);
+            }
+          "
+      
+      - name: Export API documentation
+        run: |
+          mkdir -p ${{ github.workspace }}/docs/api
+          node -e "
+            const swaggerSpec = require('./config/swagger');
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+            
+            const specJson = JSON.stringify(swaggerSpec, null, 2);
+            fs.writeFileSync('${{ github.workspace }}/docs/api/openapi.json', specJson);
+            
+            const specYaml = yaml.dump(swaggerSpec, { indent: 2 });
+            fs.writeFileSync('${{ github.workspace }}/docs/api/openapi.yaml', specYaml);
+            
+            console.log('API documentation exported to docs/api/');
+          "
+      
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-documentation
+          path: docs/api/
+          retention-days: 30
+      
+      - name: Comment on PR with documentation changes
+        if: github.event_name == 'pull_request'
+        run: |
+          node -e "
+            const swaggerSpec = require('./config/swagger');
+            
+            const paths = swaggerSpec.paths || {};
+            const summary = [];
+            
+            summary.push('## API Documentation Summary');
+            summary.push('');
+            summary.push('- **Version**: ' + swaggerSpec.info.version);
+            summary.push('- **Total Endpoints**: ' + Object.keys(paths).length);
+            summary.push('- **OpenAPI Version**: ' + swaggerSpec.openapi);
+            
+            console.log(summary.join('\\n'));
+          "
+      
+      - name: Check for undocumented endpoints
+        run: |
+          node -e "
+            const swaggerSpec = require('./config/swagger');
+            
+            const undocumented = [];
+            const paths = swaggerSpec.paths || {};
+            
+            for (const [path, methods] of Object.entries(paths)) {
+              for (const [method, details] of Object.entries(methods)) {
+                if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
+                  if (!details.summary || details.summary === '') {
+                    undocumented.push(method.toUpperCase() + ' ' + path);
+                  }
+                }
+              }
+            }
+            
+            if (undocumented.length > 0) {
+              console.error('Undocumented endpoints found:');
+              undocumented.forEach(ep => console.error('  - ' + ep));
+              process.exit(1);
+            } else {
+              console.log('All endpoints are documented!');
+            }
+          "

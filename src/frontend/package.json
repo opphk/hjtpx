@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint src/",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "build-storybook-docs": "storybook build --doctypeoc"
   },
   "dependencies": {
     "date-fns": "^4.1.0",
@@ -21,6 +24,17 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "^7.6.0",
+    "@storybook/addon-actions": "^7.6.0",
+    "@storybook/addon-backgrounds": "^7.6.0",
+    "@storybook/addon-controls": "^7.6.0",
+    "@storybook/addon-docs": "^7.6.0",
+    "@storybook/addon-essentials": "^7.6.0",
+    "@storybook/addon-jest": "^7.6.0",
+    "@storybook/addon-links": "^7.6.0",
+    "@storybook/addon-viewport": "^7.6.0",
+    "@storybook/react-vite": "^7.6.0",
+    "@storybook/testing-library": "^0.2.0",
     "@playwright/test": "^1.60.0",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
