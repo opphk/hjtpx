@@ -30,7 +30,9 @@ const { performanceMiddleware } = require('./backend/middleware/performanceMonit
 const { ipRateLimiter } = require('./backend/middleware/rateLimiter');
 const responseFormatter = require('./backend/middleware/responseFormatter');
 const v1Routes = require('./backend/routes/v1');
+const v2Routes = require('./backend/routes/v2');
 const docsRoutes = require('./backend/routes/docs');
+const { versionNegotiationMiddleware } = require('./backend/middleware/apiVersionNegotiation');
 const websocketService = require('./backend/services/websocketService');
 
 app.use((req, res, next) => {
@@ -92,6 +94,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/v1', v1Routes);
+app.use('/api/v2', v2Routes);
 app.use('/api-docs', docsRoutes);
 
 app.use((req, res) => {

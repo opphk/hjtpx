@@ -1,4 +1,7 @@
 const crypto = require('crypto');
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 class SecurityAudit {
   constructor() {
@@ -236,6 +239,204 @@ class SecurityAudit {
       grade: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F',
       maxDeduction: 100
     };
+  }
+
+  async runVulnerabilityScan() {
+    console.log('🔍 Starting comprehensive security vulnerability scan...\n');
+
+    const report = {
+      timestamp: new Date().toISOString(),
+      npmAuditResults: null,
+      codeAuditResults: null,
+      overallRisk: 'Low',
+      recommendations: []
+    };
+
+    try {
+      console.log('📦 Running npm audit...');
+      const npmAuditOutput = execSync('npm audit --json', { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 });
+      const npmAuditData = JSON.parse(npmAuditOutput);
+      report.npmAuditResults = this.parseNpmAuditResults(npmAuditData);
+      console.log(`   Found ${report.npmAuditResults.totalVulnerabilities} vulnerabilities`);
+    } catch (error) {
+      if (error.status === 1 && error.stdout) {
+        const npmAuditData = JSON.parse(error.stdout);
+        report.npmAuditResults = this.parseNpmAuditResults(npmAuditData);
+        console.log(`   Found ${report.npmAuditResults.totalVulnerabilities} vulnerabilities`);
+      } else {
+        console.log('   ⚠️ npm audit completed with warnings');
+        report.npmAuditResults = { error: 'Unable to complete npm audit', vulnerabilities: [], totalVulnerabilities: 0 };
+      }
+    }
+
+    try {
+      console.log('🔎 Scanning code for security issues...');
+      const codeResults = await this.scanCodeForVulnerabilities();
+      report.codeAuditResults = codeResults;
+      console.log(`   Found ${codeResults.totalIssues} code security issues`);
+    } catch (error) {
+      console.error('   ❌ Error during code scanning:', error.message);
+      report.codeAuditResults = { error: 'Code scan failed', issues: [], totalIssues: 0 };
+    }
+
+    const totalIssues = (report.npmAuditResults?.totalVulnerabilities || 0) +
+                        (report.codeAuditResults?.totalIssues || 0);
+    report.totalIssues = totalIssues;
+
+    if (totalIssues > 20) {
+      report.overallRisk = 'Critical';
+    } else if (totalIssues > 10) {
+      report.overallRisk = 'High';
+    } else if (totalIssues > 5) {
+      report.overallRisk = 'Medium';
+    } else if (totalIssues > 0) {
+      report.overallRisk = 'Low';
+    } else {
+      report.overallRisk = 'Minimal';
+    }
+
+    report.recommendations = this.generateRecommendations(report);
+
+    console.log('\n📊 Security Scan Summary:');
+    console.log(`   Total Issues: ${totalIssues}`);
+    console.log(`   Overall Risk: ${report.overallRisk}`);
+    console.log(`   NPM Vulnerabilities: ${report.npmAuditResults?.totalVulnerabilities || 0}`);
+    console.log(`   Code Issues: ${report.codeAuditResults?.totalIssues || 0}`);
+
+    if (report.recommendations.length > 0) {
+      console.log('\n🔧 Recommendations:');
+      report.recommendations.forEach((rec, i) => {
+        console.log(`   ${i + 1}. ${rec}`);
+      });
+    }
+
+    const reportPath = path.join(process.cwd(), 'security-scan-report.json');
+    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(`\n📄 Detailed report saved to: ${reportPath}`);
+
+    return report;
+  }
+
+  parseNpmAuditResults(data) {
+    const vulnerabilities = [];
+
+    if (data.advisories) {
+      for (const [id, advisory] of Object.entries(data.advisories)) {
+        vulnerabilities.push({
+          id: id,
+          name: advisory.module_name,
+          severity: advisory.severity,
+          title: advisory.title,
+          url: advisory.url,
+          description: advisory.overview,
+          recommendedUpdate: advisory.fix_available ? advisory.fix_available.version : null,
+          vulnerableVersions: advisory.vulnerable_versions
+        });
+      }
+    }
+
+    const bySeverity = { critical: [], high: [], medium: [], low: [], info: [] };
+    vulnerabilities.forEach(v => {
+      if (bySeverity[v.severity]) {
+        bySeverity[v.severity].push(v);
+      }
+    });
+
+    return {
+      totalVulnerabilities: vulnerabilities.length,
+      bySeverity,
+      vulnerabilities,
+      metadata: data.metadata || {}
+    };
+  }
+
+  async scanCodeForVulnerabilities() {
+    const issues = [];
+    const srcPath = path.join(process.cwd(), 'src');
+
+    if (!fs.existsSync(srcPath)) {
+      return { totalIssues: 0, issues: [] };
+    }
+
+    const scanDirectory = (dir, relativePath = '') => {
+      try {
+        const files = fs.readdirSync(dir);
+
+        for (const file of files) {
+          const fullPath = path.join(dir, file);
+          const fileRelativePath = path.join(relativePath, file);
+          const stat = fs.statSync(fullPath);
+
+          if (stat.isDirectory()) {
+            if (!file.startsWith('.') && file !== 'node_modules' && file !== 'coverage') {
+              scanDirectory(fullPath, fileRelativePath);
+            }
+          } else if (/\.(js|jsx|ts|tsx)$/.test(file)) {
+            try {
+              const content = fs.readFileSync(fullPath, 'utf-8');
+              const fileIssues = this.auditCode(content, fileRelativePath);
+              issues.push(...fileIssues);
+            } catch (e) {
+              console.warn(`   Warning: Could not read ${fileRelativePath}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`   Warning: Could not scan ${relativePath}`);
+      }
+    };
+
+    scanDirectory(srcPath);
+
+    const bySeverity = { critical: [], high: [], medium: [], low: [], info: [] };
+    issues.forEach(issue => {
+      if (bySeverity[issue.severity]) {
+        bySeverity[issue.severity].push(issue);
+      }
+    });
+
+    return {
+      totalIssues: issues.length,
+      bySeverity,
+      issues
+    };
+  }
+
+  generateRecommendations(report) {
+    const recommendations = [];
+
+    if (report.npmAuditResults?.totalVulnerabilities > 0) {
+      const critical = report.npmAuditResults.bySeverity.critical?.length || 0;
+      const high = report.npmAuditResults.bySeverity.high?.length || 0;
+
+      if (critical > 0) {
+        recommendations.push('URGENT: Update packages with critical vulnerabilities immediately using "npm audit fix"');
+      }
+      if (high > 0) {
+        recommendations.push('Update packages with high-severity vulnerabilities to prevent potential attacks');
+      }
+    }
+
+    if (report.codeAuditResults?.totalIssues > 0) {
+      const codeIssues = report.codeAuditResults.issues;
+      const criticalCode = codeIssues.filter(i => i.severity === 'critical');
+
+      if (criticalCode.length > 0) {
+        recommendations.push('Fix critical security issues in code immediately: hardcoded secrets, SQL injection, etc.');
+      }
+
+      const highCode = codeIssues.filter(i => i.severity === 'high');
+      if (highCode.length > 0) {
+        recommendations.push('Review and fix high-severity code issues (XSS, weak cryptography, etc.)');
+      }
+    }
+
+    if (report.overallRisk === 'Critical' || report.overallRisk === 'High') {
+      recommendations.push('Consider implementing automated security scanning in CI/CD pipeline');
+      recommendations.push('Schedule regular security audits and dependency updates');
+    }
+
+    return recommendations;
   }
 }
 
