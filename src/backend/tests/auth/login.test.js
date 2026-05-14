@@ -2,8 +2,6 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
 
-const pool = require('../../../../src/config/database/db');
-
 jest.mock('../../../../src/config/database/db', () => ({
   query: jest.fn()
 }));
@@ -13,6 +11,7 @@ jest.mock('bcrypt', () => ({
   compare: jest.fn()
 }));
 
+const pool = require('../../../../src/config/database/db');
 const bcrypt = require('bcrypt');
 
 const app = express();
@@ -52,8 +51,8 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'test-secret-key',
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production',
       { expiresIn: '24h' }
     );
 
@@ -158,7 +157,7 @@ describe('Login Authentication', () => {
       expect(response.body.data).toBeUndefined();
     });
 
-    it('should reject login when password does not match', async () => {
+    it('should reject login when password is empty', async () => {
       const hashedPassword = await bcrypt.hash('somePassword', 10);
       const mockUser = {
         id: 1,
@@ -168,6 +167,7 @@ describe('Login Authentication', () => {
       };
 
       pool.query.mockResolvedValue({ rows: [mockUser] });
+      bcrypt.compare.mockResolvedValue(false);
 
       const response = await request(app).post('/api/auth/login').send({
         email: 'test@example.com',
@@ -230,9 +230,12 @@ describe('Login Authentication', () => {
       });
 
       const token = response.body.data.token;
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'test-secret-key');
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production'
+      );
 
-      expect(decoded.userId).toBe(1);
+      expect(decoded.id).toBe(1);
       expect(decoded.email).toBe('test@example.com');
       expect(decoded).toHaveProperty('exp');
       expect(decoded).toHaveProperty('iat');
@@ -265,7 +268,10 @@ describe('Login Authentication', () => {
 
     it('should reject invalid token format', () => {
       expect(() => {
-        jwt.verify('invalid.token.here', process.env.JWT_SECRET || 'test-secret-key');
+        jwt.verify(
+          'invalid.token.here',
+          process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production'
+        );
       }).toThrow();
     });
   });

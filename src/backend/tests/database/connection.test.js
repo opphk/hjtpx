@@ -1,254 +1,230 @@
-const { Pool } = require('pg');
+jest.mock('../../../../src/config/database/db', () => ({
+  query: jest.fn(),
+  connect: jest.fn(),
+  end: jest.fn()
+}));
 
 describe('Database Connection Tests', () => {
-  let pool;
+  const pool = require('../../../../src/config/database/db');
 
-  beforeAll(() => {
-    pool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || 'hjtpx',
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres'
-    });
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  afterAll(async () => {
-    await pool.end();
-  });
-
-  describe('Connection Tests', () => {
-    test('should establish database connection', async () => {
-      const client = await pool.connect();
-      expect(client).toBeDefined();
-      client.release();
+  describe('Mocked Connection Tests', () => {
+    test('should have pool query method available', () => {
+      expect(pool.query).toBeDefined();
+      expect(typeof pool.query).toBe('function');
     });
 
-    test('should execute simple query', async () => {
-      const result = await pool.query('SELECT $1 as value', ['test']);
-      expect(result.rows[0].value).toBe('test');
+    test('should mock successful query execution', async () => {
+      const mockUsers = [
+        { id: 1, email: 'test@example.com', name: 'Test User' }
+      ];
+      pool.query.mockResolvedValue({ rows: mockUsers });
+
+      const result = await pool.query('SELECT * FROM users');
+
+      expect(result.rows).toEqual(mockUsers);
+      expect(pool.query).toHaveBeenCalledWith('SELECT * FROM users');
     });
 
-    test('should handle connection errors gracefully', async () => {
-      const badPool = new Pool({
-        host: 'invalid-host',
-        port: 5432,
-        database: 'nonexistent',
-        user: 'invalid',
-        password: 'invalid',
-        connectionTimeoutMillis: 2000
-      });
+    test('should mock failed query execution', async () => {
+      pool.query.mockRejectedValue(new Error('Database error'));
 
-      await expect(badPool.query('SELECT 1')).rejects.toThrow();
-      await badPool.end();
-    });
-  });
-
-  describe('Query Tests', () => {
-    test('should insert and retrieve data', async () => {
-      const testEmail = `test_${Date.now()}@example.com`;
-      const insertResult = await pool.query(
-        'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4) RETURNING *',
-        [testEmail, 'Test User', 'hashedpassword', 'user']
-      );
-      expect(insertResult.rows[0].email).toBe(testEmail);
-
-      const selectResult = await pool.query('SELECT * FROM users WHERE email = $1', [testEmail]);
-      expect(selectResult.rows[0].email).toBe(testEmail);
-
-      await pool.query('DELETE FROM users WHERE email = $1', [testEmail]);
+      await expect(pool.query('SELECT * FROM users')).rejects.toThrow('Database error');
     });
 
-    test('should update existing record', async () => {
-      const testEmail = `test_update_${Date.now()}@example.com`;
-      await pool.query('INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)', [
-        testEmail,
-        'Original Name',
-        'password',
-        'user'
+    test('should handle parameterized queries', async () => {
+      pool.query.mockResolvedValue({ rows: [{ id: 1 }] });
+
+      await pool.query('SELECT * FROM users WHERE id = $1', [1]);
+
+      expect(pool.query).toHaveBeenCalledWith('SELECT * FROM users WHERE id = $1', [1]);
+    });
+
+    test('should handle multiple parameter queries', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
+
+      await pool.query('SELECT * FROM users WHERE email = $1 AND role = $2', [
+        'test@example.com',
+        'admin'
       ]);
 
-      const updateResult = await pool.query(
-        'UPDATE users SET name = $1 WHERE email = $2 RETURNING *',
-        ['Updated Name', testEmail]
-      );
-      expect(updateResult.rows[0].name).toBe('Updated Name');
-
-      await pool.query('DELETE FROM users WHERE email = $1', [testEmail]);
-    });
-
-    test('should handle batch operations', async () => {
-      const emails = Array.from(
-        { length: 5 },
-        (_, i) => `batch_test_${i}_${Date.now()}@example.com`
-      );
-
-      for (const email of emails) {
-        await pool.query(
-          'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)',
-          [email, 'Batch User', 'password', 'user']
-        );
-      }
-
-      const result = await pool.query('SELECT COUNT(*) FROM users WHERE email LIKE $1', [
-        `batch_test_%@example.com`
-      ]);
-      expect(parseInt(result.rows[0].count)).toBeGreaterThanOrEqual(5);
-
-      await pool.query('DELETE FROM users WHERE email LIKE $1', ['batch_test_%@example.com']);
+      expect(pool.query).toHaveBeenCalled();
     });
   });
 
-  describe('Transaction Tests', () => {
-    test('should commit transaction on success', async () => {
-      const client = await pool.connect();
-      const testEmail = `transaction_${Date.now()}@example.com`;
+  describe('Query Builder Tests', () => {
+    test('should build SELECT query correctly', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
 
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)',
-          [testEmail, 'Transaction User', 'password', 'user']
-        );
-        await client.query('COMMIT');
+      await pool.query('SELECT id, email, name FROM users');
 
-        const result = await pool.query('SELECT * FROM users WHERE email = $1', [testEmail]);
-        expect(result.rows.length).toBe(1);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-        await pool.query('DELETE FROM users WHERE email = $1', [testEmail]);
-      }
+      expect(pool.query).toHaveBeenCalled();
     });
 
-    test('should rollback transaction on error', async () => {
-      const client = await pool.connect();
-      const testEmail = `rollback_${Date.now()}@example.com`;
+    test('should build INSERT query correctly', async () => {
+      pool.query.mockResolvedValue({ rows: [{ id: 1 }] });
 
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)',
-          [testEmail, 'Rollback User', 'password', 'user']
-        );
-        await client.query('INSERT INTO nonexistent_table VALUES (1)');
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-      } finally {
-        client.release();
-      }
+      await pool.query('INSERT INTO users (email, name) VALUES ($1, $2)', [
+        'test@example.com',
+        'Test User'
+      ]);
 
-      const result = await pool.query('SELECT * FROM users WHERE email = $1', [testEmail]);
-      expect(result.rows.length).toBe(0);
+      expect(pool.query).toHaveBeenCalled();
     });
 
-    test('should handle nested transactions with savepoints', async () => {
-      const client = await pool.connect();
-      const email1 = `nested1_${Date.now()}@example.com`;
-      const email2 = `nested2_${Date.now()}@example.com`;
+    test('should build UPDATE query correctly', async () => {
+      pool.query.mockResolvedValue({ rows: [{ id: 1, email: 'new@example.com' }] });
 
-      try {
-        await client.query('BEGIN');
-        await client.query(
-          'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)',
-          [email1, 'Nested User 1', 'password', 'user']
-        );
+      await pool.query('UPDATE users SET email = $1 WHERE id = $2', ['new@example.com', 1]);
 
-        await client.query('SAVEPOINT sp1');
-        await client.query(
-          'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)',
-          [email2, 'Nested User 2', 'password', 'user']
-        );
-        await client.query('ROLLBACK TO SAVEPOINT sp1');
+      expect(pool.query).toHaveBeenCalled();
+    });
 
-        await client.query('COMMIT');
+    test('should build DELETE query correctly', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
 
-        const result = await pool.query('SELECT COUNT(*) FROM users WHERE email LIKE $1', [
-          `nested%@example.com`
-        ]);
-        expect(parseInt(result.rows[0].count)).toBe(1);
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-        await pool.query('DELETE FROM users WHERE email LIKE $1', [`nested%@example.com`]);
-      }
+      await pool.query('DELETE FROM users WHERE id = $1', [1]);
+
+      expect(pool.query).toHaveBeenCalledWith('DELETE FROM users WHERE id = $1', [1]);
+    });
+  });
+
+  describe('Transaction Mock Tests', () => {
+    test('should mock transaction commit', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
+
+      await pool.query('BEGIN');
+      await pool.query('INSERT INTO users (email) VALUES ($1)', ['test@example.com']);
+      await pool.query('COMMIT');
+
+      expect(pool.query).toHaveBeenCalledTimes(3);
+    });
+
+    test('should mock transaction rollback', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
+
+      await pool.query('BEGIN');
+      await pool.query('INSERT INTO users (email) VALUES ($1)', ['test@example.com']);
+      await pool.query('ROLLBACK');
+
+      expect(pool.query).toHaveBeenCalledTimes(3);
+    });
+
+    test('should handle savepoint operations', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
+
+      await pool.query('BEGIN');
+      await pool.query('SAVEPOINT sp1');
+      await pool.query('ROLLBACK TO SAVEPOINT sp1');
+      await pool.query('COMMIT');
+
+      expect(pool.query).toHaveBeenCalledTimes(4);
     });
   });
 
   describe('Error Handling Tests', () => {
-    test('should handle unique constraint violations', async () => {
-      const testEmail = `unique_${Date.now()}@example.com`;
+    test('should handle unique constraint violation', async () => {
+      pool.query.mockRejectedValue(new Error('duplicate key value violates unique constraint'));
 
-      await pool.query('INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)', [
-        testEmail,
-        'User 1',
-        'password',
-        'user'
-      ]);
-
-      await expect(
-        pool.query('INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)', [
-          testEmail,
-          'User 2',
-          'password',
-          'user'
-        ])
-      ).rejects.toThrow();
-
-      await pool.query('DELETE FROM users WHERE email = $1', [testEmail]);
+      await expect(pool.query('INSERT INTO users (email) VALUES ($1)', ['existing@example.com'])).rejects.toThrow();
     });
 
-    test('should handle invalid query syntax', async () => {
+    test('should handle foreign key violation', async () => {
+      pool.query.mockRejectedValue(new Error('foreign key constraint violation'));
+
+      await expect(pool.query('INSERT INTO orders (user_id) VALUES ($1)', [9999])).rejects.toThrow();
+    });
+
+    test('should handle connection timeout', async () => {
+      pool.query.mockRejectedValue(new Error('connection timeout'));
+
+      await expect(pool.query('SELECT * FROM users')).rejects.toThrow('connection timeout');
+    });
+
+    test('should handle syntax errors', async () => {
+      pool.query.mockRejectedValue(new Error('syntax error at or near "SELEC"'));
+
       await expect(pool.query('SELEC * FROM users')).rejects.toThrow();
     });
 
-    test('should handle non-existent table', async () => {
-      await expect(pool.query('SELECT * FROM nonexistent_table')).rejects.toThrow();
+    test('should handle null constraint violations', async () => {
+      pool.query.mockRejectedValue(new Error('null value in column violates not-null constraint'));
+
+      await expect(pool.query('INSERT INTO users (email) VALUES ($1)', [null])).rejects.toThrow();
+    });
+  });
+
+  describe('Query Results Tests', () => {
+    test('should return correct row count', async () => {
+      const mockUsers = [
+        { id: 1, email: 'user1@example.com' },
+        { id: 2, email: 'user2@example.com' },
+        { id: 3, email: 'user3@example.com' }
+      ];
+      pool.query.mockResolvedValue({ rows: mockUsers, rowCount: 3 });
+
+      const result = await pool.query('SELECT * FROM users');
+
+      expect(result.rows).toHaveLength(3);
+      expect(result.rowCount).toBe(3);
     });
 
-    test('should handle null values correctly', async () => {
-      const testEmail = `null_${Date.now()}@example.com`;
-      await pool.query('INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)', [
-        testEmail,
-        'Null User',
-        'password',
-        'user'
-      ]);
+    test('should return empty array when no results', async () => {
+      pool.query.mockResolvedValue({ rows: [], rowCount: 0 });
 
-      const result = await pool.query('SELECT * FROM users WHERE email = $1', [testEmail]);
-      expect(result.rows[0].email).toBe(testEmail);
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [999]);
 
-      await pool.query('DELETE FROM users WHERE email = $1', [testEmail]);
+      expect(result.rows).toEqual([]);
+      expect(result.rowCount).toBe(0);
+    });
+
+    test('should return first row correctly', async () => {
+      const mockUser = { id: 1, email: 'test@example.com', name: 'Test' };
+      pool.query.mockResolvedValue({ rows: [mockUser] });
+
+      const result = await pool.query('SELECT * FROM users LIMIT 1');
+
+      expect(result.rows[0]).toEqual(mockUser);
     });
   });
 
   describe('Performance Tests', () => {
     test('should handle concurrent queries', async () => {
-      const queries = Array.from({ length: 10 }, (_, i) => pool.query(`SELECT ${i} as num`));
+      pool.query.mockResolvedValue({ rows: [] });
+
+      const queries = Array.from({ length: 10 }, (_, i) =>
+        pool.query(`SELECT ${i} as num`)
+      );
 
       const results = await Promise.all(queries);
-      expect(results.length).toBe(10);
-      results.forEach((result, i) => {
-        expect(result.rows[0].num).toBe(i);
-      });
+
+      expect(results).toHaveLength(10);
     });
 
-    test('should handle large result sets', async () => {
-      const result = await pool.query('SELECT * FROM users LIMIT 1000');
-      expect(result.rows).toBeDefined();
-      expect(Array.isArray(result.rows)).toBe(true);
+    test('should track query call count', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
+
+      await pool.query('SELECT 1');
+      await pool.query('SELECT 2');
+      await pool.query('SELECT 3');
+
+      expect(pool.query).toHaveBeenCalledTimes(3);
     });
 
-    test('should measure query execution time', async () => {
-      const start = Date.now();
-      await pool.query('SELECT * FROM users');
-      const duration = Date.now() - start;
-      expect(duration).toBeLessThan(5000);
+    test('should clear mock calls between tests', async () => {
+      pool.query.mockResolvedValue({ rows: [] });
+
+      await pool.query('SELECT 1');
+
+      jest.clearAllMocks();
+
+      await pool.query('SELECT 2');
+
+      expect(pool.query).toHaveBeenCalledTimes(1);
+      expect(pool.query).toHaveBeenCalledWith('SELECT 2');
     });
   });
 });

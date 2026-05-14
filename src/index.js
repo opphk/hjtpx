@@ -1,14 +1,27 @@
-require('dotenv').config();
+require('dotenv').config({
+  path: process.env.NODE_ENV === 'production' ? '.env.production' :
+        process.env.NODE_ENV === 'staging' ? '.env.staging' : '.env'
+});
 
 const http = require('http');
+const cluster = require('cluster');
+const os = require('os');
 
 const compression = require('compression');
 const express = require('express');
+
+const productionConfig = require('./backend/config/production');
+const { securityHeaders, additionalSecurityHeaders } = require('./backend/middleware/securityHeaders');
 
 const app = express();
 
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+const isProduction = NODE_ENV === 'production';
+
+if (isProduction && productionConfig.production.trustProxy) {
+  app.set('trust proxy', 1);
+}
 
 const { corsMiddleware } = require('./backend/middleware/cors');
 const errorHandler = require('./backend/middleware/errorHandler');
@@ -17,6 +30,7 @@ const { performanceMiddleware } = require('./backend/middleware/performanceMonit
 const { ipRateLimiter } = require('./backend/middleware/rateLimiter');
 const responseFormatter = require('./backend/middleware/responseFormatter');
 const v1Routes = require('./backend/routes/v1');
+const docsRoutes = require('./backend/routes/docs');
 const websocketService = require('./backend/services/websocketService');
 
 app.use((req, res, next) => {
@@ -25,28 +39,42 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(
-  compression({
-    level: 6,
-    threshold: 1024,
-    filter: (req, res) => {
-      if (req.headers['x-no-compression']) {
-        return false;
+if (productionConfig.production.enableCompression) {
+  app.use(
+    compression({
+      level: productionConfig.production.compressionLevel,
+      threshold: productionConfig.production.compressionThreshold,
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+          return false;
+        }
+        return compression.filter(req, res);
       }
-      return compression.filter(req, res);
-    }
-  })
-);
+    })
+  );
+}
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use(corsMiddleware);
+if (isProduction && productionConfig.security.enableHelmet) {
+  app.use(securityHeaders);
+}
+
+if (isProduction && productionConfig.security.enableCors) {
+  app.use(corsMiddleware);
+} else {
+  app.use(corsMiddleware);
+}
+
+app.use(additionalSecurityHeaders);
 app.use(performanceMiddleware);
 app.use(logger);
 app.use(responseFormatter);
 
-app.use(ipRateLimiter);
+if (productionConfig.security.enableRateLimit) {
+  app.use(ipRateLimiter);
+}
 
 app.get('/', (req, res) => {
   res.json({
@@ -57,12 +85,14 @@ app.get('/', (req, res) => {
       status: 'running',
       timestamp: new Date().toISOString(),
       documentation: '/api/v1',
-      healthCheck: '/api/v1/health'
+      healthCheck: '/api/v1/health',
+      environment: NODE_ENV
     }
   });
 });
 
 app.use('/api/v1', v1Routes);
+app.use('/api-docs', docsRoutes);
 
 app.use((req, res) => {
   res.notFound(`Route ${req.method} ${req.path} not found`);
@@ -92,41 +122,71 @@ app.use((err, req, res, next) => {
 
 app.use(errorHandler);
 
-const server = app.listen(PORT, () => {
-  console.log('🚀 HJTPX API Server');
-  console.log('========================================');
-  console.log(`Environment: ${NODE_ENV}`);
-  console.log(`Port: ${PORT}`);
-  console.log(`API Version: v1`);
-  console.log(`Health Check: http://localhost:${PORT}/api/v1/health`);
-  console.log(`Detailed Health: http://localhost:${PORT}/api/v1/health/detailed`);
-  console.log('========================================\n');
-});
-
-websocketService.initialize(server);
-console.log('✅ WebSocket service initialized');
-
-const gracefulShutdown = signal => {
-  console.log(`${signal} signal received: closing HTTP server`);
-  websocketService.close();
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
+const createServer = () => {
+  const server = app.listen(PORT, () => {
+    console.log('🚀 HJTPX API Server');
+    console.log('========================================');
+    console.log(`Environment: ${NODE_ENV}`);
+    console.log(`Port: ${PORT}`);
+    console.log(`API Version: v1`);
+    console.log(`Health Check: http://localhost:${PORT}/api/v1/health`);
+    console.log(`Detailed Health: http://localhost:${PORT}/api/v1/health/detailed`);
+    console.log('========================================\n');
   });
+
+  if (isProduction && productionConfig.performance.requestTimeout) {
+    server.timeout = productionConfig.performance.requestTimeout;
+    server.keepAliveTimeout = productionConfig.performance.keepAliveTimeout;
+  }
+
+  websocketService.initialize(server);
+  console.log('✅ WebSocket service initialized');
+
+  const gracefulShutdown = signal => {
+    console.log(`${signal} signal received: closing HTTP server`);
+    websocketService.close();
+    server.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  process.on('unhandledRejection', (reason, promise) => {
+    logError(new Error(reason), null, { context: 'Unhandled Rejection' });
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+
+  process.on('uncaughtException', error => {
+    logError(error, null, { context: 'Uncaught Exception' });
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+  });
+
+  return server;
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+if (isProduction && productionConfig.production.enableCluster && cluster.isMaster) {
+  const numCPUs = productionConfig.production.clusterWorkers;
+  console.log(`🌐 Master process ${process.pid} is running`);
+  console.log(`🔧 Spawning ${numCPUs} worker processes...\n`);
 
-process.on('unhandledRejection', (reason, promise) => {
-  logError(new Error(reason), null, { context: 'Unhandled Rejection' });
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
 
-process.on('uncaughtException', error => {
-  logError(error, null, { context: 'Uncaught Exception' });
-  console.error('Uncaught Exception:', error);
-  process.exit(1);
-});
+  cluster.on('exit', (worker, code, signal) => {
+    console.log(`Worker ${worker.process.pid} died (${signal || code}). Restarting...`);
+    cluster.fork();
+  });
+
+  cluster.on('online', (worker) => {
+    console.log(`Worker ${worker.process.pid} started`);
+  });
+} else {
+  createServer();
+}
 
 module.exports = app;

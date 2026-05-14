@@ -1,5 +1,15 @@
 const jwt = require('jsonwebtoken');
 
+jest.mock('../../../../src/config/database/db', () => ({
+  query: jest.fn()
+}));
+
+jest.mock('../../../../src/backend/services/sessionService', () => ({
+  validateSession: jest.fn(),
+  getActiveSessionsCount: jest.fn(),
+  enforceMaxSessions: jest.fn()
+}));
+
 const { auth } = require('../../middleware/auth');
 
 describe('Auth Middleware', () => {
@@ -25,8 +35,8 @@ describe('Auth Middleware', () => {
   describe('valid JWT token', () => {
     it('should pass valid token and call next', async () => {
       const token = jwt.sign(
-        { userId: 1, email: 'test@example.com' },
-        process.env.JWT_SECRET || 'test-secret-key',
+        { id: 1, email: 'test@example.com' },
+        process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production',
         { expiresIn: '1h' }
       );
       mockReq.headers.authorization = `Bearer ${token}`;
@@ -35,15 +45,15 @@ describe('Auth Middleware', () => {
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.user).toBeDefined();
-      expect(mockReq.user.userId).toBe(1);
+      expect(mockReq.user.id).toBe(1);
       expect(mockReq.user.email).toBe('test@example.com');
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
     it('should handle token with different payload', async () => {
       const token = jwt.sign(
-        { userId: 42, email: 'user@domain.com', role: 'admin' },
-        process.env.JWT_SECRET || 'test-secret-key',
+        { id: 42, email: 'user@domain.com', role: 'admin' },
+        process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production',
         { expiresIn: '2h' }
       );
       mockReq.headers.authorization = `Bearer ${token}`;
@@ -56,10 +66,10 @@ describe('Auth Middleware', () => {
   });
 
   describe('invalid JWT token', () => {
-    it('should reject invalid token format', () => {
+    it('should reject invalid token format', async () => {
       mockReq.headers.authorization = 'Bearer invalid_token_string';
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -69,10 +79,10 @@ describe('Auth Middleware', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('should reject malformed token', () => {
+    it('should reject malformed token', async () => {
       mockReq.headers.authorization = 'Bearer malformed.token.here';
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -81,13 +91,13 @@ describe('Auth Middleware', () => {
       });
     });
 
-    it('should reject token signed with wrong secret', () => {
-      const token = jwt.sign({ userId: 1, email: 'test@example.com' }, 'wrong-secret-key', {
+    it('should reject token signed with wrong secret', async () => {
+      const token = jwt.sign({ id: 1, email: 'test@example.com' }, 'wrong-secret-key', {
         expiresIn: '1h'
       });
       mockReq.headers.authorization = `Bearer ${token}`;
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -96,15 +106,15 @@ describe('Auth Middleware', () => {
       });
     });
 
-    it('should reject expired token', () => {
+    it('should reject expired token', async () => {
       const token = jwt.sign(
-        { userId: 1, email: 'test@example.com' },
-        process.env.JWT_SECRET || 'test-secret-key',
+        { id: 1, email: 'test@example.com' },
+        process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production',
         { expiresIn: '-1h' }
       );
       mockReq.headers.authorization = `Bearer ${token}`;
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -115,8 +125,8 @@ describe('Auth Middleware', () => {
   });
 
   describe('missing token', () => {
-    it('should reject request without authorization header', () => {
-      auth(mockReq, mockRes, mockNext);
+    it('should reject request without authorization header', async () => {
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -126,10 +136,10 @@ describe('Auth Middleware', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('should reject request with empty authorization header', () => {
+    it('should reject request with empty authorization header', async () => {
       mockReq.headers.authorization = '';
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -138,10 +148,10 @@ describe('Auth Middleware', () => {
       });
     });
 
-    it('should reject request with undefined authorization header', () => {
+    it('should reject request with undefined authorization header', async () => {
       mockReq.headers.authorization = undefined;
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -150,10 +160,10 @@ describe('Auth Middleware', () => {
       });
     });
 
-    it('should reject request with malformed authorization header', () => {
+    it('should reject request with malformed authorization header', async () => {
       mockReq.headers.authorization = 'NotBearer some_token';
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -167,8 +177,8 @@ describe('Auth Middleware', () => {
   describe('token extraction edge cases', () => {
     it('should handle token with multiple spaces', async () => {
       const token = jwt.sign(
-        { userId: 1, email: 'test@example.com' },
-        process.env.JWT_SECRET || 'test-secret-key',
+        { id: 1, email: 'test@example.com' },
+        process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production',
         { expiresIn: '1h' }
       );
       mockReq.headers.authorization = `Bearer ${token}`;
@@ -176,13 +186,13 @@ describe('Auth Middleware', () => {
       await auth(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
-      expect(mockReq.user.userId).toBe(1);
+      expect(mockReq.user.id).toBe(1);
     });
 
-    it('should reject empty bearer token', () => {
+    it('should reject empty bearer token', async () => {
       mockReq.headers.authorization = 'Bearer ';
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -191,10 +201,10 @@ describe('Auth Middleware', () => {
       });
     });
 
-    it('should handle authorization header with only Bearer keyword', () => {
+    it('should handle authorization header with only Bearer keyword', async () => {
       mockReq.headers.authorization = 'Bearer';
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockRes.status).toHaveBeenCalledWith(401);
       expect(mockRes.json).toHaveBeenCalledWith({

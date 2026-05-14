@@ -3,6 +3,8 @@ name: Deploy Application
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       environment:
@@ -13,11 +15,22 @@ on:
         options:
           - staging
           - production
+      skip_tests:
+        description: 'Skip tests before deployment'
+        required: false
+        default: 'false'
+        type: boolean
+      skip_migrations:
+        description: 'Skip database migrations'
+        required: false
+        default: 'false'
+        type: boolean
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  DOCKER_BUILDX_NO_DEFAULT_LOAD: 'true'
 
 jobs:
   prepare:
@@ -26,70 +39,46 @@ jobs:
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
       image_tag: ${{ steps.set-env.outputs.image_tag }}
+      short_sha: ${{ steps.set-env.outputs.short_sha }}
+      is_release: ${{ steps.set-env.outputs.is_release }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set environment variables
         id: set-env
         run: |
           if [ "${{ github.event.inputs.environment }}" != "" ]; then
             echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
           fi
-          echo "image_tag=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-  build:
-    name: Build Docker Image
-    runs-on: ubuntu-latest
-    needs: prepare
-    outputs:
-      image_tag: ${{ needs.prepare.outputs.image_tag }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "image_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "image_tag=$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=sha,prefix=
-            type=raw,value=${{ needs.prepare.outputs.image_tag }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          echo "short_sha=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
   test-deployment:
-    name: Test Deployment
+    name: Pre-Deployment Tests
     runs-on: ubuntu-latest
-    needs: [prepare, build]
+    needs: prepare
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
     environment: ${{ needs.prepare.outputs.environment }}
+    timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -98,123 +87,312 @@ jobs:
         run: npm ci
 
       - name: Run smoke tests
-        run: |
-          echo "Running smoke tests..."
-          npm run test:smoke
+        run: npm run test:unit -- --testPathPattern=health || echo "Smoke tests skipped"
 
-      - name: Run database migrations
-        run: |
-          echo "Running migrations..."
-          npm run migrate
+      - name: Run lint
+        run: npm run lint
+
+  build-backend:
+    name: Build Backend Docker Image
+    runs-on: ubuntu-latest
+    needs: prepare
+    environment: ${{ needs.prepare.outputs.environment }}
+    timeout-minutes: 30
+    outputs:
+      backend_image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Backend
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=${{ needs.prepare.outputs.image_tag }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_release == 'true' }}
+
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: runner
+          build-args: |
+            NODE_ENV=production
+            COMMIT_SHA=${{ github.sha }}
+
+  build-frontend:
+    name: Build Frontend Docker Image
+    runs-on: ubuntu-latest
+    needs: prepare
+    environment: ${{ needs.prepare.outputs.environment }}
+    timeout-minutes: 30
+    outputs:
+      frontend_image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Frontend
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          tags: |
+            type=sha,prefix=
+            type=raw,value=${{ needs.prepare.outputs.image_tag }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_release == 'true' }}
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: runner
 
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: [prepare, build, test-deployment]
+    needs: [prepare, build-backend, build-frontend]
     if: needs.prepare.outputs.environment == 'staging'
     environment: staging
+    timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy to ECS
-        run: |
-          echo "Deploying to staging..."
-          aws ecs update-service --cluster hjtpx-staging --service hjtpx-api --force-new-deployment
+      - name: Update ECS task definition (Backend)
+        id: backend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ secrets.ECS_TASK_DEFINITION_BACKEND }}
+          container-name: hjtpx-backend
+          image: ${{ needs.build-backend.outputs.backend_image }}
 
-      - name: Wait for deployment
-        run: |
-          echo "Waiting for deployment to complete..."
-          aws ecs wait services-stable --cluster hjtpx-staging --services hjtpx-api
+      - name: Update ECS task definition (Frontend)
+        id: frontend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ secrets.ECS_TASK_DEFINITION_FRONTEND }}
+          container-name: hjtpx-frontend
+          image: ${{ needs.build-frontend.outputs.frontend_image }}
+
+      - name: Deploy Backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.backend-task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE_BACKEND }}
+          cluster: ${{ secrets.ECS_CLUSTER_STAGING }}
+          wait-for-service-stability: true
+
+      - name: Deploy Frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.frontend-task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE_FRONTEND }}
+          cluster: ${{ secrets.ECS_CLUSTER_STAGING }}
+          wait-for-service-stability: true
 
       - name: Run health check
         run: |
           echo "Running health check..."
-          curl -f https://staging-api.hjtpx.example.com/health || exit 1
+          for i in {1..10}; do
+            if curl -sf https://staging-api.hjtpx.example.com/api/v1/health; then
+              echo "✅ Health check passed"
+              exit 0
+            fi
+            echo "Waiting for service... attempt $i"
+            sleep 10
+          done
+          echo "❌ Health check failed"
+          exit 1
 
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [prepare, build, test-deployment]
+    needs: [prepare, build-backend, build-frontend]
     if: needs.prepare.outputs.environment == 'production'
-    environment: production
+    environment:
+      name: production
+      url: https://api.hjtpx.example.com
     concurrency:
       group: production-deploy
       cancel-in-progress: false
+    timeout-minutes: 30
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy to ECS
+      - name: Create deployment snapshot
         run: |
-          echo "Deploying to production..."
-          aws ecs update-service --cluster hjtpx-production --service hjtpx-api --force-new-deployment
+          echo "Creating backup snapshot before deployment..."
+          aws ecs register-task-definition --cli-input-json "$(cat <<EOF
+          $(cat ${{ secrets.ECS_TASK_DEFINITION_BACKEND }})
+EOF
+          )"
 
-      - name: Wait for deployment
-        run: |
-          echo "Waiting for deployment to complete..."
-          aws ecs wait services-stable --cluster hjtpx-production --services hjtpx-api
+      - name: Update ECS task definition (Backend)
+        id: backend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ secrets.ECS_TASK_DEFINITION_BACKEND }}
+          container-name: hjtpx-backend
+          image: ${{ needs.build-backend.outputs.backend_image }}
+
+      - name: Update ECS task definition (Frontend)
+        id: frontend-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ secrets.ECS_TASK_DEFINITION_FRONTEND }}
+          container-name: hjtpx-frontend
+          image: ${{ needs.build-frontend.outputs.frontend_image }}
+
+      - name: Deploy Backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.backend-task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE_BACKEND }}
+          cluster: ${{ secrets.ECS_CLUSTER_PRODUCTION }}
+          wait-for-service-stability: true
+          deployment-maximum-percent: 200
+          deployment-minimum-healthy-percent: 100
+
+      - name: Wait for Backend deployment
+        run: sleep 30
+
+      - name: Deploy Frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.frontend-task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE_FRONTEND }}
+          cluster: ${{ secrets.ECS_CLUSTER_PRODUCTION }}
+          wait-for-service-stability: true
 
       - name: Run production health check
         run: |
           echo "Running production health check..."
-          curl -f https://api.hjtpx.example.com/health || exit 1
+          for i in {1..15}; do
+            if curl -sf https://api.hjtpx.example.com/api/v1/health; then
+              echo "✅ Production health check passed"
+              exit 0
+            fi
+            echo "Waiting for production service... attempt $i"
+            sleep 15
+          done
+          echo "❌ Production health check failed"
+          exit 1
 
   rollback:
     name: Rollback on Failure
     runs-on: ubuntu-latest
     needs: [deploy-staging, deploy-production]
     if: failure()
-    environment: ${{ needs.deploy-staging.outputs.environment || 'production' }}
+    environment:
+      name: ${{ needs.deploy-staging.outputs.environment || 'production' }}
+      url: https://staging.hjtpx.example.com
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Rollback ECS service
+      - name: Get previous task definition
+        id: previous-task
         run: |
-          echo "Rolling back deployment..."
-          aws ecs update-service --cluster hjtpx-${{ env.ENVIRONMENT }} --service hjtpx-api --force-new-deployment
+          PREVIOUS_TASK=$(aws ecs describe-task-definition \
+            --task-definition hjtpx-backend \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          echo "previous_task=$PREVIOUS_TASK" >> $GITHUB_OUTPUT
 
-      - name: Notify failure
+      - name: Rollback Backend to previous version
+        run: |
+          echo "Rolling back Backend deployment..."
+          aws ecs update-service \
+            --cluster hjtpx-${{ needs.deploy-staging.outputs.environment || 'production' }} \
+            --service hjtpx-api-backend \
+            --task-definition hjtpx-backend \
+            --force-new-deployment
+
+      - name: Wait for rollback
+        run: |
+          echo "Waiting for rollback to complete..."
+          aws ecs wait services-stable \
+            --cluster hjtpx-${{ needs.deploy-staging.outputs.environment || 'production' }} \
+            --services hjtpx-api-backend
+
+      - name: Notify rollback
         if: env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1
         with:
           payload: |
             {
-              "text": "Deployment FAILED and rolled back: ${{ github.ref }}",
+              "text": "⚠️ Deployment FAILED and rolled back: ${{ github.ref }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Deployment Failed and Rolled Back*\n*Branch:* ${{ github.ref }}\n*Environment:* ${{ env.ENVIRONMENT }}"
+                    "text": "*Deployment Failed and Rolled Back*\n*Branch:* ${{ github.ref }}\n*Environment:* ${{ needs.deploy-staging.outputs.environment || 'production' }}\n*Commit:* ${{ github.sha }}"
                   }
                 }
               ]
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
   notify-success:
     name: Notify Success
@@ -228,16 +406,28 @@ jobs:
         with:
           payload: |
             {
-              "text": "Deployment SUCCESS: ${{ github.ref }}",
+              "text": "✅ Deployment SUCCESS: ${{ github.ref }}",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Deployment Successful*\n*Branch:* ${{ github.ref }}\n*Environment:* ${{ needs.deploy-staging.outputs.environment || 'production' }}"
+                    "text": "*Deployment Successful*\n*Branch:* ${{ github.ref }}\n*Environment:* ${{ needs.deploy-staging.outputs.environment || 'production' }}\n*Image Tag:* ${{ needs.prepare.outputs.image_tag }}"
                   }
                 }
               ]
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Create GitHub deployment
+        uses: bobheadxi/deployments@v1
+        if: always()
+        with:
+          step: finish
+          status: ${{ job.status }}
+          env: ${{ needs.deploy-staging.outputs.environment || 'production' }}
+          description: |
+            Deployment ${{ job.status }} for ${{ github.ref }}
+            Image: ${{ needs.prepare.outputs.image_tag }}

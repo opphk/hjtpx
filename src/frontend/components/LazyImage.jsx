@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
 
 function LazyImage({
   src,
@@ -10,16 +10,29 @@ function LazyImage({
   rootMargin = '50px',
   onLoad,
   onError,
+  srcSet,
+  sizes,
+  aspectRatio,
+  objectFit = 'cover',
+  priority = false,
+  blurAmount = 10,
   ...props
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isBlurred, setIsBlurred] = useState(true);
   const imgRef = useRef(null);
   const observerRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!imgRef.current) return;
+    if (priority) {
+      setIsInView(true);
+      return;
+    }
+
+    if (!containerRef.current) return;
 
     observerRef.current = new IntersectionObserver(
       ([entry]) => {
@@ -31,22 +44,23 @@ function LazyImage({
       { threshold, rootMargin }
     );
 
-    observerRef.current.observe(imgRef.current);
+    observerRef.current.observe(containerRef.current);
 
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [threshold, rootMargin]);
+  }, [threshold, rootMargin, priority]);
 
-  const handleLoad = () => {
+  const handleLoad = useCallback(() => {
     setIsLoaded(true);
+    setTimeout(() => setIsBlurred(false), 50);
     onLoad?.();
-  };
+  }, [onLoad]);
 
-  const handleError = () => {
+  const handleError = useCallback(() => {
     setHasError(true);
     onError?.();
-  };
+  }, [onError]);
 
   const defaultPlaceholder = (
     <div
@@ -57,9 +71,21 @@ function LazyImage({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        position: 'absolute',
+        top: 0,
+        left: 0
       }}
     >
-      <span>Loading...</span>
+      <div
+        style={{
+          width: 24,
+          height: 24,
+          border: '2px solid #e0e0e0',
+          borderTopColor: '#2196f3',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }}
+      />
     </div>
   );
 
@@ -73,6 +99,9 @@ function LazyImage({
         alignItems: 'center',
         justifyContent: 'center',
         color: '#c62828',
+        position: 'absolute',
+        top: 0,
+        left: 0
       }}
     >
       <span>Failed to load image</span>
@@ -81,30 +110,62 @@ function LazyImage({
 
   if (hasError) {
     return (
-      <div ref={imgRef} className={className} {...props}>
+      <div
+        ref={containerRef}
+        className={className}
+        style={{
+          position: 'relative',
+          aspectRatio,
+          overflow: 'hidden'
+        }}
+        {...props}
+      >
         {errorFallback || defaultErrorFallback}
       </div>
     );
   }
 
   return (
-    <div ref={imgRef} className={className} style={{ position: 'relative', overflow: 'hidden' }} {...props}>
+    <div
+      ref={containerRef}
+      className={className}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        aspectRatio
+      }}
+      {...props}
+    >
       {!isLoaded && (placeholder || defaultPlaceholder)}
       {isInView && (
         <img
+          ref={imgRef}
           src={src}
+          srcSet={srcSet}
+          sizes={sizes}
           alt={alt}
           onLoad={handleLoad}
           onError={handleError}
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
           style={{
             width: '100%',
             height: '100%',
-            objectFit: 'cover',
+            objectFit,
             opacity: isLoaded ? 1 : 0,
-            transition: 'opacity 0.3s ease-in-out',
+            filter: isBlurred ? `blur(${blurAmount}px)` : 'none',
+            transition: 'opacity 0.3s ease-in-out, filter 0.3s ease-in-out'
           }}
         />
       )}
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
     </div>
   );
 }

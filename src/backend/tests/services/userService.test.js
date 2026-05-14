@@ -4,18 +4,34 @@ jest.mock('../../../../src/config/database/db', () => ({
   query: jest.fn()
 }));
 
+jest.mock('../../../../src/backend/utils/queryOptimizer', () => ({
+  cachedQuery: jest.fn(),
+  clearCache: jest.fn()
+}));
+
+jest.mock('../../../../src/backend/services/cacheService', () => ({
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn()
+}));
+
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
   compare: jest.fn()
 }));
 
 const pool = require('../../../../src/config/database/db');
-
+const queryOptimizer = require('../../../../src/backend/utils/queryOptimizer');
+const cacheService = require('../../../../src/backend/services/cacheService');
 const bcrypt = require('bcrypt');
 
 describe('UserService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    cacheService.get.mockResolvedValue(null);
+    cacheService.del.mockResolvedValue(undefined);
+    cacheService.set.mockResolvedValue(undefined);
+    queryOptimizer.clearCache.mockResolvedValue(undefined);
   });
 
   describe('getAllUsers', () => {
@@ -25,17 +41,17 @@ describe('UserService', () => {
         { id: 2, email: 'user2@example.com', name: 'User Two', created_at: new Date() }
       ];
 
-      pool.query.mockResolvedValue({ rows: mockUsers });
+      queryOptimizer.cachedQuery.mockResolvedValue(mockUsers);
 
       const result = await userService.getAllUsers();
 
-      expect(pool.query).toHaveBeenCalled();
+      expect(queryOptimizer.cachedQuery).toHaveBeenCalled();
       expect(result).toEqual(mockUsers);
       expect(result).toHaveLength(2);
     });
 
     it('should return empty array when no users exist', async () => {
-      pool.query.mockResolvedValue({ rows: [] });
+      queryOptimizer.cachedQuery.mockResolvedValue([]);
 
       const result = await userService.getAllUsers();
 
@@ -44,7 +60,7 @@ describe('UserService', () => {
     });
 
     it('should handle database errors', async () => {
-      pool.query.mockRejectedValue(new Error('Database connection failed'));
+      queryOptimizer.cachedQuery.mockRejectedValue(new Error('Database connection failed'));
 
       await expect(userService.getAllUsers()).rejects.toThrow('Database connection failed');
     });
@@ -59,16 +75,16 @@ describe('UserService', () => {
         created_at: new Date()
       };
 
-      pool.query.mockResolvedValue({ rows: [mockUser] });
+      queryOptimizer.cachedQuery.mockResolvedValue([mockUser]);
 
       const result = await userService.getUserById(1);
 
-      expect(pool.query).toHaveBeenCalled();
+      expect(queryOptimizer.cachedQuery).toHaveBeenCalled();
       expect(result).toEqual(mockUser);
     });
 
     it('should return undefined when user not found', async () => {
-      pool.query.mockResolvedValue({ rows: [] });
+      queryOptimizer.cachedQuery.mockResolvedValue([]);
 
       const result = await userService.getUserById(999);
 
@@ -76,7 +92,7 @@ describe('UserService', () => {
     });
 
     it('should handle database errors', async () => {
-      pool.query.mockRejectedValue(new Error('Database error'));
+      queryOptimizer.cachedQuery.mockRejectedValue(new Error('Database error'));
 
       await expect(userService.getUserById(1)).rejects.toThrow('Database error');
     });
@@ -90,6 +106,7 @@ describe('UserService', () => {
         id: 3,
         email: userData.email,
         name: userData.name,
+        password: hashedPassword,
         created_at: new Date()
       };
 
@@ -101,6 +118,7 @@ describe('UserService', () => {
       expect(bcrypt.hash).toHaveBeenCalledWith(userData.password, 10);
       expect(pool.query).toHaveBeenCalled();
       expect(result).toEqual(mockCreatedUser);
+      expect(result.password).toBe(hashedPassword);
     });
 
     it('should handle password hashing errors', async () => {

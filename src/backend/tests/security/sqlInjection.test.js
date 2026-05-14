@@ -1,3 +1,15 @@
+jest.mock('../../../../src/config/database/db', () => ({
+  query: jest.fn(),
+  pool: {
+    on: jest.fn(),
+    query: jest.fn(),
+    connect: jest.fn(),
+    totalCount: 0,
+    idleCount: 0,
+    waitingCount: 0
+  }
+}));
+
 const {
   validateInput,
   validateObject,
