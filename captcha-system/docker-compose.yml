@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  captcha:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=captcha_db
+      - DB_USER=captcha_user
+      - DB_PASSWORD=captcha_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-secret-key-change-in-production
+    volumes:
+      - ./logs:/root/logs
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=captcha_db
+      - POSTGRES_USER=captcha_user
+      - POSTGRES_PASSWORD=captcha_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
