@@ -1,4 +1,4 @@
-const auth = require('../../../backend/middleware/auth');
+const { auth } = require('../../../backend/middleware/auth');
 const jwt = require('jsonwebtoken');
 
 describe('Auth Middleware', () => {
@@ -22,7 +22,7 @@ describe('Auth Middleware', () => {
   });
 
   describe('valid JWT token', () => {
-    it('should pass valid token and call next', () => {
+    it('should pass valid token and call next', async () => {
       const token = jwt.sign(
         { userId: 1, email: 'test@example.com' },
         process.env.JWT_SECRET || 'test-secret-key',
@@ -30,7 +30,7 @@ describe('Auth Middleware', () => {
       );
       mockReq.headers.authorization = `Bearer ${token}`;
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.user).toBeDefined();
@@ -39,7 +39,7 @@ describe('Auth Middleware', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it('should handle token with different payload', () => {
+    it('should handle token with different payload', async () => {
       const token = jwt.sign(
         { userId: 42, email: 'user@domain.com', role: 'admin' },
         process.env.JWT_SECRET || 'test-secret-key',
@@ -47,7 +47,7 @@ describe('Auth Middleware', () => {
       );
       mockReq.headers.authorization = `Bearer ${token}`;
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.user.role).toBe('admin');
@@ -166,7 +166,7 @@ describe('Auth Middleware', () => {
   });
 
   describe('token extraction edge cases', () => {
-    it('should handle token with multiple spaces', () => {
+    it('should handle token with multiple spaces', async () => {
       const token = jwt.sign(
         { userId: 1, email: 'test@example.com' },
         process.env.JWT_SECRET || 'test-secret-key',
@@ -174,7 +174,7 @@ describe('Auth Middleware', () => {
       );
       mockReq.headers.authorization = `Bearer ${token}`;
 
-      auth(mockReq, mockRes, mockNext);
+      await auth(mockReq, mockRes, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.user.userId).toBe(1);

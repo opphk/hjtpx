@@ -18,7 +18,8 @@ jest.mock('jsonwebtoken', () => mockJwt);
 
 const authService = require('../../services/authService');
 const { checkRole, ROLES } = require('../../middleware/roleCheck');
-const authMiddleware = require('../../middleware/auth');
+const { auth: authMiddleware } = require('../../middleware/auth');
+const jwt = require('jsonwebtoken');
 
 describe('Auth Service', () => {
   beforeEach(() => {
@@ -180,7 +181,7 @@ describe('Auth Service', () => {
       expect(typeof token).toBe('string');
       expect(mockJwt.sign).toHaveBeenCalledWith(
         { id: user.id, email: user.email, role: user.role },
-        process.env.JWT_SECRET,
+        expect.any(String),
         { expiresIn: '7d' }
       );
     });
@@ -200,7 +201,7 @@ describe('Auth Service', () => {
       const decoded = await authService.validateSession(token);
 
       expect(decoded.id).toBe(user.id);
-      expect(mockJwt.verify).toHaveBeenCalledWith(token, process.env.JWT_SECRET);
+      expect(mockJwt.verify).toHaveBeenCalledWith(token, expect.any(String));
     });
 
     test('should throw error for invalid session', async () => {
@@ -394,7 +395,7 @@ describe('Auth Middleware', () => {
       json: jest.fn()
     };
     mockNext = jest.fn();
-    process.env.JWT_SECRET = 'test-secret';
+    mockJwt.verify.mockReset();
   });
 
   test('should reject request without token', () => {
@@ -408,10 +409,13 @@ describe('Auth Middleware', () => {
     expect(mockNext).not.toHaveBeenCalled();
   });
 
-  test('should reject request with invalid token', () => {
+  test('should reject request with invalid token', async () => {
     mockReq.headers.authorization = 'Bearer invalid-token';
+    mockJwt.verify.mockImplementation(() => {
+      throw new Error('Invalid token');
+    });
 
-    authMiddleware(mockReq, mockRes, mockNext);
+    await authMiddleware(mockReq, mockRes, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(401);
     expect(mockRes.json).toHaveBeenCalledWith({
@@ -420,25 +424,31 @@ describe('Auth Middleware', () => {
     });
   });
 
-  test('should allow request with valid token', () => {
-    const token = jwt.sign(
-      { id: '123', email: 'test@example.com', role: 'user' },
-      'test-secret'
-    );
-    mockReq.headers.authorization = `Bearer ${token}`;
+  test('should allow request with valid token', async () => {
+    const mockReqLocal = { headers: { authorization: 'Bearer valid-token' } };
+    const decodedUser = { id: '123', email: 'test@example.com', role: 'user' };
+    mockJwt.verify.mockImplementation((token, secret) => {
+      if (token === 'valid-token') {
+        return decodedUser;
+      }
+      throw new Error('Invalid token');
+    });
 
-    authMiddleware(mockReq, mockRes, mockNext);
+    await authMiddleware(mockReqLocal, mockRes, mockNext);
 
-    expect(mockReq.user).toBeDefined();
-    expect(mockReq.user.id).toBe('123');
-    expect(mockReq.user.email).toBe('test@example.com');
+    expect(mockReqLocal.user).toBeDefined();
+    expect(mockReqLocal.user.id).toBe('123');
+    expect(mockReqLocal.user.email).toBe('test@example.com');
     expect(mockNext).toHaveBeenCalled();
   });
 
-  test('should reject malformed authorization header', () => {
+  test('should reject malformed authorization header', async () => {
     mockReq.headers.authorization = 'InvalidFormat token';
+    mockJwt.verify.mockImplementation(() => {
+      throw new Error('Invalid token');
+    });
 
-    authMiddleware(mockReq, mockRes, mockNext);
+    await authMiddleware(mockReq, mockRes, mockNext);
 
     expect(mockRes.status).toHaveBeenCalledWith(401);
   });

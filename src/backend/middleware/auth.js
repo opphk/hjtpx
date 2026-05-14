@@ -47,7 +47,7 @@ async function clearLoginAttempts(email) {
 }
 
 function auth(req, res, next) {
-  authenticate(req, res, next);
+  return authenticate(req, res, next);
 }
 
 async function authenticate(req, res, next) {
