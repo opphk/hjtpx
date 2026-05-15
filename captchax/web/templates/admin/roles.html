@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="admin.roles_title">角色管理 - CaptchaX 管理后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link:hover {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+        }
+        .sidebar-link.active {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
+            border-left: 3px solid #3b82f6;
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+        .permission-checkbox:checked + label {
+            background: #dbeafe;
+            border-color: #3b82f6;
+        }
+        .system-badge {
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.625rem;
+            font-weight: 500;
+        }
+        .table-row:hover {
+            background: #f9fafb;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex">
+        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 bg-white shadow-lg transform -translate-x-full lg:translate-x-0 transition-transform duration-300 z-30">
+            <div class="h-full flex flex-col">
+                <div class="p-6 border-b border-gray-100">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-gray-800">CaptchaX</h1>
+                            <p class="text-xs text-gray-500" data-i18n="admin.panel">管理后台</p>
+                        </div>
+                    </div>
+                </div>
+
+                <nav class="flex-1 py-4 overflow-y-auto">
+                    <div class="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider" data-i18n="admin.menu_main">主菜单</div>
+                    <a href="/admin/dashboard" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
+                        <span data-i18n="admin.dashboard">仪表盘</span>
+                    </a>
+                    <a href="/admin/stats" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span data-i18n="admin.stats">统计分析</span>
+                    </a>
+                    <a href="/admin/config" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span data-i18n="admin.config">系统配置</span>
+                    </a>
+
+                    <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider" data-i18n="admin.system_management">系统管理</div>
+                    <a href="/admin/admins" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <span data-i18n="admin.admins">管理员</span>
+                    </a>
+                    <a href="/admin/roles" class="sidebar-link active flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        <span data-i18n="admin.roles">角色管理</span>
+                    </a>
+
+                    <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider" data-i18n="admin.security_control">安全管控</div>
+                    <a href="/admin/whitelist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span data-i18n="admin.whitelist">白名单</span>
+                    </a>
+                    <a href="/admin/blacklist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span data-i18n="admin.blacklist">黑名单</span>
+                    </a>
+                </nav>
+
+                <div class="p-4 border-t border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-700" data-i18n="admin.admin">管理员</p>
+                                <p class="text-xs text-green-500 flex items-center">
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></span>
+                                    <span data-i18n="admin.online">在线</span>
+                                </p>
+                            </div>
+                        </div>
+                        <button id="logout-btn" class="p-2 text-gray-400 hover:text-red-500 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col min-h-screen lg:ml-0">
+            <header class="bg-white shadow-sm sticky top-0 z-20">
+                <div class="flex items-center justify-between px-6 py-4">
+                    <button id="mobile-menu-btn" class="lg:hidden p-2 text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <h2 class="text-xl font-semibold text-gray-800" data-i18n="admin.roles">角色管理</h2>
+                    <div class="flex items-center space-x-3">
+                        <button id="refresh-btn" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                        </button>
+                        <button id="add-role-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            <span data-i18n="admin.add_role">添加角色</span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 p-6">
+                <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6" id="roles-grid">
+                    <div class="col-span-full text-center py-12 text-gray-500" data-i18n="common.loading">加载中...</div>
+                </div>
+
+                <div class="mt-6 bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="admin.permissions_title">权限说明</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" id="permissions-legend">
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="role-modal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800" id="modal-title" data-i18n="admin.add_role">添加角色</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form id="role-form" class="p-6 space-y-4 overflow-y-auto flex-1">
+                <input type="hidden" id="role-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.role_code">角色代码</label>
+                        <input type="text" id="role-code" required minlength="3" maxlength="50" pattern="[a-z_]+"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <p class="text-xs text-gray-500 mt-1" data-i18n="admin.role_code_hint">小写字母和下划线，如 custom_role</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.role_name">角色名称</label>
+                        <input type="text" id="role-name" required minlength="2" maxlength="100"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.description">描述</label>
+                    <textarea id="role-description" rows="2"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="admin.permissions">权限配置</label>
+                    <div class="border border-gray-200 rounded-lg p-4 max-h-64 overflow-y-auto" id="permissions-container">
+                    </div>
+                </div>
+            </form>
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end space-x-3">
+                <button id="cancel-btn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition" data-i18n="common.cancel">取消</button>
+                <button id="save-btn" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition" data-i18n="common.save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800" id="detail-modal-title" data-i18n="admin.role_detail">角色详情</h3>
+                <button id="close-detail-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="mb-4">
+                    <h4 class="text-sm font-medium text-gray-500 mb-1" data-i18n="admin.role_name">角色名称</h4>
+                    <p class="text-gray-800" id="detail-name"></p>
+                </div>
+                <div class="mb-4">
+                    <h4 class="text-sm font-medium text-gray-500 mb-1" data-i18n="admin.description">描述</h4>
+                    <p class="text-gray-800" id="detail-description"></p>
+                </div>
+                <div class="mb-4">
+                    <h4 class="text-sm font-medium text-gray-500 mb-2" data-i18n="admin.permissions">权限列表</h4>
+                    <div class="flex flex-wrap gap-2" id="detail-permissions"></div>
+                </div>
+                <div class="mb-4">
+                    <h4 class="text-sm font-medium text-gray-500 mb-1" data-i18n="admin.created_at">创建时间</h4>
+                    <p class="text-gray-800" id="detail-created"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end">
+                <button id="close-detail-btn" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition" data-i18n="common.close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div class="text-center">
+                <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2" data-i18n="admin.confirm_delete">确认删除</h3>
+                <p class="text-gray-500 mb-6" id="confirm-message" data-i18n="admin.delete_role_warning">确定要删除此角色吗？此操作无法撤销。</p>
+                <div class="flex justify-center space-x-3">
+                    <button id="confirm-cancel" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition" data-i18n="common.cancel">取消</button>
+                    <button id="confirm-delete" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition" data-i18n="common.delete">删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <span id="toast-message"></span>
+    </div>
+
+    <script src="/static/admin.js"></script>
+    <script>
+        const RolesPage = {
+            roles: [],
+            permissions: [],
+            currentRole: null,
+            deleteCallback: null,
+
+            async init() {
+                await Promise.all([this.loadRoles(), this.loadPermissions()]);
+                this.bindEvents();
+            },
+
+            bindEvents() {
+                document.getElementById('add-role-btn').addEventListener('click', () => this.showAddModal());
+                document.getElementById('close-modal').addEventListener('click', () => this.hideModal());
+                document.getElementById('cancel-btn').addEventListener('click', () => this.hideModal());
+                document.getElementById('save-btn').addEventListener('click', () => this.saveRole());
+                document.getElementById('refresh-btn').addEventListener('click', () => this.loadRoles());
+                document.getElementById('confirm-cancel').addEventListener('click', () => this.hideConfirmModal());
+                document.getElementById('close-detail-modal').addEventListener('click', () => this.hideDetailModal());
+                document.getElementById('close-detail-btn').addEventListener('click', () => this.hideDetailModal());
+                document.getElementById('confirm-delete').addEventListener('click', () => {
+                    if (this.deleteCallback) this.deleteCallback();
+                });
+
+                document.getElementById('role-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'role-modal') this.hideModal();
+                });
+                document.getElementById('confirm-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'confirm-modal') this.hideConfirmModal();
+                });
+                document.getElementById('detail-modal').addEventListener('click', (e) => {
+                    if (e.target.id === 'detail-modal') this.hideDetailModal();
+                });
+            },
+
+            async loadRoles() {
+                try {
+                    const response = await fetch('/admin/api/roles', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
+                    });
+                    const result = await response.json();
+                    if (result.code === 0) {
+                        this.roles = result.data.items;
+                        this.renderRoles();
+                    }
+                } catch (error) {
+                    console.error('Failed to load roles:', error);
+                    this.showToast('加载失败', 'error');
+                }
+            },
+
+            async loadPermissions() {
+                try {
+                    const response = await fetch('/admin/api/permissions', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
+                    });
+                    const result = await response.json();
+                    if (result.code === 0) {
+                        this.permissions = result.data;
+                        this.renderPermissionsLegend();
+                    }
+                } catch (error) {
+                    console.error('Failed to load permissions:', error);
+                }
+            },
+
+            renderRoles() {
+                const grid = document.getElementById('roles-grid');
+                if (!this.roles || this.roles.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500">暂无数据</div>`;
+                    return;
+                }
+
+                grid.innerHTML = this.roles.map(role => `
+                    <div class="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+                        <div class="flex items-start justify-between mb-4">
+                            <div>
+                                <div class="flex items-center">
+                                    <h3 class="text-lg font-semibold text-gray-800">${role.name}</h3>
+                                    ${role.is_system ? '<span class="ml-2 system-badge bg-purple-100 text-purple-700">系统</span>' : ''}
+                                </div>
+                                <p class="text-sm text-gray-500 mt-1">${role.code}</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">${role.description || '无描述'}</p>
+                        <div class="mb-4">
+                            <p class="text-xs font-medium text-gray-500 mb-2">权限</p>
+                            <div class="flex flex-wrap gap-1">
+                                ${(role.permissions || []).slice(0, 4).map(p => `
+                                    <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">${p.name}</span>
+                                `).join('')}
+                                ${(role.permissions || []).length > 4 ? `<span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">+${role.permissions.length - 4}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <button onclick="RolesPage.showDetail(${role.id})" class="text-blue-500 hover:text-blue-600 text-sm" data-i18n="common.view">查看</button>
+                            <div class="flex space-x-2">
+                                <button onclick="RolesPage.editRole(${role.id})" class="p-1 text-gray-400 hover:text-blue-500 ${role.is_system ? 'opacity-50 cursor-not-allowed' : ''}" ${role.is_system ? 'disabled' : ''} title="编辑">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <button onclick="RolesPage.confirmDelete(${role.id}, '${role.name}')" class="p-1 text-gray-400 hover:text-red-500 ${role.is_system ? 'opacity-50 cursor-not-allowed' : ''}" ${role.is_system ? 'disabled' : ''} title="删除">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            renderPermissionsLegend() {
+                const container = document.getElementById('permissions-legend');
+                if (!this.permissions || this.permissions.length === 0) {
+                    container.innerHTML = '';
+                    return;
+                }
+
+                const categories = {};
+                this.permissions.forEach(p => {
+                    if (!categories[p.category]) {
+                        categories[p.category] = [];
+                    }
+                    categories[p.category].push(p);
+                });
+
+                container.innerHTML = Object.entries(categories).map(([cat, perms]) => `
+                    <div class="border border-gray-200 rounded-lg p-3">
+                        <p class="text-xs font-medium text-gray-500 mb-2">${this.getCategoryName(cat)}</p>
+                        ${perms.map(p => `
+                            <div class="flex items-center mb-1">
+                                <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                <span class="text-sm text-gray-700">${p.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `).join('');
+            },
+
+            getCategoryName(cat) {
+                const names = {
+                    'general': '通用',
+                    'admin': '管理',
+                    'config': '配置',
+                    'logs': '日志',
+                    'data': '数据',
+                    'security': '安全'
+                };
+                return names[cat] || cat;
+            },
+
+            renderPermissionsForm(selectedIds = []) {
+                const container = document.getElementById('permissions-container');
+                if (!this.permissions || this.permissions.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500">加载中...</p>';
+                    return;
+                }
+
+                const categories = {};
+                this.permissions.forEach(p => {
+                    if (!categories[p.category]) {
+                        categories[p.category] = [];
+                    }
+                    categories[p.category].push(p);
+                });
+
+                container.innerHTML = Object.entries(categories).map(([cat, perms]) => `
+                    <div class="mb-4">
+                        <p class="text-sm font-medium text-gray-700 mb-2">${this.getCategoryName(cat)}</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            ${perms.map(p => `
+                                <label class="flex items-center p-2 border border-gray-200 rounded cursor-pointer hover:bg-gray-50">
+                                    <input type="checkbox" name="permissions" value="${p.id}" ${selectedIds.includes(p.id) ? 'checked' : ''}
+                                        class="w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-500">
+                                    <span class="ml-2 text-sm text-gray-700">${p.name}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            showAddModal() {
+                document.getElementById('modal-title').textContent = '添加角色';
+                document.getElementById('role-form').reset();
+                document.getElementById('role-id').value = '';
+                document.getElementById('role-code').disabled = false;
+                this.renderPermissionsForm();
+                document.getElementById('role-modal').classList.remove('hidden');
+            },
+
+            async editRole(id) {
+                try {
+                    const response = await fetch(`/admin/api/roles/${id}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
+                    });
+                    const result = await response.json();
+                    if (result.code === 0) {
+                        this.currentRole = result.data;
+                        document.getElementById('modal-title').textContent = '编辑角色';
+                        document.getElementById('role-id').value = result.data.id;
+                        document.getElementById('role-code').value = result.data.code;
+                        document.getElementById('role-code').disabled = true;
+                        document.getElementById('role-name').value = result.data.name;
+                        document.getElementById('role-description').value = result.data.description || '';
+                        const selectedIds = (result.data.permissions || []).map(p => p.id);
+                        this.renderPermissionsForm(selectedIds);
+                        document.getElementById('role-modal').classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Failed to load role:', error);
+                    this.showToast('加载失败', 'error');
+                }
+            },
+
+            hideModal() {
+                document.getElementById('role-modal').classList.add('hidden');
+                this.currentRole = null;
+            },
+
+            async saveRole() {
+                const id = document.getElementById('role-id').value;
+                const data = {
+                    code: document.getElementById('role-code').value,
+                    name: document.getElementById('role-name').value,
+                    description: document.getElementById('role-description').value,
+                    permission_ids: Array.from(document.querySelectorAll('input[name="permissions"]:checked')).map(el => parseInt(el.value))
+                };
+
+                const url = id ? `/admin/api/roles/${id}` : '/admin/api/roles';
+                const method = id ? 'PUT' : 'POST';
+
+                try {
+                    const response = await fetch(url, {
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    const result = await response.json();
+                    if (result.code === 0) {
+                        this.hideModal();
+                        this.loadRoles();
+                        this.showToast(id ? '更新成功' : '创建成功', 'success');
+                    } else {
+                        this.showToast(result.message || '操作失败', 'error');
+                    }
+                } catch (error) {
+                    console.error('Failed to save role:', error);
+                    this.showToast('操作失败', 'error');
+                }
+            },
+
+            showDetail(id) {
+                const role = this.roles.find(r => r.id === id);
+                if (!role) return;
+
+                document.getElementById('detail-modal-title').textContent = role.name;
+                document.getElementById('detail-name').textContent = role.name;
+                document.getElementById('detail-description').textContent = role.description || '无描述';
+                document.getElementById('detail-created').textContent = new Date(role.created_at).toLocaleString();
+                document.getElementById('detail-permissions').innerHTML = (role.permissions || []).map(p => `
+                    <span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm">${p.name}</span>
+                `).join('') || '<span class="text-gray-500">无权限</span>';
+                document.getElementById('detail-modal').classList.remove('hidden');
+            },
+
+            hideDetailModal() {
+                document.getElementById('detail-modal').classList.add('hidden');
+            },
+
+            confirmDelete(id, name) {
+                this.deleteCallback = async () => {
+                    try {
+                        const response = await fetch(`/admin/api/roles/${id}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('admin_token')}` }
+                        });
+                        const result = await response.json();
+                        if (result.code === 0) {
+                            this.hideConfirmModal();
+                            this.loadRoles();
+                            this.showToast('删除成功', 'success');
+                        } else {
+                            this.showToast(result.message || '删除失败', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Failed to delete role:', error);
+                        this.showToast('删除失败', 'error');
+                    }
+                };
+                document.getElementById('confirm-message').textContent = `确定要删除角色 "${name}" 吗？此操作无法撤销。`;
+                document.getElementById('confirm-modal').classList.remove('hidden');
+            },
+
+            hideConfirmModal() {
+                document.getElementById('confirm-modal').classList.add('hidden');
+                this.deleteCallback = null;
+            },
+
+            showToast(message, type = 'info') {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toast-message');
+                toastMessage.textContent = message;
+                toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 z-50 ${type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-gray-800'} text-white`;
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 3000);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => RolesPage.init());
+    </script>
+</body>
+</html>
