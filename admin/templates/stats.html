@@ -4,93 +4,104 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台 - 统计分析</title>
-    <link rel="stylesheet" href="/admin/static/css/style.css">
-    <link rel="stylesheet" href="/admin/static/css/stats.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
+        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
+        .main-wrapper { flex: 1; min-width: 0; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .chart-card canvas { width: 100% !important; height: 300px !important; }
+    </style>
 </head>
-<body class="admin-layout">
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h2>管理后台</h2>
-        </div>
-        <nav class="sidebar-nav">
-            <ul>
-                <li><a href="/admin/">
-                    <span class="icon">📊</span>
-                    <span>仪表盘</span>
-                </a></li>
-                <li><a href="/admin/stats" class="active">
-                    <span class="icon">📈</span>
-                    <span>统计分析</span>
-                </a></li>
-                <li><a href="/admin/applications">
-                    <span class="icon">📱</span>
-                    <span>应用管理</span>
-                </a></li>
-                <li><a href="/admin/logs">
-                    <span class="icon">📋</span>
-                    <span>日志查询</span>
-                </a></li>
-            </ul>
-        </nav>
-        <div class="sidebar-footer">
-            <a href="#" id="logoutBtn" class="logout-btn">
-                <span class="icon">🚪</span>
-                <span>退出登录</span>
-            </a>
-        </div>
-    </div>
-    
-    <div class="main-wrapper">
-        <header class="topbar">
-            <div class="topbar-left">
-                <h1>统计分析</h1>
+<body>
+    <div class="d-flex">
+        <div class="sidebar d-flex flex-column flex-shrink-0">
+            <div class="sidebar-header p-3"><h5 class="text-white mb-0">管理后台</h5></div>
+            <nav class="nav flex-column mt-2">
+                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+            </nav>
+            <div class="sidebar-footer mt-auto p-3">
+                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
             </div>
-            <div class="topbar-right">
-                <div class="user-info">
-                    <span class="username" id="usernameDisplay">管理员</span>
+        </div>
+        
+        <div class="main-wrapper">
+            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">统计分析</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
                     <div class="user-avatar" id="userAvatar">A</div>
                 </div>
-            </div>
-        </header>
-        
-        <main class="main-content">
-            <div class="stats-page">
-                <div class="filter-bar">
-                    <div class="form-group">
-                        <label for="dateRange">时间范围</label>
-                        <select id="dateRange">
-                            <option value="7d">最近7天</option>
-                            <option value="30d" selected>最近30天</option>
-                            <option value="90d">最近90天</option>
-                            <option value="1y">最近1年</option>
-                        </select>
+            </header>
+            
+            <main class="p-4 bg-light min-vh-100">
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">时间范围</label>
+                                <select class="form-select" id="dateRange">
+                                    <option value="7d">最近7天</option>
+                                    <option value="30d" selected>最近30天</option>
+                                    <option value="90d">最近90天</option>
+                                    <option value="1y">最近1年</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button id="refreshBtn" class="btn btn-secondary w-100"><i class="fas fa-sync me-1"></i>刷新数据</button>
+                            </div>
+                        </div>
                     </div>
-                    <button id="refreshBtn" class="btn">刷新数据</button>
                 </div>
                 
-                <div class="charts-grid">
-                    <div class="chart-card">
-                        <h3>用户增长趋势</h3>
-                        <canvas id="userGrowthChart"></canvas>
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">用户增长趋势</h5>
+                                <canvas id="userGrowthChart" height="300"></canvas>
+                            </div>
+                        </div>
                     </div>
-                    <div class="chart-card">
-                        <h3>请求量统计</h3>
-                        <canvas id="requestChart"></canvas>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">请求量统计</h5>
+                                <canvas id="requestChart" height="300"></canvas>
+                            </div>
+                        </div>
                     </div>
-                    <div class="chart-card">
-                        <h3>应用分布</h3>
-                        <canvas id="appDistributionChart"></canvas>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">应用分布</h5>
+                                <canvas id="appDistributionChart" height="300"></canvas>
+                            </div>
+                        </div>
                     </div>
-                    <div class="chart-card">
-                        <h3>错误率分析</h3>
-                        <canvas id="errorRateChart"></canvas>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">错误率分析</h5>
+                                <canvas id="errorRateChart" height="300"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </main>
+            </main>
+        </div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
     <script src="/admin/static/js/stats.js"></script>
 </body>

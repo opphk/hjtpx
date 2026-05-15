@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/hjtpx/hjtpx/pkg/config"
 )
 
 var (
@@ -20,18 +19,17 @@ type Claims struct {
 }
 
 var jwtSecret []byte
-var jwtConfig *config.JWTConfig
+var jwtExpireHours = 24
 
 // InitJWT 初始化JWT配置
-func InitJWT(cfg *config.JWTConfig) {
-	jwtSecret = []byte(cfg.Secret)
-	jwtConfig = cfg
+func InitJWT(secret string) {
+	jwtSecret = []byte(secret)
 }
 
 // GenerateToken 生成JWT token
 func GenerateToken(adminID uint, username string) (string, error) {
 	nowTime := time.Now()
-	expireTime := nowTime.Add(time.Duration(jwtConfig.ExpireHours) * time.Hour)
+	expireTime := nowTime.Add(time.Duration(jwtExpireHours) * time.Hour)
 
 	claims := Claims{
 		AdminID:  adminID,

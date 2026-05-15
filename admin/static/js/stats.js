@@ -24,7 +24,7 @@ async function loadStatsData() {
 
     try {
         const dateRange = document.getElementById('dateRange')?.value || '30d';
-        const result = await auth.request(`/stats?range=${dateRange}`);
+        const result = await auth.request(`/admin/stats?range=${dateRange}`);
         if (result.code === 0) {
             data = result.data;
         }

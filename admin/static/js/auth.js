@@ -35,7 +35,7 @@ const auth = {
 
     async login(username, password) {
         try {
-            const response = await fetch(`${API_BASE}/auth/login`, {
+            const response = await fetch(`${API_BASE}/admin/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -61,7 +61,7 @@ const auth = {
         try {
             const token = this.getToken();
             if (token) {
-                await fetch(`${API_BASE}/auth/logout`, {
+                await fetch(`${API_BASE}/admin/logout`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`

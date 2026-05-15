@@ -1,60 +1,125 @@
-{% extends "base.html" %}
-
-{% block title %}行为验证码 - 安全验证{% endblock %}
-
-{% block styles %}
-<link rel="stylesheet" href="/static/css/captcha.css">
-{% endblock %}
-
-{% block content %}
-<div class="hero">
-    <div class="container" style="text-align: center; padding: 40px 20px;">
-        <h1 style="color: white; margin-bottom: 20px;">安全验证系统</h1>
-        <p style="color: rgba(255,255,255,0.9); font-size: 18px;">请完成下方验证以继续</p>
-    </div>
-</div>
-
-<section style="padding: 60px 20px;">
-    <div class="container">
-        <div id="captcha-container"></div>
-        
-        <div style="margin-top: 60px; text-align: center;">
-            <h3 style="margin-bottom: 20px; color: #1f2937;">使用说明</h3>
-            <div style="max-width: 600px; margin: 0 auto; text-align: left; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <h4 style="margin-bottom: 15px; color: #3b82f6;">滑块验证</h4>
-                <p style="margin-bottom: 20px; color: #6b7280;">将滑块从左侧拖动到右侧，使拼图块对齐到正确位置即可完成验证。</p>
-                
-                <h4 style="margin-bottom: 15px; color: #3b82f6;">点选验证</h4>
-                <p style="margin-bottom: 20px; color: #6b7280;">按照提示文字，依次点击图片中的对应位置，完成后点击确认按钮。</p>
-                
-                <h4 style="margin-bottom: 15px; color: #3b82f6;">刷新验证码</h4>
-                <p style="color: #6b7280;">点击右上角的刷新按钮可以更换新的验证码图片。</p>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行为验证码 - 安全验证</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <header class="bg-white shadow-sm sticky-top">
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-light">
+                <div class="container-fluid px-0">
+                    <a class="navbar-brand fw-bold text-primary" href="/">用户端</a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/products">产品</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/contact">联系我们</a></li>
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
+                            <a href="/register" class="btn btn-primary btn-sm">注册</a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="min-vh-100">
+        <div class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="container">
+                <h1 class="fw-bold mb-3">安全验证系统</h1>
+                <p class="lead text-white-50">请完成下方验证以继续</p>
             </div>
         </div>
-    </div>
-</section>
-{% endblock %}
 
-{% block scripts %}
-<script src="/static/js/captcha.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const captcha = new Captcha('captcha-container', {
-            apiBase: '/api/v1',
-            type: 'slider',
-            onSuccess: function(result) {
-                console.log('验证成功:', result);
-                setTimeout(function() {
-                    alert('验证成功！会话ID: ' + result.session_id);
-                }, 500);
-            },
-            onError: function(error) {
-                console.log('验证失败:', error);
-            },
-            onRefresh: function() {
-                console.log('验证码已刷新');
-            }
+        <section class="py-5">
+            <div class="container">
+                <div class="row justify-content-center">
+                    <div class="col-md-6">
+                        <div id="captcha-container"></div>
+                    </div>
+                </div>
+                
+                <div class="row justify-content-center mt-5">
+                    <div class="col-md-8">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-primary mb-4">使用说明</h5>
+                                
+                                <h6 class="fw-bold text-primary">滑块验证</h6>
+                                <p class="text-muted mb-3">将滑块从左侧拖动到右侧，使拼图块对齐到正确位置即可完成验证。</p>
+                                
+                                <h6 class="fw-bold text-primary">点选验证</h6>
+                                <p class="text-muted mb-3">按照提示文字，依次点击图片中的对应位置，完成后点击确认按钮。</p>
+                                
+                                <h6 class="fw-bold text-primary">刷新验证码</h6>
+                                <p class="text-muted mb-0">点击右上角的刷新按钮可以更换新的验证码图片。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="bg-dark text-white py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <h5>关于我们</h5>
+                    <p class="text-white-50">专业的服务团队，为您提供优质的体验。</p>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <h5>快速链接</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
+                        <li><a href="/products" class="text-white-50 text-decoration-none">产品</a></li>
+                        <li><a href="/about" class="text-white-50 text-decoration-none">关于</a></li>
+                        <li><a href="/contact" class="text-white-50 text-decoration-none">联系我们</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <h5>联系方式</h5>
+                    <p class="text-white-50">邮箱: contact@example.com</p>
+                    <p class="text-white-50">电话: 400-888-8888</p>
+                </div>
+            </div>
+            <hr class="border-white-50">
+            <p class="text-center text-white-50 mb-0">&copy; 2026 用户端. All rights reserved.</p>
+        </div>
+    </footer>
+    
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/captcha.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const captcha = new Captcha('captcha-container', {
+                apiBase: '/api/v1',
+                type: 'slider',
+                onSuccess: function(result) {
+                    console.log('验证成功:', result);
+                    setTimeout(function() {
+                        alert('验证成功！会话ID: ' + result.session_id);
+                    }, 500);
+                },
+                onError: function(error) {
+                    console.log('验证失败:', error);
+                },
+                onRefresh: function() {
+                    console.log('验证码已刷新');
+                }
+            });
         });
-    });
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

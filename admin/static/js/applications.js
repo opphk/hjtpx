@@ -43,7 +43,7 @@ async function loadApplications() {
     try {
         const keyword = document.getElementById('searchApp')?.value || '';
         const status = document.getElementById('appStatus')?.value || '';
-        const result = await auth.request(`/apps?page=${currentPage}&size=${pageSize}&keyword=${encodeURIComponent(keyword)}&status=${status}`);
+        const result = await auth.request(`/admin/applications?page=${currentPage}&size=${pageSize}&keyword=${encodeURIComponent(keyword)}&status=${status}`);
         if (result.code === 0) {
             apps = result.data.list || [];
             renderPagination(result.data.total || apps.length);
@@ -59,11 +59,11 @@ async function loadApplications() {
 
 function getMockApplications() {
     return [
-        { id: 'app_001', name: '用户中心', secret: 'sk_abc123def456', status: 'active', createdAt: '2024-01-01 10:00:00' },
-        { id: 'app_002', name: '支付系统', secret: 'sk_xyz789123', status: 'active', createdAt: '2024-01-05 14:30:00' },
-        { id: 'app_003', name: '消息推送', secret: 'sk_mno456789', status: 'inactive', createdAt: '2024-01-10 09:15:00' },
-        { id: 'app_004', name: '数据分析', secret: 'sk_pqr012345', status: 'active', createdAt: '2024-01-12 16:45:00' },
-        { id: 'app_005', name: '文件存储', secret: 'sk_stu678901', status: 'suspended', createdAt: '2024-01-15 11:20:00' }
+        { id: 1, name: '用户中心', secret: 'sk_abc123def456', status: 'active', createdAt: '2024-01-01 10:00:00' },
+        { id: 2, name: '支付系统', secret: 'sk_xyz789123', status: 'active', createdAt: '2024-01-05 14:30:00' },
+        { id: 3, name: '消息推送', secret: 'sk_mno456789', status: 'inactive', createdAt: '2024-01-10 09:15:00' },
+        { id: 4, name: '数据分析', secret: 'sk_pqr012345', status: 'active', createdAt: '2024-01-12 16:45:00' },
+        { id: 5, name: '文件存储', secret: 'sk_stu678901', status: 'suspended', createdAt: '2024-01-15 11:20:00' }
     ];
 }
 
@@ -79,8 +79,8 @@ function renderApplications(apps) {
             <td><span class="status ${app.status}">${getStatusText(app.status)}</span></td>
             <td>${app.createdAt}</td>
             <td>
-                <button class="btn btn-sm" onclick="editApp('${app.id}')">编辑</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteApp('${app.id}')">删除</button>
+                <button class="btn btn-sm" onclick="editApp(${app.id})">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteApp(${app.id})">删除</button>
             </td>
         </tr>
     `).join('');
@@ -156,18 +156,18 @@ async function handleAppSubmit(e) {
     const appId = document.getElementById('appId').value;
     const appData = {
         name: document.getElementById('appName').value,
-        description: document.getElementById('appDescription').value,
-        status: document.getElementById('appStatusSelect').value
+        user_id: 1,
+        description: document.getElementById('appDescription').value
     };
 
     try {
         if (appId) {
-            await auth.request(`/apps/${appId}`, {
+            await auth.request(`/admin/applications/${appId}`, {
                 method: 'PUT',
                 body: JSON.stringify(appData)
             });
         } else {
-            await auth.request('/apps', {
+            await auth.request('/admin/applications', {
                 method: 'POST',
                 body: JSON.stringify(appData)
             });
@@ -193,7 +193,7 @@ async function deleteApp(appId) {
     if (!confirm('确定要删除这个应用吗？')) return;
 
     try {
-        await auth.request(`/apps/${appId}`, {
+        await auth.request(`/admin/applications/${appId}`, {
             method: 'DELETE'
         });
     } catch (error) {

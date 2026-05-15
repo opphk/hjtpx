@@ -4,32 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台 - 登录</title>
-    <link rel="stylesheet" href="/admin/static/css/style.css">
-    <link rel="stylesheet" href="/admin/static/css/login.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .login-page {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-box {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 420px;
+            width: 100%;
+        }
+    </style>
 </head>
 <body class="login-page">
-    <div class="login-container">
-        <div class="login-box">
-            <div class="login-header">
-                <h1>管理后台</h1>
-                <p>请登录您的账户</p>
-            </div>
-            <form id="loginForm" class="login-form">
-                <div class="form-group">
-                    <label for="username">用户名</label>
-                    <input type="text" id="username" name="username" placeholder="请输入用户名" required autocomplete="username">
-                </div>
-                <div class="form-group">
-                    <label for="password">密码</label>
-                    <input type="password" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password">
-                </div>
-                <div class="form-group">
-                    <button type="submit" id="loginBtn" class="login-btn">登录</button>
-                </div>
-                <div id="loginError" class="error-message"></div>
-            </form>
+    <div class="login-box">
+        <div class="text-center mb-4">
+            <h3 class="fw-bold">管理后台</h3>
+            <p class="text-muted">请登录您的账户</p>
         </div>
+        <form id="loginForm">
+            <div class="mb-3">
+                <label for="username" class="form-label">用户名</label>
+                <input type="text" class="form-control" id="username" name="username" placeholder="请输入用户名" required>
+            </div>
+            <div class="mb-3">
+                <label for="password" class="form-label">密码</label>
+                <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" id="loginBtn" class="btn btn-primary w-100 py-2">登录</button>
+            <div id="loginError" class="text-danger text-center mt-2"></div>
+        </form>
     </div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
 </body>
 </html>

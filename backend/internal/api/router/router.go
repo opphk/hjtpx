@@ -1,6 +1,9 @@
 package router
 
 import (
+	"html/template"
+	"path/filepath"
+
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
@@ -19,6 +22,63 @@ func SetupRouter() *gin.Engine {
 	// 健康检查
 	r.GET("/health", handler.HealthCheck)
 
+	// 静态文件服务
+	r.Static("/static", "../frontend/static")
+	r.Static("/admin/static", "../admin/static")
+
+	// 加载HTML模板（合并前端和管理端模板，避免多次LoadHTMLGlob覆盖）
+	templates := template.Must(template.New("").Parse(""))
+	for _, glob := range []string{"../frontend/templates/*", "../admin/templates/*"} {
+		matches, err := filepath.Glob(glob)
+		if err != nil {
+			continue
+		}
+		for _, match := range matches {
+			template.Must(templates.ParseFiles(match))
+		}
+	}
+	r.SetHTMLTemplate(templates)
+
+	// 前端页面路由
+	r.GET("/", func(c *gin.Context) {
+		c.HTML(200, "home.html", nil)
+	})
+	r.GET("/captcha", func(c *gin.Context) {
+		c.HTML(200, "captcha.html", nil)
+	})
+	r.GET("/login", func(c *gin.Context) {
+		c.HTML(200, "home.html", nil)
+	})
+	r.GET("/register", func(c *gin.Context) {
+		c.HTML(200, "home.html", nil)
+	})
+	r.GET("/products", func(c *gin.Context) {
+		c.HTML(200, "home.html", nil)
+	})
+	r.GET("/about", func(c *gin.Context) {
+		c.HTML(200, "home.html", nil)
+	})
+	r.GET("/contact", func(c *gin.Context) {
+		c.HTML(200, "home.html", nil)
+	})
+
+	// 管理端页面路由
+	r.GET("/admin/login", func(c *gin.Context) {
+		c.HTML(200, "login.html", nil)
+	})
+	r.GET("/admin", func(c *gin.Context) {
+		c.HTML(200, "dashboard.html", nil)
+	})
+	r.GET("/admin/stats", func(c *gin.Context) {
+		c.HTML(200, "stats.html", nil)
+	})
+	r.GET("/admin/applications", func(c *gin.Context) {
+		c.HTML(200, "applications.html", nil)
+	})
+	r.GET("/admin/logs", func(c *gin.Context) {
+		c.HTML(200, "logs.html", nil)
+	})
+
 	// API路由组
 	api := r.Group("/api/v1")
 	{
@@ -33,8 +93,9 @@ func SetupRouter() *gin.Engine {
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
 		{
-			auth.POST("/login", handler.Login)
+			auth.POST("/login", handler.UserLogin)
 			auth.POST("/logout", handler.Logout)
+			auth.POST("/register", handler.Register)
 		}
 
 		// 管理员路由
@@ -77,6 +138,10 @@ func SetupRouter() *gin.Engine {
 					logs.GET("/statistics", handler.GetLogStatistics)
 					logs.GET("/:id", handler.GetLogDetail)
 				}
+
+				// CSS来源切换
+				adminAuth.GET("/css-source", handler.GetCSSSource)
+				adminAuth.POST("/css-source", handler.SetCSSSource)
 			}
 		}
 
