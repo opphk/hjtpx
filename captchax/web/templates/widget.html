@@ -136,3 +136,34 @@
         <button type="button" class="captchax-retry-btn">重新验证</button>
     </div>
 </template>
+
+<template id="captchax-audio-template">
+    <div class="captchax-audio-container">
+        <div class="captchax-audio-player">
+            <button type="button" class="captchax-audio-play-btn" aria-label="播放音频验证码">
+                <svg class="captchax-audio-play-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+                <svg class="captchax-audio-pause-icon captchax-hidden" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+            </button>
+            <div class="captchax-audio-progress">
+                <div class="captchax-audio-progress-bar">
+                    <div class="captchax-audio-progress-fill"></div>
+                </div>
+                <span class="captchax-audio-time">0:00 / 0:00</span>
+            </div>
+            <button type="button" class="captchax-audio-replay-btn" title="重新播放">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                </svg>
+            </button>
+        </div>
+        <div class="captchax-audio-input-group">
+            <input type="text" class="captchax-audio-input" placeholder="输入听到的验证码" maxlength="8" autocomplete="off" aria-label="验证码输入框"/>
+            <button type="button" class="captchax-audio-verify-btn" disabled>验证</button>
+        </div>
+        <p class="captchax-audio-hint">请输入听到的4-6位字符</p>
+    </div>
+</template>

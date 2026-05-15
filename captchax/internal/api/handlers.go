@@ -28,7 +28,11 @@ type CaptchaServiceInterface interface {
 	VerifyTextCaptcha(ctx context.Context, captchaID string, code string) (*service.TextVerifyResult, error)
 	GenerateIconCaptcha(ctx context.Context, appID, clientInfo string) (*service.IconCaptchaResult, error)
 	VerifyIconCaptcha(ctx context.Context, captchaID string, iconIDs []string) (*service.IconVerifyResult, error)
+	GenerateAudioCaptcha(ctx context.Context, appID, clientInfo string) (*service.AudioCaptchaResult, error)
+	VerifyAudioCaptcha(ctx context.Context, captchaID string, code string) (*service.AudioVerifyResult, error)
 	LogVerification(ctx context.Context, appID, captchaType, captchaID string, success bool, message, ip string)
+	GenerateBehaviorCaptcha(ctx context.Context, challengeType string) (*service.BehaviorCaptchaResult, error)
+	VerifyBehaviorCaptcha(ctx context.Context, req *service.BehaviorVerifyRequest) (*service.BehaviorVerifyResult, error)
 }
 
 type Handler struct {
@@ -200,6 +204,126 @@ type IconVerifyRequest struct {
 type IconVerifyResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+}
+
+type AudioGenerateRequest struct {
+	AppID      string `json:"app_id" binding:"required"`
+	ClientInfo string `json:"client_info"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+type AudioGenerateResponse struct {
+	ID       string `json:"id"`
+	AudioB64 string `json:"audio_b64"`
+	Duration int    `json:"duration"`
+}
+
+type AudioVerifyRequest struct {
+	CaptchaID string `json:"captcha_id" binding:"required"`
+	Code      string `json:"code" binding:"required"`
+}
+
+type AudioVerifyResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type BehaviorGenerateRequest struct {
+	ChallengeType string `json:"challenge_type" binding:"required"`
+	ClientInfo    string `json:"client_info"`
+	ScenarioID    string `json:"scenario_id"`
+}
+
+type BehaviorGenerateResponse struct {
+	ID            string            `json:"id"`
+	ImageB64      string            `json:"image_b64"`
+	ChallengeType string            `json:"challenge_type"`
+	TargetCount   int               `json:"target_count"`
+	GuidePoints   []GuidePointDTO   `json:"guide_points,omitempty"`
+	Token         string            `json:"token"`
+	ExpiresIn     int               `json:"expires_in"`
+}
+
+type GuidePointDTO struct {
+	X     int    `json:"x"`
+	Y     int    `json:"y"`
+	Order int    `json:"order"`
+	Label string `json:"label"`
+}
+
+type BehaviorVerifyRequest struct {
+	Token         string           `json:"token" binding:"required"`
+	ChallengeType  string          `json:"challenge_type" binding:"required"`
+	ClickSequence []ClickInputDTO  `json:"click_sequence,omitempty"`
+	DragPath      []DragPointDTO  `json:"drag_path,omitempty"`
+	HoverSequence []HoverInputDTO `json:"hover_sequence,omitempty"`
+	BehaviorData  *BehaviorDataDTO `json:"behavior_data,omitempty"`
+}
+
+type ClickInputDTO struct {
+	X     int   `json:"x"`
+	Y     int   `json:"y"`
+	Index int   `json:"index"`
+	Time  int64 `json:"time"`
+}
+
+type DragPointDTO struct {
+	X     int   `json:"x"`
+	Y     int   `json:"y"`
+	Time  int64 `json:"time"`
+}
+
+type HoverInputDTO struct {
+	X        int   `json:"x"`
+	Y        int   `json:"y"`
+	Time     int64 `json:"time"`
+	Duration int64 `json:"duration"`
+}
+
+type BehaviorDataDTO struct {
+	MouseTracks      []MouseTrackDTO    `json:"mouse_tracks,omitempty"`
+	ClickEvents      []ClickEventDTO    `json:"click_events,omitempty"`
+	KeyPressIntervals []int64           `json:"key_press_intervals,omitempty"`
+	ScrollPatterns   []ScrollEventDTO   `json:"scroll_patterns,omitempty"`
+	Fingerprint      string             `json:"fingerprint,omitempty"`
+}
+
+type MouseTrackDTO struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Timestamp int64   `json:"timestamp"`
+	Velocity  float64 `json:"velocity"`
+}
+
+type ClickEventDTO struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Timestamp int64   `json:"timestamp"`
+	Duration  int64   `json:"duration"`
+	Pressure  float64 `json:"pressure"`
+}
+
+type ScrollEventDTO struct {
+	X         int   `json:"x"`
+	Y         int   `json:"y"`
+	Timestamp int64 `json:"timestamp"`
+	DeltaY    int   `json:"delta_y"`
+}
+
+type BehaviorVerifyResponse struct {
+	Success        bool              `json:"success"`
+	Score          float64           `json:"score"`
+	RiskLevel      string            `json:"risk_level"`
+	RiskScore      int               `json:"risk_score"`
+	Message        string            `json:"message"`
+	Factors        []RiskFactorDTO   `json:"factors,omitempty"`
+	PositionScore  float64           `json:"position_score,omitempty"`
+}
+
+type RiskFactorDTO struct {
+	Name   string `json:"name"`
+	Weight int    `json:"weight"`
+	Reason string `json:"reason"`
 }
 
 type Scenario struct {
@@ -489,6 +613,107 @@ func (h *Handler) verifyIconCaptcha(c *gin.Context) {
 	}
 
 	h.captchaService.LogVerification(ctx, "", "icon", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) getAudioCaptcha(c *gin.Context) {
+	var req AudioGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateAudioCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "audio", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate audio captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "audio", result.ID, false, "generated", c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) verifyAudioCaptcha(c *gin.Context) {
+	var req AudioVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyAudioCaptcha(ctx, req.CaptchaID, req.Code)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "audio", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "audio", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) GetAudioCaptchaV2(c *gin.Context) {
+	var req AudioGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	var difficulty string
+	h.scenariosMu.RLock()
+	if req.ScenarioID != "" {
+		if scenario, ok := h.scenarios[req.ScenarioID]; ok {
+			difficulty = scenario.Difficulty
+		}
+	}
+	h.scenariosMu.RUnlock()
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateAudioCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "audio", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate audio captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "audio", result.ID, false, "generated", c.ClientIP())
+
+	response.Success(c, gin.H{
+		"id":         result.ID,
+		"audio_b64":  result.AudioB64,
+		"duration":   result.Duration,
+		"difficulty": difficulty,
+		"expires_in": 300,
+	})
+}
+
+func (h *Handler) VerifyAudioCaptchaV2(c *gin.Context) {
+	var req AudioVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyAudioCaptcha(ctx, req.CaptchaID, req.Code)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "audio", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "audio", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+
+	h.triggerWebhooks(ctx, "verification.completed", gin.H{
+		"captcha_id": req.CaptchaID,
+		"type":       "audio",
+		"success":    result.Success,
+		"message":    result.Message,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	})
+
 	response.Success(c, result)
 }
 
@@ -1266,4 +1491,199 @@ func (h *Handler) triggerWebhooks(ctx context.Context, event string, payload map
 			client.Do(req)
 		}(webhook)
 	}
+}
+
+func (h *Handler) GetBehaviorCaptcha(c *gin.Context) {
+	var req BehaviorGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	if req.ChallengeType == "" {
+		req.ChallengeType = "click_order"
+	}
+
+	validTypes := map[string]bool{
+		"click_order":      true,
+		"drag_path":        true,
+		"hover_sequence":   true,
+	}
+	if !validTypes[req.ChallengeType] {
+		response.BadRequest(c, "invalid challenge type")
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateBehaviorCaptcha(ctx, req.ChallengeType)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "behavior", "", false, "generate_failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate behavior captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "behavior", result.ID, false, "generated", c.ClientIP())
+
+	guidePoints := make([]GuidePointDTO, len(result.GuidePoints))
+	for i, gp := range result.GuidePoints {
+		guidePoints[i] = GuidePointDTO{
+			X:     gp.X,
+			Y:     gp.Y,
+			Order: gp.Order,
+			Label: gp.Label,
+		}
+	}
+
+	response.Success(c, BehaviorGenerateResponse{
+		ID:            result.ID,
+		ImageB64:      result.ImageB64,
+		ChallengeType: result.ChallengeType,
+		TargetCount:   result.TargetCount,
+		GuidePoints:   guidePoints,
+		Token:         result.Token,
+		ExpiresIn:     result.ExpiresIn,
+	})
+}
+
+func (h *Handler) VerifyBehaviorCaptcha(c *gin.Context) {
+	var req BehaviorVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		response.BadRequest(c, "token is required")
+		return
+	}
+
+	if req.ChallengeType == "" {
+		response.BadRequest(c, "challenge_type is required")
+		return
+	}
+
+	verifyReq := &service.BehaviorVerifyRequest{
+		Token:         req.Token,
+		ChallengeType: req.ChallengeType,
+	}
+
+	if len(req.ClickSequence) > 0 {
+		verifyReq.ClickSequence = make([]service.ClickInput, len(req.ClickSequence))
+		for i, click := range req.ClickSequence {
+			verifyReq.ClickSequence[i] = service.ClickInput{
+				X:     click.X,
+				Y:     click.Y,
+				Index: click.Index,
+				Time:  click.Time,
+			}
+		}
+	}
+
+	if len(req.DragPath) > 0 {
+		verifyReq.DragPath = make([]service.DragPoint, len(req.DragPath))
+		for i, point := range req.DragPath {
+			verifyReq.DragPath[i] = service.DragPoint{
+				X:    point.X,
+				Y:    point.Y,
+				Time: point.Time,
+			}
+		}
+	}
+
+	if len(req.HoverSequence) > 0 {
+		verifyReq.HoverSequence = make([]service.HoverInput, len(req.HoverSequence))
+		for i, hover := range req.HoverSequence {
+			verifyReq.HoverSequence[i] = service.HoverInput{
+				X:        hover.X,
+				Y:        hover.Y,
+				Time:     hover.Time,
+				Duration: hover.Duration,
+			}
+		}
+	}
+
+	if req.BehaviorData != nil {
+		verifyReq.BehaviorData = &service.BehaviorInput{}
+
+		if len(req.BehaviorData.MouseTracks) > 0 {
+			verifyReq.BehaviorData.MouseTracks = make([]service.MouseTrackInput, len(req.BehaviorData.MouseTracks))
+			for i, track := range req.BehaviorData.MouseTracks {
+				verifyReq.BehaviorData.MouseTracks[i] = service.MouseTrackInput{
+					X:         track.X,
+					Y:         track.Y,
+					Timestamp: track.Timestamp,
+					Velocity:  track.Velocity,
+				}
+			}
+		}
+
+		if len(req.BehaviorData.ClickEvents) > 0 {
+			verifyReq.BehaviorData.ClickEvents = make([]service.ClickEventInput, len(req.BehaviorData.ClickEvents))
+			for i, event := range req.BehaviorData.ClickEvents {
+				verifyReq.BehaviorData.ClickEvents[i] = service.ClickEventInput{
+					X:         event.X,
+					Y:         event.Y,
+					Timestamp: event.Timestamp,
+					Duration:  event.Duration,
+					Pressure:  event.Pressure,
+				}
+			}
+		}
+
+		if len(req.BehaviorData.KeyPressIntervals) > 0 {
+			verifyReq.BehaviorData.KeyPressIntervals = req.BehaviorData.KeyPressIntervals
+		}
+
+		if len(req.BehaviorData.ScrollPatterns) > 0 {
+			verifyReq.BehaviorData.ScrollPatterns = make([]service.ScrollEventInput, len(req.BehaviorData.ScrollPatterns))
+			for i, scroll := range req.BehaviorData.ScrollPatterns {
+				verifyReq.BehaviorData.ScrollPatterns[i] = service.ScrollEventInput{
+					X:         scroll.X,
+					Y:         scroll.Y,
+					Timestamp: scroll.Timestamp,
+					DeltaY:    scroll.DeltaY,
+				}
+			}
+		}
+
+		verifyReq.BehaviorData.Fingerprint = req.BehaviorData.Fingerprint
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyBehaviorCaptcha(ctx, verifyReq)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "behavior", req.Token, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "behavior", req.Token, result.Success, result.Message, c.ClientIP())
+
+	h.triggerWebhooks(ctx, "verification.completed", gin.H{
+		"captcha_id": req.Token,
+		"type":       "behavior",
+		"success":    result.Success,
+		"score":     result.Score,
+		"message":   result.Message,
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+
+	factors := make([]RiskFactorDTO, len(result.Factors))
+	for i, factor := range result.Factors {
+		factors[i] = RiskFactorDTO{
+			Name:   factor.Name,
+			Weight: factor.Weight,
+			Reason: factor.Reason,
+		}
+	}
+
+	response.Success(c, BehaviorVerifyResponse{
+		Success:       result.Success,
+		Score:         result.Score,
+		RiskLevel:     string(result.RiskLevel),
+		RiskScore:     result.RiskScore,
+		Message:       result.Message,
+		Factors:       factors,
+		PositionScore: result.PositionScore,
+	})
 }

@@ -115,6 +115,8 @@ func (s *Server) setupV1Routes(api *gin.RouterGroup) {
 		captcha.POST("/text/verify", s.handler.verifyTextCaptcha)
 		captcha.POST("/icon", s.handler.getIconCaptcha)
 		captcha.POST("/icon/verify", s.handler.verifyIconCaptcha)
+		captcha.POST("/audio", s.handler.getAudioCaptcha)
+		captcha.POST("/audio/verify", s.handler.verifyAudioCaptcha)
 	}
 }
 
@@ -133,6 +135,10 @@ func (s *Server) setupV2Routes(api *gin.RouterGroup) {
 		captcha.POST("/text/verify", s.handler.VerifyTextCaptchaV2)
 		captcha.POST("/icon", s.handler.GetIconCaptchaV2)
 		captcha.POST("/icon/verify", s.handler.VerifyIconCaptchaV2)
+		captcha.POST("/audio", s.handler.GetAudioCaptchaV2)
+		captcha.POST("/audio/verify", s.handler.VerifyAudioCaptchaV2)
+		captcha.POST("/behavior", s.handler.GetBehaviorCaptcha)
+		captcha.POST("/behavior/verify", s.handler.VerifyBehaviorCaptcha)
 	}
 
 	batch := api.Group("/batch")

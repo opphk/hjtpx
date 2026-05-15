@@ -2,6 +2,8 @@ package service
 
 import (
 	serverconfig "captchax/config"
+	"captchax/internal/captcha/audio"
+	"captchax/internal/captcha/behavior"
 	"captchax/internal/captcha/click"
 	"captchax/internal/captcha/icon"
 	"captchax/internal/captcha/rotate"
@@ -43,7 +45,13 @@ type CaptchaService struct {
 	iconGen      *icon.IconCaptcha
 	iconVerify   *icon.VerifyService
 	iconCache    *icon.CacheManager
+	audioGen     *audio.Audio
+	audioVerify  *audio.Verifier
+	audioCache   *audio.CacheManager
 	riskEngine   *risk.RiskEngine
+	behaviorGen  *behavior.BehaviorCaptcha
+	behaviorVerify *behavior.VerifyService
+}
 }
 
 type SliderCaptchaResult struct {
@@ -136,6 +144,17 @@ type IconVerifyResult struct {
 	Message string `json:"message"`
 }
 
+type AudioCaptchaResult struct {
+	ID       string `json:"id"`
+	AudioB64 string `json:"audio_b64"`
+	Duration int    `json:"duration"`
+}
+
+type AudioVerifyResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
 func NewCaptchaService(
 	cfg *serverconfig.Config,
 	redisClient *cache.RedisClient,
@@ -202,7 +221,14 @@ func NewCaptchaService(
 	iconGen := icon.New(&cfg.Captcha, redisClient)
 	iconVerify := icon.NewVerifyService(&cfg.Captcha, iconCache)
 
+	audioCache = audio.NewCacheManager(&cfg.Captcha, redisClient)
+	audioGen = audio.New(&cfg.Captcha, redisClient)
+	audioVerify = audio.NewVerifier(audioCache)
+
 	riskEngine := risk.NewRiskEngine(riskCfg, ipLimit, whitelist)
+
+	behaviorGen := behavior.New(&cfg.Captcha, redisClient)
+	behaviorVerify := behavior.NewVerifyService(behaviorGen, riskEngine)
 
 	return &CaptchaService{
 		cfg:          cfg,
@@ -223,7 +249,12 @@ func NewCaptchaService(
 		iconGen:      iconGen,
 		iconVerify:   iconVerify,
 		iconCache:    iconCache,
+		audioGen:     audioGen,
+		audioVerify:  audioVerify,
+		audioCache:   audioCache,
 		riskEngine:   riskEngine,
+		behaviorGen:  behaviorGen,
+		behaviorVerify: behaviorVerify,
 	}, nil
 }
 
@@ -696,6 +727,63 @@ func (s *CaptchaService) VerifyIconCaptcha(ctx context.Context, captchaID string
 	}, nil
 }
 
+func (s *CaptchaService) GenerateAudioCaptcha(ctx context.Context, appID, clientInfo string) (*AudioCaptchaResult, error) {
+	behavior := &risk.BehaviorData{
+		SessionID: uuid.New().String(),
+	}
+
+	riskResult := s.riskEngine.CalculateRiskScore(ctx, behavior, "", appID)
+	if riskResult.Recommended == risk.ActionBlock {
+		return nil, errors.New("risk level too high")
+	}
+
+	result, err := s.audioGen.GenerateCaptcha(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	captcha := &model.Captcha{
+		ID:         result.ID,
+		AppID:      appID,
+		Type:       "audio",
+		ImageData:  result.AudioB64,
+		Status:     int(model.CaptchaStatusPending),
+		ClientInfo: clientInfo,
+		ExpiredAt:  time.Now().Add(time.Duration(s.cfg.Captcha.ExpireMinutes) * time.Minute),
+	}
+	if err := s.saveCaptchaRecord(captcha); err != nil {
+		log.Error("failed to save audio captcha record", map[string]interface{}{
+			"error": err.Error(),
+			"id":    result.ID,
+		})
+	}
+
+	return &AudioCaptchaResult{
+		ID:       result.ID,
+		AudioB64: result.AudioB64,
+		Duration: result.Duration,
+	}, nil
+}
+
+func (s *CaptchaService) VerifyAudioCaptcha(ctx context.Context, captchaID string, code string) (*AudioVerifyResult, error) {
+	result, err := s.audioVerify.Verify(ctx, captchaID, code)
+	if err != nil {
+		return &AudioVerifyResult{
+			Success: false,
+			Message: result.Message,
+		}, err
+	}
+
+	if result.Success {
+		s.updateCaptchaStatus(captchaID, model.CaptchaStatusVerified)
+	}
+
+	return &AudioVerifyResult{
+		Success: result.Success,
+		Message: result.Message,
+	}, nil
+}
+
 func (s *CaptchaService) generatePuzzleBackground(targetX, targetY int) string {
 	width := s.cfg.Captcha.Width
 	height := s.cfg.Captcha.Height
@@ -814,4 +902,227 @@ func (s *CaptchaService) CheckRateLimit(ctx context.Context, ip string, limit in
 	}
 
 	return true, remaining, resetAt, nil
+}
+
+type BehaviorCaptchaResult struct {
+	ID            string         `json:"id"`
+	ImageB64      string         `json:"image_b64"`
+	ChallengeType string         `json:"challenge_type"`
+	TargetCount   int            `json:"target_count"`
+	GuidePoints   []GuidePointDTO `json:"guide_points,omitempty"`
+	Token         string         `json:"token"`
+	ExpiresIn     int            `json:"expires_in"`
+}
+
+type GuidePointDTO struct {
+	X     int    `json:"x"`
+	Y     int    `json:"y"`
+	Order int    `json:"order"`
+	Label string `json:"label"`
+}
+
+type BehaviorVerifyRequest struct {
+	Token         string               `json:"token"`
+	ChallengeType string               `json:"challenge_type"`
+	ClickSequence []ClickInput        `json:"click_sequence,omitempty"`
+	DragPath      []DragPoint         `json:"drag_path,omitempty"`
+	HoverSequence []HoverInput        `json:"hover_sequence,omitempty"`
+	BehaviorData  *BehaviorInput      `json:"behavior_data,omitempty"`
+}
+
+type ClickInput struct {
+	X     int   `json:"x"`
+	Y     int   `json:"y"`
+	Index int   `json:"index"`
+	Time  int64 `json:"time"`
+}
+
+type DragPoint struct {
+	X    int   `json:"x"`
+	Y    int   `json:"y"`
+	Time int64 `json:"time"`
+}
+
+type HoverInput struct {
+	X        int   `json:"x"`
+	Y        int   `json:"y"`
+	Time     int64 `json:"time"`
+	Duration int64 `json:"duration"`
+}
+
+type BehaviorInput struct {
+	MouseTracks       []MouseTrackInput    `json:"mouse_tracks,omitempty"`
+	ClickEvents      []ClickEventInput    `json:"click_events,omitempty"`
+	KeyPressIntervals []int64             `json:"key_press_intervals,omitempty"`
+	ScrollPatterns   []ScrollEventInput   `json:"scroll_patterns,omitempty"`
+	Fingerprint      string               `json:"fingerprint,omitempty"`
+}
+
+type MouseTrackInput struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Timestamp int64   `json:"timestamp"`
+	Velocity  float64 `json:"velocity"`
+}
+
+type ClickEventInput struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Timestamp int64   `json:"timestamp"`
+	Duration  int64   `json:"duration"`
+	Pressure  float64 `json:"pressure"`
+}
+
+type ScrollEventInput struct {
+	X         int   `json:"x"`
+	Y         int   `json:"y"`
+	Timestamp int64 `json:"timestamp"`
+	DeltaY    int   `json:"delta_y"`
+}
+
+type BehaviorVerifyResult struct {
+	Success       bool             `json:"success"`
+	Score         float64         `json:"score"`
+	RiskLevel     risk.RiskLevel  `json:"risk_level"`
+	RiskScore     int             `json:"risk_score"`
+	Message       string          `json:"message"`
+	Factors       []risk.RiskFactor `json:"factors,omitempty"`
+	PositionScore float64         `json:"position_score,omitempty"`
+}
+
+func (s *CaptchaService) GenerateBehaviorCaptcha(ctx context.Context, challengeType string) (*BehaviorCaptchaResult, error) {
+	result, err := s.behaviorGen.GenerateCaptcha(ctx, challengeType)
+	if err != nil {
+		return nil, err
+	}
+
+	guidePoints := make([]GuidePointDTO, len(result.GuidePoints))
+	for i, gp := range result.GuidePoints {
+		guidePoints[i] = GuidePointDTO{
+			X:     gp.X,
+			Y:     gp.Y,
+			Order: gp.Order,
+			Label: gp.Label,
+		}
+	}
+
+	return &BehaviorCaptchaResult{
+		ID:            result.ID,
+		ImageB64:      result.ImageB64,
+		ChallengeType: result.ChallengeType,
+		TargetCount:   result.TargetCount,
+		GuidePoints:   guidePoints,
+		Token:         result.Token,
+		ExpiresIn:     result.ExpiresIn,
+	}, nil
+}
+
+func (s *CaptchaService) VerifyBehaviorCaptcha(ctx context.Context, req *BehaviorVerifyRequest) (*BehaviorVerifyResult, error) {
+	verifyReq := &behavior.VerifyRequest{
+		Token:         req.Token,
+		ChallengeType: req.ChallengeType,
+	}
+
+	if len(req.ClickSequence) > 0 {
+		verifyReq.ClickSequence = make([]behavior.ClickInput, len(req.ClickSequence))
+		for i, click := range req.ClickSequence {
+			verifyReq.ClickSequence[i] = behavior.ClickInput{
+				X:     click.X,
+				Y:     click.Y,
+				Index: click.Index,
+				Time:  click.Time,
+			}
+		}
+	}
+
+	if len(req.DragPath) > 0 {
+		verifyReq.DragPath = make([]behavior.DragPoint, len(req.DragPath))
+		for i, point := range req.DragPath {
+			verifyReq.DragPath[i] = behavior.DragPoint{
+				X:    point.X,
+				Y:    point.Y,
+				Time: point.Time,
+			}
+		}
+	}
+
+	if len(req.HoverSequence) > 0 {
+		verifyReq.HoverSequence = make([]behavior.HoverInput, len(req.HoverSequence))
+		for i, hover := range req.HoverSequence {
+			verifyReq.HoverSequence[i] = behavior.HoverInput{
+				X:        hover.X,
+				Y:        hover.Y,
+				Time:     hover.Time,
+				Duration: hover.Duration,
+			}
+		}
+	}
+
+	if req.BehaviorData != nil {
+		verifyReq.BehaviorData = &behavior.BehaviorInput{}
+
+		if len(req.BehaviorData.MouseTracks) > 0 {
+			verifyReq.BehaviorData.MouseTracks = make([]behavior.MouseTrack, len(req.BehaviorData.MouseTracks))
+			for i, track := range req.BehaviorData.MouseTracks {
+				verifyReq.BehaviorData.MouseTracks[i] = behavior.MouseTrack{
+					X:         track.X,
+					Y:         track.Y,
+					Timestamp: track.Timestamp,
+					Velocity:  track.Velocity,
+				}
+			}
+		}
+
+		if len(req.BehaviorData.ClickEvents) > 0 {
+			verifyReq.BehaviorData.ClickEvents = make([]behavior.ClickEvent, len(req.BehaviorData.ClickEvents))
+			for i, event := range req.BehaviorData.ClickEvents {
+				verifyReq.BehaviorData.ClickEvents[i] = behavior.ClickEvent{
+					X:         event.X,
+					Y:         event.Y,
+					Timestamp: event.Timestamp,
+					Duration:  event.Duration,
+					Pressure:  event.Pressure,
+				}
+			}
+		}
+
+		if len(req.BehaviorData.KeyPressIntervals) > 0 {
+			verifyReq.BehaviorData.KeyPressIntervals = req.BehaviorData.KeyPressIntervals
+		}
+
+		if len(req.BehaviorData.ScrollPatterns) > 0 {
+			verifyReq.BehaviorData.ScrollPatterns = make([]behavior.ScrollEvent, len(req.BehaviorData.ScrollPatterns))
+			for i, scroll := range req.BehaviorData.ScrollPatterns {
+				verifyReq.BehaviorData.ScrollPatterns[i] = behavior.ScrollEvent{
+					X:         scroll.X,
+					Y:         scroll.Y,
+					Timestamp: scroll.Timestamp,
+					DeltaY:    scroll.DeltaY,
+				}
+			}
+		}
+
+		verifyReq.BehaviorData.Fingerprint = req.BehaviorData.Fingerprint
+	}
+
+	result, err := s.behaviorVerify.Verify(ctx, verifyReq)
+	if err != nil {
+		return &BehaviorVerifyResult{
+			Success:   false,
+			Score:     0,
+			RiskLevel: risk.RiskLevelHigh,
+			RiskScore: 100,
+			Message:   err.Error(),
+		}, err
+	}
+
+	return &BehaviorVerifyResult{
+		Success:       result.Success,
+		Score:         result.Score,
+		RiskLevel:     result.RiskLevel,
+		RiskScore:     result.RiskScore,
+		Message:       result.Message,
+		Factors:       result.Factors,
+		PositionScore: result.PositionScore,
+	}, nil
 }
