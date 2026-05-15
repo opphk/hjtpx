@@ -1,178 +1,208 @@
-/// <reference types="vitest/config" />
-import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
-import viteCompression from 'vite-plugin-compression';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
-import { playwright } from '@vitest/browser-playwright';
-const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+import { gzipSize } from 'gzip-size';
+import { readFileSync } from 'fs';
+import path from 'path';
 
-// More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
+const ANALYZE_MODE = process.env.ANALYZE === 'true';
+const GENERATE_STATS = process.env.GENERATE_STATS === 'true';
+
+function getGzipSize(filePath) {
+  try {
+    const code = readFileSync(filePath);
+    return gzipSize.sync(code);
+  } catch {
+    return 0;
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), viteCompression({
-    algorithm: 'gzip',
-    ext: '.gz',
-    threshold: 1024,
-    deleteOriginFile: false,
-    compressionOptions: {
-      level: 9
-    }
-  }), viteCompression({
-    algorithm: 'brotliCompress',
-    ext: '.br',
-    threshold: 1024,
-    deleteOriginFile: false,
-    compressionOptions: {
-      params: {
-        [2]: 11
+  plugins: [
+    react(),
+    ANALYZE_MODE && visualizer({
+      filename: 'dist/stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+      template: 'treemap',
+      projectRoot: path.resolve(__dirname, 'src'),
+      output: {
+        filename: 'dist/stats.html',
+        format: 'html'
       }
-    }
-  }), visualizer({
-    filename: 'dist/stats.html',
-    open: false,
-    gzipSize: true,
-    brotliSize: true
-  })],
-  server: {
-    port: 3001,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      }
-    }
-  },
+    }),
+    GENERATE_STATS && visualizer({
+      filename: 'dist/stats.json',
+      json: true,
+      gzipSize: true
+    })
+  ].filter(Boolean),
+  
   build: {
-    target: 'es2020',
-    minify: 'terser',
-    sourcemap: false,
-    chunkSizeWarningLimit: 500,
+    target: 'esnext',
+    sourcemap: process.env.NODE_ENV === 'development',
+    
     rollupOptions: {
       output: {
-        manualChunks: id => {
-          if (id.includes('node_modules')) {
-            if (id.includes('react')) {
-              return 'vendor-react';
-            }
-            if (id.includes('socket.io')) {
-              return 'vendor-socket';
-            }
-            if (id.includes('recharts') || id.includes('d3-')) {
-              return 'vendor-charts';
-            }
-            if (id.includes('i18next') || id.includes('react-i18next')) {
-              return 'vendor-i18n';
-            }
-            if (id.includes('date-fns')) {
-              return 'vendor-date';
-            }
-            if (id.includes('papaparse')) {
-              return 'vendor-csv';
-            }
-            if (id.includes('prop-types') || id.includes('warning')) {
-              return 'vendor-polyfills';
-            }
-            if (id.includes('@vitejs') || id.includes('vite')) {
-              return 'vendor-build';
-            }
-            return 'vendor-misc';
-          }
-          if (id.includes('src/pages')) {
-            const pageName = id.split('pages/')[1]?.replace('.jsx', '') || 'unknown';
-            return `page-${pageName}`;
-          }
-          if (id.includes('src/components')) {
-            const componentName = id.split('components/')[1]?.split('/')[0] || 'common';
-            return `component-${componentName}`;
+        manualChunks: {
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendor',
+            chunks: 'all',
+            priority: 10
+          },
+          react: {
+            test: /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/,
+            name: 'react-vendor',
+            chunks: 'all',
+            priority: 20
+          },
+          charts: {
+            test: /[\\/]node_modules[\\/](recharts|chart\.js|echarts|d3)[\\/]/,
+            name: 'charts-vendor',
+            chunks: 'all',
+            priority: 15
+          },
+          ui: {
+            test: /[\\/]node_modules[\\/](@mui|antd|element-ui|chakra-ui)[\\/]/,
+            name: 'ui-vendor',
+            chunks: 'all',
+            priority: 15
           }
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
+        assetFileNames: (assetInfo) => {
+          const name = assetInfo.name || '';
+          const ext = path.extname(name);
+          
+          if (/\.(png|jpe?g|gif|svg|webp|ico)$/.test(ext)) {
+            return 'assets/images/[name]-[hash][ext]';
+          }
+          if (/\.(woff2?|eot|ttf|otf)$/.test(ext)) {
+            return 'assets/fonts/[name]-[hash][ext]';
+          }
+          if (/\.css$/.test(ext)) {
+            return 'assets/css/[name]-[hash][ext]';
+          }
+          return 'assets/[name]-[hash][ext]';
+        }
       }
     },
+    
+    chunkSizeWarningLimit: 500,
+    
+    reportCompressedSize: true,
+    
+    minify: 'terser',
+    
     terserOptions: {
       compress: {
-        drop_console: true,
+        drop_console: process.env.NODE_ENV === 'production',
         drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn', 'console.assert'],
-        passes: 3,
-        unsafe_arrows: true,
-        unsafe_methods: true,
-        unsafe_comps: true,
-        unsafe_proto: true,
-        unsafe_regexp: true,
-        ecma: 2020,
-        module: true,
-        toplevel: true,
-        arguments: true,
-        dead_code: true
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+        passes: 2,
+        unsafe: {
+          prototype: false,
+          constructor: false
+        }
       },
       mangle: {
-        safari10: true,
-        properties: false,
-        toplevel: true,
-        reserved: ['React', 'ReactDOM']
+        safari10: true
       },
       format: {
         comments: false,
-        ecma: 2020,
-        ascii_only: true,
-        inline_script: true
+        ecma: 2020
       }
-    },
-    reportCompressedSize: true,
-    cssCodeSplit: true,
-    assetsInlineLimit: 4096
-  },
-  optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom', 'socket.io-client', 'i18next', 'react-i18next', 'date-fns', 'recharts', 'papaparse'],
-    exclude: [],
-    esbuildOptions: {
-      target: 'es2020',
-      treeShaking: true,
-      keepNames: true
-    },
-    buildCompression: 'gzip',
-    maxConcurrency: 8
-  },
-  css: {
-    devSourcemap: true,
-    preprocessorOptions: {
-      css: {
-        charset: false
-      }
-    },
-    modules: {
-      localsConvention: 'camelCase'
     }
   },
-  assetsInclude: ['**/*.webp', '**/*.avif'],
-  json: {
-    stringify: true
+  
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'axios',
+      'dayjs',
+      'lodash'
+    ],
+    exclude: [
+      '@vitejs/plugin-react'
+    ]
   },
-  test: {
-    projects: [{
-      extends: true,
-      plugins: [
-      // The plugin will run tests for the stories defined in your Storybook config
-      // See options at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon#storybooktest
-      storybookTest({
-        configDir: path.join(dirname, '.storybook')
-      })],
-      test: {
-        name: 'storybook',
-        browser: {
-          enabled: true,
-          headless: true,
-          provider: playwright({}),
-          instances: [{
-            browser: 'chromium'
-          }]
-        }
+  
+  esbuild: {
+    jsxFactory: 'React.createElement',
+    jsxFragment: 'React.Fragment',
+    target: 'esnext',
+    supported: {
+      'top-level-await': true,
+      'dynamic-import': true
+    }
+  },
+  
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      '@components': path.resolve(__dirname, 'src/components'),
+      '@pages': path.resolve(__dirname, 'src/pages'),
+      '@hooks': path.resolve(__dirname, 'src/hooks'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+      '@services': path.resolve(__dirname, 'src/services'),
+      '@store': path.resolve(__dirname, 'src/store'),
+      '@assets': path.resolve(__dirname, 'src/assets'),
+      '@styles': path.resolve(__dirname, 'src/styles'),
+      '@config': path.resolve(__dirname, 'src/config')
+    },
+    extensions: ['.mjs', '.js', '.jsx', '.ts', '.tsx', '.json']
+  },
+  
+  server: {
+    port: 3000,
+    host: true,
+    open: false,
+    cors: true,
+    proxy: {
+      '/api': {
+        target: process.env.API_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
+      },
+      '/graphql': {
+        target: process.env.API_URL || 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
       }
-    }]
+    }
+  },
+  
+  preview: {
+    port: 4173,
+    host: true
+  },
+  
+  css: {
+    modules: {
+      localsConvention: 'camelCase',
+      generateScopedName: '[name]__[local]___[hash:base64:5]'
+    },
+    preprocessorOptions: {
+      scss: {
+        additionalData: `@import "@styles/variables.scss";`
+      }
+    }
+  },
+  
+  json: {
+    stringify: false
+  },
+  
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    'process.env.API_URL': JSON.stringify(process.env.API_URL || 'http://localhost:8080'),
+    'process.env.CDN_URL': JSON.stringify(process.env.CDN_URL || ''),
+    '__DEV__': process.env.NODE_ENV !== 'production',
+    '__VERSION__': JSON.stringify(process.env.npm_package_version || '1.0.0')
   }
 });

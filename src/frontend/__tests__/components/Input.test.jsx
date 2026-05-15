@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, test, expect, vi } from 'vitest';
 import Input from '../../components/Input';
 
 describe('Input Component', () => {
@@ -24,7 +25,7 @@ describe('Input Component', () => {
   });
 
   test('calls onChange handler when value changes', () => {
-    const handleChange = jest.fn();
+    const handleChange = vi.fn();
     render(<Input name="email" onChange={handleChange} />);
     const inputElement = screen.getByRole('textbox');
     fireEvent.change(inputElement, { target: { value: 'test@example.com' } });
@@ -67,7 +68,8 @@ describe('Input Component', () => {
     expect(screen.getByRole('textbox')).toHaveAttribute('type', 'email');
 
     rerender(<Input type="password" name="password" />);
-    expect(screen.getByByTestId('input-wrapper') || document.querySelector('input[type="password"]')).toHaveAttribute('type', 'password');
+    const passwordInput = document.querySelector('input[type="password"]') || screen.getByRole('textbox');
+    expect(passwordInput).toHaveAttribute('type', 'password');
   });
 
   test('applies custom className', () => {
@@ -90,7 +92,7 @@ describe('Input Component', () => {
   });
 
   test('handles keyboard events', () => {
-    const handleKeyDown = jest.fn();
+    const handleKeyDown = vi.fn();
     render(<Input name="email" onKeyDown={handleKeyDown} />);
     const inputElement = screen.getByRole('textbox');
     fireEvent.keyDown(inputElement, { key: 'Enter' });

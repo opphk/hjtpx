@@ -1,0 +1,105 @@
+import { Meta } from '@storybook/addon-docs';
+import Code from '../assets/code-brackets.svg';
+import Colors from '../assets/colors.svg';
+import Comments from '../assets/comments.svg';
+import Direction from '../assets/direction.svg';
+import Flow from '../assets/flow.svg';
+import Plugin from '../assets/plugin.svg';
+import Repo from '../assets/repo.svg';
+import StackAlt from '../assets/stackalt.svg';
+
+<Meta title="介绍/Introduction" />
+
+<style>
+  {`
+    .subheading {
+      --mediumdark: '#999999';
+      font-weight: 900;
+      font-size: 13px;
+      color: #999;
+      text-transform: uppercase;
+      margin: 8px 0 8px 14px;
+    }
+    
+    .linkItems {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      padding: 0;
+    }
+    
+    .linkItem {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      color: #333;
+      text-decoration: none;
+    }
+    
+    .linkItem:hover {
+      color: #6b46c1;
+    }
+    
+    .linkItem img {
+      margin-right: 8px;
+      width: 20px;
+      height: 20px;
+    }
+  `}
+</style>
+
+# HJTPX 组件库文档
+
+欢迎使用HJTPX组件库Storybook文档。
+
+## 快速开始
+
+本Storybook包含了HJTPX项目中所有React组件的文档和示例。
+
+### 浏览组件
+
+在左侧菜单中选择任意组件查看：
+- **UI组件** - 基础UI组件（Button、Input、Modal等）
+- **业务组件** - 业务相关组件（RegisterForm、UserList等）
+
+### 查看示例
+
+每个组件都有多个示例，展示不同的：
+- 变体和尺寸
+- 状态（默认、禁用、加载等）
+- 交互行为
+
+### 探索参数
+
+使用Controls面板动态调整组件属性：
+- 点击参数右侧的控件
+- 拖动滑块
+- 选择下拉选项
+- 查看组件如何响应
+
+## 开发指南
+
+```bash
+# 启动Storybook
+npm run storybook
+
+# 构建Storybook
+npm run build-storybook
+
+# 运行Storybook测试
+npm run test-storybook
+```
+
+## 资源链接
+
+<div className="subheading">资源</div>
+
+<div className="linkItems">
+  <a className="linkItem" href="https://storybook.js.org/docs/react/get-started/introduction">
+    <img src={Repo} alt="repo" />
+    Storybook文档
+  </a>
+  <a className="linkItem" href="https://reactjs.org/docs/getting-started.html">
+    <img src={React} alt="react" />
+    React文档
+  </a>
+</div>

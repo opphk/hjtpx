@@ -1,0 +1,25 @@
+{
+  "cache_strategies": {
+    "npm": {
+      "path": "node_modules",
+      "key_files": ["package-lock.json"],
+      "fallback_keys": ["node-"]
+    },
+    "docker": {
+      "type": "gha",
+      "mode": "max"
+    },
+    "webpack": {
+      "path": ".next/cache",
+      "key_files": ["package-lock.json", "next.config.js"]
+    },
+    "jest": {
+      "path": ".jest-cache"
+    }
+  },
+  "ttl": {
+    "default": 86400,
+    "production": 604800,
+    "development": 3600
+  }
+}

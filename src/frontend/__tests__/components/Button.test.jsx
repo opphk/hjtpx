@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, test, expect, vi } from 'vitest';
 import Button from '../../components/Button';
 
 describe('Button Component', () => {
@@ -10,7 +11,7 @@ describe('Button Component', () => {
   });
 
   test('calls onClick handler when clicked', () => {
-    const handleClick = jest.fn();
+    const handleClick = vi.fn();
     render(<Button onClick={handleClick}>Click Me</Button>);
     const buttonElement = screen.getByRole('button', { name: /click me/i });
     fireEvent.click(buttonElement);
@@ -18,7 +19,7 @@ describe('Button Component', () => {
   });
 
   test('does not call onClick when disabled', () => {
-    const handleClick = jest.fn();
+    const handleClick = vi.fn();
     render(<Button onClick={handleClick} disabled>Click Me</Button>);
     const buttonElement = screen.getByRole('button', { name: /click me/i });
     expect(buttonElement).toBeDisabled();
@@ -27,7 +28,7 @@ describe('Button Component', () => {
   });
 
   test('does not call onClick when loading', () => {
-    const handleClick = jest.fn();
+    const handleClick = vi.fn();
     render(<Button onClick={handleClick} loading>Click Me</Button>);
     const buttonElement = screen.getByRole('button');
     expect(buttonElement).toBeDisabled();

@@ -1,183 +1,132 @@
-import React, { useEffect, useRef, lazy, Suspense } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Loading from './components/ui/Loading';
-import DashboardLayout from './components/DashboardLayout';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
+import { Spin } from 'antd';
+import { LoadingOutlined } from '@ant-design/icons';
 
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const RegisterPage = lazy(() => import('./pages/RegisterPage'));
-const DashboardPage = lazy(() => import('./pages/DashboardPage'));
-const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
-const LogsPage = lazy(() => import('./pages/LogsPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const AuditDashboard = lazy(() => import('./pages/AuditDashboard'));
-const UserList = lazy(() => import('./components/UserList'));
+import Layout from '@components/Layout';
+import ErrorBoundary from '@components/ErrorBoundary';
+import AuthGuard from '@components/AuthGuard';
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
-  
-  if (loading) {
-    return <Loading fullScreen text="加载中..." />;
-  }
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return children;
-};
+const HomePage = lazy(() => import('@pages/Home'));
+const DashboardPage = lazy(() => import('@pages/Dashboard'));
+const UsersPage = lazy(() => import('@pages/Users'));
+const ProfilePage = lazy(() => import('@pages/Profile'));
+const SettingsPage = lazy(() => import('@pages/Settings'));
+const LoginPage = lazy(() => import('@pages/Login'));
+const RegisterPage = lazy(() => import('@pages/Register'));
+const NotFoundPage = lazy(() => import('@pages/NotFound'));
+const CaptchaDemoPage = lazy(() => import('@pages/CaptchaDemo'));
+const AnalyticsPage = lazy(() => import('@pages/Analytics'));
 
-const PublicRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
-  
-  if (loading) {
-    return <Loading fullScreen text="加载中..." />;
-  }
-  
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  
-  return children;
-};
-
-const RoutePreloader = ({ children, delay = 1000 }) => {
-  const timeoutRef = useRef(null);
-  
-  useEffect(() => {
-    timeoutRef.current = setTimeout(() => {
-      if (children?.props?.children?.props?.path) {
-        const path = children.props.children.props.path;
-        if (path === '/dashboard') {
-          DashboardPage.preload();
-        } else if (path === '/users') {
-          UserList.preload();
-        }
-      }
-    }, delay);
-    
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [children, delay]);
-  
-  return children;
-};
-
-const SuspenseFallback = () => (
-  <Loading fullScreen text="加载中..." />
+const LoadingSpinner = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100vh',
+    background: '#f0f2f5'
+  }}>
+    <Spin indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />} />
+  </div>
 );
 
-const AppRoutes = () => {
-  return (
-    <Routes>
-      <Route 
-        path="/login" 
-        element={
-          <PublicRoute>
-            <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-              <LoginPage />
-            </Suspense>
-          </PublicRoute>
-        } 
-      />
-      <Route 
-        path="/register" 
-        element={
-          <PublicRoute>
-            <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-              <RegisterPage />
-            </Suspense>
-          </PublicRoute>
-        } 
-      />
-      <Route 
-        path="/dashboard" 
-        element={
-          <ProtectedRoute>
-            <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-              <DashboardPage />
-            </Suspense>
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/users" 
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-                <UserList />
-              </Suspense>
-            </DashboardLayout>
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/admin/users" 
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-                <AdminUsersPage />
-              </Suspense>
-            </DashboardLayout>
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/admin/logs" 
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-                <LogsPage />
-              </Suspense>
-            </DashboardLayout>
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/admin/settings" 
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-                <SettingsPage />
-              </Suspense>
-            </DashboardLayout>
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/admin/audit" 
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
-                <AuditDashboard />
-              </Suspense>
-            </DashboardLayout>
-          </ProtectedRoute>
-        } 
-      />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
-  );
-};
+const PageError = ({ error }) => (
+  <div style={{
+    padding: 40,
+    textAlign: 'center',
+    color: '#ff4d4f'
+  }}>
+    <h2>页面加载失败</h2>
+    <p>{error?.message || '未知错误'}</p>
+    <button onClick={() => window.location.reload()}>
+      重新加载
+    </button>
+  </div>
+);
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-        <PWAInstallPrompt delay={3000} />
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            <Route path="/login" element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <LoginPage />
+              </Suspense>
+            } />
+            
+            <Route path="/register" element={
+              <Suspense fallback={<LoadingSpinner />}>
+                <RegisterPage />
+              </Suspense>
+            } />
+            
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/home" replace />} />
+              
+              <Route path="home" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <HomePage />
+                </Suspense>
+              } />
+              
+              <Route path="dashboard" element={
+                <AuthGuard>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <DashboardPage />
+                  </Suspense>
+                </AuthGuard>
+              } />
+              
+              <Route path="users" element={
+                <AuthGuard>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <UsersPage />
+                  </Suspense>
+                </AuthGuard>
+              } />
+              
+              <Route path="profile" element={
+                <AuthGuard>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ProfilePage />
+                  </Suspense>
+                </AuthGuard>
+              } />
+              
+              <Route path="settings" element={
+                <AuthGuard>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <SettingsPage />
+                  </Suspense>
+                </AuthGuard>
+              } />
+              
+              <Route path="captcha-demo" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <CaptchaDemoPage />
+                </Suspense>
+              } />
+              
+              <Route path="analytics" element={
+                <AuthGuard>
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <AnalyticsPage />
+                  </Suspense>
+                </AuthGuard>
+              } />
+              
+              <Route path="*" element={
+                <Suspense fallback={<LoadingSpinner />}>
+                  <NotFoundPage />
+                </Suspense>
+              } />
+            </Route>
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

@@ -1,23 +1,26 @@
-import { useState, useEffect } from 'react';
-import i18n from '../i18n';
+import { useState, useCallback } from 'react';
 
 export const useDirection = () => {
-  const [direction, setDirection] = useState('ltr');
-  
-  useEffect(() => {
-    const updateDirection = () => {
-      const lang = i18n.language;
-      const rtlLanguages = ['ar', 'he', 'fa', 'ur'];
-      setDirection(rtlLanguages.includes(lang) ? 'rtl' : 'ltr');
-    };
-    
-    updateDirection();
-    i18n.on('languageChanged', updateDirection);
-    
-    return () => i18n.off('languageChanged', updateDirection);
+  const [direction, setDirectionState] = useState('ltr');
+
+  const setDirection = useCallback((dir) => {
+    const newDirection = dir === 'rtl' ? 'rtl' : 'ltr';
+    setDirectionState(newDirection);
+
+    document.documentElement.dir = newDirection;
+    document.documentElement.lang = dir === 'rtl' ? 'ar' : 'en';
+
+    document.body.classList.remove('ltr', 'rtl');
+    document.body.classList.add(newDirection);
   }, []);
-  
-  return direction;
+
+  const isRTL = direction === 'rtl';
+
+  return {
+    direction,
+    setDirection,
+    isRTL
+  };
 };
 
 export default useDirection;

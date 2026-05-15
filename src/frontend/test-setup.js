@@ -1,10 +1,6 @@
-import { expect, afterEach } from 'vitest';
+import { vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
-
-afterEach(() => {
-  cleanup();
-});
 
 global.localStorage = {
   getItem: () => null,
@@ -29,8 +25,7 @@ Object.defineProperty(window, 'matchMedia', {
     addListener: () => {},
     removeListener: () => {},
     addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => {}
+    removeEventListener: () => {}
   })
 });
 
@@ -39,9 +34,7 @@ window.IntersectionObserver = class IntersectionObserver {
   observe() {}
   unobserve() {}
   disconnect() {}
-  takeRecords() {
-    return [];
-  }
+  takeRecords() { return []; }
 };
 
 window.ResizeObserver = class ResizeObserver {
@@ -51,25 +44,18 @@ window.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
-window.PerformanceObserver = class PerformanceObserver {
-  constructor() {}
-  observe() {}
-  disconnect() {}
-  takeRecords() {
-    return [];
-  }
-};
+global.fetch = vi.fn();
 
-global.navigator = {
-  ...global.navigator,
-  onLine: true,
-  connection: {
-    effectiveType: '4g',
-    downlink: 10,
-    addEventListener: () => {},
-    removeEventListener: () => {}
-  }
-};
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key) => key,
+    i18n: {
+      language: 'en',
+      changeLanguage: vi.fn()
+    }
+  }),
+  I18nProvider: ({ children }) => children
+}));
 
 console.log = vi.fn();
 console.warn = vi.fn();

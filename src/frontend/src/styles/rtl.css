@@ -1,175 +1,61 @@
-[dir="rtl"] {
+.rtl {
   direction: rtl;
   text-align: right;
 }
 
-[dir="rtl"] .container {
-  margin-left: 0;
-  margin-right: auto;
-}
-
-[dir="rtl"] .button-icon-left {
-  margin-right: 0;
-  margin-left: 8px;
-}
-
-[dir="rtl"] .button-icon-right {
-  margin-left: 0;
-  margin-right: 8px;
-}
-
-[dir="rtl"] .ml-auto {
-  margin-left: 0;
-  margin-right: auto;
-}
-
-[dir="rtl"] .mr-auto {
-  margin-right: 0;
-  margin-left: auto;
-}
-
-[dir="rtl"] .text-left {
-  text-align: right;
-}
-
-[dir="rtl"] .text-right {
-  text-align: left;
-}
-
-[dir="rtl"] .pl-4 {
-  padding-left: 0;
-  padding-right: 1rem;
-}
-
-[dir="rtl"] .pr-4 {
-  padding-right: 0;
-  padding-left: 1rem;
-}
-
-[dir="rtl"] .ml-4 {
-  margin-left: 0;
-  margin-right: 1rem;
-}
-
-[dir="rtl"] .mr-4 {
-  margin-right: 0;
-  margin-left: 1rem;
-}
-
-[dir="rtl"] .navbar-nav {
+[dir="rtl"] .modal-header {
   flex-direction: row-reverse;
 }
 
-[dir="rtl"] .dropdown-menu {
+[dir="rtl"] .modal-close {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .form-group {
   text-align: right;
 }
 
-[dir="rtl"] .form-check {
-  padding-left: 0;
-  padding-right: 1.25rem;
+[dir="rtl"] .form-label {
+  text-align: right;
 }
 
-[dir="rtl"] .form-check-input {
-  margin-left: 0;
-  margin-right: -1.25rem;
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: right;
 }
 
-[dir="rtl"] .input-group > .form-control {
-  border-radius: 0.25rem 0 0 0.25rem;
-}
-
-[dir="rtl"] .input-group > .input-group-append > .btn {
-  border-radius: 0.25rem 0 0 0.25rem;
-}
-
-[dir="rtl"] .input-group > .form-control:not(:last-child) {
-  border-radius: 0 0.25rem 0.25rem 0;
-}
-
-[dir="rtl"] .input-group > .input-group-prepend:not(:first-child) > .btn {
-  border-radius: 0.25rem 0 0 0.25rem;
-}
-
-[dir="rtl"] .breadcrumb {
-  padding-right: 0;
+[dir="rtl"] .btn {
+  text-align: center;
 }
 
 [dir="rtl"] .pagination {
-  padding-right: 0;
+  flex-direction: row-reverse;
 }
 
-[dir="rtl"] .modal-header .close {
-  margin: -1rem auto -1rem -1rem;
+[dir="rtl"] .nav-menu {
+  text-align: right;
 }
 
-[dir="rtl"] .alert-dismissible {
-  padding-right: 1rem;
-  padding-left: 4rem;
-}
-
-[dir="rtl"] .alert-dismissible .close {
-  right: auto;
-  left: 0;
-}
-
-[dir="rtl"] .list-group {
-  padding-right: 0;
-}
-
-[dir="rtl"] .card-header {
-  border-right: none;
-  border-left: 4px solid rgba(0, 0, 0, 0.125);
-}
-
-[dir="rtl"] .nav-pills .nav-link {
-  border-radius: 1rem;
-}
-
-[dir="rtl"] .nav-pills .nav-link.active {
-  border-radius: 1rem;
-}
-
-[dir="rtl"] .form-floating > label {
+[dir="rtl"] .sidebar {
   left: auto;
   right: 0;
 }
 
-[dir="rtl"] .form-floating > .form-control:focus ~ label,
-[dir="rtl"] .form-floating > .form-control:not(:placeholder-shown) ~ label {
-  transform: scale(0.85) translateY(-0.5rem) translateX(0.5rem);
+[dir="rtl"] .main-content {
+  margin-left: 0;
+  margin-right: 250px;
 }
 
-[dir="rtl"] .sidebar {
-  border-right: none;
-  border-left: 1px solid rgba(0, 0, 0, 0.125);
+[dir="rtl"] .breadcrumb {
+  flex-direction: row-reverse;
 }
 
-[dir="rtl"] .table {
-  text-align: right;
+[dir="rtl"] .icon-arrow-left::before {
+  content: "\2192";
 }
 
-[dir="rtl"] .table th,
-[dir="rtl"] .table td {
-  text-align: right;
-}
-
-[dir="rtl"] .table thead th {
-  text-align: right;
-}
-
-[dir="rtl"] .Toastify__toast {
-  text-align: right;
-}
-
-[dir="rtl"] .Toastify__close-button {
-  right: auto;
-  left: 0;
-}
-
-[dir="rtl"] .progress {
-  direction: rtl;
-}
-
-[dir="rtl"] .progress-bar {
-  float: right;
+[dir="rtl"] .icon-arrow-right::before {
+  content: "\2190";
 }

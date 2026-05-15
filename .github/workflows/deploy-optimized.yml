@@ -1,0 +1,108 @@
+name: Deploy (优化版)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: '跳过测试'
+        type: boolean
+        default: false
+
+jobs:
+  pre-deploy:
+    name: Pre-deployment checks
+    runs-on: ubuntu-latest
+    outputs:
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
+    steps:
+      - name: Check branch protection
+        id: check
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "can_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "can_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    name: Deploy to ${{ inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    needs: pre-deploy
+    if: needs.pre-deploy.outputs.can_deploy == 'true'
+    environment:
+      name: ${{ inputs.environment || 'production' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --prefer-offline
+        
+      - name: Run tests
+        if: ${{ !inputs.skip_tests }}
+        run: npm test
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Deploy to server
+        uses: appleboy/ssh-action@master
+        env:
+          ENVIRONMENT: ${{ inputs.environment || 'production' }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_KEY }}
+          envs: ENVIRONMENT
+          script: |
+            cd /app/${{ inputs.environment || 'production' }}
+            git pull origin main
+            docker-compose pull
+            docker-compose up -d --build
+            docker-compose exec -T app npm run migrate
+            
+            # 健康检查
+            for i in {1..10}; do
+              if curl -f http://localhost:3000/health; then
+                echo "Health check passed"
+                exit 0
+              fi
+              echo "Waiting for service... ($i/10)"
+              sleep 10
+            done
+            echo "Health check failed"
+            exit 1
+
+      - name: Notify deployment
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL }}
+          payload: |
+            {
+              "text": "Deployment ${{ job.status }} to ${{ inputs.environment || 'production' }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Status*\n${{ job.status }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
