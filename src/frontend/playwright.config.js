@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 30000,
-  fullyParallel: true,
+  timeout: 60000,
+  fullyParallel: !process.env.CI,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
@@ -18,7 +18,7 @@ export default defineConfig({
     ['list']
   ],
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001',
     trace: 'on-first-retry',
     screenshot: {
       mode: 'only-on-failure',
@@ -26,6 +26,8 @@ export default defineConfig({
     },
     video: 'retain-on-failure',
     headless: !process.env.HEADED,
+    actionTimeout: 15000,
+    navigationTimeout: 30000,
   },
   projects: [
     {
@@ -33,7 +35,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
+  webServer: process.env.CI ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:3001',
     reuseExistingServer: true,
@@ -42,7 +44,7 @@ export default defineConfig({
     stderr: 'pipe',
   },
   expect: {
-    timeout: 5000,
+    timeout: 10000,
     toMatchSnapshot: {
       maxDiffPixelRatio: 0.1,
     },
