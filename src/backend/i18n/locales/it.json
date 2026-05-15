@@ -1,0 +1,71 @@
+{
+  "errors": {
+    "validation": {
+      "required": "Questo campo è obbligatorio",
+      "invalidEmail": "Indirizzo email non valido",
+      "invalidPassword": "La password deve contenere almeno {min} caratteri",
+      "passwordMismatch": "Le password non coincidono",
+      "invalidInput": "Input non valido"
+    },
+    "auth": {
+      "invalidCredentials": "Email o password non validi",
+      "accountLocked": "Account bloccato. Si prega di riprovare più tardi.",
+      "accountDisabled": "L'account è stato disattivato",
+      "tokenExpired": "Sessione scaduta. Si prega di accedere nuovamente.",
+      "tokenInvalid": "Token di sessione non valido",
+      "unauthorized": "Non sei autorizzato a eseguire questa azione",
+      "forbidden": "Accesso negato"
+    },
+    "network": {
+      "connectionFailed": "Connessione fallita",
+      "timeout": "Timeout della richiesta",
+      "serverError": "Errore del server",
+      "serviceUnavailable": "Servizio temporaneamente non disponibile"
+    },
+    "generic": {
+      "somethingWentWrong": "Qualcosa è andato storto",
+      "tryAgainLater": "Si prega di riprovare più tardi",
+      "notFound": "Risorsa non trovata",
+      "operationFailed": "Operazione fallita"
+    }
+  },
+  "success": {
+    "login": "Accesso effettuato con successo",
+    "logout": "Disconnessione effettuata con successo",
+    "register": "Registrazione effettuata con successo",
+    "passwordReset": "Email di reimpostazione password inviata",
+    "passwordChanged": "Password modificata con successo",
+    "profileUpdated": "Profilo aggiornato con successo",
+    "operationSuccess": "Operazione completata con successo"
+  },
+  "emails": {
+    "verification": {
+      "subject": "Verifica il tuo indirizzo email",
+      "body": "Si prega di fare clic sul link sottostante per verificare il proprio indirizzo email:",
+      "button": "Verifica email",
+      "expireNotice": "Questo link scadrà tra {hours} ore"
+    },
+    "passwordReset": {
+      "subject": "Reimposta la tua password",
+      "body": "Hai richiesto una reimpostazione della password. Fai clic sul link sottostante:",
+      "button": "Reimposta password",
+      "expireNotice": "Questo link scadrà tra {hours} ore",
+      "ignoreNotice": "Se non hai richiesto questo, ignora questa email"
+    },
+    "welcome": {
+      "subject": "Benvenuto in {appName}!",
+      "body": "Grazie per aver aderito!"
+    }
+  },
+  "notifications": {
+    "newLogin": "Nuovo accesso rilevato da {location}",
+    "passwordChanged": "La tua password è stata modificata",
+    "accountUpdated": "Il tuo account è stato aggiornato"
+  },
+  "validation": {
+    "email": "Email",
+    "password": "Password",
+    "username": "Nome utente",
+    "confirmPassword": "Conferma password"
+  }
+}

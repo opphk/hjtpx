@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>验证邮箱</title>
+    <style>
+        body { font-family: "Microsoft YaHei", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; direction: ltr; }
+        .container { background-color: #f9fafb; border-radius: 8px; padding: 30px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .button { display: inline-block; background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        .footer { margin-top: 30px; font-size: 12px; color: #6b7280; text-align: center; }
+        .highlight { background-color: #e5e7eb; padding: 15px; border-radius: 6px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>欢迎加入 HJTPX！</h1>
+        </div>
+        
+        <p>您好，</p>
+        
+        <p>请点击下面的按钮验证您的邮箱地址：</p>
+        
+        <div style="text-align: center;">
+            <a href="{{verificationLink}}" class="button">验证邮箱</a>
+        </div>
+        
+        <div class="highlight">
+            <strong>重要提示：</strong>此验证链接将在 {{hours}} 小时后过期。
+        </div>
+        
+        <p>如果您没有在我们的网站上创建账户，请忽略此邮件。</p>
+        
+        <p>祝好，<br>HJTPX 团队</p>
+        
+        <div class="footer">
+            <p>这是一封自动发送的邮件，请勿回复此邮件。</p>
+            <p>&copy; {{year}} HJTPX. 保留所有权利。</p>
+        </div>
+    </div>
+</body>
+</html>

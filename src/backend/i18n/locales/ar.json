@@ -1,0 +1,71 @@
+{
+  "errors": {
+    "validation": {
+      "required": "هذا الحقل مطلوب",
+      "invalidEmail": "عنوان البريد الإلكتروني غير صالح",
+      "invalidPassword": "يجب أن تتكون كلمة المرور من {min} أحرف على الأقل",
+      "passwordMismatch": "كلمات المرور غير متطابقة",
+      "invalidInput": "إدخال غير صالح"
+    },
+    "auth": {
+      "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صالحة",
+      "accountLocked": "الحساب مقفل. يرجى المحاولة لاحقاً.",
+      "accountDisabled": "تم تعطيل الحساب",
+      "tokenExpired": "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.",
+      "tokenInvalid": "رمز الجلسة غير صالح",
+      "unauthorized": "ليس لديك صلاحية لتنفيذ هذا الإجراء",
+      "forbidden": "تم رفض الوصول"
+    },
+    "network": {
+      "connectionFailed": "فشل الاتصال",
+      "timeout": "انتهت مهلة الطلب",
+      "serverError": "حدث خطأ في الخادم",
+      "serviceUnavailable": "الخدمة غير متاحة مؤقتاً"
+    },
+    "generic": {
+      "somethingWentWrong": "حدث خطأ ما",
+      "tryAgainLater": "يرجى المحاولة لاحقاً",
+      "notFound": "المورد غير موجود",
+      "operationFailed": "فشلت العملية"
+    }
+  },
+  "success": {
+    "login": "تم تسجيل الدخول بنجاح",
+    "logout": "تم تسجيل الخروج بنجاح",
+    "register": "تم التسجيل بنجاح",
+    "passwordReset": "تم إرسال بريد إعادة تعيين كلمة المرور",
+    "passwordChanged": "تم تغيير كلمة المرور بنجاح",
+    "profileUpdated": "تم تحديث الملف الشخصي بنجاح",
+    "operationSuccess": "تمت العملية بنجاح"
+  },
+  "emails": {
+    "verification": {
+      "subject": "تحقق من عنوان بريدك الإلكتروني",
+      "body": "يرجى النقر على الرابط أدناه للتحقق من عنوان بريدك الإلكتروني:",
+      "button": "تحقق من البريد الإلكتروني",
+      "expireNotice": "ستنتهي صلاحية هذا الرابط خلال {hours} ساعات"
+    },
+    "passwordReset": {
+      "subject": "أعد تعيين كلمة المرور الخاصة بك",
+      "body": "لقد طلبت إعادة تعيين كلمة المرور. انقر على الرابط أدناه:",
+      "button": "إعادة تعيين كلمة المرور",
+      "expireNotice": "ستنتهي صلاحية هذا الرابط خلال {hours} ساعات",
+      "ignoreNotice": "إذا لم تطلب ذلك، يرجى تجاهل هذا البريد الإلكتروني"
+    },
+    "welcome": {
+      "subject": "مرحباً بك في {appName}!",
+      "body": "شكراً لانضمامك!"
+    }
+  },
+  "notifications": {
+    "newLogin": "تم اكتشاف تسجيل دخول جديد من {location}",
+    "passwordChanged": "تم تغيير كلمة المرور الخاصة بك",
+    "accountUpdated": "تم تحديث حسابك"
+  },
+  "validation": {
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "username": "اسم المستخدم",
+    "confirmPassword": "تأكيد كلمة المرور"
+  }
+}

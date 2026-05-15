@@ -1,0 +1,71 @@
+{
+  "errors": {
+    "validation": {
+      "required": "この項目は必須です",
+      "invalidEmail": "無効なメールアドレスです",
+      "invalidPassword": "パスワードは{min}文字以上である必要があります",
+      "passwordMismatch": "パスワードが一致しません",
+      "invalidInput": "無効な入力です"
+    },
+    "auth": {
+      "invalidCredentials": "メールアドレスまたはパスワードが無効です",
+      "accountLocked": "アカウントがロックされました。後でもう一度お試しください。",
+      "accountDisabled": "アカウントが無効化されました",
+      "tokenExpired": "セッションが期限切れです。再度ログインしてください。",
+      "tokenInvalid": "無効なセッショントークンです",
+      "unauthorized": "このアクションを実行する権限がありません",
+      "forbidden": "アクセスが拒否されました"
+    },
+    "network": {
+      "connectionFailed": "接続に失敗しました",
+      "timeout": "リクエストがタイムアウトしました",
+      "serverError": "サーバーエラーが発生しました",
+      "serviceUnavailable": "サービスが一時的に利用できません"
+    },
+    "generic": {
+      "somethingWentWrong": "問題が発生しました",
+      "tryAgainLater": "後でもう一度お試しください",
+      "notFound": "リソースが見つかりません",
+      "operationFailed": "操作に失敗しました"
+    }
+  },
+  "success": {
+    "login": "ログインに成功しました",
+    "logout": "ログアウトに成功しました",
+    "register": "登録に成功しました",
+    "passwordReset": "パスワードリセットメールを送信しました",
+    "passwordChanged": "パスワードが正常に変更されました",
+    "profileUpdated": "プロフィールが正常に更新されました",
+    "operationSuccess": "操作が正常に完了しました"
+  },
+  "emails": {
+    "verification": {
+      "subject": "メールアドレスの確認",
+      "body": "メールアドレスを確認するには、下のリンクをクリックしてください：",
+      "button": "メールを確認",
+      "expireNotice": "このリンクは{hours}時間後に期限切れになります"
+    },
+    "passwordReset": {
+      "subject": "パスワードのリセット",
+      "body": "パスワードのリセットをリクエストされました。下のリンクをクリックしてください：",
+      "button": "パスワードをリセット",
+      "expireNotice": "このリンクは{hours}時間後に期限切れになります",
+      "ignoreNotice": "このリクエストを行っていない場合は、このメールを無視してください"
+    },
+    "welcome": {
+      "subject": "{appName}へようこそ！",
+      "body": "ご登録ありがとうございます！"
+    }
+  },
+  "notifications": {
+    "newLogin": "{location}からの新しいログインを検出しました",
+    "passwordChanged": "パスワードが変更されました",
+    "accountUpdated": "アカウントが更新されました"
+  },
+  "validation": {
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "username": "ユーザー名",
+    "confirmPassword": "パスワード確認"
+  }
+}
