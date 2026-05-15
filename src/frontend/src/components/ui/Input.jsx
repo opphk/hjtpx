@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
+import PropTypes from 'prop-types';
 
-const Input = ({ 
+const Input = memo(({
   label,
   type = 'text',
   name,
@@ -15,19 +16,19 @@ const Input = ({
   'aria-describedby': ariaDescribedBy,
   ...props
 }) => {
-  const inputClasses = [
+  const inputClasses = useMemo(() => [
     'form-input',
     error ? 'input-error' : '',
     disabled ? 'input-disabled' : '',
     className
-  ].filter(Boolean).join(' ');
-  
-  const errorId = error ? `${name}-error` : undefined;
-  
-  const describedByIds = [
-    ariaDescribedBy,
-    errorId
-  ].filter(Boolean).join(' ') || undefined;
+  ].filter(Boolean).join(' '), [error, disabled, className]);
+
+  const errorId = useMemo(() => error ? `${name}-error` : undefined, [error, name]);
+
+  const describedByIds = useMemo(() => {
+    const ids = [ariaDescribedBy, errorId].filter(Boolean);
+    return ids.length > 0 ? ids.join(' ') : undefined;
+  }, [ariaDescribedBy, errorId]);
 
   return (
     <div className="form-group">
@@ -61,6 +62,23 @@ const Input = ({
       )}
     </div>
   );
+});
+
+Input.displayName = 'Input';
+
+Input.propTypes = {
+  label: PropTypes.string,
+  type: PropTypes.string,
+  name: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  onChange: PropTypes.func,
+  placeholder: PropTypes.string,
+  error: PropTypes.string,
+  disabled: PropTypes.bool,
+  required: PropTypes.bool,
+  className: PropTypes.string,
+  'aria-label': PropTypes.string,
+  'aria-describedby': PropTypes.string,
 };
 
 export default Input;

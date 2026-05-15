@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { memo, useEffect, useRef, useCallback } from 'react';
+import PropTypes from 'prop-types';
 
-const Modal = ({ 
-  isOpen, 
-  onClose, 
-  title, 
-  children, 
+const Modal = memo(({
+  isOpen,
+  onClose,
+  title,
+  children,
   footer,
   size = 'medium',
   'aria-label': ariaLabel,
@@ -18,16 +19,16 @@ const Modal = ({
 
   const focusTrap = useCallback((e) => {
     if (!modalRef.current) return;
-    
+
     const focusableElements = modalRef.current.querySelectorAll(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     );
-    
+
     if (focusableElements.length === 0) return;
-    
+
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
-    
+
     if (e.key === 'Tab') {
       if (e.shiftKey && document.activeElement === firstElement) {
         e.preventDefault();
@@ -43,11 +44,11 @@ const Modal = ({
     if (isOpen) {
       lastFocusedElementRef.current = document.activeElement;
       document.body.style.overflow = 'hidden';
-      
+
       const focusableElements = modalRef.current?.querySelectorAll(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
-      
+
       if (focusableElements?.[0]) {
         focusableElements[0].focus();
       } else if (modalRef.current) {
@@ -59,18 +60,18 @@ const Modal = ({
         lastFocusedElementRef.current.focus();
       }
     }
-    
+
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isOpen) {
         onClose();
       }
     };
-    
+
     if (isOpen) {
       document.addEventListener('keydown', handleEscape);
       document.addEventListener('keydown', focusTrap);
     }
-    
+
     return () => {
       document.removeEventListener('keydown', handleEscape);
       document.removeEventListener('keydown', focusTrap);
@@ -86,13 +87,13 @@ const Modal = ({
   };
 
   return (
-    <div 
-      className="modal-overlay" 
+    <div
+      className="modal-overlay"
       ref={overlayRef}
       onClick={handleBackdropClick}
       role="presentation"
     >
-      <div 
+      <div
         className={`modal-container modal-${size}`}
         ref={modalRef}
         role="dialog"
@@ -104,8 +105,8 @@ const Modal = ({
       >
         <div className="modal-header">
           <h3 className="modal-title" id={titleId}>{title}</h3>
-          <button 
-            className="modal-close" 
+          <button
+            className="modal-close"
             onClick={onClose}
             aria-label="关闭对话框"
             type="button"
@@ -124,6 +125,19 @@ const Modal = ({
       </div>
     </div>
   );
+});
+
+Modal.displayName = 'Modal';
+
+Modal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  title: PropTypes.string.isRequired,
+  children: PropTypes.node,
+  footer: PropTypes.node,
+  size: PropTypes.oneOf(['small', 'medium', 'large']),
+  'aria-label': PropTypes.string,
+  'aria-describedby': PropTypes.string,
 };
 
 export default Modal;
