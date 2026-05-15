@@ -1,0 +1,45 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+captchax/captchax-server
+captchax/admin
+*.test
+*.out
+
+# Go workspace
+go.work
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.production
+.env.staging
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Dump files
+dump.rdb
+*.dump
+
+# Temp
+tmp/
+temp/

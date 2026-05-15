@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - CaptchaX 管理后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link:hover {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+        }
+        .sidebar-link.active {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
+            border-left: 3px solid #3b82f6;
+        }
+        .settings-card {
+            transition: all 0.2s ease;
+        }
+        .settings-card:hover {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex">
+        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 bg-white shadow-lg transform -translate-x-full lg:translate-x-0 transition-transform duration-300 z-30">
+            <div class="h-full flex flex-col">
+                <div class="p-6 border-b border-gray-100">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-gray-800">CaptchaX</h1>
+                            <p class="text-xs text-gray-500">管理后台</p>
+                        </div>
+                    </div>
+                </div>
+                <nav class="flex-1 py-4 overflow-y-auto">
+                    <div class="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">主菜单</div>
+                    <a href="/admin/dashboard" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
+                        <span>仪表盘</span>
+                    </a>
+                    <a href="/admin/stats" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span>统计分析</span>
+                    </a>
+                    <a href="/admin/users" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>用户管理</span>
+                    </a>
+                    <a href="/admin/settings" class="sidebar-link active flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>系统设置</span>
+                    </a>
+                    <a href="/admin/audit" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        <span>审计日志</span>
+                    </a>
+                    <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">安全管控</div>
+                    <a href="/admin/whitelist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>白名单</span>
+                    </a>
+                    <a href="/admin/blacklist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span>黑名单</span>
+                    </a>
+                </nav>
+                <div class="p-4 border-t border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-700">管理员</p>
+                                <p class="text-xs text-green-500 flex items-center">
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></span>
+                                    <span>在线</span>
+                                </p>
+                            </div>
+                        </div>
+                        <a href="/admin/login" class="p-2 text-gray-400 hover:text-red-500 transition" title="退出登录">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col min-h-screen lg:ml-0">
+            <header class="bg-white shadow-sm sticky top-0 z-20">
+                <div class="flex items-center justify-between px-6 py-4">
+                    <button id="mobile-menu-btn" class="lg:hidden p-2 text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <h2 class="text-xl font-semibold text-gray-800">系统设置</h2>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm text-gray-500" id="current-time"></span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 p-6">
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <div class="settings-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center mb-6">
+                            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">基本设置</h3>
+                                <p class="text-sm text-gray-500">配置站点基本信息</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">站点名称</label>
+                                <input type="text" id="site-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="CaptchaX">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">站点描述</label>
+                                <textarea id="site-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="CaptchaX 验证码管理系统"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center mb-6">
+                            <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
+                                <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">安全设置</h3>
+                                <p class="text-sm text-gray-500">配置认证与密码策略</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">JWT 过期时间（小时）</label>
+                                <input type="number" id="jwt-expiry" min="1" max="720" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="24">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">最小密码长度</label>
+                                <input type="number" id="min-password-length" min="6" max="128" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="8">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center mb-6">
+                            <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                                <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">验证码设置</h3>
+                                <p class="text-sm text-gray-500">配置验证码难度与类型</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">难度级别</label>
+                                <select id="captcha-difficulty" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="easy">简单</option>
+                                    <option value="medium">中等</option>
+                                    <option value="hard">困难</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">验证类型</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="checkbox" value="slider" class="captcha-type-checkbox mr-2 rounded border-gray-300 text-blue-500 focus:ring-blue-500">
+                                        <span class="text-sm text-gray-700">滑动验证码</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" value="click" class="captcha-type-checkbox mr-2 rounded border-gray-300 text-blue-500 focus:ring-blue-500">
+                                        <span class="text-sm text-gray-700">点击验证码</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" value="rotate" class="captcha-type-checkbox mr-2 rounded border-gray-300 text-blue-500 focus:ring-blue-500">
+                                        <span class="text-sm text-gray-700">旋转验证码</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" value="text" class="captcha-type-checkbox mr-2 rounded border-gray-300 text-blue-500 focus:ring-blue-500">
+                                        <span class="text-sm text-gray-700">文本验证码</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="checkbox" value="icon" class="captcha-type-checkbox mr-2 rounded border-gray-300 text-blue-500 focus:ring-blue-500">
+                                        <span class="text-sm text-gray-700">图标验证码</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center mb-6">
+                            <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mr-4">
+                                <svg class="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">通知设置</h3>
+                                <p class="text-sm text-gray-500">配置通知渠道</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <label class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-sm font-medium text-gray-700">邮件通知</span>
+                                    <p class="text-xs text-gray-500">启用邮件通知功能</p>
+                                </div>
+                                <button id="email-toggle" class="toggle-switch relative inline-flex items-center h-6 w-11 rounded-full bg-gray-300" onclick="toggleEmailNotification()">
+                                    <span class="toggle-dot inline-block w-4 h-4 transform bg-white rounded-full transition-transform translate-x-1"></span>
+                                </button>
+                            </label>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
+                                <input type="url" id="webhook-url" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://hooks.example.com/webhook">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-end space-x-4">
+                        <button id="reset-btn" class="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">重置</button>
+                        <button id="save-btn" class="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存设置</button>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <script>
+        var API_BASE = '/admin/api';
+        var token = localStorage.getItem('admin_token') || '';
+        var emailEnabled = false;
+
+        function apiFetch(url, options) {
+            options = options || {};
+            var headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+                ...options.headers
+            };
+            return fetch(url, { ...options, headers: headers }).then(function(r) {
+                if (r.status === 401) { window.location.href = '/admin/login'; throw new Error('Unauthorized'); }
+                return r.json();
+            });
+        }
+
+        function showToast(message, type) {
+            type = type || 'success';
+            var colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500' };
+            var container = document.getElementById('toast-container');
+            var toast = document.createElement('div');
+            toast.className = (colors[type] || colors.success) + ' text-white px-4 py-3 rounded-lg shadow-lg text-sm fade-in';
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        function toggleEmailNotification() {
+            emailEnabled = !emailEnabled;
+            var btn = document.getElementById('email-toggle');
+            var dot = btn.querySelector('.toggle-dot');
+            if (emailEnabled) {
+                btn.classList.remove('bg-gray-300');
+                btn.classList.add('bg-green-500');
+                dot.classList.remove('translate-x-1');
+                dot.classList.add('translate-x-6');
+            } else {
+                btn.classList.remove('bg-green-500');
+                btn.classList.add('bg-gray-300');
+                dot.classList.remove('translate-x-6');
+                dot.classList.add('translate-x-1');
+            }
+        }
+
+        function loadSettings() {
+            apiFetch(API_BASE + '/settings')
+                .then(function(data) {
+                    if (data.code !== 0) { showToast(data.message || '加载设置失败', 'error'); return; }
+                    var s = data.data;
+                    document.getElementById('site-name').value = s.site_name || '';
+                    document.getElementById('site-description').value = s.site_description || '';
+                    document.getElementById('jwt-expiry').value = s.jwt_expiry_hours || 24;
+                    document.getElementById('min-password-length').value = s.min_password_length || 8;
+                    document.getElementById('captcha-difficulty').value = s.captcha_difficulty || 'medium';
+                    document.getElementById('webhook-url').value = s.webhook_url || '';
+
+                    var types = (s.captcha_types || 'slider,click,rotate').split(',');
+                    var checkboxes = document.querySelectorAll('.captcha-type-checkbox');
+                    checkboxes.forEach(function(cb) { cb.checked = types.indexOf(cb.value) >= 0; });
+
+                    emailEnabled = s.email_notification || false;
+                    var btn = document.getElementById('email-toggle');
+                    var dot = btn.querySelector('.toggle-dot');
+                    if (emailEnabled) {
+                        btn.classList.remove('bg-gray-300');
+                        btn.classList.add('bg-green-500');
+                        dot.classList.remove('translate-x-1');
+                        dot.classList.add('translate-x-6');
+                    }
+                })
+                .catch(function() { showToast('加载设置失败', 'error'); });
+        }
+
+        function saveSettings() {
+            var checkboxes = document.querySelectorAll('.captcha-type-checkbox');
+            var selectedTypes = [];
+            checkboxes.forEach(function(cb) { if (cb.checked) selectedTypes.push(cb.value); });
+
+            var body = {
+                site_name: document.getElementById('site-name').value,
+                site_description: document.getElementById('site-description').value,
+                jwt_expiry_hours: parseInt(document.getElementById('jwt-expiry').value) || 24,
+                min_password_length: parseInt(document.getElementById('min-password-length').value) || 8,
+                captcha_difficulty: document.getElementById('captcha-difficulty').value,
+                captcha_types: selectedTypes.join(','),
+                email_notification: emailEnabled,
+                webhook_url: document.getElementById('webhook-url').value
+            };
+
+            apiFetch(API_BASE + '/settings', {
+                method: 'PUT',
+                body: JSON.stringify(body)
+            }).then(function(data) {
+                if (data.code !== 0) { showToast(data.message || '保存失败', 'error'); return; }
+                showToast('设置已保存');
+                loadSettings();
+            }).catch(function() { showToast('保存失败', 'error'); });
+        }
+
+        document.getElementById('save-btn').addEventListener('click', saveSettings);
+        document.getElementById('reset-btn').addEventListener('click', loadSettings);
+
+        document.getElementById('mobile-menu-btn').addEventListener('click', function() {
+            var sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+        });
+
+        function updateTime() {
+            var now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        loadSettings();
+    </script>
+</body>
+</html>

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - CaptchaX 管理后台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .sidebar-link:hover {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+        }
+        .sidebar-link.active {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
+            border-left: 3px solid #3b82f6;
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+        .toggle-switch {
+            transition: background-color 0.2s ease;
+        }
+        .toggle-dot {
+            transition: transform 0.2s ease;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="flex">
+        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 bg-white shadow-lg transform -translate-x-full lg:translate-x-0 transition-transform duration-300 z-30">
+            <div class="h-full flex flex-col">
+                <div class="p-6 border-b border-gray-100">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="font-bold text-gray-800">CaptchaX</h1>
+                            <p class="text-xs text-gray-500">管理后台</p>
+                        </div>
+                    </div>
+                </div>
+                <nav class="flex-1 py-4 overflow-y-auto">
+                    <div class="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">主菜单</div>
+                    <a href="/admin/dashboard" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
+                        <span>仪表盘</span>
+                    </a>
+                    <a href="/admin/stats" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span>统计分析</span>
+                    </a>
+                    <a href="/admin/users" class="sidebar-link active flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>用户管理</span>
+                    </a>
+                    <a href="/admin/settings" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span>系统设置</span>
+                    </a>
+                    <a href="/admin/audit" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        <span>审计日志</span>
+                    </a>
+                    <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">安全管控</div>
+                    <a href="/admin/whitelist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>白名单</span>
+                    </a>
+                    <a href="/admin/blacklist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span>黑名单</span>
+                    </a>
+                </nav>
+                <div class="p-4 border-t border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-700">管理员</p>
+                                <p class="text-xs text-green-500 flex items-center">
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1"></span>
+                                    <span>在线</span>
+                                </p>
+                            </div>
+                        </div>
+                        <a href="/admin/login" class="p-2 text-gray-400 hover:text-red-500 transition" title="退出登录">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col min-h-screen lg:ml-0">
+            <header class="bg-white shadow-sm sticky top-0 z-20">
+                <div class="flex items-center justify-between px-6 py-4">
+                    <button id="mobile-menu-btn" class="lg:hidden p-2 text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <h2 class="text-xl font-semibold text-gray-800">用户管理</h2>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm text-gray-500" id="current-time"></span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 p-6">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+                        <div class="flex items-center space-x-3 w-full sm:w-auto">
+                            <div class="relative flex-1 sm:flex-none">
+                                <svg class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                <input type="text" id="search-input" placeholder="搜索用户名、邮箱..." class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            </div>
+                            <select id="role-filter" class="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">所有角色</option>
+                                <option value="super_admin">超级管理员</option>
+                                <option value="admin">管理员</option>
+                                <option value="operator">操作员</option>
+                                <option value="viewer">观察者</option>
+                            </select>
+                            <select id="status-filter" class="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">所有状态</option>
+                                <option value="1">已启用</option>
+                                <option value="0">已禁用</option>
+                            </select>
+                        </div>
+                        <button id="add-user-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center whitespace-nowrap">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            新建用户
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="text-left text-sm text-gray-500 border-b">
+                                    <th class="pb-3 font-medium">ID</th>
+                                    <th class="pb-3 font-medium">用户名</th>
+                                    <th class="pb-3 font-medium">邮箱</th>
+                                    <th class="pb-3 font-medium">角色</th>
+                                    <th class="pb-3 font-medium">状态</th>
+                                    <th class="pb-3 font-medium">创建时间</th>
+                                    <th class="pb-3 font-medium">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body" class="text-sm">
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-gray-500">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex items-center justify-between mt-6">
+                        <div class="text-sm text-gray-500">
+                            共 <span id="total-count">0</span> 条记录
+                        </div>
+                        <div class="flex items-center space-x-2" id="pagination-container">
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="user-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
+        <div class="modal-overlay absolute inset-0" id="modal-overlay"></div>
+        <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md relative z-10 fade-in">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-semibold text-gray-800" id="modal-title">新建用户</h3>
+                <button id="modal-close-btn" class="p-1 text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form id="user-form">
+                <input type="hidden" id="edit-user-id" value="">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">用户名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="form-username" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-4" id="password-field">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码 <span class="text-red-500">*</span></label>
+                    <input type="password" id="form-password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                    <input type="email" id="form-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">昵称</label>
+                    <input type="text" id="form-nickname" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">角色 <span class="text-red-500">*</span></label>
+                    <select id="form-role" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="admin">管理员</option>
+                        <option value="super_admin">超级管理员</option>
+                        <option value="operator">操作员</option>
+                        <option value="viewer">观察者</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" id="modal-cancel-btn" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <script>
+        const API_BASE = '/admin/api';
+        const token = localStorage.getItem('admin_token') || '';
+
+        function apiFetch(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+                ...options.headers
+            };
+            return fetch(url, { ...options, headers }).then(function(r) {
+                if (r.status === 401) {
+                    window.location.href = '/admin/login';
+                    throw new Error('Unauthorized');
+                }
+                return r.json();
+            });
+        }
+
+        function showToast(message, type) {
+            type = type || 'success';
+            var colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500' };
+            var container = document.getElementById('toast-container');
+            var toast = document.createElement('div');
+            toast.className = (colors[type] || colors.success) + ' text-white px-4 py-3 rounded-lg shadow-lg text-sm fade-in';
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(function() { toast.remove(); }, 3000);
+        }
+
+        function openModal() {
+            document.getElementById('user-modal').classList.remove('hidden');
+            document.getElementById('user-modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('user-modal').classList.add('hidden');
+            document.getElementById('user-modal').classList.remove('flex');
+        }
+
+        function resetForm() {
+            document.getElementById('user-form').reset();
+            document.getElementById('edit-user-id').value = '';
+            document.getElementById('password-field').style.display = 'block';
+            document.getElementById('form-password').required = true;
+            document.getElementById('modal-title').textContent = '新建用户';
+        }
+
+        var currentPage = 1;
+        var currentPageSize = 20;
+
+        function loadUsers(page) {
+            page = page || currentPage;
+            currentPage = page;
+            var search = document.getElementById('search-input').value;
+            var role = document.getElementById('role-filter').value;
+            var status = document.getElementById('status-filter').value;
+
+            var params = new URLSearchParams({ page: page, page_size: currentPageSize });
+            if (search) params.set('search', search);
+            if (role) params.set('role', role);
+            if (status) params.set('status', status);
+
+            apiFetch(API_BASE + '/users?' + params.toString())
+                .then(function(data) {
+                    if (data.code !== 0) { showToast(data.message || '加载失败', 'error'); return; }
+                    renderUsers(data.data.items);
+                    renderPagination(data.data.total, data.data.page, data.data.total_pages);
+                    document.getElementById('total-count').textContent = data.data.total;
+                })
+                .catch(function(err) { showToast('加载用户列表失败', 'error'); });
+        }
+
+        function renderUsers(users) {
+            var tbody = document.getElementById('users-table-body');
+            if (!users || users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500">暂无数据</td></tr>';
+                return;
+            }
+            var roleLabels = { super_admin: '超级管理员', admin: '管理员', operator: '操作员', viewer: '观察者' };
+            tbody.innerHTML = users.map(function(u) {
+                var roleLabel = roleLabels[u.role] || u.role;
+                var statusClass = u.status === 1 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600';
+                var statusText = u.status === 1 ? '启用' : '禁用';
+                return '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+                    '<td class="py-3 text-gray-500">' + u.id + '</td>' +
+                    '<td class="py-3 font-medium text-gray-800">' + escapeHtml(u.username) + '</td>' +
+                    '<td class="py-3 text-gray-500">' + escapeHtml(u.email || '-') + '</td>' +
+                    '<td class="py-3">' +
+                        '<select onchange="changeRole(' + u.id + ', this.value)" class="text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">' +
+                            ['super_admin','admin','operator','viewer'].map(function(r) {
+                                return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + (roleLabels[r] || r) + '</option>';
+                            }).join('') +
+                        '</select>' +
+                    '</td>' +
+                    '<td class="py-3">' +
+                        '<button onclick="toggleStatus(' + u.id + ', ' + u.status + ')" class="toggle-switch relative inline-flex items-center h-6 w-11 rounded-full ' + (u.status === 1 ? 'bg-green-500' : 'bg-gray-300') + '">' +
+                            '<span class="toggle-dot inline-block w-4 h-4 transform bg-white rounded-full transition-transform ' + (u.status === 1 ? 'translate-x-6' : 'translate-x-1') + '"></span>' +
+                        '</button>' +
+                    '</td>' +
+                    '<td class="py-3 text-gray-500">' + (u.created_at ? new Date(u.created_at).toLocaleString('zh-CN') : '-') + '</td>' +
+                    '<td class="py-3">' +
+                        '<button onclick="editUser(' + u.id + ')" class="text-blue-500 hover:text-blue-700 mr-3">编辑</button>' +
+                        '<button onclick="deleteUser(' + u.id + ', \'' + escapeHtml(u.username) + '\')" class="text-red-500 hover:text-red-700">删除</button>' +
+                    '</td>' +
+                '</tr>';
+            }).join('');
+        }
+
+        function renderPagination(total, page, totalPages) {
+            var container = document.getElementById('pagination-container');
+            if (totalPages <= 1) { container.innerHTML = ''; return; }
+            var html = '<button onclick="loadUsers(' + (page - 1) + ')" ' + (page <= 1 ? 'disabled class="px-3 py-1 border rounded text-gray-300 cursor-not-allowed"' : 'class="px-3 py-1 border rounded hover:bg-gray-50"') + '>上一页</button>';
+            for (var i = 1; i <= totalPages; i++) {
+                if (i === page) {
+                    html += '<span class="px-3 py-1 bg-blue-500 text-white rounded">' + i + '</span>';
+                } else {
+                    html += '<button onclick="loadUsers(' + i + ')" class="px-3 py-1 border rounded hover:bg-gray-50">' + i + '</button>';
+                }
+            }
+            html += '<button onclick="loadUsers(' + (page + 1) + ')" ' + (page >= totalPages ? 'disabled class="px-3 py-1 border rounded text-gray-300 cursor-not-allowed"' : 'class="px-3 py-1 border rounded hover:bg-gray-50"') + '>下一页</button>';
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function changeRole(id, role) {
+            apiFetch(API_BASE + '/users/' + id + '/role', {
+                method: 'PUT',
+                body: JSON.stringify({ role: role })
+            }).then(function(data) {
+                if (data.code !== 0) { showToast(data.message || '更新失败', 'error'); return; }
+                showToast('角色更新成功');
+            }).catch(function() { showToast('更新失败', 'error'); });
+        }
+
+        function toggleStatus(id, currentStatus) {
+            var newStatus = currentStatus === 1 ? 0 : 1;
+            apiFetch(API_BASE + '/users/' + id + '/status', {
+                method: 'PUT',
+                body: JSON.stringify({ status: newStatus })
+            }).then(function(data) {
+                if (data.code !== 0) { showToast(data.message || '更新失败', 'error'); return; }
+                showToast('状态更新成功');
+                loadUsers();
+            }).catch(function() { showToast('更新失败', 'error'); });
+        }
+
+        function editUser(id) {
+            apiFetch(API_BASE + '/users/' + id)
+                .then(function(data) {
+                    if (data.code !== 0) { showToast(data.message || '获取用户失败', 'error'); return; }
+                    var u = data.data;
+                    document.getElementById('edit-user-id').value = u.id;
+                    document.getElementById('form-username').value = u.username;
+                    document.getElementById('form-email').value = u.email || '';
+                    document.getElementById('form-nickname').value = u.nickname || '';
+                    document.getElementById('form-role').value = u.role || 'admin';
+                    document.getElementById('password-field').style.display = 'none';
+                    document.getElementById('form-password').required = false;
+                    document.getElementById('form-password').value = '';
+                    document.getElementById('modal-title').textContent = '编辑用户';
+                    openModal();
+                })
+                .catch(function() { showToast('获取用户失败', 'error'); });
+        }
+
+        function deleteUser(id, username) {
+            if (!confirm('确定要删除用户 "' + username + '" 吗？此操作不可撤销。')) return;
+            apiFetch(API_BASE + '/users/' + id, { method: 'DELETE' })
+                .then(function(data) {
+                    if (data.code !== 0) { showToast(data.message || '删除失败', 'error'); return; }
+                    showToast('用户已删除');
+                    loadUsers();
+                })
+                .catch(function() { showToast('删除失败', 'error'); });
+        }
+
+        document.getElementById('add-user-btn').addEventListener('click', function() {
+            resetForm();
+            openModal();
+        });
+
+        document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+        document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+        document.getElementById('modal-overlay').addEventListener('click', closeModal);
+
+        document.getElementById('user-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var id = document.getElementById('edit-user-id').value;
+            var body = {
+                username: document.getElementById('form-username').value,
+                email: document.getElementById('form-email').value,
+                nickname: document.getElementById('form-nickname').value,
+                role: document.getElementById('form-role').value
+            };
+            if (id) {
+                apiFetch(API_BASE + '/users/' + id, {
+                    method: 'PUT',
+                    body: JSON.stringify(body)
+                }).then(function(data) {
+                    if (data.code !== 0) { showToast(data.message || '更新失败', 'error'); return; }
+                    showToast('用户更新成功');
+                    closeModal();
+                    loadUsers();
+                }).catch(function() { showToast('更新失败', 'error'); });
+            } else {
+                body.password = document.getElementById('form-password').value;
+                apiFetch(API_BASE + '/users', {
+                    method: 'POST',
+                    body: JSON.stringify(body)
+                }).then(function(data) {
+                    if (data.code !== 0) { showToast(data.message || '创建失败', 'error'); return; }
+                    showToast('用户创建成功');
+                    closeModal();
+                    loadUsers();
+                }).catch(function() { showToast('创建失败', 'error'); });
+            }
+        });
+
+        document.getElementById('search-input').addEventListener('input', function() {
+            loadUsers(1);
+        });
+        document.getElementById('role-filter').addEventListener('change', function() {
+            loadUsers(1);
+        });
+        document.getElementById('status-filter').addEventListener('change', function() {
+            loadUsers(1);
+        });
+
+        document.getElementById('mobile-menu-btn').addEventListener('click', function() {
+            var sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+        });
+
+        function updateTime() {
+            var now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        loadUsers(1);
+    </script>
+</body>
+</html>
