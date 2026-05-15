@@ -35,10 +35,22 @@ const CACHE_PRIORITY = {
   CRITICAL: 4
 };
 
+const CACHE_POLICY = {
+  SESSION_SLIDING_EXPIRY: true,
+  SESSION_WARMUP_ENABLED: false,
+  MAX_CONCURRENT_REQUESTS: 100,
+  LOCK_TIMEOUT: 5000,
+  CACHE_STALE_THRESHOLD: 0.8,
+  COMPRESSION_THRESHOLD: 1024,
+  BATCH_SIZE: 100
+};
+
 class CacheService {
   constructor() {
     this.memoryCache = new Map();
     this.cacheTimers = new Map();
+    this.cacheLocks = new Map();
+    this.warmupCache = new Map();
     this.stats = {
       hits: 0,
       misses: 0,
@@ -46,10 +58,19 @@ class CacheService {
       deletes: 0,
       errors: 0,
       evictions: 0,
-      sessions: { hits: 0, misses: 0, sets: 0, deletes: 0 },
-      api: { hits: 0, misses: 0, sets: 0, deletes: 0 },
+      locks: 0,
+      lockTimeouts: 0,
+      session: { hits: 0, misses: 0, sets: 0, deletes: 0, extensions: 0 },
+      api: { hits: 0, misses: 0, sets: 0, deletes: 0, stale: 0 },
       user: { hits: 0, misses: 0, sets: 0, deletes: 0 },
+      permissions: { hits: 0, misses: 0, sets: 0, deletes: 0 },
       tags: { hits: 0, misses: 0, sets: 0, deletes: 0 },
+      lockAcquisitions: 0,
+      lockReleases: 0,
+      lockTimeouts: 0,
+      warmupHits: 0,
+      warmupMisses: 0,
+      compressionSavings: 0,
       latency: {
         get: [],
         set: [],
@@ -60,7 +81,9 @@ class CacheService {
     this.memoryCacheTTL = 60000;
     this.maxMemoryCacheSize = 1000;
     this.isRedisConnected = false;
+    this.startTime = Date.now();
     this.initRedisConnection();
+    this.startMetricsCollection();
   }
 
   async initRedisConnection() {
@@ -92,6 +115,84 @@ class CacheService {
     }
   }
 
+  startMetricsCollection() {
+    setInterval(() => {
+      this.collectMetrics();
+    }, 60000);
+  }
+
+  async collectMetrics() {
+    if (!this.isRedisConnected) return;
+
+    try {
+      const metrics = {
+        timestamp: Date.now(),
+        memoryCacheSize: this.memoryCache.size,
+        maxMemoryCacheSize: this.maxMemoryCacheSize,
+        memoryUsagePercent: (this.memoryCache.size / this.maxMemoryCacheSize) * 100,
+        redisConnected: this.isRedisConnected,
+        uptime: Date.now() - this.startTime,
+        hitRate: this.calculateOverallHitRate(),
+        stats: { ...this.stats }
+      };
+
+      await redisClient.setEx(
+        CACHE_KEYS.METRICS,
+        CACHE_TTL.MEDIUM,
+        JSON.stringify(metrics)
+      );
+    } catch (error) {
+      console.error('Failed to collect metrics:', error);
+    }
+  }
+
+  calculateOverallHitRate() {
+    const total = this.stats.hits + this.stats.misses;
+    return total > 0 ? (this.stats.hits / total) * 100 : 0;
+  }
+
+  async acquireLock(key, timeout = CACHE_POLICY.LOCK_TIMEOUT) {
+    const lockKey = `${CACHE_KEYS.LOCK}${key}`;
+    const lockValue = `${Date.now()}-${Math.random()}`;
+
+    try {
+      const acquired = await redisClient.set(lockKey, lockValue, {
+        NX: true,
+        EX: Math.ceil(timeout / 1000)
+      });
+
+      if (acquired) {
+        this.stats.locks++;
+        this.cacheLocks.set(key, lockValue);
+        return lockValue;
+      }
+
+      this.stats.lockTimeouts++;
+      return null;
+    } catch (error) {
+      this.stats.errors++;
+      return null;
+    }
+  }
+
+  async releaseLock(key, lockValue) {
+    const cachedValue = this.cacheLocks.get(key);
+    if (cachedValue !== lockValue) {
+      return false;
+    }
+
+    const lockKey = `${CACHE_KEYS.LOCK}${key}`;
+    try {
+      await redisClient.del(lockKey);
+      this.cacheLocks.delete(key);
+      this.stats.lockReleases++;
+      return true;
+    } catch (error) {
+      this.stats.errors++;
+      return false;
+    }
+  }
+
   generateSessionKey(sessionToken) {
     return `${CACHE_KEYS.SESSION}${sessionToken}`;
   }
@@ -115,15 +216,43 @@ class CacheService {
     return `${CACHE_KEYS.TAGS}${tag}`;
   }
 
-  async getSession(sessionToken) {
+  async warmupSession(sessionToken, sessionData, ttl = CACHE_TTL.SESSION) {
+    if (!CACHE_POLICY.SESSION_WARMUP_ENABLED) {
+      return false;
+    }
+
+    const key = this.generateSessionKey(sessionToken);
+    this.warmupCache.set(key, {
+      data: sessionData,
+      ttl,
+      warmedAt: Date.now()
+    });
+    return true;
+  }
+
+  async getSession(sessionToken, options = {}) {
     const startTime = Date.now();
     const key = this.generateSessionKey(sessionToken);
+
+    if (options.allowStale && this.warmupCache.has(key)) {
+      const warmupData = this.warmupCache.get(key);
+      this.stats.warmupHits++;
+      return warmupData.data;
+    }
+
     const cached = await this.get(key);
     if (cached) {
-      this.stats.sessions.hits++;
-      await this.extendSessionTTL(sessionToken);
+      this.stats.session.hits++;
+      if (CACHE_POLICY.SESSION_SLIDING_EXPIRY) {
+        await this.extendSessionTTL(sessionToken);
+      }
     } else {
-      this.stats.sessions.misses++;
+      this.stats.session.misses++;
+      if (options.allowStale && this.warmupCache.has(key)) {
+        const warmupData = this.warmupCache.get(key);
+        this.stats.warmupHits++;
+        return warmupData.data;
+      }
     }
     this.measureLatency('get', startTime);
     return cached;
@@ -134,7 +263,14 @@ class CacheService {
     const key = this.generateSessionKey(sessionToken);
     const result = await this.set(key, sessionData, ttl, tags);
     if (result) {
-      this.stats.sessions.sets++;
+      this.stats.session.sets++;
+      if (CACHE_POLICY.SESSION_WARMUP_ENABLED) {
+        this.warmupCache.set(key, {
+          data: sessionData,
+          ttl,
+          warmedAt: Date.now()
+        });
+      }
     }
     this.measureLatency('set', startTime);
     return result;
@@ -150,6 +286,7 @@ class CacheService {
         const memEntry = this.memoryCache.get(key);
         memEntry.expiresAt = Date.now() + Math.min(ttl * 1000, this.memoryCacheTTL);
       }
+      this.stats.session.extensions++;
       return true;
     } catch (error) {
       this.stats.errors++;
@@ -163,7 +300,8 @@ class CacheService {
     const key = this.generateSessionKey(sessionToken);
     const result = await this.del(key);
     if (result) {
-      this.stats.sessions.deletes++;
+      this.stats.session.deletes++;
+      this.warmupCache.delete(key);
     }
     this.measureLatency('del', startTime);
     return result;
@@ -171,6 +309,41 @@ class CacheService {
 
   async invalidateUserSessions(userId) {
     return await this.invalidatePattern(`${CACHE_KEYS.SESSION}*:${userId}*`);
+  }
+
+  async getCachedPermissions(userId) {
+    const startTime = Date.now();
+    const key = `${CACHE_KEYS.PERMISSIONS}${userId}`;
+    const cached = await this.get(key);
+    if (cached) {
+      this.stats.permissions.hits++;
+    } else {
+      this.stats.permissions.misses++;
+    }
+    this.measureLatency('get', startTime);
+    return cached;
+  }
+
+  async setCachedPermissions(userId, permissionsData, ttl = CACHE_TTL.PERMISSIONS, tags = []) {
+    const startTime = Date.now();
+    const key = `${CACHE_KEYS.PERMISSIONS}${userId}`;
+    const result = await this.set(key, permissionsData, ttl, tags);
+    if (result) {
+      this.stats.permissions.sets++;
+    }
+    this.measureLatency('set', startTime);
+    return result;
+  }
+
+  async invalidatePermissions(userId) {
+    const startTime = Date.now();
+    const key = `${CACHE_KEYS.PERMISSIONS}${userId}`;
+    const result = await this.del(key);
+    if (result) {
+      this.stats.permissions.deletes++;
+    }
+    this.measureLatency('del', startTime);
+    return result;
   }
 
   async getCachedUser(userId) {
@@ -545,9 +718,10 @@ class CacheService {
 
   getStats() {
     const total = this.stats.hits + this.stats.misses;
-    const sessionTotal = this.stats.sessions.hits + this.stats.sessions.misses;
+    const sessionTotal = this.stats.session.hits + this.stats.session.misses;
     const apiTotal = this.stats.api.hits + this.stats.api.misses;
     const userTotal = this.stats.user.hits + this.stats.user.misses;
+    const permissionsTotal = this.stats.permissions.hits + this.stats.permissions.misses;
 
     return {
       overall: {
@@ -558,6 +732,9 @@ class CacheService {
         deletes: this.stats.deletes,
         evictions: this.stats.evictions,
         errors: this.stats.errors,
+        uptime: Date.now() - this.startTime,
+        memoryCacheUsage: `${this.memoryCache.size}/${this.maxMemoryCacheSize}`,
+        memoryCachePercent: ((this.memoryCache.size / this.maxMemoryCacheSize) * 100).toFixed(2) + '%',
         latency: {
           avgGet: this.calculateAverageLatency('get') + 'ms',
           avgSet: this.calculateAverageLatency('set') + 'ms',
@@ -567,17 +744,19 @@ class CacheService {
         }
       },
       session: {
-        hits: this.stats.sessions.hits,
-        misses: this.stats.sessions.misses,
-        sets: this.stats.sessions.sets,
-        deletes: this.stats.sessions.deletes,
-        hitRate: sessionTotal > 0 ? ((this.stats.sessions.hits / sessionTotal) * 100).toFixed(2) + '%' : '0%'
+        hits: this.stats.session.hits,
+        misses: this.stats.session.misses,
+        sets: this.stats.session.sets,
+        deletes: this.stats.session.deletes,
+        extensions: this.stats.session.extensions,
+        hitRate: sessionTotal > 0 ? ((this.stats.session.hits / sessionTotal) * 100).toFixed(2) + '%' : '0%'
       },
       api: {
         hits: this.stats.api.hits,
         misses: this.stats.api.misses,
         sets: this.stats.api.sets,
         deletes: this.stats.api.deletes,
+        stale: this.stats.api.stale,
         hitRate: apiTotal > 0 ? ((this.stats.api.hits / apiTotal) * 100).toFixed(2) + '%' : '0%'
       },
       user: {
@@ -587,18 +766,38 @@ class CacheService {
         deletes: this.stats.user.deletes,
         hitRate: userTotal > 0 ? ((this.stats.user.hits / userTotal) * 100).toFixed(2) + '%' : '0%'
       },
+      permissions: {
+        hits: this.stats.permissions.hits,
+        misses: this.stats.permissions.misses,
+        sets: this.stats.permissions.sets,
+        deletes: this.stats.permissions.deletes,
+        hitRate: permissionsTotal > 0 ? ((this.stats.permissions.hits / permissionsTotal) * 100).toFixed(2) + '%' : '0%'
+      },
       tags: {
         hits: this.stats.tags.hits,
         misses: this.stats.tags.misses,
         sets: this.stats.tags.sets,
         deletes: this.stats.tags.deletes
       },
+      locks: {
+        acquisitions: this.stats.lockAcquisitions,
+        releases: this.stats.lockReleases,
+        timeouts: this.stats.lockTimeouts,
+        active: this.cacheLocks.size
+      },
+      warmup: {
+        enabled: CACHE_POLICY.SESSION_WARMUP_ENABLED,
+        hits: this.stats.warmupHits,
+        misses: this.stats.warmupMisses,
+        cachedItems: this.warmupCache.size
+      },
       memoryCacheSize: this.memoryCache.size,
       maxMemoryCacheSize: this.maxMemoryCacheSize,
       isRedisConnected: this.isRedisConnected,
       cacheKeys: CACHE_KEYS,
       cacheTTL: CACHE_TTL,
-      cachePriority: CACHE_PRIORITY
+      cachePriority: CACHE_PRIORITY,
+      cachePolicy: CACHE_POLICY
     };
   }
 
@@ -610,10 +809,19 @@ class CacheService {
       deletes: 0,
       errors: 0,
       evictions: 0,
-      sessions: { hits: 0, misses: 0, sets: 0, deletes: 0 },
-      api: { hits: 0, misses: 0, sets: 0, deletes: 0 },
+      locks: 0,
+      lockTimeouts: 0,
+      session: { hits: 0, misses: 0, sets: 0, deletes: 0, extensions: 0 },
+      api: { hits: 0, misses: 0, sets: 0, deletes: 0, stale: 0 },
       user: { hits: 0, misses: 0, sets: 0, deletes: 0 },
+      permissions: { hits: 0, misses: 0, sets: 0, deletes: 0 },
       tags: { hits: 0, misses: 0, sets: 0, deletes: 0 },
+      lockAcquisitions: 0,
+      lockReleases: 0,
+      lockTimeouts: 0,
+      warmupHits: 0,
+      warmupMisses: 0,
+      compressionSavings: 0,
       latency: {
         get: [],
         set: [],
@@ -629,3 +837,4 @@ module.exports = cacheService;
 module.exports.CACHE_KEYS = CACHE_KEYS;
 module.exports.CACHE_TTL = CACHE_TTL;
 module.exports.CACHE_PRIORITY = CACHE_PRIORITY;
+module.exports.CACHE_POLICY = CACHE_POLICY;
