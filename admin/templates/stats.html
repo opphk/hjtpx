@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 统计分析</title>
+    <link rel="stylesheet" href="/admin/static/css/style.css">
+    <link rel="stylesheet" href="/admin/static/css/stats.css">
+</head>
+<body class="admin-layout">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>管理后台</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="/admin/">
+                    <span class="icon">📊</span>
+                    <span>仪表盘</span>
+                </a></li>
+                <li><a href="/admin/stats" class="active">
+                    <span class="icon">📈</span>
+                    <span>统计分析</span>
+                </a></li>
+                <li><a href="/admin/applications">
+                    <span class="icon">📱</span>
+                    <span>应用管理</span>
+                </a></li>
+                <li><a href="/admin/logs">
+                    <span class="icon">📋</span>
+                    <span>日志查询</span>
+                </a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="#" id="logoutBtn" class="logout-btn">
+                <span class="icon">🚪</span>
+                <span>退出登录</span>
+            </a>
+        </div>
+    </div>
+    
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1>统计分析</h1>
+            </div>
+            <div class="topbar-right">
+                <div class="user-info">
+                    <span class="username" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <div class="stats-page">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label for="dateRange">时间范围</label>
+                        <select id="dateRange">
+                            <option value="7d">最近7天</option>
+                            <option value="30d" selected>最近30天</option>
+                            <option value="90d">最近90天</option>
+                            <option value="1y">最近1年</option>
+                        </select>
+                    </div>
+                    <button id="refreshBtn" class="btn">刷新数据</button>
+                </div>
+                
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>用户增长趋势</h3>
+                        <canvas id="userGrowthChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>请求量统计</h3>
+                        <canvas id="requestChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>应用分布</h3>
+                        <canvas id="appDistributionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>错误率分析</h3>
+                        <canvas id="errorRateChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/stats.js"></script>
+</body>
+</html>

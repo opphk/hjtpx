@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}行为验证码 - 安全验证{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="/static/css/captcha.css">
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <div class="container" style="text-align: center; padding: 40px 20px;">
+        <h1 style="color: white; margin-bottom: 20px;">安全验证系统</h1>
+        <p style="color: rgba(255,255,255,0.9); font-size: 18px;">请完成下方验证以继续</p>
+    </div>
+</div>
+
+<section style="padding: 60px 20px;">
+    <div class="container">
+        <div id="captcha-container"></div>
+        
+        <div style="margin-top: 60px; text-align: center;">
+            <h3 style="margin-bottom: 20px; color: #1f2937;">使用说明</h3>
+            <div style="max-width: 600px; margin: 0 auto; text-align: left; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <h4 style="margin-bottom: 15px; color: #3b82f6;">滑块验证</h4>
+                <p style="margin-bottom: 20px; color: #6b7280;">将滑块从左侧拖动到右侧，使拼图块对齐到正确位置即可完成验证。</p>
+                
+                <h4 style="margin-bottom: 15px; color: #3b82f6;">点选验证</h4>
+                <p style="margin-bottom: 20px; color: #6b7280;">按照提示文字，依次点击图片中的对应位置，完成后点击确认按钮。</p>
+                
+                <h4 style="margin-bottom: 15px; color: #3b82f6;">刷新验证码</h4>
+                <p style="color: #6b7280;">点击右上角的刷新按钮可以更换新的验证码图片。</p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/captcha.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const captcha = new Captcha('captcha-container', {
+            apiBase: '/api/v1',
+            type: 'slider',
+            onSuccess: function(result) {
+                console.log('验证成功:', result);
+                setTimeout(function() {
+                    alert('验证成功！会话ID: ' + result.session_id);
+                }, 500);
+            },
+            onError: function(error) {
+                console.log('验证失败:', error);
+            },
+            onRefresh: function() {
+                console.log('验证码已刷新');
+            }
+        });
+    });
+</script>
+{% endblock %}

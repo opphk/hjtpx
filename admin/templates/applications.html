@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 应用管理</title>
+    <link rel="stylesheet" href="/admin/static/css/style.css">
+    <link rel="stylesheet" href="/admin/static/css/applications.css">
+</head>
+<body class="admin-layout">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>管理后台</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="/admin/">
+                    <span class="icon">📊</span>
+                    <span>仪表盘</span>
+                </a></li>
+                <li><a href="/admin/stats">
+                    <span class="icon">📈</span>
+                    <span>统计分析</span>
+                </a></li>
+                <li><a href="/admin/applications" class="active">
+                    <span class="icon">📱</span>
+                    <span>应用管理</span>
+                </a></li>
+                <li><a href="/admin/logs">
+                    <span class="icon">📋</span>
+                    <span>日志查询</span>
+                </a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="#" id="logoutBtn" class="logout-btn">
+                <span class="icon">🚪</span>
+                <span>退出登录</span>
+            </a>
+        </div>
+    </div>
+    
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1>应用管理</h1>
+            </div>
+            <div class="topbar-right">
+                <button id="createAppBtn" class="btn btn-primary">+ 创建应用</button>
+                <div class="user-info">
+                    <span class="username" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <div class="applications-page">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label for="searchApp">搜索应用</label>
+                        <input type="text" id="searchApp" placeholder="输入应用名称或ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="appStatus">状态</label>
+                        <select id="appStatus">
+                            <option value="">全部</option>
+                            <option value="active">活跃</option>
+                            <option value="inactive">停用</option>
+                            <option value="suspended">暂停</option>
+                        </select>
+                    </div>
+                    <button id="searchBtn" class="btn">搜索</button>
+                </div>
+                
+                <div class="apps-list">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>应用ID</th>
+                                <th>应用名称</th>
+                                <th>应用密钥</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appsTableBody">
+                        </tbody>
+                    </table>
+                    
+                    <div class="pagination" id="pagination">
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div id="appModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">创建应用</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <form id="appForm" class="modal-body">
+                <input type="hidden" id="appId">
+                <div class="form-group">
+                    <label for="appName">应用名称 *</label>
+                    <input type="text" id="appName" required>
+                </div>
+                <div class="form-group">
+                    <label for="appDescription">应用描述</label>
+                    <textarea id="appDescription" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="appStatusSelect">状态</label>
+                    <select id="appStatusSelect">
+                        <option value="active">活跃</option>
+                        <option value="inactive">停用</option>
+                        <option value="suspended">暂停</option>
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" id="cancelBtn">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/applications.js"></script>
+</body>
+</html>

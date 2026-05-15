@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}管理后台 - 仪表盘{% endblock %}
+
+{% block page_title %}仪表盘{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-users">👥</div>
+            <div class="stat-content">
+                <h3>总用户数</h3>
+                <p class="stat-number">1,234</p>
+                <span class="stat-change positive">+12%</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-products">📦</div>
+            <div class="stat-content">
+                <h3>产品总数</h3>
+                <p class="stat-number">567</p>
+                <span class="stat-change positive">+5%</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-orders">🛒</div>
+            <div class="stat-content">
+                <h3>订单总数</h3>
+                <p class="stat-number">890</p>
+                <span class="stat-change negative">-2%</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon stat-icon-revenue">💰</div>
+            <div class="stat-content">
+                <h3>总收入</h3>
+                <p class="stat-number">¥ 123,456</p>
+                <span class="stat-change positive">+8%</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="dashboard-sections">
+        <div class="recent-section">
+            <h2>最近订单</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>订单号</th>
+                        <th>用户</th>
+                        <th>金额</th>
+                        <th>状态</th>
+                        <th>时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>#12345</td>
+                        <td>张三</td>
+                        <td>¥ 99.00</td>
+                        <td><span class="status success">已完成</span></td>
+                        <td>2026-05-12 10:30</td>
+                    </tr>
+                    <tr>
+                        <td>#12344</td>
+                        <td>李四</td>
+                        <td>¥ 199.00</td>
+                        <td><span class="status pending">处理中</span></td>
+                        <td>2026-05-12 09:15</td>
+                    </tr>
+                    <tr>
+                        <td>#12343</td>
+                        <td>王五</td>
+                        <td>¥ 299.00</td>
+                        <td><span class="status error">已取消</span></td>
+                        <td>2026-05-11 18:45</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="activity-section">
+            <h2>系统活动</h2>
+            <div class="activity-list">
+                <div class="activity-item">
+                    <div class="activity-icon">➕</div>
+                    <div class="activity-content">
+                        <p>新用户注册：赵六</p>
+                        <span class="activity-time">5分钟前</span>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon">✏️</div>
+                    <div class="activity-content">
+                        <p>产品已更新：产品A</p>
+                        <span class="activity-time">15分钟前</span>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon">📦</div>
+                    <div class="activity-content">
+                        <p>订单发货：#12342</p>
+                        <span class="activity-time">30分钟前</span>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon">🔔</div>
+                    <div class="activity-content">
+                        <p>系统备份完成</p>
+                        <span class="activity-time">1小时前</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 仪表盘</title>
+    <link rel="stylesheet" href="/admin/static/css/style.css">
+    <link rel="stylesheet" href="/admin/static/css/dashboard.css">
+</head>
+<body class="admin-layout">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>管理后台</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="/admin/" class="active">
+                    <span class="icon">📊</span>
+                    <span>仪表盘</span>
+                </a></li>
+                <li><a href="/admin/stats">
+                    <span class="icon">📈</span>
+                    <span>统计分析</span>
+                </a></li>
+                <li><a href="/admin/applications">
+                    <span class="icon">📱</span>
+                    <span>应用管理</span>
+                </a></li>
+                <li><a href="/admin/logs">
+                    <span class="icon">📋</span>
+                    <span>日志查询</span>
+                </a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="#" id="logoutBtn" class="logout-btn">
+                <span class="icon">🚪</span>
+                <span>退出登录</span>
+            </a>
+        </div>
+    </div>
+    
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1>仪表盘</h1>
+            </div>
+            <div class="topbar-right">
+                <div class="user-info">
+                    <span class="username" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <div class="dashboard">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-users">👥</div>
+                        <div class="stat-content">
+                            <h3>用户总数</h3>
+                            <div class="stat-number" id="totalUsers">0</div>
+                            <div class="stat-change positive">+12.5%</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-apps">📱</div>
+                        <div class="stat-content">
+                            <h3>应用总数</h3>
+                            <div class="stat-number" id="totalApps">0</div>
+                            <div class="stat-change positive">+8.2%</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-requests">🚀</div>
+                        <div class="stat-content">
+                            <h3>请求总数</h3>
+                            <div class="stat-number" id="totalRequests">0</div>
+                            <div class="stat-change positive">+23.1%</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-errors">⚠️</div>
+                        <div class="stat-content">
+                            <h3>错误总数</h3>
+                            <div class="stat-number" id="totalErrors">0</div>
+                            <div class="stat-change negative">-5.7%</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-sections">
+                    <div class="recent-section">
+                        <h2>最近活动</h2>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>时间</th>
+                                    <th>事件</th>
+                                    <th>用户</th>
+                                    <th>状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentActivity">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="activity-section">
+                        <h2>系统状态</h2>
+                        <div class="status-list">
+                            <div class="status-item">
+                                <span class="status-indicator success"></span>
+                                <span>数据库服务</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-indicator success"></span>
+                                <span>Redis 缓存</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-indicator success"></span>
+                                <span>API 服务</span>
+                            </div>
+                            <div class="status-item">
+                                <span class="status-indicator warning"></span>
+                                <span>存储服务</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/dashboard.js"></script>
+</body>
+</html>

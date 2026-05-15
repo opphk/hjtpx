@@ -1,0 +1,45 @@
+.dashboard {
+    max-width: 1400px;
+}
+
+.stat-icon-apps {
+    background-color: #d1fae5;
+}
+
+.stat-icon-requests {
+    background-color: #fef3c7;
+}
+
+.stat-icon-errors {
+    background-color: #fee2e2;
+}
+
+.status-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.status-indicator.success {
+    background-color: var(--success-color);
+}
+
+.status-indicator.warning {
+    background-color: var(--warning-color);
+}
+
+.status-indicator.error {
+    background-color: var(--danger-color);
+}

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 日志查询</title>
+    <link rel="stylesheet" href="/admin/static/css/style.css">
+    <link rel="stylesheet" href="/admin/static/css/logs.css">
+</head>
+<body class="admin-layout">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>管理后台</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <ul>
+                <li><a href="/admin/">
+                    <span class="icon">📊</span>
+                    <span>仪表盘</span>
+                </a></li>
+                <li><a href="/admin/stats">
+                    <span class="icon">📈</span>
+                    <span>统计分析</span>
+                </a></li>
+                <li><a href="/admin/applications">
+                    <span class="icon">📱</span>
+                    <span>应用管理</span>
+                </a></li>
+                <li><a href="/admin/logs" class="active">
+                    <span class="icon">📋</span>
+                    <span>日志查询</span>
+                </a></li>
+            </ul>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="#" id="logoutBtn" class="logout-btn">
+                <span class="icon">🚪</span>
+                <span>退出登录</span>
+            </a>
+        </div>
+    </div>
+    
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1>日志查询</h1>
+            </div>
+            <div class="topbar-right">
+                <button id="exportBtn" class="btn">导出日志</button>
+                <div class="user-info">
+                    <span class="username" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="main-content">
+            <div class="logs-page">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label for="logLevel">日志级别</label>
+                        <select id="logLevel">
+                            <option value="">全部</option>
+                            <option value="debug">Debug</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="startDate">开始时间</label>
+                        <input type="datetime-local" id="startDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">结束时间</label>
+                        <input type="datetime-local" id="endDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="keyword">关键词</label>
+                        <input type="text" id="keyword" placeholder="搜索关键词">
+                    </div>
+                    <button id="searchLogsBtn" class="btn btn-primary">查询</button>
+                </div>
+                
+                <div class="logs-container">
+                    <div class="logs-header">
+                        <span class="logs-count" id="logsCount">共 0 条日志</span>
+                    </div>
+                    <div class="logs-list" id="logsList">
+                    </div>
+                    
+                    <div class="pagination" id="pagination">
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div id="logDetailModal" class="modal hidden">
+        <div class="modal-content log-detail-content">
+            <div class="modal-header">
+                <h2>日志详情</h2>
+                <button class="close-btn" id="closeLogModal">&times;</button>
+            </div>
+            <div class="modal-body" id="logDetailContent">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" id="closeLogDetailBtn">关闭</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/logs.js"></script>
+</body>
+</html>
