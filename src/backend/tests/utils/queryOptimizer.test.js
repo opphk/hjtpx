@@ -1,287 +1,280 @@
-jest.mock('../../../config/database/db');
+jest.mock('../../../config/database/db', () => ({
+  query: jest.fn(),
+  getClient: jest.fn()
+}));
 
-describe('Query Builder', () => {
-  const buildSelectQuery = (table, columns = ['*'], conditions = {}) => {
-    let query = `SELECT ${columns.join(', ')} FROM ${table}`;
-    const params = [];
-    
-    if (Object.keys(conditions).length > 0) {
-      const whereClauses = [];
-      let paramIndex = 1;
-      
-      for (const [key, value] of Object.entries(conditions)) {
-        if (value === null) {
-          whereClauses.push(`${key} IS NULL`);
-        } else if (Array.isArray(value)) {
-          whereClauses.push(`${key} IN (${value.map(() => `$${paramIndex++}`).join(', ')})`);
-          params.push(...value);
-        } else {
-          whereClauses.push(`${key} = $${paramIndex++}`);
-          params.push(value);
-        }
-      }
-      
-      query += ` WHERE ${whereClauses.join(' AND ')}`;
-    }
-    
-    return { query, params };
-  };
+const db = require('../../config/database/db');
+const queryOptimizer = require('../../utils/queryOptimizer');
 
-  const buildInsertQuery = (table, data) => {
-    const columns = Object.keys(data);
-    const values = Object.values(data);
-    const paramIndex = values.map((_, i) => `$${i + 1}`);
-    
-    return {
-      query: `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${paramIndex.join(', ')})`,
-      params: values
-    };
-  };
+describe('queryOptimizer', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    queryOptimizer.clearCache();
+  });
 
-  const buildUpdateQuery = (table, data, conditions = {}) => {
-    const setClauses = [];
-    const params = [];
-    let paramIndex = 1;
-    
-    for (const [key, value] of Object.entries(data)) {
-      if (value === null) {
-        setClauses.push(`${key} = NULL`);
-      } else {
-        setClauses.push(`${key} = $${paramIndex++}`);
-        params.push(value);
-      }
-    }
-    
-    let query = `UPDATE ${table} SET ${setClauses.join(', ')}`;
-    
-    if (Object.keys(conditions).length > 0) {
-      const whereClauses = [];
-      for (const [key, value] of Object.entries(conditions)) {
-        whereClauses.push(`${key} = $${paramIndex++}`);
-        params.push(value);
-      }
-      query += ` WHERE ${whereClauses.join(' AND ')}`;
-    }
-    
-    return { query, params };
-  };
+  describe('cacheKey', () => {
+    test('should generate consistent cache keys', () => {
+      const key1 = queryOptimizer.cacheKey('SELECT * FROM users', [1, 'test']);
+      const key2 = queryOptimizer.cacheKey('SELECT * FROM users', [1, 'test']);
+      const key3 = queryOptimizer.cacheKey('SELECT * FROM users', [2, 'test']);
 
-  const buildDeleteQuery = (table, conditions = {}) => {
-    let query = `DELETE FROM ${table}`;
-    const params = [];
-    
-    if (Object.keys(conditions).length > 0) {
-      const whereClauses = [];
-      let paramIndex = 1;
-      
-      for (const [key, value] of Object.entries(conditions)) {
-        whereClauses.push(`${key} = $${paramIndex++}`);
-        params.push(value);
-      }
-      query += ` WHERE ${whereClauses.join(' AND ')}`;
-    }
-    
-    return { query, params };
-  };
-
-  describe('SELECT queries', () => {
-    test('should build simple SELECT query', () => {
-      const { query, params } = buildSelectQuery('users');
-      expect(query).toBe('SELECT * FROM users');
-      expect(params).toEqual([]);
+      expect(key1).toBe(key2);
+      expect(key1).not.toBe(key3);
     });
 
-    test('should build SELECT with specific columns', () => {
-      const { query, params } = buildSelectQuery('users', ['id', 'email', 'name']);
-      expect(query).toBe('SELECT id, email, name FROM users');
-      expect(params).toEqual([]);
+    test('should handle null params', () => {
+      const key = queryOptimizer.cacheKey('SELECT * FROM users', null);
+      expect(key).toContain('SELECT * FROM users');
+    });
+  });
+
+  describe('cachedQuery', () => {
+    test('should return cached result if within TTL', async () => {
+      const mockData = [{ id: 1, name: 'User 1' }];
+      db.query.mockResolvedValueOnce({ rows: mockData });
+
+      const result1 = await queryOptimizer.cachedQuery('SELECT * FROM users', [], 60);
+      const result2 = await queryOptimizer.cachedQuery('SELECT * FROM users', [], 60);
+
+      expect(result1).toEqual(mockData);
+      expect(result2).toEqual(mockData);
+      expect(db.query).toHaveBeenCalledTimes(1);
     });
 
-    test('should build SELECT with equality condition', () => {
-      const { query, params } = buildSelectQuery('users', ['*'], { status: 'active' });
-      expect(query).toBe('SELECT * FROM users WHERE status = $1');
-      expect(params).toEqual(['active']);
+    test('should fetch from database if cache expired', async () => {
+      const mockData1 = [{ id: 1, name: 'User 1' }];
+      const mockData2 = [{ id: 2, name: 'User 2' }];
+
+      db.query
+        .mockResolvedValueOnce({ rows: mockData1 })
+        .mockResolvedValueOnce({ rows: mockData2 });
+
+      const result1 = await queryOptimizer.cachedQuery('SELECT * FROM users', [], 0);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      const result2 = await queryOptimizer.cachedQuery('SELECT * FROM users', [], 0);
+
+      expect(result1).toEqual(mockData1);
+      expect(result2).toEqual(mockData2);
+      expect(db.query).toHaveBeenCalledTimes(2);
     });
 
-    test('should build SELECT with multiple conditions', () => {
-      const { query, params } = buildSelectQuery('users', ['*'], { 
-        status: 'active', 
-        role: 'admin' 
+    test('should log warning for slow queries', async () => {
+      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      const originalThreshold = process.env.SLOW_QUERY_THRESHOLD;
+      process.env.SLOW_QUERY_THRESHOLD = '0';
+
+      const optimizer = Object.create(queryOptimizer);
+      optimizer.slowQueryThreshold = 0;
+      optimizer.queryCache = new Map();
+
+      db.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+
+      await optimizer.cachedQuery('SELECT * FROM slow_query', [], 60);
+
+      consoleSpy.mockRestore();
+      process.env.SLOW_QUERY_THRESHOLD = originalThreshold;
+    });
+  });
+
+  describe('batchQuery', () => {
+    test('should execute multiple queries in a transaction', async () => {
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce()
+          .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+          .mockResolvedValueOnce({ rows: [{ id: 2 }] })
+          .mockResolvedValueOnce(),
+        release: jest.fn()
+      };
+
+      db.getClient.mockResolvedValueOnce(mockClient);
+
+      const queries = [
+        { query: 'INSERT INTO users VALUES ($1)', params: ['user1'] },
+        { query: 'INSERT INTO users VALUES ($1)', params: ['user2'] }
+      ];
+
+      const results = await queryOptimizer.batchQuery(queries);
+
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    test('should rollback on error', async () => {
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce()
+          .mockRejectedValueOnce(new Error('DB Error'))
+          .mockResolvedValueOnce(),
+        release: jest.fn()
+      };
+
+      db.getClient.mockResolvedValueOnce(mockClient);
+
+      const queries = [
+        { query: 'INSERT INTO users VALUES ($1)', params: ['user1'] }
+      ];
+
+      await expect(queryOptimizer.batchQuery(queries)).rejects.toThrow('DB Error');
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+  });
+
+  describe('batchInsert', () => {
+    test('should insert rows in batches', async () => {
+      const rows = [
+        { name: 'User 1', email: 'user1@example.com' },
+        { name: 'User 2', email: 'user2@example.com' }
+      ];
+
+      db.query.mockResolvedValue({ rows: [{ id: 1, ...rows[0] }, { id: 2, ...rows[1] }] });
+
+      const result = await queryOptimizer.batchInsert('users', rows, 100);
+
+      expect(result).toHaveLength(2);
+      expect(db.query).toHaveBeenCalledTimes(1);
+    });
+
+    test('should handle empty rows array', async () => {
+      const result = await queryOptimizer.batchInsert('users', [], 100);
+      expect(result).toEqual([]);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    test('should split large batches', async () => {
+      const rows = [
+        { name: 'User 1', email: 'user1@example.com' },
+        { name: 'User 2', email: 'user2@example.com' },
+        { name: 'User 3', email: 'user3@example.com' }
+      ];
+
+      db.query.mockResolvedValue({ rows: [] });
+
+      const result = await queryOptimizer.batchInsert('users', rows, 2);
+
+      expect(result).toHaveLength(0);
+      expect(db.query).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('batchUpdate', () => {
+    test('should update rows in batches', async () => {
+      const updates = [
+        { id: 1, name: 'Updated User 1' },
+        { id: 2, name: 'Updated User 2' }
+      ];
+
+      const mockClient = {
+        query: jest.fn()
+          .mockResolvedValueOnce()
+          .mockResolvedValueOnce({ rows: [{ id: 1 }] })
+          .mockResolvedValueOnce({ rows: [{ id: 2 }] })
+          .mockResolvedValueOnce(),
+        release: jest.fn()
+      };
+
+      db.getClient.mockResolvedValueOnce(mockClient);
+
+      const result = await queryOptimizer.batchUpdate('users', updates);
+
+      expect(result).toHaveLength(2);
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+    });
+
+    test('should handle empty updates array', async () => {
+      const result = await queryOptimizer.batchUpdate('users', []);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('paginatedQuery', () => {
+    test('should return paginated results', async () => {
+      const mockData = [
+        { id: 1, name: 'User 1' },
+        { id: 2, name: 'User 2' }
+      ];
+
+      db.query
+        .mockResolvedValueOnce({ rows: [{ total: 10 }] })
+        .mockResolvedValueOnce({ rows: mockData });
+
+      const result = await queryOptimizer.paginatedQuery('SELECT * FROM users', [], 1, 2);
+
+      expect(result.data).toEqual(mockData);
+      expect(result.pagination).toEqual({
+        page: 1,
+        pageSize: 2,
+        total: 10,
+        totalPages: 5
       });
-      expect(query).toBe('SELECT * FROM users WHERE status = $1 AND role = $2');
-      expect(params).toEqual(['active', 'admin']);
     });
 
-    test('should handle NULL conditions', () => {
-      const { query, params } = buildSelectQuery('users', ['*'], { deleted_at: null });
-      expect(query).toBe('SELECT * FROM users WHERE deleted_at IS NULL');
-      expect(params).toEqual([]);
-    });
+    test('should handle empty results', async () => {
+      db.query
+        .mockResolvedValueOnce({ rows: [{ total: 0 }] })
+        .mockResolvedValueOnce({ rows: [] });
 
-    test('should handle IN clause for arrays', () => {
-      const { query, params } = buildSelectQuery('users', ['*'], { id: [1, 2, 3] });
-      expect(query).toBe('SELECT * FROM users WHERE id IN ($1, $2, $3)');
-      expect(params).toEqual([1, 2, 3]);
+      const result = await queryOptimizer.paginatedQuery('SELECT * FROM users', [], 1, 10);
+
+      expect(result.pagination.total).toBe(0);
+      expect(result.pagination.totalPages).toBe(0);
     });
   });
 
-  describe('INSERT queries', () => {
-    test('should build INSERT query', () => {
-      const { query, params } = buildInsertQuery('users', { 
-        email: 'test@example.com', 
-        name: 'Test User' 
-      });
-      expect(query).toBe('INSERT INTO users (email, name) VALUES ($1, $2)');
-      expect(params).toEqual(['test@example.com', 'Test User']);
-    });
+  describe('explainQuery', () => {
+    test('should return query execution plan', async () => {
+      const mockPlan = [{ 'QUERY PLAN': ['Seq Scan on users'] }];
+      db.query.mockResolvedValueOnce({ rows: mockPlan });
 
-    test('should handle single column', () => {
-      const { query, params } = buildInsertQuery('users', { email: 'test@example.com' });
-      expect(query).toBe('INSERT INTO users (email) VALUES ($1)');
-      expect(params).toEqual(['test@example.com']);
+      const result = await queryOptimizer.explainQuery('SELECT * FROM users', []);
+
+      expect(result).toEqual(mockPlan);
+      expect(db.query).toHaveBeenCalledWith('EXPLAIN ANALYZE SELECT * FROM users', []);
     });
   });
 
-  describe('UPDATE queries', () => {
-    test('should build UPDATE query', () => {
-      const { query, params } = buildUpdateQuery('users', { name: 'New Name' }, { id: 1 });
-      expect(query).toBe('UPDATE users SET name = $1 WHERE id = $2');
-      expect(params).toEqual(['New Name', 1]);
-    });
+  describe('clearCache', () => {
+    test('should clear the query cache', async () => {
+      db.query.mockResolvedValue({ rows: [{ id: 1 }] });
 
-    test('should handle NULL values', () => {
-      const { query, params } = buildUpdateQuery('users', { deleted_at: null }, { id: 1 });
-      expect(query).toBe('UPDATE users SET deleted_at = NULL WHERE id = $1');
-      expect(params).toEqual([1]);
-    });
+      await queryOptimizer.cachedQuery('SELECT * FROM users', [], 60);
+      expect(db.query).toHaveBeenCalledTimes(1);
 
-    test('should handle multiple columns', () => {
-      const { query, params } = buildUpdateQuery('users', { 
-        name: 'New Name', 
-        email: 'new@example.com' 
-      }, { id: 1 });
-      expect(query).toBe('UPDATE users SET name = $1, email = $2 WHERE id = $3');
-      expect(params).toEqual(['New Name', 'new@example.com', 1]);
+      queryOptimizer.clearCache();
+
+      await queryOptimizer.cachedQuery('SELECT * FROM users', [], 60);
+      expect(db.query).toHaveBeenCalledTimes(2);
     });
   });
 
-  describe('DELETE queries', () => {
-    test('should build DELETE query with condition', () => {
-      const { query, params } = buildDeleteQuery('users', { id: 1 });
-      expect(query).toBe('DELETE FROM users WHERE id = $1');
-      expect(params).toEqual([1]);
+  describe('getCacheStats', () => {
+    test('should return cache statistics', async () => {
+      db.query.mockResolvedValue({ rows: [{ id: 1 }] });
+
+      await queryOptimizer.cachedQuery('SELECT * FROM users', [], 60);
+      const stats = queryOptimizer.getCacheStats();
+
+      expect(stats.size).toBe(1);
+      expect(stats.maxSize).toBe(100);
+      expect(stats.queries).toHaveLength(1);
     });
 
-    test('should build DELETE query without condition', () => {
-      const { query, params } = buildDeleteQuery('users', {});
-      expect(query).toBe('DELETE FROM users');
-      expect(params).toEqual([]);
-    });
+    test('should respect max cache size', async () => {
+      const optimizer = Object.create(queryOptimizer);
+      optimizer.queryCache = new Map();
+      optimizer.maxCacheSize = 2;
 
-    test('should handle multiple conditions', () => {
-      const { query, params } = buildDeleteQuery('users', { id: 1, status: 'inactive' });
-      expect(query).toBe('DELETE FROM users WHERE id = $1 AND status = $2');
-      expect(params).toEqual([1, 'inactive']);
-    });
-  });
-});
+      db.query.mockResolvedValue({ rows: [] });
 
-describe('Validation Rules', () => {
-  const RULES = {
-    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{8,}$/,
-    phone: /^\+?[1-9]\d{1,14}$/,
-    url: /^https?:\/\/.+/,
-    uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-  };
+      await optimizer.cachedQuery('SELECT 1', [], 60);
+      await optimizer.cachedQuery('SELECT 2', [], 60);
+      await optimizer.cachedQuery('SELECT 3', [], 60);
 
-  const validate = (type, value) => {
-    const rule = RULES[type];
-    if (!rule) return { valid: false, error: 'Unknown validation type' };
-    if (!rule.test(value)) return { valid: false, error: `Invalid ${type}` };
-    return { valid: true };
-  };
-
-  describe('email validation', () => {
-    test('should accept valid email', () => {
-      const result = validate('email', 'test@example.com');
-      expect(result.valid).toBe(true);
-    });
-
-    test('should reject invalid email', () => {
-      const result = validate('email', 'invalid-email');
-      expect(result.valid).toBe(false);
-    });
-
-    test('should reject email without @', () => {
-      const result = validate('email', 'testexample.com');
-      expect(result.valid).toBe(false);
-    });
-
-    test('should reject email without domain', () => {
-      const result = validate('email', 'test@');
-      expect(result.valid).toBe(false);
-    });
-  });
-
-  describe('password validation', () => {
-    test('should accept valid password', () => {
-      const result = validate('password', 'Password123');
-      expect(result.valid).toBe(true);
-    });
-
-    test('should reject short password', () => {
-      const result = validate('password', 'Pass1');
-      expect(result.valid).toBe(false);
-    });
-
-    test('should reject password without uppercase', () => {
-      const result = validate('password', 'password123');
-      expect(result.valid).toBe(false);
-    });
-
-    test('should reject password without lowercase', () => {
-      const result = validate('password', 'PASSWORD123');
-      expect(result.valid).toBe(false);
-    });
-
-    test('should reject password without number', () => {
-      const result = validate('password', 'PasswordABC');
-      expect(result.valid).toBe(false);
-    });
-  });
-
-  describe('phone validation', () => {
-    test('should accept valid phone number', () => {
-      expect(validate('phone', '+1234567890').valid).toBe(true);
-    });
-
-    test('should reject invalid phone', () => {
-      expect(validate('phone', 'abc').valid).toBe(false);
-    });
-  });
-
-  describe('url validation', () => {
-    test('should accept http url', () => {
-      expect(validate('url', 'http://example.com').valid).toBe(true);
-    });
-
-    test('should accept https url', () => {
-      expect(validate('url', 'https://example.com').valid).toBe(true);
-    });
-
-    test('should reject invalid url', () => {
-      expect(validate('url', 'not-a-url').valid).toBe(false);
-    });
-  });
-
-  describe('uuid validation', () => {
-    test('should accept valid uuid', () => {
-      expect(validate('uuid', '123e4567-e89b-12d3-a456-426614174000').valid).toBe(true);
-    });
-
-    test('should reject invalid uuid', () => {
-      expect(validate('uuid', 'not-a-uuid').valid).toBe(false);
+      expect(optimizer.queryCache.size).toBe(2);
     });
   });
 });
