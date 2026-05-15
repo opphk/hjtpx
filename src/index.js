@@ -13,7 +13,7 @@ const express = require('express');
 const productionConfig = require('./backend/config/production');
 const { securityHeaders, additionalSecurityHeaders, helmetMiddleware } = require('./backend/middleware/securityHeaders');
 const { initSentry, Sentry } = require('./backend/config/sentry');
-const { createApolloServer } = require('./backend/graphql');
+const { createApolloServer, setupPlayground } = require('./backend/graphql');
 
 const app = express();
 
@@ -169,11 +169,15 @@ if (process.env.SENTRY_DSN) {
 app.use(errorHandler);
 
 const createServer = async () => {
-  const apolloServer = createApolloServer();
-  await apolloServer.start();
-  apolloServer.applyMiddleware({ app, path: '/graphql' });
-
-  const server = app.listen(PORT, () => {
+  const httpServer = http.createServer(app);
+  
+  await createApolloServer(app, httpServer);
+  
+  if (process.env.NODE_ENV !== 'production') {
+    setupPlayground(app);
+  }
+  
+  httpServer.listen(PORT, () => {
     console.log('🚀 HJTPX API Server');
     console.log('========================================');
     console.log(`Environment: ${NODE_ENV}`);
@@ -181,22 +185,25 @@ const createServer = async () => {
     console.log(`Default API Version: ${DEFAULT_VERSION}`);
     console.log(`Supported API Versions: ${SUPPORTED_VERSIONS.join(', ')}`);
     console.log(`Health Check: http://localhost:${PORT}/api/${DEFAULT_VERSION}/health`);
-    console.log(`GraphQL Playground: http://localhost:${PORT}/graphql`);
+    console.log(`GraphQL Endpoint: http://localhost:${PORT}/graphql`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`GraphQL Playground: http://localhost:${PORT}/playground`);
+    }
     console.log('========================================\n');
   });
 
   if (isProduction && productionConfig.performance.requestTimeout) {
-    server.timeout = productionConfig.performance.requestTimeout;
-    server.keepAliveTimeout = productionConfig.performance.keepAliveTimeout;
+    httpServer.timeout = productionConfig.performance.requestTimeout;
+    httpServer.keepAliveTimeout = productionConfig.performance.keepAliveTimeout;
   }
 
-  websocketService.initialize(server);
+  websocketService.initialize(httpServer);
   console.log('✅ WebSocket service initialized');
 
   const gracefulShutdown = signal => {
     console.log(`${signal} signal received: closing HTTP server`);
     websocketService.close();
-    server.close(() => {
+    httpServer.close(() => {
       console.log('HTTP server closed');
       process.exit(0);
     });
@@ -216,7 +223,7 @@ const createServer = async () => {
     process.exit(1);
   });
 
-  return server;
+  return httpServer;
 };
 
 if (isProduction && productionConfig.production.enableCluster && cluster.isMaster) {

@@ -1,7 +1,6 @@
-const { gql } = require('apollo-server-express');
+const { gql } = require('graphql-tag');
 
 const typeDefs = gql`
-  # 枚举类型
   enum Role {
     admin
     user
@@ -39,7 +38,6 @@ const typeDefs = gql`
     push
   }
 
-  # 分页信息
   type Pagination {
     page: Int!
     limit: Int!
@@ -47,7 +45,6 @@ const typeDefs = gql`
     pages: Int!
   }
 
-  # 用户类型
   type User {
     id: ID!
     email: String!
@@ -55,11 +52,10 @@ const typeDefs = gql`
     role: Role!
     created_at: String!
     updated_at: String
-    notifications: [Notification]
+    notifications(limit: Int, status: NotificationStatus): [Notification]
     unreadNotificationsCount: Int
   }
 
-  # 通知类型
   type Notification {
     id: ID!
     userId: ID!
@@ -80,20 +76,21 @@ const typeDefs = gql`
     user: User
   }
 
-  # 通知列表响应
   type NotificationsResponse {
     notifications: [Notification!]!
     pagination: Pagination!
   }
 
-  # 查询
+  type AuthPayload {
+    token: String!
+    user: User!
+  }
+
   type Query {
-    # 用户查询
-    users: [User!]!
+    users(limit: Int, offset: Int): [User!]!
     user(id: ID!): User
     me: User
-    
-    # 通知查询
+
     notifications(
       status: NotificationStatus
       type: NotificationType
@@ -106,14 +103,11 @@ const typeDefs = gql`
     unreadNotificationsCount: Int!
   }
 
-  # 变更
   type Mutation {
-    # 用户变更
     createUser(email: String!, name: String!, password: String!, role: Role = user): User!
     updateUser(id: ID!, email: String, name: String, password: String, role: Role): User
     deleteUser(id: ID!): Boolean!
-    
-    # 通知变更
+
     createNotification(
       userId: ID!
       type: NotificationType!
@@ -126,9 +120,19 @@ const typeDefs = gql`
     ): Notification!
     markNotificationAsRead(id: ID!): Notification
     markAllNotificationsAsRead: Boolean!
+    deleteNotification(id: ID!): Boolean!
+
+    login(email: String!, password: String!): AuthPayload!
+    register(email: String!, name: String!, password: String!): AuthPayload!
   }
 
-  # 自定义标量类型
+  type Subscription {
+    notificationCreated(userId: ID): Notification!
+    notificationUpdated(userId: ID!): Notification!
+    notificationDeleted(userId: ID!): ID!
+    userUpdated: User!
+  }
+
   scalar JSON
 `;
 

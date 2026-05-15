@@ -1,104 +1,222 @@
-jest.mock('../../../config/database/db');
+const bcrypt = require('bcryptjs');
 
-describe('Pool Mock', () => {
-  let pool;
+jest.mock('../../config/database/db', () => ({
+  query: jest.fn().mockResolvedValue({ rows: [] }),
+  pool: {
+    query: jest.fn().mockResolvedValue({ rows: [] })
+  }
+}));
 
+jest.mock('../../utils/queryOptimizer', () => ({
+  cachedQuery: jest.fn().mockResolvedValue([]),
+  clearCache: jest.fn().mockResolvedValue(undefined)
+}));
+
+jest.mock('../../services/authService', () => ({
+  validatePassword: jest.fn().mockReturnValue(true)
+}));
+
+jest.mock('../../services/cacheService', () => ({
+  get: jest.fn().mockResolvedValue(null),
+  set: jest.fn().mockResolvedValue(true),
+  del: jest.fn().mockResolvedValue(true)
+}));
+
+const pool = require('../../config/database/db');
+const userService = require('../../services/userService');
+
+describe('userService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    pool = require('../../../config/database/db');
+    pool.query.mockResolvedValue({ rows: [] });
   });
 
-  describe('query', () => {
-    it('should be a function', () => {
-      expect(typeof pool.query).toBe('function');
-    });
-
-    it('should return mock data', async () => {
-      const mockData = { rows: [{ id: 1, email: 'test@example.com' }] };
-      pool.query.mockResolvedValue(mockData);
-
-      const result = await pool.query('SELECT * FROM users');
-
-      expect(result).toEqual(mockData);
-    });
-
-    it('should handle query errors', async () => {
-      pool.query.mockRejectedValue(new Error('Database error'));
-
-      await expect(pool.query('SELECT * FROM users')).rejects.toThrow('Database error');
-    });
-
-    it('should track query calls', async () => {
-      pool.query.mockResolvedValue({ rows: [] });
-
-      await pool.query('SELECT 1');
-      await pool.query('SELECT 2');
-
-      expect(pool.query).toHaveBeenCalledTimes(2);
+  describe('VALID_ROLES', () => {
+    test('should export valid roles', () => {
+      expect(userService.VALID_ROLES).toContain('admin');
+      expect(userService.VALID_ROLES).toContain('user');
+      expect(userService.VALID_ROLES).toContain('moderator');
     });
   });
-});
 
-describe('User Data Validation', () => {
-  const validateUserData = (data) => {
-    const errors = [];
-    if (!data.email) {
-      errors.push('Email is required');
-    }
-    if (data.email && !data.email.includes('@')) {
-      errors.push('Invalid email format');
-    }
-    if (!data.name) {
-      errors.push('Name is required');
-    }
-    return { valid: errors.length === 0, errors };
-  };
+  describe('createUser', () => {
+    test('should create a new user successfully', async () => {
+      const newUser = {
+        id: 1,
+        email: 'newuser@example.com',
+        name: 'New User',
+        role: 'user',
+        created_at: new Date()
+      };
 
-  test('should validate complete user data', () => {
-    const result = validateUserData({
-      email: 'test@example.com',
-      name: 'Test User'
+      pool.query.mockResolvedValueOnce({ rows: [newUser] });
+
+      const result = await userService.createUser({
+        email: 'newuser@example.com',
+        name: 'New User',
+        password: 'Password123'
+      });
+
+      expect(result).toEqual(newUser);
+      expect(pool.query).toHaveBeenCalled();
     });
-    expect(result.valid).toBe(true);
-    expect(result.errors).toHaveLength(0);
-  });
 
-  test('should reject missing email', () => {
-    const result = validateUserData({ name: 'Test User' });
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain('Email is required');
-  });
-
-  test('should reject invalid email format', () => {
-    const result = validateUserData({
-      email: 'invalid-email',
-      name: 'Test User'
+    test('should throw error for weak password', async () => {
+      await expect(
+        userService.createUser({
+          email: 'newuser@example.com',
+          name: 'New User',
+          password: 'weak'
+        })
+      ).rejects.toThrow('Password must be at least 8 characters long');
     });
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain('Invalid email format');
+
+    test('should throw error for empty password', async () => {
+      await expect(
+        userService.createUser({
+          email: 'newuser@example.com',
+          name: 'New User',
+          password: ''
+        })
+      ).rejects.toThrow('Password must be at least 8 characters long');
+    });
+
+    test('should throw error for invalid role', async () => {
+      await expect(
+        userService.createUser({
+          email: 'newuser@example.com',
+          name: 'New User',
+          password: 'Password123',
+          role: 'invalid_role'
+        })
+      ).rejects.toThrow('Invalid role. Must be one of:');
+    });
+
+    test('should create user with admin role', async () => {
+      const newUser = {
+        id: 1,
+        email: 'admin@example.com',
+        name: 'Admin User',
+        role: 'admin',
+        created_at: new Date()
+      };
+
+      pool.query.mockResolvedValueOnce({ rows: [newUser] });
+
+      const result = await userService.createUser({
+        email: 'admin@example.com',
+        name: 'Admin User',
+        password: 'Password123',
+        role: 'admin'
+      });
+
+      expect(result.role).toBe('admin');
+    });
+
+    test('should hash password before storing', async () => {
+      const newUser = {
+        id: 1,
+        email: 'newuser@example.com',
+        name: 'New User',
+        role: 'user',
+        created_at: new Date()
+      };
+
+      pool.query.mockResolvedValueOnce({ rows: [newUser] });
+
+      await userService.createUser({
+        email: 'newuser@example.com',
+        name: 'New User',
+        password: 'Password123'
+      });
+
+      const queryCall = pool.query.mock.calls[0];
+      const storedPassword = queryCall[1][2];
+      expect(storedPassword).toMatch(/^\$2[aby]?\$/);
+    });
   });
 
-  test('should reject missing name', () => {
-    const result = validateUserData({ email: 'test@example.com' });
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain('Name is required');
+  describe('updateUser', () => {
+    test('should update user name successfully', async () => {
+      const updatedUser = {
+        id: 1,
+        email: 'user@example.com',
+        name: 'Updated Name',
+        role: 'user'
+      };
+
+      pool.query.mockResolvedValueOnce({ rows: [updatedUser] });
+
+      const result = await userService.updateUser(1, { name: 'Updated Name' });
+
+      expect(result.name).toBe('Updated Name');
+    });
+
+    test('should update user email successfully', async () => {
+      const updatedUser = {
+        id: 1,
+        email: 'newemail@example.com',
+        name: 'Test User',
+        role: 'user'
+      };
+
+      pool.query.mockResolvedValueOnce({ rows: [updatedUser] });
+
+      const result = await userService.updateUser(1, { email: 'newemail@example.com' });
+
+      expect(result.email).toBe('newemail@example.com');
+    });
+
+    test('should update user role successfully', async () => {
+      const updatedUser = {
+        id: 1,
+        email: 'user@example.com',
+        name: 'Test User',
+        role: 'moderator'
+      };
+
+      pool.query.mockResolvedValueOnce({ rows: [updatedUser] });
+
+      const result = await userService.updateUser(1, { role: 'moderator' });
+
+      expect(result.role).toBe('moderator');
+    });
+
+    test('should throw error for invalid role update', async () => {
+      await expect(userService.updateUser(1, { role: 'invalid_role' })).rejects.toThrow(
+        'Invalid role. Must be one of:'
+      );
+    });
+
+    test('should update multiple fields at once', async () => {
+      const updatedUser = {
+        id: 1,
+        email: 'newemail@example.com',
+        name: 'Updated Name',
+        role: 'moderator'
+      };
+
+      pool.query.mockResolvedValueOnce({ rows: [updatedUser] });
+
+      const result = await userService.updateUser(1, {
+        email: 'newemail@example.com',
+        name: 'Updated Name',
+        role: 'moderator'
+      });
+
+      expect(result.email).toBe('newemail@example.com');
+      expect(result.name).toBe('Updated Name');
+      expect(result.role).toBe('moderator');
+    });
   });
-});
 
-describe('Cache Key Generation', () => {
-  const generateCacheKey = (prefix, id) => {
-    return `${prefix}:${id}`;
-  };
+  describe('deleteUser', () => {
+    test('should delete user successfully', async () => {
+      pool.query.mockResolvedValueOnce({ rows: [] });
 
-  test('should generate user cache key', () => {
-    expect(generateCacheKey('user', 1)).toBe('user:1');
-  });
+      await userService.deleteUser(1);
 
-  test('should generate session cache key', () => {
-    expect(generateCacheKey('session', 'abc123')).toBe('session:abc123');
-  });
-
-  test('should handle string ids', () => {
-    expect(generateCacheKey('item', 'uuid-123')).toBe('item:uuid-123');
+      expect(pool.query).toHaveBeenCalledWith('DELETE FROM users WHERE id = $1', [1]);
+    });
   });
 });

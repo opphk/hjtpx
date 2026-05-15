@@ -1,8 +1,32 @@
+jest.mock('../../../../config/redis/client', () => ({
+  isOpen: true,
+  connect: jest.fn().mockResolvedValue(undefined),
+  get: jest.fn(),
+  setEx: jest.fn().mockResolvedValue('OK'),
+  del: jest.fn().mockResolvedValue(1),
+  expire: jest.fn().mockResolvedValue(1),
+  scan: jest.fn().mockResolvedValue({ cursor: 0, keys: [] }),
+  sMembers: jest.fn().mockResolvedValue([]),
+  sAdd: jest.fn().mockResolvedValue(1),
+  flushDb: jest.fn().mockResolvedValue('OK'),
+  ping: jest.fn().mockResolvedValue('PONG'),
+  multi: jest.fn().mockReturnValue({
+    sAdd: jest.fn().mockReturnThis(),
+    expire: jest.fn().mockReturnThis(),
+    setEx: jest.fn().mockReturnThis(),
+    exec: jest.fn().mockResolvedValue([])
+  }),
+  mGet: jest.fn().mockResolvedValue([]),
+  on: jest.fn(),
+  off: jest.fn()
+}));
+
 const cacheService = require('../../services/cacheService');
 
 describe('CacheService', () => {
   beforeEach(() => {
     cacheService.resetStats();
+    cacheService.memoryCache.clear();
   });
 
   describe('Basic Operations', () => {

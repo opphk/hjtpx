@@ -13,19 +13,13 @@ const CACHE_KEYS = {
 };
 const CACHE_TTL = 300;
 
-async function getAllUsers() {
-  const cached = await cacheService.get(CACHE_KEYS.ALL_USERS);
-  if (cached) {
-    return cached;
-  }
-
+async function getAllUsers({ limit = 100, offset = 0 } = {}) {
   const result = await queryOptimizer.cachedQuery(
-    'SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC',
-    [],
+    'SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+    [limit, offset],
     CACHE_TTL
   );
 
-  await cacheService.set(CACHE_KEYS.ALL_USERS, result, CACHE_TTL);
   return result;
 }
 
@@ -126,9 +120,18 @@ async function deleteUser(id) {
   queryOptimizer.clearCache();
 }
 
+async function getUserByEmail(email) {
+  const result = await pool.query(
+    'SELECT id, email, name, role, password, created_at FROM users WHERE email = $1',
+    [email]
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   getAllUsers,
   getUserById,
+  getUserByEmail,
   createUser,
   updateUser,
   deleteUser,
