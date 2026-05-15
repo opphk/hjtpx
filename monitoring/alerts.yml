@@ -19,6 +19,15 @@ groups:
           summary: "High response time"
           description: "95th percentile response time is {{ $value | humanizeDuration }}"
 
+      - alert: CriticalResponseTime
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical response time detected"
+          description: "99th percentile response time is {{ $value | humanizeDuration }}"
+
       - alert: HighCPUUsage
         expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
         for: 10m
@@ -26,6 +35,15 @@ groups:
           severity: warning
         annotations:
           summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      - alert: CriticalCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage"
           description: "CPU usage is {{ $value | humanizePercentage }}"
 
       - alert: HighMemoryUsage
@@ -36,6 +54,24 @@ groups:
         annotations:
           summary: "High memory usage"
           description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: CriticalMemoryUsage
+        expr: (process_resident_memory_bytes / node_memory_MemTotal_bytes) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: HighHeapMemoryUsage
+        expr: (process_memory_bytes{type="heap_used"} / process_memory_bytes{type="heap_total"}) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High heap memory usage"
+          description: "Heap memory usage is {{ $value | humanizePercentage }}"
 
       - alert: HighConnectionCount
         expr: http_active_connections > 1000
@@ -91,6 +127,33 @@ groups:
           summary: "Slow database queries"
           description: "95th percentile query time is {{ $value | humanizeDuration }}"
 
+      - alert: CriticalSlowDatabaseQueries
+        expr: histogram_quantile(0.99, rate(database_query_duration_seconds_bucket[5m])) > 3
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical slow database queries"
+          description: "99th percentile query time is {{ $value | humanizeDuration }}"
+
+      - alert: SlowRedisOperations
+        expr: histogram_quantile(0.95, rate(redis_operation_duration_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow Redis operations"
+          description: "95th percentile Redis operation time is {{ $value | humanizeDuration }}"
+
+      - alert: HighWebSocketConnections
+        expr: websocket_connections_active > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High WebSocket connection count"
+          description: "Active WebSocket connections: {{ $value }}"
+
   - name: infrastructure
     rules:
       - alert: InstanceDown
@@ -120,6 +183,15 @@ groups:
           summary: "Redis is down"
           description: "Redis instance {{ $labels.instance }} is down"
 
+      - alert: RedisSlowResponses
+        expr: rate(redis_operation_duration_seconds_bucket[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis slow responses"
+          description: "Redis response time is high"
+
       - alert: PostgreSQLDown
         expr: up{job="postgres-exporter"} == 0
         for: 1m
@@ -129,6 +201,15 @@ groups:
           summary: "PostgreSQL is down"
           description: "PostgreSQL instance {{ $labels.instance }} is down"
 
+      - alert: PostgreSQLSlowQueries
+        expr: rate(database_query_duration_seconds_bucket[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL slow queries"
+          description: "PostgreSQL query performance degraded"
+
       - alert: NginxDown
         expr: up{job="nginx"} == 0
         for: 1m
@@ -137,6 +218,15 @@ groups:
         annotations:
           summary: "Nginx is down"
           description: "Nginx instance {{ $labels.instance }} is down"
+
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node exporter is down"
+          description: "Node exporter {{ $labels.instance }} is down"
 
   - name: business
     rules:
@@ -157,3 +247,41 @@ groups:
         annotations:
           summary: "Unusual high traffic"
           description: "HTTP traffic is unusually high: {{ $value | humanize }} requests per second"
+
+      - alert: HighErrorRateTrend
+        expr: increase(http_request_errors_total[1h]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate trend"
+          description: "Errors increased by {{ $value }} in the last hour"
+
+      - alert: SlowResponseTrend
+        expr: increase(http_request_duration_seconds_bucket[1h]) > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Slow response trend"
+          description: "Response times are trending upward"
+
+  - name: sentry-performance
+    rules:
+      - alert: SentryTransactionLatency
+        expr: histogram_quantile(0.95, rate(sentry_transactions_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Sentry transaction latency"
+          description: "Sentry transaction p95 latency is {{ $value | humanizeDuration }}"
+
+      - alert: SentryErrorRate
+        expr: rate(sentry_errors_total[5m]) / rate(sentry_transactions_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Sentry error rate"
+          description: "Error rate in Sentry is {{ $value | humanizePercentage }}"
