@@ -57,6 +57,10 @@
             from { opacity: 0.7; }
             to { opacity: 1; }
         }
+        .tab-btn.active {
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -81,7 +85,7 @@
                     <div class="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">主菜单</div>
                     <a href="/admin/dashboard" class="sidebar-link active flex items-center px-6 py-3 text-gray-700 transition">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001-1m-6 0h6"></path>
                         </svg>
                         仪表盘
                     </a>
@@ -93,7 +97,7 @@
                     </a>
                     <a href="/admin/config" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426-1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                         </svg>
                         系统配置
@@ -108,7 +112,7 @@
                     </a>
                     <a href="/admin/blacklist" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path>
                         </svg>
                         黑名单
                     </a>
@@ -220,7 +224,7 @@
                             </div>
                             <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
                                 <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path>
                                 </svg>
                             </div>
                         </div>
@@ -242,127 +246,384 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                    <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-lg font-semibold text-gray-800">24小时验证趋势</h3>
-                            <div class="flex items-center space-x-3">
-                                <select id="trend-period" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="24">最近24小时</option>
-                                    <option value="48">最近48小时</option>
-                                    <option value="72">最近72小时</option>
-                                </select>
-                                <button id="export-trend-btn" class="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition flex items-center">
-                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                <div class="bg-white rounded-xl p-4 shadow-sm mb-6">
+                    <div class="flex space-x-1 border-b">
+                        <button class="tab-btn active px-4 py-2 text-sm font-medium border-b-2 border-transparent" data-tab="overview">总览</button>
+                        <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700" data-tab="performance">性能</button>
+                        <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700" data-tab="security">安全</button>
+                        <button class="tab-btn px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700" data-tab="system">系统</button>
+                    </div>
+                </div>
+
+                <div id="tab-overview" class="tab-content">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                        <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">24小时验证趋势</h3>
+                                <div class="flex items-center space-x-3">
+                                    <select id="trend-period" class="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="24">最近24小时</option>
+                                        <option value="48">最近48小时</option>
+                                        <option value="72">最近72小时</option>
+                                    </select>
+                                    <button id="export-trend-btn" class="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition flex items-center">
+                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                        </svg>
+                                        导出
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="trend-chart"></canvas>
+                                <div id="trend-loading" class="absolute inset-0 bg-white/80 flex items-center justify-center hidden">
+                                    <svg class="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    导出
-                                </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="h-64 relative">
-                            <canvas id="trend-chart"></canvas>
-                            <div id="trend-loading" class="absolute inset-0 bg-white/80 flex items-center justify-center hidden">
-                                <svg class="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-semibold text-gray-800">验证码类型分布</h3>
+                                <button id="export-distribution-btn" class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="导出">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="h-52 relative">
+                                <canvas id="distribution-chart"></canvas>
+                            </div>
+                            <div class="mt-4 space-y-2" id="distribution-legend">
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="flex items-center"><span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>滑动验证码</span>
+                                    <span class="font-medium" id="dist-slider">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="flex items-center"><span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>点选验证码</span>
+                                    <span class="font-medium" id="dist-click">0</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="flex items-center"><span class="w-3 h-3 bg-pink-500 rounded-full mr-2"></span>旋转验证码</span>
+                                    <span class="font-medium" id="dist-rotate">0</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-semibold text-gray-800">验证码类型分布</h3>
-                            <button id="export-distribution-btn" class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition" title="导出">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="h-52 relative">
-                            <canvas id="distribution-chart"></canvas>
-                        </div>
-                        <div class="mt-4 space-y-2" id="distribution-legend">
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="flex items-center"><span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>滑动验证码</span>
-                                <span class="font-medium" id="dist-slider">0</span>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">各类型验证码成功率</h3>
                             </div>
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="flex items-center"><span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>点选验证码</span>
-                                <span class="font-medium" id="dist-click">0</span>
+                            <div class="h-64 relative">
+                                <canvas id="success-rate-chart"></canvas>
                             </div>
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="flex items-center"><span class="w-3 h-3 bg-pink-500 rounded-full mr-2"></span>旋转验证码</span>
-                                <span class="font-medium" id="dist-rotate">0</span>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">24小时分布</h3>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="hourly-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">快捷操作</h3>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <a href="/admin/config" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-blue-50 transition">
+                                    <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-2">
+                                        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426-1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-gray-700">系统配置</span>
+                                </a>
+                                <a href="/admin/whitelist" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-green-50 transition">
+                                    <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-2">
+                                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-gray-700">白名单</span>
+                                </a>
+                                <a href="/admin/blacklist" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-red-50 transition">
+                                    <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mb-2">
+                                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-gray-700">黑名单</span>
+                                </a>
+                                <a href="/admin/stats" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-purple-50 transition">
+                                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mb-2">
+                                        <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-gray-700">详细统计</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">IP访问排行</h3>
+                                <a href="/admin/stats" class="text-sm text-blue-500 hover:text-blue-600">查看更多</a>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="text-left text-sm text-gray-500 border-b">
+                                            <th class="pb-3 font-medium">排名</th>
+                                            <th class="pb-3 font-medium">IP地址</th>
+                                            <th class="pb-3 font-medium">验证次数</th>
+                                            <th class="pb-3 font-medium">状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ip-ranking-list" class="text-sm">
+                                        <tr class="border-b border-gray-50">
+                                            <td class="py-3" colspan="4" class="text-center text-gray-400">加载中...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white rounded-xl p-6 shadow-sm">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-lg font-semibold text-gray-800">快捷操作</h3>
+                <div id="tab-performance" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">响应时间趋势</h3>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="response-time-chart"></canvas>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <a href="/admin/config" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-blue-50 transition">
-                                <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-2">
-                                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">热门接口</h3>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="top-endpoints-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                     </svg>
                                 </div>
-                                <span class="text-sm text-gray-700">系统配置</span>
-                            </a>
-                            <a href="/admin/whitelist" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-green-50 transition">
-                                <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-2">
-                                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <div>
+                                    <p class="text-sm text-gray-500">平均响应时间</p>
+                                    <p class="text-2xl font-bold text-gray-800" id="stat-avg-response">0ms</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
                                 </div>
-                                <span class="text-sm text-gray-700">白名单</span>
-                            </a>
-                            <a href="/admin/blacklist" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-red-50 transition">
-                                <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mb-2">
-                                    <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                <div>
+                                    <p class="text-sm text-gray-500">系统可用性</p>
+                                    <p class="text-2xl font-bold text-gray-800" id="stat-availability">99.9%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
                                     </svg>
                                 </div>
-                                <span class="text-sm text-gray-700">黑名单</span>
-                            </a>
-                            <a href="/admin/stats" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-purple-50 transition">
-                                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mb-2">
-                                    <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                <div>
+                                    <p class="text-sm text-gray-500">缓存命中率</p>
+                                    <p class="text-2xl font-bold text-gray-800" id="stat-cache-hit">0%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-security" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">风险等级分布</h3>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="risk-level-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">最近安全事件</h3>
+                            </div>
+                            <div class="space-y-4" id="security-events">
+                                <div class="text-center text-gray-400 py-8">加载中...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path>
                                     </svg>
                                 </div>
-                                <span class="text-sm text-gray-700">详细统计</span>
-                            </a>
+                                <div>
+                                    <p class="text-sm text-gray-500">今日拦截</p>
+                                    <p class="text-2xl font-bold text-red-600" id="stat-today-blocked">0</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">高风险请求</p>
+                                    <p class="text-2xl font-bold text-yellow-600" id="stat-high-risk">0</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">活跃威胁</p>
+                                    <p class="text-2xl font-bold text-orange-600" id="stat-active-threats">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-system" class="tab-content hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">系统健康状态</h3>
+                            </div>
+                            <div class="space-y-4" id="system-health">
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                                        <span class="text-gray-700">API 服务</span>
+                                    </div>
+                                    <span class="text-sm text-gray-500">正常</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                                        <span class="text-gray-700">数据库</span>
+                                    </div>
+                                    <span class="text-sm text-gray-500">正常</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                                        <span class="text-gray-700">缓存服务</span>
+                                    </div>
+                                    <span class="text-sm text-gray-500">正常</span>
+                                </div>
+                                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                                        <span class="text-gray-700">消息队列</span>
+                                    </div>
+                                    <span class="text-sm text-gray-500">负载较高</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6 shadow-sm">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-800">资源使用情况</h3>
+                            </div>
+                            <div class="space-y-4">
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-gray-600">CPU 使用率</span>
+                                        <span class="text-gray-800 font-medium" id="stat-cpu">0%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="cpu-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-gray-600">内存使用率</span>
+                                        <span class="text-gray-800 font-medium" id="stat-memory">0%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="memory-bar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-gray-600">磁盘使用率</span>
+                                        <span class="text-gray-800 font-medium" id="stat-disk">0%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="disk-bar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1">
+                                        <span class="text-gray-600">网络带宽</span>
+                                        <span class="text-gray-800 font-medium" id="stat-network">0 Mbps</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="network-bar" class="bg-orange-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="bg-white rounded-xl p-6 shadow-sm">
                         <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-lg font-semibold text-gray-800">IP访问排行</h3>
-                            <a href="/admin/stats" class="text-sm text-blue-500 hover:text-blue-600">查看更多</a>
+                            <h3 class="text-lg font-semibold text-gray-800">最近活动</h3>
                         </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full">
-                                <thead>
-                                    <tr class="text-left text-sm text-gray-500 border-b">
-                                        <th class="pb-3 font-medium">排名</th>
-                                        <th class="pb-3 font-medium">IP地址</th>
-                                        <th class="pb-3 font-medium">验证次数</th>
-                                        <th class="pb-3 font-medium">状态</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="ip-ranking-list" class="text-sm">
-                                    <tr class="border-b border-gray-50">
-                                        <td class="py-3" colspan="4" class="text-center text-gray-400">加载中...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <div class="space-y-3" id="recent-activities">
+                            <div class="text-center text-gray-400 py-8">加载中...</div>
                         </div>
                     </div>
                 </div>
@@ -391,12 +652,36 @@
             let currentTrendData = null;
             let currentDistributionData = null;
 
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const tabId = this.dataset.tab;
+                    
+                    document.querySelectorAll('.tab-btn').forEach(b => {
+                        b.classList.remove('active', 'text-blue-500');
+                        b.classList.add('text-gray-500');
+                    });
+                    this.classList.add('active');
+                    this.classList.remove('text-gray-500');
+                    
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                    document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+                    
+                    if (tabId === 'performance') {
+                        loadPerformanceData();
+                    } else if (tabId === 'security') {
+                        loadSecurityData();
+                    } else if (tabId === 'system') {
+                        loadSystemData();
+                    }
+                });
+            });
+
             async function loadDashboardData() {
                 const loadingEl = document.getElementById('trend-loading');
                 loadingEl.classList.remove('hidden');
 
                 try {
-                    const [dashboard, trend, distribution] = await Promise.all([
+                    const [dashboard, trend, distribution, successRate, hourly] = await Promise.all([
                         AdminApi.stats.getDashboard().catch(() => ({
                             today_verifications: 12847,
                             success_rate: 94.2,
@@ -405,7 +690,9 @@
                             verifications_change: 12.5
                         })),
                         AdminApi.stats.getTrend(24).catch(() => generateMockTrendData()),
-                        AdminApi.stats.getCaptchaDistribution().catch(() => generateMockDistribution())
+                        AdminApi.stats.getCaptchaDistribution().catch(() => generateMockDistribution()),
+                        AdminApi.stats.getSuccessRateByType().catch(() => generateMockSuccessRate()),
+                        AdminApi.stats.getHourlyDistribution().catch(() => generateMockHourly())
                     ]);
 
                     updateStats(dashboard);
@@ -414,6 +701,8 @@
 
                     AdminCharts.initTrendChart('trend-chart', trend);
                     AdminCharts.initDistributionChart('distribution-chart', distribution);
+                    AdminCharts.initSuccessRateByTypeChart('success-rate-chart', successRate);
+                    AdminCharts.initHourlyDistributionChart('hourly-chart', hourly);
 
                     document.getElementById('dist-slider').textContent = AdminUI.formatNumber(
                         distribution.find(d => d.type === 'slider')?.count || 0
@@ -436,6 +725,59 @@
                     AdminUI.showToast('数据加载失败', 'error');
                 } finally {
                     loadingEl.classList.add('hidden');
+                }
+            }
+
+            async function loadPerformanceData() {
+                try {
+                    const [responseTime, topEndpoints] = await Promise.all([
+                        AdminApi.stats.getResponseTimeTrend().catch(() => generateMockResponseTime()),
+                        AdminApi.stats.getTopEndpoints().catch(() => generateMockTopEndpoints())
+                    ]);
+
+                    AdminCharts.initResponseTimeChart('response-time-chart', responseTime);
+                    AdminCharts.initTopEndpointsChart('top-endpoints-chart', topEndpoints);
+
+                    document.getElementById('stat-avg-response').textContent = '156ms';
+                    document.getElementById('stat-availability').textContent = '99.9%';
+                    document.getElementById('stat-cache-hit').textContent = '87.3%';
+                } catch (error) {
+                    console.error('Failed to load performance data:', error);
+                }
+            }
+
+            async function loadSecurityData() {
+                try {
+                    const riskLevel = await AdminApi.stats.getRiskLevelDistribution().catch(() => generateMockRiskLevel());
+                    AdminCharts.initRiskLevelChart('risk-level-chart', riskLevel);
+                    
+                    renderSecurityEvents(generateMockSecurityEvents());
+                    
+                    document.getElementById('stat-today-blocked').textContent = AdminUI.formatNumber(234);
+                    document.getElementById('stat-high-risk').textContent = AdminUI.formatNumber(56);
+                    document.getElementById('stat-active-threats').textContent = AdminUI.formatNumber(3);
+                } catch (error) {
+                    console.error('Failed to load security data:', error);
+                }
+            }
+
+            async function loadSystemData() {
+                try {
+                    const systemHealth = await AdminApi.stats.getSystemHealth().catch(() => generateMockSystemHealth());
+                    
+                    document.getElementById('stat-cpu').textContent = '45.2%';
+                    document.getElementById('stat-memory').textContent = '62.8%';
+                    document.getElementById('stat-disk').textContent = '34.5%';
+                    document.getElementById('stat-network').textContent = '128 Mbps';
+                    
+                    document.getElementById('cpu-bar').style.width = '45.2%';
+                    document.getElementById('memory-bar').style.width = '62.8%';
+                    document.getElementById('disk-bar').style.width = '34.5%';
+                    document.getElementById('network-bar').style.width = '64%';
+                    
+                    renderRecentActivities(generateMockActivities());
+                } catch (error) {
+                    console.error('Failed to load system data:', error);
                 }
             }
 
@@ -492,6 +834,46 @@
                 }).join('');
             }
 
+            function renderSecurityEvents(events) {
+                const container = document.getElementById('security-events');
+                if (!events || events.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-400 py-8">暂无安全事件</div>';
+                    return;
+                }
+
+                container.innerHTML = events.map(event => `
+                    <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <div class="w-2 h-2 mt-2 rounded-full ${event.severity === 'high' ? 'bg-red-500' : event.severity === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}"></div>
+                        <div class="flex-1">
+                            <p class="text-sm text-gray-800">${event.message}</p>
+                            <p class="text-xs text-gray-500 mt-1">${event.time}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            function renderRecentActivities(activities) {
+                const container = document.getElementById('recent-activities');
+                if (!activities || activities.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-400 py-8">暂无活动记录</div>';
+                    return;
+                }
+
+                container.innerHTML = activities.map(activity => `
+                    <div class="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition">
+                        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm text-gray-800">${activity.action}</p>
+                            <p class="text-xs text-gray-500">${activity.user} · ${activity.time}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
             function generateMockTrendData() {
                 const data = [];
                 for (let i = 23; i >= 0; i--) {
@@ -511,6 +893,87 @@
                     { type: 'slider', count: 5420 },
                     { type: 'click', count: 3890 },
                     { type: 'rotate', count: 2560 }
+                ];
+            }
+
+            function generateMockSuccessRate() {
+                return [
+                    { type: '滑动验证码', successRate: 95.2, total: 5420 },
+                    { type: '点选验证码', successRate: 92.8, total: 3890 },
+                    { type: '旋转验证码', successRate: 88.5, total: 2560 }
+                ];
+            }
+
+            function generateMockHourly() {
+                const data = [];
+                for (let i = 0; i < 24; i++) {
+                    data.push({
+                        hour: i,
+                        count: Math.floor(Math.random() * 800) + 200
+                    });
+                }
+                return data;
+            }
+
+            function generateMockResponseTime() {
+                const data = [];
+                for (let i = 11; i >= 0; i--) {
+                    const time = new Date();
+                    time.setMinutes(time.getMinutes() - i * 5);
+                    data.push({
+                        time: time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0'),
+                        avgTime: Math.floor(Math.random() * 100) + 100,
+                        maxTime: Math.floor(Math.random() * 200) + 300
+                    });
+                }
+                return data;
+            }
+
+            function generateMockTopEndpoints() {
+                return [
+                    { endpoint: '/api/captcha/generate', count: 12847 },
+                    { endpoint: '/api/captcha/verify', count: 11986 },
+                    { endpoint: '/api/captcha/refresh', count: 3421 },
+                    { endpoint: '/api/captcha/config', count: 856 },
+                    { endpoint: '/api/health', count: 432 }
+                ];
+            }
+
+            function generateMockRiskLevel() {
+                return [
+                    { level: '低风险', count: 8542 },
+                    { level: '中风险', count: 1234 },
+                    { level: '高风险', count: 356 },
+                    { level: '极高风险', count: 42 }
+                ];
+            }
+
+            function generateMockSecurityEvents() {
+                return [
+                    { severity: 'high', message: '检测到异常高频请求，已临时封禁 IP: 192.168.1.100', time: '2分钟前' },
+                    { severity: 'medium', message: '发现可疑行为模式，已提升验证难度', time: '15分钟前' },
+                    { severity: 'low', message: '验证码验证失败率略有上升', time: '1小时前' },
+                    { severity: 'high', message: '检测到疑似机器人行为', time: '2小时前' },
+                    { severity: 'low', message: '系统自动更新完成', time: '3小时前' }
+                ];
+            }
+
+            function generateMockSystemHealth() {
+                return {
+                    api: 'healthy',
+                    database: 'healthy',
+                    cache: 'healthy',
+                    queue: 'warning'
+                };
+            }
+
+            function generateMockActivities() {
+                return [
+                    { action: '管理员登录', user: 'admin', time: '5分钟前' },
+                    { action: '更新系统配置', user: 'admin', time: '15分钟前' },
+                    { action: '添加白名单 IP', user: 'admin', time: '1小时前' },
+                    { action: '导出统计数据', user: 'admin', time: '2小时前' },
+                    { action: '查看系统日志', user: 'admin', time: '3小时前' }
                 ];
             }
 

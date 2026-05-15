@@ -1929,6 +1929,29 @@ body {
   }
 }
 
+/* Captcha Field Styles */
+.captcha-field-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.captcha-label {
+  font-weight: 500;
+  color: var(--text-color);
+  font-size: 14px;
+}
+
+.captcha-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.captcha-container {
+  max-width: 100%;
+}
+
 /* Print styles */
 @media print {
   .filter-bar,
@@ -1939,7 +1962,8 @@ body {
   .config-actions,
   .log-stats,
   .audit-stats,
-  .audit-charts {
+  .audit-charts,
+  .captcha-field-wrapper {
     display: none !important;
   }
 

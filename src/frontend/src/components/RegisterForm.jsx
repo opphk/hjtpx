@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Input from './ui/Input';
 import Button from './ui/Button';
+import CaptchaX from './CaptchaX';
 
 const RegisterForm = ({ onSubmit, loading }) => {
   const [formData, setFormData] = useState({
@@ -10,6 +11,8 @@ const RegisterForm = ({ onSubmit, loading }) => {
     confirmPassword: ''
   });
   const [errors, setErrors] = useState({});
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,6 +27,21 @@ const RegisterForm = ({ onSubmit, loading }) => {
         [name]: ''
       }));
     }
+  };
+
+  const handleCaptchaSuccess = (result) => {
+    setCaptchaVerified(true);
+    setCaptchaToken(result.token || result.captcha_id);
+  };
+
+  const handleCaptchaError = () => {
+    setCaptchaVerified(false);
+    setCaptchaToken(null);
+  };
+
+  const handleCaptchaRefresh = () => {
+    setCaptchaVerified(false);
+    setCaptchaToken(null);
   };
 
   const validate = () => {
@@ -53,6 +71,10 @@ const RegisterForm = ({ onSubmit, loading }) => {
       newErrors.confirmPassword = '两次输入的密码不一致';
     }
     
+    if (!captchaVerified) {
+      newErrors.captcha = '请先完成验证码验证';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -64,7 +86,8 @@ const RegisterForm = ({ onSubmit, loading }) => {
       onSubmit({
         name: formData.name,
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        captchaToken
       });
     }
   };
@@ -113,11 +136,27 @@ const RegisterForm = ({ onSubmit, loading }) => {
         error={errors.confirmPassword}
         required
       />
+
+      <div className="captcha-field-wrapper">
+        <label className="captcha-label">安全验证</label>
+        <CaptchaX
+          type="slider"
+          onSuccess={handleCaptchaSuccess}
+          onError={handleCaptchaError}
+          onRefresh={handleCaptchaRefresh}
+          width={300}
+          height={150}
+        />
+        {errors.captcha && (
+          <span className="input-error">{errors.captcha}</span>
+        )}
+      </div>
       
       <Button 
         type="submit" 
         loading={loading}
         className="auth-submit"
+        disabled={!captchaVerified}
       >
         注册
       </Button>

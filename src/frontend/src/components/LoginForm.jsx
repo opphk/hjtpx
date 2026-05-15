@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Input from './ui/Input';
 import Button from './ui/Button';
+import CaptchaX from './CaptchaX';
 
 const LoginForm = ({ onSubmit, loading }) => {
   const [formData, setFormData] = useState({
@@ -8,6 +9,8 @@ const LoginForm = ({ onSubmit, loading }) => {
     password: ''
   });
   const [errors, setErrors] = useState({});
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,6 +25,21 @@ const LoginForm = ({ onSubmit, loading }) => {
         [name]: ''
       }));
     }
+  };
+
+  const handleCaptchaSuccess = (result) => {
+    setCaptchaVerified(true);
+    setCaptchaToken(result.token || result.captcha_id);
+  };
+
+  const handleCaptchaError = () => {
+    setCaptchaVerified(false);
+    setCaptchaToken(null);
+  };
+
+  const handleCaptchaRefresh = () => {
+    setCaptchaVerified(false);
+    setCaptchaToken(null);
   };
 
   const validate = () => {
@@ -39,6 +57,10 @@ const LoginForm = ({ onSubmit, loading }) => {
       newErrors.password = '密码至少8个字符';
     }
     
+    if (!captchaVerified) {
+      newErrors.captcha = '请先完成验证码验证';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -47,7 +69,10 @@ const LoginForm = ({ onSubmit, loading }) => {
     e.preventDefault();
     
     if (validate()) {
-      onSubmit(formData);
+      onSubmit({
+        ...formData,
+        captchaToken
+      });
     }
   };
 
@@ -73,11 +98,27 @@ const LoginForm = ({ onSubmit, loading }) => {
         error={errors.password}
         required
       />
+
+      <div className="captcha-field-wrapper">
+        <label className="captcha-label">安全验证</label>
+        <CaptchaX
+          type="slider"
+          onSuccess={handleCaptchaSuccess}
+          onError={handleCaptchaError}
+          onRefresh={handleCaptchaRefresh}
+          width={300}
+          height={150}
+        />
+        {errors.captcha && (
+          <span className="input-error">{errors.captcha}</span>
+        )}
+      </div>
       
       <Button 
         type="submit" 
         loading={loading}
         className="auth-submit"
+        disabled={!captchaVerified}
       >
         登录
       </Button>

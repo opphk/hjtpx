@@ -60,7 +60,7 @@ const helmetMiddleware = (() => {
     cspDirectives.upgradeInsecureRequests = [];
   }
 
-  return helmet({
+  const helmetInstance = helmet({
     contentSecurityPolicy: {
       directives: cspDirectives,
       reportUri: '/api/v1/security/csp-report',
@@ -98,6 +98,13 @@ const helmetMiddleware = (() => {
     },
     xssFilter: true
   });
+
+  return (req, res, next) => {
+    helmetInstance(req, res, () => {
+      res.set('Permissions-Policy', 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), fullscreen=(self), picture-in-picture=(self)');
+      next();
+    });
+  };
 })();
 
 const securityHeaders = (req, res, next) => {

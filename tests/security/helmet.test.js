@@ -39,7 +39,7 @@ describe('Helmet Security Middleware', () => {
       const response = await request(app).get('/test');
       const xssProtection = response.headers['x-xss-protection'];
       expect(xssProtection).toBeDefined();
-      expect(xssProtection).toMatch(/1; mode=block/);
+      expect(xssProtection).toBe('0');
     });
 
     test('should set Strict-Transport-Security header', async () => {

@@ -1,163 +1,266 @@
-# 自动化开发任务清单
+# HJTPX + CaptchaX 系统开发任务列表
 
-## 任务执行顺序
+## [ ] 任务1: CaptchaX 国际化多语言支持
+- **Priority**: P0
+- **Depends On**: None
+- **Description**: 
+  - 为 CaptchaX 添加 12+ 种语言支持（英语、中文、法语、德语、西班牙语、俄语、日语、韩语、阿拉伯语、葡萄牙语、意大利语、荷兰语）
+  - 实现多语言切换机制
+  - 实现时区自适应
+  - 编写 i18n 测试用例
+- **Acceptance Criteria Addressed**: AC1
+- **Test Requirements**:
+  - `programmatic`: 验证所有语言文件存在且格式正确
+  - `programmatic`: 验证语言切换功能正常
+  - `human-judgement`: 验证界面显示正确的语言
+- **Notes**: 参考 HJTPX 的国际化实现
 
-### 批次1：测试和质量保障
+## [ ] 任务2: HJTPX 与 CaptchaX 集成 - 后端
+- **Priority**: P0
+- **Depends On**: None
+- **Description**: 
+  - 在 HJTPX 后端集成 CaptchaX SDK
+  - 添加验证码验证中间件
+  - 在登录/注册接口集成验证码
+  - 实现验证失败重试机制
+- **Acceptance Criteria Addressed**: AC2
+- **Test Requirements**:
+  - `programmatic`: 验证 SDK 集成正常
+  - `programmatic`: 验证中间件工作正常
+  - `programmatic`: 编写集成测试
 
-- [ ] **任务1: API集成测试完善**
-  - 小任务1.1: 完成所有认证API端点的集成测试
-  - 小任务1.2: 完成所有用户管理API端点的集成测试
-  - 小任务1.3: 完成通知和消息API的集成测试
-  - 小任务1.4: 完成文件管理API的集成测试
-  - 小任务1.5: 添加测试数据工厂和fixture
+## [ ] 任务3: HJTPX 与 CaptchaX 集成 - 前端
+- **Priority**: P0
+- **Depends On**: 任务2
+- **Description**: 
+  - 在 HJTPX 前端集成 CaptchaX JavaScript SDK
+  - 在登录/注册页面添加验证码组件
+  - 实现验证码加载失败降级处理
+  - 响应式设计适配
+- **Acceptance Criteria Addressed**: AC2
+- **Test Requirements**:
+  - `programmatic`: 前端集成测试
+  - `human-judgement`: UI 交互测试
 
-- [ ] **任务2: 前端E2E测试框架**
-  - 小任务2.1: 配置Playwright测试框架
-  - 小任务2.2: 创建登录流程E2E测试
-  - 小任务2.3: 创建注册流程E2E测试
-  - 小任务2.4: 创建用户管理E2E测试
-  - 小任务2.5: 配置CI中的E2E测试运行
+## [ ] 任务4: CaptchaX 管理后台增强
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 增强管理后台数据可视化
+  - 添加实时验证码请求监控
+  - 实现验证码使用统计报表
+  - 添加系统配置管理界面
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: 后端 API 测试
+  - `human-judgement`: 管理界面测试
 
-- [ ] **任务3: 数据库迁移脚本优化**
-  - 小任务3.1: 审查现有迁移脚本完整性
-  - 小任务3.2: 添加迁移回滚脚本
-  - 小任务3.3: 优化迁移执行性能
-  - 小任务3.4: 添加迁移状态追踪
-  - 小任务3.5: 编写迁移文档
+## [ ] 任务5: 完整的端到端测试套件
+- **Priority**: P0
+- **Depends On**: 任务2, 任务3
+- **Description**: 
+  - 编写完整的 HJTPX E2E 测试
+  - 编写完整的 CaptchaX E2E 测试
+  - 集成测试两系统
+  - 添加浏览器控制台错误检查
+  - 添加截图保存功能
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: 所有 E2E 测试通过
+  - `human-judgement`: 检查截图和控制台日志
 
-- [ ] **任务5: WebSocket压力测试**
-  - 小任务5.1: 配置WebSocket测试环境
-  - 小任务5.2: 编写并发连接测试脚本
-  - 小任务5.3: 测试消息广播性能
-  - 小任务5.4: 优化WebSocket心跳机制
-  - 小任务5.5: 添加WebSocket监控
+## [ ] 任务6: CaptchaX 性能优化与压测
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 实现验证码生成性能优化
+  - 添加 Redis 缓存预热
+  - 实现连接池优化
+  - 编写性能基准测试
+  - 进行 1000+ 并发压测
+- **Acceptance Criteria Addressed**: AC4
+- **Test Requirements**:
+  - `programmatic`: 性能基准测试通过
+  - `programmatic`: 压测结果达标
 
-### 批次2：性能和优化
+## [ ] 任务7: HJTPX 安全增强
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 修复剩余的安全测试失败问题
+  - 增强 CSP 策略
+  - 添加安全头完善
+  - 实现更严格的输入验证
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: 安全测试全部通过
 
-- [ ] **任务4: Redis缓存策略优化**
-  - 小任务4.1: 分析现有缓存使用情况
-  - 小任务4.2: 实现会话缓存优化
-  - 小任务4.3: 实现API响应缓存
-  - 小任务4.4: 配置缓存失效策略
-  - 小任务4.5: 添加缓存监控指标
+## [ ] 任务8: 文档完善
+- **Priority**: P2
+- **Depends On**: None
+- **Description**: 
+  - 更新开发核心.md
+  - 编写 CaptchaX 集成指南
+  - 编写 API 文档
+  - 编写部署文档
+  - 编写故障排查指南
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `human-judgement`: 文档完整且准确
 
-- [ ] **任务6: 前端性能优化**
-  - 小任务6.1: 分析前端性能瓶颈
-  - 小任务6.2: 实现路由级代码分割
-  - 小任务6.3: 实现图片懒加载
-  - 小任务6.4: 配置Gzip压缩
-  - 小任务6.5: 优化bundle大小
+## [ ] 任务9: CaptchaX 验证码类型增强
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 添加音频验证码支持（视障友好）
+  - 优化现有 6 种验证码的用户体验
+  - 添加验证码难度动态调整
+  - 实现验证码刷新功能优化
+- **Acceptance Criteria Addressed**: AC1, AC3
+- **Test Requirements**:
+  - `programmatic`: 单元测试通过
+  - `human-judgement`: 用户体验测试
 
-- [ ] **任务7: 安全漏洞扫描与修复**
-  - 小任务7.1: 集成npm audit安全扫描
-  - 小任务7.2: 扫描并修复依赖漏洞
-  - 小任务7.3: 添加CSP内容安全策略
-  - 小任务7.4: 配置安全响应头
-  - 小任务7.5: 编写安全测试用例
+## [ ] 任务10: AI 风控引擎增强
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 增强行为数据分析算法
+  - 添加设备指纹深度分析
+  - 实现用户行为画像
+  - 优化风险评分模型
+  - 添加自适应验证策略
+- **Acceptance Criteria Addressed**: AC4
+- **Test Requirements**:
+  - `programmatic`: 风控引擎测试通过
+  - `programmatic`: 性能测试达标
 
-- [ ] **任务15: CI/CD测试覆盖率检查**
-  - 小任务15.1: 配置覆盖率阈值检查
-  - 小任务15.2: 添加覆盖率下降告警
-  - 小任务15.3: 生成覆盖率趋势报告
-  - 小任务15.4: 配置分支覆盖率要求
-  - 小任务15.5: 集成到PR检查流程
+## [ ] 任务11: SDK 生态完善
+- **Priority**: P2
+- **Depends On**: None
+- **Description**: 
+  - 完善 Swift SDK 文档和示例
+  - 完善 Android SDK 文档和示例
+  - 添加 Flutter SDK 基础支持
+  - 添加 React Native SDK 基础支持
+  - 添加 WordPress 插件完善
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: SDK 示例可运行
+  - `human-judgement`: 文档质量检查
 
-### 批次3：功能增强
+## [ ] 任务12: 监控告警系统完善
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 完善 Prometheus 指标
+  - 添加 Grafana 仪表板
+  - 实现关键指标告警
+  - 添加日志聚合和分析
+  - 实现系统健康检查完善
+- **Acceptance Criteria Addressed**: AC4
+- **Test Requirements**:
+  - `programmatic`: 监控指标正常
+  - `human-judgement`: 仪表板可视化
 
-- [ ] **任务8: API版本控制完善**
-  - 小任务8.1: 设计API版本迁移策略
-  - 小任务8.2: 实现API版本协商
-  - 小任务8.3: 添加版本弃用警告
-  - 小任务8.4: 编写版本迁移指南
-  - 小任务8.5: 配置版本共存测试
+## [ ] 任务13: 部署和 CI/CD 完善
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 完善 Docker Compose 配置
+  - 添加 K8s 部署配置
+  - 完善 GitHub Actions CI/CD
+  - 添加自动化测试和部署
+  - 实现蓝绿部署支持
+- **Acceptance Criteria Addressed**: AC3, AC4
+- **Test Requirements**:
+  - `programmatic`: CI/CD 流程正常
+  - `human-judgement`: 部署流程验证
 
-- [ ] **任务9: 前端国际化完善**
-  - 小任务9.1: 审计现有i18n覆盖范围
-  - 小任务9.2: 添加更多语言支持
-  - 小任务9.3: 实现动态语言切换
-  - 小任务9.4: 添加日期时间本地化
-  - 小任务9.5: 优化翻译文件加载
+## [ ] 任务14: 数据迁移和备份
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 编写 CaptchaX 数据库迁移脚本
+  - 实现数据备份策略
+  - 添加数据恢复演练
+  - 实现数据归档
+  - 添加数据加密
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: 迁移和备份测试通过
 
-- [ ] **任务10: 后端日志聚合**
-  - 小任务10.1: 配置结构化日志格式
-  - 小任务10.2: 实现日志分级管理
-  - 小任务10.3: 添加请求追踪ID
-  - 小任务10.4: 配置日志输出格式化
-  - 小任务10.5: 添加敏感信息过滤
+## [ ] 任务15: 移动端优化
+- **Priority**: P2
+- **Depends On**: 任务3
+- **Description**: 
+  - 优化 HJTPX 移动端体验
+  - 优化 CaptchaX 移动端验证码
+  - 添加移动端 PWA 增强
+  - 优化触摸交互
+- **Acceptance Criteria Addressed**: AC1, AC3
+- **Test Requirements**:
+  - `human-judgement`: 移动端体验测试
+  - `programmatic`: 响应式测试
 
-- [ ] **任务11: 移动端PWA优化**
-  - 小任务11.1: 完善Service Worker
-  - 小任务11.2: 添加离线缓存策略
-  - 小任务11.3: 实现推送通知
-  - 小任务11.4: 优化Manifest配置
-  - 小任务11.5: 添加PWA安装提示
+## [ ] 任务16: 多租户支持（企业级）
+- **Priority**: P2
+- **Depends On**: None
+- **Description**: 
+  - 实现 CaptchaX 多租户架构
+  - 添加租户隔离
+  - 实现租户配额管理
+  - 添加租户统计报表
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: 多租户功能测试
 
-- [ ] **任务12: 数据库连接池优化**
-  - 小任务12.1: 分析当前连接池配置
-  - 小任务12.2: 优化连接池参数
-  - 小任务12.3: 添加连接健康检查
-  - 小任务12.4: 实现连接泄漏检测
-  - 小任务12.5: 配置连接池监控
+## [ ] 任务17: Webhook 和事件系统
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 实现 CaptchaX Webhook 系统
+  - 添加验证事件推送
+  - 实现告警事件推送
+  - 添加 Webhook 签名验证
+- **Acceptance Criteria Addressed**: AC3
+- **Test Requirements**:
+  - `programmatic`: Webhook 功能测试
 
-### 批次4：高级功能
+## [ ] 任务18: A/B 测试框架
+- **Priority**: P2
+- **Depends On**: None
+- **Description**: 
+  - 实现验证码类型 A/B 测试
+  - 添加用户体验数据收集
+  - 实现测试结果分析
+  - 添加自动优化建议
+- **Acceptance Criteria Addressed**: AC3, AC4
+- **Test Requirements**:
+  - `programmatic`: A/B 测试框架测试
 
-- [ ] **任务13: 前端组件库文档**
-  - 小任务13.1: 配置Storybook文档工具
-  - 小任务13.2: 编写基础组件文档
-  - 小任务13.3: 添加组件示例代码
-  - 小任务13.4: 配置Props表格生成
-  - 小任务13.5: 部署组件文档网站
+## [ ] 任务19: API 限流和防护增强
+- **Priority**: P1
+- **Depends On**: None
+- **Description**: 
+  - 增强 API 限流策略
+  - 添加 DDoS 防护
+  - 实现 IP 信誉系统
+  - 添加恶意请求检测
+- **Acceptance Criteria Addressed**: AC4
+- **Test Requirements**:
+  - `programmatic`: 限流和防护测试
 
-- [ ] **任务14: 后端API文档自动更新**
-  - 小任务14.1: 配置Swagger自动生成
-  - 小任务14.2: 添加API变更检测
-  - 小任务14.3: 实现文档版本管理
-  - 小任务14.4: 添加API使用统计
-  - 小任务14.5: 配置文档CI检查
-
-- [ ] **任务16: 前端无障碍访问优化**
-  - 小任务16.1: 添加ARIA标签
-  - 小任务16.2: 优化键盘导航
-  - 小任务16.3: 添加屏幕阅读器支持
-  - 小任务16.4: 配置a11y测试
-  - 小任务16.5: 添加颜色对比度优化
-
-- [ ] **任务17: 后端错误追踪系统**
-  - 小任务17.1: 集成Sentry错误追踪
-  - 小任务17.2: 配置错误分组
-  - 小任务17.3: 添加性能监控
-  - 小任务17.4: 配置告警规则
-  - 小任务17.5: 集成源码映射
-
-- [ ] **任务18: 数据库备份恢复自动化**
-  - 小任务18.1: 配置自动备份脚本
-  - 小任务18.2: 实现增量备份
-  - 小任务18.3: 添加备份验证
-  - 小任务18.4: 实现定时恢复演练
-  - 小任务18.5: 编写备份恢复文档
-
-- [ ] **任务19: 前端SEO优化**
-  - 小任务19.1: 添加Meta标签
-  - 小任务19.2: 配置Open Graph
-  - 小任务19.3: 添加结构化数据
-  - 小任务19.4: 优化页面标题
-  - 小任务19.5: 添加robots.txt
-
-- [ ] **任务20: 后端GraphQL API**
-  - 小任务20.1: 评估GraphQL需求
-  - 小任务20.2: 配置Apollo Server
-  - 小任务20.3: 定义GraphQL Schema
-  - 小任务20.4: 实现查询和变更
-  - 小任务20.5: 添加GraphQL Playground
-
-## 任务依赖关系
-- 批次1任务可并行执行
-- 批次2任务依赖批次1部分完成
-- 批次3/4任务可与批次2并行
-- 所有任务完成后进行PR合并
-
-## 执行策略
-- 同时启动5个子代理并行处理
-- 每个子代理处理1-4个大任务
-- 完成测试后立即提交
-- 每完成一个功能进行测试验证
+## [ ] 任务20: 最终集成测试和发布准备
+- **Priority**: P0
+- **Depends On**: 任务1-19
+- **Description**: 
+  - 完整系统集成测试
+  - 端到端全流程测试
+  - 性能基准测试
+  - 安全审计
+  - 发布准备和文档
+- **Acceptance Criteria Addressed**: AC1, AC2, AC3, AC4
+- **Test Requirements**:
+  - `programmatic`: 所有测试通过
+  - `human-judgement`: 最终验收检查

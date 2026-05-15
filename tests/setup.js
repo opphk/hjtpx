@@ -73,6 +73,67 @@ jest.mock('pg', () => {
   };
 });
 
+jest.mock('mongoose', () => {
+  return {
+    connect: jest.fn().mockResolvedValue(true),
+    Schema: jest.fn(() => ({
+      Types: {
+        ObjectId: jest.fn()
+      }
+    })),
+    model: jest.fn().mockReturnValue({
+      find: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      findByIdAndUpdate: jest.fn(),
+      findByIdAndDelete: jest.fn(),
+    }),
+    Types: {
+      ObjectId: jest.fn().mockReturnValue('mock-object-id')
+    }
+  };
+});
+
+jest.mock('redis', () => ({
+  createClient: jest.fn().mockReturnValue({
+    on: jest.fn(),
+    connect: jest.fn().mockResolvedValue(true),
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+    expire: jest.fn(),
+    disconnect: jest.fn(),
+  }),
+}));
+
+jest.mock('ioredis', () => jest.fn().mockImplementation(() => ({
+  on: jest.fn(),
+  connect: jest.fn().mockResolvedValue(true),
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+  expire: jest.fn(),
+  disconnect: jest.fn(),
+})));
+
+jest.mock('apollo-server-express', () => ({
+  ApolloServer: jest.fn().mockImplementation(() => ({
+    start: jest.fn().mockResolvedValue(true),
+    applyMiddleware: jest.fn(),
+  })),
+}));
+
+jest.mock('@sentry/node', () => ({
+  init: jest.fn(),
+  Handlers: {
+    requestHandler: jest.fn(),
+    tracingHandler: jest.fn(),
+    errorHandler: jest.fn(),
+  },
+}));
+
+jest.mock('@sentry/tracing', () => ({}));
+
 beforeAll(() => {
   if (!process.env.JWT_SECRET) {
     process.env.JWT_SECRET = 'test-secret-key-for-testing';

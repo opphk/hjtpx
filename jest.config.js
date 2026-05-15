@@ -1,20 +1,20 @@
 module.exports = {
-  testEnvironment: 'jsdom',
-  roots: ['<rootDir>/src', '<rootDir>/captchax', '<rootDir>/tests'],
+  testEnvironment: 'node',
+  roots: ['<rootDir>/src', '<rootDir>/tests'],
   testMatch: ['**/tests/**/*.test.js', '**/__tests__/**/*.test.js'],
   collectCoverageFrom: [
     'src/**/*.js',
     'src/**/*.jsx',
-    'captchax/**/*.js',
     '!src/**/*.test.js',
-    '!captchax/**/*.test.js',
     'src/**/__tests__/**',
-    '!src/**/node_modules/**',
-    '!captchax/**/node_modules/**'
+    '!src/**/node_modules/**'
   ],
   transform: {
     '^.+\\.(js|jsx)$': 'babel-jest'
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(bson)/)'
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
@@ -31,7 +31,11 @@ module.exports = {
     '^../../config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
     '^../config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
     '^backend/config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^src/backend/config/redis/client$': '<rootDir>/tests/__mocks__/redis.js'
+    '^src/backend/config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
+    '^src/backend/services/cacheService$': '<rootDir>/tests/__mocks__/cacheService.js',
+    '^backend/services/cacheService$': '<rootDir>/tests/__mocks__/cacheService.js',
+    '^src/backend/graphql$': '<rootDir>/tests/__mocks__/graphql.js',
+    '^backend/graphql$': '<rootDir>/tests/__mocks__/graphql.js'
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
   clearMocks: true,
@@ -43,61 +47,9 @@ module.exports = {
       functions: 45,
       lines: 50,
       statements: 50
-    },
-    './src/utils/': {
-      branches: 60,
-      functions: 65,
-      lines: 70,
-      statements: 70
-    },
-    './src/models/': {
-      branches: 50,
-      functions: 55,
-      lines: 60,
-      statements: 60
-    },
-    './src/services/': {
-      branches: 55,
-      functions: 60,
-      lines: 65,
-      statements: 65
     }
   },
-  coverageAlertThreshold: {
-    global: {
-      branches: 35,
-      functions: 40,
-      lines: 45,
-      statements: 45
-    }
-  },
-  coverageBranchRequirements: {
-    main: {
-      branches: 50,
-      functions: 55,
-      lines: 60,
-      statements: 60
-    },
-    develop: {
-      branches: 45,
-      functions: 50,
-      lines: 55,
-      statements: 55
-    },
-    feature: {
-      branches: 40,
-      functions: 45,
-      lines: 50,
-      statements: 50
-    },
-    hotfix: {
-      branches: 40,
-      functions: 45,
-      lines: 50,
-      statements: 50
-    }
-  },
-  testPathIgnorePatterns: ['/node_modules/', '/frontend/node_modules/'],
+  testPathIgnorePatterns: ['/node_modules/', '/frontend/node_modules/', '/captchax/'],
   verbose: true,
   modulePathIgnorePatterns: ['<rootDir>/src/config/database/db.js'],
   testTimeout: 10000

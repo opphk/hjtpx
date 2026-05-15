@@ -26,6 +26,18 @@ type MockCaptchaService struct {
 	GeneratePuzzleErr    error
 	VerifyPuzzleResult   *service.PuzzleVerifyResult
 	VerifyPuzzleErr      error
+	GenerateRotateResult *service.RotateCaptchaResult
+	GenerateRotateErr    error
+	VerifyRotateResult   *service.RotateVerifyResult
+	VerifyRotateErr      error
+	GenerateTextResult   *service.TextCaptchaResult
+	GenerateTextErr      error
+	VerifyTextResult     *service.TextVerifyResult
+	VerifyTextErr        error
+	GenerateIconResult   *service.IconCaptchaResult
+	GenerateIconErr      error
+	VerifyIconResult     *service.IconVerifyResult
+	VerifyIconErr        error
 }
 
 func (m *MockCaptchaService) GenerateSliderCaptcha(ctx context.Context, appID, clientInfo string) (*service.SliderCaptchaResult, error) {
@@ -50,6 +62,30 @@ func (m *MockCaptchaService) GeneratePuzzleCaptcha(ctx context.Context, appID, c
 
 func (m *MockCaptchaService) VerifyPuzzleCaptcha(ctx context.Context, captchaID string, targetX, targetY int) (*service.PuzzleVerifyResult, error) {
 	return m.VerifyPuzzleResult, m.VerifyPuzzleErr
+}
+
+func (m *MockCaptchaService) GenerateRotateCaptcha(ctx context.Context, appID, clientInfo string) (*service.RotateCaptchaResult, error) {
+	return m.GenerateRotateResult, m.GenerateRotateErr
+}
+
+func (m *MockCaptchaService) VerifyRotateCaptcha(ctx context.Context, captchaID string, angle int) (*service.RotateVerifyResult, error) {
+	return m.VerifyRotateResult, m.VerifyRotateErr
+}
+
+func (m *MockCaptchaService) GenerateTextCaptcha(ctx context.Context, appID, clientInfo string) (*service.TextCaptchaResult, error) {
+	return m.GenerateTextResult, m.GenerateTextErr
+}
+
+func (m *MockCaptchaService) VerifyTextCaptcha(ctx context.Context, captchaID string, code string) (*service.TextVerifyResult, error) {
+	return m.VerifyTextResult, m.VerifyTextErr
+}
+
+func (m *MockCaptchaService) GenerateIconCaptcha(ctx context.Context, appID, clientInfo string) (*service.IconCaptchaResult, error) {
+	return m.GenerateIconResult, m.GenerateIconErr
+}
+
+func (m *MockCaptchaService) VerifyIconCaptcha(ctx context.Context, captchaID string, iconIDs []string) (*service.IconVerifyResult, error) {
+	return m.VerifyIconResult, m.VerifyIconErr
 }
 
 func (m *MockCaptchaService) LogVerification(ctx context.Context, appID, captchaType, captchaID string, success bool, message, ip string) {

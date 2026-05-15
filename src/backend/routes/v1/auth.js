@@ -3,9 +3,10 @@ const express = require('express');
 const router = express.Router();
 const { authRateLimiter } = require('../../middleware/rateLimiter');
 const validator = require('../../middleware/validator');
+const { requireCaptcha } = require('../../middleware/captcha.middleware');
 const authService = require('../../services/authService');
 
-router.post('/login', authRateLimiter, validator('loginSchema', 'body'), async (req, res) => {
+router.post('/login', authRateLimiter, requireCaptcha, validator('loginSchema', 'body'), async (req, res) =&gt; {
   try {
     const { email, password } = req.body;
     const result = await authService.login({ email, password });
@@ -19,7 +20,7 @@ router.post('/login', authRateLimiter, validator('loginSchema', 'body'), async (
   }
 });
 
-router.post('/register', authRateLimiter, validator('userSchema', 'body'), async (req, res) => {
+router.post('/register', authRateLimiter, requireCaptcha, validator('userSchema', 'body'), async (req, res) =&gt; {
   try {
     const { email, name, password } = req.body;
     const userService = require('../../services/userService');

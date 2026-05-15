@@ -1149,6 +1149,447 @@ func TestPreheatManager(t *testing.T) {
 	cache.Stop()
 }
 
+func TestPreheatManager_Strategies(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	loader := func(ctx context.Context, keys []string) (map[string][]byte, error) {
+		result := make(map[string][]byte)
+		for _, k := range keys {
+			result[k] = []byte("value_" + k)
+		}
+		return result, nil
+	}
+
+	testCases := []struct {
+		name     string
+		strategy PreheatStrategy
+	}{
+		{"Parallel", PreheatStrategyParallel},
+		{"Serial", PreheatStrategySerial},
+		{"Gradual", PreheatStrategyGradual},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := NewMultiLevelCache(mockRedis, cfg)
+			preheatCfg := &PreheatConfig{
+				Enabled:         true,
+				Concurrency:     2,
+				BatchSize:       3,
+				RetryCount:      3,
+				RetryInterval:   10 * time.Millisecond,
+				Strategy:        tc.strategy,
+				GradualInterval: 10 * time.Millisecond,
+			}
+
+			manager := NewPreheatManager(cache, loader, preheatCfg)
+			ctx := context.Background()
+			keys := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"}
+
+			err := manager.Preheat(ctx, keys)
+			if err != nil {
+				t.Fatalf("%s preheat failed: %v", tc.name, err)
+			}
+
+			for _, key := range keys {
+				_, ok := cache.Get(ctx, key)
+				if !ok {
+					t.Errorf("key %s should be preheated in %s strategy", key, tc.name)
+				}
+			}
+
+			cache.Stop()
+		})
+	}
+}
+
+func TestPreheatManager_Stop(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	cache := NewMultiLevelCache(mockRedis, cfg)
+
+	loader := func(ctx context.Context, keys []string) (map[string][]byte, error) {
+		time.Sleep(50 * time.Millisecond)
+		result := make(map[string][]byte)
+		for _, k := range keys {
+			result[k] = []byte("value_" + k)
+		}
+		return result, nil
+	}
+
+	preheatCfg := &PreheatConfig{
+		Enabled:       true,
+		Concurrency:   1,
+		BatchSize:     1,
+		RetryCount:    1,
+		RetryInterval: 10 * time.Millisecond,
+	}
+
+	manager := NewPreheatManager(cache, loader, preheatCfg)
+	ctx := context.Background()
+
+	keys := make([]string, 100)
+	for i := 0; i < 100; i++ {
+		keys[i] = fmt.Sprintf("key%d", i)
+	}
+
+	done := make(chan error)
+	go func() {
+		done <- manager.Preheat(ctx, keys)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	manager.Stop()
+
+	select {
+	case err := <-done:
+		t.Logf("Preheat stopped with error: %v", err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Preheat should have stopped")
+	}
+
+	cache.Stop()
+}
+
+func TestPreheatManager_RetryFailed(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	cache := NewMultiLevelCache(mockRedis, cfg)
+
+	shouldFail := true
+	loader := func(ctx context.Context, keys []string) (map[string][]byte, error) {
+		if shouldFail {
+			return nil, fmt.Errorf("simulated failure")
+		}
+		result := make(map[string][]byte)
+		for _, k := range keys {
+			result[k] = []byte("value_" + k)
+		}
+		return result, nil
+	}
+
+	preheatCfg := &PreheatConfig{
+		Enabled:         true,
+		Concurrency:     2,
+		BatchSize:       5,
+		RetryCount:      2,
+		RetryInterval:   10 * time.Millisecond,
+		MaxRetryInterval: 100 * time.Millisecond,
+	}
+
+	manager := NewPreheatManager(cache, loader, preheatCfg)
+	ctx := context.Background()
+
+	keys := []string{"k1", "k2", "k3"}
+	err := manager.Preheat(ctx, keys)
+	if err == nil {
+		t.Fatal("expected error from first preheat")
+	}
+
+	shouldFail = false
+	err = manager.RetryFailedKeys(ctx)
+	if err != nil {
+		t.Fatalf("retry failed: %v", err)
+	}
+
+	stats := manager.GetStats()
+	if stats == nil {
+		t.Fatal("expected stats after retry")
+	}
+
+	for _, key := range keys {
+		val, ok := cache.Get(ctx, key)
+		if !ok {
+			t.Errorf("key %s should be loaded after retry", key)
+		}
+		if string(val) != "value_"+key {
+			t.Errorf("unexpected value for key %s", key)
+		}
+	}
+
+	cache.Stop()
+}
+
+func TestCacheWarmingService(t *testing.T) {
+	localCache := NewLocalLRUCache(100, 5*time.Minute)
+	cache := NewAdvancedCache(nil, localCache)
+
+	service := NewCacheWarmingService(cache)
+
+	warmedData := make(map[string]string)
+	service.Register("warmer1", func(ctx context.Context) error {
+		warmedData["w1"] = "value1"
+		return nil
+	})
+
+	service.Register("warmer2", func(ctx context.Context) error {
+		warmedData["w2"] = "value2"
+		return nil
+	})
+
+	ctx := context.Background()
+	results, err := service.Warm(ctx)
+	if err != nil {
+		t.Fatalf("warm failed: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(results))
+	}
+
+	if warmedData["w1"] != "value1" {
+		t.Error("warmer1 did not run")
+	}
+	if warmedData["w2"] != "value2" {
+		t.Error("warmer2 did not run")
+	}
+
+	warmerInfos := service.GetAllWarmerInfo()
+	if len(warmerInfos) != 2 {
+		t.Errorf("expected 2 warmer infos, got %d", len(warmerInfos))
+	}
+
+	service.Unregister("warmer1")
+	warmers := service.ListWarmers()
+	if len(warmers) != 1 {
+		t.Errorf("expected 1 warmer after unregister, got %d", len(warmers))
+	}
+}
+
+func TestCacheWarmingService_Single(t *testing.T) {
+	localCache := NewLocalLRUCache(100, 5*time.Minute)
+	cache := NewAdvancedCache(nil, localCache)
+
+	service := NewCacheWarmingService(cache)
+
+	executed := false
+	service.Register("test_warmer", func(ctx context.Context) error {
+		executed = true
+		return nil
+	})
+
+	ctx := context.Background()
+	result, err := service.WarmSingle(ctx, "test_warmer")
+	if err != nil {
+		t.Fatalf("warm single failed: %v", err)
+	}
+
+	if result.Name != "test_warmer" {
+		t.Errorf("expected result name 'test_warmer', got '%s'", result.Name)
+	}
+
+	if !executed {
+		t.Error("warmer was not executed")
+	}
+
+	_, err = service.WarmSingle(ctx, "nonexistent")
+	if err == nil {
+		t.Error("expected error for nonexistent warmer")
+	}
+}
+
+func TestCacheWarmingService_WithTimeout(t *testing.T) {
+	localCache := NewLocalLRUCache(100, 5*time.Minute)
+	cache := NewAdvancedCache(nil, localCache)
+
+	service := NewCacheWarmingService(cache)
+
+	service.Register("slow_warmer", func(ctx context.Context) error {
+		time.Sleep(1 * time.Second)
+		return nil
+	})
+
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+
+	results, err := service.Warm(ctx)
+	t.Logf("Warm completed with %d results, err: %v", len(results), err)
+}
+
+func TestLazyCacheLoader(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	cache := NewMultiLevelCache(mockRedis, cfg)
+
+	loadCount := 0
+	loader := func(ctx context.Context, key string) ([]byte, error) {
+		loadCount++
+		return []byte("loaded_" + key), nil
+	}
+
+	lazyLoader := NewLazyCacheLoader(cache, loader, 5*time.Minute)
+	ctx := context.Background()
+
+	val, ok, err := lazyLoader.Get(ctx, "test_key")
+	if err != nil {
+		t.Fatalf("first get failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected ok to be true")
+	}
+	if string(val) != "loaded_test_key" {
+		t.Errorf("unexpected value: %s", string(val))
+	}
+	if loadCount != 1 {
+		t.Errorf("expected load count 1, got %d", loadCount)
+	}
+
+	val, ok, err = lazyLoader.Get(ctx, "test_key")
+	if err != nil {
+		t.Fatalf("second get failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected ok to be true on second get")
+	}
+	if loadCount != 1 {
+		t.Errorf("expected load count still 1, got %d", loadCount)
+	}
+
+	cache.Stop()
+}
+
+func TestLazyCacheLoader_Concurrent(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	cache := NewMultiLevelCache(mockRedis, cfg)
+
+	loadCount := 0
+	loader := func(ctx context.Context, key string) ([]byte, error) {
+		time.Sleep(10 * time.Millisecond)
+		loadCount++
+		return []byte("value"), nil
+	}
+
+	lazyLoader := NewLazyCacheLoader(cache, loader, 5*time.Minute)
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			lazyLoader.Get(ctx, "concurrent_key")
+		}()
+	}
+
+	wg.Wait()
+
+	if loadCount > 1 {
+		t.Errorf("expected load count <= 1, got %d", loadCount)
+	}
+
+	cache.Stop()
+}
+
+func TestBackgroundRefresher(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	cache := NewMultiLevelCache(mockRedis, cfg)
+
+	refreshCount := 0
+	loader := func(ctx context.Context, key string) ([]byte, error) {
+		refreshCount++
+		return []byte(fmt.Sprintf("refreshed_%d", refreshCount)), nil
+	}
+
+	refresher := NewBackgroundRefresher(cache, []string{"key1", "key2"}, loader, 50*time.Millisecond)
+
+	refresher.Start()
+
+	time.Sleep(150 * time.Millisecond)
+
+	refresher.Stop()
+
+	// Wait a bit for goroutine to stop
+	time.Sleep(50 * time.Millisecond)
+
+	if refresher.IsRunning() {
+		t.Error("refresher should not be running after stop")
+	}
+
+	stats := refresher.GetStats()
+	if stats.TotalRefreshes < 1 {
+		t.Errorf("expected at least 1 refresh, got %d", stats.TotalRefreshes)
+	}
+
+	cache.Stop()
+}
+
+func TestBackgroundRefresher_AddRemove(t *testing.T) {
+	mockRedis := NewMockRedisClient()
+	cfg := &MultiLevelCacheConfig{
+		LocalCacheItems:   100,
+		LocalCacheTTL:     5 * time.Minute,
+		RemoteCacheTTL:    10 * time.Minute,
+		StatsEnabled:      true,
+		AsyncWriteEnabled: false,
+	}
+
+	cache := NewMultiLevelCache(mockRedis, cfg)
+
+	loader := func(ctx context.Context, key string) ([]byte, error) {
+		return []byte("value"), nil
+	}
+
+	refresher := NewBackgroundRefresher(cache, []string{"initial_key"}, loader, 100*time.Millisecond)
+
+	refresher.AddKey("new_key1")
+	refresher.AddKey("new_key2")
+	refresher.AddKey("new_key1")
+
+	refresher.RemoveKey("initial_key")
+	refresher.RemoveKey("nonexistent")
+
+	refresher.Start()
+	time.Sleep(50 * time.Millisecond)
+	refresher.Stop()
+
+	cache.Stop()
+}
+
 func TestLocalCache(t *testing.T) {
 	cache := NewLocalCacheSimple(100, 30*time.Second)
 

@@ -89,6 +89,54 @@
                 });
             },
 
+            async getSuccessRateByType() {
+                return ApiClient.request('/stats/success-rate-by-type', {
+                    method: 'GET'
+                });
+            },
+
+            async getResponseTimeTrend() {
+                return ApiClient.request('/stats/response-time-trend', {
+                    method: 'GET'
+                });
+            },
+
+            async getTopEndpoints() {
+                return ApiClient.request('/stats/top-endpoints', {
+                    method: 'GET'
+                });
+            },
+
+            async getRiskLevelDistribution() {
+                return ApiClient.request('/stats/risk-level-distribution', {
+                    method: 'GET'
+                });
+            },
+
+            async getHourlyDistribution() {
+                return ApiClient.request('/stats/hourly-distribution', {
+                    method: 'GET'
+                });
+            },
+
+            async getGeoDistribution() {
+                return ApiClient.request('/stats/geo-distribution', {
+                    method: 'GET'
+                });
+            },
+
+            async getRecentActivities(limit = 20) {
+                return ApiClient.request(`/stats/recent-activities?limit=${limit}`, {
+                    method: 'GET'
+                });
+            },
+
+            async getSystemHealth() {
+                return ApiClient.request('/stats/system-health', {
+                    method: 'GET'
+                });
+            },
+
             async exportData(format = 'csv', type = 'stats') {
                 return ApiClient.request(`/stats/export?format=${format}&type=${type}`, {
                     method: 'GET'
@@ -893,6 +941,319 @@
 
         destroyAll() {
             Object.keys(this.charts).forEach(id => this.destroyChart(id));
+        },
+
+        initSuccessRateByTypeChart(canvasId, data, options = {}) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            if (this.charts[canvasId]) {
+                this.charts[canvasId].destroy();
+            }
+
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.type),
+                    datasets: [
+                        {
+                            label: '验证成功率 (%)',
+                            data: data.map(d => d.successRate),
+                            backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                            borderColor: '#10b981',
+                            borderWidth: 2,
+                            borderRadius: 8
+                        },
+                        {
+                            label: '验证数量',
+                            data: data.map(d => d.total),
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 2,
+                            borderRadius: 8,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.datasetIndex === 0) {
+                                        label += context.parsed.y.toFixed(1) + '%';
+                                    } else {
+                                        label += AdminUI.formatNumber(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: '成功率 (%)'
+                            }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return AdminUI.formatNumber(value);
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: '验证数量'
+                            }
+                        }
+                    }
+                }
+            });
+            return this.charts[canvasId];
+        },
+
+        initResponseTimeChart(canvasId, data, options = {}) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            if (this.charts[canvasId]) {
+                this.charts[canvasId].destroy();
+            }
+
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.time),
+                    datasets: [
+                        {
+                            label: '平均响应时间 (ms)',
+                            data: data.map(d => d.avgTime),
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: '最大响应时间 (ms)',
+                            data: data.map(d => d.maxTime),
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 3,
+                            pointHoverRadius: 6,
+                            borderDash: [5, 5]
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '响应时间 (ms)'
+                            }
+                        }
+                    }
+                }
+            });
+            return this.charts[canvasId];
+        },
+
+        initRiskLevelChart(canvasId, data, options = {}) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            if (this.charts[canvasId]) {
+                this.charts[canvasId].destroy();
+            }
+
+            const colors = {
+                '低风险': '#10b981',
+                '中风险': '#f59e0b',
+                '高风险': '#ef4444',
+                '极高风险': '#7f1d1d'
+            };
+
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'polarArea',
+                data: {
+                    labels: data.map(d => d.level),
+                    datasets: [{
+                        data: data.map(d => d.count),
+                        backgroundColor: data.map(d => colors[d.level] || '#3b82f6'),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${AdminUI.formatNumber(context.parsed)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            return this.charts[canvasId];
+        },
+
+        initTopEndpointsChart(canvasId, data, options = {}) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            if (this.charts[canvasId]) {
+                this.charts[canvasId].destroy();
+            }
+
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.endpoint),
+                    datasets: [{
+                        label: '请求次数',
+                        data: data.map(d => d.count),
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(139, 92, 246, 0.8)',
+                            'rgba(236, 72, 153, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(16, 185, 129, 0.8)'
+                        ],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    return `请求次数: ${AdminUI.formatNumber(context.parsed.x)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return AdminUI.formatNumber(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            return this.charts[canvasId];
+        },
+
+        initHourlyDistributionChart(canvasId, data, options = {}) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            if (this.charts[canvasId]) {
+                this.charts[canvasId].destroy();
+            }
+
+            this.charts[canvasId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => `${d.hour}:00`),
+                    datasets: [{
+                        label: '验证次数',
+                        data: data.map(d => d.count),
+                        backgroundColor: data.map(d => 
+                            d.count > (data.reduce((a, b) => a + b.count, 0) / data.length) 
+                                ? 'rgba(59, 130, 246, 0.9)' 
+                                : 'rgba(59, 130, 246, 0.5)'
+                        ),
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return AdminUI.formatNumber(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            return this.charts[canvasId];
         }
     };
 

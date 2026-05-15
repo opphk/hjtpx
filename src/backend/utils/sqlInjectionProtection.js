@@ -1,7 +1,7 @@
 class SQLInjectionProtection {
   static get dangerousPatterns() {
     return [
-      /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE)\b/gi,
+      /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|VALUES)\b/gi,
       /\b(UNION|EXEC|EXECUTE|XP_|SP_)\b/gi,
       /(--|#|\/\*|\*\/)/g,
       /;\s*(DROP|INSERT|UPDATE|DELETE|EXEC)/gi,
