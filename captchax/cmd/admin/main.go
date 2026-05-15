@@ -12,6 +12,7 @@ import (
 	"captchax/config"
 	"captchax/internal/admin"
 	"captchax/internal/log"
+	"captchax/internal/monitoring"
 	"captchax/internal/repository"
 	"captchax/pkg/cache"
 	"captchax/pkg/database"
@@ -67,6 +68,8 @@ func main() {
 	configRepo := repository.NewConfigRepo(sqlDB)
 	captchaRepo := repository.NewCaptchaRepo(sqlDB)
 
+	metrics := monitoring.NewMetrics()
+
 	jwtSecret := cfg.Admin.JWTSecret
 	if jwtSecret == "" {
 		jwtSecret = "captchax-admin-default-secret-change-in-production"
@@ -88,6 +91,8 @@ func main() {
 		captchaRepo,
 		jwtSecret,
 		tokenTTL,
+		sqlDB,
+		metrics,
 	)
 	adminRouter.RegisterRoutes(router)
 

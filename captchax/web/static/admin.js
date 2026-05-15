@@ -157,6 +157,48 @@
                     method: 'DELETE'
                 });
             }
+        },
+
+        analytics: {
+            async getOverview(range = '7d') {
+                return ApiClient.request(`/analytics/overview?range=${range}`, {
+                    method: 'GET'
+                });
+            },
+
+            async getTrends(range = '7d', interval = '', startDate = '', endDate = '') {
+                let url = `/analytics/trends?range=${range}`;
+                if (interval) url += `&interval=${interval}`;
+                if (startDate) url += `&start_date=${startDate}`;
+                if (endDate) url += `&end_date=${endDate}`;
+                return ApiClient.request(url, {
+                    method: 'GET'
+                });
+            },
+
+            async getDistribution(range = '7d', groupBy = 'type') {
+                return ApiClient.request(`/analytics/distribution?range=${range}&group_by=${groupBy}`, {
+                    method: 'GET'
+                });
+            },
+
+            async getGeo(range = '7d', limit = 20) {
+                return ApiClient.request(`/analytics/geo?range=${range}&limit=${limit}`, {
+                    method: 'GET'
+                });
+            },
+
+            async getDevices(range = '7d') {
+                return ApiClient.request(`/analytics/devices?range=${range}`, {
+                    method: 'GET'
+                });
+            },
+
+            async getRisk(range = '7d') {
+                return ApiClient.request(`/analytics/risk?range=${range}`, {
+                    method: 'GET'
+                });
+            }
         }
     };
 

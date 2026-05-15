@@ -1,21 +1,22 @@
 package admin
 
 import (
+	"database/sql"
 	"time"
 
+	"captchax/internal/monitoring"
 	"captchax/internal/repository"
 	"captchax/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Router 路由管理
 type Router struct {
 	handlers *AdminHandlers
+	rbacHandlers *RBACHandlers
 	auth     *AuthService
 }
 
-// NewRouter 创建路由管理器
 func NewRouter(
 	adminRepo *repository.AdminRepo,
 	whitelistRepo *repository.WhitelistRepo,
@@ -24,6 +25,8 @@ func NewRouter(
 	captchaRepo *repository.CaptchaRepo,
 	jwtSecret string,
 	tokenTTLSeconds int,
+	db *sql.DB,
+	metrics *monitoring.Metrics,
 ) *Router {
 	tokenTTL := time.Duration(tokenTTLSeconds) * time.Second
 	if tokenTTLSeconds <= 0 {
@@ -31,6 +34,13 @@ func NewRouter(
 	}
 
 	authService := NewAuthService(adminRepo, jwtSecret, tokenTTL)
+	analyticsService := NewAnalyticsService(captchaRepo, db)
+
+	roleRepo := repository.NewRoleRepo(db)
+	permRepo := repository.NewPermissionRepo(db)
+	adminRoleRepo := repository.NewAdminRoleRepo(db)
+
+	rbacService := NewRBACService(roleRepo, permRepo, adminRoleRepo, adminRepo)
 
 	handlers := NewAdminHandlers(
 		authService,
@@ -39,27 +49,38 @@ func NewRouter(
 		blacklistRepo,
 		configRepo,
 		captchaRepo,
+		analyticsService,
+		metrics,
 	)
+
+	rbacHandlers := NewRBACHandlers(rbacService)
 
 	return &Router{
 		handlers: handlers,
+		rbacHandlers: rbacHandlers,
 		auth:     authService,
 	}
 }
 
-// RegisterRoutes 注册路由
 func (r *Router) RegisterRoutes(router *gin.Engine) {
 	router.LoadHTMLGlob("web/templates/admin/*.html")
 
 	// 页面路由
 	router.GET("/admin/login", r.handlers.ShowLoginPage)
 	router.GET("/admin/dashboard", r.handlers.ShowDashboardPage)
+	router.GET("/admin/realtime", r.handlers.ShowRealtimePage)
 	router.GET("/admin/stats", r.handlers.ShowStatsPage)
+	router.GET("/admin/analytics", r.handlers.ShowAnalyticsPage)
 	router.GET("/admin/config", r.handlers.ShowConfigPage)
 	router.GET("/admin/whitelist", r.handlers.ShowWhitelistPage)
 	router.GET("/admin/blacklist", r.handlers.ShowBlacklistPage)
+	router.GET("/admin/admins", r.handlers.ShowAdminsPage)
+	router.GET("/admin/roles", r.handlers.ShowRolesPage)
 
-	// API路由
+	router.GET("/admin/ws", r.auth.AuthMiddleware(), r.handlers.HandleWebSocket)
+	router.GET("/admin/api/realtime/stats", r.auth.AuthMiddleware(), r.handlers.GetRealtimeStats)
+	router.GET("/admin/api/realtime/charts", r.auth.AuthMiddleware(), r.handlers.GetRealtimeCharts)
+
 	apiGroup := router.Group("/admin/api")
 	{
 		apiGroup.POST("/login", r.handlers.Login)
@@ -68,28 +89,46 @@ func (r *Router) RegisterRoutes(router *gin.Engine) {
 		protected := apiGroup.Group("")
 		protected.Use(r.auth.AuthMiddleware())
 		{
-			// 仪表盘
 			protected.GET("/dashboard", r.handlers.GetDashboard)
 
-			// 统计
 			protected.GET("/stats", r.handlers.GetStats)
 			protected.GET("/stats/trend", r.handlers.GetTrend)
 			protected.GET("/stats/captcha-distribution", r.handlers.GetCaptchaDistribution)
 			protected.GET("/stats/ip-ranking", r.handlers.GetIPRanking)
 
-			// 配置
+			protected.GET("/analytics/overview", r.handlers.GetAnalyticsOverview)
+			protected.GET("/analytics/trends", r.handlers.GetAnalyticsTrends)
+			protected.GET("/analytics/distribution", r.handlers.GetAnalyticsDistribution)
+			protected.GET("/analytics/geo", r.handlers.GetAnalyticsGeo)
+			protected.GET("/analytics/devices", r.handlers.GetAnalyticsDevices)
+			protected.GET("/analytics/risk", r.handlers.GetAnalyticsRisk)
+
 			protected.GET("/config", r.handlers.GetConfig)
 			protected.POST("/config", r.auth.SuperAdminOnly(), r.handlers.UpdateConfig)
 
-			// 白名单
 			protected.GET("/whitelist", r.handlers.GetWhitelist)
 			protected.POST("/whitelist", r.handlers.AddWhitelist)
 			protected.DELETE("/whitelist/:id", r.handlers.DeleteWhitelist)
 
-			// 黑名单
 			protected.GET("/blacklist", r.handlers.GetBlacklist)
 			protected.POST("/blacklist", r.handlers.AddBlacklist)
 			protected.DELETE("/blacklist/:id", r.handlers.DeleteBlacklist)
+
+			protected.GET("/admins", r.rbacHandlers.GetAdmins)
+			protected.GET("/admins/:id", r.rbacHandlers.GetAdmin)
+			protected.POST("/admins", r.auth.SuperAdminOnly(), r.rbacHandlers.CreateAdmin)
+			protected.PUT("/admins/:id", r.auth.SuperAdminOnly(), r.rbacHandlers.UpdateAdmin)
+			protected.DELETE("/admins/:id", r.auth.SuperAdminOnly(), r.rbacHandlers.DeleteAdmin)
+			protected.PUT("/admins/:id/roles", r.auth.SuperAdminOnly(), r.rbacHandlers.AssignRoles)
+
+			protected.GET("/roles", r.rbacHandlers.GetRoles)
+			protected.GET("/roles/:id", r.rbacHandlers.GetRole)
+			protected.POST("/roles", r.auth.SuperAdminOnly(), r.rbacHandlers.CreateRole)
+			protected.PUT("/roles/:id", r.auth.SuperAdminOnly(), r.rbacHandlers.UpdateRole)
+			protected.DELETE("/roles/:id", r.auth.SuperAdminOnly(), r.rbacHandlers.DeleteRole)
+
+			protected.GET("/permissions", r.rbacHandlers.GetPermissions)
+			protected.GET("/me/permissions", r.rbacHandlers.GetMyPermissions)
 		}
 	}
 
