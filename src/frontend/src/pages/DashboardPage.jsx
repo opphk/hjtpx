@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
+import { usePageTitle } from '../hooks/usePageTitle';
 import DashboardLayout from '../components/DashboardLayout';
 import Navigation from '../components/Navigation';
 import Alert from '../components/ui/Alert';
@@ -9,6 +10,8 @@ import { formatDate } from '../i18n/dateFormat';
 const DashboardPage = () => {
   const { t } = useTranslation();
   const { user, isAuthenticated } = useAuth();
+
+  usePageTitle(t('dashboard.dashboard'));
 
   if (!isAuthenticated) {
     return (

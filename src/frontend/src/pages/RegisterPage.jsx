@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
+import { usePageTitle } from '../hooks/usePageTitle';
 import RegisterForm from '../components/RegisterForm';
 import Alert from '../components/ui/Alert';
 import { register } from '../services/auth';
@@ -10,6 +11,8 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  usePageTitle(t('auth.register'));
 
   const handleRegister = async (formData) => {
     setError('');

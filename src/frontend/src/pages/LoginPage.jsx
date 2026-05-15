@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { usePageTitle } from '../hooks/usePageTitle';
 import LoginForm from '../components/LoginForm';
 import Alert from '../components/ui/Alert';
 
@@ -11,6 +12,8 @@ const LoginPage = () => {
   const { login } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  usePageTitle(t('auth.login'));
 
   const handleLogin = async (formData) => {
     setError('');

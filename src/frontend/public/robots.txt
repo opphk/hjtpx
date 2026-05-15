@@ -1,15 +1,17 @@
 User-agent: *
 Allow: /
+Allow: /login
+Allow: /register
 
-# 禁止访问管理页面
 Disallow: /admin/
-
-# 禁止访问用户特定页面
 Disallow: /users/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /config/
+Disallow: /scripts/
+Disallow: /migrations/
+Disallow: /tests/
 
-# 禁止访问登录和注册页面（可选，根据需求）
-# Disallow: /login
-# Disallow: /register
+Sitemap: https://hjtpx.com/sitemap.xml
 
-# Sitemap 链接（如果有）
-# Sitemap: https://hjtpx.com/sitemap.xml
+Crawl-delay: 1
