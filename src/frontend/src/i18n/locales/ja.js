@@ -28,6 +28,17 @@ export default {
     reset: 'リセット',
     clear: 'クリア'
   },
+  search: {
+    placeholder: '検索...',
+    suggestions: '候補',
+    recentSearches: '最近の検索',
+    filters: 'フィルター',
+    noResults: '結果が見つかりません',
+    searchResults: '検索結果',
+    clearAll: 'すべてクリア',
+    minResults: '{min} 文字以上必要です',
+    searching: '検索中...'
+  },
   nav: {
     dashboard: 'ダッシュボード',
     users: 'ユーザー管理',

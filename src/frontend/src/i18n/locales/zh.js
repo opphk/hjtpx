@@ -28,6 +28,17 @@ export default {
     reset: '重置',
     clear: '清除'
   },
+  search: {
+    placeholder: '搜索...',
+    suggestions: '建议',
+    recentSearches: '最近搜索',
+    filters: '筛选条件',
+    noResults: '未找到结果',
+    searchResults: '搜索结果',
+    clearAll: '清除全部',
+    minResults: '最少需要 {min} 个字符',
+    searching: '搜索中...'
+  },
   nav: {
     dashboard: '仪表板',
     users: '用户管理',

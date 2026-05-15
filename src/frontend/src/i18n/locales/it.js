@@ -28,6 +28,17 @@ export default {
     reset: 'Ripristina',
     clear: 'Cancella'
   },
+  search: {
+    placeholder: 'Cerca...',
+    suggestions: 'Suggerimenti',
+    recentSearches: 'Ricerche recenti',
+    filters: 'Filtri',
+    noResults: 'Nessun risultato trovato',
+    searchResults: 'Risultati della ricerca',
+    clearAll: 'Cancella tutto',
+    minResults: 'Minimo {min} caratteri richiesti',
+    searching: 'Ricerca in corso...'
+  },
   nav: {
     dashboard: 'Pannello',
     users: 'Utenti',

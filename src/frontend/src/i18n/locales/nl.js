@@ -28,6 +28,17 @@ export default {
     reset: 'Resetten',
     clear: 'Wissen'
   },
+  search: {
+    placeholder: 'Zoeken...',
+    suggestions: 'Suggesties',
+    recentSearches: 'Recente zoekopdrachten',
+    filters: 'Filters',
+    noResults: 'Geen resultaten gevonden',
+    searchResults: 'Zoekresultaten',
+    clearAll: 'Alles wissen',
+    minResults: 'Minimaal {min} tekens vereist',
+    searching: 'Zoeken...'
+  },
   nav: {
     dashboard: 'Dashboard',
     users: 'Gebruikers',

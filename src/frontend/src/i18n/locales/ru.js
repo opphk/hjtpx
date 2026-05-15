@@ -28,6 +28,17 @@ export default {
     reset: 'Сбросить',
     clear: 'Очистить'
   },
+  search: {
+    placeholder: 'Поиск...',
+    suggestions: 'Предложения',
+    recentSearches: 'Недавние поиски',
+    filters: 'Фильтры',
+    noResults: 'Результаты не найдены',
+    searchResults: 'Результаты поиска',
+    clearAll: 'Очистить все',
+    minResults: 'Минимум {min} символов',
+    searching: 'Поиск...'
+  },
   nav: {
     dashboard: 'Панель управления',
     users: 'Пользователи',

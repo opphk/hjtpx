@@ -28,6 +28,17 @@ export default {
     reset: '초기화',
     clear: '지우기'
   },
+  search: {
+    placeholder: '검색...',
+    suggestions: '제안',
+    recentSearches: '최근 검색',
+    filters: '필터',
+    noResults: '결과를 찾을 수 없습니다',
+    searchResults: '검색 결과',
+    clearAll: '모두 지우기',
+    minResults: '최소 {min}자 필요',
+    searching: '검색 중...'
+  },
   nav: {
     dashboard: '대시보드',
     users: '사용자',

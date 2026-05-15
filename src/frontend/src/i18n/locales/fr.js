@@ -28,6 +28,17 @@ export default {
     reset: 'Réinitialiser',
     clear: 'Effacer'
   },
+  search: {
+    placeholder: 'Rechercher...',
+    suggestions: 'Suggestions',
+    recentSearches: 'Recherches récentes',
+    filters: 'Filtres',
+    noResults: 'Aucun résultat trouvé',
+    searchResults: 'Résultats de recherche',
+    clearAll: 'Tout effacer',
+    minResults: 'Minimum {min} caractères requis',
+    searching: 'Recherche en cours...'
+  },
   nav: {
     dashboard: 'Tableau de bord',
     users: 'Utilisateurs',

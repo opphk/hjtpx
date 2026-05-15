@@ -28,6 +28,17 @@ export default {
     reset: 'إعادة تعيين',
     clear: 'مسح'
   },
+  search: {
+    placeholder: 'بحث...',
+    suggestions: 'اقتراحات',
+    recentSearches: 'عمليات البحث الأخيرة',
+    filters: 'الفلاتر',
+    noResults: 'لم يتم العثور على نتائج',
+    searchResults: 'نتائج البحث',
+    clearAll: 'مسح الكل',
+    minResults: 'مطلوب {min} أحرف على الأقل',
+    searching: 'جاري البحث...'
+  },
   nav: {
     dashboard: 'لوحة التحكم',
     users: 'المستخدمون',

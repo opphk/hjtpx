@@ -34,6 +34,8 @@ const savedLanguage = localStorage.getItem('language') || navigator.language?.sp
 const supportedLanguages = ['en', 'zh', 'fr', 'de', 'es', 'ru', 'ja', 'ko', 'ar', 'pt', 'it', 'nl'];
 const initialLanguage = supportedLanguages.includes(savedLanguage) ? savedLanguage : 'en';
 
+const rtlLanguages = ['ar', 'he', 'fa', 'ur'];
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -56,23 +58,39 @@ i18n
 
 i18n.on('languageChanged', (lng) => {
   localStorage.setItem('language', lng);
-  document.documentElement.dir = ['ar', 'he', 'fa', 'ur'].includes(lng) ? 'rtl' : 'ltr';
+  const isRTL = rtlLanguages.includes(lng);
+  document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
   document.documentElement.lang = lng;
+  document.documentElement.classList.toggle('rtl', isRTL);
+  document.documentElement.classList.toggle('ltr', !isRTL);
+  
+  document.body.dir = isRTL ? 'rtl' : 'ltr';
 });
+
+export const changeLanguage = async (lng) => {
+  await i18n.changeLanguage(lng);
+  return lng;
+};
+
+export const getCurrentLanguage = () => i18n.language;
+
+export const isRTL = (lng = i18n.language) => rtlLanguages.includes(lng);
+
+export const getSupportedLanguages = () => supportedLanguages;
 
 export default i18n;
 
 export const languages = [
-  { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧', dir: 'ltr' },
-  { code: 'zh', name: 'Chinese', nativeName: '中文', flag: '🇨🇳', dir: 'ltr' },
-  { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷', dir: 'ltr' },
-  { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪', dir: 'ltr' },
-  { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸', dir: 'ltr' },
-  { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺', dir: 'ltr' },
-  { code: 'ja', name: 'Japanese', nativeName: '日本語', flag: '🇯🇵', dir: 'ltr' },
-  { code: 'ko', name: 'Korean', nativeName: '한국어', flag: '🇰🇷', dir: 'ltr' },
-  { code: 'ar', name: 'Arabic', nativeName: 'العربية', flag: '🇸🇦', dir: 'rtl' },
-  { code: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇧🇷', dir: 'ltr' },
-  { code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹', dir: 'ltr' },
-  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', flag: '🇳🇱', dir: 'ltr' }
+  { code: 'en', name: 'English', nativeName: 'English', flag: '🇬🇧', dir: 'ltr', region: 'Europe' },
+  { code: 'zh', name: 'Chinese', nativeName: '中文', flag: '🇨🇳', dir: 'ltr', region: 'Asia' },
+  { code: 'fr', name: 'French', nativeName: 'Français', flag: '🇫🇷', dir: 'ltr', region: 'Europe' },
+  { code: 'de', name: 'German', nativeName: 'Deutsch', flag: '🇩🇪', dir: 'ltr', region: 'Europe' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸', dir: 'ltr', region: 'Europe' },
+  { code: 'ru', name: 'Russian', nativeName: 'Русский', flag: '🇷🇺', dir: 'ltr', region: 'Europe' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語', flag: '🇯🇵', dir: 'ltr', region: 'Asia' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어', flag: '🇰🇷', dir: 'ltr', region: 'Asia' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية', flag: '🇸🇦', dir: 'rtl', region: 'Middle East' },
+  { code: 'pt', name: 'Portuguese', nativeName: 'Português', flag: '🇧🇷', dir: 'ltr', region: 'Europe' },
+  { code: 'it', name: 'Italian', nativeName: 'Italiano', flag: '🇮🇹', dir: 'ltr', region: 'Europe' },
+  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands', flag: '🇳🇱', dir: 'ltr', region: 'Europe' }
 ];
