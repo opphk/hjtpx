@@ -6,6 +6,7 @@
 *.dylib
 captchax/captchax-server
 captchax/admin
+captchax/server
 *.test
 *.out
 
