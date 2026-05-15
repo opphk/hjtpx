@@ -30,6 +30,21 @@ func (h *Histogram) Observe(duration time.Duration) {
 	atomic.AddInt64(&h.counts[bucket], 1)
 }
 
+func (h *Histogram) GetCounts() [11]int64 {
+	var counts [11]int64
+	for i := 0; i < 11; i++ {
+		counts[i] = atomic.LoadInt64(&h.counts[i])
+	}
+	return counts
+}
+
+func (h *Histogram) GetBucket(index int) int64 {
+	if index < 0 || index >= 11 {
+		return 0
+	}
+	return atomic.LoadInt64(&h.counts[index])
+}
+
 func (m *Metrics) RecordRequest(duration time.Duration, success bool) {
 	atomic.AddInt64(&m.requestsTotal, 1)
 	if success {
@@ -78,4 +93,17 @@ func NewMetrics() *Metrics {
 	return &Metrics{
 		requestDuration: &Histogram{},
 	}
+}
+
+func (m *Metrics) GetResponseTimeDistribution() []int64 {
+	if m.requestDuration == nil {
+		counts := make([]int64, 11)
+		return counts
+	}
+	counts := m.requestDuration.GetCounts()
+	return counts[:]
+}
+
+func (m *Metrics) GetHistogram() *Histogram {
+	return m.requestDuration
 }
