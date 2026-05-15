@@ -16,6 +16,10 @@ func NewAdminRepo(db *sql.DB) *AdminRepo {
 	return &AdminRepo{db: db}
 }
 
+func (r *AdminRepo) GetDB() *sql.DB {
+	return r.db
+}
+
 func (r *AdminRepo) Create(ctx context.Context, admin *model.Admin) (int64, error) {
 	query := `
 		INSERT INTO admins (username, password_hash, role, created_at)

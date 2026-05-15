@@ -59,3 +59,29 @@ func DefaultRiskConfig() *RiskConfig {
 		},
 	}
 }
+
+type AIConfig struct {
+	Enable            bool     `yaml:"enable"`
+	ModelPath         string   `yaml:"model_path"`
+	HiddenDims        []int    `yaml:"hidden_dims"`
+	LearningRate      float64  `yaml:"learning_rate"`
+	WeightDecay       float64  `yaml:"weight_decay"`
+	BatchSize         int      `yaml:"batch_size"`
+	TrainingEpochs    int      `yaml:"training_epochs"`
+	ValidationSplit   float64  `yaml:"validation_split"`
+	DropoutRate       float64  `yaml:"dropout_rate"`
+}
+
+func DefaultAIConfig() *AIConfig {
+	return &AIConfig{
+		Enable:           true,
+		ModelPath:        "models/risk_model.json",
+		HiddenDims:      []int{64, 32, 16},
+		LearningRate:     0.001,
+		WeightDecay:      0.0001,
+		BatchSize:        32,
+		TrainingEpochs:   100,
+		ValidationSplit:  0.2,
+		DropoutRate:     0.0,
+	}
+}

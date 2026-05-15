@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -161,15 +162,15 @@ func (h *AdminHandlers) GetDashboard(c *gin.Context) {
 	yesterdayStart := todayStart.AddDate(0, 0, -1)
 	todayStats, err := h.captchaRepo.GetStats(ctx, todayStart, now)
 	if err == nil {
-		stats["today_verifications"] = todayStats.Total
+		stats["today_verifications"] = todayStats.TotalCount
 		stats["success_rate"] = calculateSuccessRate(todayStats)
 	}
 
 	// 获取昨日统计用于对比
 	yesterdayStats, err := h.captchaRepo.GetStats(ctx, yesterdayStart, todayStart)
 	if err == nil {
-		stats["yesterday_verifications"] = yesterdayStats.Total
-		stats["verifications_change"] = calculateChange(todayStats.Total, yesterdayStats.Total)
+		stats["yesterday_verifications"] = yesterdayStats.TotalCount
+		stats["verifications_change"] = calculateChange(todayStats.TotalCount, yesterdayStats.TotalCount)
 	}
 
 	// 获取7天统计
@@ -177,7 +178,7 @@ func (h *AdminHandlers) GetDashboard(c *gin.Context) {
 	weekStats, err := h.captchaRepo.GetStats(ctx, weekStart, now)
 	if err == nil {
 		stats["captcha_stats"] = weekStats
-		stats["blocked_attacks"] = weekStats.Rejected
+		stats["blocked_attacks"] = weekStats.FailCount
 	}
 
 	// 获取白名单、黑名单、管理员数量
@@ -364,8 +365,8 @@ func (h *AdminHandlers) GetIPRanking(c *gin.Context) {
 	// 添加状态信息
 	for i := range ranking {
 		ip := ranking[i].IP
-		isWhitelisted, _ := h.whitelistRepo.Exists(ctx, ip)
-		isBlacklisted, _ := h.blacklistRepo.Exists(ctx, ip)
+		isWhitelisted, _ := h.whitelistRepo.IsWhitelisted(ctx, ip)
+		isBlacklisted, _ := h.blacklistRepo.IsBlacklisted(ctx, ip)
 
 		switch {
 		case isWhitelisted:
@@ -630,11 +631,11 @@ func (h *AdminHandlers) DeleteBlacklist(c *gin.Context) {
 }
 
 // 辅助函数：计算成功率
-func calculateSuccessRate(stats *model.CaptchaStats) float64 {
-	if stats.Total == 0 {
+func calculateSuccessRate(stats *model.CaptchaLogStats) float64 {
+	if stats.TotalCount == 0 {
 		return 0
 	}
-	return (float64(stats.Verified) / float64(stats.Total)) * 100
+	return (float64(stats.SuccessCount) / float64(stats.TotalCount)) * 100
 }
 
 // 辅助函数：计算变化百分比
@@ -867,8 +868,8 @@ func (h *AdminHandlers) GetRealtimeStats(c *gin.Context) {
 	}
 
 	successRate := 0.0
-	if stats.Total > 0 {
-		successRate = float64(stats.Verified) / float64(stats.Total) * 100
+	if stats.TotalCount > 0 {
+		successRate = float64(stats.SuccessCount) / float64(stats.TotalCount) * 100
 	}
 
 	trend, err := h.captchaRepo.GetTrend(ctx, windowStart, now)
@@ -881,9 +882,9 @@ func (h *AdminHandlers) GetRealtimeStats(c *gin.Context) {
 	response.Success(c, gin.H{
 		"requests_per_second":  0,
 		"success_rate":        successRate,
-		"total_verifications": stats.Total,
-		"verified":            stats.Verified,
-		"rejected":            stats.Rejected,
+		"total_verifications": stats.TotalCount,
+		"verified":            stats.SuccessCount,
+		"rejected":            stats.FailCount,
 		"active_connections":  hub.getClientCount(),
 		"chart_data":          trend,
 		"timestamp":           now.Unix(),
@@ -923,7 +924,7 @@ func (h *AdminHandlers) GetRealtimeCharts(c *gin.Context) {
 
 	stats, err := h.captchaRepo.GetStats(ctx, startTime, now)
 	if err != nil {
-		stats = &model.CaptchaStats{}
+		stats = &model.CaptchaLogStats{}
 	}
 
 	response.Success(c, gin.H{
@@ -933,9 +934,9 @@ func (h *AdminHandlers) GetRealtimeCharts(c *gin.Context) {
 		"trend":        trend,
 		"distribution": distribution,
 		"summary": gin.H{
-			"total":     stats.Total,
-			"verified":  stats.Verified,
-			"rejected":  stats.Rejected,
+			"total":     stats.TotalCount,
+			"verified":  stats.SuccessCount,
+			"rejected":  stats.FailCount,
 			"success_rate": 0.0,
 		},
 	})
@@ -1201,6 +1202,106 @@ func (h *RBACHandlers) GetPermissions(c *gin.Context) {
 	response.Success(c, dtos)
 }
 
+// ExportHandlers 数据导出处理器
+type ExportHandlers struct {
+	exportService *ExportService
+}
+
+func NewExportHandlers(exportService *ExportService) *ExportHandlers {
+	return &ExportHandlers{
+		exportService: exportService,
+	}
+}
+
+// ExportCaptchas 导出验证码数据
+func (h *ExportHandlers) ExportCaptchas(c *gin.Context) {
+	ctx := c.Request.Context()
+	req := ParseExportRequest(c)
+	req.Type = "captchas"
+
+	result, err := h.exportService.ExportCaptchas(ctx, req)
+	if err != nil {
+		response.InternalError(c, "failed to export captchas: "+err.Error())
+		return
+	}
+
+	data, err := SerializeToFormat(result.Data, req.Format)
+	if err != nil {
+		response.InternalError(c, "failed to serialize data: "+err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("%s.%s", result.FileName, req.Format)
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, result.MimeType, data)
+}
+
+// ExportStats 导出统计数据
+func (h *ExportHandlers) ExportStats(c *gin.Context) {
+	ctx := c.Request.Context()
+	req := ParseExportRequest(c)
+	req.Type = "stats"
+
+	result, err := h.exportService.ExportStats(ctx, req)
+	if err != nil {
+		response.InternalError(c, "failed to export stats: "+err.Error())
+		return
+	}
+
+	data, err := SerializeToFormat(result.Data, req.Format)
+	if err != nil {
+		response.InternalError(c, "failed to serialize data: "+err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("%s.%s", result.FileName, req.Format)
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, result.MimeType, data)
+}
+
+// ExportLogs 导出日志数据
+func (h *ExportHandlers) ExportLogs(c *gin.Context) {
+	ctx := c.Request.Context()
+	req := ParseExportRequest(c)
+	req.Type = "logs"
+
+	result, err := h.exportService.ExportLogs(ctx, req)
+	if err != nil {
+		response.InternalError(c, "failed to export logs: "+err.Error())
+		return
+	}
+
+	data, err := SerializeToFormat(result.Data, req.Format)
+	if err != nil {
+		response.InternalError(c, "failed to serialize data: "+err.Error())
+		return
+	}
+
+	filename := fmt.Sprintf("%s.%s", result.FileName, req.Format)
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, result.MimeType, data)
+}
+
+// GetExportCount 获取导出数据量
+func (h *ExportHandlers) GetExportCount(c *gin.Context) {
+	ctx := c.Request.Context()
+	req := ParseExportRequest(c)
+
+	count, err := h.exportService.GetExportCount(ctx, req.Type, req)
+	if err != nil {
+		response.InternalError(c, "failed to get export count: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"count":       count,
+		"estimated_size": count * 200,
+	})
+}
+
 // AssignRoles 给管理员分配角色
 func (h *RBACHandlers) AssignRoles(c *gin.Context) {
 	idStr := c.Param("id")
@@ -1235,7 +1336,18 @@ func (h *RBACHandlers) GetMyPermissions(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	permissions, err := h.rbacService.GetAdminPermissions(ctx, adminID.(uint))
+	var adminIDInt64 int64
+	switch v := adminID.(type) {
+	case uint:
+		adminIDInt64 = int64(v)
+	case int64:
+		adminIDInt64 = v
+	case int:
+		adminIDInt64 = int64(v)
+	default:
+		adminIDInt64 = 0
+	}
+	permissions, err := h.rbacService.GetAdminPermissions(ctx, adminIDInt64)
 	if err != nil {
 		response.InternalError(c, "failed to get permissions")
 		return

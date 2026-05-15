@@ -35,6 +35,7 @@ func NewRouter(
 
 	authService := NewAuthService(adminRepo, jwtSecret, tokenTTL)
 	analyticsService := NewAnalyticsService(captchaRepo, db)
+	exportService := NewExportService(captchaRepo, db)
 
 	roleRepo := repository.NewRoleRepo(db)
 	permRepo := repository.NewPermissionRepo(db)
@@ -53,6 +54,7 @@ func NewRouter(
 		metrics,
 	)
 
+	exportHandlers := NewExportHandlers(exportService)
 	rbacHandlers := NewRBACHandlers(rbacService)
 
 	return &Router{
@@ -102,6 +104,11 @@ func (r *Router) RegisterRoutes(router *gin.Engine) {
 			protected.GET("/analytics/geo", r.handlers.GetAnalyticsGeo)
 			protected.GET("/analytics/devices", r.handlers.GetAnalyticsDevices)
 			protected.GET("/analytics/risk", r.handlers.GetAnalyticsRisk)
+
+			protected.GET("/export/count", exportHandlers.GetExportCount)
+			protected.GET("/export/captchas", exportHandlers.ExportCaptchas)
+			protected.GET("/export/stats", exportHandlers.ExportStats)
+			protected.GET("/export/logs", exportHandlers.ExportLogs)
 
 			protected.GET("/config", r.handlers.GetConfig)
 			protected.POST("/config", r.auth.SuperAdminOnly(), r.handlers.UpdateConfig)

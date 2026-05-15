@@ -168,16 +168,71 @@
                         <button id="apply-range" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg hidden">
                             <span data-i18n="admin.apply">应用</span>
                         </button>
-                        <select id="export-format" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="csv">CSV</option>
-                            <option value="json">JSON</option>
-                        </select>
-                        <button id="export-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            <span data-i18n="admin.export">导出</span>
-                        </button>
+                        <div class="relative" id="export-dropdown-container">
+                            <button id="export-dropdown-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                <span data-i18n="admin.export">导出</span>
+                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="export-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                                <div class="p-3 border-b border-gray-100">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.export.type">导出类型</label>
+                                    <select id="export-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="captchas" data-i18n="admin.export.captchas">验证码数据</option>
+                                        <option value="stats" data-i18n="admin.export.stats">统计数据</option>
+                                        <option value="logs" data-i18n="admin.export.logs">日志数据</option>
+                                    </select>
+                                </div>
+                                <div class="p-3 border-b border-gray-100">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.export.format">导出格式</label>
+                                    <select id="export-format" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="csv">CSV</option>
+                                        <option value="json">JSON</option>
+                                    </select>
+                                </div>
+                                <div class="p-3 border-b border-gray-100" id="captcha-type-filter">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="admin.export.captcha_type">验证码类型</label>
+                                    <select id="export-captcha-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="">全部</option>
+                                        <option value="slider">滑动验证</option>
+                                        <option value="click">点选验证</option>
+                                        <option value="rotate">旋转验证</option>
+                                        <option value="puzzle">拼图验证</option>
+                                        <option value="icon">图标验证</option>
+                                        <option value="text">文字验证</option>
+                                    </select>
+                                </div>
+                                <div class="p-3 border-b border-gray-100">
+                                    <p class="text-xs text-gray-500">
+                                        <span data-i18n="admin.export.range">时间范围:</span> <span id="export-range-preview">最近7天</span>
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        <span data-i18n="admin.export.records">预计记录:</span> <span id="export-count-preview">-</span>
+                                    </p>
+                                </div>
+                                <div class="p-3" id="export-progress-container" style="display: none;">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="text-xs text-gray-600" data-i18n="admin.export.progress">导出进度</span>
+                                        <span class="text-xs text-gray-600" id="export-progress-text">0%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div id="export-progress-bar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="p-3">
+                                    <button id="start-export-btn" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center justify-center transition">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                        </svg>
+                                        <span data-i18n="admin.export.start">开始导出</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -1027,36 +1082,164 @@
             document.getElementById('trend-interval').addEventListener('change', loadTrends);
             document.getElementById('distribution-group').addEventListener('change', loadDistribution);
 
-            document.getElementById('export-btn').addEventListener('click', function() {
-                const format = document.getElementById('export-format').value;
-                const data = {
-                    overview: overviewData,
-                    trends: trendsData,
-                    export_time: new Date().toISOString(),
-                    time_range: currentRange
-                };
+            document.getElementById('export-dropdown-btn').addEventListener('click', function(e) {
+                e.stopPropagation();
+                const dropdown = document.getElementById('export-dropdown');
+                dropdown.classList.toggle('hidden');
+                if (!dropdown.classList.contains('hidden')) {
+                    updateExportPreview();
+                }
+            });
 
-                if (format === 'json') {
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'analytics_' + new Date().toISOString().split('T')[0] + '.json';
-                    a.click();
+            document.addEventListener('click', function(e) {
+                const container = document.getElementById('export-dropdown-container');
+                if (!container.contains(e.target)) {
+                    document.getElementById('export-dropdown').classList.add('hidden');
+                }
+            });
+
+            document.getElementById('export-type').addEventListener('change', function() {
+                const captchaTypeFilter = document.getElementById('captcha-type-filter');
+                if (this.value === 'captchas') {
+                    captchaTypeFilter.style.display = 'block';
                 } else {
-                    let csv = 'Metric,Value\n';
-                    if (overviewData) {
-                        csv += 'Total Verifications,' + overviewData.total_verifications + '\n';
-                        csv += 'Success Rate,' + overviewData.success_rate.toFixed(2) + '%\n';
-                        csv += 'Unique IPs,' + overviewData.unique_ips + '\n';
-                        csv += 'Avg Response Time,' + overviewData.avg_response_time.toFixed(0) + 'ms\n';
+                    captchaTypeFilter.style.display = 'none';
+                }
+                updateExportPreview();
+            });
+
+            document.getElementById('time-range').addEventListener('change', updateExportPreview);
+            document.getElementById('start-date').addEventListener('change', updateExportPreview);
+            document.getElementById('end-date').addEventListener('change', updateExportPreview);
+
+            async function updateExportPreview() {
+                const rangeType = document.getElementById('time-range').value;
+                const exportType = document.getElementById('export-type').value;
+                const rangeLabel = {
+                    'today': '今天',
+                    'yesterday': '昨天',
+                    '7d': '最近7天',
+                    '30d': '最近30天',
+                    '90d': '最近90天',
+                    'custom': '自定义'
+                };
+                document.getElementById('export-range-preview').textContent = rangeLabel[rangeType] || '最近7天';
+
+                try {
+                    const params = new URLSearchParams({
+                        type: exportType,
+                        range: rangeType,
+                        start_date: document.getElementById('start-date').value,
+                        end_date: document.getElementById('end-date').value,
+                        captcha_type: document.getElementById('export-captcha-type').value
+                    });
+                    const response = await fetch('/admin/api/export/count?' + params.toString(), {
+                        headers: {
+                            'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                        }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        const count = data.data?.count || 0;
+                        document.getElementById('export-count-preview').textContent = count.toLocaleString() + ' 条';
                     }
-                    const blob = new Blob([csv], { type: 'text/csv' });
+                } catch (error) {
+                    console.error('Failed to get export count:', error);
+                    document.getElementById('export-count-preview').textContent = '获取失败';
+                }
+            }
+
+            document.getElementById('start-export-btn').addEventListener('click', async function() {
+                const exportType = document.getElementById('export-type').value;
+                const format = document.getElementById('export-format').value;
+                const rangeType = document.getElementById('time-range').value;
+                const startDate = document.getElementById('start-date').value;
+                const endDate = document.getElementById('end-date').value;
+                const captchaType = document.getElementById('export-captcha-type').value;
+
+                const progressContainer = document.getElementById('export-progress-container');
+                const progressBar = document.getElementById('export-progress-bar');
+                const progressText = document.getElementById('export-progress-text');
+                const exportBtn = document.getElementById('start-export-btn');
+
+                progressContainer.style.display = 'block';
+                progressBar.style.width = '0%';
+                progressText.textContent = '0%';
+                exportBtn.disabled = true;
+                exportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                try {
+                    progressBar.style.width = '30%';
+                    progressText.textContent = '30%';
+
+                    const params = new URLSearchParams({
+                        type: exportType,
+                        format: format,
+                        range: rangeType,
+                        start_date: startDate,
+                        end_date: endDate,
+                        captcha_type: captchaType
+                    });
+
+                    progressBar.style.width = '60%';
+                    progressText.textContent = '60%';
+
+                    const endpointMap = {
+                        'captchas': '/admin/api/export/captchas',
+                        'stats': '/admin/api/export/stats',
+                        'logs': '/admin/api/export/logs'
+                    };
+
+                    const response = await fetch(endpointMap[exportType] + '?' + params.toString(), {
+                        headers: {
+                            'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+                        }
+                    });
+
+                    progressBar.style.width = '90%';
+                    progressText.textContent = '90%';
+
+                    if (!response.ok) {
+                        throw new Error('Export failed: ' + response.status);
+                    }
+
+                    const blob = await response.blob();
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    let filename = exportType + '_export.' + format;
+                    if (contentDisposition) {
+                        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (match) {
+                            filename = match[1].replace(/['"]/g, '');
+                        }
+                    }
+
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'analytics_' + new Date().toISOString().split('T')[0] + '.csv';
+                    a.download = filename;
+                    document.body.appendChild(a);
                     a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '100%';
+
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                        exportBtn.disabled = false;
+                        exportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        document.getElementById('export-dropdown').classList.add('hidden');
+                    }, 1000);
+
+                } catch (error) {
+                    console.error('Export failed:', error);
+                    progressBar.style.width = '0%';
+                    progressText.textContent = '导出失败';
+                    progressContainer.style.display = 'none';
+                    exportBtn.disabled = false;
+                    exportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    alert('导出失败: ' + error.message);
                 }
             });
 

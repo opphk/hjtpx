@@ -14,11 +14,17 @@ import (
 
 	"captchax/config"
 	"captchax/internal/api"
+	"captchax/internal/file"
 	"captchax/internal/log"
+	"captchax/internal/notification"
+	"captchax/internal/search"
 	"captchax/internal/sentry"
 	"captchax/internal/service"
+	"captchax/internal/web"
+	"captchax/internal/websocket"
 	"captchax/pkg/cache"
 	"captchax/pkg/database"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,11 +33,11 @@ type metrics struct {
 	requestsTotal     atomic.Int64
 	requestsSuccess   atomic.Int64
 	requestsFailed    atomic.Int64
-	activeRequests   atomic.Int64
+	activeRequests    atomic.Int64
 	requestDuration   atomic.Int64
 	imageGenerated    atomic.Int64
-	imageCacheHits   atomic.Int64
-	imageCacheMisses atomic.Int64
+	imageCacheHits    atomic.Int64
+	imageCacheMisses  atomic.Int64
 }
 
 var appMetrics = &metrics{}
@@ -60,7 +66,7 @@ func recordMetrics() {
 
 			logger := log.Default()
 			logger.Info("metrics_sample", map[string]interface{}{
-				"requests_delta":    reqDelta,
+				"requests_delta":   reqDelta,
 				"avg_duration_ms":  avgDuration / 1e6,
 			})
 		}
@@ -113,28 +119,28 @@ func setupMetrics(router *gin.Engine) {
 		runtime.ReadMemStats(&m)
 
 		c.JSON(http.StatusOK, gin.H{
-			"go_version":        runtime.Version(),
-			"go_routines":      runtime.NumGoroutine(),
-			"mem_alloc":         m.Alloc,
-			"mem_total_alloc":   m.TotalAlloc,
-			"mem_sys":          m.Sys,
-			"mem_lookups":      m.Lookups,
-			"mem_mallocs":      m.Mallocs,
-			"mem_frees":        m.Frees,
-			"mem_heap_alloc":   m.HeapAlloc,
-			"mem_heap_sys":     m.HeapSys,
-			"mem_heap_idle":    m.HeapIdle,
-			"mem_heap_inuse":   m.HeapInuse,
-			"mem_heap_released": m.HeapReleased,
-			"mem_heap_objects":  m.HeapObjects,
-			"mem_stack_inuse":  m.StackInuse,
-			"mem_stack_sys":    m.StackSys,
-			"mem_mspan_inuse":  m.MSpanInuse,
-			"mem_mspan_sys":    m.MSpanInuse,
-			"mem_mcache_inuse": m.MCacheInuse,
-			"mem_mcache_sys":   m.MCacheInuse,
-			"gc_count":         m.NumGC,
-			"gc_pause_total":   m.PauseTotalNs,
+			"go_version":         runtime.Version(),
+			"go_routines":        runtime.NumGoroutine(),
+			"mem_alloc":          m.Alloc,
+			"mem_total_alloc":    m.TotalAlloc,
+			"mem_sys":            m.Sys,
+			"mem_lookups":        m.Lookups,
+			"mem_mallocs":        m.Mallocs,
+			"mem_frees":          m.Frees,
+			"mem_heap_alloc":     m.HeapAlloc,
+			"mem_heap_sys":       m.HeapSys,
+			"mem_heap_idle":      m.HeapIdle,
+			"mem_heap_inuse":     m.HeapInuse,
+			"mem_heap_released":  m.HeapReleased,
+			"mem_heap_objects":   m.HeapObjects,
+			"mem_stack_inuse":    m.StackInuse,
+			"mem_stack_sys":      m.StackSys,
+			"mem_mspan_inuse":    m.MSpanInuse,
+			"mem_mspan_sys":      m.MSpanInuse,
+			"mem_mcache_inuse":   m.MCacheInuse,
+			"mem_mcache_sys":     m.MCacheInuse,
+			"gc_count":           m.NumGC,
+			"gc_pause_total":     m.PauseTotalNs,
 		})
 	})
 }
@@ -278,7 +284,30 @@ func main() {
 		})
 	}
 
+	db := dbWrapper.DB()
+
+	fileService := file.NewService(db)
+	fileHandler := file.NewHandler(fileService)
+
+	searchService := search.NewService(db)
+	searchHandler := search.NewHandler(searchService)
+
+	notificationService := notification.NewService(db)
+	notificationHandler := notification.NewHandler(notificationService)
+
+	wsHub := websocket.NewHub()
+	go wsHub.Run()
+
+	jwtSecret := cfg.Admin.JWTSecret
+	if jwtSecret == "" {
+		jwtSecret = "captchax-default-secret-change-in-production"
+	}
+	wsHandler := websocket.NewHandler(wsHub, jwtSecret)
+
 	captchaAPI := api.NewServer(captchaService)
+	captchaAPI.RegisterFileHandler(fileHandler)
+	captchaAPI.RegisterSearchHandler(searchHandler)
+	captchaAPI.RegisterNotificationHandler(notificationHandler)
 
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -293,6 +322,20 @@ func main() {
 
 	setupPPROF(router)
 	setupMetrics(router)
+
+	var allFiles []string
+	for _, pattern := range []string{"web/templates/admin/*.html", "web/templates/user/*.html", "web/templates/*.html"} {
+		files, err := filepath.Glob(pattern)
+		if err == nil {
+			allFiles = append(allFiles, files...)
+		}
+	}
+	if len(allFiles) > 0 {
+		router.LoadHTMLFiles(allFiles...)
+	}
+	router.Static("/static", "./web/static")
+
+	web.NewUserRouter().RegisterRoutes(router)
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -319,12 +362,7 @@ func main() {
 		})
 	})
 
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"service": "CaptchaX",
-			"version": "1.0.0",
-		})
-	})
+	router.GET("/ws", wsHandler.HandleWebSocket)
 
 	apiGroup := router.Group("")
 	{

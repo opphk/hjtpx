@@ -2,10 +2,13 @@ package risk
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"captchax/internal/config"
+	"captchax/internal/risk/ai"
 )
 
 type MouseTrack struct {
@@ -87,6 +90,10 @@ type RiskEngine struct {
 	config     *config.RiskConfig
 	ipLimit    *IPLimit
 	whitelist  *Whitelist
+	aiTrainer  *ai.Trainer
+	aiEnabled  bool
+	aiConfig   *config.AIConfig
+	mu         sync.RWMutex
 }
 
 func NewRiskEngine(cfg *config.RiskConfig, ipLimit *IPLimit, whitelist *Whitelist) *RiskEngine {
@@ -95,6 +102,63 @@ func NewRiskEngine(cfg *config.RiskConfig, ipLimit *IPLimit, whitelist *Whitelis
 		ipLimit:   ipLimit,
 		whitelist: whitelist,
 	}
+}
+
+func NewRiskEngineWithAI(cfg *config.RiskConfig, ipLimit *IPLimit, whitelist *Whitelist, aiCfg *config.AIConfig) (*RiskEngine, error) {
+	engine := &RiskEngine{
+		config:    cfg,
+		ipLimit:   ipLimit,
+		whitelist: whitelist,
+		aiConfig:  aiCfg,
+		aiEnabled: aiCfg != nil && aiCfg.Enable,
+	}
+
+	if engine.aiEnabled {
+		modelConfig := &ai.ModelConfig{
+			ModelType:       ai.ModelTypeMLP,
+			InputDim:        ai.FeatureDimension,
+			HiddenDims:      aiCfg.HiddenDims,
+			OutputDim:       1,
+			LearningRate:    aiCfg.LearningRate,
+			WeightDecay:     aiCfg.WeightDecay,
+			BatchSize:       aiCfg.BatchSize,
+			Epochs:          aiCfg.TrainingEpochs,
+			ValidationSplit: aiCfg.ValidationSplit,
+		}
+
+		if len(modelConfig.HiddenDims) == 0 {
+			modelConfig.HiddenDims = []int{64, 32, 16}
+		}
+
+		engine.aiTrainer = ai.NewTrainer(modelConfig)
+
+		if aiCfg.ModelPath != "" {
+			if err := engine.aiTrainer.LoadModel(aiCfg.ModelPath); err != nil {
+				return engine, nil
+			}
+		}
+	}
+
+	return engine, nil
+}
+
+func (e *RiskEngine) IsAIEnabled() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.aiEnabled && e.aiTrainer != nil && e.aiTrainer.IsReady()
+}
+
+func (e *RiskEngine) SetAIEnabled(enabled bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.aiEnabled = enabled
+}
+
+func (e *RiskEngine) GetAIConfidence() float64 {
+	if !e.IsAIEnabled() {
+		return 0.0
+	}
+	return 0.7
 }
 
 func (e *RiskEngine) TrackBehavior(data *BehaviorData) error {
@@ -1049,4 +1113,152 @@ func (e *RiskEngine) CalculateRiskWithAdaptiveWeights(
 	}
 
 	return tempResult
+}
+
+// ========================================
+// AI 深度学习模型集成
+// ========================================
+
+func (e *RiskEngine) PredictWithAI(ctx context.Context, behavior *BehaviorData) (*ai.PredictionResult, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.aiTrainer == nil || !e.aiEnabled {
+		return nil, fmt.Errorf("AI model is not enabled")
+	}
+
+	aiBehavior := convertToAIBehavior(behavior)
+	return e.aiTrainer.Predict(ctx, aiBehavior)
+}
+
+func (e *RiskEngine) CalculateRiskScoreWithAI(ctx context.Context, behavior *BehaviorData, ip string, domain string) *RiskResult {
+	result := &RiskResult{
+		Factors:   make([]RiskFactor, 0),
+		Timestamp: time.Now(),
+	}
+
+	e.mu.RLock()
+	aiEnabled := e.aiEnabled && e.aiTrainer != nil && e.aiTrainer.IsReady()
+	e.mu.RUnlock()
+
+	ruleResult := e.EnhancedCalculateRiskScore(ctx, behavior, ip, domain)
+
+	if aiEnabled {
+		aiBehavior := convertToAIBehavior(behavior)
+		aiResult, err := e.aiTrainer.Predict(ctx, aiBehavior)
+		if err == nil && aiResult != nil {
+			ruleScore := float64(ruleResult.Score)
+			aiScore := aiResult.Score * 100.0
+
+			aiWeight := 0.7
+			ruleWeight := 0.3
+
+			combinedScore := ruleScore*ruleWeight + aiScore*aiWeight
+
+			combinedScoreInt := int(combinedScore)
+			if combinedScoreInt > 100 {
+				combinedScoreInt = 100
+			}
+
+			result.Score = combinedScoreInt
+			result.Factors = append(result.Factors, RiskFactor{
+				Name:   "ai_model_prediction",
+				Weight: int(aiScore),
+				Reason: fmt.Sprintf("AI模型预测: %.2f, 置信度: %.2f", aiScore, aiResult.Confidence),
+			})
+
+			result.Level = e.GetRiskLevel(combinedScoreInt)
+
+			if aiResult.ShouldBlock() || ruleResult.Level == RiskLevelCritical {
+				result.Recommended = ActionBlock
+			} else if aiResult.IsHighRisk() || ruleResult.Level == RiskLevelHigh {
+				result.Recommended = ActionVerify
+			} else {
+				result.Recommended = ActionAllow
+			}
+
+			return result
+		}
+	}
+
+	return ruleResult
+}
+
+func (e *RiskEngine) TrainAIModel(ctx context.Context, behaviors []*BehaviorData, labels []float64) (*ai.TrainingResult, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.aiTrainer == nil {
+		return nil, fmt.Errorf("AI trainer not initialized")
+	}
+
+	if !e.aiEnabled {
+		return nil, fmt.Errorf("AI is not enabled in config")
+	}
+
+	return e.aiTrainer.Train(ctx, behaviors, labels)
+}
+
+func (e *RiskEngine) UpdateAIModelWithFeedback(ctx context.Context, behavior *BehaviorData, isBot bool) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.aiTrainer == nil || !e.aiEnabled {
+		return fmt.Errorf("AI model is not enabled")
+	}
+
+	return e.aiTrainer.UpdateWithFeedback(ctx, behavior, isBot)
+}
+
+func (e *RiskEngine) SaveAIModel(path string) error {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.aiTrainer == nil {
+		return fmt.Errorf("AI trainer not initialized")
+	}
+
+	return e.aiTrainer.SaveModel(path)
+}
+
+func (e *RiskEngine) LoadAIModel(path string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.aiTrainer == nil {
+		return fmt.Errorf("AI trainer not initialized")
+	}
+
+	return e.aiTrainer.LoadModel(path)
+}
+
+func (e *RiskEngine) GetAIStats() *AIStats {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	stats := &AIStats{
+		Enabled: e.aiEnabled,
+	}
+
+	if e.aiTrainer != nil {
+		stats.Ready = e.aiTrainer.IsReady()
+		stats.Training = e.aiTrainer.IsTraining()
+	}
+
+	if e.aiConfig != nil {
+		stats.ModelPath = e.aiConfig.ModelPath
+		stats.BatchSize = e.aiConfig.BatchSize
+		stats.LearningRate = e.aiConfig.LearningRate
+	}
+
+	return stats
+}
+
+type AIStats struct {
+	Enabled     bool
+	Ready       bool
+	Training    bool
+	ModelPath   string
+	BatchSize   int
+	LearningRate float64
 }

@@ -49,7 +49,11 @@ func (s *RBACService) ListRoles(ctx context.Context, filter *model.RoleFilter) (
 		if err != nil {
 			return nil, 0, err
 		}
-		role.Permissions = permissions
+		perms := make([]model.Permission, len(permissions))
+		for i, p := range permissions {
+			perms[i] = *p
+		}
+		role.Permissions = perms
 	}
 
 	return roles, count, nil
@@ -216,7 +220,11 @@ func (s *RBACService) ListAdmins(ctx context.Context, filter *model.AdminFilter)
 
 		roles, err := s.adminRoleRepo.GetAdminRoles(ctx, int64(admin.ID))
 		if err == nil {
-			admin.Roles = roles
+			adminRoles := make([]model.Role, len(roles))
+			for i, r := range roles {
+				adminRoles[i] = *r
+			}
+			admin.Roles = adminRoles
 		}
 
 		admins = append(admins, admin)

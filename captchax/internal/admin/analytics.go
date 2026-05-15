@@ -482,7 +482,10 @@ func (s *AnalyticsService) GetDeviceDistribution(ctx context.Context, timeRange 
 	var deviceStats []DeviceStats
 	var totalCount int64
 
-	typeDeviceMap := make(map[string]DeviceStats)
+	typeDeviceMap := make(map[string]struct {
+		stats       DeviceStats
+		successCount int64
+	})
 
 	for rows.Next() {
 		var ua sql.NullString
@@ -539,30 +542,39 @@ func (s *AnalyticsService) GetDeviceDistribution(ctx context.Context, timeRange 
 
 		key := deviceType + "|" + browser + "|" + os
 		if existing, ok := typeDeviceMap[key]; ok {
-			existing.Count += count
-			existing.SuccessRate = float64(existing.SuccessCount+successCount) / float64(existing.Count) * 100
+			existing.stats.Count += count
+			existing.successCount += successCount
+			if existing.stats.Count > 0 {
+				existing.stats.SuccessRate = float64(existing.successCount) / float64(existing.stats.Count) * 100
+			}
 			typeDeviceMap[key] = existing
 		} else {
 			successRate := float64(0)
 			if count > 0 {
 				successRate = float64(successCount) / float64(count) * 100
 			}
-			typeDeviceMap[key] = DeviceStats{
-				DeviceType:   deviceType,
-				Browser:      browser,
-				OS:           os,
-				Count:        count,
-				SuccessRate:  successRate,
-				AvgRiskScore: avgRisk,
+			typeDeviceMap[key] = struct {
+				stats       DeviceStats
+				successCount int64
+			}{
+				stats: DeviceStats{
+					DeviceType:   deviceType,
+					Browser:      browser,
+					OS:           os,
+					Count:        count,
+					SuccessRate:  successRate,
+					AvgRiskScore: avgRisk,
+				},
+				successCount: successCount,
 			}
 		}
 	}
 
 	for _, ds := range typeDeviceMap {
 		if totalCount > 0 {
-			ds.Rate = float64(ds.Count) / float64(totalCount) * 100
+			ds.stats.Rate = float64(ds.stats.Count) / float64(totalCount) * 100
 		}
-		deviceStats = append(deviceStats, ds)
+		deviceStats = append(deviceStats, ds.stats)
 	}
 
 	return deviceStats, nil

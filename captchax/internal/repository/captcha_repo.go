@@ -421,6 +421,104 @@ func (r *CaptchaRepo) GetIPStats(ctx context.Context, limit int) ([]*model.IPSta
 	return stats, nil
 }
 
+func (r *CaptchaRepo) CountUniqueIPs(ctx context.Context, startDate, endDate time.Time) (int64, error) {
+	query := `SELECT COUNT(DISTINCT ip) FROM captcha_logs WHERE created_at >= $1 AND created_at <= $2`
+	var count int64
+	err := r.db.QueryRowContext(ctx, query, startDate, endDate).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count unique IPs: %w", err)
+	}
+	return count, nil
+}
+
+func (r *CaptchaRepo) GetTrend(ctx context.Context, startDate, endDate time.Time) ([]model.TrendPoint, error) {
+	query := `
+		SELECT 
+			DATE_TRUNC('hour', created_at) as hour,
+			COUNT(*) FILTER (WHERE result = true) as verified,
+			COUNT(*) FILTER (WHERE result = false) as rejected
+		FROM captcha_logs
+		WHERE created_at >= $1 AND created_at <= $2
+		GROUP BY DATE_TRUNC('hour', created_at)
+		ORDER BY hour
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get trend: %w", err)
+	}
+	defer rows.Close()
+
+	var trends []model.TrendPoint
+	for rows.Next() {
+		var t model.TrendPoint
+		var hour time.Time
+		if err := rows.Scan(&hour, &t.Verified, &t.Rejected); err != nil {
+			continue
+		}
+		t.Time = hour.Format("15:04")
+		trends = append(trends, t)
+	}
+	return trends, nil
+}
+
+func (r *CaptchaRepo) GetTypeDistribution(ctx context.Context, startDate, endDate time.Time) ([]model.TypeDistribution, error) {
+	query := `
+		SELECT captcha_type, COUNT(*) as count
+		FROM captcha_logs
+		WHERE created_at >= $1 AND created_at <= $2
+		GROUP BY captcha_type
+		ORDER BY count DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get type distribution: %w", err)
+	}
+	defer rows.Close()
+
+	var distribution []model.TypeDistribution
+	for rows.Next() {
+		var d model.TypeDistribution
+		if err := rows.Scan(&d.Type, &d.Count); err != nil {
+			continue
+		}
+		distribution = append(distribution, d)
+	}
+	return distribution, nil
+}
+
+func (r *CaptchaRepo) GetIPRanking(ctx context.Context, startDate, endDate time.Time, limit int) ([]model.IPRanking, error) {
+	query := `
+		SELECT 
+			ip,
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE result = true) as verified,
+			AVG(CASE WHEN result = true THEN 100.0 ELSE 0.0 END) as success_rate
+		FROM captcha_logs
+		WHERE created_at >= $1 AND created_at <= $2
+		GROUP BY ip
+		ORDER BY total DESC
+		LIMIT $3
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, startDate, endDate, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get IP ranking: %w", err)
+	}
+	defer rows.Close()
+
+	var ranking []model.IPRanking
+	for rows.Next() {
+		var r model.IPRanking
+		if err := rows.Scan(&r.IP, &r.Total, &r.Verified, &r.SuccessRate); err != nil {
+			continue
+		}
+		ranking = append(ranking, r)
+	}
+	return ranking, nil
+}
+
 func (r *CaptchaRepo) RefreshMaterializedStats(ctx context.Context) error {
 	query := `SELECT refresh_captcha_stats()`
 	_, err := r.db.ExecContext(ctx, query)

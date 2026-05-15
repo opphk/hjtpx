@@ -7,6 +7,8 @@
         supportedLocales: ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'ar', 'de', 'es', 'fr', 'ru', 'it', 'nl'],
         translations: {},
         listeners: [],
+        initialized: false,
+        initPromise: null,
 
         localeMap: {
             'zh': 'zh-CN',
@@ -20,35 +22,65 @@
             'ar': 'ar',
             'ar-SA': 'ar',
             'ar-AE': 'ar',
+            'ar-EG': 'ar',
+            'ar-MA': 'ar',
+            'ar-DZ': 'ar',
+            'ar-LB': 'ar',
+            'ar-IQ': 'ar',
+            'ar-QA': 'ar',
             'en': 'en',
             'en-US': 'en',
             'en-GB': 'en',
+            'en-AU': 'en',
+            'en-CA': 'en',
             'de': 'de',
             'de-DE': 'de',
+            'de-AT': 'de',
+            'de-CH': 'de',
             'es': 'es',
             'es-ES': 'es',
             'es-MX': 'es',
+            'es-AR': 'es',
             'fr': 'fr',
             'fr-FR': 'fr',
+            'fr-CA': 'fr',
+            'fr-BE': 'fr',
             'ru': 'ru',
             'ru-RU': 'ru',
+            'ru-UA': 'ru',
             'it': 'it',
             'it-IT': 'it',
             'nl': 'nl',
-            'nl-NL': 'nl'
+            'nl-NL': 'nl',
+            'nl-BE': 'nl'
         },
 
         async init(options) {
-            options = options || {};
-            this.defaultLocale = options.defaultLocale || 'en';
-            this.localeParam = options.localeParam || 'lang';
-            this.storageKey = options.storageKey || 'captchax_locale';
+            if (this.initPromise) {
+                return this.initPromise;
+            }
 
-            await this.loadAllTranslations();
-            var detectedLocale = this.detectLocale();
-            await this.setLocale(detectedLocale, options.skipPersist);
+            var self = this;
+            this.initPromise = (async function() {
+                options = options || {};
+                self.defaultLocale = options.defaultLocale || 'en';
+                self.localeParam = options.localeParam || 'lang';
+                self.storageKey = options.storageKey || 'captchax_locale';
+                self.containerSelector = options.containerSelector || '.language-switcher';
 
-            return this;
+                await self.loadAllTranslations();
+                var detectedLocale = self.detectLocale();
+                await self.setLocale(detectedLocale, options.skipPersist);
+
+                if (!self.initialized) {
+                    self.setupLanguageSwitcher();
+                    self.initialized = true;
+                }
+
+                return self;
+            })();
+
+            return this.initPromise;
         },
 
         async loadAllTranslations() {
@@ -73,6 +105,11 @@
         },
 
         detectLocale() {
+            var urlLocale = this.getUrlLocale();
+            if (urlLocale && this.isSupported(urlLocale)) {
+                return urlLocale;
+            }
+
             var stored = this.getStoredLocale();
             if (stored && this.isSupported(stored)) {
                 return stored;
@@ -84,6 +121,31 @@
             }
 
             return this.defaultLocale;
+        },
+
+        getUrlLocale() {
+            try {
+                var params = new URLSearchParams(window.location.search);
+                var locale = params.get(this.localeParam);
+                if (locale) {
+                    var normalized = locale.toLowerCase().replace('_', '-');
+                    var mapped = this.localeMap[normalized];
+                    if (mapped) {
+                        return mapped;
+                    }
+                    var prefix = normalized.split('-')[0];
+                    for (var i = 0; i < this.supportedLocales.length; i++) {
+                        var supported = this.supportedLocales[i].toLowerCase();
+                        if (supported === prefix || supported.startsWith(prefix + '-')) {
+                            return this.supportedLocales[i];
+                        }
+                    }
+                    if (this.isSupported(normalized)) {
+                        return normalized;
+                    }
+                }
+            } catch (e) {}
+            return null;
         },
 
         getBrowserLocale() {
@@ -161,6 +223,7 @@
 
             this.applyDirection(locale);
             this.updateDOM();
+            this.updateLanguageSwitcher();
             this.notifyListeners(oldLocale, locale);
 
             return true;
@@ -173,6 +236,8 @@
             if (document.documentElement) {
                 document.documentElement.setAttribute('dir', dir);
                 document.documentElement.setAttribute('lang', locale);
+                document.body.classList.remove('rtl', 'ltr');
+                document.body.classList.add(dir);
             }
         },
 
@@ -259,6 +324,85 @@
                         }
                     }
                 } catch (e) {}
+            });
+        },
+
+        setupLanguageSwitcher() {
+            var container = document.querySelector(this.containerSelector);
+            if (!container) {
+                return;
+            }
+
+            var currentInfo = this.getLocaleInfo();
+            container.innerHTML = this.createSwitcherHTML(currentInfo);
+
+            var self = this;
+            container.addEventListener('click', function(e) {
+                var item = e.target.closest('[data-locale]');
+                if (item) {
+                    var locale = item.getAttribute('data-locale');
+                    self.setLocale(locale);
+                }
+            });
+
+            container.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    var item = e.target.closest('[data-locale]');
+                    if (item) {
+                        e.preventDefault();
+                        var locale = item.getAttribute('data-locale');
+                        self.setLocale(locale);
+                    }
+                }
+            });
+
+            this.updateLanguageSwitcher();
+        },
+
+        createSwitcherHTML(currentInfo) {
+            var html = '<div class="language-switcher-dropdown">';
+            html += '<button class="language-switcher-trigger" aria-haspopup="listbox" aria-expanded="false">';
+            html += '<span class="language-switcher-current">' + (currentInfo ? currentInfo.name : 'English') + '</span>';
+            html += '<span class="language-switcher-arrow"></span>';
+            html += '</button>';
+            html += '<ul class="language-switcher-list" role="listbox">';
+
+            this.supportedLocales.forEach(function(locale) {
+                var info = I18n.getLocaleInfo(locale);
+                var isActive = locale === currentInfo.code;
+                html += '<li role="option" aria-selected="' + (isActive ? 'true' : 'false') + '"';
+                html += ' class="' + (isActive ? 'active' : '') + '"';
+                html += ' data-locale="' + locale + '">';
+                html += '<span class="language-name">' + (info ? info.name : locale) + '</span>';
+                if (info && info.dir === 'rtl') {
+                    html += '<span class="language-rtl-indicator" title="RTL">RTL</span>';
+                }
+                html += '</li>';
+            });
+
+            html += '</ul></div>';
+            return html;
+        },
+
+        updateLanguageSwitcher() {
+            var container = document.querySelector(this.containerSelector);
+            if (!container) {
+                return;
+            }
+
+            var currentInfo = this.getLocaleInfo();
+            var trigger = container.querySelector('.language-switcher-current');
+            if (trigger) {
+                trigger.textContent = currentInfo ? currentInfo.name : 'English';
+            }
+
+            var items = container.querySelectorAll('[data-locale]');
+            var self = this;
+            items.forEach(function(item) {
+                var locale = item.getAttribute('data-locale');
+                var isActive = locale === self.currentLocale;
+                item.classList.toggle('active', isActive);
+                item.setAttribute('aria-selected', isActive ? 'true' : 'false');
             });
         },
 
@@ -349,6 +493,21 @@
                 var template = time.weeksAgo || '{n} weeks ago';
                 return template.replace('{n}', weeks);
             }
+        },
+
+        isRTL() {
+            var translation = this.translations[this.currentLocale];
+            return translation && translation.dir === 'rtl';
+        },
+
+        isLTR() {
+            return !this.isRTL();
+        },
+
+        clearStoredLocale() {
+            try {
+                localStorage.removeItem(this.storageKey);
+            } catch (e) {}
         }
     };
 
