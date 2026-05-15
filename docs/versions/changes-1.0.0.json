@@ -1,80 +1,200 @@
 {
-  "timestamp": "2026-05-15T06:47:09.032Z",
+  "timestamp": "2026-05-15T08:44:21.214Z",
   "summary": {
-    "total": 6,
-    "added": 0,
-    "removed": 6,
+    "total": 18,
+    "added": 18,
+    "removed": 0,
     "modified": 0,
-    "breaking": 6,
-    "nonBreaking": 0
+    "breaking": 0,
+    "nonBreaking": 18
   },
   "details": {
-    "added": [],
-    "removed": [
+    "added": [
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications",
-        "message": "Removed endpoint: /api/v1/notifications"
+        "path": "/api-docs/json",
+        "message": "Added endpoint: /api-docs/json"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/unread/count",
-        "message": "Removed endpoint: /api/v1/notifications/unread/count"
+        "path": "/api-docs/yaml",
+        "message": "Added endpoint: /api-docs/yaml"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/{id}",
-        "message": "Removed endpoint: /api/v1/notifications/{id}"
+        "path": "/api-docs/versions",
+        "message": "Added endpoint: /api-docs/versions"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/{id}/read",
-        "message": "Removed endpoint: /api/v1/notifications/{id}/read"
+        "path": "/api-docs/versions/{version}",
+        "message": "Added endpoint: /api-docs/versions/{version}"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/read-all",
-        "message": "Removed endpoint: /api/v1/notifications/read-all"
+        "path": "/api-docs/versions/{version}/ui",
+        "message": "Added endpoint: /api-docs/versions/{version}/ui"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/send",
-        "message": "Removed endpoint: /api/v1/notifications/send"
+        "path": "/api-docs/compare/{version1}/{version2}",
+        "message": "Added endpoint: /api-docs/compare/{version1}/{version2}"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api-docs/stats",
+        "message": "Added endpoint: /api-docs/stats"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api-docs/stats/endpoint",
+        "message": "Added endpoint: /api-docs/stats/endpoint"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health",
+        "message": "Added endpoint: /api/v1/health"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/detailed",
+        "message": "Added endpoint: /api/v1/health/detailed"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/stats",
+        "message": "Added endpoint: /api/v1/health/stats"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/pool-stats",
+        "message": "Added endpoint: /api/v1/health/pool-stats"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/pool-health",
+        "message": "Added endpoint: /api/v1/health/pool-health"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/stats/reset",
+        "message": "Added endpoint: /api/v1/health/stats/reset"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/pool-stats/reset",
+        "message": "Added endpoint: /api/v1/health/pool-stats/reset"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/users",
+        "message": "Added endpoint: /api/v1/users"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/users/me",
+        "message": "Added endpoint: /api/v1/users/me"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/users/{id}",
+        "message": "Added endpoint: /api/v1/users/{id}"
       }
     ],
+    "removed": [],
     "modified": [],
-    "breaking": [
+    "breaking": [],
+    "nonBreaking": [
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications",
-        "message": "Removed endpoint: /api/v1/notifications"
+        "path": "/api-docs/json",
+        "message": "Added endpoint: /api-docs/json"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/unread/count",
-        "message": "Removed endpoint: /api/v1/notifications/unread/count"
+        "path": "/api-docs/yaml",
+        "message": "Added endpoint: /api-docs/yaml"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/{id}",
-        "message": "Removed endpoint: /api/v1/notifications/{id}"
+        "path": "/api-docs/versions",
+        "message": "Added endpoint: /api-docs/versions"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/{id}/read",
-        "message": "Removed endpoint: /api/v1/notifications/{id}/read"
+        "path": "/api-docs/versions/{version}",
+        "message": "Added endpoint: /api-docs/versions/{version}"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/read-all",
-        "message": "Removed endpoint: /api/v1/notifications/read-all"
+        "path": "/api-docs/versions/{version}/ui",
+        "message": "Added endpoint: /api-docs/versions/{version}/ui"
       },
       {
         "type": "endpoint",
-        "path": "/api/v1/notifications/send",
-        "message": "Removed endpoint: /api/v1/notifications/send"
+        "path": "/api-docs/compare/{version1}/{version2}",
+        "message": "Added endpoint: /api-docs/compare/{version1}/{version2}"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api-docs/stats",
+        "message": "Added endpoint: /api-docs/stats"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api-docs/stats/endpoint",
+        "message": "Added endpoint: /api-docs/stats/endpoint"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health",
+        "message": "Added endpoint: /api/v1/health"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/detailed",
+        "message": "Added endpoint: /api/v1/health/detailed"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/stats",
+        "message": "Added endpoint: /api/v1/health/stats"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/pool-stats",
+        "message": "Added endpoint: /api/v1/health/pool-stats"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/pool-health",
+        "message": "Added endpoint: /api/v1/health/pool-health"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/stats/reset",
+        "message": "Added endpoint: /api/v1/health/stats/reset"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/health/pool-stats/reset",
+        "message": "Added endpoint: /api/v1/health/pool-stats/reset"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/users",
+        "message": "Added endpoint: /api/v1/users"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/users/me",
+        "message": "Added endpoint: /api/v1/users/me"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/users/{id}",
+        "message": "Added endpoint: /api/v1/users/{id}"
       }
-    ],
-    "nonBreaking": []
+    ]
   }
 }

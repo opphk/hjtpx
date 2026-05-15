@@ -24,6 +24,62 @@ try {
   console.warn('Cache service not available');
 }
 
+/**
+ * @swagger
+ * tags:
+ *   name: Health
+ *   description: Health check and monitoring endpoints
+ */
+
+/**
+ * @swagger
+ * /api/v1/health:
+ *   get:
+ *     summary: Basic health check
+ *     description: Returns basic health status of the API service
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       example: healthy
+ *                     service:
+ *                       type: string
+ *                       example: HJTPX API
+ *                     version:
+ *                       type: string
+ *                       example: 1.0.0
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *                     uptime:
+ *                       type: number
+ *                       description: Process uptime in seconds
+ *                     environment:
+ *                       type: string
+ *                       example: development
+ *                 message:
+ *                   type: string
+ *                   example: Health check passed
+ *       503:
+ *         description: Service is unhealthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
 router.get('/', async (req, res) => {
   try {
     res.json({
@@ -49,6 +105,95 @@ router.get('/', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/v1/health/detailed:
+ *   get:
+ *     summary: Detailed health check
+ *     description: Returns detailed health status including database, Redis, cache, memory and CPU
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Detailed health status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [healthy, degraded, unhealthy]
+ *                     timestamp:
+ *                       type: string
+ *                       format: date-time
+ *                     service:
+ *                       type: string
+ *                     version:
+ *                       type: string
+ *                     uptime:
+ *                       type: number
+ *                     environment:
+ *                       type: string
+ *                     responseTime:
+ *                       type: string
+ *                     checks:
+ *                       type: object
+ *                       properties:
+ *                         database:
+ *                           type: object
+ *                           properties:
+ *                             status:
+ *                               type: string
+ *                             message:
+ *                               type: string
+ *                             responseTime:
+ *                               type: string
+ *                         redis:
+ *                           type: object
+ *                           properties:
+ *                             status:
+ *                               type: string
+ *                             message:
+ *                               type: string
+ *                             responseTime:
+ *                               type: string
+ *                         cache:
+ *                           type: object
+ *                           properties:
+ *                             status:
+ *                               type: string
+ *                             message:
+ *                               type: string
+ *                             stats:
+ *                               type: object
+ *                         memory:
+ *                           type: object
+ *                           properties:
+ *                             status:
+ *                               type: string
+ *                             message:
+ *                               type: string
+ *                             usage:
+ *                               type: object
+ *                         cpu:
+ *                           type: object
+ *                           properties:
+ *                             status:
+ *                               type: string
+ *                             message:
+ *                               type: string
+ *                             loadAverage:
+ *                               type: array
+ *                               items:
+ *                                 type: number
+ *       503:
+ *         description: Service is unhealthy
+ */
 router.get('/detailed', async (req, res) => {
   const startTime = Date.now();
   const healthStatus = {
@@ -114,7 +259,7 @@ router.get('/detailed', async (req, res) => {
     if (cacheService) {
       const cacheHealth = await cacheService.isHealthy();
       const cacheStats = cacheService.getStats();
-      
+
       healthStatus.checks.cache = {
         status: cacheHealth ? 'healthy' : 'degraded',
         message: cacheHealth ? 'Cache service is healthy' : 'Cache service is degraded',
@@ -165,6 +310,29 @@ router.get('/detailed', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/v1/health/stats:
+ *   get:
+ *     summary: Get cache statistics
+ *     description: Returns cache service statistics
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Cache statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   description: Cache statistics object
+ *       503:
+ *         description: Cache service not available
+ */
 router.get('/stats', async (req, res) => {
   try {
     if (!cacheService) {
@@ -187,6 +355,35 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/v1/health/pool-stats:
+ *   get:
+ *     summary: Get database pool statistics
+ *     description: Returns database connection pool statistics
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Pool statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     pool:
+ *                       type: object
+ *                     queries:
+ *                       type: object
+ *                     detailed:
+ *                       type: object
+ *       503:
+ *         description: Database connection not available
+ */
 router.get('/pool-stats', async (req, res) => {
   try {
     if (!db) {
@@ -211,13 +408,39 @@ router.get('/pool-stats', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' 
-        ? error.message 
-        : 'Failed to retrieve pool statistics'
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : 'Failed to retrieve pool statistics'
     });
   }
 });
 
+/**
+ * @swagger
+ * /api/v1/health/pool-health:
+ *   get:
+ *     summary: Check database pool health
+ *     description: Returns database connection pool health status
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Pool is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     healthy:
+ *                       type: boolean
+ *       503:
+ *         description: Pool is unhealthy or database not available
+ */
 router.get('/pool-health', async (req, res) => {
   try {
     if (!db) {
@@ -238,13 +461,33 @@ router.get('/pool-health', async (req, res) => {
   } catch (error) {
     res.status(503).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' 
-        ? error.message 
-        : 'Health check failed'
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Health check failed'
     });
   }
 });
 
+/**
+ * @swagger
+ * /api/v1/health/stats/reset:
+ *   post:
+ *     summary: Reset cache statistics
+ *     description: Reset all cache statistics counters
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Cache statistics reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       503:
+ *         description: Cache service not available
+ */
 router.post('/stats/reset', async (req, res) => {
   try {
     if (!cacheService) {
@@ -267,6 +510,28 @@ router.post('/stats/reset', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/v1/health/pool-stats/reset:
+ *   post:
+ *     summary: Reset pool statistics
+ *     description: Reset all database pool statistics counters
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Pool statistics reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       503:
+ *         description: Database connection not available
+ */
 router.post('/pool-stats/reset', async (req, res) => {
   try {
     if (!db) {
@@ -287,9 +552,8 @@ router.post('/pool-stats/reset', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' 
-        ? error.message 
-        : 'Failed to reset pool statistics'
+      error:
+        process.env.NODE_ENV === 'development' ? error.message : 'Failed to reset pool statistics'
     });
   }
 });

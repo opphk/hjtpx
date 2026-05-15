@@ -10,8 +10,8 @@ info:
     name: MIT
     url: https://opensource.org/licenses/MIT
   x-build:
-    commitHash: 0f72f80
-    buildTime: '2026-05-15T06:47:23.410Z'
+    commitHash: fc902817
+    buildTime: '2026-05-15T08:46:31.571Z'
 servers:
   - url: http://localhost:3000
     description: Development server
@@ -253,6 +253,296 @@ components:
 security:
   - bearerAuth: []
 paths:
+  /api-docs/json:
+    get:
+      summary: Get OpenAPI JSON specification
+      description: Returns the API specification in JSON format
+      tags:
+        - Docs
+      responses:
+        '200':
+          description: OpenAPI JSON specification
+          content:
+            application/json:
+              schema:
+                type: object
+  /api-docs/yaml:
+    get:
+      summary: Get OpenAPI YAML specification
+      description: Returns the API specification in YAML format
+      tags:
+        - Docs
+      responses:
+        '200':
+          description: OpenAPI YAML specification
+          content:
+            text/yaml:
+              schema:
+                type: string
+  /api-docs/versions:
+    get:
+      summary: List all API versions
+      description: Returns a list of all saved API versions
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of API versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiVersionInfo'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Save current API version
+      description: Save the current API specification as a new version
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  description: Version description
+      responses:
+        '200':
+          description: Version saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ApiVersionInfo'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api-docs/versions/{version}:
+    get:
+      summary: Get specific API version
+      description: Returns the OpenAPI specification for a specific version
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+          description: API version (e.g., 1.0.0)
+      responses:
+        '200':
+          description: API specification for the requested version
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Delete API version
+      description: Delete a specific API version
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+          description: API version to delete
+      responses:
+        '200':
+          description: Version deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api-docs/versions/{version}/ui:
+    get:
+      summary: Get API version UI
+      description: Returns the Swagger UI for a specific API version
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+          description: API version (e.g., 1.0.0)
+      responses:
+        '200':
+          description: Swagger UI HTML for the requested version
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api-docs/compare/{version1}/{version2}:
+    get:
+      summary: Compare two API versions
+      description: Compare two API versions and return the differences
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: version1
+          required: true
+          schema:
+            type: string
+          description: First API version
+        - in: path
+          name: version2
+          required: true
+          schema:
+            type: string
+          description: Second API version
+      responses:
+        '200':
+          description: Version comparison result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      added:
+                        type: array
+                        items:
+                          type: string
+                      removed:
+                        type: array
+                        items:
+                          type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api-docs/stats:
+    get:
+      summary: Get API documentation stats
+      description: Returns statistics about API documentation usage
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: API documentation statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Clear API stats
+      description: Clear all API documentation statistics
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Stats cleared successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api-docs/stats/endpoint:
+    get:
+      summary: Get endpoint stats
+      description: Returns statistics for a specific endpoint
+      tags:
+        - Docs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: method
+          required: true
+          schema:
+            type: string
+          description: HTTP method
+        - in: query
+          name: path
+          required: true
+          schema:
+            type: string
+          description: Endpoint path
+      responses:
+        '200':
+          description: Endpoint statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/analytics/dashboard:
     get:
       summary: Get dashboard summary
@@ -451,3 +741,535 @@ paths:
       responses:
         '200':
           description: Exported analytics file
+  /api/v1/health:
+    get:
+      summary: Basic health check
+      description: Returns basic health status of the API service
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: healthy
+                      service:
+                        type: string
+                        example: HJTPX API
+                      version:
+                        type: string
+                        example: 1.0.0
+                      timestamp:
+                        type: string
+                        format: date-time
+                      uptime:
+                        type: number
+                        description: Process uptime in seconds
+                      environment:
+                        type: string
+                        example: development
+                  message:
+                    type: string
+                    example: Health check passed
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/health/detailed:
+    get:
+      summary: Detailed health check
+      description: >-
+        Returns detailed health status including database, Redis, cache, memory
+        and CPU
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Detailed health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - healthy
+                          - degraded
+                          - unhealthy
+                      timestamp:
+                        type: string
+                        format: date-time
+                      service:
+                        type: string
+                      version:
+                        type: string
+                      uptime:
+                        type: number
+                      environment:
+                        type: string
+                      responseTime:
+                        type: string
+                      checks:
+                        type: object
+                        properties:
+                          database:
+                            type: object
+                            properties:
+                              status:
+                                type: string
+                              message:
+                                type: string
+                              responseTime:
+                                type: string
+                          redis:
+                            type: object
+                            properties:
+                              status:
+                                type: string
+                              message:
+                                type: string
+                              responseTime:
+                                type: string
+                          cache:
+                            type: object
+                            properties:
+                              status:
+                                type: string
+                              message:
+                                type: string
+                              stats:
+                                type: object
+                          memory:
+                            type: object
+                            properties:
+                              status:
+                                type: string
+                              message:
+                                type: string
+                              usage:
+                                type: object
+                          cpu:
+                            type: object
+                            properties:
+                              status:
+                                type: string
+                              message:
+                                type: string
+                              loadAverage:
+                                type: array
+                                items:
+                                  type: number
+        '503':
+          description: Service is unhealthy
+  /api/v1/health/stats:
+    get:
+      summary: Get cache statistics
+      description: Returns cache service statistics
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Cache statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    description: Cache statistics object
+        '503':
+          description: Cache service not available
+  /api/v1/health/pool-stats:
+    get:
+      summary: Get database pool statistics
+      description: Returns database connection pool statistics
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Pool statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      pool:
+                        type: object
+                      queries:
+                        type: object
+                      detailed:
+                        type: object
+        '503':
+          description: Database connection not available
+  /api/v1/health/pool-health:
+    get:
+      summary: Check database pool health
+      description: Returns database connection pool health status
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Pool is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      healthy:
+                        type: boolean
+        '503':
+          description: Pool is unhealthy or database not available
+  /api/v1/health/stats/reset:
+    post:
+      summary: Reset cache statistics
+      description: Reset all cache statistics counters
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Cache statistics reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '503':
+          description: Cache service not available
+  /api/v1/health/pool-stats/reset:
+    post:
+      summary: Reset pool statistics
+      description: Reset all database pool statistics counters
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Pool statistics reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '503':
+          description: Database connection not available
+  /api/v1/users:
+    get:
+      summary: Get all users
+      description: Retrieve a list of all users (Admin only)
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+                    example: Users retrieved successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create new user
+      description: Create a new user account (Admin only)
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - name
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: newuser@example.com
+                name:
+                  type: string
+                  example: John Doe
+                password:
+                  type: string
+                  format: password
+                  example: securePassword123
+                role:
+                  type: string
+                  enum:
+                    - user
+                    - admin
+                    - moderator
+                  example: user
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/users/me:
+    get:
+      summary: Get current user
+      description: Retrieve the currently authenticated user's profile
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Update current user
+      description: Update the currently authenticated user's profile
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: John Updated
+                email:
+                  type: string
+                  format: email
+                  example: updated@example.com
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/users/{id}:
+    get:
+      summary: Get user by ID
+      description: Retrieve a specific user by their ID
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '200':
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Update user by ID
+      description: Update a specific user's information
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum:
+                    - user
+                    - admin
+                    - moderator
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Delete user
+      description: Delete a user account (Admin only)
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: User ID
+      responses:
+        '204':
+          description: User deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'

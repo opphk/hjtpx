@@ -1,0 +1,12 @@
+{
+  "versions": [
+    {
+      "version": "1.0.0",
+      "createdAt": "2026-05-15T08:44:38.442Z",
+      "description": "Initial API version with complete documentation",
+      "filename": "openapi-1.0.0.json",
+      "filepath": "docs/versions/openapi-1.0.0.json",
+      "endpoints": 28
+    }
+  ]
+}
