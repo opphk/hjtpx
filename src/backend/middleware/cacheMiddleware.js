@@ -1,4 +1,5 @@
 const cacheService = require('../services/cacheService');
+const cacheMetricsService = require('../services/cacheMetricsService');
 
 const CACHEABLE_METHODS = ['GET', 'HEAD'];
 const DEFAULT_TTL = 300;
@@ -10,7 +11,7 @@ const CACHE_INVALIDATION_STRATEGIES = {
   TTL_BASED: 'ttl_based'
 };
 
-const cacheConfig = {
+const endpointCacheConfig = {
   '/api/v1/users': { ttl: 60, isPublic: false, tags: ['users'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE },
   '/api/v1/notifications': { ttl: 30, isPublic: false, tags: ['notifications'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE },
   '/api/v1/health': { ttl: 5, isPublic: true, tags: ['health'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.TTL_BASED },
@@ -84,7 +85,11 @@ function shouldCacheResponse(res) {
 }
 
 function getCacheConfig(path) {
-  for (const [pattern, config] of Object.entries(cacheConfig)) {
+  if (endpointCacheConfig && typeof endpointCacheConfig.getEndpointConfig === 'function') {
+    return endpointCacheConfig.getEndpointConfig(path);
+  }
+
+  for (const [pattern, config] of Object.entries(endpointCacheConfig)) {
     if (path.startsWith(pattern)) {
       return config;
     }
@@ -114,6 +119,12 @@ function apiCache(ttl = DEFAULT_TTL, options = {}) {
         res.set('X-Cache-TTL', effectiveTtl.toString());
         res.set('X-Cache-Hit-Time', new Date().toISOString());
 
+        if (cacheMetricsService) {
+          cacheMetricsService.recordHit('api', 1);
+          cacheMetricsService.recordApiCacheHit(req.path);
+          cacheMetricsService.recordLatency('get', Date.now() - req.startTime);
+        }
+
         if (options.onCacheHit) {
           await options.onCacheHit(req, res, cachedResponse);
         }
@@ -127,6 +138,11 @@ function apiCache(ttl = DEFAULT_TTL, options = {}) {
       res.set('X-Cache', 'MISS');
       res.set('X-Cache-Key', cacheKey);
       res.set('X-Cache-Miss-Time', new Date().toISOString());
+
+      if (cacheMetricsService) {
+        cacheMetricsService.recordMiss('api', 1);
+        cacheMetricsService.recordApiCacheMiss(req.path);
+      }
 
       const originalJson = res.json.bind(res);
       const originalSend = res.send.bind(res);
@@ -160,11 +176,19 @@ function apiCache(ttl = DEFAULT_TTL, options = {}) {
               tags
             );
 
+            if (cacheMetricsService) {
+              cacheMetricsService.recordSet('api', 1);
+              cacheMetricsService.setApiCacheSize(cacheMetricsService.metrics.api.size + 1);
+            }
+
             if (options.onCacheSet) {
               await options.onCacheSet(req, res, cacheKey, responseData);
             }
           } catch (error) {
             console.error('Failed to cache API response:', error);
+            if (cacheMetricsService) {
+              cacheMetricsService.recordError('cache_set', error.message);
+            }
           }
         }
       });
@@ -479,6 +503,6 @@ module.exports = {
   generateCacheKey,
   generateAdvancedCacheKey,
   getCacheConfig,
-  cacheConfig,
+  endpointCacheConfig,
   CACHE_INVALIDATION_STRATEGIES
 };

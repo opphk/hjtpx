@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
-import { usePageTitle } from '../hooks/usePageTitle';
+import SEO, { getSEOMeta } from '../components/SEO';
 import DashboardLayout from '../components/DashboardLayout';
 import Navigation from '../components/Navigation';
 import Alert from '../components/ui/Alert';
@@ -10,20 +10,24 @@ import { formatDate } from '../i18n/dateFormat';
 const DashboardPage = () => {
   const { t } = useTranslation();
   const { user, isAuthenticated } = useAuth();
-
-  usePageTitle(t('dashboard.dashboard'));
+  const seoMeta = getSEOMeta('dashboard');
 
   if (!isAuthenticated) {
     return (
-      <Alert 
+      <>
+        <SEO {...seoMeta} />
+        <Alert 
         type="warning" 
         message={t('common.error')} 
       />
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
+      <SEO {...seoMeta} />
+      <DashboardLayout>
       <div className="dashboard-content">
         <div className="dashboard-header">
           <h1>{t('dashboard.welcomeBack')}, {user?.username || t('users.user')}!</h1>
@@ -50,6 +54,7 @@ const DashboardPage = () => {
         </div>
       </div>
     </DashboardLayout>
+    </>
   );
 };
 

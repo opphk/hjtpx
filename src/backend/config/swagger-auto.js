@@ -15,7 +15,7 @@ const getGitCommitHash = () => {
   }
 };
 
-const options = {
+const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
     info: {
@@ -248,7 +248,7 @@ const options = {
 };
 
 const generateSwaggerSpec = () => {
-  return swaggerJsdoc(options);
+  return swaggerJsdoc(swaggerOptions);
 };
 
 const saveSwaggerSpec = (outputDir = './docs') => {
@@ -274,8 +274,11 @@ const saveSwaggerSpec = (outputDir = './docs') => {
   return spec;
 };
 
+const getSwaggerOptions = () => swaggerOptions;
+
 module.exports = {
   generateSwaggerSpec,
   saveSwaggerSpec,
-  options
+  swaggerOptions,
+  getSwaggerOptions
 };

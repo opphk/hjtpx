@@ -7,6 +7,7 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/hjtpx}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_DIR="${PROJECT_ROOT}/logs"
 LOG_FILE="${LOG_DIR}/backup_${TIMESTAMP}.log"
+METADATA_FILE="${BACKUP_DIR}/backup_metadata.json"
 
 mkdir -p "$LOG_DIR"
 
@@ -84,6 +85,7 @@ create_full_backup() {
         BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
         log "Full database backup created: ${BACKUP_FILE} (${BACKUP_SIZE})"
         echo "${BACKUP_FILE}" > "${BACKUP_DIR}/full/latest.txt"
+        update_backup_metadata "full" "${BACKUP_FILE}" "${BACKUP_SIZE}"
         return 0
     else
         error_exit "Full database backup failed"
@@ -112,6 +114,7 @@ create_incremental_backup() {
         BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
         log "Incremental backup created: ${BACKUP_FILE} (${BACKUP_SIZE})"
         echo "${LATEST_FULL}" > "${BACKUP_FILE}.base"
+        update_backup_metadata "incremental" "${BACKUP_FILE}" "${BACKUP_SIZE}"
         return 0
     else
         error_exit "Incremental backup failed"
@@ -137,6 +140,7 @@ backup_redis() {
         gzip -f "${REDIS_BACKUP_FILE}"
         BACKUP_SIZE=$(du -h "${REDIS_BACKUP_FILE}.gz" | cut -f1)
         log "Redis backup created: ${REDIS_BACKUP_FILE}.gz (${BACKUP_SIZE})"
+        update_backup_metadata "redis" "${REDIS_BACKUP_FILE}.gz" "${BACKUP_SIZE}"
     else
         log "Redis RDB file not found"
     fi
@@ -156,9 +160,34 @@ backup_config() {
     
     if [ ${#CONFIG_FILES[@]} -gt 0 ]; then
         tar -czf "${CONFIG_BACKUP_FILE}" -C "${PROJECT_ROOT}" "${CONFIG_FILES[@]}"
-        log "Configuration backup created: ${CONFIG_BACKUP_FILE}"
+        CONFIG_SIZE=$(du -h "${CONFIG_BACKUP_FILE}" | cut -f1)
+        log "Configuration backup created: ${CONFIG_BACKUP_FILE} (${CONFIG_SIZE})"
+        update_backup_metadata "config" "${CONFIG_BACKUP_FILE}" "${CONFIG_SIZE}"
     else
         log "No configuration files found to backup"
+    fi
+}
+
+update_backup_metadata() {
+    local BACKUP_TYPE="$1"
+    local BACKUP_PATH="$2"
+    local BACKUP_SIZE="$3"
+    
+    local METADATA_TEMP="${LOG_DIR}/.backup_metadata_temp.json"
+    
+    if [ -f "${METADATA_FILE}" ]; then
+        local EXISTING=$(cat "${METADATA_FILE}")
+    else
+        local EXISTING="{\"backups\": []}"
+    fi
+    
+    local ENTRY="{\"type\": \"${BACKUP_TYPE}\", \"path\": \"${BACKUP_PATH}\", \"size\": \"${BACKUP_SIZE}\", \"timestamp\": \"${TIMESTAMP}\", \"date\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+    
+    if command -v jq &> /dev/null; then
+        echo "${EXISTING}" | jq --argjson entry "${ENTRY}" '.backups += [$entry]' > "${METADATA_TEMP}" 2>/dev/null || echo "${EXISTING}" > "${METADATA_TEMP}"
+        mv "${METADATA_TEMP}" "${METADATA_FILE}"
+    else
+        log "jq not found, skipping metadata update"
     fi
 }
 
@@ -221,7 +250,12 @@ main() {
     
     setup_backup_dir
     load_env
-    check_postgres_connection
+    
+    case "${BACKUP_TYPE}" in
+        full|incremental|incr|db-only|redis|config)
+            check_postgres_connection
+            ;;
+    esac
     
     case "${BACKUP_TYPE}" in
         full)

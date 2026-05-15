@@ -1,7 +1,7 @@
+const { logInfo, logWarning, logError } = require('../middleware/logger');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
-
-const { logger } = require('../middleware/logger');
+const metricsService = require('../services/metricsService');
 
 class WebSocketServer {
   constructor(httpServer) {
@@ -47,10 +47,21 @@ class WebSocketServer {
       heartbeatsReceived: 0,
       missedHeartbeats: 0,
       connectionTimes: [],
-      startTime: Date.now()
+      startTime: Date.now(),
+      latencySamples: [],
+      lastLatencyReport: Date.now()
+    };
+
+    this.connectionStateMonitor = {
+      activeConnections: 0,
+      pendingConnections: 0,
+      maxConcurrentConnections: 0,
+      connectionQueue: [],
+      stateHistory: []
     };
 
     this.setupHeartbeatMonitor();
+    this.setupConnectionStateMonitor();
     this.setupMiddleware();
     this.setupEventHandlers();
   }
@@ -64,22 +75,69 @@ class WebSocketServer {
       this.clientHeartbeats.set(socket.id, {
         lastPing: Date.now(),
         missedCount: 0,
-        connectedAt: Date.now()
+        connectedAt: Date.now(),
+        lastHeartbeatResponse: Date.now()
       });
     });
 
-    this.io.engine.on('packet', (packet) => {
+    this.io.engine.on('packet', (packet, socket) => {
       if (packet.type === 'pong') {
-        const socket = this.findSocketByEngineSocket(this.io.engine);
-        if (socket) {
-          const heartbeat = this.clientHeartbeats.get(socket.id);
+        const socketId = this.getSocketIdFromPacket(socket);
+        if (socketId) {
+          const heartbeat = this.clientHeartbeats.get(socketId);
           if (heartbeat) {
-            heartbeat.lastPing = Date.now();
+            const now = Date.now();
+            const latency = now - heartbeat.lastPing;
+            heartbeat.lastPing = now;
+            heartbeat.lastHeartbeatResponse = now;
             heartbeat.missedCount = 0;
             this.metrics.heartbeatsReceived++;
+            this.recordLatency(latency);
+            
+            if (metricsService && metricsService.recordWebSocketHeartbeat) {
+              metricsService.recordWebSocketHeartbeat('received');
+            }
           }
         }
       }
+    });
+  }
+
+  getSocketIdFromPacket(engine) {
+    for (const [id, socket] of this.io.sockets.sockets) {
+      if (socket.conn && socket.conn.transport) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  recordLatency(latency) {
+    this.metrics.latencySamples.push(latency);
+    if (this.metrics.latencySamples.length > 1000) {
+      this.metrics.latencySamples.shift();
+    }
+    
+    const now = Date.now();
+    if (now - this.metrics.lastLatencyReport > 60000) {
+      this.reportLatencyStats();
+      this.metrics.lastLatencyReport = now;
+    }
+  }
+
+  reportLatencyStats() {
+    if (this.metrics.latencySamples.length === 0) return;
+    
+    const sorted = [...this.metrics.latencySamples].sort((a, b) => a - b);
+    const p50 = sorted[Math.floor(sorted.length * 0.5)];
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    const p99 = sorted[Math.floor(sorted.length * 0.99)];
+    
+    logInfo('WebSocket latency statistics', {
+      p50,
+      p95,
+      p99,
+      samples: this.metrics.latencySamples.length
     });
   }
 
@@ -103,24 +161,66 @@ class WebSocketServer {
         heartbeat.missedCount++;
         this.metrics.missedHeartbeats++;
 
+        if (metricsService && metricsService.recordWebSocketMissedHeartbeat) {
+          metricsService.recordWebSocketMissedHeartbeat();
+        }
+
         if (heartbeat.missedCount >= this.heartbeatConfig.maxMissedHeartbeats) {
           const socket = this.io.sockets.sockets.get(socketId);
           if (socket) {
-            logger.warn('Client missed too many heartbeats, disconnecting', {
+            logWarning('Client missed too many heartbeats, disconnecting', {
               socketId,
-              missedCount: heartbeat.missedCount
+              missedCount: heartbeat.missedCount,
+              timeSinceLastPing
             });
             socket.disconnect(true);
+            
+            if (metricsService && metricsService.recordWebSocketError) {
+              metricsService.recordWebSocketError('heartbeat_timeout');
+            }
           }
           this.clientHeartbeats.delete(socketId);
         } else {
-          logger.warn('Client missed heartbeat', {
+          logWarning('Client missed heartbeat', {
             socketId,
             missedCount: heartbeat.missedCount,
             timeSinceLastPing
           });
         }
       }
+    }
+  }
+
+  setupConnectionStateMonitor() {
+    this.stateMonitorInterval = setInterval(() => {
+      this.updateConnectionState();
+    }, 1000);
+  }
+
+  updateConnectionState() {
+    const currentTime = Date.now();
+    const activeConnections = this.connectedClients.size;
+    
+    this.connectionStateMonitor.activeConnections = activeConnections;
+    this.connectionStateMonitor.maxConcurrentConnections = Math.max(
+      this.connectionStateMonitor.maxConcurrentConnections,
+      activeConnections
+    );
+
+    if (activeConnections > 0) {
+      this.connectionStateMonitor.stateHistory.push({
+        timestamp: currentTime,
+        activeConnections,
+        queuedConnections: this.connectionStateMonitor.pendingConnections
+      });
+
+      if (this.connectionStateMonitor.stateHistory.length > 3600) {
+        this.connectionStateMonitor.stateHistory.shift();
+      }
+    }
+
+    if (metricsService && metricsService.updateConnectionMetrics) {
+      metricsService.updateConnectionMetrics(activeConnections);
     }
   }
 
@@ -138,7 +238,7 @@ class WebSocketServer {
         socket.user = decoded;
         next();
       } catch (error) {
-        logger.error('WebSocket authentication failed', { error: error.message });
+        logError('WebSocket authentication failed', { error: error.message });
         next(new Error('Authentication failed'));
       }
     });
@@ -161,7 +261,7 @@ class WebSocketServer {
     this.connectedClients.set(socket.id, clientInfo);
     this.metrics.totalConnections++;
 
-    logger.info('Client connected', {
+    logInfo('Client connected', {
       socketId: socket.id,
       userId: socket.userId
     });
@@ -213,7 +313,7 @@ class WebSocketServer {
 
     socket.on('error', error => {
       this.metrics.errors++;
-      logger.error('Socket error', {
+      logError('Socket error', {
         socketId: socket.id,
         userId: socket.userId,
         error: error.message
@@ -230,7 +330,7 @@ class WebSocketServer {
         clientInfo.rooms.push(room);
       }
 
-      logger.info('Client joined room', {
+      logInfo('Client joined room', {
         socketId: socket.id,
         userId: socket.userId,
         room
@@ -246,7 +346,7 @@ class WebSocketServer {
         timestamp: new Date()
       });
     } catch (error) {
-      logger.error('Error joining room', { error: error.message });
+      logError('Error joining room', { error: error.message });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -262,7 +362,7 @@ class WebSocketServer {
         clientInfo.rooms = clientInfo.rooms.filter(r => r !== room);
       }
 
-      logger.info('Client left room', {
+      logInfo('Client left room', {
         socketId: socket.id,
         userId: socket.userId,
         room
@@ -278,7 +378,7 @@ class WebSocketServer {
         timestamp: new Date()
       });
     } catch (error) {
-      logger.error('Error leaving room', { error: error.message });
+      logError('Error leaving room', { error: error.message });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -294,7 +394,7 @@ class WebSocketServer {
       }
       this.roomSubscriptions.get(channel).add(socket.userId);
 
-      logger.info('Client subscribed to channel', {
+      logInfo('Client subscribed to channel', {
         socketId: socket.id,
         userId: socket.userId,
         channel
@@ -304,7 +404,7 @@ class WebSocketServer {
         callback({ success: true, channel });
       }
     } catch (error) {
-      logger.error('Error subscribing to channel', { error: error.message });
+      logError('Error subscribing to channel', { error: error.message });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -319,7 +419,7 @@ class WebSocketServer {
         this.roomSubscriptions.get(channel).delete(socket.userId);
       }
 
-      logger.info('Client unsubscribed from channel', {
+      logInfo('Client unsubscribed from channel', {
         socketId: socket.id,
         userId: socket.userId,
         channel
@@ -329,7 +429,7 @@ class WebSocketServer {
         callback({ success: true, channel });
       }
     } catch (error) {
-      logger.error('Error unsubscribing from channel', { error: error.message });
+      logError('Error unsubscribing from channel', { error: error.message });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -340,7 +440,11 @@ class WebSocketServer {
     try {
       this.metrics.messagesReceived++;
       
-      logger.info('Message received', {
+      if (metricsService && metricsService.recordWebSocketMessageReceived) {
+        metricsService.recordWebSocketMessageReceived();
+      }
+      
+      logInfo('Message received', {
         socketId: socket.id,
         userId: socket.userId,
         type: data.type
@@ -351,7 +455,10 @@ class WebSocketServer {
       }
     } catch (error) {
       this.metrics.errors++;
-      logger.error('Error handling message', { error: error.message });
+      if (metricsService && metricsService.recordWebSocketError) {
+        metricsService.recordWebSocketError('message_handler_error');
+      }
+      logError('Error handling message', { error: error.message });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -378,7 +485,11 @@ class WebSocketServer {
 
       this.metrics.messagesSent++;
       
-      logger.info('Broadcast sent', {
+      if (metricsService && metricsService.recordWebSocketMessageSent) {
+        metricsService.recordWebSocketMessageSent();
+      }
+      
+      logInfo('Broadcast sent', {
         socketId: socket.id,
         userId: socket.userId,
         room,
@@ -390,7 +501,10 @@ class WebSocketServer {
       }
     } catch (error) {
       this.metrics.errors++;
-      logger.error('Error sending broadcast', { error: error.message });
+      if (metricsService && metricsService.recordWebSocketError) {
+        metricsService.recordWebSocketError('broadcast_error');
+      }
+      logError('Error sending broadcast', { error: error.message });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -403,7 +517,7 @@ class WebSocketServer {
     if (clientInfo) {
       const connectedDuration = Date.now() - clientInfo.connectedAt.getTime();
       
-      logger.info('Client disconnected', {
+      logInfo('Client disconnected', {
         socketId: socket.id,
         userId: socket.userId,
         reason,
@@ -527,7 +641,7 @@ class WebSocketServer {
   }
 
   close() {
-    logger.info('Closing WebSocket server');
+    logInfo('Closing WebSocket server');
     
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SEO, { getSEOMeta } from '../components/SEO';
 import AdminUserTable from '../components/AdminUserTable';
 import AdminUserEdit from '../components/AdminUserEdit';
 import Loading from '../components/ui/Loading';
@@ -23,6 +24,7 @@ const AdminUsersPage = () => {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [bulkAction, setBulkAction] = useState('');
+  const seoMeta = getSEOMeta('adminUsers');
 
   const pageSize = 10;
 
@@ -264,7 +266,9 @@ const AdminUsersPage = () => {
   }
 
   return (
-    <div className="admin-users-page">
+    <>
+      <SEO {...seoMeta} />
+      <div className="admin-users-page">
       <div className="page-header">
         <div>
           <h1>用户管理</h1>
@@ -394,6 +398,7 @@ const AdminUsersPage = () => {
         onSave={handleSaveUser}
       />
     </div>
+    </>
   );
 };
 

@@ -191,7 +191,8 @@ verify_all_backups() {
     local PASSED=0
     local FAILED=0
     
-    for BACKUP in "${BACKUP_DIR}/full"/db_*.sql.gz 2>/dev/null; do
+    shopt -s nullglob
+    for BACKUP in "${BACKUP_DIR}/full"/db_*.sql.gz; do
         if [ -f "$BACKUP" ]; then
             ((TOTAL++))
             if verify_postgres_backup "$BACKUP"; then
@@ -203,8 +204,10 @@ verify_all_backups() {
             fi
         fi
     done
+    shopt -u nullglob
     
-    for BACKUP in "${BACKUP_DIR}/incremental"/db_incr_*.sql.gz 2>/dev/null; do
+    shopt -s nullglob
+    for BACKUP in "${BACKUP_DIR}/incremental"/db_incr_*.sql.gz; do
         if [ -f "$BACKUP" ]; then
             ((TOTAL++))
             if verify_postgres_backup "$BACKUP"; then
@@ -216,6 +219,7 @@ verify_all_backups() {
             fi
         fi
     done
+    shopt -u nullglob
     
     echo "{\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"total\": $TOTAL, \"passed\": $PASSED, \"failed\": $FAILED, \"results\": [${RESULTS[*]}]}" > "$REPORT_FILE"
     

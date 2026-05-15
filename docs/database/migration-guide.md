@@ -8,6 +8,7 @@
 
 - [迁移系统架构](#迁移系统架构)
 - [迁移命令使用](#迁移命令使用)
+- [迁移追踪系统](#迁移追踪系统)
 - [迁移文件结构](#迁移文件结构)
 - [性能优化策略](#性能优化策略)
 - [事务管理](#事务管理)
@@ -25,10 +26,11 @@
 | 组件 | 文件路径 | 功能 |
 |------|----------|------|
 | 迁移引擎 | `scripts/migrate.js` | 核心迁移执行引擎 |
+| 迁移回滚 | `scripts/migrate-rollback.js` | 专业回滚脚本 |
 | 迁移运行器 | `scripts/run-migrations.js` | 应用启动时自动运行 |
 | 迁移脚本 | `migrations/*.sql` | SQL 迁移文件 |
 | 迁移追踪器 | `migrations` 表 | 记录迁移历史 |
-| 增强追踪 | `008_migration_tracking.up.sql` | 高级追踪功能 |
+| 增强追踪 | `migration_tracking` 表 | 详细追踪信息 |
 
 ### 迁移流程
 
@@ -45,7 +47,9 @@
    ↓
 6. 记录执行结果到 migrations 表
    ↓
-7. 完成/报告错误
+7. 记录详细追踪到 migration_tracking 表
+   ↓
+8. 完成/报告错误
 ```
 
 ---
@@ -75,6 +79,40 @@ node scripts/migrate.js down --to 2
 
 # 创建新迁移
 node scripts/migrate.js create <migration_name>
+
+# 查看追踪历史
+node scripts/migrate.js tracking
+
+# 健康检查
+node scripts/migrate.js health
+
+# 统计信息
+node scripts/migrate.js stats
+```
+
+### 回滚专用命令
+
+```bash
+# 查看回滚计划
+node scripts/migrate-rollback.js plan
+
+# 回滚单个迁移
+node scripts/migrate-rollback.js rollback
+
+# 回滚多个迁移
+node scripts/migrate-rollback.js rollback 3
+
+# 回滚到指定版本
+node scripts/migrate-rollback.js rollback --to 5
+
+# 预览回滚（不执行）
+node scripts/migrate-rollback.js rollback --dry-run
+
+# 强制回滚（跳过确认）
+node scripts/migrate-rollback.js rollback --force
+
+# 查看当前状态
+node scripts/migrate-rollback.js status
 ```
 
 ### NPM 脚本
@@ -87,9 +125,67 @@ node scripts/migrate.js create <migration_name>
     "migrate": "node scripts/migrate.js",
     "migrate:up": "node scripts/migrate.js up",
     "migrate:down": "node scripts/migrate.js down",
-    "migrate:status": "node scripts/migrate.js status"
+    "migrate:status": "node scripts/migrate.js status",
+    "migrate:tracking": "node scripts/migrate.js tracking",
+    "migrate:rollback": "node scripts/migrate-rollback.js rollback",
+    "migrate:plan": "node scripts/migrate-rollback.js plan"
   }
 }
+```
+
+---
+
+## 迁移追踪系统
+
+### 迁移追踪表结构
+
+`migration_tracking` 表提供详细的迁移追踪信息：
+
+```sql
+CREATE TABLE migration_tracking (
+  migration_id SERIAL PRIMARY KEY,
+  migration_name VARCHAR(255) NOT NULL,
+  migration_version INTEGER NOT NULL,
+  migration_hash VARCHAR(64) NOT NULL,
+  executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  rollback_executed_at TIMESTAMP,
+  executed_by VARCHAR(255),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  execution_time_ms INTEGER,
+  error_message TEXT,
+  machine_name VARCHAR(255),
+  database_name VARCHAR(100)
+);
+```
+
+### 追踪状态
+
+| 状态 | 描述 |
+|------|------|
+| `pending` | 待执行 |
+| `executed` | 已执行 |
+| `rolled_back` | 已回滚 |
+| `failed` | 执行失败 |
+
+### 查询追踪信息
+
+```sql
+-- 查看所有追踪记录
+SELECT * FROM migration_tracking ORDER BY migration_version;
+
+-- 查看特定版本追踪
+SELECT * FROM migration_tracking WHERE migration_version = 5;
+
+-- 查看最近执行的迁移
+SELECT * FROM migration_tracking 
+WHERE status = 'executed' 
+ORDER BY executed_at DESC 
+LIMIT 10;
+
+-- 查看所有回滚记录
+SELECT * FROM migration_tracking 
+WHERE status = 'rolled_back' 
+ORDER BY rollback_executed_at DESC;
 ```
 
 ---
@@ -368,6 +464,39 @@ COMMIT;
 001_initial_schema.down.sql    → 回滚
 ```
 
+### 使用专业回滚脚本
+
+`migrate-rollback.js` 提供了增强的回滚功能：
+
+```bash
+# 1. 查看回滚计划（预览模式）
+node scripts/migrate-rollback.js plan
+
+# 2. 预览回滚操作（不执行）
+node scripts/migrate-rollback.js rollback --dry-run
+
+# 3. 执行回滚（带确认提示）
+node scripts/migrate-rollback.js rollback
+
+# 4. 强制回滚（跳过确认）
+node scripts/migrate-rollback.js rollback --force
+
+# 5. 回滚到特定版本
+node scripts/migrate-rollback.js rollback --to 3
+
+# 6. 查看当前迁移状态
+node scripts/migrate-rollback.js status
+```
+
+### 回滚验证
+
+回滚脚本会自动执行以下验证：
+
+- 检查外键约束依赖
+- 检查活跃数据库连接
+- 验证回滚脚本存在
+- 记录回滚执行时间和状态
+
 ### 安全回滚检查
 
 ```sql
@@ -482,11 +611,29 @@ LIMIT 1;
 
 -- 查看待执行迁移
 SELECT * FROM pending_migrations;
+
+-- 查看迁移追踪统计
+SELECT
+  COUNT(*) FILTER (WHERE status = 'executed') as executed,
+  COUNT(*) FILTER (WHERE status = 'rolled_back') as rolled_back,
+  COUNT(*) FILTER (WHERE status = 'failed') as failed,
+  COUNT(*) FILTER (WHERE status = 'pending') as pending
+FROM migration_tracking;
+```
+
+### 使用追踪命令
+
+```bash
+# 查看详细追踪历史
+node scripts/migrate.js tracking
+
+# 查看追踪统计
+node scripts/migrate.js status
 ```
 
 ---
 
-## 最佳实践
+## 相关文档
 
 ### 1. 迁移开发
 

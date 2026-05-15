@@ -1,19 +1,24 @@
 {
-  "name": "HJTPX 系统",
+  "name": "HJTPX 系统 - 现代化全栈应用",
   "short_name": "HJTPX",
-  "description": "现代化全栈应用程序 - HJTPX 系统，提供用户管理、数据分析、审计追踪等功能",
+  "description": "HJTPX系统提供用户管理、数据分析、审计追踪等功能，支持离线使用和推送通知",
   "start_url": "/?source=pwa",
   "id": "hjtpx-app",
   "version": "2.2.0",
+  "version_name": "2.2.0 稳定版",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "background_color": "#ffffff",
   "theme_color": "#1890ff",
+  "secondary_theme_color": "#52c41a",
   "orientation": "any",
   "scope": "/",
   "lang": "zh-CN",
   "dir": "ltr",
   "categories": ["productivity", "business", "utilities"],
+  "iarc_rating_id": "",
+  "rating": [],
+  "note": "推荐使用Chrome、Edge或Safari浏览器以获得最佳体验",
   "icons": [
     {
       "src": "/favicon.png",
@@ -76,7 +81,22 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [],
+  "screenshots": [
+    {
+      "src": "/screenshot-1.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "首页仪表板"
+    },
+    {
+      "src": "/screenshot-2.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "用户管理界面"
+    }
+  ],
   "shortcuts": [
     {
       "name": "首页",
@@ -125,5 +145,44 @@
       "text": "text",
       "url": "url"
     }
-  }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "hjtpx",
+      "url": "/?action=%s"
+    }
+  ],
+  "widgets": [],
+  "creators": [
+    {
+      "name": "HJTPX 开发团队",
+      "url": "https://hjtpx.example.com"
+    }
+  ],
+  "developers": [
+    {
+      "name": "HJTPX 开发团队",
+      "url": "https://hjtpx.example.com/developers"
+    }
+  ],
+  "publishers": [
+    {
+      "name": "HJTPX",
+      "url": "https://hjtpx.example.com"
+    }
+  ],
+  "footer_links": [
+    {
+      "name": "隐私政策",
+      "url": "/privacy"
+    },
+    {
+      "name": "服务条款",
+      "url": "/terms"
+    },
+    {
+      "name": "联系我们",
+      "url": "/contact"
+    }
+  ]
 }

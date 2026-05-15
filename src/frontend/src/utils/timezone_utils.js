@@ -30,7 +30,7 @@ const getTimezoneOffsetMinutes = (timezone) => {
   return (utcDate - tzDate) / (1000 * 60);
 };
 
-export const formatTimezone = (locale = 'en-US') => {
+export const formatTimezone = () => {
   const timezone = getTimezone();
   const offset = getTimezoneOffset();
   const offsetHours = Math.abs(Math.floor(offset / 60));

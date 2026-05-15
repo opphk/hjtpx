@@ -13,7 +13,7 @@ const express = require('express');
 const productionConfig = require('./backend/config/production');
 const { securityHeaders, additionalSecurityHeaders, helmetMiddleware } = require('./backend/middleware/securityHeaders');
 const { initSentry, Sentry } = require('./backend/config/sentry');
-const { createApolloServer } = require('./backend/graphql');
+const { createApolloServer, startApolloServer } = require('./backend/graphql');
 
 const app = express();
 
@@ -35,6 +35,8 @@ const { performanceMiddleware } = require('./backend/middleware/performanceMonit
 const { ipRateLimiter } = require('./backend/middleware/rateLimiter');
 const responseFormatter = require('./backend/middleware/responseFormatter');
 const { versionNegotiator, deprecationWarning, SUPPORTED_VERSIONS, DEFAULT_VERSION } = require('./backend/middleware/versionControl');
+const { apiVersionNegotiator } = require('./backend/middleware/apiVersionNegotiation');
+const { deprecationWarning: deprecationWarningNew } = require('./backend/middleware/deprecationWarning');
 const { apiStatsMiddleware } = require('./backend/middleware/apiStats');
 const v1Routes = require('./backend/routes/v1');
 const v2Routes = require('./backend/routes/v2');
@@ -91,6 +93,8 @@ app.use(responseFormatter);
 app.use(cacheStatsMiddleware);
 app.use(versionNegotiator);
 app.use(deprecationWarning);
+app.use(apiVersionNegotiator);
+app.use(deprecationWarningNew);
 
 if (productionConfig.security.enableRateLimit) {
   app.use(ipRateLimiter);
@@ -170,8 +174,7 @@ app.use(errorHandler);
 
 const createServer = async () => {
   const apolloServer = createApolloServer();
-  await apolloServer.start();
-  apolloServer.applyMiddleware({ app, path: '/graphql' });
+  await startApolloServer(apolloServer, app);
 
   const server = app.listen(PORT, () => {
     console.log('🚀 HJTPX API Server');

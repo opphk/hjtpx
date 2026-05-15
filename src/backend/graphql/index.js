@@ -1,4 +1,5 @@
-const { ApolloServer } = require('apollo-server-express');
+const { ApolloServer } = require('@apollo/server');
+const { expressMiddleware } = require('@apollo/server/express4');
 const typeDefs = require('./schema');
 const resolvers = require('./resolvers');
 
@@ -6,41 +7,6 @@ const createApolloServer = (app) => {
   const server = new ApolloServer({
     typeDefs,
     resolvers,
-    context: async ({ req }) => {
-      let user = null;
-      if (req.headers.authorization) {
-        const token = req.headers.authorization.replace('Bearer ', '');
-        try {
-          const authService = require('../services/authService');
-          const decoded = authService.verifyToken(token);
-          user = { id: decoded.id, email: decoded.email, role: decoded.role };
-        } catch (error) {
-          user = null;
-        }
-      }
-      return { user, req };
-    },
-    playground: process.env.NODE_ENV !== 'production' ? {
-      endpoint: '/graphql',
-      settings: {
-        'editor.theme': 'dark',
-        'editor.fontSize': 14,
-        'editor.reuseHeaders': true,
-        'general.betaUpdates': false,
-        'request.credentials': 'same-origin',
-        'request.headers': {
-          'Authorization': 'Bearer <your-token>'
-        }
-      },
-      tabs: [
-        {
-          endpoint: '/graphql',
-          name: 'HJTPX GraphQL',
-          query: '# Welcome to HJTPX GraphQL API\n# Try out queries and mutations here'
-        }
-      ]
-    } : false,
-    introspection: process.env.NODE_ENV !== 'production',
     formatError: (error) => {
       if (process.env.NODE_ENV !== 'production') {
         console.error('GraphQL Error:', error);
@@ -57,4 +23,25 @@ const createApolloServer = (app) => {
   return server;
 };
 
-module.exports = { createApolloServer };
+const startApolloServer = async (server, app) => {
+  await server.start();
+
+  app.use('/graphql', expressMiddleware(server, {
+    context: async ({ req }) => {
+      let user = null;
+      if (req.headers.authorization) {
+        const token = req.headers.authorization.replace('Bearer ', '');
+        try {
+          const authService = require('../services/authService');
+          const decoded = authService.verifyToken(token);
+          user = { id: decoded.id, email: decoded.email, role: decoded.role };
+        } catch (error) {
+          user = null;
+        }
+      }
+      return { user, req };
+    }
+  }));
+};
+
+module.exports = { createApolloServer, startApolloServer };

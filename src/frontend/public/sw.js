@@ -450,6 +450,50 @@ self.addEventListener('notificationclose', (event) => {
   }
 });
 
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'sync-content') {
+    event.waitUntil(syncContent());
+  }
+});
+
+async function syncContent() {
+  try {
+    console.log('[SW] Periodic sync content...');
+    const cache = await caches.open(DYNAMIC_CACHE);
+    const criticalRoutes = ['/', '/dashboard', '/api/v1/user/profile'];
+    
+    for (const route of criticalRoutes) {
+      try {
+        const response = await fetch(route);
+        if (response.ok) {
+          await cache.put(route, response.clone());
+          console.log('[SW] Periodically synced:', route);
+        }
+      } catch (error) {
+        console.error('[SW] Periodic sync failed for:', route, error);
+      }
+    }
+    
+    notifyClientsAboutSync(true);
+  } catch (error) {
+    console.error('[SW] Periodic sync error:', error);
+    notifyClientsAboutSync(false);
+  }
+}
+
+function notifyClientsAboutSync(success) {
+  clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((clientList) => {
+      clientList.forEach((client) => {
+        client.postMessage({
+          action: 'periodicSyncComplete',
+          success: success,
+          timestamp: Date.now()
+        });
+      });
+    });
+}
+
 self.addEventListener('message', (event) => {
   console.log('[SW] Message received:', event.data);
   
@@ -526,6 +570,20 @@ self.addEventListener('message', (event) => {
         })
         .catch((error) => {
           event.source.postMessage({ action: 'prefetchFailed', error: error.message });
+        })
+    );
+  }
+  
+  if (event.data.action === 'updateAvailable') {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          clientList.forEach((client) => {
+            client.postMessage({
+              action: 'updateAvailable',
+              version: CACHE_VERSION
+            });
+          });
         })
     );
   }

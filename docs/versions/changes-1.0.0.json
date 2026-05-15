@@ -1,23 +1,80 @@
 {
-  "timestamp": "2026-05-14T22:10:14.186Z",
+  "timestamp": "2026-05-15T06:47:09.032Z",
   "summary": {
-    "total": 1,
-    "added": 1,
-    "removed": 0,
+    "total": 6,
+    "added": 0,
+    "removed": 6,
     "modified": 0,
-    "breaking": 0,
+    "breaking": 6,
     "nonBreaking": 0
   },
   "details": {
-    "added": [
+    "added": [],
+    "removed": [
       {
-        "type": "spec",
-        "message": "Initial API specification"
+        "type": "endpoint",
+        "path": "/api/v1/notifications",
+        "message": "Removed endpoint: /api/v1/notifications"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/unread/count",
+        "message": "Removed endpoint: /api/v1/notifications/unread/count"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/{id}",
+        "message": "Removed endpoint: /api/v1/notifications/{id}"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/{id}/read",
+        "message": "Removed endpoint: /api/v1/notifications/{id}/read"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/read-all",
+        "message": "Removed endpoint: /api/v1/notifications/read-all"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/send",
+        "message": "Removed endpoint: /api/v1/notifications/send"
       }
     ],
-    "removed": [],
     "modified": [],
-    "breaking": [],
+    "breaking": [
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications",
+        "message": "Removed endpoint: /api/v1/notifications"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/unread/count",
+        "message": "Removed endpoint: /api/v1/notifications/unread/count"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/{id}",
+        "message": "Removed endpoint: /api/v1/notifications/{id}"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/{id}/read",
+        "message": "Removed endpoint: /api/v1/notifications/{id}/read"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/read-all",
+        "message": "Removed endpoint: /api/v1/notifications/read-all"
+      },
+      {
+        "type": "endpoint",
+        "path": "/api/v1/notifications/send",
+        "message": "Removed endpoint: /api/v1/notifications/send"
+      }
+    ],
     "nonBreaking": []
   }
 }

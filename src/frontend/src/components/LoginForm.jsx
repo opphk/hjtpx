@@ -51,8 +51,14 @@ const LoginForm = ({ onSubmit, loading }) => {
     }
   };
 
+  const formId = React.useId();
+
   return (
-    <form onSubmit={handleSubmit} className="auth-form">
+    <form 
+      onSubmit={handleSubmit} 
+      className="auth-form"
+      aria-label="登录表单"
+    >
       <Input
         label="邮箱"
         name="email"
@@ -61,7 +67,13 @@ const LoginForm = ({ onSubmit, loading }) => {
         placeholder="请输入邮箱"
         error={errors.email}
         required
+        aria-describedby={errors.email ? `${formId}-email-error` : undefined}
       />
+      {errors.email && (
+        <span id={`${formId}-email-error`} className="sr-only" role="alert">
+          {errors.email}
+        </span>
+      )}
       
       <Input
         label="密码"
@@ -72,12 +84,19 @@ const LoginForm = ({ onSubmit, loading }) => {
         placeholder="请输入密码"
         error={errors.password}
         required
+        aria-describedby={errors.password ? `${formId}-password-error` : undefined}
       />
+      {errors.password && (
+        <span id={`${formId}-password-error`} className="sr-only" role="alert">
+          {errors.password}
+        </span>
+      )}
       
       <Button 
         type="submit" 
         loading={loading}
         className="auth-submit"
+        aria-label="提交登录"
       >
         登录
       </Button>

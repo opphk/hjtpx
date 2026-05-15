@@ -1,5 +1,5 @@
 module.exports = {
-  testEnvironment: 'jsdom',
+  testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/captchax', '<rootDir>/tests'],
   testMatch: ['**/tests/**/*.test.js', '**/__tests__/**/*.test.js'],
   collectCoverageFrom: [
@@ -15,90 +15,97 @@ module.exports = {
   transform: {
     '^.+\\.(js|jsx)$': 'babel-jest'
   },
+  transformIgnorePatterns: [
+    '/node_modules/(?!(uuid|mongoose|mongodb|bson|@aws|exceljs|pdfkit|csv-parse|token-types|strtok3|file-type|@borewit)/)'
+  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-    '^config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^src/config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^backend/config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^src/backend/config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^../../config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^../config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^../../../config/database/db$': '<rootDir>/tests/__mocks__/database.js',
-    '^config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^src/config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^../../../config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^../../config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^../config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^backend/config/redis/client$': '<rootDir>/tests/__mocks__/redis.js',
-    '^src/backend/config/redis/client$': '<rootDir>/tests/__mocks__/redis.js'
+    '\\.(css|less|scss|sass)$': '<rootDir>/src/backend/tests/__mocks__/styleMock.js',
+    '^config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^src/config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^backend/config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^src/backend/config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^../../config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^../config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^../../../config/database/db$': '<rootDir>/src/backend/tests/__mocks__/database.js',
+    '^config/redis/client$': '<rootDir>/src/backend/tests/__mocks__/redisClient.js',
+    '^src/config/redis/client$': '<rootDir>/src/backend/tests/__mocks__/redisClient.js',
+    '^backend/config/redis/client$': '<rootDir>/src/backend/tests/__mocks__/redisClient.js',
+    '^../../../config/redis/client$': '<rootDir>/src/backend/tests/__mocks__/redisClient.js',
+    '^../../config/redis/client$': '<rootDir>/src/backend/tests/__mocks__/redisClient.js',
+    '^../config/redis/client$': '<rootDir>/src/backend/tests/__mocks__/redisClient.js',
+    '^../src/backend/middleware/versionControl$': '<rootDir>/src/backend/middleware/versionControl.js',
+    '^../src/backend/middleware/apiVersionNegotiation$': '<rootDir>/src/backend/middleware/apiVersionNegotiation.js',
+    '^../src/backend/middleware/deprecationWarning$': '<rootDir>/src/backend/middleware/deprecationWarning.js'
   },
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/src/backend/tests/setup.js'],
   clearMocks: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'clover', 'json-summary', 'json'],
   coverageThreshold: {
     global: {
-      branches: 40,
-      functions: 45,
-      lines: 50,
-      statements: 50
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     },
     './src/utils/': {
-      branches: 60,
-      functions: 65,
-      lines: 70,
-      statements: 70
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     },
     './src/models/': {
-      branches: 50,
-      functions: 55,
-      lines: 60,
-      statements: 60
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     },
     './src/services/': {
-      branches: 55,
-      functions: 60,
-      lines: 65,
-      statements: 65
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     }
   },
   coverageAlertThreshold: {
     global: {
-      branches: 35,
-      functions: 40,
-      lines: 45,
-      statements: 45
+      branches: 70,
+      functions: 80,
+      lines: 75,
+      statements: 75
     }
   },
   coverageBranchRequirements: {
     main: {
-      branches: 50,
-      functions: 55,
-      lines: 60,
-      statements: 60
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     },
     develop: {
-      branches: 45,
-      functions: 50,
-      lines: 55,
-      statements: 55
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     },
     feature: {
-      branches: 40,
-      functions: 45,
-      lines: 50,
-      statements: 50
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     },
     hotfix: {
-      branches: 40,
-      functions: 45,
-      lines: 50,
-      statements: 50
+      branches: 75,
+      functions: 85,
+      lines: 80,
+      statements: 80
     }
   },
   testPathIgnorePatterns: ['/node_modules/', '/frontend/node_modules/'],
   verbose: true,
   modulePathIgnorePatterns: ['<rootDir>/src/config/database/db.js'],
-  testTimeout: 10000
+  testTimeout: 30000,
+  forceExit: true,
+  detectOpenHandles: true
 };

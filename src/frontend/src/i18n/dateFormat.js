@@ -66,6 +66,21 @@ const localeTimeFormats = {
   ar: 'HH:mm:ss'
 };
 
+const localeShortDateFormats = {
+  en: 'MM/dd',
+  zh: 'MM/dd',
+  ja: 'MM/dd',
+  ko: 'MM/dd',
+  de: 'dd.MM',
+  fr: 'dd/MM',
+  es: 'dd/MM',
+  pt: 'dd/MM',
+  ru: 'dd.MM',
+  it: 'dd/MM',
+  nl: 'dd/MM',
+  ar: 'dd/MM'
+};
+
 export const formatDate = (date, lng = i18n.language) => {
   if (!date) return '';
   const d = typeof date === 'string' ? parseISO(date) : date;
@@ -90,6 +105,26 @@ export const formatTime = (date, lng = i18n.language) => {
   return format(d, formatStr, { locale });
 };
 
+export const formatTimeAgo = (date, lng = i18n.language) => {
+  if (!date) return '';
+  const d = typeof date === 'string' ? parseISO(date) : date;
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) {
+    return i18n.t('dateTime.justNow', { lng });
+  } else if (diffMins < 60) {
+    return i18n.t('dateTime.minutesAgo', { count: diffMins, lng });
+  } else if (diffHours < 24) {
+    return i18n.t('dateTime.hoursAgo', { count: diffHours, lng });
+  } else {
+    return i18n.t('dateTime.daysAgo', { count: diffDays, lng });
+  }
+};
+
 export const formatRelativeTime = (date, lng = i18n.language) => {
   if (!date) return '';
   const d = typeof date === 'string' ? parseISO(date) : date;
@@ -107,26 +142,6 @@ export const formatRelativeTime = (date, lng = i18n.language) => {
   return distance;
 };
 
-export const formatTimeAgo = (date, lng = i18n.language) => {
-  if (!date) return '';
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  const now = new Date();
-  const diffMs = now - d;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) {
-    return i18n.t('dateTime.justNow');
-  } else if (diffMins < 60) {
-    return i18n.t('dateTime.minutesAgo', { count: diffMins });
-  } else if (diffHours < 24) {
-    return i18n.t('dateTime.hoursAgo', { count: diffHours });
-  } else {
-    return i18n.t('dateTime.daysAgo', { count: diffDays });
-  }
-};
-
 export const formatDateRange = (startDate, endDate, lng = i18n.language) => {
   if (!startDate || !endDate) return '';
   const start = formatDate(startDate, lng);
@@ -137,7 +152,7 @@ export const formatDateRange = (startDate, endDate, lng = i18n.language) => {
 export const formatShortDate = (date, lng = i18n.language) => {
   if (!date) return '';
   const d = typeof date === 'string' ? parseISO(date) : date;
-  const formatStr = lng === 'en' ? 'MM/dd' : lng === 'zh' || lng === 'ja' || lng === 'ko' ? 'MM/dd' : 'dd/MM';
+  const formatStr = localeShortDateFormats[lng] || localeShortDateFormats.en;
   const locale = getDateFnsLocale(lng);
   return format(d, formatStr, { locale });
 };
@@ -152,4 +167,8 @@ export const getLocalizedDateTimeFormat = (lng) => {
 
 export const getLocalizedTimeFormat = (lng) => {
   return localeTimeFormats[lng] || localeTimeFormats.en;
+};
+
+export const getSupportedLocales = () => {
+  return Object.keys(localeMap);
 };

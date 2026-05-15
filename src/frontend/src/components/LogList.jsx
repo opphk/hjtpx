@@ -2,6 +2,9 @@ import React from 'react';
 import Loading from './ui/Loading';
 
 const LogList = ({ logs, loading, onViewDetails, selectedLog }) => {
+  const tableId = React.useId();
+  const captionId = `${tableId}-caption`;
+
   const getLevelBadge = (level) => {
     const levelMap = {
       error: { label: '错误', className: 'level-error' },
@@ -24,40 +27,71 @@ const LogList = ({ logs, loading, onViewDetails, selectedLog }) => {
     return <span className={`log-type-badge ${typeInfo.className}`}>{typeInfo.label}</span>;
   };
 
+  const handleRowKeyDown = (e, log) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onViewDetails(log);
+    }
+  };
+
   if (loading && logs.length === 0) {
-    return <Loading text="加载日志..." />;
+    return (
+      <Loading 
+        text="加载日志..." 
+        aria-label="正在加载日志列表"
+      />
+    );
   }
 
   if (!loading && logs.length === 0) {
     return (
-      <div className="empty-state">
+      <div 
+        className="empty-state"
+        role="status"
+        aria-live="polite"
+        aria-label="暂无日志数据"
+      >
         <p>暂无日志数据</p>
       </div>
     );
   }
 
   return (
-    <div className="log-list-container">
-      <table className="log-table">
-        <thead>
-          <tr>
-            <th>时间</th>
-            <th>级别</th>
-            <th>类型</th>
-            <th>用户</th>
-            <th>操作</th>
-            <th>IP地址</th>
-            <th>详情</th>
+    <div className="log-list-container" role="region" aria-label="日志列表">
+      <table 
+        className="log-table"
+        role="grid"
+        aria-label="日志数据表"
+      >
+        <caption id={captionId} className="sr-only">
+          系统日志列表，包含时间、级别、类型、用户、操作、IP地址和详情
+        </caption>
+        <thead role="rowgroup">
+          <tr role="row">
+            <th role="columnheader" scope="col">时间</th>
+            <th role="columnheader" scope="col">级别</th>
+            <th role="columnheader" scope="col">类型</th>
+            <th role="columnheader" scope="col">用户</th>
+            <th role="columnheader" scope="col">操作</th>
+            <th role="columnheader" scope="col">IP地址</th>
+            <th role="columnheader" scope="col">
+              <span className="sr-only">操作</span>
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {logs.map((log, index) => (
-            <tr
+            <tr 
               key={log.id || index}
+              role="row"
               className={selectedLog?.id === log.id ? 'selected' : ''}
               onClick={() => onViewDetails(log)}
+              onKeyDown={(e) => handleRowKeyDown(e, log)}
+              tabIndex={0}
+              aria-selected={selectedLog?.id === log.id}
+              aria-label={`日志条目 ${index + 1}，${log.action || '操作'}`}
             >
-              <td className="log-time">
+              <td className="log-time" role="gridcell">
                 {new Date(log.timestamp).toLocaleString('zh-CN', {
                   year: 'numeric',
                   month: '2-digit',
@@ -66,22 +100,26 @@ const LogList = ({ logs, loading, onViewDetails, selectedLog }) => {
                   minute: '2-digit'
                 })}
               </td>
-              <td>{getLevelBadge(log.level)}</td>
-              <td>{getTypeBadge(log.type)}</td>
-              <td className="log-user">
+              <td role="gridcell">{getLevelBadge(log.level)}</td>
+              <td role="gridcell">{getTypeBadge(log.type)}</td>
+              <td className="log-user" role="gridcell">
                 {log.user_id ? (
                   <span className="user-badge">{log.user_id}</span>
                 ) : (
                   <span className="system-badge">系统</span>
                 )}
               </td>
-              <td className="log-action">{log.action}</td>
-              <td className="log-ip">{log.ip || '-'}</td>
-              <td className="log-details-btn">
-                <button className="btn btn-small btn-secondary" onClick={(e) => {
-                  e.stopPropagation();
-                  onViewDetails(log);
-                }}>
+              <td className="log-action" role="gridcell">{log.action}</td>
+              <td className="log-ip" role="gridcell">{log.ip || '-'}</td>
+              <td className="log-details-btn" role="gridcell">
+                <button 
+                  className="btn btn-small btn-secondary" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewDetails(log);
+                  }}
+                  aria-label={`查看日志详情 ${log.action || '操作'}`}
+                >
                   查看
                 </button>
               </td>

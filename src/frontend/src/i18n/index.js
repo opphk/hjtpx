@@ -2,39 +2,39 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
-import en from './locales/en';
-import zh from './locales/zh';
-import fr from './locales/fr';
-import de from './locales/de';
-import es from './locales/es';
-import ru from './locales/ru';
-import ja from './locales/ja';
-import ko from './locales/ko';
-import ar from './locales/ar';
-import pt from './locales/pt';
-import it from './locales/it';
-import nl from './locales/nl';
+const resources = {};
+const loadedLanguages = new Set();
+const languageCache = new Map();
 
-const resources = {
-  en: { translation: en },
-  zh: { translation: zh },
-  fr: { translation: fr },
-  de: { translation: de },
-  es: { translation: es },
-  ru: { translation: ru },
-  ja: { translation: ja },
-  ko: { translation: ko },
-  ar: { translation: ar },
-  pt: { translation: pt },
-  it: { translation: it },
-  nl: { translation: nl }
-};
+const supportedLanguages = ['en', 'zh', 'fr', 'de', 'es', 'ru', 'ja', 'ko', 'ar', 'pt', 'it', 'nl'];
+const rtlLanguages = ['ar', 'he', 'fa', 'ur'];
 
 const savedLanguage = localStorage.getItem('language') || navigator.language?.split('-')[0] || 'en';
-const supportedLanguages = ['en', 'zh', 'fr', 'de', 'es', 'ru', 'ja', 'ko', 'ar', 'pt', 'it', 'nl'];
 const initialLanguage = supportedLanguages.includes(savedLanguage) ? savedLanguage : 'en';
 
-const rtlLanguages = ['ar', 'he', 'fa', 'ur'];
+export const preloadLanguage = async (lng) => {
+  if (loadedLanguages.has(lng)) {
+    return languageCache.get(lng);
+  }
+
+  if (!resources[lng]) {
+    const translations = await import(`./locales/${lng}.js`);
+    resources[lng] = { translation: translations.default };
+    i18n.addResourceBundle(lng, 'translation', translations.default, true, true);
+    loadedLanguages.add(lng);
+    languageCache.set(lng, translations.default);
+  }
+
+  return languageCache.get(lng);
+};
+
+export const preloadAllLanguages = async () => {
+  const loadPromises = supportedLanguages
+    .filter(lng => lng !== initialLanguage)
+    .map(lng => preloadLanguage(lng));
+  
+  await Promise.all(loadPromises);
+};
 
 i18n
   .use(LanguageDetector)
@@ -53,8 +53,23 @@ i18n
     },
     react: {
       useSuspense: false
-    }
+    },
+    partialBundledLanguages: true
   });
+
+const initialLoad = async () => {
+  const en = await import('./locales/en.js');
+  resources.en = { translation: en.default };
+  loadedLanguages.add('en');
+  languageCache.set('en', en.default);
+
+  const savedLang = localStorage.getItem('language') || initialLanguage;
+  if (savedLang !== 'en') {
+    await preloadLanguage(savedLang);
+  }
+};
+
+initialLoad().catch(console.error);
 
 i18n.on('languageChanged', (lng) => {
   localStorage.setItem('language', lng);
@@ -65,9 +80,16 @@ i18n.on('languageChanged', (lng) => {
   document.documentElement.classList.toggle('ltr', !isRTL);
   
   document.body.dir = isRTL ? 'rtl' : 'ltr';
+  
+  preloadLanguage(lng).catch(err => {
+    console.warn(`Failed to preload language ${lng}:`, err);
+  });
 });
 
 export const changeLanguage = async (lng) => {
+  if (!loadedLanguages.has(lng)) {
+    await preloadLanguage(lng);
+  }
   await i18n.changeLanguage(lng);
   return lng;
 };
@@ -77,6 +99,10 @@ export const getCurrentLanguage = () => i18n.language;
 export const isRTL = (lng = i18n.language) => rtlLanguages.includes(lng);
 
 export const getSupportedLanguages = () => supportedLanguages;
+
+export const isLanguageLoaded = (lng) => loadedLanguages.has(lng);
+
+export const getLoadedLanguages = () => Array.from(loadedLanguages);
 
 export default i18n;
 

@@ -11,28 +11,28 @@ class BranchCoverageChecker {
   getDefaultRequirements() {
     return {
       main: {
-        branches: 50,
-        functions: 55,
-        lines: 60,
-        statements: 60
+        branches: 75,
+        functions: 85,
+        lines: 80,
+        statements: 80
       },
       develop: {
-        branches: 45,
-        functions: 50,
-        lines: 55,
-        statements: 55
+        branches: 75,
+        functions: 85,
+        lines: 80,
+        statements: 80
       },
       feature: {
-        branches: 40,
-        functions: 45,
-        lines: 50,
-        statements: 50
+        branches: 75,
+        functions: 85,
+        lines: 80,
+        statements: 80
       },
       hotfix: {
-        branches: 40,
-        functions: 45,
-        lines: 50,
-        statements: 50
+        branches: 75,
+        functions: 85,
+        lines: 80,
+        statements: 80
       }
     };
   }

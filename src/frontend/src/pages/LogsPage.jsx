@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import SEO, { getSEOMeta } from '../components/SEO';
 import LogList from '../components/LogList';
 import LogFilter from '../components/LogFilter';
 import Pagination from '../components/ui/Pagination';
@@ -14,6 +15,7 @@ const LogsPage = () => {
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalLogs, setTotalLogs] = useState(0);
+  const seoMeta = getSEOMeta('logs');
   const [filters, setFilters] = useState({
     type: '',
     level: '',
@@ -201,7 +203,9 @@ const LogsPage = () => {
   };
 
   return (
-    <div className="logs-page">
+    <>
+      <SEO {...seoMeta} />
+      <div className="logs-page">
       <div className="page-header">
         <div>
           <h1>{t('logs.title')}</h1>
@@ -333,6 +337,7 @@ const LogsPage = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 

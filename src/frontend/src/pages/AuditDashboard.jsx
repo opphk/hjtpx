@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import SEO, { getSEOMeta } from '../components/SEO';
 import Loading from '../components/ui/Loading';
 import Alert from '../components/ui/Alert';
 import Pagination from '../components/ui/Pagination';
@@ -9,6 +10,7 @@ const AuditDashboard = () => {
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalLogs, setTotalLogs] = useState(0);
+  const seoMeta = getSEOMeta('audit');
   const [filters, setFilters] = useState({
     userId: '',
     action: '',
@@ -185,7 +187,9 @@ const AuditDashboard = () => {
   }
 
   return (
-    <div className="audit-dashboard">
+    <>
+      <SEO {...seoMeta} />
+      <div className="audit-dashboard">
       <div className="page-header">
         <div>
           <h1>审计仪表板</h1>
@@ -394,6 +398,7 @@ const AuditDashboard = () => {
         )}
       </div>
     </div>
+    </>
   );
 };
 

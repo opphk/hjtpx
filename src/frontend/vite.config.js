@@ -90,8 +90,7 @@ export default defineConfig({
         },
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
-        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
-        manualImportAssets: true
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
       }
     },
     terserOptions: {
@@ -109,9 +108,7 @@ export default defineConfig({
         module: true,
         toplevel: true,
         arguments: true,
-        dead_code: true,
-        drop_labels: true,
-        ecma: 2020
+        dead_code: true
       },
       mangle: {
         safari10: true,

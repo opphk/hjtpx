@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import SEO, { getSEOMeta } from '../components/SEO';
 import SystemConfig from '../components/SystemConfig';
 import FeatureFlags from '../components/FeatureFlags';
 import Alert from '../components/ui/Alert';
@@ -9,6 +10,7 @@ const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('system');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const seoMeta = getSEOMeta('settings');
 
   const handleSuccess = (message) => {
     setSuccess(message);
@@ -49,7 +51,9 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="settings-page">
+    <>
+      <SEO {...seoMeta} />
+      <div className="settings-page">
       <div className="page-header">
         <div>
           <h1>{t('settings.title')}</h1>
@@ -100,6 +104,7 @@ const SettingsPage = () => {
         {renderContent()}
       </div>
     </div>
+    </>
   );
 };
 

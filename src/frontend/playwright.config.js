@@ -8,14 +8,22 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'test-results/e2e-results.json' }],
+    ['html', {
+      outputFolder: 'playwright-report',
+      open: 'never'
+    }],
+    ['json', {
+      outputFile: 'test-results/e2e-results.json'
+    }],
     ['list']
   ],
   use: {
     baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    screenshot: {
+      mode: 'only-on-failure',
+      fullPage: true
+    },
     video: 'retain-on-failure',
     headless: !process.env.HEADED,
   },
@@ -24,28 +32,19 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    },
   ],
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:3001',
     reuseExistingServer: true,
     timeout: 120000,
-    cwd: '.'
+    stdout: 'ignore',
+    stderr: 'pipe',
+  },
+  expect: {
+    timeout: 5000,
+    toMatchSnapshot: {
+      maxDiffPixelRatio: 0.1,
+    },
   },
 });

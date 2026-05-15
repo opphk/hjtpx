@@ -48,6 +48,15 @@ const versionNegotiator = (req, res, next) => {
   }
 
   if (!version) {
+    const acceptVersion = req.headers['accept-version'];
+    if (acceptVersion && SUPPORTED_VERSIONS.includes(acceptVersion)) {
+      version = acceptVersion;
+      negotiationDetails.negotiationMethod = 'accept-version-header';
+      negotiationDetails.requestedVersion = version;
+    }
+  }
+
+  if (!version) {
     const acceptHeader = req.headers.accept;
     if (acceptHeader) {
       const acceptMatch = acceptHeader.match(/application\/vnd\.hjtpx\.(v\d+)\+json/);
@@ -101,18 +110,30 @@ const versionNegotiator = (req, res, next) => {
   res.setHeader('X-API-Supported-Versions', SUPPORTED_VERSIONS.join(', '));
   res.setHeader('X-API-Latest-Version', LATEST_STABLE_VERSION);
 
-  if (negotiationDetails.requestedVersion && negotiationDetails.requestedVersion !== version) {
+  if (negotiationDetails.negotiationMethod && negotiationDetails.negotiationMethod !== 'url') {
     res.setHeader('X-API-Version-Negotiated', 'true');
-    res.setHeader('X-API-Original-Version', negotiationDetails.requestedVersion);
+    if (negotiationDetails.requestedVersion) {
+      res.setHeader('X-API-Original-Version', negotiationDetails.requestedVersion);
+    }
+  }
+
+  if (!negotiationDetails.requestedVersion && (req.headers['accept-version'] || req.headers['x-api-version'] || req.headers['prefer'])) {
+    const requested = req.headers['accept-version'] || req.headers['x-api-version'] || 
+                     (req.headers['prefer'] ? req.headers['prefer'].match(/version=(v\d+)/)?.[1] : null);
+    if (requested && !SUPPORTED_VERSIONS.includes(requested)) {
+      res.setHeader('X-API-Version-Negotiated', 'true');
+      res.setHeader('X-API-Version-Upgrade', `Version ${requested} not available. Using ${version}.`);
+    }
   }
 
   next();
 };
 
-const deprecationWarning = (req, res, next) => {
+const deprecationWarningMiddleware = (req, res, next) => {
   const versionInfo = req.apiVersionInfo;
 
   if (versionInfo.deprecated) {
+    res.setHeader('Deprecation', `API version ${versionInfo.version} is deprecated since ${versionInfo.deprecationDate}`);
     const warningMessage = `API ${versionInfo.version} is deprecated. Please upgrade to the latest version.`;
     res.setHeader('Warning', `299 - "${warningMessage}"`);
     
@@ -188,7 +209,7 @@ const versionRouter = (req, res, next) => {
 
 module.exports = {
   versionNegotiator,
-  deprecationWarning,
+  deprecationWarning: deprecationWarningMiddleware,
   versionRouter,
   VERSIONS,
   DEFAULT_VERSION,
