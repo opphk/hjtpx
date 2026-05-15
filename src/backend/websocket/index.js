@@ -2,6 +2,11 @@ const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 
 const { logger } = require('../middleware/logger');
+const connectionManager = require('./connection_manager');
+const notificationSystem = require('./notification_system');
+const onlineStatusManager = require('./online_status_manager');
+const messageBroadcaster = require('./message_broadcaster');
+const heartbeatSystem = require('./heartbeat_system');
 
 class WebSocketServer {
   constructor(httpServer) {
@@ -36,6 +41,9 @@ class WebSocketServer {
     this.connectedClients = new Map();
     this.roomSubscriptions = new Map();
     this.clientHeartbeats = new Map();
+
+    this.initializeSubsystems();
+    this.setupHeartbeatMonitor();
     
     this.metrics = {
       totalConnections: 0,
@@ -50,7 +58,6 @@ class WebSocketServer {
       startTime: Date.now()
     };
 
-    this.setupHeartbeatMonitor();
     this.setupMiddleware();
     this.setupEventHandlers();
   }
@@ -124,6 +131,16 @@ class WebSocketServer {
     }
   }
 
+  initializeSubsystems() {
+    connectionManager.initialize ? connectionManager.initialize() : null;
+    notificationSystem.initialize(this.io, connectionManager);
+    onlineStatusManager.initialize(this.io, connectionManager);
+    messageBroadcaster.initialize(this.io, connectionManager);
+    heartbeatSystem.initialize(this.io, connectionManager);
+
+    logger.info('WebSocket subsystems initialized');
+  }
+
   setupMiddleware() {
     this.io.use(async (socket, next) => {
       try {
@@ -160,6 +177,7 @@ class WebSocketServer {
 
     this.connectedClients.set(socket.id, clientInfo);
     this.metrics.totalConnections++;
+    connectionManager.addConnection(socket);
 
     logger.info('Client connected', {
       socketId: socket.id,
@@ -171,7 +189,17 @@ class WebSocketServer {
       message: 'Successfully connected to WebSocket server'
     });
 
+    socket.emit('online_status', {
+      status: 'online',
+      timestamp: new Date()
+    });
+
     this.setupSocketEventHandlers(socket);
+
+    onlineStatusManager.setUserOnline(socket.userId, socket.id, {
+      socketId: socket.id,
+      connectedAt: clientInfo.connectedAt
+    });
 
     this.broadcastUserOnlineStatus(socket.userId, true);
   }
@@ -205,7 +233,40 @@ class WebSocketServer {
       this.handleBroadcast(socket, data, callback);
     });
 
-    socket.on('get:metrics', (callback) => {
+    socket.on('private_message', (data, callback) => {
+      this.handlePrivateMessage(socket, data, callback);
+    });
+
+    socket.on('group_message', (data, callback) => {
+      this.handleGroupMessage(socket, data, callback);
+    });
+
+    socket.on('heartbeat', () => {
+      this.handleHeartbeat(socket);
+    });
+
+    socket.on('ping', () => {
+      socket.emit('pong', { timestamp: Date.now() });
+    });
+
+    socket.on('status_update', (data, callback) => {
+      this.handleStatusUpdate(socket, data, callback);
+    });
+
+    socket.on('get:online_users', callback => {
+      if (callback && typeof callback === 'function') {
+        callback({
+          success: true,
+          users: onlineStatusManager.getOnlineUsers()
+        });
+      }
+    });
+
+    socket.on('get:history', (data, callback) => {
+      this.handleGetHistory(socket, data, callback);
+    });
+
+    socket.on('get:metrics', callback => {
       if (callback && typeof callback === 'function') {
         callback({ success: true, metrics: this.getDetailedMetrics() });
       }
@@ -229,6 +290,8 @@ class WebSocketServer {
       if (clientInfo && !clientInfo.rooms.includes(room)) {
         clientInfo.rooms.push(room);
       }
+
+      connectionManager.addRoomConnection(room, socket.id, socket.userId);
 
       logger.info('Client joined room', {
         socketId: socket.id,
@@ -261,6 +324,8 @@ class WebSocketServer {
       if (clientInfo) {
         clientInfo.rooms = clientInfo.rooms.filter(r => r !== room);
       }
+
+      connectionManager.removeRoomConnection(room, socket.id);
 
       logger.info('Client left room', {
         socketId: socket.id,
@@ -339,7 +404,12 @@ class WebSocketServer {
   handleMessage(socket, data, callback) {
     try {
       this.metrics.messagesReceived++;
-      
+
+      const handler = messageBroadcaster.messageHandlers.get(data.type || 'text');
+      if (handler) {
+        handler(data);
+      }
+
       logger.info('Message received', {
         socketId: socket.id,
         userId: socket.userId,
@@ -352,6 +422,70 @@ class WebSocketServer {
     } catch (error) {
       this.metrics.errors++;
       logger.error('Error handling message', { error: error.message });
+      if (callback && typeof callback === 'function') {
+        callback({ success: false, error: error.message });
+      }
+    }
+  }
+
+  handlePrivateMessage(socket, data, callback) {
+    try {
+      const { to, content, type, metadata } = data;
+
+      const message = messageBroadcaster.sendPrivateMessage(socket.userId, to, {
+        content,
+        type: type || 'text',
+        metadata
+      });
+
+      this.metrics.messagesSent++;
+
+      if (callback && typeof callback === 'function') {
+        callback({
+          success: true,
+          messageId: message.id,
+          timestamp: message.timestamp
+        });
+      }
+    } catch (error) {
+      this.metrics.errors++;
+      logger.error('Error sending private message', {
+        from: socket.userId,
+        to: data.to,
+        error: error.message
+      });
+      if (callback && typeof callback === 'function') {
+        callback({ success: false, error: error.message });
+      }
+    }
+  }
+
+  handleGroupMessage(socket, data, callback) {
+    try {
+      const { room, content, type, metadata } = data;
+
+      const message = messageBroadcaster.sendGroupMessage(socket.userId, room, {
+        content,
+        type: type || 'text',
+        metadata
+      });
+
+      this.metrics.messagesSent++;
+
+      if (callback && typeof callback === 'function') {
+        callback({
+          success: true,
+          messageId: message.id,
+          timestamp: message.timestamp
+        });
+      }
+    } catch (error) {
+      this.metrics.errors++;
+      logger.error('Error sending group message', {
+        from: socket.userId,
+        room: data.room,
+        error: error.message
+      });
       if (callback && typeof callback === 'function') {
         callback({ success: false, error: error.message });
       }
@@ -377,7 +511,7 @@ class WebSocketServer {
       }
 
       this.metrics.messagesSent++;
-      
+
       logger.info('Broadcast sent', {
         socketId: socket.id,
         userId: socket.userId,
@@ -397,12 +531,76 @@ class WebSocketServer {
     }
   }
 
+  handleHeartbeat(socket) {
+    heartbeatSystem.handleHeartbeatResponse(socket.id);
+    onlineStatusManager.updateLastActivity(socket.userId);
+    connectionManager.updateHeartbeat(socket.id);
+
+    socket.emit('heartbeat:ack', {
+      timestamp: Date.now(),
+      serverTime: new Date().toISOString()
+    });
+  }
+
+  handleStatusUpdate(socket, data, callback) {
+    try {
+      const { status } = data;
+
+      const success = onlineStatusManager.updateUserStatus(socket.userId, status, {
+        socketId: socket.id
+      });
+
+      if (callback && typeof callback === 'function') {
+        callback({ success });
+      }
+    } catch (error) {
+      logger.error('Error updating status', {
+        socketId: socket.id,
+        userId: socket.userId,
+        error: error.message
+      });
+      if (callback && typeof callback === 'function') {
+        callback({ success: false, error: error.message });
+      }
+    }
+  }
+
+  handleGetHistory(socket, data, callback) {
+    try {
+      const { type, room, limit } = data;
+
+      let history;
+
+      if (room) {
+        history = messageBroadcaster.getRoomHistory(room, { limit });
+      } else {
+        history = messageBroadcaster.getUserHistory(socket.userId, {
+          type,
+          limit
+        });
+      }
+
+      if (callback && typeof callback === 'function') {
+        callback({ success: true, history });
+      }
+    } catch (error) {
+      logger.error('Error getting history', {
+        socketId: socket.id,
+        userId: socket.userId,
+        error: error.message
+      });
+      if (callback && typeof callback === 'function') {
+        callback({ success: false, error: error.message });
+      }
+    }
+  }
+
   handleDisconnection(socket, reason) {
     const clientInfo = this.connectedClients.get(socket.id);
 
     if (clientInfo) {
       const connectedDuration = Date.now() - clientInfo.connectedAt.getTime();
-      
+
       logger.info('Client disconnected', {
         socketId: socket.id,
         userId: socket.userId,
@@ -413,7 +611,15 @@ class WebSocketServer {
       this.metrics.totalDisconnections++;
       this.metrics.connectionTimes.push(connectedDuration);
 
-      this.broadcastUserOnlineStatus(socket.userId, false);
+      const userConnections = connectionManager.getUserConnections(socket.userId);
+      const isLastConnection = userConnections.length <= 1;
+
+      if (isLastConnection) {
+        onlineStatusManager.setUserOffline(socket.userId, reason, {
+          socketId: socket.id,
+          duration: connectedDuration
+        });
+      }
 
       clientInfo.rooms.forEach(room => {
         socket.to(room).emit('user:left', {
@@ -423,16 +629,23 @@ class WebSocketServer {
         });
       });
 
+      connectionManager.removeConnection(socket.id);
+      heartbeatSystem.unregisterSocketHeartbeat(socket.id, reason);
+
       this.connectedClients.delete(socket.id);
+
+      this.broadcastUserOnlineStatus(socket.userId, isLastConnection ? false : undefined);
     }
   }
 
   broadcastUserOnlineStatus(userId, isOnline) {
-    this.io.emit('presence:update', {
-      userId,
-      isOnline,
-      timestamp: new Date()
-    });
+    if (isOnline !== undefined) {
+      this.io.emit('presence:update', {
+        userId,
+        isOnline,
+        timestamp: new Date()
+      });
+    }
   }
 
   broadcast(event, data, room = null) {
@@ -444,13 +657,17 @@ class WebSocketServer {
   }
 
   sendToUser(userId, event, data) {
-    for (const [socketId, clientInfo] of this.connectedClients.entries()) {
-      if (clientInfo.userId === userId) {
-        this.io.to(socketId).emit(event, data);
-        return true;
-      }
+    const userConnections = connectionManager.getUserConnections(userId);
+
+    if (userConnections.length === 0) {
+      return false;
     }
-    return false;
+
+    userConnections.forEach(connection => {
+      this.io.to(connection.socketId).emit(event, data);
+    });
+
+    return true;
   }
 
   sendToUsers(userIds, event, data) {
@@ -468,31 +685,38 @@ class WebSocketServer {
   }
 
   getOnlineUsers() {
-    const onlineUsers = new Map();
-    for (const [socketId, clientInfo] of this.connectedClients.entries()) {
-      if (!onlineUsers.has(clientInfo.userId)) {
-        onlineUsers.set(clientInfo.userId, {
-          userId: clientInfo.userId,
-          socketCount: 0,
-          connectedAt: clientInfo.connectedAt
-        });
-      }
-      const user = onlineUsers.get(clientInfo.userId);
-      user.socketCount++;
-    }
-    return Array.from(onlineUsers.values());
+    return onlineStatusManager.getOnlineUsers();
+  }
+
+  getConnectionStats() {
+    return {
+      totalConnections: this.connectedClients.size,
+      onlineUsers: onlineStatusManager.getOnlineUserCount(),
+      rooms: Array.from(this.roomSubscriptions.keys()),
+      subscriptions: Array.from(this.roomSubscriptions.entries()).map(([channel, users]) => ({
+        channel,
+        subscriberCount: users.size
+      })),
+      connectionManager: connectionManager.getStats(),
+      onlineStatus: onlineStatusManager.getStats(),
+      messageBroadcaster: messageBroadcaster.getStats(),
+      heartbeat: heartbeatSystem.getStats(),
+      notification: notificationSystem.getStats()
+    };
   }
 
   getDetailedMetrics() {
     const uptime = Date.now() - this.metrics.startTime;
-    const avgConnectionTime = this.metrics.connectionTimes.length > 0
-      ? this.metrics.connectionTimes.reduce((sum, t) => sum + t, 0) / this.metrics.connectionTimes.length
-      : 0;
-    
+    const avgConnectionTime =
+      this.metrics.connectionTimes.length > 0
+        ? this.metrics.connectionTimes.reduce((sum, t) => sum + t, 0) /
+          this.metrics.connectionTimes.length
+        : 0;
+
     return {
       uptime,
       currentConnections: this.connectedClients.size,
-      onlineUsers: this.getOnlineUsers().length,
+      onlineUsers: onlineStatusManager.getOnlineUserCount(),
       totalConnections: this.metrics.totalConnections,
       totalDisconnections: this.metrics.totalDisconnections,
       messagesSent: this.metrics.messagesSent,
@@ -510,20 +734,27 @@ class WebSocketServer {
       subscriptions: Array.from(this.roomSubscriptions.entries()).map(([channel, users]) => ({
         channel,
         subscriberCount: users.size
-      }))
+      })),
+      subsystems: {
+        connectionManager: connectionManager.getStats(),
+        onlineStatus: onlineStatusManager.getStats(),
+        messageBroadcaster: messageBroadcaster.getStats(),
+        heartbeat: heartbeatSystem.getStats(),
+        notification: notificationSystem.getStats()
+      }
     };
   }
 
-  getConnectionStats() {
-    return {
-      totalConnections: this.connectedClients.size,
-      onlineUsers: this.getOnlineUsers().length,
-      rooms: Array.from(this.roomSubscriptions.keys()),
-      subscriptions: Array.from(this.roomSubscriptions.entries()).map(([channel, users]) => ({
-        channel,
-        subscriberCount: users.size
-      }))
-    };
+  async sendNotification(userId, notification) {
+    return await notificationSystem.sendToUser(userId, notification);
+  }
+
+  async sendBulkNotifications(userIds, notification) {
+    return await notificationSystem.sendToUsers(userIds, notification);
+  }
+
+  broadcastNotification(notification, room = 'notifications') {
+    return notificationSystem.broadcast(notification, room);
   }
 
   close() {
@@ -535,6 +766,13 @@ class WebSocketServer {
     }
     
     this.clientHeartbeats.clear();
+
+    heartbeatSystem.cleanup();
+    onlineStatusManager.cleanup();
+    messageBroadcaster.cleanup();
+    notificationSystem.cleanup();
+    connectionManager.cleanup();
+
     this.io.close();
   }
 }
