@@ -1,6 +1,10 @@
 require('dotenv').config({
-  path: process.env.NODE_ENV === 'production' ? '.env.production' :
-        process.env.NODE_ENV === 'staging' ? '.env.staging' : '.env'
+  path:
+    process.env.NODE_ENV === 'production'
+      ? '.env.production'
+      : process.env.NODE_ENV === 'staging'
+        ? '.env.staging'
+        : '.env'
 });
 
 const http = require('http');
@@ -34,11 +38,17 @@ const { logger, logError } = require('./backend/middleware/logger');
 const { performanceMiddleware } = require('./backend/middleware/performanceMonitor');
 const { ipRateLimiter } = require('./backend/middleware/rateLimiter');
 const responseFormatter = require('./backend/middleware/responseFormatter');
-const { versionNegotiator, deprecationWarning, SUPPORTED_VERSIONS, DEFAULT_VERSION } = require('./backend/middleware/versionControl');
+const {
+  versionNegotiator,
+  deprecationWarning,
+  SUPPORTED_VERSIONS,
+  DEFAULT_VERSION
+} = require('./backend/middleware/versionControl');
 const { apiStatsMiddleware } = require('./backend/middleware/apiStats');
 const v1Routes = require('./backend/routes/v1');
 const v2Routes = require('./backend/routes/v2');
 const docsRoutes = require('./backend/routes/docs');
+const oauthRoutes = require('./backend/oauth');
 const websocketService = require('./backend/services/websocketService');
 const cacheService = require('./backend/services/cacheService');
 
@@ -119,6 +129,8 @@ app.get('/', (req, res) => {
 app.use('/api/v1', v1Routes);
 app.use('/api/v2', v2Routes);
 app.use('/api-docs', docsRoutes);
+app.use('/oauth', oauthRoutes);
+app.use('/auth', oauthRoutes);
 
 app.use((req, res) => {
   res.notFound(`Route ${req.method} ${req.path} not found`);
@@ -170,13 +182,13 @@ app.use(errorHandler);
 
 const createServer = async () => {
   const httpServer = http.createServer(app);
-  
+
   await createApolloServer(app, httpServer);
-  
+
   if (process.env.NODE_ENV !== 'production') {
     setupPlayground(app);
   }
-  
+
   httpServer.listen(PORT, () => {
     console.log('🚀 HJTPX API Server');
     console.log('========================================');
@@ -240,7 +252,7 @@ if (isProduction && productionConfig.production.enableCluster && cluster.isMaste
     cluster.fork();
   });
 
-  cluster.on('online', (worker) => {
+  cluster.on('online', worker => {
     console.log(`Worker ${worker.process.pid} started`);
   });
 } else {
