@@ -69,12 +69,12 @@ describe('GraphQL DataLoaders', () => {
   describe('createNotificationLoader', () => {
     it('should batch load notifications', async () => {
       const mockNotifications = [
-        { _id: 'notif-1', title: 'Notification 1', toObject: function() { return this; } },
-        { _id: 'notif-2', title: 'Notification 2', toObject: function() { return this; } }
+        { _id: 'notif-1', title: 'Notification 1' },
+        { _id: 'notif-2', title: 'Notification 2' }
       ];
 
       Notification.find.mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockNotifications)
+        lean: jest.fn().mockResolvedValue(mockNotifications)
       });
 
       const loader = createNotificationLoader();
@@ -90,7 +90,7 @@ describe('GraphQL DataLoaders', () => {
 
     it('should return null for non-existent notification', async () => {
       Notification.find.mockReturnValue({
-        sort: jest.fn().mockResolvedValue([])
+        lean: jest.fn().mockResolvedValue([])
       });
 
       const loader = createNotificationLoader();
@@ -103,13 +103,15 @@ describe('GraphQL DataLoaders', () => {
   describe('createUserNotificationsLoader', () => {
     it('should batch load notifications for multiple users', async () => {
       const mockNotifications = [
-        { _id: 'notif-1', userId: '1', title: 'Notification 1', toObject: function() { return this; } },
-        { _id: 'notif-2', userId: '2', title: 'Notification 2', toObject: function() { return this; } }
+        { _id: 'notif-1', userId: '1', title: 'Notification 1' },
+        { _id: 'notif-2', userId: '2', title: 'Notification 2' }
       ];
 
       Notification.find.mockReturnValue({
         sort: jest.fn().mockReturnValue({
-          limit: jest.fn().mockResolvedValue(mockNotifications)
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue(mockNotifications)
+          })
         })
       });
 

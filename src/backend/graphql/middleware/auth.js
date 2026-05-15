@@ -1,4 +1,24 @@
-const { AuthenticationError, ForbiddenError } = require('apollo-server-express');
+const { GraphQLError } = require('graphql');
+
+class AuthenticationError extends GraphQLError {
+  constructor(message) {
+    super(message, {
+      extensions: {
+        code: 'AUTHENTICATION_ERROR'
+      }
+    });
+  }
+}
+
+class ForbiddenError extends GraphQLError {
+  constructor(message) {
+    super(message, {
+      extensions: {
+        code: 'FORBIDDEN'
+      }
+    });
+  }
+}
 
 const requireAuth = (context) => {
   if (!context.user) {
@@ -40,6 +60,8 @@ const checkPermission = (context, requiredRoles) => {
 };
 
 module.exports = {
+  AuthenticationError,
+  ForbiddenError,
   requireAuth,
   requireAdmin,
   requireModerator,

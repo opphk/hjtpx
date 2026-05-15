@@ -35,13 +35,13 @@ const createNotificationLoader = () => {
   return new DataLoader(async (ids) => {
     const uniqueIds = [...new Set(ids)];
     const notifications = await Notification.find({
-      _id: { $in: uniqueIds.map(id => id) }
-    });
+      _id: { $in: uniqueIds }
+    }).lean();
     
     const notificationMap = new Map();
     notifications.forEach(notification => {
       notificationMap.set(notification._id.toString(), {
-        ...notification.toObject(),
+        ...notification,
         id: notification._id.toString()
       });
     });
@@ -55,7 +55,7 @@ const createUserNotificationsLoader = () => {
     const uniqueUserIds = [...new Set(userIds)];
     const notifications = await Notification.find({
       userId: { $in: uniqueUserIds }
-    }).sort({ createdAt: -1 }).limit(10);
+    }).sort({ createdAt: -1 }).limit(10).lean();
     
     const notificationMap = new Map();
     notifications.forEach(notification => {
@@ -64,7 +64,7 @@ const createUserNotificationsLoader = () => {
         notificationMap.set(userIdStr, []);
       }
       notificationMap.get(userIdStr).push({
-        ...notification.toObject(),
+        ...notification,
         id: notification._id.toString()
       });
     });
