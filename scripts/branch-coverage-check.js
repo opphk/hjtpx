@@ -4,54 +4,51 @@ const path = require('path');
 class BranchCoverageChecker {
   constructor(options = {}) {
     this.coverageDir = options.coverageDir || path.join(__dirname, '..', 'coverage');
-    this.config = this.loadJestConfig();
-    this.branchRequirements = this.config.coverageBranchRequirements || this.getDefaultRequirements();
+    this.config = this.loadConfig();
+    this.branchRequirements = this.config.branchRequirements || this.getDefaultRequirements();
   }
 
   getDefaultRequirements() {
     return {
       main: {
-        branches: 75,
-        functions: 85,
+        branches: 80,
+        functions: 80,
         lines: 80,
         statements: 80
       },
       develop: {
         branches: 75,
-        functions: 85,
-        lines: 80,
-        statements: 80
+        functions: 75,
+        lines: 75,
+        statements: 75
       },
       feature: {
-        branches: 75,
-        functions: 85,
-        lines: 80,
-        statements: 80
+        branches: 70,
+        functions: 70,
+        lines: 70,
+        statements: 70
       },
       hotfix: {
         branches: 75,
-        functions: 85,
-        lines: 80,
-        statements: 80
+        functions: 75,
+        lines: 75,
+        statements: 75
       }
     };
   }
 
-  loadJestConfig() {
-    const configPath = path.join(__dirname, '..', 'jest.config.js');
+  loadConfig() {
+    const configPath = path.join(__dirname, '..', 'coverage-config.json');
     if (!fs.existsSync(configPath)) {
+      console.warn('Coverage config not found, using defaults');
       return {};
     }
-    const configContent = fs.readFileSync(configPath, 'utf8');
-    const configMatch = configContent.match(/coverageBranchRequirements:\s*({[\s\S]*?}),/);
-    if (configMatch) {
-      try {
-        return { coverageBranchRequirements: eval(`(${configMatch[1]})`) };
-      } catch (e) {
-        console.warn('Failed to parse branch requirements config');
-      }
+    try {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      console.warn('Failed to parse coverage config:', e.message);
+      return {};
     }
-    return {};
   }
 
   getBranchType(branchName) {

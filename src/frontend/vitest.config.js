@@ -135,14 +135,20 @@ export default defineConfig({
     setupFiles: ['./test-setup.js'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'html', 'lcov'],
       exclude: [
         'node_modules/',
         'test/',
         'test-results/',
         'dist/',
         '**/*.config.*'
-      ]
+      ],
+      thresholds: {
+        branches: 70,
+        functions: 70,
+        lines: 70,
+        statements: 70
+      }
     }
   }
 });

@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD/MM/YYYY',
     dateTimeFormat: 'DD/MM/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'E-mail',
+    password: 'Wachtwoord',
+    confirmPassword: 'Wachtwoord bevestigen',
+    username: 'Gebruikersnaam',
+    name: 'Naam',
+    placeholder: {
+      email: 'Voer uw e-mail in',
+      password: 'Voer uw wachtwoord in',
+      confirmPassword: 'Bevestig uw wachtwoord',
+      username: 'Voer uw gebruikersnaam in',
+      name: 'Voer uw naam in'
+    }
+  },
   validation: {
     required: 'Dit veld is verplicht',
     email: 'Voer een geldig e-mailadres in',
     passwordMin: 'Wachtwoord moet minimaal {min} tekens bevatten',
-    passwordMatch: 'Wachtwoorden komen niet overeen'
+    passwordMatch: 'Wachtwoorden komen niet overeen',
+    emailRequired: 'E-mail is verplicht',
+    passwordRequired: 'Wachtwoord is verplicht',
+    usernameRequired: 'Gebruikersnaam is verplicht',
+    nameRequired: 'Naam is verplicht',
+    confirmPasswordRequired: 'Bevestig uw wachtwoord',
+    passwordComplexity: 'Wachtwoord moet minimaal één hoofdletter, één kleine letter en één cijfer bevatten',
+    usernameMin: 'Gebruikersnaam moet minimaal {min} tekens bevatten'
   },
   pagination: {
     showing: 'Weergeven',
@@ -248,6 +269,25 @@ export default {
     entries: 'items',
     previous: 'Vorige',
     next: 'Volgende',
-    page: 'Pagina'
+    page: 'Pagina',
+    total: 'Totaal {total} items, {pages} pagina\'s, pagina {current}',
+    ariaLabel: 'Paginering navigatie',
+    pageList: 'Paginalijst',
+    currentPage: 'Huidige pagina',
+    gotoPage: 'Pagina {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Gebruikersnaam',
+    email: 'E-mail',
+    role: 'Rol',
+    action: 'Actie',
+    actions: 'Acties',
+    noData: 'Geen gegevens beschikbaar'
+  },
+  language: {
+    select: 'Selecteer taal',
+    current: 'Huidige taal',
+    switch: 'Wissel van taal'
   }
 }

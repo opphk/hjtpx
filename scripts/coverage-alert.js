@@ -4,34 +4,31 @@ const path = require('path');
 class CoverageAlertManager {
   constructor(options = {}) {
     this.coverageDir = options.coverageDir || path.join(__dirname, '..', 'coverage');
-    this.config = this.loadJestConfig();
-    this.alertThreshold = this.config.coverageAlertThreshold || {
-      global: {
-        branches: 35,
-        functions: 40,
-        lines: 45,
-        statements: 45
+    this.config = this.loadConfig();
+    this.alertThreshold = {
+      global: this.config.backend?.alertThreshold || {
+        branches: 75,
+        functions: 75,
+        lines: 75,
+        statements: 75
       }
     };
     this.slackWebhook = process.env.SLACK_WEBHOOK_URL;
     this.githubToken = process.env.GITHUB_TOKEN;
   }
 
-  loadJestConfig() {
-    const configPath = path.join(__dirname, '..', 'jest.config.js');
+  loadConfig() {
+    const configPath = path.join(__dirname, '..', 'coverage-config.json');
     if (!fs.existsSync(configPath)) {
+      console.warn('Coverage config not found, using defaults');
       return {};
     }
-    const configContent = fs.readFileSync(configPath, 'utf8');
-    const configMatch = configContent.match(/coverageAlertThreshold:\s*({[\s\S]*?}),/);
-    if (configMatch) {
-      try {
-        return { coverageAlertThreshold: eval(`(${configMatch[1]})`) };
-      } catch (e) {
-        console.warn('Failed to parse alert threshold config');
-      }
+    try {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      console.warn('Failed to parse coverage config:', e.message);
+      return {};
     }
-    return {};
   }
 
   loadCoverageSummary() {

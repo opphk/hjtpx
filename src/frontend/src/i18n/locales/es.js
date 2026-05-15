@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD/MM/YYYY',
     dateTimeFormat: 'DD/MM/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'Correo Electrónico',
+    password: 'Contraseña',
+    confirmPassword: 'Confirmar Contraseña',
+    username: 'Nombre de Usuario',
+    name: 'Nombre',
+    placeholder: {
+      email: 'Ingresa tu correo electrónico',
+      password: 'Ingresa tu contraseña',
+      confirmPassword: 'Confirma tu contraseña',
+      username: 'Ingresa tu nombre de usuario',
+      name: 'Ingresa tu nombre'
+    }
+  },
   validation: {
     required: 'Este campo es obligatorio',
     email: 'Por favor ingresa un correo electrónico válido',
     passwordMin: 'La contraseña debe tener al menos {min} caracteres',
-    passwordMatch: 'Las contraseñas no coinciden'
+    passwordMatch: 'Las contraseñas no coinciden',
+    emailRequired: 'El correo electrónico es obligatorio',
+    passwordRequired: 'La contraseña es obligatoria',
+    usernameRequired: 'El nombre de usuario es obligatorio',
+    nameRequired: 'El nombre es obligatorio',
+    confirmPasswordRequired: 'Por favor confirma tu contraseña',
+    passwordComplexity: 'La contraseña debe contener al menos una mayúscula, una minúscula y un número',
+    usernameMin: 'El nombre de usuario debe tener al menos {min} caracteres'
   },
   pagination: {
     showing: 'Mostrando',
@@ -248,6 +269,25 @@ export default {
     entries: 'entradas',
     previous: 'Anterior',
     next: 'Siguiente',
-    page: 'Página'
+    page: 'Página',
+    total: 'Total {total} entradas, {pages} páginas, página {current}',
+    ariaLabel: 'Navegación de paginación',
+    pageList: 'Lista de páginas',
+    currentPage: 'Página actual',
+    gotoPage: 'Página {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Nombre de Usuario',
+    email: 'Correo Electrónico',
+    role: 'Rol',
+    action: 'Acción',
+    actions: 'Acciones',
+    noData: 'No hay datos disponibles'
+  },
+  language: {
+    select: 'Seleccionar idioma',
+    current: 'Idioma actual',
+    switch: 'Cambiar idioma'
   }
 }

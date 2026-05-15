@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Input from './ui/Input';
 import Button from './ui/Button';
 
 const LoginForm = ({ onSubmit, loading }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -28,15 +30,15 @@ const LoginForm = ({ onSubmit, loading }) => {
     const newErrors = {};
     
     if (!formData.email.trim()) {
-      newErrors.email = '邮箱不能为空';
+      newErrors.email = t('validation.emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = '请输入有效的邮箱地址';
+      newErrors.email = t('validation.email');
     }
     
     if (!formData.password) {
-      newErrors.password = '密码不能为空';
+      newErrors.password = t('validation.passwordRequired');
     } else if (formData.password.length < 8) {
-      newErrors.password = '密码至少8个字符';
+      newErrors.password = t('validation.passwordMin', { min: 8 });
     }
     
     setErrors(newErrors);
@@ -54,23 +56,23 @@ const LoginForm = ({ onSubmit, loading }) => {
   return (
     <form onSubmit={handleSubmit} className="auth-form">
       <Input
-        label="邮箱"
+        label={t('form.email')}
         name="email"
         type="email"
         value={formData.email}
         onChange={handleChange}
-        placeholder="请输入邮箱"
+        placeholder={t('form.placeholder.email')}
         error={errors.email}
         required
       />
       
       <Input
-        label="密码"
+        label={t('form.password')}
         name="password"
         type="password"
         value={formData.password}
         onChange={handleChange}
-        placeholder="请输入密码"
+        placeholder={t('form.placeholder.password')}
         error={errors.password}
         required
       />
@@ -80,7 +82,7 @@ const LoginForm = ({ onSubmit, loading }) => {
         loading={loading}
         className="auth-submit"
       >
-        登录
+        {t('auth.login')}
       </Button>
     </form>
   );

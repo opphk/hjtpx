@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD.MM.YYYY',
     dateTimeFormat: 'DD.MM.YYYY HH:mm:ss'
   },
+  form: {
+    email: 'Электронная почта',
+    password: 'Пароль',
+    confirmPassword: 'Подтвердите пароль',
+    username: 'Имя пользователя',
+    name: 'Имя',
+    placeholder: {
+      email: 'Введите ваш email',
+      password: 'Введите ваш пароль',
+      confirmPassword: 'Подтвердите ваш пароль',
+      username: 'Введите ваше имя пользователя',
+      name: 'Введите ваше имя'
+    }
+  },
   validation: {
     required: 'Это поле обязательно',
     email: 'Пожалуйста, введите корректный email',
     passwordMin: 'Пароль должен содержать минимум {min} символов',
-    passwordMatch: 'Пароли не совпадают'
+    passwordMatch: 'Пароли не совпадают',
+    emailRequired: 'Email обязателен',
+    passwordRequired: 'Пароль обязателен',
+    usernameRequired: 'Имя пользователя обязательно',
+    nameRequired: 'Имя обязательно',
+    confirmPasswordRequired: 'Пожалуйста, подтвердите пароль',
+    passwordComplexity: 'Пароль должен содержать хотя бы одну заглавную букву, одну строчную букву и одну цифру',
+    usernameMin: 'Имя пользователя должно содержать минимум {min} символов'
   },
   pagination: {
     showing: 'Показано',
@@ -248,6 +269,25 @@ export default {
     entries: 'записей',
     previous: 'Предыдущая',
     next: 'Следующая',
-    page: 'Страница'
+    page: 'Страница',
+    total: 'Всего {total} записей, {pages} страниц, текущая страница {current}',
+    ariaLabel: 'Навигация по страницам',
+    pageList: 'Список страниц',
+    currentPage: 'Текущая страница',
+    gotoPage: 'Страница {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Имя пользователя',
+    email: 'Email',
+    role: 'Роль',
+    action: 'Действие',
+    actions: 'Действия',
+    noData: 'Нет доступных данных'
+  },
+  language: {
+    select: 'Выбрать язык',
+    current: 'Текущий язык',
+    switch: 'Переключить язык'
   }
 }

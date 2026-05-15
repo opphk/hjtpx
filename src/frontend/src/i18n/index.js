@@ -45,7 +45,9 @@ i18n
     fallbackLng: 'en',
     debug: false,
     interpolation: {
-      escapeValue: false
+      escapeValue: false,
+      prefix: '{',
+      suffix: '}'
     },
     detection: {
       order: ['localStorage', 'navigator'],

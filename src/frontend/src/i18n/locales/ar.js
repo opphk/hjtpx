@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD/MM/YYYY',
     dateTimeFormat: 'DD/MM/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'البريد الإلكتروني',
+    password: 'كلمة المرور',
+    confirmPassword: 'تأكيد كلمة المرور',
+    username: 'اسم المستخدم',
+    name: 'الاسم',
+    placeholder: {
+      email: 'أدخل بريدك الإلكتروني',
+      password: 'أدخل كلمة المرور',
+      confirmPassword: 'أكد كلمة المرور',
+      username: 'أدخل اسم المستخدم',
+      name: 'أدخل الاسم'
+    }
+  },
   validation: {
     required: 'هذا الحقل مطلوب',
     email: 'يرجى إدخال بريد إلكتروني صالح',
     passwordMin: 'يجب أن تتكون كلمة المرور من {min} أحرف على الأقل',
-    passwordMatch: 'كلمات المرور غير متطابقة'
+    passwordMatch: 'كلمات المرور غير متطابقة',
+    emailRequired: 'البريد الإلكتروني مطلوب',
+    passwordRequired: 'كلمة المرور مطلوبة',
+    usernameRequired: 'اسم المستخدم مطلوب',
+    nameRequired: 'الاسم مطلوب',
+    confirmPasswordRequired: 'يرجى تأكيد كلمة المرور',
+    passwordComplexity: 'يجب أن تحتوي كلمة المرور على حرف كبير وحرف صغير ورقم واحد على الأقل',
+    usernameMin: 'يجب أن يتكون اسم المستخدم من {min} أحرف على الأقل'
   },
   pagination: {
     showing: 'عرض',
@@ -248,6 +269,25 @@ export default {
     entries: 'إدخالات',
     previous: 'السابق',
     next: 'التالي',
-    page: 'صفحة'
+    page: 'صفحة',
+    total: 'إجمالي {total} سجل، {pages} صفحة، الصفحة الحالية {current}',
+    ariaLabel: 'تنقل الترقيم',
+    pageList: 'قائمة الصفحات',
+    currentPage: 'الصفحة الحالية',
+    gotoPage: 'صفحة {page}'
+  },
+  table: {
+    id: 'المعرف',
+    username: 'اسم المستخدم',
+    email: 'البريد الإلكتروني',
+    role: 'الدور',
+    action: 'الإجراء',
+    actions: 'الإجراءات',
+    noData: 'لا توجد بيانات متاحة'
+  },
+  language: {
+    select: 'اختيار اللغة',
+    current: 'اللغة الحالية',
+    switch: 'تبديل اللغة'
   }
 }

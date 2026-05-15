@@ -266,11 +266,32 @@ export default {
     dateFormat: 'YYYY年MM月DD日',
     dateTimeFormat: 'YYYY年MM月DD日 HH:mm:ss'
   },
+  form: {
+    email: '邮箱',
+    password: '密码',
+    confirmPassword: '确认密码',
+    username: '用户名',
+    name: '姓名',
+    placeholder: {
+      email: '请输入邮箱',
+      password: '请输入密码',
+      confirmPassword: '请再次输入密码',
+      username: '请输入用户名',
+      name: '请输入姓名'
+    }
+  },
   validation: {
     required: '此字段为必填项',
     email: '请输入有效的邮箱地址',
     passwordMin: '密码至少需要 {min} 个字符',
-    passwordMatch: '两次输入的密码不一致'
+    passwordMatch: '两次输入的密码不一致',
+    emailRequired: '邮箱不能为空',
+    passwordRequired: '密码不能为空',
+    usernameRequired: '用户名不能为空',
+    nameRequired: '姓名不能为空',
+    confirmPasswordRequired: '请确认密码',
+    passwordComplexity: '密码必须包含至少一个大写字母、一个小写字母和一个数字',
+    usernameMin: '用户名至少需要 {min} 个字符'
   },
   pagination: {
     showing: '显示',
@@ -279,6 +300,25 @@ export default {
     entries: '条记录',
     previous: '上一页',
     next: '下一页',
-    page: '第'
+    page: '第',
+    total: '共 {total} 条记录，共 {pages} 页，当前第 {current} 页',
+    ariaLabel: '分页导航',
+    pageList: '页码列表',
+    currentPage: '当前页',
+    gotoPage: '第 {page} 页'
+  },
+  table: {
+    id: 'ID',
+    username: '用户名',
+    email: '邮箱',
+    role: '角色',
+    action: '操作',
+    actions: '操作',
+    noData: '暂无数据'
+  },
+  language: {
+    select: '选择语言',
+    current: '当前语言',
+    switch: '切换语言'
   }
 }

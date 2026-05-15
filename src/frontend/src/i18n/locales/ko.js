@@ -235,11 +235,32 @@ export default {
     dateFormat: 'YYYY.MM.DD',
     dateTimeFormat: 'YYYY.MM.DD HH:mm:ss'
   },
+  form: {
+    email: '이메일',
+    password: '비밀번호',
+    confirmPassword: '비밀번호 확인',
+    username: '사용자 이름',
+    name: '이름',
+    placeholder: {
+      email: '이메일을 입력하세요',
+      password: '비밀번호를 입력하세요',
+      confirmPassword: '비밀번호를 확인하세요',
+      username: '사용자 이름을 입력하세요',
+      name: '이름을 입력하세요'
+    }
+  },
   validation: {
     required: '이 필드는 필수입니다',
     email: '유효한 이메일 주소를 입력해 주세요',
     passwordMin: '비밀번호는 최소 {min}자 이상이어야 합니다',
-    passwordMatch: '비밀번호가 일치하지 않습니다'
+    passwordMatch: '비밀번호가 일치하지 않습니다',
+    emailRequired: '이메일은 필수입니다',
+    passwordRequired: '비밀번호는 필수입니다',
+    usernameRequired: '사용자 이름은 필수입니다',
+    nameRequired: '이름은 필수입니다',
+    confirmPasswordRequired: '비밀번호를 확인해 주세요',
+    passwordComplexity: '비밀번호는 대문자, 소문자, 숫자를 각각 하나 이상 포함해야 합니다',
+    usernameMin: '사용자 이름은 최소 {min}자 이상이어야 합니다'
   },
   pagination: {
     showing: '표시 중',
@@ -248,6 +269,25 @@ export default {
     entries: '개 항목',
     previous: '이전',
     next: '다음',
-    page: '페이지'
+    page: '페이지',
+    total: '총 {total}개 항목, {pages}페이지 중 {current}페이지',
+    ariaLabel: '페이지 탐색',
+    pageList: '페이지 목록',
+    currentPage: '현재 페이지',
+    gotoPage: '{page} 페이지'
+  },
+  table: {
+    id: 'ID',
+    username: '사용자 이름',
+    email: '이메일',
+    role: '역할',
+    action: '작업',
+    actions: '작업',
+    noData: '사용 가능한 데이터가 없습니다'
+  },
+  language: {
+    select: '언어 선택',
+    current: '현재 언어',
+    switch: '언어 전환'
   }
 }

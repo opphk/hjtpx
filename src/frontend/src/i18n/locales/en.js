@@ -266,11 +266,32 @@ export default {
     dateFormat: 'MM/DD/YYYY',
     dateTimeFormat: 'MM/DD/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'Email',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+    username: 'Username',
+    name: 'Name',
+    placeholder: {
+      email: 'Enter your email',
+      password: 'Enter your password',
+      confirmPassword: 'Confirm your password',
+      username: 'Enter your username',
+      name: 'Enter your name'
+    }
+  },
   validation: {
     required: 'This field is required',
     email: 'Please enter a valid email',
     passwordMin: 'Password must be at least {min} characters',
-    passwordMatch: 'Passwords do not match'
+    passwordMatch: 'Passwords do not match',
+    emailRequired: 'Email is required',
+    passwordRequired: 'Password is required',
+    usernameRequired: 'Username is required',
+    nameRequired: 'Name is required',
+    confirmPasswordRequired: 'Please confirm your password',
+    passwordComplexity: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+    usernameMin: 'Username must be at least {min} characters'
   },
   pagination: {
     showing: 'Showing',
@@ -279,6 +300,25 @@ export default {
     entries: 'entries',
     previous: 'Previous',
     next: 'Next',
-    page: 'Page'
+    page: 'Page',
+    total: 'Total {total} records, {pages} pages, current page {current}',
+    ariaLabel: 'Pagination navigation',
+    pageList: 'Page list',
+    currentPage: 'Current page',
+    gotoPage: 'Page {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Username',
+    email: 'Email',
+    role: 'Role',
+    action: 'Action',
+    actions: 'Actions',
+    noData: 'No data available'
+  },
+  language: {
+    select: 'Select language',
+    current: 'Current language',
+    switch: 'Switch language'
   }
 }

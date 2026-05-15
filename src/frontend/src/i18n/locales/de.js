@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD.MM.YYYY',
     dateTimeFormat: 'DD.MM.YYYY HH:mm:ss'
   },
+  form: {
+    email: 'E-Mail',
+    password: 'Passwort',
+    confirmPassword: 'Passwort bestätigen',
+    username: 'Benutzername',
+    name: 'Name',
+    placeholder: {
+      email: 'Geben Sie Ihre E-Mail ein',
+      password: 'Geben Sie Ihr Passwort ein',
+      confirmPassword: 'Bestätigen Sie Ihr Passwort',
+      username: 'Geben Sie Ihren Benutzernamen ein',
+      name: 'Geben Sie Ihren Namen ein'
+    }
+  },
   validation: {
     required: 'Dieses Feld ist erforderlich',
     email: 'Bitte geben Sie eine gültige E-Mail-Adresse ein',
     passwordMin: 'Das Passwort muss mindestens {min} Zeichen lang sein',
-    passwordMatch: 'Passwörter stimmen nicht überein'
+    passwordMatch: 'Passwörter stimmen nicht überein',
+    emailRequired: 'E-Mail ist erforderlich',
+    passwordRequired: 'Passwort ist erforderlich',
+    usernameRequired: 'Benutzername ist erforderlich',
+    nameRequired: 'Name ist erforderlich',
+    confirmPasswordRequired: 'Bitte bestätigen Sie Ihr Passwort',
+    passwordComplexity: 'Passwort muss mindestens einen Großbuchstaben, einen Kleinbuchstaben und eine Zahl enthalten',
+    usernameMin: 'Benutzername muss mindestens {min} Zeichen lang sein'
   },
   pagination: {
     showing: 'Zeige',
@@ -248,6 +269,25 @@ export default {
     entries: 'Einträgen',
     previous: 'Vorherige',
     next: 'Nächste',
-    page: 'Seite'
+    page: 'Seite',
+    total: 'Insgesamt {total} Einträge, {pages} Seiten, aktuelle Seite {current}',
+    ariaLabel: 'Seitennavigation',
+    pageList: 'Seitenliste',
+    currentPage: 'Aktuelle Seite',
+    gotoPage: 'Seite {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Benutzername',
+    email: 'E-Mail',
+    role: 'Rolle',
+    action: 'Aktion',
+    actions: 'Aktionen',
+    noData: 'Keine Daten verfügbar'
+  },
+  language: {
+    select: 'Sprache auswählen',
+    current: 'Aktuelle Sprache',
+    switch: 'Sprache wechseln'
   }
 }

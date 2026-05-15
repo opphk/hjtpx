@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 const Pagination = ({ 
   current = 1, 
@@ -7,9 +8,9 @@ const Pagination = ({
   onChange,
   showTotal = true,
   className = '',
-  'aria-label': ariaLabel = '分页导航',
   ...props
 }) => {
+  const { t } = useTranslation();
   const totalPages = Math.ceil(total / pageSize);
   
   if (totalPages <= 1) return null;
@@ -73,7 +74,7 @@ const Pagination = ({
           onKeyDown={(e) => handlePageKeyDown(e, i)}
           disabled={isCurrent}
           aria-current={isCurrent ? 'page' : 'false'}
-          aria-label={`第 ${i} 页${isCurrent ? '（当前页）' : ''}`}
+          aria-label={t('pagination.gotoPage', { page: i }) + (isCurrent ? ` (${t('pagination.currentPage')})` : '')}
           type="button"
         >
           {i}
@@ -88,18 +89,18 @@ const Pagination = ({
     <nav 
       className={`pagination ${className}`}
       role="navigation"
-      aria-label={ariaLabel}
+      aria-label={t('pagination.ariaLabel')}
       {...props}
     >
       {showTotal && (
         <span className="pagination-total" aria-live="polite">
-          共 {total} 条记录，共 {totalPages} 页，当前第 {current} 页
+          {t('pagination.total', { total, pages: totalPages, current })}
         </span>
       )}
       <div 
         className="pagination-controls"
         role="list"
-        aria-label="页码列表"
+        aria-label={t('pagination.pageList')}
       >
         <button 
           className="page-item"
@@ -107,10 +108,10 @@ const Pagination = ({
           onKeyDown={handlePrevKeyDown}
           disabled={current === 1}
           aria-disabled={current === 1}
-          aria-label="上一页"
+          aria-label={t('pagination.previous')}
           type="button"
         >
-          上一页
+          {t('pagination.previous')}
         </button>
         {renderPageNumbers()}
         <button 
@@ -119,10 +120,10 @@ const Pagination = ({
           onKeyDown={handleNextKeyDown}
           disabled={current === totalPages}
           aria-disabled={current === totalPages}
-          aria-label="下一页"
+          aria-label={t('pagination.next')}
           type="button"
         >
-          下一页
+          {t('pagination.next')}
         </button>
       </div>
     </nav>

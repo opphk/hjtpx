@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD/MM/YYYY',
     dateTimeFormat: 'DD/MM/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'E-mail',
+    password: 'Senha',
+    confirmPassword: 'Confirmar Senha',
+    username: 'Nome de usuário',
+    name: 'Nome',
+    placeholder: {
+      email: 'Digite seu e-mail',
+      password: 'Digite sua senha',
+      confirmPassword: 'Confirme sua senha',
+      username: 'Digite seu nome de usuário',
+      name: 'Digite seu nome'
+    }
+  },
   validation: {
     required: 'Este campo é obrigatório',
     email: 'Por favor, insira um e-mail válido',
     passwordMin: 'A senha deve ter pelo menos {min} caracteres',
-    passwordMatch: 'As senhas não coincidem'
+    passwordMatch: 'As senhas não coincidem',
+    emailRequired: 'E-mail é obrigatório',
+    passwordRequired: 'Senha é obrigatória',
+    usernameRequired: 'Nome de usuário é obrigatório',
+    nameRequired: 'Nome é obrigatório',
+    confirmPasswordRequired: 'Por favor, confirme sua senha',
+    passwordComplexity: 'A senha deve conter pelo menos uma letra maiúscula, uma letra minúscula e um número',
+    usernameMin: 'O nome de usuário deve ter pelo menos {min} caracteres'
   },
   pagination: {
     showing: 'Mostrando',
@@ -248,6 +269,25 @@ export default {
     entries: 'entradas',
     previous: 'Anterior',
     next: 'Próximo',
-    page: 'Página'
+    page: 'Página',
+    total: 'Total de {total} entradas, {pages} páginas, página {current}',
+    ariaLabel: 'Navegação de paginação',
+    pageList: 'Lista de páginas',
+    currentPage: 'Página atual',
+    gotoPage: 'Página {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Nome de usuário',
+    email: 'E-mail',
+    role: 'Função',
+    action: 'Ação',
+    actions: 'Ações',
+    noData: 'Nenhum dado disponível'
+  },
+  language: {
+    select: 'Selecionar idioma',
+    current: 'Idioma atual',
+    switch: 'Mudar idioma'
   }
 }

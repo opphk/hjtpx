@@ -184,18 +184,26 @@ describe('Internationalization Tests', () => {
   describe('Translation Interpolation', () => {
     test('should support interpolation in translations', async () => {
       await i18n.changeLanguage('en');
+      // Wait for resources to load
+      await new Promise(resolve => setTimeout(resolve, 200));
       const translated = i18n.t('dateTime.daysAgo', { count: 5 });
       expect(translated).toContain('5');
     });
 
     test('should support interpolation in French', async () => {
+      const fr = await import('../../src/i18n/locales/fr.js');
+      i18n.addResourceBundle('fr', 'translation', fr.default, true, true);
       await i18n.changeLanguage('fr');
+      await new Promise(resolve => setTimeout(resolve, 100));
       const translated = i18n.t('dateTime.daysAgo', { count: 3 });
       expect(translated).toContain('3');
     });
 
     test('should support interpolation in German', async () => {
+      const de = await import('../../src/i18n/locales/de.js');
+      i18n.addResourceBundle('de', 'translation', de.default, true, true);
       await i18n.changeLanguage('de');
+      await new Promise(resolve => setTimeout(resolve, 100));
       const translated = i18n.t('validation.passwordMin', { min: 8 });
       expect(translated).toContain('8');
     });
@@ -205,7 +213,10 @@ describe('Internationalization Tests', () => {
     test('should fallback to English for unsupported language', async () => {
       const originalLanguage = i18n.language;
       await i18n.changeLanguage('unsupported-lang');
-      expect(i18n.language).toBe('en');
+      // i18n keeps the requested language but uses fallback for translations
+      const translated = i18n.t('common.loading');
+      expect(translated).not.toBe('common.loading');
+      expect(translated.length).toBeGreaterThan(0);
       await i18n.changeLanguage(originalLanguage);
     });
   });

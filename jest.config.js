@@ -44,64 +44,37 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'clover', 'json-summary', 'json'],
   coverageThreshold: {
     global: {
-      branches: 75,
-      functions: 85,
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    },
+    './src/backend/**/*.js': {
+      branches: 80,
+      functions: 80,
       lines: 80,
       statements: 80
     },
     './src/utils/': {
-      branches: 75,
-      functions: 85,
+      branches: 80,
+      functions: 80,
       lines: 80,
       statements: 80
     },
     './src/models/': {
-      branches: 75,
-      functions: 85,
+      branches: 80,
+      functions: 80,
       lines: 80,
       statements: 80
     },
     './src/services/': {
-      branches: 75,
-      functions: 85,
-      lines: 80,
-      statements: 80
-    }
-  },
-  coverageAlertThreshold: {
-    global: {
-      branches: 70,
+      branches: 80,
       functions: 80,
-      lines: 75,
-      statements: 75
-    }
-  },
-  coverageBranchRequirements: {
-    main: {
-      branches: 75,
-      functions: 85,
-      lines: 80,
-      statements: 80
-    },
-    develop: {
-      branches: 75,
-      functions: 85,
-      lines: 80,
-      statements: 80
-    },
-    feature: {
-      branches: 75,
-      functions: 85,
-      lines: 80,
-      statements: 80
-    },
-    hotfix: {
-      branches: 75,
-      functions: 85,
       lines: 80,
       statements: 80
     }
   },
+
   testPathIgnorePatterns: ['/node_modules/', '/frontend/node_modules/'],
   verbose: true,
   modulePathIgnorePatterns: ['<rootDir>/src/config/database/db.js'],

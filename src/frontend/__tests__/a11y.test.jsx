@@ -1,5 +1,6 @@
-import { test, expect } from 'vitest';
+import { test, expect, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { I18nextProvider } from 'react-i18next';
 import axe from 'axe-core';
 import Button from '../src/components/ui/Button';
 import Input from '../src/components/ui/Input';
@@ -7,6 +8,22 @@ import Alert from '../src/components/ui/Alert';
 import Modal from '../src/components/ui/Modal';
 import Table from '../src/components/ui/Table';
 import Pagination from '../src/components/ui/Pagination';
+import i18n from '../src/i18n';
+
+// Initialize i18n for tests
+beforeAll(async () => {
+  await i18n.changeLanguage('zh');
+  // Wait for resources to load
+  await new Promise(resolve => setTimeout(resolve, 100));
+});
+
+const renderWithI18n = (component) => {
+  return render(
+    <I18nextProvider i18n={i18n}>
+      {component}
+    </I18nextProvider>
+  );
+};
 
 expect.extend({
   async toHaveNoViolations() {
@@ -228,7 +245,7 @@ describe('Table Component Accessibility', () => {
 
 describe('Pagination Component Accessibility', () => {
   test('Pagination is accessible', async () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <Pagination
         current={1}
         total={100}
@@ -242,7 +259,7 @@ describe('Pagination Component Accessibility', () => {
   });
 
   test('Current page is marked correctly', () => {
-    render(
+    renderWithI18n(
       <Pagination
         current={3}
         total={100}
@@ -251,13 +268,13 @@ describe('Pagination Component Accessibility', () => {
       />
     );
     
-    const currentPage = screen.getByRole('button', { name: /第 3 页（当前页）/i });
+    const currentPage = screen.getByRole('button', { name: /第 3 页/i });
     expect(currentPage).toBeInTheDocument();
     expect(currentPage).toHaveAttribute('aria-current', 'page');
   });
 
   test('Previous and next buttons are labeled', () => {
-    render(
+    renderWithI18n(
       <Pagination
         current={1}
         total={100}

@@ -6,10 +6,10 @@ class CoverageAnalyzer {
     this.coverageDir = options.coverageDir || path.join(__dirname, '..', 'coverage');
     this.historyFile = options.historyFile || path.join(this.coverageDir, 'coverage-history.json');
     this.minThreshold = options.minThreshold || {
-      branches: 40,
-      functions: 45,
-      lines: 50,
-      statements: 50
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
     };
     this.dropThreshold = options.dropThreshold || 5;
   }

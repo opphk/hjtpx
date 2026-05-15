@@ -136,19 +136,33 @@ jobs:
       - name: Run database migrations
         run: npm run migrate || echo "Migration may have already been applied"
 
-      - name: Run tests with coverage
+      - name: Run backend tests with coverage
         run: npm run test:ci
+
+      - name: Run frontend tests with coverage
+        run: |
+          cd src/frontend
+          npm ci
+          npm run test:coverage || echo "Frontend tests completed with coverage"
+          mkdir -p ../../coverage/frontend
+          cp -r coverage/* ../../coverage/frontend/ 2>/dev/null || true
+        continue-on-error: true
 
       - name: Analyze coverage
         id: coverage
         run: |
           node scripts/coverage-analyzer.js
           node scripts/trend-report.js
+          node scripts/coverage-check.js
           if [ -f coverage/analysis-result.json ]; then
             THRESHOLD_PASSED=$(jq -r '.thresholdCheck.passed' coverage/analysis-result.json)
             DROPPED=$(jq -r '.dropCheck.dropped' coverage/analysis-result.json)
             echo "threshold_passed=$THRESHOLD_PASSED" >> $GITHUB_OUTPUT
             echo "coverage_dropped=$DROPPED" >> $GITHUB_OUTPUT
+          fi
+          if [ -f coverage/coverage-check-result.json ]; then
+            ALL_PASSED=$(jq -r '.allPassed' coverage/coverage-check-result.json)
+            echo "all_coverage_passed=$ALL_PASSED" >> $GITHUB_OUTPUT
           fi
         continue-on-error: true
 
@@ -203,6 +217,9 @@ jobs:
         run: |
           echo "📊 Coverage Check Summary"
           echo "========================"
+          echo ""
+          echo "Backend Target: 80% | Frontend Target: 70%"
+          echo ""
           
           if [ "${{ steps.coverage.outputs.threshold_passed }}" == "false" ]; then
             echo "❌ Coverage thresholds not met"
@@ -214,6 +231,12 @@ jobs:
             echo "❌ Coverage dropped significantly"
           else
             echo "✅ No significant coverage drop"
+          fi
+          
+          if [ "${{ steps.coverage.outputs.all_coverage_passed }}" == "false" ]; then
+            echo "❌ Backend/Frontend coverage check failed"
+          else
+            echo "✅ Backend/Frontend coverage check passed"
           fi
           
           if [ "${{ steps.coverage-alerts.outputs.has_critical }}" == "true" ]; then
@@ -229,9 +252,15 @@ jobs:
           fi
           
           if [ "${{ steps.coverage.outputs.threshold_passed }}" == "false" ] || \
-             [ "${{ steps.coverage.outputs.coverage_dropped }}" == "true" ]; then
+             [ "${{ steps.coverage.outputs.coverage_dropped }}" == "true" ] || \
+             [ "${{ steps.coverage.outputs.all_coverage_passed }}" == "false" ]; then
+            echo ""
+            echo "❌ Coverage checks failed - see reports in artifacts"
             exit 1
           fi
+          
+          echo ""
+          echo "✅ All coverage checks passed!"
 
   sentry-test:
     name: Test Sentry Integration

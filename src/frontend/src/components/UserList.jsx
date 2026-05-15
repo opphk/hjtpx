@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Table from './ui/Table';
 import Button from './ui/Button';
 import Loading from './ui/Loading';
@@ -7,6 +8,7 @@ import Alert from './ui/Alert';
 import UserEditModal from './UserEditModal';
 
 const UserList = () => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,10 +40,10 @@ const UserList = () => {
         setUsers(data.users || []);
         setTotalUsers(data.total || 0);
       } else {
-        setError('获取用户列表失败');
+        setError(t('users.fetchFailed'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(t('users.networkError'));
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ const UserList = () => {
   };
 
   const handleDelete = async (userId) => {
-    if (!window.confirm('确定要删除此用户吗？')) return;
+    if (!window.confirm(t('users.deleteConfirm'))) return;
     
     try {
       const token = localStorage.getItem('authToken');
@@ -65,13 +67,13 @@ const UserList = () => {
       });
       
       if (response.ok) {
-        Alert.success('用户删除成功');
+        Alert.success(t('users.deleteSuccess'));
         fetchUsers();
       } else {
-        setError('删除用户失败');
+        setError(t('users.deleteFailed') || t('users.fetchFailed'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(t('users.networkError'));
     }
   };
 
@@ -92,39 +94,41 @@ const UserList = () => {
         setEditingUser(null);
         fetchUsers();
       } else {
-        setError('更新用户失败');
+        setError(t('users.updateFailed') || t('users.fetchFailed'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(t('users.networkError'));
     }
   };
 
   const columns = [
     {
-      title: 'ID',
+      title: t('table.id'),
       dataIndex: 'id',
       width: '10%'
     },
     {
-      title: '用户名',
+      title: t('table.username'),
       dataIndex: 'username',
       width: '20%'
     },
     {
-      title: '邮箱',
+      title: t('table.email'),
       dataIndex: 'email',
       width: '25%'
     },
     {
-      title: '角色',
+      title: t('table.role'),
       dataIndex: 'role',
       width: '15%',
       render: (role) => (
-        <span className={`badge badge-${role}`}>{role}</span>
+        <span className={`badge badge-${role}`}>
+          {role === 'admin' ? t('users.admin') : t('users.user')}
+        </span>
       )
     },
     {
-      title: '操作',
+      title: t('table.actions'),
       width: '30%',
       render: (_, record) => (
         <div className="action-buttons">
@@ -133,14 +137,14 @@ const UserList = () => {
             variant="primary"
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Button 
             size="small" 
             variant="danger"
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t('common.delete')}
           </Button>
         </div>
       )
@@ -148,7 +152,7 @@ const UserList = () => {
   ];
 
   if (loading && users.length === 0) {
-    return <Loading text="加载用户列表..." />;
+    return <Loading text={t('users.loadingUsers')} />;
   }
 
   return (
@@ -163,7 +167,7 @@ const UserList = () => {
       )}
       
       <div className="user-list-header">
-        <h2>用户管理</h2>
+        <h2>{t('users.title')}</h2>
       </div>
       
       <Table 

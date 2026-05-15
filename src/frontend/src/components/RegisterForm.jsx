@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Input from './ui/Input';
 import Button from './ui/Button';
 
 const RegisterForm = ({ onSubmit, loading }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -30,27 +32,27 @@ const RegisterForm = ({ onSubmit, loading }) => {
     const newErrors = {};
     
     if (!formData.name.trim()) {
-      newErrors.name = '用户名不能为空';
+      newErrors.name = t('validation.nameRequired');
     } else if (formData.name.length < 2) {
-      newErrors.name = '用户名至少2个字符';
+      newErrors.name = t('validation.usernameMin', { min: 2 });
     }
     
     if (!formData.email.trim()) {
-      newErrors.email = '邮箱不能为空';
+      newErrors.email = t('validation.emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = '请输入有效的邮箱地址';
+      newErrors.email = t('validation.email');
     }
     
     if (!formData.password) {
-      newErrors.password = '密码不能为空';
+      newErrors.password = t('validation.passwordRequired');
     } else if (formData.password.length < 8) {
-      newErrors.password = '密码至少8个字符';
+      newErrors.password = t('validation.passwordMin', { min: 8 });
     } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-      newErrors.password = '密码必须包含至少一个大写字母、一个小写字母和一个数字';
+      newErrors.password = t('validation.passwordComplexity');
     }
     
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = '两次输入的密码不一致';
+      newErrors.confirmPassword = t('validation.passwordMatch');
     }
     
     setErrors(newErrors);
@@ -72,44 +74,44 @@ const RegisterForm = ({ onSubmit, loading }) => {
   return (
     <form onSubmit={handleSubmit} className="auth-form">
       <Input
-        label="用户名"
+        label={t('form.name')}
         name="name"
         value={formData.name}
         onChange={handleChange}
-        placeholder="请输入用户名"
+        placeholder={t('form.placeholder.name')}
         error={errors.name}
         required
       />
       
       <Input
-        label="邮箱"
+        label={t('form.email')}
         name="email"
         type="email"
         value={formData.email}
         onChange={handleChange}
-        placeholder="请输入邮箱"
+        placeholder={t('form.placeholder.email')}
         error={errors.email}
         required
       />
       
       <Input
-        label="密码"
+        label={t('form.password')}
         name="password"
         type="password"
         value={formData.password}
         onChange={handleChange}
-        placeholder="请输入密码"
+        placeholder={t('form.placeholder.password')}
         error={errors.password}
         required
       />
       
       <Input
-        label="确认密码"
+        label={t('form.confirmPassword')}
         name="confirmPassword"
         type="password"
         value={formData.confirmPassword}
         onChange={handleChange}
-        placeholder="请再次输入密码"
+        placeholder={t('form.placeholder.confirmPassword')}
         error={errors.confirmPassword}
         required
       />
@@ -119,7 +121,7 @@ const RegisterForm = ({ onSubmit, loading }) => {
         loading={loading}
         className="auth-submit"
       >
-        注册
+        {t('auth.register')}
       </Button>
     </form>
   );

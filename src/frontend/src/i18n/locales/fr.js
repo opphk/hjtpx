@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD/MM/YYYY',
     dateTimeFormat: 'DD/MM/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'E-mail',
+    password: 'Mot de passe',
+    confirmPassword: 'Confirmer le mot de passe',
+    username: 'Nom d\'utilisateur',
+    name: 'Nom',
+    placeholder: {
+      email: 'Entrez votre e-mail',
+      password: 'Entrez votre mot de passe',
+      confirmPassword: 'Confirmez votre mot de passe',
+      username: 'Entrez votre nom d\'utilisateur',
+      name: 'Entrez votre nom'
+    }
+  },
   validation: {
     required: 'Ce champ est obligatoire',
     email: 'Veuillez entrer une adresse e-mail valide',
     passwordMin: 'Le mot de passe doit contenir au moins {min} caractères',
-    passwordMatch: 'Les mots de passe ne correspondent pas'
+    passwordMatch: 'Les mots de passe ne correspondent pas',
+    emailRequired: 'L\'e-mail est obligatoire',
+    passwordRequired: 'Le mot de passe est obligatoire',
+    usernameRequired: 'Le nom d\'utilisateur est obligatoire',
+    nameRequired: 'Le nom est obligatoire',
+    confirmPasswordRequired: 'Veuillez confirmer votre mot de passe',
+    passwordComplexity: 'Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre',
+    usernameMin: 'Le nom d\'utilisateur doit contenir au moins {min} caractères'
   },
   pagination: {
     showing: 'Affichage',
@@ -248,6 +269,25 @@ export default {
     entries: 'entrées',
     previous: 'Précédent',
     next: 'Suivant',
-    page: 'Page'
+    page: 'Page',
+    total: 'Total {total} entrées, {pages} pages, page {current}',
+    ariaLabel: 'Navigation par pagination',
+    pageList: 'Liste des pages',
+    currentPage: 'Page actuelle',
+    gotoPage: 'Page {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Nom d\'utilisateur',
+    email: 'E-mail',
+    role: 'Rôle',
+    action: 'Action',
+    actions: 'Actions',
+    noData: 'Aucune donnée disponible'
+  },
+  language: {
+    select: 'Sélectionner la langue',
+    current: 'Langue actuelle',
+    switch: 'Changer de langue'
   }
 }

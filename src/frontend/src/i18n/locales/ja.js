@@ -235,11 +235,32 @@ export default {
     dateFormat: 'YYYY年MM月DD日',
     dateTimeFormat: 'YYYY年MM月DD日 HH:mm:ss'
   },
+  form: {
+    email: 'メールアドレス',
+    password: 'パスワード',
+    confirmPassword: 'パスワード確認',
+    username: 'ユーザー名',
+    name: '名前',
+    placeholder: {
+      email: 'メールアドレスを入力',
+      password: 'パスワードを入力',
+      confirmPassword: 'パスワードを確認',
+      username: 'ユーザー名を入力',
+      name: '名前を入力'
+    }
+  },
   validation: {
     required: 'このフィールドは必須です',
     email: '有効なメールアドレスを入力してください',
     passwordMin: 'パスワードは最低 {min} 文字必要です',
-    passwordMatch: 'パスワードが一致しません'
+    passwordMatch: 'パスワードが一致しません',
+    emailRequired: 'メールアドレスは必須です',
+    passwordRequired: 'パスワードは必須です',
+    usernameRequired: 'ユーザー名は必須です',
+    nameRequired: '名前は必須です',
+    confirmPasswordRequired: 'パスワードを確認してください',
+    passwordComplexity: 'パスワードは大文字、小文字、数字をそれぞれ1文字以上含める必要があります',
+    usernameMin: 'ユーザー名は最低 {min} 文字必要です'
   },
   pagination: {
     showing: '表示中',
@@ -248,6 +269,25 @@ export default {
     entries: '件',
     previous: '前へ',
     next: '次へ',
-    page: 'ページ'
+    page: 'ページ',
+    total: '全 {total} 件、{pages} ページ中 {current} ページ',
+    ariaLabel: 'ページネーションナビゲーション',
+    pageList: 'ページリスト',
+    currentPage: '現在のページ',
+    gotoPage: '{page} ページ'
+  },
+  table: {
+    id: 'ID',
+    username: 'ユーザー名',
+    email: 'メールアドレス',
+    role: '役割',
+    action: 'アクション',
+    actions: 'アクション',
+    noData: 'データがありません'
+  },
+  language: {
+    select: '言語を選択',
+    current: '現在の言語',
+    switch: '言語を切り替え'
   }
 }

@@ -235,11 +235,32 @@ export default {
     dateFormat: 'DD/MM/YYYY',
     dateTimeFormat: 'DD/MM/YYYY HH:mm:ss'
   },
+  form: {
+    email: 'Email',
+    password: 'Password',
+    confirmPassword: 'Conferma Password',
+    username: 'Nome utente',
+    name: 'Nome',
+    placeholder: {
+      email: 'Inserisci la tua email',
+      password: 'Inserisci la tua password',
+      confirmPassword: 'Conferma la tua password',
+      username: 'Inserisci il tuo nome utente',
+      name: 'Inserisci il tuo nome'
+    }
+  },
   validation: {
     required: 'Questo campo è obbligatorio',
     email: 'Per favore inserisci un\'email valida',
     passwordMin: 'La password deve contenere almeno {min} caratteri',
-    passwordMatch: 'Le password non coincidono'
+    passwordMatch: 'Le password non coincidono',
+    emailRequired: 'L\'email è obbligatoria',
+    passwordRequired: 'La password è obbligatoria',
+    usernameRequired: 'Il nome utente è obbligatorio',
+    nameRequired: 'Il nome è obbligatorio',
+    confirmPasswordRequired: 'Per favore conferma la password',
+    passwordComplexity: 'La password deve contenere almeno una lettera maiuscola, una minuscola e un numero',
+    usernameMin: 'Il nome utente deve contenere almeno {min} caratteri'
   },
   pagination: {
     showing: 'Visualizzazione',
@@ -248,6 +269,25 @@ export default {
     entries: 'voci',
     previous: 'Precedente',
     next: 'Successivo',
-    page: 'Pagina'
+    page: 'Pagina',
+    total: 'Totale {total} voci, {pages} pagine, pagina {current}',
+    ariaLabel: 'Navigazione paginazione',
+    pageList: 'Lista pagine',
+    currentPage: 'Pagina corrente',
+    gotoPage: 'Pagina {page}'
+  },
+  table: {
+    id: 'ID',
+    username: 'Nome utente',
+    email: 'Email',
+    role: 'Ruolo',
+    action: 'Azione',
+    actions: 'Azioni',
+    noData: 'Nessun dato disponibile'
+  },
+  language: {
+    select: 'Seleziona lingua',
+    current: 'Lingua corrente',
+    switch: 'Cambia lingua'
   }
 }
