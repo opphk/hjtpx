@@ -1,0 +1,8 @@
+.captchax-container {
+    margin: 15px 0;
+}
+
+.captchax-container .captchax-error {
+    font-size: 12px;
+    margin-top: 5px;
+}
