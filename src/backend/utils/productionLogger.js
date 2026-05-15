@@ -1,10 +1,14 @@
 const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
+const { v4: uuidv4 } = require('uuid');
+const loggingConfig = require('../config/logging').logging;
 
 const { combine, timestamp, printf, errors, json, colorize, splat } = winston.format;
 
-const LOG_DIR = process.env.LOG_DIR || 'logs';
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const LOG_DIR = loggingConfig.logDir;
+const NODE_ENV = loggingConfig.environment;
+const SERVICE_NAME = loggingConfig.serviceName;
+const APP_VERSION = loggingConfig.appVersion;
 
 const logLevels = {
   error: 0,
@@ -28,10 +32,56 @@ const logColors = {
 
 winston.addColors(logColors);
 
+const sensitiveDataMasker = (data, sensitiveFields = loggingConfig.sensitiveFields) => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(item => sensitiveDataMasker(item, sensitiveFields));
+  }
+
+  const masked = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    const lowerKey = key.toLowerCase();
+    const isSensitive = sensitiveFields.some(field => 
+      lowerKey.includes(field.toLowerCase())
+    );
+
+    if (isSensitive) {
+      masked[key] = '***MASKED***';
+    } else if (typeof value === 'object' && value !== null) {
+      masked[key] = sensitiveDataMasker(value, sensitiveFields);
+    } else {
+      masked[key] = value;
+    }
+  }
+
+  return masked;
+};
+
+const maskSensitiveData = winston.format(info => {
+  if (info.meta) {
+    info.meta = sensitiveDataMasker(info.meta);
+  }
+  if (info.query) {
+    info.query = sensitiveDataMasker(info.query);
+  }
+  if (info.body) {
+    info.body = sensitiveDataMasker(info.body);
+  }
+  if (info.headers) {
+    info.headers = sensitiveDataMasker(info.headers);
+  }
+  return info;
+});
+
 const logFormat = combine(
   errors({ stack: true }),
   splat(),
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+  maskSensitiveData(),
   json()
 );
 
@@ -40,7 +90,8 @@ const consoleFormat = combine(
   timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   printf(info => {
     const { level, message, timestamp, ...meta } = info;
-    const metaStr = Object.keys(meta).length ? `\n${JSON.stringify(meta, null, 2)}` : '';
+    const maskedMeta = sensitiveDataMasker(meta);
+    const metaStr = Object.keys(maskedMeta).length ? `\n${JSON.stringify(maskedMeta, null, 2)}` : '';
     return `${timestamp} [${level}]: ${message}${metaStr}`;
   })
 );
@@ -48,21 +99,22 @@ const consoleFormat = combine(
 const createTransports = () => {
   const transports = [];
 
-  if (NODE_ENV === 'production') {
-    const maxSize = process.env.LOG_MAX_SIZE || '20m';
-    const maxFiles = process.env.LOG_MAX_FILES || '30d';
+  if (loggingConfig.enableFile) {
+    const maxSize = loggingConfig.maxFileSize;
+    const maxFiles = loggingConfig.maxFiles;
+    const zippedArchive = loggingConfig.zippedArchive;
 
     transports.push(
       new DailyRotateFile({
         filename: `${LOG_DIR}/error-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+        datePattern: loggingConfig.datePattern,
         level: 'error',
         maxSize,
         maxFiles,
         format: logFormat,
         handleExceptions: true,
         handleRejections: true,
-        zippedArchive: true,
+        zippedArchive,
         eol: '\n'
       })
     );
@@ -70,12 +122,12 @@ const createTransports = () => {
     transports.push(
       new DailyRotateFile({
         filename: `${LOG_DIR}/warn-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+        datePattern: loggingConfig.datePattern,
         level: 'warn',
         maxSize,
         maxFiles,
         format: logFormat,
-        zippedArchive: true,
+        zippedArchive,
         eol: '\n'
       })
     );
@@ -83,11 +135,11 @@ const createTransports = () => {
     transports.push(
       new DailyRotateFile({
         filename: `${LOG_DIR}/combined-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+        datePattern: loggingConfig.datePattern,
         maxSize,
         maxFiles,
         format: logFormat,
-        zippedArchive: true,
+        zippedArchive,
         eol: '\n'
       })
     );
@@ -95,12 +147,12 @@ const createTransports = () => {
     transports.push(
       new DailyRotateFile({
         filename: `${LOG_DIR}/http-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+        datePattern: loggingConfig.datePattern,
         level: 'http',
         maxSize,
         maxFiles: '14d',
         format: logFormat,
-        zippedArchive: true,
+        zippedArchive,
         eol: '\n'
       })
     );
@@ -108,12 +160,12 @@ const createTransports = () => {
     transports.push(
       new DailyRotateFile({
         filename: `${LOG_DIR}/performance-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+        datePattern: loggingConfig.datePattern,
         level: 'performance',
         maxSize,
         maxFiles: '7d',
         format: logFormat,
-        zippedArchive: true,
+        zippedArchive,
         eol: '\n'
       })
     );
@@ -121,18 +173,18 @@ const createTransports = () => {
     transports.push(
       new DailyRotateFile({
         filename: `${LOG_DIR}/security-%DATE%.log`,
-        datePattern: 'YYYY-MM-DD',
+        datePattern: loggingConfig.datePattern,
         level: 'security',
         maxSize,
         maxFiles: '30d',
         format: logFormat,
-        zippedArchive: true,
+        zippedArchive,
         eol: '\n'
       })
     );
   }
 
-  if (NODE_ENV !== 'test') {
+  if (loggingConfig.enableConsole && NODE_ENV !== 'test') {
     transports.push(
       new winston.transports.Console({
         format: NODE_ENV === 'production' ? logFormat : consoleFormat,
@@ -146,21 +198,27 @@ const createTransports = () => {
 };
 
 const Logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: loggingConfig.level,
   levels: logLevels,
   format: logFormat,
   transports: createTransports(),
   exitOnError: false,
   silent: NODE_ENV === 'test',
   defaultMeta: {
-    service: 'hjtpx-api',
+    service: SERVICE_NAME,
     environment: NODE_ENV,
-    version: process.env.APP_VERSION || '1.0.0'
+    version: APP_VERSION,
+    timestamp: new Date().toISOString()
   }
 });
 
+const generateRequestId = () => {
+  return `req_${Date.now()}_${uuidv4().substr(0, 8)}`;
+};
+
 const createChildLogger = (context, meta = {}) => {
-  return Logger.child(context, {
+  return Logger.child({
+    ...context,
     ...meta,
     timestamp: new Date().toISOString()
   });
@@ -169,11 +227,20 @@ const createChildLogger = (context, meta = {}) => {
 const logRequest = (req, res, duration, meta = {}) => {
   const logData = {
     requestId: req.requestId,
+    traceId: req.traceId || req.requestId,
     method: req.method,
     url: req.originalUrl || req.url,
     path: req.path,
-    query: req.query,
-    params: req.params,
+    query: sensitiveDataMasker(req.query),
+    params: sensitiveDataMasker(req.params),
+    body: sensitiveDataMasker(req.body),
+    headers: sensitiveDataMasker(
+      Object.fromEntries(
+        Object.entries(req.headers || {}).filter(([key]) => 
+          !['authorization', 'cookie'].includes(key.toLowerCase())
+        )
+      )
+    ),
     ip: req.ip || req.connection?.remoteAddress,
     userAgent: req.get('user-agent'),
     userId: req.user?.id,
@@ -198,6 +265,7 @@ const logRequest = (req, res, duration, meta = {}) => {
 const logError = (error, req = null, context = {}) => {
   const logData = {
     requestId: req?.requestId,
+    traceId: req?.traceId || req?.requestId,
     message: error.message,
     stack: NODE_ENV === 'development' ? error.stack : undefined,
     name: error.name,
@@ -208,7 +276,7 @@ const logError = (error, req = null, context = {}) => {
     ip: req?.ip || req?.connection?.remoteAddress,
     userAgent: req?.get?.('user-agent'),
     userId: req?.user?.id,
-    ...context
+    ...sensitiveDataMasker(context)
   };
 
   Logger.error('Error occurred', logData);
@@ -216,7 +284,7 @@ const logError = (error, req = null, context = {}) => {
 
 const logSecurity = (event, data = {}) => {
   Logger.security(event, {
-    ...data,
+    ...sensitiveDataMasker(data),
     timestamp: new Date().toISOString(),
     source: 'security-middleware'
   });
@@ -224,26 +292,26 @@ const logSecurity = (event, data = {}) => {
 
 const logPerformance = (metric, data = {}) => {
   Logger.performance(metric, {
-    ...data,
+    ...sensitiveDataMasker(data),
     timestamp: new Date().toISOString(),
     source: 'performance-monitor'
   });
 };
 
 const logInfo = (message, meta = {}) => {
-  Logger.info(message, meta);
+  Logger.info(message, sensitiveDataMasker(meta));
 };
 
 const logWarn = (message, meta = {}) => {
-  Logger.warn(message, meta);
+  Logger.warn(message, sensitiveDataMasker(meta));
 };
 
 const logDebug = (message, meta = {}) => {
-  Logger.debug(message, meta);
+  Logger.debug(message, sensitiveDataMasker(meta));
 };
 
 const logHttp = (message, meta = {}) => {
-  Logger.http(message, meta);
+  Logger.http(message, sensitiveDataMasker(meta));
 };
 
 const logPerformanceMetric = (name, value, unit, tags = {}) => {
@@ -251,7 +319,7 @@ const logPerformanceMetric = (name, value, unit, tags = {}) => {
     metric: name,
     value,
     unit,
-    tags,
+    tags: sensitiveDataMasker(tags),
     timestamp: new Date().toISOString()
   });
 };
@@ -267,5 +335,7 @@ module.exports = {
   logWarn,
   logDebug,
   logHttp,
-  logPerformanceMetric
+  logPerformanceMetric,
+  generateRequestId,
+  sensitiveDataMasker
 };

@@ -1,12 +1,15 @@
-const { logRequest } = require('../utils/logger');
+const { logRequest, generateRequestId, sensitiveDataMasker, logWarn } = require('../utils/logger');
+const loggingConfig = require('../config/logging').logging;
 
 const requestLogger = (req, res, next) => {
   const startTime = Date.now();
   const requestId = generateRequestId();
+  const traceId = req.headers['x-trace-id'] || requestId;
 
   req.requestId = requestId;
+  req.traceId = traceId;
 
-  if (process.env.NODE_ENV === 'development') {
+  if (loggingConfig.environment === 'development') {
     console.log(`\n[${requestId}] --> ${req.method} ${req.path}`);
   }
 
@@ -28,29 +31,6 @@ const requestLogger = (req, res, next) => {
   next();
 };
 
-const generateRequestId = () => {
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-};
-
-const sensitiveDataMasker = (
-  data,
-  sensitiveFields = ['password', 'token', 'authorization', 'cookie', 'secret']
-) => {
-  if (!data || typeof data !== 'object') {
-    return data;
-  }
-
-  const masked = { ...data };
-
-  for (const field of sensitiveFields) {
-    if (masked[field]) {
-      masked[field] = '***MASKED***';
-    }
-  }
-
-  return masked;
-};
-
 const logRequestBody = (req, maxLength = 1000) => {
   if (!req.body || Object.keys(req.body).length === 0) {
     return null;
@@ -66,7 +46,7 @@ const logRequestBody = (req, maxLength = 1000) => {
   return bodyString;
 };
 
-const logSlowRequests = (threshold = 3000) => {
+const logSlowRequests = (threshold = loggingConfig.slowRequestThreshold || 3000) => {
   return (req, res, next) => {
     const startTime = Date.now();
 
@@ -74,17 +54,15 @@ const logSlowRequests = (threshold = 3000) => {
       const duration = Date.now() - startTime;
 
       if (duration > threshold) {
-        console.warn(
-          JSON.stringify({
-            level: 'warn',
-            type: 'slow_request',
-            requestId: req.requestId,
-            method: req.method,
-            path: req.path,
-            duration: `${duration}ms`,
-            threshold: `${threshold}ms`
-          })
-        );
+        logWarn('Slow request detected', {
+          type: 'slow_request',
+          requestId: req.requestId,
+          traceId: req.traceId,
+          method: req.method,
+          path: req.path,
+          duration: `${duration}ms`,
+          threshold: `${threshold}ms`
+        });
       }
     });
 

@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import SEO, { getSEOMeta } from '../components/SEO';
 import LogList from '../components/LogList';
 import LogFilter from '../components/LogFilter';
 import Pagination from '../components/ui/Pagination';
 import Loading from '../components/ui/Loading';
 import Alert from '../components/ui/Alert';
+import { formatDateTime } from '../i18n/dateFormat';
 
 const LogsPage = () => {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalLogs, setTotalLogs] = useState(0);
+  const seoMeta = getSEOMeta('logs');
   const [filters, setFilters] = useState({
     type: '',
     level: '',
@@ -108,10 +113,10 @@ const LogsPage = () => {
         setTotalLogs(data.total || 0);
       } else {
         const errorData = await response.json();
-        setError(errorData.error || '获取日志列表失败');
+        setError(errorData.error || t('logs.fetchFailed'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(t('users.networkError'));
     } finally {
       setLoading(false);
     }
@@ -161,10 +166,10 @@ const LogsPage = () => {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       } else {
-        setError('导出日志失败');
+        setError(t('logs.exportFailed'));
       }
     } catch (err) {
-      setError('导出失败，请稍后重试');
+      setError(t('users.networkError'));
     }
   };
 
@@ -172,7 +177,7 @@ const LogsPage = () => {
   const handleExportCSV = () => handleExportLogs('csv');
 
   const handleClearOldLogs = async () => {
-    if (!window.confirm('确定要清除30天前的日志吗？此操作不可撤销。')) return;
+    if (!window.confirm(t('logs.clearConfirm'))) return;
 
     try {
       const token = localStorage.getItem('authToken');
@@ -186,39 +191,41 @@ const LogsPage = () => {
 
       if (response.ok) {
         setError('');
-        Alert.success('旧日志已清除');
+        Alert.success(t('logs.clearSuccess'));
         fetchLogs();
       } else {
         const errorData = await response.json();
-        setError(errorData.error || '清除日志失败');
+        setError(errorData.error || t('logs.clearFailed'));
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      setError(t('users.networkError'));
     }
   };
 
   return (
-    <div className="logs-page">
+    <>
+      <SEO {...seoMeta} />
+      <div className="logs-page">
       <div className="page-header">
         <div>
-          <h1>日志管理</h1>
-          <p>查看和搜索系统操作日志、错误日志</p>
+          <h1>{t('logs.title')}</h1>
+          <p>{t('logs.description')}</p>
         </div>
         <div className="header-actions">
           <button className="btn btn-secondary" onClick={() => setShowStats(!showStats)}>
-            {showStats ? '隐藏统计' : '显示统计'}
+            {showStats ? t('logs.hideStats') : t('logs.showStats')}
           </button>
           <div className="export-dropdown">
             <button className="btn btn-secondary dropdown-toggle">
-              导出日志 ▾
+              {t('logs.exportLogs')} ▾
             </button>
             <div className="export-dropdown-menu">
-              <button onClick={handleExportCSV}>导出 CSV</button>
-              <button onClick={handleExportJSON}>导出 JSON</button>
+              <button onClick={handleExportCSV}>{t('logs.exportCSV')}</button>
+              <button onClick={handleExportJSON}>{t('logs.exportJSON')}</button>
             </div>
           </div>
           <button className="btn btn-danger" onClick={handleClearOldLogs}>
-            清除旧日志
+            {t('logs.clearOldLogs')}
           </button>
         </div>
       </div>
@@ -236,27 +243,27 @@ const LogsPage = () => {
         <div className="log-stats">
           <div className="stat-card">
             <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">总日志数</div>
+            <div className="stat-label">{t('logs.totalLogs')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.last24h}</div>
-            <div className="stat-label">24小时内</div>
+            <div className="stat-label">{t('logs.last24h')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.byLevel.error || 0}</div>
-            <div className="stat-label">错误数</div>
+            <div className="stat-label">{t('logs.errorCount')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.byLevel.warn || 0}</div>
-            <div className="stat-label">警告数</div>
+            <div className="stat-label">{t('logs.warnCount')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.byType.error || 0}</div>
-            <div className="stat-label">错误类型</div>
+            <div className="stat-label">{t('logs.errorType')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.byType.security || 0}</div>
-            <div className="stat-label">安全类型</div>
+            <div className="stat-label">{t('logs.securityType')}</div>
           </div>
         </div>
       )}
@@ -283,45 +290,45 @@ const LogsPage = () => {
         <div className="log-detail-modal" onClick={() => setSelectedLog(null)}>
           <div className="log-detail-content" onClick={(e) => e.stopPropagation()}>
             <div className="log-detail-header">
-              <h3>日志详情</h3>
+              <h3>{t('logs.logDetails')}</h3>
               <button className="close-btn" onClick={() => setSelectedLog(null)}>×</button>
             </div>
             <div className="log-detail-body">
               <div className="log-detail-item">
-                <label>时间:</label>
-                <span>{new Date(selectedLog.timestamp).toLocaleString('zh-CN')}</span>
+                <label>{t('logs.time')}:</label>
+                <span>{formatDateTime(selectedLog.timestamp)}</span>
               </div>
               <div className="log-detail-item">
-                <label>类型:</label>
+                <label>{t('logs.type')}:</label>
                 <span className={`log-type ${selectedLog.type}`}>{selectedLog.type}</span>
               </div>
               <div className="log-detail-item">
-                <label>级别:</label>
+                <label>{t('logs.level')}:</label>
                 <span className={`log-level ${selectedLog.level}`}>{selectedLog.level}</span>
               </div>
               <div className="log-detail-item">
-                <label>用户:</label>
-                <span>{selectedLog.user_id || '系统'}</span>
+                <label>{t('logs.user')}:</label>
+                <span>{selectedLog.user_id || t('logs.system')}</span>
               </div>
               <div className="log-detail-item">
-                <label>操作:</label>
+                <label>{t('logs.action')}:</label>
                 <span>{selectedLog.action}</span>
               </div>
               {selectedLog.ip && (
                 <div className="log-detail-item">
-                  <label>IP地址:</label>
+                  <label>{t('logs.ipAddress')}:</label>
                   <span>{selectedLog.ip}</span>
                 </div>
               )}
               {selectedLog.user_agent && (
                 <div className="log-detail-item">
-                  <label>用户代理:</label>
+                  <label>{t('logs.userAgent')}:</label>
                   <span className="user-agent">{selectedLog.user_agent}</span>
                 </div>
               )}
               {selectedLog.details && (
                 <div className="log-detail-item full-width">
-                  <label>详细信息:</label>
+                  <label>{t('logs.details')}:</label>
                   <pre className="log-details">{JSON.stringify(selectedLog.details, null, 2)}</pre>
                 </div>
               )}
@@ -330,7 +337,8 @@ const LogsPage = () => {
         </div>
       )}
     </div>
+    </>
   );
 };
 
-export default LogsPage;
+export default LogsPage;Page;

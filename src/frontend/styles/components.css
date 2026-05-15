@@ -109,7 +109,7 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--color-primary-hover);
 }
 
 .btn-secondary {
@@ -118,7 +118,7 @@
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #545b62;
+  background-color: #343a40;
 }
 
 .btn-success {
@@ -127,7 +127,7 @@
 }
 
 .btn-success:hover:not(:disabled) {
-  background-color: #218838;
+  background-color: #155724;
 }
 
 .btn-danger {
@@ -136,7 +136,7 @@
 }
 
 .btn-danger:hover:not(:disabled) {
-  background-color: #c82333;
+  background-color: #721c24;
 }
 
 .btn-sm {

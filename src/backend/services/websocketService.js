@@ -181,6 +181,10 @@ class WebSocketService {
     return this.io.getConnectionStats();
   }
 
+  getDetailedMetrics() {
+    return this.io.getDetailedMetrics();
+  }
+
   isUserOnline(userId) {
     const onlineUsers = this.getOnlineUsers();
     return onlineUsers.some(user => user.userId === userId);

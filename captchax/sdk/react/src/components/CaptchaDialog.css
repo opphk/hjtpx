@@ -1,0 +1,146 @@
+.captcha-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+}
+
+.captcha-dialog--visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.captcha-dialog--hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.captcha-dialog--light {
+  background-color: rgba(0, 0, 0, 0.45);
+}
+
+.captcha-dialog--dark {
+  background-color: rgba(0, 0, 0, 0.75);
+}
+
+.captcha-dialog__content {
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: dialogSlideIn 0.3s ease;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.captcha-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.captcha-dialog__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.captcha-dialog__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #8c8c8c;
+  transition: all 0.2s ease;
+}
+
+.captcha-dialog__close:hover {
+  background-color: #f5f5f5;
+  color: #595959;
+}
+
+.captcha-dialog__body {
+  padding: 20px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.captcha-dialog__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #8c8c8c;
+}
+
+.captcha-dialog__loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f0f0f0;
+  border-top-color: #1890ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.captcha-dialog__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #ff4d4f;
+}
+
+.captcha-dialog__error button {
+  padding: 6px 16px;
+  background-color: #1890ff;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.captcha-dialog__error button:hover {
+  background-color: #40a9ff;
+}
+
+.captcha-dialog__footer {
+  padding: 12px 20px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}
+
+.captcha-dialog__tip {
+  font-size: 12px;
+  color: #8c8c8c;
+}

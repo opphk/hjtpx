@@ -1,0 +1,18 @@
+# HJTPX Database Backup Crontab Configuration
+# Copy this file to /etc/cron.d/hjtpx-backup or add to your user's crontab with 'crontab -e'
+
+# Full backup every Sunday at 2:00 AM
+0 2 * * 0 /workspace/hjtpx/scripts/backup.sh full >> /workspace/hjtpx/logs/backup_full.log 2>&1
+
+# Incremental backup every day (Monday-Saturday) at 2:00 AM
+0 2 * * 1-6 /workspace/hjtpx/scripts/backup.sh incremental >> /workspace/hjtpx/logs/backup_incr.log 2>&1
+
+# Verify latest backups every day at 4:00 AM
+0 4 * * * /workspace/hjtpx/scripts/verify-backup.sh latest >> /workspace/hjtpx/logs/backup_verify.log 2>&1
+
+# Restore drill every Sunday at 5:00 AM (tests the latest backup)
+0 5 * * 0 /workspace/hjtpx/scripts/restore-drill.sh full >> /workspace/hjtpx/logs/restore_drill.log 2>&1
+
+# Clean up old logs monthly (optional)
+0 3 1 * * find /workspace/hjtpx/logs -name "*.log" -mtime +30 -delete
+

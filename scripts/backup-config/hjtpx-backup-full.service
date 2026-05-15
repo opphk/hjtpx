@@ -1,0 +1,13 @@
+[Unit]
+Description=HJTPX Full Database Backup
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+WorkingDirectory=/workspace/hjtpx
+ExecStart=/workspace/hjtpx/scripts/backup.sh full
+StandardOutput=append:/workspace/hjtpx/logs/backup_full.log
+StandardError=append:/workspace/hjtpx/logs/backup_full.log
+Environment="BACKUP_DIR=/var/backups/hjtpx"
+

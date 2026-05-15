@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import SEO, { getSEOMeta } from '../components/SEO';
 import SystemConfig from '../components/SystemConfig';
 import FeatureFlags from '../components/FeatureFlags';
 import Alert from '../components/ui/Alert';
 
 const SettingsPage = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('system');
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const seoMeta = getSEOMeta('settings');
 
   const handleSuccess = (message) => {
     setSuccess(message);
@@ -47,11 +51,13 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="settings-page">
+    <>
+      <SEO {...seoMeta} />
+      <div className="settings-page">
       <div className="page-header">
         <div>
-          <h1>系统设置</h1>
-          <p>配置系统参数、功能开关和通知设置</p>
+          <h1>{t('settings.title')}</h1>
+          <p>{t('settings.description')}</p>
         </div>
       </div>
 
@@ -78,19 +84,19 @@ const SettingsPage = () => {
           className={`tab-button ${activeTab === 'system' ? 'active' : ''}`}
           onClick={() => setActiveTab('system')}
         >
-          系统配置
+          {t('settings.systemConfig')}
         </button>
         <button
           className={`tab-button ${activeTab === 'features' ? 'active' : ''}`}
           onClick={() => setActiveTab('features')}
         >
-          功能开关
+          {t('settings.features')}
         </button>
         <button
           className={`tab-button ${activeTab === 'notifications' ? 'active' : ''}`}
           onClick={() => setActiveTab('notifications')}
         >
-          通知配置
+          {t('settings.notifications')}
         </button>
       </div>
 
@@ -98,10 +104,12 @@ const SettingsPage = () => {
         {renderContent()}
       </div>
     </div>
+    </>
   );
 };
 
 const NotificationsConfig = ({ onSuccess, onError }) => {
+  const { t } = useTranslation();
   const [config, setConfig] = useState({
     email_notifications: true,
     push_notifications: true,
@@ -141,13 +149,13 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
       });
 
       if (response.ok) {
-        onSuccess('通知配置已保存');
+        onSuccess(t('settings.saveSuccess'));
       } else {
         const errorData = await response.json();
-        onError(errorData.error || '保存失败');
+        onError(errorData.error || t('settings.saveFailed'));
       }
     } catch (err) {
-      onError('网络错误，请稍后重试');
+      onError(t('users.networkError'));
     } finally {
       setLoading(false);
     }
@@ -156,11 +164,11 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
   return (
     <div className="config-section">
       <div className="config-card">
-        <h3>通知渠道</h3>
+        <h3>{t('settings.notificationChannels')}</h3>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">邮件通知</span>
-            <span className="config-item-desc">通过邮件接收系统通知</span>
+            <span className="config-item-label">{t('settings.emailNotifications')}</span>
+            <span className="config-item-desc">{t('users.description')}</span>
           </div>
           <button
             className={`toggle-switch ${config.email_notifications ? 'active' : ''}`}
@@ -171,8 +179,8 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
         </div>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">推送通知</span>
-            <span className="config-item-desc">接收浏览器推送通知</span>
+            <span className="config-item-label">{t('settings.pushNotifications')}</span>
+            <span className="config-item-desc">{t('logs.description')}</span>
           </div>
           <button
             className={`toggle-switch ${config.push_notifications ? 'active' : ''}`}
@@ -183,8 +191,8 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
         </div>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">应用内通知</span>
-            <span className="config-item-desc">在应用内显示通知</span>
+            <span className="config-item-label">{t('settings.inAppNotifications')}</span>
+            <span className="config-item-desc">{t('audit.description')}</span>
           </div>
           <button
             className={`toggle-switch ${config.in_app_notifications ? 'active' : ''}`}
@@ -196,26 +204,26 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
       </div>
 
       <div className="config-card">
-        <h3>通知设置</h3>
+        <h3>{t('settings.notificationSettings')}</h3>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">通知频率</span>
-            <span className="config-item-desc">选择通知接收频率</span>
+            <span className="config-item-label">{t('settings.notificationFrequency')}</span>
+            <span className="config-item-desc">{t('common.apply')}</span>
           </div>
           <select
             value={config.notification_frequency}
             onChange={(e) => handleSelectChange('notification_frequency', e.target.value)}
             className="form-select"
           >
-            <option value="realtime">实时</option>
-            <option value="hourly">每小时汇总</option>
-            <option value="daily">每日汇总</option>
+            <option value="realtime">{t('settings.realtime')}</option>
+            <option value="hourly">{t('settings.hourly')}</option>
+            <option value="daily">{t('settings.daily')}</option>
           </select>
         </div>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">重要通知邮件</span>
-            <span className="config-item-desc">重要事件通过邮件通知</span>
+            <span className="config-item-label">{t('settings.importantEmail')}</span>
+            <span className="config-item-desc">{t('common.confirm')}</span>
           </div>
           <button
             className={`toggle-switch ${config.email_for_important ? 'active' : ''}`}
@@ -227,11 +235,11 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
       </div>
 
       <div className="config-card">
-        <h3>报告设置</h3>
+        <h3>{t('settings.reportSettings')}</h3>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">每日摘要</span>
-            <span className="config-item-desc">每天发送系统活动摘要</span>
+            <span className="config-item-label">{t('settings.dailyDigest')}</span>
+            <span className="config-item-desc">{t('common.save')}</span>
           </div>
           <button
             className={`toggle-switch ${config.daily_digest ? 'active' : ''}`}
@@ -242,8 +250,8 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
         </div>
         <div className="config-item">
           <div className="config-item-info">
-            <span className="config-item-label">每周报告</span>
-            <span className="config-item-desc">每周发送系统统计报告</span>
+            <span className="config-item-label">{t('settings.weeklyReport')}</span>
+            <span className="config-item-desc">{t('common.cancel')}</span>
           </div>
           <button
             className={`toggle-switch ${config.weekly_report ? 'active' : ''}`}
@@ -260,7 +268,7 @@ const NotificationsConfig = ({ onSuccess, onError }) => {
           onClick={handleSave}
           disabled={loading}
         >
-          {loading ? '保存中...' : '保存配置'}
+          {loading ? t('common.loading') : t('settings.saveConfig')}
         </button>
       </div>
     </div>

@@ -1,81 +1,69 @@
-const CACHE_NAME = 'hjtpx-v1.0.0';
-const STATIC_CACHE = 'hjtpx-static-v1';
-const DYNAMIC_CACHE = 'hjtpx-dynamic-v1';
-const IMAGE_CACHE = 'hjtpx-images-v1';
+const CACHE_VERSION = 'v2.2.0';
+const CACHE_NAME = `hjtpx-${CACHE_VERSION}`;
+const STATIC_CACHE = `hjtpx-static-${CACHE_VERSION}`;
+const DYNAMIC_CACHE = `hjtpx-dynamic-${CACHE_VERSION}`;
+const IMAGE_CACHE = `hjtpx-images-${CACHE_VERSION}`;
+const API_CACHE = `hjtpx-api-${CACHE_VERSION}`;
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/offline.html',
   '/manifest.json',
-  '/favicon.png',
-  '/static/js/main.js',
-  '/static/css/main.css'
+  '/favicon.png'
 ];
 
-const API_CACHE_NAME = 'hjtpx-api-v1';
-const OFFLINE_API_PATHS = [
-  '/api/v1/health',
-  '/api/v1/users',
-  '/api/v1/notifications'
-];
+const CACHE_STRATEGIES = {
+  cacheFirst: 'cache-first',
+  networkFirst: 'network-first',
+  staleWhileRevalidate: 'stale-while-revalidate',
+  networkOnly: 'network-only'
+};
+
+const MAX_CACHE_AGE = {
+  static: 7 * 24 * 60 * 60 * 1000,
+  dynamic: 24 * 60 * 60 * 1000,
+  images: 30 * 24 * 60 * 60 * 1000,
+  api: 5 * 60 * 1000
+};
+
+const OFFLINE_URL = '/offline.html';
+const API_TIMEOUT = 5000;
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker...', event);
+  console.log('[SW] Installing service worker...', CACHE_VERSION);
   
   event.waitUntil(
-    Promise.all([
-      caches.open(STATIC_CACHE).then((cache) => {
-        console.log('[SW] Precaching static assets');
-        return cache.addAll(STATIC_ASSETS).catch((error) => {
-          console.warn('[SW] Failed to cache some static assets:', error);
-        });
-      }),
-      caches.open(DYNAMIC_CACHE).then((cache) => {
-        console.log('[SW] Dynamic cache initialized');
-        return cache;
-      }),
-      caches.open(IMAGE_CACHE).then((cache) => {
-        console.log('[SW] Image cache initialized');
-        return cache;
-      }),
-      caches.open(API_CACHE_NAME).then((cache) => {
-        console.log('[SW] API cache initialized');
-        return cache;
+    caches.open(STATIC_CACHE)
+      .then((cache) => {
+        console.log('[SW] Caching static assets');
+        return cache.addAll(STATIC_ASSETS);
       })
-    ]).then(() => {
-      console.log('[SW] Skip waiting');
-      return self.skipWaiting();
-    })
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker...', event);
+  console.log('[SW] Activating service worker...');
   
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((cacheName) => {
-            return (
-              cacheName.startsWith('hjtpx-') &&
-              ![
-                STATIC_CACHE,
-                DYNAMIC_CACHE,
-                IMAGE_CACHE,
-                API_CACHE_NAME
-              ].includes(cacheName)
-            );
-          })
-          .map((cacheName) => {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          })
-      );
-    }).then(() => {
-      console.log('[SW] Claiming clients');
-      return self.clients.claim();
-    })
+    caches.keys()
+      .then((keys) => {
+        return Promise.all(
+          keys
+            .filter((key) => !key.includes(CACHE_VERSION))
+            .map((key) => {
+              console.log('[SW] Deleting old cache:', key);
+              return caches.delete(key);
+            })
+        );
+      })
+      .then(() => {
+        return self.clients.claim();
+      })
+      .then(() => {
+        console.log('[SW] Service worker activated');
+      })
   );
 });
 
@@ -88,75 +76,132 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin === location.origin) {
-    if (STATIC_ASSETS.some(asset => request.url.includes(asset))) {
+    if (isHTMLRequest(request)) {
+      event.respondWith(networkFirst(request, STATIC_CACHE, '/offline.html'));
+    } else if (isStaticAsset(url.pathname)) {
       event.respondWith(cacheFirst(request, STATIC_CACHE));
-      return;
-    }
-
-    if (isImageRequest(request)) {
+    } else if (isAPIRequest(url.pathname)) {
+      event.respondWith(networkFirst(request, API_CACHE));
+    } else if (isImageRequest(request)) {
       event.respondWith(staleWhileRevalidate(request, IMAGE_CACHE));
-      return;
+    } else {
+      event.respondWith(networkFirst(request, DYNAMIC_CACHE));
     }
-
-    if (url.pathname.startsWith('/api/')) {
-      event.respondWith(networkFirst(request, API_CACHE_NAME));
-      return;
-    }
-
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
-  } else {
-    event.respondWith(networkFirst(request, DYNAMIC_CACHE));
+  } else if (isCDNRequest(url)) {
+    event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE));
   }
 });
 
+function isHTMLRequest(request) {
+  return request.destination === 'document';
+}
+
+function isStaticAsset(pathname) {
+  const staticExtensions = ['.js', '.css', '.woff', '.woff2', '.ttf', '.eot', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.ico'];
+  return staticExtensions.some(ext => pathname.endsWith(ext)) || pathname.includes('/assets/');
+}
+
+function isAPIRequest(pathname) {
+  return pathname.startsWith('/api/') || pathname.startsWith('/socket.io/');
+}
+
 function isImageRequest(request) {
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico'];
-  return imageExtensions.some(ext => request.url.includes(ext));
+  return request.destination === 'image';
+}
+
+function isCDNRequest(url) {
+  return url.hostname.includes('unpkg.com') || 
+         url.hostname.includes('jsdelivr.net') || 
+         url.hostname.includes('cdnjs.cloudflare.com') ||
+         url.hostname.includes('cdn.');
 }
 
 async function cacheFirst(request, cacheName) {
-  const cachedResponse = await caches.match(request);
+  const cache = await caches.open(cacheName);
+  const cachedResponse = await cache.match(request);
+  
   if (cachedResponse) {
+    const cacheDate = cachedResponse.headers.get('sw-cache-date');
+    if (cacheDate) {
+      const age = Date.now() - parseInt(cacheDate, 10);
+      if (age > MAX_CACHE_AGE.static) {
+        cache.delete(request);
+        try {
+          const networkResponse = await fetch(request);
+          
+          if (networkResponse.ok) {
+            const headers = new Headers(networkResponse.headers);
+            headers.append('sw-cache-date', Date.now().toString());
+            const responseToCache = new Response(await networkResponse.clone().blob(), {
+              status: networkResponse.status,
+              statusText: networkResponse.statusText,
+              headers: headers
+            });
+            cache.put(request, responseToCache);
+          }
+          
+          return networkResponse;
+        } catch (error) {
+          console.error('[SW] Cache first failed:', error);
+          return cachedResponse;
+        }
+      }
+    }
     return cachedResponse;
   }
 
   try {
     const networkResponse = await fetch(request);
+    
     if (networkResponse.ok) {
-      const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
+      const headers = new Headers(networkResponse.headers);
+      headers.append('sw-cache-date', Date.now().toString());
+      const responseToCache = new Response(await networkResponse.clone().blob(), {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: headers
+      });
+      cache.put(request, responseToCache);
     }
+    
     return networkResponse;
   } catch (error) {
-    console.error('[SW] Cache first fetch failed:', error);
+    console.error('[SW] Cache first failed:', error);
     return caches.match('/offline.html');
   }
 }
 
-async function networkFirst(request, cacheName) {
+async function networkFirst(request, cacheName, fallback = null) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  
   try {
-    const networkResponse = await fetch(request);
+    const networkResponse = await fetch(request, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
     if (networkResponse.ok) {
       const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
+      const headers = new Headers(networkResponse.headers);
+      headers.append('sw-cache-date', Date.now().toString());
+      const responseToCache = new Response(await networkResponse.clone().blob(), {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: headers
+      });
+      cache.put(request, responseToCache);
     }
+    
     return networkResponse;
   } catch (error) {
-    console.log('[SW] Network failed, trying cache:', request.url);
+    clearTimeout(timeoutId);
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
-
-    if (request.destination === 'document') {
-      return caches.match('/offline.html');
+    if (fallback) {
+      return caches.match(fallback);
     }
-
-    return new Response('Offline content not available', {
-      status: 503,
-      statusText: 'Service Unavailable',
-      headers: { 'Content-Type': 'text/plain' }
-    });
+    return createOfflineResponse();
   }
 }
 
@@ -167,140 +212,165 @@ async function staleWhileRevalidate(request, cacheName) {
   const fetchPromise = fetch(request)
     .then((networkResponse) => {
       if (networkResponse.ok) {
-        cache.put(request, networkResponse.clone());
+        const headers = new Headers(networkResponse.headers);
+        headers.append('sw-cache-date', Date.now().toString());
+        const responseToCache = new Response(await networkResponse.clone().blob(), {
+          status: networkResponse.status,
+          statusText: networkResponse.statusText,
+          headers: headers
+        });
+        cache.put(request, responseToCache);
       }
       return networkResponse;
     })
     .catch((error) => {
-      console.log('[SW] Stale while revalidate fetch failed:', error);
+      console.warn('[SW] Stale while revalidate fetch failed:', error);
+      return null;
     });
 
-  return cachedResponse || fetchPromise;
+  return cachedResponse || fetchPromise || createOfflineResponse();
 }
 
-self.addEventListener('message', (event) => {
-  console.log('[SW] Message received:', event.data);
+function networkOnly(request) {
+  return fetch(request);
+}
 
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+function createOfflineResponse() {
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: {
+        code: 'OFFLINE',
+        message: '您当前处于离线状态，请检查网络连接'
+      }
+    }),
+    {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    }
+  );
+}
 
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    event.waitUntil(
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames
-            .filter(name => name.startsWith('hjtpx-'))
-            .map(name => caches.delete(name))
-        );
-      }).then(() => {
-        console.log('[SW] All caches cleared');
-        event.ports[0].postMessage({ success: true });
-      })
-    );
-  }
-
-  if (event.data && event.data.type === 'GET_CACHE_SIZE') {
-    event.waitUntil(
-      getCacheSize().then(size => {
-        event.ports[0].postMessage({ cacheSize: size });
-      })
-    );
-  }
-
-  if (event.data && event.data.type === 'CACHE_URLS') {
-    const { urls } = event.data;
-    event.waitUntil(
-      cacheUrls(urls).then(() => {
-        event.ports[0].postMessage({ success: true });
-      })
-    );
+self.addEventListener('sync', (event) => {
+  console.log('[SW] Background sync:', event.tag);
+  
+  if (event.tag === 'sync-notifications') {
+    event.waitUntil(syncNotifications());
+  } else if (event.tag === 'sync-user-data') {
+    event.waitUntil(syncUserData());
+  } else if (event.tag.startsWith('sync-')) {
+    event.waitUntil(syncData(event.tag));
   }
 });
 
-async function getCacheSize() {
-  let totalSize = 0;
-  const cacheNames = await caches.keys();
-
-  for (const cacheName of cacheNames) {
-    if (cacheName.startsWith('hjtpx-')) {
-      const cache = await caches.open(cacheName);
-      const keys = await cache.keys();
-
-      for (const request of keys) {
-        const response = await cache.match(request);
-        if (response) {
-          const blob = await response.clone().blob();
-          totalSize += blob.size;
-        }
+async function syncNotifications() {
+  try {
+    console.log('[SW] Syncing notifications...');
+    const response = await fetch('/api/v1/notifications/unread', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.notifications && data.notifications.length > 0) {
+        self.registration.showNotification('HJTPX 系统', {
+          body: `您有 ${data.notifications.length} 条未读通知`,
+          icon: '/favicon.png',
+          badge: '/favicon.png',
+          tag: 'sync-notification',
+          vibrate: [100, 50, 100]
+        });
       }
     }
+  } catch (error) {
+    console.error('[SW] Notification sync failed:', error);
   }
-
-  return totalSize;
 }
 
-async function cacheUrls(urls) {
-  const cache = await caches.open(DYNAMIC_CACHE);
-  for (const url of urls) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        await cache.put(url, response);
+async function syncUserData() {
+  try {
+    console.log('[SW] Syncing user data...');
+    const db = await openDatabase();
+    const tx = db.transaction('pendingRequests', 'readonly');
+    const store = tx.objectStore('pendingRequests');
+    const requests = await getAllFromStore(store);
+
+    for (const request of requests) {
+      try {
+        const response = await fetch(request.url, {
+          method: request.method,
+          headers: request.headers,
+          body: request.body
+        });
+        
+        if (response.ok) {
+          const deleteTx = db.transaction('pendingRequests', 'readwrite');
+          deleteTx.objectStore('pendingRequests').delete(request.id);
+        }
+      } catch (error) {
+        console.error('[SW] Sync failed for request:', request.id, error);
       }
-    } catch (error) {
-      console.error(`[SW] Failed to cache URL: ${url}`, error);
     }
+  } catch (error) {
+    console.error('[SW] Sync error:', error);
   }
+}
+
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('hjtpx-sync', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('pendingRequests')) {
+        db.createObjectStore('pendingRequests', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+  });
+}
+
+function getAllFromStore(store) {
+  return new Promise((resolve, reject) => {
+    const request = store.getAll();
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+  });
 }
 
 self.addEventListener('push', (event) => {
-  console.log('[SW] Push notification received:', event);
-
+  console.log('[SW] Push notification received');
+  
   let data = {
-    title: 'HJTPX 通知',
-    body: '您有一条新消息',
+    title: 'HJTPX 系统',
+    body: '您有一条新通知',
     icon: '/favicon.png',
-    badge: '/favicon.png',
-    tag: 'default',
-    renotify: true,
-    requireInteraction: false,
-    data: {}
+    badge: '/favicon.png'
   };
 
-  try {
-    if (event.data) {
-      const payload = event.data.json();
-      data = {
-        ...data,
-        ...payload
-      };
+  if (event.data) {
+    try {
+      data = { ...data, ...event.data.json() };
+    } catch (e) {
+      data.body = event.data.text();
     }
-  } catch (error) {
-    console.error('[SW] Error parsing push data:', error);
   }
 
   const options = {
     body: data.body,
-    icon: data.icon,
-    badge: data.badge,
-    tag: data.tag,
-    renotify: data.renotify,
-    requireInteraction: data.requireInteraction,
-    data: data.data,
-    vibrate: [200, 100, 200],
-    actions: [
-      {
-        action: 'view',
-        title: '查看',
-        icon: '/favicon.png'
-      },
-      {
-        action: 'dismiss',
-        title: '忽略',
-        icon: '/favicon.png'
-      }
-    ]
+    icon: data.icon || '/favicon.png',
+    badge: data.badge || '/favicon.png',
+    tag: data.tag || 'default-' + Date.now(),
+    data: data.data || {},
+    vibrate: data.vibrate || [100, 50, 100],
+    renotify: data.renotify !== false,
+    requireInteraction: data.requireInteraction || false,
+    actions: data.actions || [],
+    dir: data.dir || 'ltr',
+    lang: data.lang || 'zh-CN'
   };
 
   event.waitUntil(
@@ -309,67 +379,228 @@ self.addEventListener('push', (event) => {
 });
 
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification clicked:', event);
+  console.log('[SW] Notification clicked');
+  
   event.notification.close();
 
-  if (event.action === 'dismiss') {
-    return;
-  }
+  const notificationData = event.notification.data || {};
+  const targetUrl = notificationData.url || '/';
+  const action = event.action;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        if (clientList.length > 0) {
-          let client = clientList[0];
-          for (let i = 0; i < clientList.length; i++) {
-            if (clientList[i].focused) {
-              client = clientList[i];
-              break;
+      .then(async (clientList) => {
+        if (action && notificationData.actionUrls && notificationData.actionUrls[action]) {
+          const actionUrl = notificationData.actionUrls[action];
+          
+          for (const client of clientList) {
+            if (client.url === actionUrl && 'focus' in client) {
+              await client.focus();
+              client.postMessage({
+                action: 'notificationAction',
+                type: action,
+                notification: notificationData
+              });
+              return;
             }
           }
-          return client.focus();
+          
+          if (clients.openWindow) {
+            const newClient = await clients.openWindow(actionUrl);
+            if (newClient) {
+              newClient.postMessage({
+                action: 'notificationAction',
+                type: action,
+                notification: notificationData
+              });
+            }
+            return;
+          }
         }
-        return clients.openWindow('/');
-      })
-      .then((client) => {
-        if (client) {
-          client.postMessage({
-            type: 'NOTIFICATION_CLICK',
-            data: event.notification.data
-          });
+
+        for (const client of clientList) {
+          if ('focus' in client) {
+            await client.focus();
+            client.postMessage({
+              action: 'notificationClick',
+              notification: notificationData
+            });
+            return;
+          }
+        }
+        
+        if (clients.openWindow) {
+          const newClient = await clients.openWindow(targetUrl);
+          if (newClient) {
+            newClient.postMessage({
+              action: 'notificationClick',
+              notification: notificationData
+            });
+          }
         }
       })
   );
 });
 
 self.addEventListener('notificationclose', (event) => {
-  console.log('[SW] Notification closed:', event);
-});
-
-self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync:', event);
-
-  if (event.tag === 'sync-data') {
-    event.waitUntil(syncData());
-  }
-
-  if (event.tag === 'sync-notifications') {
-    event.waitUntil(syncNotifications());
+  console.log('[SW] Notification closed');
+  
+  if (event.notification.data && event.notification.data.id) {
+    console.log('[SW] Notification ID:', event.notification.data.id);
   }
 });
 
-async function syncData() {
-  console.log('[SW] Syncing data...');
-}
-
-async function syncNotifications() {
-  console.log('[SW] Syncing notifications...');
-}
-
-self.addEventListener('error', (event) => {
-  console.error('[SW] Error:', event.error);
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'sync-content') {
+    event.waitUntil(syncContent());
+  }
 });
 
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW] Unhandled promise rejection:', event.reason);
+async function syncContent() {
+  try {
+    console.log('[SW] Periodic sync content...');
+    const cache = await caches.open(DYNAMIC_CACHE);
+    const criticalRoutes = ['/', '/dashboard', '/api/v1/user/profile'];
+    
+    for (const route of criticalRoutes) {
+      try {
+        const response = await fetch(route);
+        if (response.ok) {
+          await cache.put(route, response.clone());
+          console.log('[SW] Periodically synced:', route);
+        }
+      } catch (error) {
+        console.error('[SW] Periodic sync failed for:', route, error);
+      }
+    }
+    
+    notifyClientsAboutSync(true);
+  } catch (error) {
+    console.error('[SW] Periodic sync error:', error);
+    notifyClientsAboutSync(false);
+  }
+}
+
+function notifyClientsAboutSync(success) {
+  clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((clientList) => {
+      clientList.forEach((client) => {
+        client.postMessage({
+          action: 'periodicSyncComplete',
+          success: success,
+          timestamp: Date.now()
+        });
+      });
+    });
+}
+
+self.addEventListener('message', (event) => {
+  console.log('[SW] Message received:', event.data);
+  
+  if (event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+  
+  if (event.data.action === 'clearCache') {
+    event.waitUntil(
+      caches.keys()
+        .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+        .then(() => event.source.postMessage({ action: 'cacheCleared', success: true }))
+    );
+  }
+  
+  if (event.data.action === 'getCacheStatus') {
+    event.waitUntil(
+      caches.keys()
+        .then(async (keys) => {
+          const stats = await Promise.all(
+            keys.map(async (key) => {
+              const cache = await caches.open(key);
+              const cacheKeys = await cache.keys();
+              return { name: key, count: cacheKeys.length };
+            })
+          );
+          return stats;
+        })
+        .then((stats) => {
+          event.source.postMessage({ action: 'cacheStatus', stats });
+        })
+    );
+  }
+  
+  if (event.data.action === 'registerSync') {
+    event.waitUntil(
+      self.registration.sync.register(event.data.tag || 'sync-data')
+        .then(() => {
+          event.source.postMessage({ action: 'syncRegistered', success: true });
+        })
+        .catch((error) => {
+          event.source.postMessage({ action: 'syncFailed', error: error.message });
+        })
+    );
+  }
+  
+  if (event.data.action === 'showNotification') {
+    event.waitUntil(
+      self.registration.showNotification(event.data.title, {
+        body: event.data.body,
+        icon: event.data.icon || '/favicon.png',
+        badge: event.data.badge || '/favicon.png',
+        tag: event.data.tag || 'custom-' + Date.now(),
+        data: event.data.data || {},
+        vibrate: event.data.vibrate || [100, 50, 100],
+        requireInteraction: event.data.requireInteraction || false,
+        actions: event.data.actions || []
+      })
+    );
+  }
+  
+  if (event.data.action === 'getVersion') {
+    event.source.postMessage({
+      action: 'version',
+      version: CACHE_VERSION
+    });
+  }
+  
+  if (event.data.action === 'prefetch') {
+    event.waitUntil(
+      prefetchResources(event.data.urls)
+        .then(() => {
+          event.source.postMessage({ action: 'prefetchComplete', success: true });
+        })
+        .catch((error) => {
+          event.source.postMessage({ action: 'prefetchFailed', error: error.message });
+        })
+    );
+  }
+  
+  if (event.data.action === 'updateAvailable') {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          clientList.forEach((client) => {
+            client.postMessage({
+              action: 'updateAvailable',
+              version: CACHE_VERSION
+            });
+          });
+        })
+    );
+  }
 });
+
+async function prefetchResources(urls) {
+  const cache = await caches.open(STATIC_CACHE);
+  
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        await cache.put(url, response);
+        console.log('[SW] Prefetched:', url);
+      }
+    } catch (error) {
+      console.error('[SW] Prefetch failed for:', url, error);
+    }
+  }
+}

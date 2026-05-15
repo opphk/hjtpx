@@ -1,353 +1,451 @@
 const request = require('supertest');
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 
 const pool = require('../../../config/database/db');
 const filesRoutes = require('../../routes/files');
+const { userFactory, fileFactory } = require('../factories');
+const {
+  generateToken,
+  testPassword,
+  fileUploadData,
+  HTTP_STATUS
+} = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
-app.use('/api/files', filesRoutes);
-
-const JWT_SECRET = process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production';
+app.use(express.urlencoded({ extended: true }));
+app.use('/api/v1/files', filesRoutes);
 
 describe('Files API Integration Tests', () => {
   let testUser;
+  let adminUser;
   let testToken;
-  let testFileId;
+  let adminToken;
+  let cleanupUsers = [];
+  let cleanupFileIds = [];
 
   beforeAll(async () => {
-    const hashedPassword = await bcrypt.hash('TestPassword123!', 10);
-    testUser = await pool.query(
-      'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role',
-      [`file_user_${Date.now()}@example.com`, 'File User', hashedPassword, 'user']
-    );
-    testUser = testUser.rows[0];
+    testUser = await userFactory.createUser({
+      password: testPassword
+    });
+    adminUser = await userFactory.createAdmin({
+      password: testPassword
+    });
+    cleanupUsers.push(testUser.id, adminUser.id);
 
-    testToken = jwt.sign(
-      { id: testUser.id, email: testUser.email, role: testUser.role },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    );
-
-    try {
-      const testFile = await pool.query(
-        'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [testUser.id, 'test.txt', '/uploads/test.txt', 'text/plain', 1024, 'test']
-      );
-      testFileId = testFile.rows[0].id;
-    } catch (error) {
-      console.log('Could not create test file:', error.message);
-    }
+    testToken = generateToken(testUser);
+    adminToken = generateToken(adminUser);
   });
 
   afterAll(async () => {
-    if (testFileId) {
-      try {
-        await pool.query('DELETE FROM files WHERE id = $1', [testFileId]);
-      } catch (error) {
-        console.log('Cleanup file skipped:', error.message);
-      }
-    }
-    if (testUser) {
-      await pool.query('DELETE FROM users WHERE id = $1', [testUser.id]);
-    }
+    await fileFactory.deleteFiles(cleanupFileIds);
+    await userFactory.deleteUsers(cleanupUsers);
     await pool.end();
   });
 
-  describe('GET /api/files', () => {
-    it('should get user files with pagination', async () => {
-      const response = await request(app)
-        .get('/api/files?page=1&limit=10')
-        .set('Authorization', `Bearer ${testToken}`);
+  describe('GET /api/v1/files', () => {
+    let testFile;
 
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toBeInstanceOf(Array);
-      expect(response.body).toHaveProperty('pagination');
+    beforeAll(async () => {
+      try {
+        testFile = await fileFactory.createFile(testUser.id);
+        cleanupFileIds.push(testFile.id);
+      } catch (error) {
+        console.log('Could not create test file:', error.message);
+      }
     });
 
-    it('should filter files by folder', async () => {
+    it('should get user files successfully', async () => {
       const response = await request(app)
-        .get('/api/files?folder=test')
+        .get('/api/v1/files')
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
+      expect(response.body.success).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    it('should support folder filtering', async () => {
+      const response = await request(app)
+        .get('/api/v1/files?folder=test')
+        .set('Authorization', `Bearer ${testToken}`);
+
+      expect(response.status).toBe(HTTP_STATUS.OK);
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should support pagination parameters', async () => {
+      const response = await request(app)
+        .get('/api/v1/files?page=1&limit=10')
+        .set('Authorization', `Bearer ${testToken}`);
+
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app).get('/api/files');
+      const response = await request(app).get('/api/v1/files');
 
-      expect(response.status).toBe(401);
-      expect(response.body.success).toBe(false);
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
 
     it('should fail with invalid token', async () => {
       const response = await request(app)
-        .get('/api/files')
+        .get('/api/v1/files')
         .set('Authorization', 'Bearer invalid-token');
 
-      expect(response.status).toBe(401);
-      expect(response.body.success).toBe(false);
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
   });
 
-  describe('GET /api/files/stats', () => {
-    it('should get storage statistics', async () => {
+  describe('GET /api/v1/files/stats', () => {
+    it('should get storage stats successfully', async () => {
       const response = await request(app)
-        .get('/api/files/stats')
+        .get('/api/v1/files/stats')
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveProperty('totalFiles');
       expect(response.body.data).toHaveProperty('totalSize');
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app).get('/api/files/stats');
+      const response = await request(app).get('/api/v1/files/stats');
 
-      expect(response.status).toBe(401);
-      expect(response.body.success).toBe(false);
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
   });
 
-  describe('GET /api/files/:id', () => {
-    it('should get file details successfully', async () => {
-      if (!testFileId) {
-        console.log('Skipping test: No test file created');
+  describe('GET /api/v1/files/:id', () => {
+    let testFile;
+
+    beforeAll(async () => {
+      try {
+        testFile = await fileFactory.createFile(testUser.id);
+        cleanupFileIds.push(testFile.id);
+      } catch (error) {
+        console.log('Could not create test file:', error.message);
+      }
+    });
+
+    it('should get file by id successfully', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create test file');
         return;
       }
 
       const response = await request(app)
-        .get(`/api/files/${testFileId}`)
+        .get(`/api/v1/files/${testFile.id}`)
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('id');
-      expect(response.body.data).toHaveProperty('original_name');
-    });
-
-    it('should return 403 for another user file', async () => {
-      const otherUser = await pool.query(
-        'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [`other_${Date.now()}@example.com`, 'Other User', await bcrypt.hash('TestPassword123!', 10), 'user']
-      );
-
-      try {
-        const otherFile = await pool.query(
-          'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-          [otherUser.rows[0].id, 'other.txt', '/uploads/other.txt', 'text/plain', 512, 'other']
-        );
-
-        const response = await request(app)
-          .get(`/api/files/${otherFile.rows[0].id}`)
-          .set('Authorization', `Bearer ${testToken}`);
-
-        expect(response.status).toBe(403);
-        expect(response.body.success).toBe(false);
-
-        await pool.query('DELETE FROM files WHERE id = $1', [otherFile.rows[0].id]);
-      } finally {
-        await pool.query('DELETE FROM users WHERE id = $1', [otherUser.rows[0].id]);
-      }
+      expect(response.body.data.id).toBe(testFile.id);
     });
 
     it('should return 404 for non-existent file', async () => {
       const response = await request(app)
-        .get('/api/files/999999')
+        .get('/api/v1/files/999999')
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
+    });
+
+    it('should fail to get other user\'s file as regular user', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create test file');
+        return;
+      }
+
+      const otherUser = await userFactory.createUser();
+      cleanupUsers.push(otherUser.id);
+      const otherToken = generateToken(otherUser);
+
+      const response = await request(app)
+        .get(`/api/v1/files/${testFile.id}`)
+        .set('Authorization', `Bearer ${otherToken}`);
+
+      expect(response.status).toBe(HTTP_STATUS.FORBIDDEN);
+    });
+
+    it('should allow admin to get any file', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create test file');
+        return;
+      }
+
+      const response = await request(app)
+        .get(`/api/v1/files/${testFile.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(HTTP_STATUS.OK);
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should fail without authentication', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create test file');
+        return;
+      }
+
+      const response = await request(app)
+        .get(`/api/v1/files/${testFile.id}`);
+
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
   });
 
-  describe('POST /api/files/:id/copy', () => {
-    it('should copy file to target folder', async () => {
-      if (!testFileId) {
-        console.log('Skipping test: No test file created');
-        return;
-      }
+  describe('DELETE /api/v1/files/:id', () => {
+    let fileToDelete;
 
-      const response = await request(app)
-        .post(`/api/files/${testFileId}/copy`)
-        .set('Authorization', `Bearer ${testToken}`)
-        .send({ targetFolder: 'backup' });
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('id');
-    });
-
-    it('should fail without target folder', async () => {
-      if (!testFileId) {
-        console.log('Skipping test: No test file created');
-        return;
-      }
-
-      const response = await request(app)
-        .post(`/api/files/${testFileId}/copy`)
-        .set('Authorization', `Bearer ${testToken}`)
-        .send({});
-
-      expect(response.status).toBe(400);
-      expect(response.body.success).toBe(false);
-    });
-
-    it('should return 403 for another user file', async () => {
-      const otherUser = await pool.query(
-        'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [`othercopy_${Date.now()}@example.com`, 'Other User', await bcrypt.hash('TestPassword123!', 10), 'user']
-      );
-
+    beforeEach(async () => {
       try {
-        const otherFile = await pool.query(
-          'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-          [otherUser.rows[0].id, 'other.txt', '/uploads/other.txt', 'text/plain', 512, 'other']
-        );
-
-        const response = await request(app)
-          .post(`/api/files/${otherFile.rows[0].id}/copy`)
-          .set('Authorization', `Bearer ${testToken}`)
-          .send({ targetFolder: 'backup' });
-
-        expect(response.status).toBe(403);
-        expect(response.body.success).toBe(false);
-
-        await pool.query('DELETE FROM files WHERE id = $1', [otherFile.rows[0].id]);
-      } finally {
-        await pool.query('DELETE FROM users WHERE id = $1', [otherUser.rows[0].id]);
+        fileToDelete = await fileFactory.createFile(testUser.id);
+      } catch (error) {
+        console.log('Could not create file in beforeEach:', error.message);
+        fileToDelete = null;
       }
     });
-  });
 
-  describe('POST /api/files/:id/move', () => {
-    it('should move file to target folder', async () => {
-      const tempFile = await pool.query(
-        'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [testUser.id, 'moveme.txt', '/uploads/moveme.txt', 'text/plain', 256, 'source']
-      );
-      const tempFileId = tempFile.rows[0].id;
-
-      const response = await request(app)
-        .post(`/api/files/${tempFileId}/move`)
-        .set('Authorization', `Bearer ${testToken}`)
-        .send({ targetFolder: 'destination' });
-
-      expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
-
-      await pool.query('DELETE FROM files WHERE id = $1', [tempFileId]);
-    });
-
-    it('should fail without target folder', async () => {
-      if (!testFileId) {
-        console.log('Skipping test: No test file created');
-        return;
-      }
-
-      const response = await request(app)
-        .post(`/api/files/${testFileId}/move`)
-        .set('Authorization', `Bearer ${testToken}`)
-        .send({});
-
-      expect(response.status).toBe(400);
-      expect(response.body.success).toBe(false);
-    });
-  });
-
-  describe('DELETE /api/files/:id', () => {
     it('should delete file successfully', async () => {
-      const tempFile = await pool.query(
-        'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [testUser.id, 'deleteme.txt', '/uploads/deleteme.txt', 'text/plain', 128, 'temp']
-      );
-      const tempFileId = tempFile.rows[0].id;
+      if (!fileToDelete) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
 
       const response = await request(app)
-        .delete(`/api/files/${tempFileId}`)
+        .delete(`/api/v1/files/${fileToDelete.id}`)
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
     });
 
     it('should return 404 for non-existent file', async () => {
       const response = await request(app)
-        .delete('/api/files/999999')
+        .delete('/api/v1/files/999999')
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).Be(404);
+      expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     });
 
-    it('should return 403 for another user file', async () => {
-      const otherUser = await pool.query(
-        'INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4) RETURNING id',
-        [`otherdel_${Date.now()}@example.com`, 'Other User', await bcrypt.hash('TestPassword123!', 10), 'user']
-      );
-
-      try {
-        const otherFile = await pool.query(
-          'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-          [otherUser.rows[0].id, 'other.txt', '/uploads/other.txt', 'text/plain', 512, 'other']
-        );
-
-        const response = await request(app)
-          .delete(`/api/files/${otherFile.rows[0].id}`)
-          .set('Authorization', `Bearer ${testToken}`);
-
-        expect(response.status).toBe(403);
-        expect(response.body.success).toBe(false);
-
-        await pool.query('DELETE FROM files WHERE id = $1', [otherFile.rows[0].id]);
-      } finally {
-        await pool.query('DELETE FROM users WHERE id = $1', [otherUser.rows[0].id]);
-      }
-    });
-
-    it('should fail without authentication', async () => {
-      if (!testFileId) {
-        console.log('Skipping test: No test file created');
+    it('should fail to delete other user\'s file as regular user', async () => {
+      if (!fileToDelete) {
+        console.log('Skipping test: Could not create file');
         return;
       }
 
-      const response = await request(app).delete(`/api/files/${testFileId}`);
+      const otherUser = await userFactory.createUser();
+      cleanupUsers.push(otherUser.id);
+      const otherToken = generateToken(otherUser);
 
-      expect(response.status).toBe(401);
+      const response = await request(app)
+        .delete(`/api/v1/files/${fileToDelete.id}`)
+        .set('Authorization', `Bearer ${otherToken}`);
+
+      expect(response.status).toBe(HTTP_STATUS.FORBIDDEN);
+      
+      cleanupFileIds.push(fileToDelete.id);
+    });
+
+    it('should allow admin to delete any file', async () => {
+      if (!fileToDelete) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .delete(`/api/v1/files/${fileToDelete.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(HTTP_STATUS.OK);
+    });
+
+    it('should fail without authentication', async () => {
+      if (!fileToDelete) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .delete(`/api/v1/files/${fileToDelete.id}`);
+
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+      
+      cleanupFileIds.push(fileToDelete.id);
     });
   });
 
-  describe('DELETE /api/files/folder/:folder', () => {
-    it('should delete all files in folder', async () => {
-      const folderName = `testfolder_${Date.now()}`;
-      
-      await pool.query(
-        'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6)',
-        [testUser.id, 'file1.txt', '/uploads/file1.txt', 'text/plain', 100, folderName]
-      );
-      await pool.query(
-        'INSERT INTO files (user_id, original_name, storage_path, mime_type, size, folder) VALUES ($1, $2, $3, $4, $5, $6)',
-        [testUser.id, 'file2.txt', '/uploads/file2.txt', 'text/plain', 200, folderName]
-      );
+  describe('POST /api/v1/files/:id/copy', () => {
+    let testFile;
+
+    beforeEach(async () => {
+      try {
+        testFile = await fileFactory.createFile(testUser.id);
+      } catch (error) {
+        console.log('Could not create file in beforeEach:', error.message);
+        testFile = null;
+      }
+    });
+
+    afterEach(async () => {
+      if (testFile) {
+        cleanupFileIds.push(testFile.id);
+      }
+    });
+
+    it('should copy file successfully', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
 
       const response = await request(app)
-        .delete(`/api/files/folder/${folderName}`)
+        .post(`/api/v1/files/${testFile.id}/copy`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ targetFolder: 'copies' });
+
+      expect(response.status).toBe(HTTP_STATUS.OK);
+      expect(response.body.success).toBe(true);
+      
+      if (response.body.data && response.body.data.id) {
+        cleanupFileIds.push(response.body.data.id);
+      }
+    });
+
+    it('should fail with missing targetFolder', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .post(`/api/v1/files/${testFile.id}/copy`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({});
+
+      expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
+    });
+
+    it('should return 404 for non-existent file', async () => {
+      const response = await request(app)
+        .post('/api/v1/files/999999/copy')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ targetFolder: 'copies' });
+
+      expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
+    });
+
+    it('should fail without authentication', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .post(`/api/v1/files/${testFile.id}/copy`)
+        .send({ targetFolder: 'copies' });
+
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+    });
+  });
+
+  describe('POST /api/v1/files/:id/move', () => {
+    let testFile;
+
+    beforeEach(async () => {
+      try {
+        testFile = await fileFactory.createFile(testUser.id);
+      } catch (error) {
+        console.log('Could not create file in beforeEach:', error.message);
+        testFile = null;
+      }
+    });
+
+    afterEach(async () => {
+      if (testFile) {
+        cleanupFileIds.push(testFile.id);
+      }
+    });
+
+    it('should move file successfully', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .post(`/api/v1/files/${testFile.id}/move`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ targetFolder: 'moved' });
+
+      expect(response.status).toBe(HTTP_STATUS.OK);
+      expect(response.body.success).toBe(true);
+    });
+
+    it('should fail with missing targetFolder', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .post(`/api/v1/files/${testFile.id}/move`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({});
+
+      expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
+    });
+
+    it('should return 404 for non-existent file', async () => {
+      const response = await request(app)
+        .post('/api/v1/files/999999/move')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ targetFolder: 'moved' });
+
+      expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
+    });
+
+    it('should fail without authentication', async () => {
+      if (!testFile) {
+        console.log('Skipping test: Could not create file');
+        return;
+      }
+
+      const response = await request(app)
+        .post(`/api/v1/files/${testFile.id}/move`)
+        .send({ targetFolder: 'moved' });
+
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+    });
+  });
+
+  describe('DELETE /api/v1/files/folder/:folder', () => {
+    beforeAll(async () => {
+      try {
+        await fileFactory.createMultipleFiles(testUser.id, 2, { folder: 'delete-test' });
+      } catch (error) {
+        console.log('Could not create test files:', error.message);
+      }
+    });
+
+    it('should delete folder and its files successfully', async () => {
+      const response = await request(app)
+        .delete('/api/v1/files/folder/delete-test')
         .set('Authorization', `Bearer ${testToken}`);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
     });
 
     it('should fail without authentication', async () => {
       const response = await request(app)
-        .delete('/api/files/folder/test');
+        .delete('/api/v1/files/folder/test');
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
   });
 });

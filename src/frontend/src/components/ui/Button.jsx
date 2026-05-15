@@ -9,6 +9,8 @@ const Button = ({
   type = 'button',
   onClick,
   className = '',
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
   ...props 
 }) => {
   const baseClasses = 'btn';
@@ -29,9 +31,15 @@ const Button = ({
       className={classes}
       disabled={disabled || loading}
       onClick={onClick}
+      aria-disabled={disabled || loading}
+      aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      aria-busy={loading}
       {...props}
     >
-      {loading && <span className="spinner"></span>}
+      {loading && (
+        <span className="spinner" aria-hidden="true"></span>
+      )}
       {children}
     </button>
   );

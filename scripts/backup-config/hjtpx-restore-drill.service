@@ -1,0 +1,13 @@
+[Unit]
+Description=HJTPX Restore Drill Service
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+WorkingDirectory=/workspace/hjtpx
+ExecStart=/workspace/hjtpx/scripts/restore-drill.sh full
+StandardOutput=append:/workspace/hjtpx/logs/restore_drill.log
+StandardError=append:/workspace/hjtpx/logs/restore_drill.log
+Environment="BACKUP_DIR=/var/backups/hjtpx"
+

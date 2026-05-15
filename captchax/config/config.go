@@ -17,6 +17,15 @@ type Config struct {
 	Log      LogConfig      `yaml:"log"`
 	Captcha  CaptchaConfig  `yaml:"captcha"`
 	Admin    AdminConfig    `yaml:"admin"`
+	Sentry   SentryConfig   `yaml:"sentry"`
+}
+
+type SentryConfig struct {
+	DSN              string  `yaml:"dsn"`
+	Environment      string  `yaml:"environment"`
+	Release          string  `yaml:"release"`
+	TracesSampleRate float64 `yaml:"traces_sample_rate"`
+	Debug            bool    `yaml:"debug"`
 }
 
 type AdminConfig struct {

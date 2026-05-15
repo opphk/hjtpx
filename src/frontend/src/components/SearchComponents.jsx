@@ -52,6 +52,13 @@ const SearchBar = ({ onSearch, placeholder, suggestions = [] }) => {
     }
   };
 
+  const handleSuggestionKeyDown = (e, suggestion) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSearch(suggestion);
+    }
+  };
+
   const clearRecentSearches = () => {
     setRecentSearches([]);
     localStorage.removeItem('recentSearches');
@@ -75,13 +82,20 @@ const SearchBar = ({ onSearch, placeholder, suggestions = [] }) => {
       </div>
 
       {showSuggestions && (
-        <div className="suggestions-dropdown">
+        <div className="suggestions-dropdown" role="listbox" aria-label="搜索建议">
           {filteredSuggestions.length > 0 && (
             <div className="suggestions-section">
               <h4>{t('search.suggestions')}</h4>
-              <ul>
+              <ul role="group" aria-label="建议列表">
                 {filteredSuggestions.map((suggestion, index) => (
-                  <li key={index} onClick={() => handleSearch(suggestion)}>
+                  <li 
+                    key={index} 
+                    onClick={() => handleSearch(suggestion)}
+                    onKeyDown={(e) => handleSuggestionKeyDown(e, suggestion)}
+                    role="option"
+                    tabIndex={0}
+                    aria-selected="false"
+                  >
                     {suggestion}
                   </li>
                 ))}
@@ -93,13 +107,20 @@ const SearchBar = ({ onSearch, placeholder, suggestions = [] }) => {
             <div className="recent-searches">
               <div className="section-header">
                 <h4>{t('search.recentSearches')}</h4>
-                <button onClick={clearRecentSearches} className="clear-btn">
+                <button onClick={clearRecentSearches} className="clear-btn" aria-label="清除最近搜索">
                   {t('common.delete')}
                 </button>
               </div>
-              <ul>
+              <ul role="group" aria-label="最近搜索">
                 {recentSearches.map((search, index) => (
-                  <li key={index} onClick={() => handleSearch(search)}>
+                  <li 
+                    key={index} 
+                    onClick={() => handleSearch(search)}
+                    onKeyDown={(e) => handleSuggestionKeyDown(e, search)}
+                    role="option"
+                    tabIndex={0}
+                    aria-selected="false"
+                  >
                     {search}
                   </li>
                 ))}

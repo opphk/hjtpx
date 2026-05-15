@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import Modal from '../ui/Modal';
-import Input from '../ui/Input';
-import Button from '../ui/Button';
-import Alert from '../ui/Alert';
+import Modal from './ui/Modal';
+import Input from './ui/Input';
+import Button from './ui/Button';
+import Alert from './ui/Alert';
 
 const UserEditModal = ({ isOpen, onClose, user, onSave }) => {
   const [formData, setFormData] = useState({
@@ -78,6 +78,7 @@ const UserEditModal = ({ isOpen, onClose, user, onSave }) => {
         variant="primary" 
         onClick={handleSubmit}
         loading={loading}
+        aria-label={loading ? '保存用户信息，请等待' : '保存用户信息'}
       >
         保存
       </Button>
@@ -113,16 +114,25 @@ const UserEditModal = ({ isOpen, onClose, user, onSave }) => {
         />
         
         <div className="form-group">
-          <label className="form-label">角色</label>
+          <label htmlFor="role" className="form-label">
+            角色<span className="required">*</span>
+          </label>
           <select
+            id="role"
             name="role"
             value={formData.role}
             onChange={handleChange}
             className="form-select"
+            required
+            aria-required="true"
+            aria-describedby="role-description"
           >
             <option value="user">普通用户</option>
             <option value="admin">管理员</option>
           </select>
+          <span id="role-description" className="sr-only">
+            选择用户的角色权限，普通用户或管理员
+          </span>
         </div>
       </div>
     </Modal>

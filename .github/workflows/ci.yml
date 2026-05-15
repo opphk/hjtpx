@@ -9,6 +9,9 @@ on:
 env:
   NODE_VERSION: '20'
   NODE_ENV: test
+  SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+  SENTRY_PROJECT: hjtpx-api
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -53,7 +56,7 @@ jobs:
         continue-on-error: true
 
   test:
-    name: Run Tests
+    name: Run Tests & Coverage
     runs-on: ubuntu-latest
     needs: lint
     timeout-minutes: 30
@@ -95,6 +98,7 @@ jobs:
       DB_PASSWORD: test
       REDIS_HOST: localhost
       REDIS_PORT: 6379
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
     steps:
       - name: Checkout code
@@ -121,34 +125,54 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Restore coverage history
+        uses: actions/cache@v4
+        with:
+          path: coverage/coverage-history.json
+          key: coverage-history-${{ github.run_id }}
+          restore-keys: |
+            coverage-history-
+
       - name: Run database migrations
         run: npm run migrate || echo "Migration may have already been applied"
 
-      - name: Run unit tests
-        run: npm run test:unit -- --coverage
-        continue-on-error: true
-
-      - name: Run integration tests
-        run: npm run test:integration -- --coverage
-        continue-on-error: true
-
-      - name: Run all tests
+      - name: Run tests with coverage
         run: npm run test:ci
-        continue-on-error: true
 
-      - name: Run branch coverage requirements check
+      - name: Analyze coverage
+        id: coverage
         run: |
-          if [ -f "coverage/lcov.info" ]; then
-            node scripts/check-branch-coverage.js || true
+          node scripts/coverage-analyzer.js
+          node scripts/trend-report.js
+          if [ -f coverage/analysis-result.json ]; then
+            THRESHOLD_PASSED=$(jq -r '.thresholdCheck.passed' coverage/analysis-result.json)
+            DROPPED=$(jq -r '.dropCheck.dropped' coverage/analysis-result.json)
+            echo "threshold_passed=$THRESHOLD_PASSED" >> $GITHUB_OUTPUT
+            echo "coverage_dropped=$DROPPED" >> $GITHUB_OUTPUT
           fi
         continue-on-error: true
 
-      - name: Run coverage trend analysis
+      - name: Check coverage alerts
+        id: coverage-alerts
         run: |
-          if [ -f "coverage/lcov.info" ]; then
-            node scripts/coverage-check.js || true
+          node scripts/coverage-alert.js || true
+          if [ -f coverage/coverage-alerts.json ]; then
+            CRITICAL=$(jq -r '.critical | length' coverage/coverage-alerts.json)
+            WARNING=$(jq -r '.warning | length' coverage/coverage-alerts.json)
+            echo "critical_alerts=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "warning_alerts=$WARNING" >> $GITHUB_OUTPUT
+            echo "has_critical=$([ "$CRITICAL" -gt 0 ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           fi
-        continue-on-error: true
+
+      - name: Check branch coverage requirements
+        id: branch-coverage
+        run: |
+          node scripts/branch-coverage-check.js || true
+          if [ -f coverage/branch-coverage-result.json ]; then
+            BRANCH_PASSED=$(jq -r '.passed' coverage/branch-coverage-result.json)
+            echo "branch_coverage_passed=$BRANCH_PASSED" >> $GITHUB_OUTPUT
+            echo "branch_name=$(jq -r '.branchName' coverage/branch-coverage-result.json)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -174,6 +198,66 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 14
+
+      - name: Check coverage status
+        run: |
+          echo "📊 Coverage Check Summary"
+          echo "========================"
+          
+          if [ "${{ steps.coverage.outputs.threshold_passed }}" == "false" ]; then
+            echo "❌ Coverage thresholds not met"
+          else
+            echo "✅ Coverage thresholds passed"
+          fi
+          
+          if [ "${{ steps.coverage.outputs.coverage_dropped }}" == "true" ]; then
+            echo "❌ Coverage dropped significantly"
+          else
+            echo "✅ No significant coverage drop"
+          fi
+          
+          if [ "${{ steps.coverage-alerts.outputs.has_critical }}" == "true" ]; then
+            echo "🚨 Critical coverage alerts detected"
+            echo "  Critical alerts: ${{ steps.coverage-alerts.outputs.critical_alerts }}"
+            echo "  Warning alerts: ${{ steps.coverage-alerts.outputs.warning_alerts }}"
+          fi
+          
+          if [ "${{ steps.branch-coverage.outputs.branch_coverage_passed }}" == "false" ]; then
+            echo "❌ Branch coverage requirements not met for ${{ steps.branch-coverage.outputs.branch_name }}"
+          else
+            echo "✅ Branch coverage requirements passed for ${{ steps.branch-coverage.outputs.branch_name }}"
+          fi
+          
+          if [ "${{ steps.coverage.outputs.threshold_passed }}" == "false" ] || \
+             [ "${{ steps.coverage.outputs.coverage_dropped }}" == "true" ]; then
+            exit 1
+          fi
+
+  sentry-test:
+    name: Test Sentry Integration
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test Sentry Connection
+        run: npm run sentry:test
+        continue-on-error: true
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          NODE_ENV: test
 
   security:
     name: Security Audit
@@ -264,52 +348,57 @@ jobs:
           path: /tmp/.docker
           retention-days: 1
 
+  sentry-release:
+    name: Create Sentry Release
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Sentry CLI
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli --version
+
+      - name: Create Sentry Release
+        run: |
+          export SENTRY_RELEASE="${GITHUB_SHA}"
+          sentry-cli releases new "$SENTRY_RELEASE" || echo "Release may already exist"
+          sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
+          sentry-cli releases finalize "$SENTRY_RELEASE"
+          echo "✅ Sentry release created: $SENTRY_RELEASE"
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: hjtpx-api
+
+      - name: Upload Source Maps
+        run: |
+          export SENTRY_RELEASE="${GITHUB_SHA}"
+          npm run sentry:sourcemaps || echo "Sourcemaps upload completed"
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: hjtpx-api
+          CI: true
+
   e2e-test:
     name: End-to-End Tests
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request'
     timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: hjtpx_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          --shm-size=128mb
-
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/hjtpx_test
-      REDIS_URL: redis://localhost:6379
-      JWT_SECRET: test-secret-key-for-e2e
-      NODE_ENV: test
-      BASE_URL: http://localhost:3000
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_NAME: hjtpx_test
-      DB_USER: test
-      DB_PASSWORD: test
-      REDIS_HOST: localhost
-      REDIS_PORT: 6379
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -320,49 +409,103 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Get npm cache directory
-        id: npm-cache
-        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-
-      - name: Cache node modules
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.npm-cache.outputs.dir }}
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Run database migrations
-        run: npm run migrate || echo "Migration may have already been applied"
+      - name: Install Frontend dependencies
+        run: cd src/frontend && npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Create test results directory
-        run: mkdir -p test-results
-
-      - name: Run E2E tests
-        run: npm run test:e2e || echo "E2E tests completed with warnings"
+      - name: Run Frontend E2E tests
+        run: cd src/frontend && npm run test:e2e
         continue-on-error: true
 
-      - name: Run E2E tests with video
-        if: failure()
-        run: npm run test:e2e:headed || echo "Headed test completed"
-        continue-on-error: true
-
-      - name: Upload E2E test results
+      - name: Upload Frontend E2E test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-test-results-${{ github.sha }}
-          path: |
-            test-results/
-            playwright-report/
-            playwright/
+          name: e2e-test-results
+          path: src/frontend/test-results/
           retention-days: 14
+
+      - name: Upload Frontend E2E report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-playwright-report
+          path: src/frontend/playwright-report/
+          retention-days: 14
+
+  coverage-comment:
+    name: Coverage PR Comment
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+      - name: Read coverage reports
+        id: read-reports
+        run: |
+          COVERAGE_REPORT=""
+          ALERT_REPORT=""
+          BRANCH_REPORT=""
+          TREND_REPORT=""
+          
+          if [ -f coverage/coverage-report.md ]; then
+            COVERAGE_REPORT=$(cat coverage/coverage-report.md)
+          fi
+          
+          if [ -f coverage/coverage-alert.md ]; then
+            ALERT_REPORT=$(cat coverage/coverage-alert.md)
+          fi
+          
+          if [ -f coverage/branch-coverage-check.md ]; then
+            BRANCH_REPORT=$(cat coverage/branch-coverage-check.md)
+          fi
+          
+          if [ -f coverage/trend-report.html ]; then
+            TREND_REPORT="[View Trend Report](https://htmlpreview.github.io/?$(echo $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/runs/$GITHUB_RUN_ID/artifacts)##)"
+          fi
+          
+          FULL_REPORT="${COVERAGE_REPORT}"
+          if [ -n "$ALERT_REPORT" ]; then
+            FULL_REPORT="${FULL_REPORT}"$'\n\n'"${ALERT_REPORT}"
+          fi
+          if [ -n "$BRANCH_REPORT" ]; then
+            FULL_REPORT="${FULL_REPORT}"$'\n\n'"${BRANCH_REPORT}"
+          fi
+          
+          echo "report<<EOF" >> $GITHUB_OUTPUT
+          echo "$FULL_REPORT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Find existing coverage comment
+        uses: peter-evans/find-comment@v3
+        id: fc
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '📊 测试覆盖率报告'
+
+      - name: Create or update coverage comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.fc.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.read-reports.outputs.report }}
+          edit-mode: replace
 
   quality-gate:
     name: Quality Gate
@@ -377,63 +520,18 @@ jobs:
             exit 1
           fi
           if [[ "${{ needs.test.result }}" != "success" ]]; then
-            echo "⚠️  Tests failed (may be expected)"
+            echo "❌ Tests or coverage check failed"
+            exit 1
           fi
           if [[ "${{ needs.security.result }}" != "success" ]]; then
             echo "⚠️  Security scan failed (warnings present)"
           fi
           echo "✅ Quality gate passed"
 
-  coverage-gate:
-    name: Coverage Gate
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: always() && github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Download coverage artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-
-      - name: Check branch coverage requirements
-        run: |
-          echo "🔍 Checking coverage requirements for PR..."
-          node scripts/check-branch-coverage.js
-        continue-on-error: true
-
-      - name: Check coverage trend
-        run: |
-          echo "📊 Analyzing coverage trends..."
-          node scripts/coverage-check.js
-        continue-on-error: true
-
-      - name: Coverage report summary
-        run: |
-          if [ -f "coverage/coverage-summary.json" ]; then
-            echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
-            cat coverage/coverage-summary.json >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ -f "coverage/lcov.info" ]; then
-            echo "## Detailed Coverage Report" >> $GITHUB_STEP_SUMMARY
-            npx cobertura-parse coverage/lcov.info || echo "Coverage parsing skipped"
-          fi
-        continue-on-error: true
-
   notify:
     name: Notify Status
     runs-on: ubuntu-latest
-    needs: [lint, test, security, build, quality-gate, coverage-gate]
+    needs: [lint, test, security, build, quality-gate]
     if: always()
     steps:
       - name: Prepare status message
@@ -465,15 +563,3 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-
-      - name: Create PR comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'CI Pipeline completed! Check the status above.'
-            })

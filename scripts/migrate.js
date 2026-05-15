@@ -1,6 +1,8 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const os = require('os');
 require('dotenv').config();
 
 const DB_HOST = process.env.DB_HOST || 'localhost';
@@ -8,735 +10,1020 @@ const DB_PORT = process.env.DB_PORT || 5432;
 const DB_NAME = process.env.DB_NAME || 'hjtpx';
 const DB_USER = process.env.DB_USER || 'postgres';
 const DB_PASSWORD = process.env.DB_PASSWORD || 'postgres';
-const DB_MAX_CONNECTIONS = parseInt(process.env.DB_MAX_CONNECTIONS) || 20;
-const DB_IDLE_TIMEOUT = parseInt(process.env.DB_IDLE_TIMEOUT) || 30000;
-const DB_CONNECTION_TIMEOUT = parseInt(process.env.DB_CONNECTION_TIMEOUT) || 2000;
 
-const MIGRATIONS_TABLE = 'schema_migrations';
+const MIGRATIONS_TABLE = 'migrations';
+const MIGRATION_TRACKING_TABLE = 'migration_tracking';
 const MIGRATIONS_DIR = path.join(__dirname, '../migrations');
-const ROLLBACKS_DIR = path.join(__dirname, '../migrations/rollbacks');
 
-class MigrationPerformance {
-  constructor() {
-    this.metrics = {
-      totalMigrations: 0,
-      successfulMigrations: 0,
-      failedMigrations: 0,
-      totalDuration: 0,
-      avgDuration: 0,
-      migrations: []
-    };
-  }
+const LOG_LEVELS = {
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3
+};
 
-  startMigration(name) {
-    return {
-      name,
-      startTime: Date.now(),
-      status: 'running'
-    };
-  }
+const currentLogLevel = process.env.MIGRATION_LOG_LEVEL
+  ? LOG_LEVELS[process.env.MIGRATION_LOG_LEVEL.toUpperCase()] || LOG_LEVELS.INFO
+  : LOG_LEVELS.INFO;
 
-  completeMigration(migration) {
-    migration.duration = Date.now() - migration.startTime;
-    migration.status = 'completed';
-    this.metrics.totalDuration += migration.duration;
-    this.metrics.successfulMigrations++;
-    this.metrics.migrations.push(migration);
-    return migration;
-  }
+const MIGRATION_STATUS = {
+  PENDING: 'pending',
+  EXECUTED: 'executed',
+  ROLLED_BACK: 'rolled_back',
+  FAILED: 'failed'
+};
 
-  failMigration(migration, error) {
-    migration.duration = Date.now() - migration.startTime;
-    migration.status = 'failed';
-    migration.error = error.message;
-    this.metrics.failedMigrations++;
-    this.metrics.migrations.push(migration);
-    return migration;
-  }
-
-  getMetrics() {
-    this.metrics.avgDuration = this.metrics.totalMigrations > 0 
-      ? (this.metrics.totalDuration / this.metrics.totalMigrations) 
-      : 0;
-    return {
-      ...this.metrics,
-      totalMigrations: this.metrics.successfulMigrations + this.metrics.failedMigrations,
-      successRate: this.metrics.totalMigrations > 0 
-        ? ((this.metrics.successfulMigrations / this.metrics.totalMigrations) * 100).toFixed(2) + '%'
-        : '0%'
-    };
+function log(level, message, data = null) {
+  if (level >= currentLogLevel) {
+    const timestamp = new Date().toISOString();
+    const levelName = Object.keys(LOG_LEVELS).find(k => LOG_LEVELS[k] === level) || 'INFO';
+    const logMessage = `[${timestamp}] [${levelName}] ${message}`;
+    console.log(logMessage);
+    if (data) {
+      console.log(JSON.stringify(data, null, 2));
+    }
   }
 }
 
-class MigrationTracker {
-  constructor(pool) {
-    this.pool = pool;
-  }
-
-  async createTable() {
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        duration INTEGER,
-        status VARCHAR(50) DEFAULT 'completed',
-        checksum VARCHAR(64),
-        batch INTEGER DEFAULT 1,
-        metadata JSONB
-      )
-    `);
-  }
-
-  async getAppliedMigrations() {
-    const result = await this.pool.query(
-      `SELECT name, applied_at, checksum, batch, metadata 
-       FROM ${MIGRATIONS_TABLE} 
-       ORDER BY applied_at ASC`
-    );
-    return result.rows;
-  }
-
-  async getPendingMigrations() {
-    const applied = await this.getAppliedMigrations();
-    const appliedNames = new Set(applied.map(m => m.name));
-    const files = fs.readdirSync(MIGRATIONS_DIR)
-      .filter(f => f.endsWith('.sql'))
-      .sort();
-
-    return files.filter(file => !appliedNames.has(file));
-  }
-
-  async recordMigration(name, checksum, duration, batch, metadata = {}) {
-    await this.pool.query(
-      `INSERT INTO ${MIGRATIONS_TABLE} (name, checksum, duration, batch, metadata)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [name, checksum, duration, batch, JSON.stringify(metadata)]
-    );
-  }
-
-  async removeMigrationRecord(name) {
-    await this.pool.query(
-      `DELETE FROM ${MIGRATIONS_TABLE} WHERE name = $1`,
-      [name]
-    );
-  }
-
-  async getMigrationStatus() {
-    const applied = await this.getAppliedMigrations();
-    const pending = await this.getPendingMigrations();
-    const batchResult = await this.pool.query(
-      `SELECT MAX(batch) as current_batch FROM ${MIGRATIONS_TABLE}`
-    );
-    const currentBatch = batchResult.rows[0]?.current_batch || 0;
-
-    return {
-      applied: applied.length,
-      pending: pending.length,
-      currentBatch,
-      migrations: applied,
-      pendingMigrations: pending
-    };
-  }
-
-  async getBatchNumber() {
-    const result = await this.pool.query(
-      `SELECT COALESCE(MAX(batch), 0) as batch FROM ${MIGRATIONS_TABLE}`
-    );
-    return result.rows[0].batch + 1;
-  }
-
-  async calculateChecksum(filePath) {
-    const crypto = require('crypto');
-    const content = fs.readFileSync(filePath, 'utf8');
-    return crypto.createHash('sha256').update(content).digest('hex');
-  }
-
-  async verifyMigration(name) {
-    const result = await this.pool.query(
-      `SELECT checksum FROM ${MIGRATIONS_TABLE} WHERE name = $1`,
-      [name]
-    );
-    if (result.rows.length === 0) {
-      return { verified: false, reason: 'Migration not found' };
-    }
-
-    const rollbackPath = path.join(ROLLBACKS_DIR, name.replace('.sql', '_rollback.sql'));
-    if (fs.existsSync(rollbackPath)) {
-      return { verified: true, hasRollback: true };
-    }
-    return { verified: true, hasRollback: false };
-  }
+function getMachineInfo() {
+  return {
+    hostname: os.hostname(),
+    platform: os.platform(),
+    arch: os.arch(),
+    nodeVersion: process.version,
+    pid: process.pid
+  };
 }
 
-class MigrationValidator {
-  static validateMigrationName(name) {
-    const pattern = /^\d{14}_[a-z_]+\.sql$/i;
-    if (!pattern.test(name)) {
-      throw new Error(
-        `Invalid migration name: ${name}. Expected format: YYYYMMDDHHMMSS_description.sql`
-      );
-    }
-    return true;
-  }
-
-  static validateSQL(sql) {
-    const dangerous = [
-      'DROP DATABASE',
-      'DROP SCHEMA public',
-      'TRUNCATE',
-      'DELETE FROM users',
-      'DELETE FROM sessions',
-      'ALTER ROLE',
-      'DROP ROLE'
-    ];
-
-    const upperSql = sql.toUpperCase();
-    for (const pattern of dangerous) {
-      if (upperSql.includes(pattern)) {
-        throw new Error(`Potentially dangerous SQL detected: ${pattern}`);
-      }
-    }
-    return true;
-  }
-
-  static validateRollback(sql) {
-    if (!sql.toUpperCase().includes('ROLLBACK')) {
-      console.warn('Warning: Rollback script should be tested');
-    }
-    return true;
-  }
+/**
+ * Calculate checksum of a file for integrity verification
+ */
+function calculateChecksum(filePath) {
+  const fileContent = fs.readFileSync(filePath, 'utf8');
+  return crypto.createHash('sha256').update(fileContent).digest('hex');
 }
 
+/**
+ * Parse migration file name to extract version and name
+ */
+function parseMigrationFileName(fileName) {
+  const match = fileName.match(/^(\d+)_([^.]+)\.(up|down)\.sql$/);
+  if (!match) return null;
+  return {
+    version: parseInt(match[1], 10),
+    name: match[2],
+    type: match[3]
+  };
+}
+
+/**
+ * Get all migration files sorted by version
+ */
+function getMigrationFiles() {
+  const files = fs.readdirSync(MIGRATIONS_DIR)
+    .filter(f => f.endsWith('.sql'))
+    .map(f => ({
+      fileName: f,
+      parsed: parseMigrationFileName(f)
+    }))
+    .filter(f => f.parsed !== null)
+    .sort((a, b) => a.parsed.version - b.parsed.version);
+  
+  return files;
+}
+
+/**
+ * Group migration files by version
+ */
+function groupMigrationsByVersion(files) {
+  const grouped = new Map();
+  files.forEach(({ fileName, parsed }) => {
+    if (!grouped.has(parsed.version)) {
+      grouped.set(parsed.version, {
+        version: parsed.version,
+        name: parsed.name,
+        up: null,
+        down: null
+      });
+    }
+    const migration = grouped.get(parsed.version);
+    if (parsed.type === 'up') {
+      migration.up = fileName;
+    } else {
+      migration.down = fileName;
+    }
+  });
+  return Array.from(grouped.values()).sort((a, b) => a.version - b.version);
+}
+
+/**
+ * Create migrations table if it doesn't exist
+ */
 async function createMigrationsTable(pool) {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
       id SERIAL PRIMARY KEY,
-      name VARCHAR(255) NOT NULL UNIQUE,
+      version INTEGER NOT NULL UNIQUE,
+      name VARCHAR(255) NOT NULL,
+      type VARCHAR(20) NOT NULL DEFAULT 'up',
       applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      duration INTEGER,
-      status VARCHAR(50) DEFAULT 'completed',
+      execution_time_ms INTEGER,
+      status VARCHAR(20) DEFAULT 'success',
       checksum VARCHAR(64),
-      batch INTEGER DEFAULT 1,
-      metadata JSONB
+      error_message TEXT
     )
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_migrations_batch 
-    ON ${MIGRATIONS_TABLE}(batch)
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_migrations_applied_at 
-    ON ${MIGRATIONS_TABLE}(applied_at)
   `);
 }
 
-async function migrate(options = {}) {
-  const performance = new MigrationPerformance();
+/**
+ * Create migration_tracking table if it doesn't exist
+ */
+async function createMigrationTrackingTable(pool) {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${MIGRATION_TRACKING_TABLE} (
+        migration_id SERIAL PRIMARY KEY,
+        migration_name VARCHAR(255) NOT NULL,
+        migration_version INTEGER NOT NULL,
+        migration_hash VARCHAR(64) NOT NULL,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        rollback_executed_at TIMESTAMP,
+        executed_by VARCHAR(255),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        execution_time_ms INTEGER,
+        error_message TEXT,
+        machine_name VARCHAR(255),
+        database_name VARCHAR(100)
+      )
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_migration_tracking_version
+        ON ${MIGRATION_TRACKING_TABLE}(migration_version DESC)
+    `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_migration_tracking_status
+        ON ${MIGRATION_TRACKING_TABLE}(status)
+    `);
+
+    log(LOG_LEVELS.DEBUG, 'Migration tracking table initialized');
+  } catch (error) {
+    log(LOG_LEVELS.WARN, 'Could not create migration tracking table, will retry later', {
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Record migration in tracking table
+ */
+async function recordMigrationTracking(pool, {
+  migrationName,
+  migrationVersion,
+  migrationHash,
+  executedBy,
+  status,
+  executionTimeMs,
+  errorMessage
+}) {
+  const machineInfo = getMachineInfo();
+
+  try {
+    await pool.query(`
+      INSERT INTO ${MIGRATION_TRACKING_TABLE} (
+        migration_name,
+        migration_version,
+        migration_hash,
+        executed_at,
+        executed_by,
+        status,
+        execution_time_ms,
+        error_message,
+        machine_name,
+        database_name
+      ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $5, $6, $7, $8, $9)
+    `, [
+      migrationName,
+      migrationVersion,
+      migrationHash,
+      executedBy || os.userInfo().username,
+      status,
+      executionTimeMs,
+      errorMessage,
+      machineInfo.hostname,
+      DB_NAME
+    ]);
+  } catch (error) {
+    log(LOG_LEVELS.WARN, 'Failed to record migration tracking', {
+      error: error.message,
+      migrationName,
+      migrationVersion
+    });
+  }
+}
+
+/**
+ * Update migration tracking status
+ */
+async function updateMigrationTracking(pool, migrationVersion, status, errorMessage = null) {
+  try {
+    const updates = [`status = '${status}'`];
+
+    if (status === MIGRATION_STATUS.ROLLED_BACK) {
+      updates.push('rollback_executed_at = CURRENT_TIMESTAMP');
+    }
+
+    if (errorMessage) {
+      updates.push(`error_message = '${errorMessage.replace(/'/g, "''")}'`);
+    }
+
+    await pool.query(`
+      UPDATE ${MIGRATION_TRACKING_TABLE}
+      SET ${updates.join(', ')}
+      WHERE migration_version = $1 AND status = '${MIGRATION_STATUS.EXECUTED}'
+    `, [migrationVersion]);
+  } catch (error) {
+    log(LOG_LEVELS.WARN, 'Failed to update migration tracking', {
+      error: error.message,
+      migrationVersion,
+      status
+    });
+  }
+}
+
+/**
+ * Get migration tracking records
+ */
+async function getMigrationTracking(pool, migrationVersion = null) {
+  let query = `SELECT * FROM ${MIGRATION_TRACKING_TABLE}`;
+  const params = [];
+
+  if (migrationVersion !== null) {
+    query += ' WHERE migration_version = $1';
+    params.push(migrationVersion);
+  }
+
+  query += ' ORDER BY migration_version ASC';
+
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
+/**
+ * Check database health
+ */
+async function checkDatabaseHealth(pool) {
+  try {
+    const result = await pool.query(`
+      SELECT
+        current_setting('server_version_num') as version_num,
+        current_setting('server_version') as version,
+        (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()) as active_connections,
+        (SELECT sum(xact_commit) FROM pg_stat_database WHERE datname = current_database()) as total_commits,
+        (SELECT sum(xact_rollback) FROM pg_stat_database WHERE datname = current_database()) as total_rollbacks
+    `);
+
+    const stats = result.rows[0];
+    log(LOG_LEVELS.DEBUG, 'Database health check passed', stats);
+
+    return {
+      healthy: true,
+      version: stats.version,
+      activeConnections: parseInt(stats.active_connections),
+      totalCommits: parseInt(stats.total_commits),
+      totalRollbacks: parseInt(stats.total_rollbacks)
+    };
+  } catch (error) {
+    log(LOG_LEVELS.ERROR, 'Database health check failed', { error: error.message });
+    return {
+      healthy: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get migration statistics
+ */
+async function getMigrationStats(pool) {
+  const result = await pool.query(`
+    SELECT
+      COUNT(*) FILTER (WHERE type = 'up') as total_migrations,
+      COUNT(*) FILTER (WHERE type = 'up' AND status = 'success') as successful_migrations,
+      COUNT(*) FILTER (WHERE type = 'up' AND status = 'failed') as failed_migrations,
+      COUNT(*) FILTER (WHERE type = 'down') as rollbacks,
+      MAX(applied_at) FILTER (WHERE status = 'success') as last_successful_migration,
+      MIN(applied_at) FILTER (WHERE status = 'success') as first_migration,
+      AVG(execution_time_ms) FILTER (WHERE status = 'success') as avg_execution_time
+    FROM ${MIGRATIONS_TABLE}
+  `);
+
+  return result.rows[0];
+}
+
+/**
+ * Get all applied migrations from the database
+ */
+async function getAppliedMigrations(pool) {
+  const result = await pool.query(
+    `SELECT version, name, type, applied_at, status, checksum FROM ${MIGRATIONS_TABLE} ORDER BY version ASC`
+  );
+  return result.rows;
+}
+
+/**
+ * Get current database version
+ */
+async function getCurrentVersion(pool) {
+  const result = await pool.query(
+    `SELECT version FROM ${MIGRATIONS_TABLE} WHERE type = 'up' AND status = 'success' ORDER BY version DESC LIMIT 1`
+  );
+  return result.rows.length > 0 ? result.rows[0].version : 0;
+}
+
+/**
+ * Record a migration in the database
+ */
+async function recordMigration(pool, { version, name, type, executionTime, status, checksum, errorMessage }) {
+  await pool.query(
+    `INSERT INTO ${MIGRATIONS_TABLE} (version, name, type, execution_time_ms, status, checksum, error_message)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (version) DO UPDATE SET
+       type = EXCLUDED.type,
+       applied_at = CURRENT_TIMESTAMP,
+       execution_time_ms = EXCLUDED.execution_time_ms,
+       status = EXCLUDED.status,
+       checksum = EXCLUDED.checksum,
+       error_message = EXCLUDED.error_message`,
+    [version, name, type, executionTime, status, checksum, errorMessage]
+  );
+}
+
+/**
+ * Execute a SQL file
+ */
+async function executeSqlFile(pool, filePath) {
+  const sql = fs.readFileSync(filePath, 'utf8');
+  
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const startTime = Date.now();
+    await client.query(sql);
+    const executionTime = Date.now() - startTime;
+    await client.query('COMMIT');
+    return { success: true, executionTime };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Apply pending migrations with enhanced tracking
+ */
+async function migrateUp(pool, targetVersion = null) {
+  const machineInfo = getMachineInfo();
+  const startTime = Date.now();
+
+  log(LOG_LEVELS.INFO, 'Starting migration process', {
+    targetVersion,
+    machine: machineInfo
+  });
+
+  const migrations = groupMigrationsByVersion(getMigrationFiles());
+  const appliedMigrations = await getAppliedMigrations(pool);
+  const currentVersion = await getCurrentVersion(pool);
+
+  const appliedVersions = new Set(appliedMigrations.filter(m => m.type === 'up' && m.status === 'success').map(m => m.version));
+
+  const pendingMigrations = migrations.filter(m =>
+    !appliedVersions.has(m.version) &&
+    (targetVersion === null || m.version <= targetVersion) &&
+    m.version > currentVersion
+  );
+
+  if (pendingMigrations.length === 0) {
+    log(LOG_LEVELS.INFO, 'No pending migrations found');
+    console.log('No pending migrations');
+    return;
+  }
+
+  log(LOG_LEVELS.INFO, `Found ${pendingMigrations.length} pending migration(s)`, {
+    pendingVersions: pendingMigrations.map(m => m.version)
+  });
+
+  console.log(`Found ${pendingMigrations.length} pending migration(s)`);
+
+  const results = {
+    successful: [],
+    failed: []
+  };
+
+  for (const migration of pendingMigrations) {
+    if (!migration.up) {
+      log(LOG_LEVELS.WARN, `Skipping migration ${migration.version} - no up script found`);
+      console.warn(`Skipping migration ${migration.version} - no up script found`);
+      continue;
+    }
+
+    const migrationStartTime = Date.now();
+    log(LOG_LEVELS.INFO, `Applying migration ${migration.version}: ${migration.name}`);
+
+    console.log(`Applying migration ${migration.version}: ${migration.name}`);
+    const filePath = path.join(MIGRATIONS_DIR, migration.up);
+    const checksum = calculateChecksum(filePath);
+
+    try {
+      const result = await executeSqlFile(pool, filePath);
+      const executionTime = Date.now() - migrationStartTime;
+
+      await recordMigration(pool, {
+        version: migration.version,
+        name: migration.name,
+        type: 'up',
+        executionTime: result.executionTime,
+        status: 'success',
+        checksum,
+        errorMessage: null
+      });
+
+      await recordMigrationTracking(pool, {
+        migrationName: migration.name,
+        migrationVersion: migration.version,
+        migrationHash: checksum,
+        executedBy: os.userInfo().username,
+        status: MIGRATION_STATUS.EXECUTED,
+        executionTimeMs: executionTime,
+        errorMessage: null
+      });
+
+      results.successful.push({
+        version: migration.version,
+        name: migration.name,
+        executionTime
+      });
+
+      log(LOG_LEVELS.INFO, `Migration ${migration.version} applied successfully`, {
+        executionTimeMs: executionTime,
+        checksum
+      });
+
+      console.log(`✓ Migration ${migration.version} applied successfully (${executionTime}ms)`);
+    } catch (error) {
+      const executionTime = Date.now() - migrationStartTime;
+
+      await recordMigration(pool, {
+        version: migration.version,
+        name: migration.name,
+        type: 'up',
+        executionTime: 0,
+        status: 'failed',
+        checksum,
+        errorMessage: error.message
+      });
+
+      await recordMigrationTracking(pool, {
+        migrationName: migration.name,
+        migrationVersion: migration.version,
+        migrationHash: checksum,
+        executedBy: os.userInfo().username,
+        status: MIGRATION_STATUS.FAILED,
+        executionTimeMs: executionTime,
+        errorMessage: error.message
+      });
+
+      results.failed.push({
+        version: migration.version,
+        name: migration.name,
+        error: error.message
+      });
+
+      log(LOG_LEVELS.ERROR, `Migration ${migration.version} failed`, {
+        error: error.message,
+        executionTimeMs: executionTime
+      });
+
+      console.error(`✗ Migration ${migration.version} failed:`, error.message);
+
+      const totalTime = Date.now() - startTime;
+      log(LOG_LEVELS.ERROR, 'Migration process failed', {
+        successfulCount: results.successful.length,
+        failedCount: results.failed.length,
+        totalTimeMs: totalTime
+      });
+
+      throw error;
+    }
+  }
+
+  const totalTime = Date.now() - startTime;
+  log(LOG_LEVELS.INFO, 'Migration process completed', {
+    successfulCount: results.successful.length,
+    failedCount: results.failed.length,
+    totalTimeMs: totalTime,
+    results
+  });
+}
+
+/**
+ * Rollback migrations with enhanced tracking
+ */
+async function migrateDown(pool, targetVersion = null, steps = 1) {
+  const machineInfo = getMachineInfo();
+  const startTime = Date.now();
+
+  log(LOG_LEVELS.INFO, 'Starting rollback process', {
+    targetVersion,
+    steps,
+    machine: machineInfo
+  });
+
+  const appliedMigrations = await getAppliedMigrations(pool);
+  const successfulUpMigrations = appliedMigrations
+    .filter(m => m.type === 'up' && m.status === 'success')
+    .sort((a, b) => b.version - a.version);
+
+  if (successfulUpMigrations.length === 0) {
+    log(LOG_LEVELS.INFO, 'No migrations to rollback');
+    console.log('No migrations to rollback');
+    return;
+  }
+
+  const migrations = groupMigrationsByVersion(getMigrationFiles());
+  const migrationsMap = new Map(migrations.map(m => [m.version, m]));
+
+  let migrationsToRollback;
+  if (targetVersion !== null) {
+    migrationsToRollback = successfulUpMigrations.filter(m => m.version > targetVersion);
+  } else {
+    migrationsToRollback = successfulUpMigrations.slice(0, steps);
+  }
+
+  if (migrationsToRollback.length === 0) {
+    log(LOG_LEVELS.INFO, 'No migrations to rollback based on criteria');
+    console.log('No migrations to rollback');
+    return;
+  }
+
+  log(LOG_LEVELS.INFO, `Rolling back ${migrationsToRollback.length} migration(s)`, {
+    versions: migrationsToRollback.map(m => m.version)
+  });
+
+  console.log(`Rolling back ${migrationsToRollback.length} migration(s)`);
+
+  const results = {
+    successful: [],
+    failed: []
+  };
+
+  for (const appliedMigration of migrationsToRollback) {
+    const migration = migrationsMap.get(appliedMigration.version);
+    if (!migration || !migration.down) {
+      log(LOG_LEVELS.WARN, `Skipping rollback of ${appliedMigration.version} - no down script found`);
+      console.warn(`Skipping rollback of ${appliedMigration.version} - no down script found`);
+      continue;
+    }
+
+    const migrationStartTime = Date.now();
+    log(LOG_LEVELS.INFO, `Rolling back migration ${migration.version}: ${migration.name}`);
+
+    console.log(`Rolling back migration ${migration.version}: ${migration.name}`);
+    const filePath = path.join(MIGRATIONS_DIR, migration.down);
+    const checksum = calculateChecksum(filePath);
+
+    try {
+      const result = await executeSqlFile(pool, filePath);
+      const executionTime = Date.now() - migrationStartTime;
+
+      await recordMigration(pool, {
+        version: migration.version,
+        name: migration.name,
+        type: 'down',
+        executionTime: result.executionTime,
+        status: 'success',
+        checksum,
+        errorMessage: null
+      });
+
+      await updateMigrationTracking(pool, migration.version, MIGRATION_STATUS.ROLLED_BACK);
+
+      await recordMigration(pool, {
+        version: migration.version,
+        name: migration.name,
+        type: 'up',
+        executionTime: 0,
+        status: 'rolled_back',
+        checksum,
+        errorMessage: null
+      });
+
+      results.successful.push({
+        version: migration.version,
+        name: migration.name,
+        executionTime
+      });
+
+      log(LOG_LEVELS.INFO, `Rollback of ${migration.version} completed`, {
+        executionTimeMs: executionTime
+      });
+
+      console.log(`✓ Rollback of ${migration.version} completed (${executionTime}ms)`);
+    } catch (error) {
+      const executionTime = Date.now() - migrationStartTime;
+
+      await recordMigration(pool, {
+        version: migration.version,
+        name: migration.name,
+        type: 'down',
+        executionTime: 0,
+        status: 'failed',
+        checksum,
+        errorMessage: error.message
+      });
+
+      await recordMigrationTracking(pool, {
+        migrationName: migration.name,
+        migrationVersion: migration.version,
+        migrationHash: checksum,
+        executedBy: os.userInfo().username,
+        status: MIGRATION_STATUS.FAILED,
+        executionTimeMs: executionTime,
+        errorMessage: `Rollback failed: ${error.message}`
+      });
+
+      results.failed.push({
+        version: migration.version,
+        name: migration.name,
+        error: error.message
+      });
+
+      log(LOG_LEVELS.ERROR, `Rollback of ${migration.version} failed`, {
+        error: error.message,
+        executionTimeMs: executionTime
+      });
+
+      console.error(`✗ Rollback of ${migration.version} failed:`, error.message);
+
+      const totalTime = Date.now() - startTime;
+      log(LOG_LEVELS.ERROR, 'Rollback process failed', {
+        successfulCount: results.successful.length,
+        failedCount: results.failed.length,
+        totalTimeMs: totalTime
+      });
+
+      throw error;
+    }
+  }
+
+  const totalTime = Date.now() - startTime;
+  log(LOG_LEVELS.INFO, 'Rollback process completed', {
+    successfulCount: results.successful.length,
+    failedCount: results.failed.length,
+    totalTimeMs: totalTime,
+    results
+  });
+}
+
+/**
+ * Show migration status with enhanced reporting
+ */
+async function showStatus(pool) {
+  const migrations = groupMigrationsByVersion(getMigrationFiles());
+  const appliedMigrations = await getAppliedMigrations(pool);
+  const appliedMap = new Map(appliedMigrations.map(m => [m.version, m]));
+  const currentVersion = await getCurrentVersion(pool);
+  const health = await checkDatabaseHealth(pool);
+  const stats = await getMigrationStats(pool);
+
+  let trackingStats = null;
+  try {
+    const trackingResult = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'executed') as executed,
+        COUNT(*) FILTER (WHERE status = 'rolled_back') as rolled_back,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending
+      FROM ${MIGRATION_TRACKING_TABLE}
+    `);
+    trackingStats = trackingResult.rows[0];
+  } catch (error) {
+    log(LOG_LEVELS.WARN, 'Could not fetch tracking stats', { error: error.message });
+  }
+
+  console.log('\n╔════════════════════════════════════════════════════════════════╗');
+  console.log('║              Database Migration Status Report                  ║');
+  console.log('╚════════════════════════════════════════════════════════════════╝\n');
+
+  console.log('┌─────────────────────────────────────────────────────────────────┐');
+  console.log('│ Database Information                                            │');
+  console.log('├─────────────────────────────────────────────────────────────────┤');
+  console.log(`│ Host: ${DB_HOST}:${DB_PORT}`.padEnd(64) + '│');
+  console.log(`│ Database: ${DB_NAME}`.padEnd(64) + '│');
+  console.log(`│ Version: ${health.healthy ? health.version : 'N/A'}`.padEnd(64) + '│');
+  console.log(`│ Active Connections: ${health.healthy ? health.activeConnections : 'N/A'}`.padEnd(64) + '│');
+  console.log('└─────────────────────────────────────────────────────────────────┘\n');
+
+  console.log('┌─────────────────────────────────────────────────────────────────┐');
+  console.log('│ Migration Statistics                                            │');
+  console.log('├─────────────────────────────────────────────────────────────────┤');
+  console.log(`│ Total Migrations: ${stats.total_migrations || 0}`.padEnd(64) + '│');
+  console.log(`│ Successful: ${stats.successful_migrations || 0}`.padEnd(64) + '│');
+  console.log(`│ Failed: ${stats.failed_migrations || 0}`.padEnd(64) + '│');
+  console.log(`│ Rollbacks: ${stats.rollbacks || 0}`.padEnd(64) + '│');
+  console.log(`│ Avg Execution Time: ${stats.avg_execution_time ? Math.round(stats.avg_execution_time) + 'ms' : 'N/A'}`.padEnd(64) + '│');
+  console.log(`│ Current Version: ${currentVersion}`.padEnd(64) + '│');
+  console.log('└─────────────────────────────────────────────────────────────────┘\n');
+
+  if (trackingStats) {
+    console.log('┌─────────────────────────────────────────────────────────────────┐');
+    console.log('│ Migration Tracking Statistics                                   │');
+    console.log('├─────────────────────────────────────────────────────────────────┤');
+    console.log(`│ Executed: ${trackingStats.executed || 0}`.padEnd(64) + '│');
+    console.log(`│ Rolled Back: ${trackingStats.rolled_back || 0}`.padEnd(64) + '│');
+    console.log(`│ Failed: ${trackingStats.failed || 0}`.padEnd(64) + '│');
+    console.log(`│ Pending: ${trackingStats.pending || 0}`.padEnd(64) + '│');
+    console.log('└─────────────────────────────────────────────────────────────────┘\n');
+  }
+
+  console.log('┌─────────────────────────────────────────────────────────────────┐');
+  console.log('│ Migration History                                               │');
+  console.log('├─────┬────────────────────────────────────────┬────────┬──────────┤');
+  console.log('│ Ver │ Name                                   │ Status │ Time     │');
+  console.log('├─────┼────────────────────────────────────────┼────────┼──────────┤');
+
+  migrations.forEach(migration => {
+    const applied = appliedMap.get(migration.version);
+    let status = 'pending';
+    let time = '';
+    let statusSymbol = '○';
+
+    if (applied) {
+      if (applied.type === 'up' && applied.status === 'success') {
+        status = 'applied';
+        time = applied.execution_time_ms ? `${applied.execution_time_ms}ms` : '';
+        statusSymbol = '✓';
+      } else if (applied.type === 'down' && applied.status === 'success') {
+        status = 'rolled back';
+        statusSymbol = '↺';
+      } else if (applied.status === 'failed') {
+        status = 'failed';
+        statusSymbol = '✗';
+      }
+    }
+
+    const version = migration.version.toString().padStart(3);
+    const name = migration.name.substring(0, 40).padEnd(40);
+    const statusDisplay = status.substring(0, 8).padEnd(8);
+    const timeDisplay = time.substring(0, 10).padEnd(10);
+
+    console.log(`│ ${version} │ ${name} │ ${statusDisplay} │ ${timeDisplay} │`);
+  });
+
+  console.log('└─────┴────────────────────────────────────────┴────────┴──────────┘\n');
+
+  console.log('Legend: ○ = Pending | ✓ = Applied | ↺ = Rolled Back | ✗ = Failed\n');
+
+  log(LOG_LEVELS.DEBUG, 'Status report generated', {
+    currentVersion,
+    totalMigrations: migrations.length,
+    stats,
+    trackingStats
+  });
+}
+
+/**
+ * Create a new migration
+ */
+async function createMigration(name) {
+  const migrations = groupMigrationsByVersion(getMigrationFiles());
+  const nextVersion = migrations.length > 0 ? migrations[migrations.length - 1].version + 1 : 1;
+  const timestamp = new Date().toISOString().split('T')[0];
+  
+  const upFileName = `${nextVersion.toString().padStart(3, '0')}_${name}.up.sql`;
+  const downFileName = `${nextVersion.toString().padStart(3, '0')}_${name}.down.sql`;
+  
+  const upContent = `-- Migration: ${name}
+-- Created: ${timestamp}
+-- Description: [Add description here]
+
+-- Write your migration SQL here
+
+`;
+  
+  const downContent = `-- Rollback: ${name}
+-- Description: [Add rollback description here]
+
+-- Write your rollback SQL here
+
+`;
+  
+  fs.writeFileSync(path.join(MIGRATIONS_DIR, upFileName), upContent);
+  fs.writeFileSync(path.join(MIGRATIONS_DIR, downFileName), downContent);
+  
+  console.log(`Created migration ${nextVersion}: ${name}`);
+  console.log(`  Up: ${upFileName}`);
+  console.log(`  Down: ${downFileName}`);
+}
+
+/**
+ * Main function with enhanced error handling and logging
+ */
+async function main() {
+  const startTime = Date.now();
+  const machineInfo = getMachineInfo();
+
+  const args = process.argv.slice(2);
+  const command = args[0] || 'status';
+
+  if (command === '--help' || command === '-h' || args.length === 0) {
+    console.log(`
+Usage: node migrate.js <command> [options]
+
+Commands:
+  up [version]          Apply pending migrations (optionally up to a specific version)
+  down [steps]          Rollback last [steps] migrations (default: 1)
+  down --to <version>   Rollback down to a specific version
+  status                Show migration status (default)
+  create <name>         Create a new migration
+  health                Check database health
+  stats                 Show migration statistics
+  tracking              Show migration tracking history
+
+Environment Variables:
+  DB_HOST               Database host (default: localhost)
+  DB_PORT               Database port (default: 5432)
+  DB_NAME               Database name (default: hjtpx)
+  DB_USER               Database user (default: postgres)
+  DB_PASSWORD           Database password (default: postgres)
+  MIGRATION_LOG_LEVEL   Log level: DEBUG, INFO, WARN, ERROR (default: INFO)
+
+Examples:
+  node migrate.js up
+  node migrate.js up 5
+  node migrate.js down
+  node migrate.js down 3
+  node migrate.js down --to 2
+  node migrate.js status
+  node migrate.js create add_users_table
+  node migrate.js health
+  node migrate.js stats
+  node migrate.js tracking
+  MIGRATION_LOG_LEVEL=DEBUG node migrate.js status
+`);
+    process.exit(0);
+  }
+
+  log(LOG_LEVELS.INFO, 'Migration process starting', {
+    machine: machineInfo,
+    arguments: args,
+    nodeVersion: process.version,
+    cwd: process.cwd()
+  });
+
   const pool = new Pool({
     host: DB_HOST,
     port: DB_PORT,
     database: DB_NAME,
     user: DB_USER,
     password: DB_PASSWORD,
-    max: DB_MAX_CONNECTIONS,
-    idleTimeoutMillis: DB_IDLE_TIMEOUT,
-    connectionTimeoutMillis: DB_CONNECTION_TIMEOUT
   });
 
-  const tracker = new MigrationTracker(pool);
-
   try {
+    log(LOG_LEVELS.INFO, 'Connecting to database', {
+      host: DB_HOST,
+      port: DB_PORT,
+      database: DB_NAME
+    });
+
     await createMigrationsTable(pool);
+    log(LOG_LEVELS.DEBUG, 'Migrations table initialized');
 
-    if (options.rollback) {
-      const targetName = options.to || null;
-      await rollbackMigration(pool, tracker, targetName, performance, options);
-    } else if (options.redo) {
-      await redoMigration(pool, tracker, performance, options);
-    } else if (options.reset) {
-      await resetMigrations(pool, tracker, performance, options);
-    } else {
-      await runMigrations(pool, tracker, performance, options);
-    }
+    await createMigrationTrackingTable(pool);
+    log(LOG_LEVELS.DEBUG, 'Migration tracking table initialized');
 
-    return {
-      success: true,
-      performance: performance.getMetrics(),
-      status: await tracker.getMigrationStatus()
-    };
-  } catch (error) {
-    console.error('Migration error:', error.message);
-    return {
-      success: false,
-      error: error.message,
-      performance: performance.getMetrics()
-    };
-  } finally {
-    await pool.end();
-  }
-}
-
-async function runMigrations(pool, tracker, performance, options) {
-  const pending = await tracker.getPendingMigrations();
-
-  if (pending.length === 0) {
-    console.log('No pending migrations');
-    return;
-  }
-
-  if (options.dryRun) {
-    console.log('Dry run - would apply the following migrations:');
-    pending.forEach(m => console.log(`  - ${m}`));
-    return;
-  }
-
-  const batch = await tracker.getBatchNumber();
-  console.log(`Starting migration batch ${batch}`);
-  console.log(`Found ${pending.length} pending migration(s)`);
-
-  if (!fs.existsSync(ROLLBACKS_DIR)) {
-    fs.mkdirSync(ROLLBACKS_DIR, { recursive: true });
-  }
-
-  for (const file of pending) {
-    const migration = performance.startMigration(file);
-    const startTime = Date.now();
-
-    console.log(`Applying migration: ${file}`);
-
-    const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    const checksum = await tracker.calculateChecksum(path.join(MIGRATIONS_DIR, file));
-
-    MigrationValidator.validateSQL(sql);
-
-    await pool.query('BEGIN');
-    try {
-      await pool.query(sql);
-      const duration = Date.now() - startTime;
-      await tracker.recordMigration(file, checksum, duration, batch, {
-        executedAt: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+    const dbHealth = await checkDatabaseHealth(pool);
+    if (!dbHealth.healthy) {
+      log(LOG_LEVELS.WARN, 'Database health check failed, proceeding anyway', {
+        error: dbHealth.error
       });
-      await pool.query('COMMIT');
-      performance.completeMigration(migration);
-      console.log(`Migration ${file} applied successfully (${duration}ms)`);
-
-      if (options.generateRollback) {
-        await generateRollbackScript(file, sql);
-      }
-    } catch (error) {
-      await pool.query('ROLLBACK');
-      performance.failMigration(migration, error);
-      console.error(`Migration ${file} failed: ${error.message}`);
-      throw error;
-    }
-  }
-}
-
-async function rollbackMigration(pool, tracker, targetName, performance, options) {
-  const applied = await tracker.getAppliedMigrations();
-
-  if (applied.length === 0) {
-    console.log('No migrations to rollback');
-    return;
-  }
-
-  const toRollback = targetName 
-    ? applied.filter(m => m.name === targetName || applied.indexOf(m) === applied.length - 1)
-    : [applied[applied.length - 1]];
-
-  for (const migration of toRollback.reverse()) {
-    const migrationPerf = performance.startMigration(migration.name);
-    const startTime = Date.now();
-
-    console.log(`Rolling back migration: ${migration.name}`);
-
-    const rollbackFile = path.join(
-      ROLLBACKS_DIR, 
-      migration.name.replace('.sql', '_rollback.sql')
-    );
-
-    if (!fs.existsSync(rollbackFile)) {
-      console.error(`Rollback script not found: ${rollbackFile}`);
-      if (!options.force) {
-        throw new Error(`Rollback script missing for ${migration.name}. Use --force to skip.`);
-      }
-      console.warn(`Skipping ${migration.name} - no rollback script found`);
-      continue;
+    } else {
+      log(LOG_LEVELS.DEBUG, 'Database health check passed', dbHealth);
     }
 
-    const rollbackSql = fs.readFileSync(rollbackFile, 'utf8');
-    MigrationValidator.validateRollback(rollbackSql);
+    log(LOG_LEVELS.INFO, `Executing command: ${command}`, { args });
 
-    await pool.query('BEGIN');
-    try {
-      await pool.query(rollbackSql);
-      await tracker.removeMigrationRecord(migration.name);
-      await pool.query('COMMIT');
-      const duration = Date.now() - startTime;
-      performance.completeMigration(migrationPerf);
-      console.log(`Rollback of ${migration.name} completed (${duration}ms)`);
-    } catch (error) {
-      await pool.query('ROLLBACK');
-      performance.failMigration(migrationPerf, error);
-      console.error(`Rollback ${migration.name} failed: ${error.message}`);
-      throw error;
-    }
-  }
-}
+    switch (command) {
+      case 'up':
+        const targetVersionUp = args[1] ? parseInt(args[1], 10) : null;
+        await migrateUp(pool, targetVersionUp);
+        break;
 
-async function redoMigration(pool, tracker, performance, options) {
-  const applied = await tracker.getAppliedMigrations();
-
-  if (applied.length === 0) {
-    console.log('No migrations to redo');
-    return;
-  }
-
-  const lastMigration = applied[applied.length - 1];
-  console.log(`Redoing migration: ${lastMigration.name}`);
-
-  const rollbackFile = path.join(
-    ROLLBACKS_DIR, 
-    lastMigration.name.replace('.sql', '_rollback.sql')
-  );
-
-  if (!fs.existsSync(rollbackFile)) {
-    throw new Error(`Rollback script not found for ${lastMigration.name}`);
-  }
-
-  const rollbackSql = fs.readFileSync(rollbackFile, 'utf8');
-  const migrationSql = fs.readFileSync(path.join(MIGRATIONS_DIR, lastMigration.name), 'utf8');
-
-  await pool.query('BEGIN');
-  try {
-    await pool.query(rollbackSql);
-    console.log(`Rolled back ${lastMigration.name}`);
-
-    await pool.query(migrationSql);
-    console.log(`Re-applied ${lastMigration.name}`);
-
-    await pool.query('COMMIT');
-  } catch (error) {
-    await pool.query('ROLLBACK');
-    throw error;
-  }
-}
-
-async function resetMigrations(pool, tracker, performance, options) {
-  const applied = await tracker.getAppliedMigrations();
-
-  if (applied.length === 0) {
-    console.log('No migrations to reset');
-    return;
-  }
-
-  console.log(`Resetting ${applied.length} migrations`);
-
-  for (const migration of applied.reverse()) {
-    const rollbackFile = path.join(
-      ROLLBACKS_DIR, 
-      migration.name.replace('.sql', '_rollback.sql')
-    );
-
-    if (fs.existsSync(rollbackFile)) {
-      const rollbackSql = fs.readFileSync(rollbackFile, 'utf8');
-
-      await pool.query('BEGIN');
-      try {
-        await pool.query(rollbackSql);
-        await tracker.removeMigrationRecord(migration.name);
-        await pool.query('COMMIT');
-        console.log(`Rolled back ${migration.name}`);
-      } catch (error) {
-        await pool.query('ROLLBACK');
-        console.error(`Failed to rollback ${migration.name}: ${error.message}`);
-        if (!options.force) {
-          throw error;
+      case 'down':
+        if (args[1] === '--to' && args[2]) {
+          await migrateDown(pool, parseInt(args[2], 10));
+        } else if (args[1]) {
+          await migrateDown(pool, null, parseInt(args[1], 10));
+        } else {
+          await migrateDown(pool);
         }
-      }
-    }
-  }
-}
+        break;
 
-async function generateRollbackScript(migrationName, sql) {
-  const statements = sql.split(';').filter(s => s.trim());
-  const rollbackStatements = [];
+      case 'status':
+        await showStatus(pool);
+        break;
 
-  for (const statement of statements.reverse()) {
-    const trimmed = statement.trim();
-    const rollback = generateRollbackStatement(trimmed);
-    if (rollback) {
-      rollbackStatements.push(rollback);
-    }
-  }
-
-  const rollbackContent = `-- Rollback for: ${migrationName}
--- Generated: ${new Date().toISOString()}
--- This script reverts the changes made by ${migrationName}
-
-BEGIN;
-
-${rollbackStatements.join(';\n\n')};
-
-COMMIT;
-`;
-
-  const rollbackFile = path.join(
-    ROLLBACKS_DIR, 
-    migrationName.replace('.sql', '_rollback.sql')
-  );
-
-  fs.writeFileSync(rollbackFile, rollbackContent);
-  console.log(`Generated rollback script: ${path.basename(rollbackFile)}`);
-}
-
-function generateRollbackStatement(statement) {
-  const upper = statement.toUpperCase();
-
-  if (upper.startsWith('CREATE TABLE')) {
-    const tableName = statement.match(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?(\w+)/i);
-    if (tableName) {
-      return `-- Drop table ${tableName[1]}\nDROP TABLE IF EXISTS ${tableName[1]} CASCADE;`;
-    }
-  }
-
-  if (upper.startsWith('CREATE INDEX') || upper.startsWith('CREATE UNIQUE INDEX')) {
-    const indexMatch = statement.match(/CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF NOT EXISTS\s+)?(\w+)/i);
-    if (indexMatch) {
-      return `-- Drop index ${indexMatch[1]}\nDROP INDEX IF EXISTS ${indexMatch[1]};`;
-    }
-  }
-
-  if (upper.startsWith('ALTER TABLE')) {
-    const addColumnMatch = statement.match(/ALTER TABLE (\w+) ADD COLUMN (\w+)/i);
-    if (addColumnMatch) {
-      return `-- Drop column ${addColumnMatch[2]} from ${addColumnMatch[1]}\nALTER TABLE ${addColumnMatch[1]} DROP COLUMN ${addColumnMatch[2]};`;
-    }
-
-    const addConstraintMatch = statement.match(/ALTER TABLE (\w+) ADD CONSTRAINT (\w+)/i);
-    if (addConstraintMatch) {
-      return `-- Drop constraint ${addConstraintMatch[2]} from ${addConstraintMatch[1]}\nALTER TABLE ${addConstraintMatch[1]} DROP CONSTRAINT ${addConstraintMatch[2]};`;
-    }
-  }
-
-  if (upper.startsWith('CREATE FUNCTION') || upper.startsWith('CREATE PROCEDURE')) {
-    const funcMatch = statement.match(/CREATE\s+(?:FUNCTION|PROCEDURE)\s+(\w+)/i);
-    if (funcMatch) {
-      return `-- Drop function/procedure ${funcMatch[1]}\nDROP FUNCTION IF EXISTS ${funcMatch[1]} CASCADE;`;
-    }
-  }
-
-  if (upper.startsWith('CREATE TRIGGER')) {
-    const triggerMatch = statement.match(/CREATE TRIGGER\s+(\w+)/i);
-    if (triggerMatch) {
-      return `-- Drop trigger ${triggerMatch[1]}\nDROP TRIGGER IF EXISTS ${triggerMatch[1]};`;
-    }
-  }
-
-  if (upper.startsWith('CREATE TYPE')) {
-    const typeMatch = statement.match(/CREATE TYPE\s+(\w+)/i);
-    if (typeMatch) {
-      return `-- Drop type ${typeMatch[1]}\nDROP TYPE IF EXISTS ${typeMatch[1]};`;
-    }
-  }
-
-  if (upper.startsWith('INSERT INTO')) {
-    return `-- Note: Manual data cleanup may be required for INSERT statements\n-- ${statement.substring(0, 100)}...`;
-  }
-
-  return null;
-}
-
-async function status(options = {}) {
-  const pool = new Pool({
-    host: DB_HOST,
-    port: DB_PORT,
-    database: DB_NAME,
-    user: DB_USER,
-    password: DB_PASSWORD
-  });
-
-  const tracker = new MigrationTracker(pool);
-
-  try {
-    const status = await tracker.getMigrationStatus();
-
-    console.log('\n=== Migration Status ===');
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Current Batch: ${status.currentBatch}`);
-    console.log(`Applied: ${status.applied}`);
-    console.log(`Pending: ${status.pending}`);
-    
-    if (status.applied > 0) {
-      console.log('\nApplied migrations:');
-      for (const m of status.migrations) {
-        const rollbackExists = fs.existsSync(
-          path.join(ROLLBACKS_DIR, m.name.replace('.sql', '_rollback.sql'))
-        );
-        console.log(`  ✓ ${m.name} (batch: ${m.batch}, rollback: ${rollbackExists ? 'yes' : 'no'})`);
-      }
-    }
-    
-    if (status.pending > 0) {
-      console.log('\nPending migrations:');
-      for (const m of status.pendingMigrations) {
-        console.log(`  ○ ${m}`);
-      }
-    }
-    console.log('========================\n');
-
-    if (options.verbose) {
-      const applied = await tracker.getAppliedMigrations();
-      console.log('\nDetailed Migration History:');
-      for (const m of applied) {
-        console.log(`  ${m.name}:`);
-        console.log(`    Applied: ${m.applied_at}`);
-        console.log(`    Duration: ${m.duration}ms`);
-        console.log(`    Status: ${m.status}`);
-        if (m.metadata) {
-          console.log(`    Metadata: ${JSON.stringify(m.metadata)}`);
+      case 'create':
+        if (args[1]) {
+          await createMigration(args[1]);
+        } else {
+          console.error('Please provide a migration name');
+          process.exit(1);
         }
-      }
+        break;
+
+      case 'health':
+        const health = await checkDatabaseHealth(pool);
+        console.log('\n=== Database Health Check ===');
+        console.log(JSON.stringify(health, null, 2));
+        break;
+
+      case 'stats':
+        const stats = await getMigrationStats(pool);
+        console.log('\n=== Migration Statistics ===');
+        console.log(JSON.stringify(stats, null, 2));
+        break;
+
+      case 'tracking':
+        const tracking = await getMigrationTracking(pool);
+        console.log('\n=== Migration Tracking History ===');
+        if (tracking.length === 0) {
+          console.log('No migration tracking records found.');
+        } else {
+          console.log(`Found ${tracking.length} tracking record(s):\n`);
+          console.table(tracking.map(t => ({
+            Version: t.migration_version,
+            Name: t.migration_name,
+            Status: t.status,
+            Executed: t.executed_at ? new Date(t.executed_at).toLocaleString() : 'N/A',
+            'Rollback At': t.rollback_executed_at ? new Date(t.rollback_executed_at).toLocaleString() : 'N/A',
+            'By': t.executed_by,
+            'Time (ms)': t.execution_time_ms
+          })));
+        }
+        break;
+
+      default:
+        console.error(`Unknown command: ${command}`);
+        console.log('\nRun "node migrate.js --help" for usage information.');
+        process.exit(1);
     }
 
-    return status;
+    const executionTime = Date.now() - startTime;
+    log(LOG_LEVELS.INFO, 'Migration process completed', {
+      command,
+      executionTimeMs: executionTime,
+      success: true
+    });
+
   } catch (error) {
-    console.error('Error getting migration status:', error.message);
-    throw error;
+    const executionTime = Date.now() - startTime;
+    log(LOG_LEVELS.ERROR, 'Migration process failed', {
+      command: process.argv.slice(2),
+      executionTimeMs: executionTime,
+      error: error.message,
+      stack: error.stack
+    });
+
+    console.error('\n❌ Migration failed:', error.message);
+    if (process.env.MIGRATION_LOG_LEVEL === 'DEBUG') {
+      console.error(error.stack);
+    }
+    process.exit(1);
   } finally {
     await pool.end();
-  }
-}
-
-async function create(name, options = {}) {
-  const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-  const filename = `${timestamp}_${name}.sql`;
-  const filepath = path.join(MIGRATIONS_DIR, filename);
-
-  const template = `-- Migration: ${name}
--- Created: ${new Date().toISOString()}
--- Description: TODO: Add description
-
-BEGIN;
-
--- TODO: Write migration SQL here
-
-COMMIT;
-`;
-
-  fs.writeFileSync(filepath, template);
-  console.log(`Created migration: ${filename}`);
-
-  if (options.withRollback) {
-    const rollbackFilename = `${timestamp}_${name}_rollback.sql`;
-    const rollbackPath = path.join(ROLLBACKS_DIR, rollbackFilename);
-
-    if (!fs.existsSync(ROLLBACKS_DIR)) {
-      fs.mkdirSync(ROLLBACKS_DIR, { recursive: true });
-    }
-
-    const rollbackTemplate = `-- Rollback for: ${filename}
--- Created: ${new Date().toISOString()}
-
-BEGIN;
-
--- TODO: Write rollback SQL here
-
-COMMIT;
-`;
-
-    fs.writeFileSync(rollbackPath, rollbackTemplate);
-    console.log(`Created rollback script: ${rollbackFilename}`);
-  }
-}
-
-function main() {
-  const args = process.argv.slice(2);
-  const command = args[0];
-
-  const options = {
-    dryRun: args.includes('--dry-run'),
-    force: args.includes('--force'),
-    generateRollback: args.includes('--generate-rollback'),
-    verbose: args.includes('--verbose')
-  };
-
-  const targetIndex = args.indexOf('--to');
-  if (targetIndex !== -1 && args[targetIndex + 1]) {
-    options.to = args[targetIndex + 1];
-  }
-
-  switch (command) {
-    case 'up':
-      migrate({ ...options, rollback: false })
-        .then((result) => {
-          console.log('\nMigration Result:', result.success ? 'SUCCESS' : 'FAILED');
-          process.exit(result.success ? 0 : 1);
-        })
-        .catch(() => process.exit(1));
-      break;
-    case 'down':
-      migrate({ ...options, rollback: true })
-        .then((result) => {
-          console.log('\nRollback Result:', result.success ? 'SUCCESS' : 'FAILED');
-          process.exit(result.success ? 0 : 1);
-        })
-        .catch(() => process.exit(1));
-      break;
-    case 'redo':
-      migrate({ ...options, redo: true })
-        .then((result) => {
-          console.log('\nRedo Result:', result.success ? 'SUCCESS' : 'FAILED');
-          process.exit(result.success ? 0 : 1);
-        })
-        .catch(() => process.exit(1));
-      break;
-    case 'reset':
-      migrate({ ...options, reset: true })
-        .then((result) => {
-          console.log('\nReset Result:', result.success ? 'SUCCESS' : 'FAILED');
-          process.exit(result.success ? 0 : 1);
-        })
-        .catch(() => process.exit(1));
-      break;
-    case 'status':
-      status({ verbose: options.verbose })
-        .then(() => process.exit(0))
-        .catch(() => process.exit(1));
-      break;
-    case 'create':
-      if (args[1]) {
-        create(args[1], { withRollback: options.generateRollback });
-      } else {
-        console.error('Please provide a migration name');
-        process.exit(1);
-      }
-      break;
-    default:
-      console.log('Usage: node migrate.js [up|down|redo|reset|status|create <name>]');
-      console.log('Options:');
-      console.log('  --dry-run         Preview migrations without applying');
-      console.log('  --force           Force operation (skip safety checks)');
-      console.log('  --generate-rollback  Generate rollback scripts');
-      console.log('  --verbose         Show detailed information');
-      console.log('  --to <migration>  Target migration for rollback');
-      process.exit(1);
+    log(LOG_LEVELS.DEBUG, 'Database connection closed');
   }
 }
 
 if (require.main === module) {
-  main();
+  main().catch(error => {
+    console.error('Migration error:', error);
+    process.exit(1);
+  });
 }
 
 module.exports = {
-  migrate,
-  status,
-  create,
-  MigrationTracker,
-  MigrationValidator,
-  MigrationPerformance
+  migrateUp,
+  migrateDown,
+  showStatus,
+  createMigration,
+  getMigrationFiles,
+  getCurrentVersion,
+  checkDatabaseHealth,
+  getMigrationStats,
+  LOG_LEVELS
 };

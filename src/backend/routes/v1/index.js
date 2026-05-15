@@ -8,9 +8,8 @@ const healthRoutes = require('./health');
 const passwordRoutes = require('./password');
 const performanceRoutes = require('./performance');
 const usersRoutes = require('./users');
-const versionsRoutes = require('./versions');
-const cacheRoutes = require('./cache');
-const poolMonitoringRoutes = require('./poolMonitoring');
+const monitoringRoutes = require('./monitoring');
+const securityRoutes = require('./security');
 
 router.use('/health', healthRoutes);
 router.use('/users', usersRoutes);
@@ -18,9 +17,8 @@ router.use('/auth', authRoutes);
 router.use('/password', passwordRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/admin', adminRoutes);
-router.use('/versions', versionsRoutes);
-router.use('/cache', cacheRoutes);
-router.use('/pool', poolMonitoringRoutes);
+router.use('/monitoring', monitoringRoutes);
+router.use('/security', securityRoutes);
 
 router.get('/', (req, res) => {
   res.json({
@@ -36,9 +34,7 @@ router.get('/', (req, res) => {
         password: '/api/v1/password',
         performance: '/api/v1/performance',
         admin: '/api/v1/admin',
-        versions: '/api/v1/versions',
-        cache: '/api/v1/cache',
-        pool: '/api/v1/pool'
+        monitoring: '/api/v1/monitoring'
       },
       timestamp: new Date().toISOString()
     }

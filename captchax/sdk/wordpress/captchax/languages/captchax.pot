@@ -1,0 +1,63 @@
+# Copyright (C) 2024 CaptchaX Team
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: CaptchaX 1.0.0\n"
+"Report-Msgid-Bugs-To: https://captchax.com/support\n"
+"POT-Creation-Date: 2024-01-01 00:00:00+0000\n"
+"PO-Revision-Date: 2024-01-01 00:00:00+0000\n"
+"Last-Translator: CaptchaX Team <support@captchax.com>\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "请先完成验证"
+msgstr "Please complete the verification first"
+
+msgid "请完成验证码"
+msgstr "Please complete the captcha"
+
+msgid "验证码验证失败"
+msgstr "Captcha verification failed"
+
+msgid "设置已保存"
+msgstr "Settings saved"
+
+msgid "CaptchaX 设置"
+msgstr "CaptchaX Settings"
+
+msgid "评论表单"
+msgstr "Comment Form"
+
+msgid "登录表单"
+msgstr "Login Form"
+
+msgid "注册表单"
+msgstr "Registration Form"
+
+msgid "找回密码表单"
+msgstr "Lost Password Form"
+
+msgid "浅色"
+msgstr "Light"
+
+msgid "深色"
+msgstr "Dark"
+
+msgid "滑块验证"
+msgstr "Slider Verification"
+
+msgid "点选验证"
+msgstr "Click Verification"
+
+msgid "拼图验证"
+msgstr "Puzzle Verification"
+
+msgid "旋转验证"
+msgstr "Rotate Verification"
+
+msgid "文字验证"
+msgstr "Text Verification"

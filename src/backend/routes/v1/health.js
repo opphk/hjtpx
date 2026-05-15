@@ -187,6 +187,64 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+router.get('/pool-stats', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+
+    const poolStats = db.getPoolStats ? db.getPoolStats() : {};
+    const queryStats = db.getQueryStats ? db.getQueryStats() : {};
+    const detailedStats = db.getDetailedStats ? db.getDetailedStats() : {};
+
+    res.json({
+      success: true,
+      data: {
+        pool: poolStats,
+        queries: queryStats,
+        detailed: detailedStats
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' 
+        ? error.message 
+        : 'Failed to retrieve pool statistics'
+    });
+  }
+});
+
+router.get('/pool-health', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+
+    const health = db.healthCheck ? await db.healthCheck() : { healthy: false };
+
+    const statusCode = health.healthy ? 200 : 503;
+
+    res.status(statusCode).json({
+      success: health.healthy,
+      data: health
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' 
+        ? error.message 
+        : 'Health check failed'
+    });
+  }
+});
+
 router.post('/stats/reset', async (req, res) => {
   try {
     if (!cacheService) {
@@ -205,6 +263,33 @@ router.post('/stats/reset', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to reset cache stats'
+    });
+  }
+});
+
+router.post('/pool-stats/reset', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database connection not available'
+      });
+    }
+
+    if (db.resetStats) {
+      db.resetStats();
+    }
+
+    res.json({
+      success: true,
+      message: 'Pool statistics reset successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' 
+        ? error.message 
+        : 'Failed to reset pool statistics'
     });
   }
 });

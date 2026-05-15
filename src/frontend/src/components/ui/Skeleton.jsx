@@ -1,6 +1,13 @@
 import React from 'react';
 
-const Skeleton = ({ width, height, borderRadius = '4px', style = {} }) => {
+const Skeleton = ({ 
+  width, 
+  height, 
+  borderRadius = '4px', 
+  style = {},
+  'aria-hidden': ariaHidden = true,
+  ...props
+}) => {
   return (
     <div
       className="skeleton"
@@ -10,13 +17,27 @@ const Skeleton = ({ width, height, borderRadius = '4px', style = {} }) => {
         borderRadius,
         ...style
       }}
+      aria-hidden={ariaHidden}
+      {...props}
     />
   );
 };
 
-export const SkeletonText = ({ lines = 3, lastLineWidth = '60%' }) => {
+export const SkeletonText = ({ 
+  lines = 3, 
+  lastLineWidth = '60%',
+  'aria-label': ariaLabel = '文本加载中',
+  ...props
+}) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
       {Array.from({ length: lines }).map((_, index) => (
         <Skeleton
           key={index}
@@ -28,35 +49,88 @@ export const SkeletonText = ({ lines = 3, lastLineWidth = '60%' }) => {
   );
 };
 
-export const SkeletonTitle = ({ width = '40%' }) => {
-  return <Skeleton height="24px" width={width} />;
-};
-
-export const SkeletonAvatar = ({ size = 48 }) => {
-  return <Skeleton width={size} height={size} borderRadius="50%" />;
-};
-
-export const SkeletonCard = ({ showAvatar = false, showImage = false }) => {
+export const SkeletonTitle = ({ 
+  width = '40%',
+  'aria-label': ariaLabel = '标题加载中',
+  ...props
+}) => {
   return (
-    <div className="skeleton-card">
-      {showImage && <div className="skeleton-image" />}
-      {showAvatar && (
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-          <SkeletonAvatar />
-          <div style={{ flex: 1 }}>
-            <SkeletonText lines={2} />
-          </div>
-        </div>
-      )}
-      {!showAvatar && <SkeletonTitle />}
-      <SkeletonText lines={3} />
+    <div
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
+      <Skeleton height="24px" width={width} />
     </div>
   );
 };
 
-export const SkeletonTable = ({ rows = 5, columns = 4 }) => {
+export const SkeletonAvatar = ({ 
+  size = 48,
+  'aria-label': ariaLabel = '头像加载中',
+  ...props
+}) => {
   return (
-    <div className="skeleton-card" style={{ padding: 0 }}>
+    <div
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
+      <Skeleton width={size} height={size} borderRadius="50%" />
+    </div>
+  );
+};
+
+export const SkeletonCard = ({ 
+  showAvatar = false, 
+  showImage = false,
+  'aria-label': ariaLabel = '卡片内容加载中',
+  ...props
+}) => {
+  return (
+    <div 
+      className="skeleton-card"
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
+      {showImage && <div className="skeleton-image" aria-hidden="true" />}
+      {showAvatar && (
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+          <SkeletonAvatar aria-hidden="true" />
+          <div style={{ flex: 1 }}>
+            <SkeletonText lines={2} aria-hidden="true" />
+          </div>
+        </div>
+      )}
+      {!showAvatar && <SkeletonTitle aria-hidden="true" />}
+      <SkeletonText lines={3} aria-hidden="true" />
+    </div>
+  );
+};
+
+export const SkeletonTable = ({ 
+  rows = 5, 
+  columns = 4,
+  'aria-label': ariaLabel = '表格内容加载中',
+  ...props
+}) => {
+  return (
+    <div 
+      className="skeleton-card" 
+      style={{ padding: 0 }}
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
       <div style={{ display: 'flex', gap: '16px', padding: '16px', borderBottom: '1px solid #f0f0f0' }}>
         {Array.from({ length: columns }).map((_, colIndex) => (
           <Skeleton key={colIndex} height="20px" style={{ flex: 1 }} />
@@ -81,9 +155,20 @@ export const SkeletonTable = ({ rows = 5, columns = 4 }) => {
   );
 };
 
-export const SkeletonList = ({ items = 3 }) => {
+export const SkeletonList = ({ 
+  items = 3,
+  'aria-label': ariaLabel = '列表内容加载中',
+  ...props
+}) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
       {Array.from({ length: items }).map((_, index) => (
         <div
           key={index}
@@ -96,9 +181,9 @@ export const SkeletonList = ({ items = 3 }) => {
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
           }}
         >
-          <SkeletonAvatar />
+          <SkeletonAvatar aria-hidden="true" />
           <div style={{ flex: 1 }}>
-            <SkeletonText lines={2} />
+            <SkeletonText lines={2} aria-hidden="true" />
           </div>
         </div>
       ))}
@@ -106,9 +191,20 @@ export const SkeletonList = ({ items = 3 }) => {
   );
 };
 
-export const SkeletonForm = ({ fields = 3 }) => {
+export const SkeletonForm = ({ 
+  fields = 3,
+  'aria-label': ariaLabel = '表单内容加载中',
+  ...props
+}) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div 
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      role="status"
+      aria-label={ariaLabel}
+      aria-live="polite"
+      aria-busy={true}
+      {...props}
+    >
       {Array.from({ length: fields }).map((_, index) => (
         <div key={index}>
           <Skeleton height="16px" width="100px" style={{ marginBottom: '8px' }} />

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/white"
+    android:padding="16dp">
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/captchaImage"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:scaleType="fitCenter"
+        android:background="#f5f5f5"
+        android:contentDescription="@string/captcha_image_description" />
+
+    <TextView
+        android:id="@+id/instructionText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="#80000000"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="@string/default_instruction"
+        android:textColor="@android:color/white"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:id="@+id/sliderBar"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/slider_bar_background"
+        android:orientation="horizontal"
+        android:padding="4dp">
+
+        <View
+            android:id="@+id/sliderThumb"
+            android:layout_width="48dp"
+            android:layout_height="40dp"
+            android:background="@drawable/slider_thumb_background" />
+
+    </LinearLayout>
+
+</FrameLayout>

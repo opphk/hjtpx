@@ -39,3 +39,10 @@ admin:
   jwt_secret: "captchax-admin-jwt-secret-change-in-production-2026"
   token_ttl_seconds: 86400
   cookie_name: "admin_token"
+
+sentry:
+  dsn: ""
+  environment: "development"
+  release: "captchax@1.0.0"
+  traces_sample_rate: 1.0
+  debug: false

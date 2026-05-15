@@ -3,7 +3,10 @@ package service
 import (
 	serverconfig "captchax/config"
 	"captchax/internal/captcha/click"
+	"captchax/internal/captcha/icon"
+	"captchax/internal/captcha/rotate"
 	"captchax/internal/captcha/slider"
+	"captchax/internal/captcha/text"
 	"captchax/internal/config"
 	"captchax/internal/log"
 	"captchax/internal/model"
@@ -31,6 +34,15 @@ type CaptchaService struct {
 	clickGen     *click.CaptchaGenerator
 	clickVerify  *click.ClickVerifier
 	clickCache   click.CaptchaCache
+	rotateGen    *rotate.Rotate
+	rotateVerify *rotate.VerifyService
+	rotateCache  *rotate.CacheManager
+	textGen      *text.Text
+	textVerify   *text.VerifyService
+	textCache    *text.CacheManager
+	iconGen      *icon.IconCaptcha
+	iconVerify   *icon.VerifyService
+	iconCache    *icon.CacheManager
 	riskEngine   *risk.RiskEngine
 }
 
@@ -77,6 +89,49 @@ type PuzzleCaptchaResult struct {
 }
 
 type PuzzleVerifyResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type RotateCaptchaResult struct {
+	ID          string `json:"id"`
+	ImageB64    string `json:"image_b64"`
+	OriginalB64 string `json:"original_b64"`
+}
+
+type RotateVerifyResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type TextCaptchaResult struct {
+	ID       string `json:"id"`
+	ImageB64 string `json:"image_b64"`
+}
+
+type TextVerifyResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type IconInfoDTO struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	SVG    string `json:"svg"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+type IconCaptchaResult struct {
+	ID          string        `json:"id"`
+	TargetIcons []IconInfoDTO `json:"target_icons"`
+	AllIcons    []IconInfoDTO `json:"all_icons"`
+	GridCols    int           `json:"grid_cols"`
+	GridRows    int           `json:"grid_rows"`
+	IconSize    int           `json:"icon_size"`
+}
+
+type IconVerifyResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
@@ -135,6 +190,18 @@ func NewCaptchaService(
 
 	clickVerify := click.NewClickVerifier(clickCache)
 
+	rotateCache := rotate.NewCacheManager(&cfg.Captcha, redisClient)
+	rotateGen := rotate.New(&cfg.Captcha, redisClient)
+	rotateVerify := rotate.NewVerifyService(&cfg.Captcha, rotateCache)
+
+	textCache := text.NewCacheManager(&cfg.Captcha, redisClient)
+	textGen := text.New(&cfg.Captcha, redisClient)
+	textVerify := text.NewVerifyService(&cfg.Captcha, textCache)
+
+	iconCache := icon.NewCacheManager(&cfg.Captcha, redisClient)
+	iconGen := icon.New(&cfg.Captcha, redisClient)
+	iconVerify := icon.NewVerifyService(&cfg.Captcha, iconCache)
+
 	riskEngine := risk.NewRiskEngine(riskCfg, ipLimit, whitelist)
 
 	return &CaptchaService{
@@ -147,6 +214,15 @@ func NewCaptchaService(
 		clickGen:     clickGen,
 		clickVerify:  clickVerify,
 		clickCache:   clickCache,
+		rotateGen:    rotateGen,
+		rotateVerify: rotateVerify,
+		rotateCache:  rotateCache,
+		textGen:      textGen,
+		textVerify:   textVerify,
+		textCache:    textCache,
+		iconGen:      iconGen,
+		iconVerify:   iconVerify,
+		iconCache:    iconCache,
 		riskEngine:   riskEngine,
 	}, nil
 }
@@ -409,6 +485,215 @@ func (s *CaptchaService) VerifyPuzzleCaptcha(ctx context.Context, captchaID stri
 		Success: false,
 		Message: fmt.Sprintf("verification failed: distance %.2f exceeds tolerance %d", distance, tolerance),
 	}, errors.New("verification failed")
+}
+
+func (s *CaptchaService) GenerateRotateCaptcha(ctx context.Context, appID, clientInfo string) (*RotateCaptchaResult, error) {
+	behavior := &risk.BehaviorData{
+		SessionID: uuid.New().String(),
+	}
+
+	riskResult := s.riskEngine.CalculateRiskScore(ctx, behavior, "", appID)
+	if riskResult.Recommended == risk.ActionBlock {
+		return nil, errors.New("risk level too high")
+	}
+
+	result, err := s.rotateGen.GenerateCaptcha(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	captcha := &model.Captcha{
+		ID:         result.ID,
+		AppID:      appID,
+		Type:       string(model.CaptchaTypeRotate),
+		ImageData:  result.ImageB64,
+		Status:     int(model.CaptchaStatusPending),
+		ClientInfo: clientInfo,
+		ExpiredAt:  time.Now().Add(time.Duration(s.cfg.Captcha.ExpireMinutes) * time.Minute),
+	}
+	if err := s.saveCaptchaRecord(captcha); err != nil {
+		log.Error("failed to save rotate captcha record", map[string]interface{}{
+			"error": err.Error(),
+			"id":    result.ID,
+		})
+	}
+
+	return &RotateCaptchaResult{
+		ID:          result.ID,
+		ImageB64:    result.ImageB64,
+		OriginalB64: result.OriginalB64,
+	}, nil
+}
+
+func (s *CaptchaService) VerifyRotateCaptcha(ctx context.Context, captchaID string, angle int) (*RotateVerifyResult, error) {
+	req := &rotate.VerifyRequest{
+		CaptchaID: captchaID,
+		Angle:     angle,
+	}
+
+	result, err := s.rotateVerify.Verify(ctx, req)
+	if err != nil {
+		return &RotateVerifyResult{
+			Success: false,
+			Message: result.Message,
+		}, err
+	}
+
+	if result.Success {
+		s.updateCaptchaStatus(captchaID, model.CaptchaStatusVerified)
+	}
+
+	return &RotateVerifyResult{
+		Success: result.Success,
+		Message: result.Message,
+	}, nil
+}
+
+func (s *CaptchaService) GenerateTextCaptcha(ctx context.Context, appID, clientInfo string) (*TextCaptchaResult, error) {
+	behavior := &risk.BehaviorData{
+		SessionID: uuid.New().String(),
+	}
+
+	riskResult := s.riskEngine.CalculateRiskScore(ctx, behavior, "", appID)
+	if riskResult.Recommended == risk.ActionBlock {
+		return nil, errors.New("risk level too high")
+	}
+
+	result, err := s.textGen.GenerateCaptcha(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	captcha := &model.Captcha{
+		ID:         result.ID,
+		AppID:      appID,
+		Type:       string(model.CaptchaTypeImage),
+		ImageData:  result.ImageB64,
+		Status:     int(model.CaptchaStatusPending),
+		ClientInfo: clientInfo,
+		ExpiredAt:  time.Now().Add(time.Duration(s.cfg.Captcha.ExpireMinutes) * time.Minute),
+	}
+	if err := s.saveCaptchaRecord(captcha); err != nil {
+		log.Error("failed to save text captcha record", map[string]interface{}{
+			"error": err.Error(),
+			"id":    result.ID,
+		})
+	}
+
+	return &TextCaptchaResult{
+		ID:       result.ID,
+		ImageB64: result.ImageB64,
+	}, nil
+}
+
+func (s *CaptchaService) VerifyTextCaptcha(ctx context.Context, captchaID string, code string) (*TextVerifyResult, error) {
+	req := &text.VerifyRequest{
+		CaptchaID: captchaID,
+		Code:      code,
+	}
+
+	result, err := s.textVerify.Verify(ctx, req)
+	if err != nil {
+		return &TextVerifyResult{
+			Success: false,
+			Message: result.Message,
+		}, err
+	}
+
+	if result.Success {
+		s.updateCaptchaStatus(captchaID, model.CaptchaStatusVerified)
+	}
+
+	return &TextVerifyResult{
+		Success: result.Success,
+		Message: result.Message,
+	}, nil
+}
+
+func (s *CaptchaService) GenerateIconCaptcha(ctx context.Context, appID, clientInfo string) (*IconCaptchaResult, error) {
+	behavior := &risk.BehaviorData{
+		SessionID: uuid.New().String(),
+	}
+
+	riskResult := s.riskEngine.CalculateRiskScore(ctx, behavior, "", appID)
+	if riskResult.Recommended == risk.ActionBlock {
+		return nil, errors.New("risk level too high")
+	}
+
+	result, err := s.iconGen.GenerateCaptcha(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	captcha := &model.Captcha{
+		ID:         result.ID,
+		AppID:      appID,
+		Type:       string(model.CaptchaTypeImage),
+		Status:     int(model.CaptchaStatusPending),
+		ClientInfo: clientInfo,
+		ExpiredAt:  time.Now().Add(time.Duration(s.cfg.Captcha.ExpireMinutes) * time.Minute),
+	}
+	if err := s.saveCaptchaRecord(captcha); err != nil {
+		log.Error("failed to save icon captcha record", map[string]interface{}{
+			"error": err.Error(),
+			"id":    result.ID,
+		})
+	}
+
+	targetIcons := make([]IconInfoDTO, len(result.TargetIcons))
+	for i, icon := range result.TargetIcons {
+		targetIcons[i] = IconInfoDTO{
+			ID:     icon.ID,
+			Name:   icon.Name,
+			SVG:    icon.SVG,
+			Width:  icon.Width,
+			Height: icon.Height,
+		}
+	}
+
+	allIcons := make([]IconInfoDTO, len(result.AllIcons))
+	for i, icon := range result.AllIcons {
+		allIcons[i] = IconInfoDTO{
+			ID:     icon.ID,
+			Name:   icon.Name,
+			SVG:    icon.SVG,
+			Width:  icon.Width,
+			Height: icon.Height,
+		}
+	}
+
+	return &IconCaptchaResult{
+		ID:          result.ID,
+		TargetIcons: targetIcons,
+		AllIcons:    allIcons,
+		GridCols:    result.GridCols,
+		GridRows:    result.GridRows,
+		IconSize:    result.IconSize,
+	}, nil
+}
+
+func (s *CaptchaService) VerifyIconCaptcha(ctx context.Context, captchaID string, iconIDs []string) (*IconVerifyResult, error) {
+	req := &icon.VerifyRequest{
+		CaptchaID: captchaID,
+		IconIDs:   iconIDs,
+	}
+
+	result, err := s.iconVerify.Verify(ctx, req)
+	if err != nil {
+		return &IconVerifyResult{
+			Success: false,
+			Message: result.Message,
+		}, err
+	}
+
+	if result.Success {
+		s.updateCaptchaStatus(captchaID, model.CaptchaStatusVerified)
+	}
+
+	return &IconVerifyResult{
+		Success: result.Success,
+		Message: result.Message,
+	}, nil
 }
 
 func (s *CaptchaService) generatePuzzleBackground(targetX, targetY int) string {

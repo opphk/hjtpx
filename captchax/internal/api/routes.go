@@ -109,6 +109,12 @@ func (s *Server) setupV1Routes(api *gin.RouterGroup) {
 		captcha.POST("/click/verify", s.handler.verifyClickCaptcha)
 		captcha.POST("/puzzle", s.handler.getPuzzleCaptcha)
 		captcha.POST("/puzzle/verify", s.handler.verifyPuzzleCaptcha)
+		captcha.POST("/rotate", s.handler.getRotateCaptcha)
+		captcha.POST("/rotate/verify", s.handler.verifyRotateCaptcha)
+		captcha.POST("/text", s.handler.getTextCaptcha)
+		captcha.POST("/text/verify", s.handler.verifyTextCaptcha)
+		captcha.POST("/icon", s.handler.getIconCaptcha)
+		captcha.POST("/icon/verify", s.handler.verifyIconCaptcha)
 	}
 }
 
@@ -121,6 +127,12 @@ func (s *Server) setupV2Routes(api *gin.RouterGroup) {
 		captcha.POST("/click/verify", s.handler.VerifyClickCaptchaV2)
 		captcha.POST("/puzzle", s.handler.GetPuzzleCaptchaV2)
 		captcha.POST("/puzzle/verify", s.handler.VerifyPuzzleCaptchaV2)
+		captcha.POST("/rotate", s.handler.GetRotateCaptchaV2)
+		captcha.POST("/rotate/verify", s.handler.VerifyRotateCaptchaV2)
+		captcha.POST("/text", s.handler.GetTextCaptchaV2)
+		captcha.POST("/text/verify", s.handler.VerifyTextCaptchaV2)
+		captcha.POST("/icon", s.handler.GetIconCaptchaV2)
+		captcha.POST("/icon/verify", s.handler.VerifyIconCaptchaV2)
 	}
 
 	batch := api.Group("/batch")

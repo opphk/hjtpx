@@ -53,6 +53,45 @@ const websocketConnections = new promClient.Gauge({
   help: 'Number of active WebSocket connections'
 });
 
+const websocketMessagesSent = new promClient.Counter({
+  name: 'websocket_messages_sent_total',
+  help: 'Total number of WebSocket messages sent'
+});
+
+const websocketMessagesReceived = new promClient.Counter({
+  name: 'websocket_messages_received_total',
+  help: 'Total number of WebSocket messages received'
+});
+
+const websocketErrors = new promClient.Counter({
+  name: 'websocket_errors_total',
+  help: 'Total number of WebSocket errors',
+  labelNames: ['error_type']
+});
+
+const websocketConnectionDuration = new promClient.Histogram({
+  name: 'websocket_connection_duration_seconds',
+  help: 'Duration of WebSocket connections in seconds',
+  buckets: [1, 5, 10, 30, 60, 300, 600, 1800, 3600]
+});
+
+const websocketHeartbeats = new promClient.Counter({
+  name: 'websocket_heartbeats_total',
+  help: 'Total number of WebSocket heartbeats',
+  labelNames: ['type']
+});
+
+const websocketMissedHeartbeats = new promClient.Counter({
+  name: 'websocket_missed_heartbeats_total',
+  help: 'Total number of missed WebSocket heartbeats'
+});
+
+const websocketRoomSubscriptions = new promClient.Gauge({
+  name: 'websocket_room_subscriptions',
+  help: 'Number of active room subscriptions',
+  labelNames: ['room']
+});
+
 const authenticationAttempts = new promClient.Counter({
   name: 'authentication_attempts_total',
   help: 'Total number of authentication attempts',
@@ -108,6 +147,13 @@ register.registerMetric(databaseQueryErrors);
 register.registerMetric(redisOperationDuration);
 register.registerMetric(activeConnections);
 register.registerMetric(websocketConnections);
+register.registerMetric(websocketMessagesSent);
+register.registerMetric(websocketMessagesReceived);
+register.registerMetric(websocketErrors);
+register.registerMetric(websocketConnectionDuration);
+register.registerMetric(websocketHeartbeats);
+register.registerMetric(websocketMissedHeartbeats);
+register.registerMetric(websocketRoomSubscriptions);
 register.registerMetric(authenticationAttempts);
 register.registerMetric(rateLimitHits);
 register.registerMetric(cacheHits);
@@ -209,6 +255,34 @@ const updateConnectionMetrics = (wsCount) => {
   websocketConnections.set(wsCount);
 };
 
+const recordWebSocketMessageSent = () => {
+  websocketMessagesSent.inc();
+};
+
+const recordWebSocketMessageReceived = () => {
+  websocketMessagesReceived.inc();
+};
+
+const recordWebSocketError = (errorType) => {
+  websocketErrors.inc({ error_type: errorType });
+};
+
+const recordWebSocketConnectionDuration = (durationSeconds) => {
+  websocketConnectionDuration.observe(durationSeconds);
+};
+
+const recordWebSocketHeartbeat = (type) => {
+  websocketHeartbeats.inc({ type });
+};
+
+const recordWebSocketMissedHeartbeat = () => {
+  websocketMissedHeartbeats.inc();
+};
+
+const updateWebSocketRoomSubscription = (room, count) => {
+  websocketRoomSubscriptions.set({ room }, count);
+};
+
 const updateSystemMetrics = () => {
   const memUsage = process.memoryUsage();
   memoryUsage.set({ type: 'heap_used' }, memUsage.heapUsed);
@@ -232,5 +306,12 @@ module.exports = {
   setBusinessMetric,
   recordBusinessEvent,
   updateConnectionMetrics,
-  updateSystemMetrics
+  updateSystemMetrics,
+  recordWebSocketMessageSent,
+  recordWebSocketMessageReceived,
+  recordWebSocketError,
+  recordWebSocketConnectionDuration,
+  recordWebSocketHeartbeat,
+  recordWebSocketMissedHeartbeat,
+  updateWebSocketRoomSubscription
 };

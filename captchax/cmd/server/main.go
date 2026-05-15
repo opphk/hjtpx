@@ -15,6 +15,7 @@ import (
 	"captchax/config"
 	"captchax/internal/api"
 	"captchax/internal/log"
+	"captchax/internal/sentry"
 	"captchax/internal/service"
 	"captchax/pkg/cache"
 	"captchax/pkg/database"
@@ -226,6 +227,20 @@ func main() {
 	log.Init(cfg.Log.Level, cfg.Log.Format, cfg.Log.Output)
 	logger := log.Default()
 
+	sentryConfig := sentry.Config{
+		DSN:              cfg.Sentry.DSN,
+		Environment:      cfg.Sentry.Environment,
+		Release:          cfg.Sentry.Release,
+		TracesSampleRate: cfg.Sentry.TracesSampleRate,
+		Debug:            cfg.Sentry.Debug,
+	}
+	if err := sentry.Init(sentryConfig); err != nil {
+		logger.Error("failed to init sentry", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+	defer sentry.Flush(2 * time.Second)
+
 	logger.Info("starting captchax server", map[string]interface{}{
 		"host":    cfg.Server.Host,
 		"port":    cfg.Server.Port,
@@ -271,6 +286,9 @@ func main() {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
+	if cfg.Sentry.DSN != "" {
+		router.Use(sentry.Middleware())
+	}
 	router.Use(MetricsMiddleware())
 
 	setupPPROF(router)

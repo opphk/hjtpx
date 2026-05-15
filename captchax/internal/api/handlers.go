@@ -22,6 +22,12 @@ type CaptchaServiceInterface interface {
 	VerifyClickCaptcha(ctx context.Context, captchaID string, clicks []service.CharPositionDTO) (*service.ClickVerifyResult, error)
 	GeneratePuzzleCaptcha(ctx context.Context, appID, clientInfo string) (*service.PuzzleCaptchaResult, error)
 	VerifyPuzzleCaptcha(ctx context.Context, captchaID string, targetX, targetY int) (*service.PuzzleVerifyResult, error)
+	GenerateRotateCaptcha(ctx context.Context, appID, clientInfo string) (*service.RotateCaptchaResult, error)
+	VerifyRotateCaptcha(ctx context.Context, captchaID string, angle int) (*service.RotateVerifyResult, error)
+	GenerateTextCaptcha(ctx context.Context, appID, clientInfo string) (*service.TextCaptchaResult, error)
+	VerifyTextCaptcha(ctx context.Context, captchaID string, code string) (*service.TextVerifyResult, error)
+	GenerateIconCaptcha(ctx context.Context, appID, clientInfo string) (*service.IconCaptchaResult, error)
+	VerifyIconCaptcha(ctx context.Context, captchaID string, iconIDs []string) (*service.IconVerifyResult, error)
 	LogVerification(ctx context.Context, appID, captchaType, captchaID string, success bool, message, ip string)
 }
 
@@ -116,6 +122,82 @@ type PuzzleVerifyRequest struct {
 }
 
 type PuzzleVerifyResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type RotateGenerateRequest struct {
+	AppID      string `json:"app_id" binding:"required"`
+	ClientInfo string `json:"client_info"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+type RotateGenerateResponse struct {
+	ID          string `json:"id"`
+	ImageB64    string `json:"image_b64"`
+	OriginalB64 string `json:"original_b64"`
+}
+
+type RotateVerifyRequest struct {
+	CaptchaID string `json:"captcha_id" binding:"required"`
+	Angle     int    `json:"angle" binding:"required"`
+}
+
+type RotateVerifyResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type TextGenerateRequest struct {
+	AppID      string `json:"app_id" binding:"required"`
+	ClientInfo string `json:"client_info"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+type TextGenerateResponse struct {
+	ID       string `json:"id"`
+	ImageB64 string `json:"image_b64"`
+}
+
+type TextVerifyRequest struct {
+	CaptchaID string `json:"captcha_id" binding:"required"`
+	Code      string `json:"code" binding:"required"`
+}
+
+type TextVerifyResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type IconGenerateRequest struct {
+	AppID      string `json:"app_id" binding:"required"`
+	ClientInfo string `json:"client_info"`
+	ScenarioID string `json:"scenario_id"`
+}
+
+type IconInfoDTO struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	SVG    string `json:"svg"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+type IconGenerateResponse struct {
+	ID          string        `json:"id"`
+	TargetIcons []IconInfoDTO `json:"target_icons"`
+	AllIcons    []IconInfoDTO `json:"all_icons"`
+	GridCols    int           `json:"grid_cols"`
+	GridRows    int           `json:"grid_rows"`
+	IconSize    int           `json:"icon_size"`
+}
+
+type IconVerifyRequest struct {
+	CaptchaID string   `json:"captcha_id" binding:"required"`
+	IconIDs   []string `json:"icon_ids" binding:"required"`
+}
+
+type IconVerifyResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
@@ -293,6 +375,120 @@ func (h *Handler) verifyPuzzleCaptcha(c *gin.Context) {
 	}
 
 	h.captchaService.LogVerification(ctx, "", "puzzle", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) getRotateCaptcha(c *gin.Context) {
+	var req RotateGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateRotateCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "rotate", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate rotate captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "rotate", result.ID, false, "generated", c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) verifyRotateCaptcha(c *gin.Context) {
+	var req RotateVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyRotateCaptcha(ctx, req.CaptchaID, req.Angle)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "rotate", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "rotate", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) getTextCaptcha(c *gin.Context) {
+	var req TextGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateTextCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "text", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate text captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "text", result.ID, false, "generated", c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) verifyTextCaptcha(c *gin.Context) {
+	var req TextVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyTextCaptcha(ctx, req.CaptchaID, req.Code)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "text", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "text", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) getIconCaptcha(c *gin.Context) {
+	var req IconGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateIconCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "icon", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate icon captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "icon", result.ID, false, "generated", c.ClientIP())
+	response.Success(c, result)
+}
+
+func (h *Handler) verifyIconCaptcha(c *gin.Context) {
+	var req IconVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyIconCaptcha(ctx, req.CaptchaID, req.IconIDs)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "icon", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "icon", req.CaptchaID, result.Success, result.Message, c.ClientIP())
 	response.Success(c, result)
 }
 
@@ -488,6 +684,219 @@ func (h *Handler) VerifyPuzzleCaptchaV2(c *gin.Context) {
 	h.triggerWebhooks(ctx, "verification.completed", gin.H{
 		"captcha_id": req.CaptchaID,
 		"type":       "puzzle",
+		"success":    result.Success,
+		"message":    result.Message,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	})
+
+	response.Success(c, result)
+}
+
+func (h *Handler) GetRotateCaptchaV2(c *gin.Context) {
+	var req RotateGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	var difficulty string
+	h.scenariosMu.RLock()
+	if req.ScenarioID != "" {
+		if scenario, ok := h.scenarios[req.ScenarioID]; ok {
+			difficulty = scenario.Difficulty
+		}
+	}
+	h.scenariosMu.RUnlock()
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateRotateCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "rotate", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate rotate captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "rotate", result.ID, false, "generated", c.ClientIP())
+
+	response.Success(c, gin.H{
+		"id":           result.ID,
+		"image_b64":    result.ImageB64,
+		"original_b64": result.OriginalB64,
+		"difficulty":   difficulty,
+		"expires_in":   300,
+	})
+}
+
+func (h *Handler) VerifyRotateCaptchaV2(c *gin.Context) {
+	var req RotateVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyRotateCaptcha(ctx, req.CaptchaID, req.Angle)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "rotate", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "rotate", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+
+	h.triggerWebhooks(ctx, "verification.completed", gin.H{
+		"captcha_id": req.CaptchaID,
+		"type":       "rotate",
+		"success":    result.Success,
+		"message":    result.Message,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	})
+
+	response.Success(c, result)
+}
+
+func (h *Handler) GetTextCaptchaV2(c *gin.Context) {
+	var req TextGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	var difficulty string
+	h.scenariosMu.RLock()
+	if req.ScenarioID != "" {
+		if scenario, ok := h.scenarios[req.ScenarioID]; ok {
+			difficulty = scenario.Difficulty
+		}
+	}
+	h.scenariosMu.RUnlock()
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateTextCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "text", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate text captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "text", result.ID, false, "generated", c.ClientIP())
+
+	response.Success(c, gin.H{
+		"id":         result.ID,
+		"image_b64":  result.ImageB64,
+		"difficulty": difficulty,
+		"expires_in": 300,
+	})
+}
+
+func (h *Handler) VerifyTextCaptchaV2(c *gin.Context) {
+	var req TextVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyTextCaptcha(ctx, req.CaptchaID, req.Code)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "text", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "text", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+
+	h.triggerWebhooks(ctx, "verification.completed", gin.H{
+		"captcha_id": req.CaptchaID,
+		"type":       "text",
+		"success":    result.Success,
+		"message":    result.Message,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	})
+
+	response.Success(c, result)
+}
+
+func (h *Handler) GetIconCaptchaV2(c *gin.Context) {
+	var req IconGenerateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	var difficulty string
+	h.scenariosMu.RLock()
+	if req.ScenarioID != "" {
+		if scenario, ok := h.scenarios[req.ScenarioID]; ok {
+			difficulty = scenario.Difficulty
+		}
+	}
+	h.scenariosMu.RUnlock()
+
+	ctx := context.Background()
+	result, err := h.captchaService.GenerateIconCaptcha(ctx, req.AppID, req.ClientInfo)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, req.AppID, "icon", "", false, "generate failed: "+err.Error(), c.ClientIP())
+		response.InternalError(c, "failed to generate icon captcha")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, req.AppID, "icon", result.ID, false, "generated", c.ClientIP())
+
+	targetIcons := make([]IconInfoDTO, len(result.TargetIcons))
+	for i, icon := range result.TargetIcons {
+		targetIcons[i] = IconInfoDTO{
+			ID:     icon.ID,
+			Name:   icon.Name,
+			SVG:    icon.SVG,
+			Width:  icon.Width,
+			Height: icon.Height,
+		}
+	}
+
+	allIcons := make([]IconInfoDTO, len(result.AllIcons))
+	for i, icon := range result.AllIcons {
+		allIcons[i] = IconInfoDTO{
+			ID:     icon.ID,
+			Name:   icon.Name,
+			SVG:    icon.SVG,
+			Width:  icon.Width,
+			Height: icon.Height,
+		}
+	}
+
+	response.Success(c, gin.H{
+		"id":           result.ID,
+		"target_icons":  targetIcons,
+		"all_icons":    allIcons,
+		"grid_cols":    result.GridCols,
+		"grid_rows":    result.GridRows,
+		"icon_size":    result.IconSize,
+		"difficulty":    difficulty,
+		"expires_in":    300,
+	})
+}
+
+func (h *Handler) VerifyIconCaptchaV2(c *gin.Context) {
+	var req IconVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	ctx := context.Background()
+	result, err := h.captchaService.VerifyIconCaptcha(ctx, req.CaptchaID, req.IconIDs)
+	if err != nil {
+		h.captchaService.LogVerification(ctx, "", "icon", req.CaptchaID, false, err.Error(), c.ClientIP())
+		response.InternalError(c, "verification failed")
+		return
+	}
+
+	h.captchaService.LogVerification(ctx, "", "icon", req.CaptchaID, result.Success, result.Message, c.ClientIP())
+
+	h.triggerWebhooks(ctx, "verification.completed", gin.H{
+		"captcha_id": req.CaptchaID,
+		"type":       "icon",
 		"success":    result.Success,
 		"message":    result.Message,
 		"timestamp":  time.Now().Format(time.RFC3339),

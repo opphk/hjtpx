@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+
+Disallow: /admin/
+Disallow: /users/
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /config/
+Disallow: /scripts/
+Disallow: /migrations/
+Disallow: /tests/
+
+Sitemap: https://hjtpx.com/sitemap.xml
+
+Crawl-delay: 1

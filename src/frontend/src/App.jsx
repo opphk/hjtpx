@@ -1,7 +1,8 @@
-import React, { Suspense, lazy, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Loading from './components/ui/Loading';
+import DashboardLayout from './components/DashboardLayout';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -12,7 +13,6 @@ const LogsPage = lazy(() => import('./pages/LogsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AuditDashboard = lazy(() => import('./pages/AuditDashboard'));
 const UserList = lazy(() => import('./components/UserList'));
-const DashboardLayout = lazy(() => import('./components/DashboardLayout'));
 
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -72,109 +72,101 @@ const SuspenseFallback = () => (
 );
 
 const AppRoutes = () => {
-  useEffect(() => {
-    const prefetchRoutes = () => {
-      const dashboardLink = document.querySelector('a[href="/dashboard"]');
-      const usersLink = document.querySelector('a[href="/users"]');
-      
-      if (dashboardLink) {
-        dashboardLink.addEventListener('mouseenter', () => {
-          DashboardPage.preload();
-        }, { once: true });
-      }
-      
-      if (usersLink) {
-        usersLink.addEventListener('mouseenter', () => {
-          UserList.preload();
-        }, { once: true });
-      }
-    };
-    
-    const timer = setTimeout(prefetchRoutes, 1000);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
-    <Suspense fallback={<SuspenseFallback />}>
-      <Routes>
-        <Route 
-          path="/login" 
-          element={
-            <PublicRoute>
+    <Routes>
+      <Route 
+        path="/login" 
+        element={
+          <PublicRoute>
+            <Suspense fallback={<Loading fullScreen text="加载中..." />}>
               <LoginPage />
-            </PublicRoute>
-          } 
-        />
-        <Route 
-          path="/register" 
-          element={
-            <PublicRoute>
+            </Suspense>
+          </PublicRoute>
+        } 
+      />
+      <Route 
+        path="/register" 
+        element={
+          <PublicRoute>
+            <Suspense fallback={<Loading fullScreen text="加载中..." />}>
               <RegisterPage />
-            </PublicRoute>
-          } 
-        />
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
+            </Suspense>
+          </PublicRoute>
+        } 
+      />
+      <Route 
+        path="/dashboard" 
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Loading fullScreen text="加载中..." />}>
               <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/users" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
+            </Suspense>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/users" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
                 <UserList />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/users" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
+              </Suspense>
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/users" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
                 <AdminUsersPage />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/logs" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
+              </Suspense>
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/logs" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
                 <LogsPage />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/settings" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
+              </Suspense>
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/settings" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
                 <SettingsPage />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin/audit" 
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
+              </Suspense>
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin/audit" 
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Suspense fallback={<Loading fullScreen text="加载中..." />}>
                 <AuditDashboard />
-              </DashboardLayout>
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Suspense>
+              </Suspense>
+            </DashboardLayout>
+          </ProtectedRoute>
+        } 
+      />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   );
 };
 
@@ -183,7 +175,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
-        <PWAInstallPrompt />
+        <PWAInstallPrompt delay={3000} />
       </AuthProvider>
     </BrowserRouter>
   );

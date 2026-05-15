@@ -1,0 +1,60 @@
+{
+  "name": "@captchax/nextjs",
+  "version": "1.0.0",
+  "description": "CaptchaX Next.js Integration - Server Components, Client Components, and Middleware",
+  "main": "dist/captchax-nextjs.cjs.js",
+  "module": "dist/captchax-nextjs.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/captchax-nextjs.esm.js",
+      "require": "./dist/captchax-nextjs.cjs.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server/captchax-server.esm.js",
+      "require": "./dist/server/captchax-server.cjs.js",
+      "types": "./dist/server/index.d.ts"
+    },
+    "./middleware": {
+      "import": "./dist/middleware/index.mjs",
+      "require": "./dist/middleware/index.cjs.js",
+      "types": "./dist/middleware/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write src"
+  },
+  "peerDependencies": {
+    "next": ">=13.0.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.3.0",
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "keywords": [
+    "captcha",
+    "captchax",
+    "nextjs",
+    "verification",
+    "security",
+    "react"
+  ],
+  "author": "CaptchaX Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/captchax/nextjs"
+  }
+}

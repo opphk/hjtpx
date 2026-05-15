@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-05-15T06:53:39.777Z",
+  "currentLeaks": {
+    "timestamp": "2026-05-15T06:53:39.767Z",
+    "count": 1,
+    "totalDuration": 5000,
+    "connections": [
+      {
+        "clientId": "client-1",
+        "holdDuration": 5000,
+        "severity": "low",
+        "query": null,
+        "user": null
+      }
+    ],
+    "averageDuration": 5000
+  },
+  "recentLeaks": [],
+  "statistics": {
+    "totalCheckedOut": 0,
+    "totalReleased": 0,
+    "potentialLeaks": 1,
+    "confirmedLeaks": 0,
+    "falsePositives": 0,
+    "autoCleanups": 1
+  },
+  "threshold": 1000,
+  "activeTrackedConnections": 1,
+  "leakTrend": "stable"
+}

@@ -1,49 +1,60 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
+import SEO, { getSEOMeta } from '../components/SEO';
 import DashboardLayout from '../components/DashboardLayout';
 import Navigation from '../components/Navigation';
 import Alert from '../components/ui/Alert';
+import { formatDate } from '../i18n/dateFormat';
 
 const DashboardPage = () => {
+  const { t } = useTranslation();
   const { user, isAuthenticated } = useAuth();
+  const seoMeta = getSEOMeta('dashboard');
 
   if (!isAuthenticated) {
     return (
-      <Alert 
+      <>
+        <SEO {...seoMeta} />
+        <Alert 
         type="warning" 
-        message="请先登录" 
+        message={t('common.error')} 
       />
+      </>
     );
   }
 
   return (
-    <DashboardLayout>
+    <>
+      <SEO {...seoMeta} />
+      <DashboardLayout>
       <div className="dashboard-content">
         <div className="dashboard-header">
-          <h1>欢迎回来, {user?.username || '用户'}!</h1>
-          <p>这是您的个人仪表板</p>
+          <h1>{t('dashboard.welcomeBack')}, {user?.username || t('users.user')}!</h1>
+          <p>{t('dashboard.thisIsYourDashboard')}</p>
         </div>
         
         <div className="dashboard-cards">
           <div className="card">
-            <h3>个人信息</h3>
+            <h3>{t('dashboard.personalInfo')}</h3>
             <div className="card-content">
-              <p><strong>用户名:</strong> {user?.username}</p>
-              <p><strong>邮箱:</strong> {user?.email}</p>
-              <p><strong>角色:</strong> {user?.role || '用户'}</p>
+              <p><strong>{t('auth.username')}:</strong> {user?.username}</p>
+              <p><strong>{t('auth.email')}:</strong> {user?.email}</p>
+              <p><strong>{t('dashboard.role')}:</strong> {user?.role === 'admin' ? t('users.admin') : t('users.user')}</p>
             </div>
           </div>
           
           <div className="card">
-            <h3>账户统计</h3>
+            <h3>{t('dashboard.accountStats')}</h3>
             <div className="card-content">
-              <p><strong>注册时间:</strong> {user?.createdAt || '未知'}</p>
-              <p><strong>最后登录:</strong> {user?.lastLogin || '未知'}</p>
+              <p><strong>{t('dashboard.registrationDate')}:</strong> {user?.createdAt ? formatDate(user.createdAt) : t('common.error')}</p>
+              <p><strong>{t('dashboard.lastLogin')}:</strong> {user?.lastLogin ? formatDate(user.lastLogin) : t('common.error')}</p>
             </div>
           </div>
         </div>
       </div>
     </DashboardLayout>
+    </>
   );
 };
 

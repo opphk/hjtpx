@@ -40,10 +40,13 @@ const LogFilter = ({ filters, onFilterChange }) => {
         </div>
 
         <div className="filter-item">
+          <label htmlFor="log-type-filter" className="filter-label">日志类型</label>
           <select
+            id="log-type-filter"
             value={localFilters.type}
             onChange={(e) => handleChange('type', e.target.value)}
             className="form-select"
+            aria-label="按日志类型筛选"
           >
             <option value="">所有类型</option>
             <option value="operation">操作</option>
@@ -54,10 +57,13 @@ const LogFilter = ({ filters, onFilterChange }) => {
         </div>
 
         <div className="filter-item">
+          <label htmlFor="log-level-filter" className="filter-label">日志级别</label>
           <select
+            id="log-level-filter"
             value={localFilters.level}
             onChange={(e) => handleChange('level', e.target.value)}
             className="form-select"
+            aria-label="按日志级别筛选"
           >
             <option value="">所有级别</option>
             <option value="error">错误</option>

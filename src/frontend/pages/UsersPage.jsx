@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useApi } from '../hooks/useApi';
+import { usePageTitle } from '../hooks/usePageTitle';
 import Table from '../components/Table';
 import Input from '../components/Input';
 import Button from '../components/Button';
@@ -18,6 +19,8 @@ function UsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
+
+  usePageTitle('User Management');
 
   useEffect(() => {
     fetchUsers();

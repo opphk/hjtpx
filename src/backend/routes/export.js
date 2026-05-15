@@ -1,10 +1,10 @@
 const express = require('express');
 
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const exportService = require('../services/exportService');
 
-router.use(authMiddleware);
+router.use(auth);
 
 router.get('/:format', async (req, res, next) => {
   try {

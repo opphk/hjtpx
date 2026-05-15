@@ -11,6 +11,8 @@ const Input = ({
   disabled = false,
   required = false,
   className = '',
+  'aria-label': ariaLabel,
+  'aria-describedby': ariaDescribedBy,
   ...props
 }) => {
   const inputClasses = [
@@ -19,6 +21,13 @@ const Input = ({
     disabled ? 'input-disabled' : '',
     className
   ].filter(Boolean).join(' ');
+  
+  const errorId = error ? `${name}-error` : undefined;
+  
+  const describedByIds = [
+    ariaDescribedBy,
+    errorId
+  ].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="form-group">
@@ -38,9 +47,18 @@ const Input = ({
         disabled={disabled}
         required={required}
         className={inputClasses}
+        aria-label={ariaLabel}
+        aria-describedby={describedByIds}
+        aria-invalid={!!error}
+        aria-required={required}
+        aria-disabled={disabled}
         {...props}
       />
-      {error && <span className="error-text">{error}</span>}
+      {error && (
+        <span className="error-text" id={errorId} role="alert">
+          {error}
+        </span>
+      )}
     </div>
   );
 };

@@ -7,12 +7,11 @@ function Alert({
   autoClose = true,
   autoCloseTime = 3000,
   className = '',
-  role = 'alert',
-  politeness = 'assertive',
-  title
+  role,
+  'aria-label': ariaLabel,
+  'aria-live': ariaLive,
+  ...props
 }) {
-  const alertId = `alert-${Math.random().toString(36).substr(2, 9)}`;
-  
   useEffect(() => {
     if (autoClose && autoCloseTime > 0) {
       const timer = setTimeout(() => {
@@ -26,46 +25,27 @@ function Alert({
   }, [autoClose, autoCloseTime, onClose]);
 
   const alertClass = `alert alert-${type} ${className}`.trim();
-  const alertTitleId = title ? `${alertId}-title` : undefined;
-
-  const getAlertRole = () => {
-    switch (type) {
-      case 'error':
-      case 'danger':
-        return 'alert';
-      case 'success':
-        return 'status';
-      case 'warning':
-        return 'alert';
-      default:
-        return 'status';
-    }
-  };
+  
+  const defaultAriaLive = type === 'error' || type === 'warning' ? 'assertive' : 'polite';
+  const defaultRole = type === 'error' || type === 'warning' ? 'alert' : 'status';
 
   return (
     <div 
       className={alertClass} 
-      role={role || getAlertRole()}
-      aria-live={politeness}
+      role={role || defaultRole}
+      aria-label={ariaLabel}
+      aria-live={ariaLive || defaultAriaLive}
       aria-atomic="true"
-      id={alertId}
+      {...props}
     >
       <div className="alert-content">
-        {title && (
-          <strong id={alertTitleId} className="alert-title">
-            {title}
-          </strong>
-        )}
-        <span className="alert-message" aria-labelledby={alertTitleId}>
-          {message}
-        </span>
+        <span className="alert-message">{message}</span>
         {onClose && (
           <button
             type="button"
             className="alert-close"
             onClick={onClose}
-            aria-label="Dismiss alert"
-            aria-describedby={alertId}
+            aria-label="关闭提示"
           >
             &times;
           </button>

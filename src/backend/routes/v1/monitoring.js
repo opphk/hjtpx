@@ -1,151 +1,141 @@
 const express = require('express');
 const router = express.Router();
 
-const { healthMonitor } = require('../services/healthMonitor');
-const { alertManager } = require('../services/alertService');
-const { getMetrics, getContentType } = require('../services/metricsService');
+const websocketService = require('../../services/websocketService');
+const metricsService = require('../../services/metricsService');
 
-router.get('/health', (req, res) => {
-  const health = healthMonitor.getHealthStatus();
-
-  const statusCode = health.healthy ? 200 : 503;
-
-  res.status(statusCode).json({
-    success: health.healthy,
-    data: health
-  });
+router.get('/websocket', (req, res) => {
+  try {
+    const metrics = websocketService.getDetailedMetrics();
+    res.json({
+      success: true,
+      data: metrics
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get WebSocket metrics'
+    });
+  }
 });
 
-router.get('/health/detailed', (req, res) => {
-  const detailed = healthMonitor.getDetailedHealth();
-
-  const statusCode = detailed.healthy ? 200 : 503;
-
-  res.status(statusCode).json({
-    success: detailed.healthy,
-    data: detailed
-  });
+router.get('/websocket/stats', (req, res) => {
+  try {
+    const stats = websocketService.getConnectionStats();
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get WebSocket stats'
+    });
+  }
 });
 
-router.get('/health/live', (req, res) => {
-  res.status(200).json({
-    success: true,
-    data: {
-      alive: true,
-      timestamp: new Date().toISOString()
-    }
-  });
+router.get('/websocket/online-users', (req, res) => {
+  try {
+    const users = websocketService.getOnlineUsers();
+    res.json({
+      success: true,
+      data: {
+        users,
+        count: users.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get online users'
+    });
+  }
 });
 
-router.get('/health/ready', async (req, res) => {
-  const checks = await healthMonitor.runAllChecks();
-  const allHealthy = checks.every(c => c.healthy);
-
-  res.status(allHealthy ? 200 : 503).json({
-    success: allHealthy,
-    data: {
-      ready: allHealthy,
-      checks: checks.map(c => ({
-        name: c.name,
-        healthy: c.healthy,
-        message: c.message
-      })),
-      timestamp: new Date().toISOString()
-    }
-  });
+router.get('/websocket/health', (req, res) => {
+  try {
+    const metrics = websocketService.getDetailedMetrics();
+    const uptime = metrics.uptime;
+    const errorRate = metrics.totalConnections > 0 
+      ? (metrics.errors / metrics.totalConnections) * 100 
+      : 0;
+    
+    const isHealthy = errorRate < 5 && uptime > 0;
+    
+    res.json({
+      success: true,
+      data: {
+        status: isHealthy ? 'healthy' : 'degraded',
+        uptime,
+        currentConnections: metrics.currentConnections,
+        errorRate: errorRate.toFixed(2),
+        heartbeatStatus: metrics.heartbeatMetrics
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get WebSocket health status'
+    });
+  }
 });
 
 router.get('/metrics', async (req, res) => {
   try {
-    const metrics = await getMetrics();
-    res.set('Content-Type', getContentType());
+    const metrics = await metricsService.getMetrics();
+    res.set('Content-Type', metricsService.getContentType());
     res.send(metrics);
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Failed to collect metrics'
+      error: 'Failed to get metrics'
     });
   }
 });
 
-router.get('/metrics/prometheus', async (req, res) => {
+router.get('/websocket/performance', (req, res) => {
   try {
-    const metrics = await getMetrics();
-    res.set('Content-Type', getContentType());
-    res.send(metrics);
+    const metrics = websocketService.getDetailedMetrics();
+    
+    const avgMessageLatency = metrics.messagesReceived > 0 
+      ? (metrics.messagesSent / metrics.messagesReceived) * 100 
+      : 0;
+    
+    const messagesPerSecond = metrics.uptime > 0 
+      ? (metrics.messagesSent / (metrics.uptime / 1000)).toFixed(2) 
+      : 0;
+    
+    const connectionsPerSecond = metrics.uptime > 0 
+      ? (metrics.totalConnections / (metrics.uptime / 1000)).toFixed(2) 
+      : 0;
+    
+    res.json({
+      success: true,
+      data: {
+        throughput: {
+          messagesPerSecond: parseFloat(messagesPerSecond),
+          connectionsPerSecond: parseFloat(connectionsPerSecond)
+        },
+        latency: {
+          avgMessageLatency: avgMessageLatency.toFixed(2)
+        },
+        reliability: {
+          totalMessages: metrics.messagesSent,
+          totalReceived: metrics.messagesReceived,
+          messageDeliveryRate: metrics.messagesSent > 0 
+            ? ((metrics.messagesReceived / metrics.messagesSent) * 100).toFixed(2) 
+            : '100.00',
+          errorCount: metrics.errors
+        },
+        heartbeat: metrics.heartbeatMetrics
+      }
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Failed to collect metrics'
+      error: 'Failed to get WebSocket performance metrics'
     });
   }
-});
-
-router.get('/alerts', (req, res) => {
-  const activeAlerts = alertManager.getActiveAlerts();
-
-  res.json({
-    success: true,
-    data: {
-      activeAlerts,
-      total: activeAlerts.length,
-      thresholds: alertManager.thresholds
-    }
-  });
-});
-
-router.get('/alerts/:type', (req, res) => {
-  const alerts = alertManager.getAlertsByType(req.params.type);
-
-  res.json({
-    success: true,
-    data: {
-      alerts,
-      type: req.params.type,
-      total: alerts.length
-    }
-  });
-});
-
-router.post('/alerts/:id/acknowledge', (req, res) => {
-  const alert = alertManager.acknowledgeAlert(req.params.id);
-
-  if (!alert) {
-    return res.status(404).json({
-      success: false,
-      error: 'Alert not found'
-    });
-  }
-
-  res.json({
-    success: true,
-    data: alert
-  });
-});
-
-router.post('/alerts/:id/resolve', (req, res) => {
-  const alert = alertManager.resolveAlert(req.params.id);
-
-  if (!alert) {
-    return res.status(404).json({
-      success: false,
-      error: 'Alert not found'
-    });
-  }
-
-  res.json({
-    success: true,
-    data: alert
-  });
-});
-
-router.get('/status', (req, res) => {
-  const metrics = healthMonitor.getMetrics();
-
-  res.json({
-    success: true,
-    data: metrics
-  });
 });
 
 module.exports = router;
