@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"net/http"

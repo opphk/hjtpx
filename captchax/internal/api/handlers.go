@@ -1687,3 +1687,95 @@ func (h *Handler) VerifyBehaviorCaptcha(c *gin.Context) {
 		PositionScore: result.PositionScore,
 	})
 }
+
+func (h *Handler) Login(c *gin.Context) {
+	response.Success(c, gin.H{"message": "login endpoint"})
+}
+
+func (h *Handler) Register(c *gin.Context) {
+	response.Success(c, gin.H{"message": "register endpoint"})
+}
+
+func (h *Handler) RefreshToken(c *gin.Context) {
+	response.Success(c, gin.H{"message": "refresh token endpoint"})
+}
+
+func (h *Handler) Logout(c *gin.Context) {
+	response.Success(c, gin.H{"message": "logout endpoint"})
+}
+
+func (h *Handler) GetProfile(c *gin.Context) {
+	response.Success(c, gin.H{"message": "get profile endpoint"})
+}
+
+func (h *Handler) UpdateProfile(c *gin.Context) {
+	response.Success(c, gin.H{"message": "update profile endpoint"})
+}
+
+func (h *Handler) UploadFile(c *gin.Context) {
+	response.Success(c, gin.H{"message": "upload file endpoint"})
+}
+
+func (h *Handler) DownloadFile(c *gin.Context) {
+	response.Success(c, gin.H{"message": "download file endpoint"})
+}
+
+func (h *Handler) DeleteFile(c *gin.Context) {
+	response.Success(c, gin.H{"message": "delete file endpoint"})
+}
+
+func (h *Handler) ListFiles(c *gin.Context) {
+	response.Success(c, gin.H{"message": "list files endpoint"})
+}
+
+func (h *Handler) Search(c *gin.Context) {
+	response.Success(c, gin.H{"message": "search endpoint"})
+}
+
+func (h *Handler) SearchSuggestions(c *gin.Context) {
+	response.Success(c, gin.H{"message": "search suggestions endpoint"})
+}
+
+func (h *Handler) ListNotifications(c *gin.Context) {
+	response.Success(c, gin.H{"message": "list notifications endpoint"})
+}
+
+func (h *Handler) CreateNotification(c *gin.Context) {
+	response.Success(c, gin.H{"message": "create notification endpoint"})
+}
+
+func (h *Handler) MarkNotificationRead(c *gin.Context) {
+	response.Success(c, gin.H{"message": "mark notification read endpoint"})
+}
+
+func (h *Handler) DeleteNotification(c *gin.Context) {
+	response.Success(c, gin.H{"message": "delete notification endpoint"})
+}
+
+func (h *Handler) WebSocketConnect(c *gin.Context) {
+	response.Success(c, gin.H{"message": "websocket connect endpoint"})
+}
+
+func (h *Handler) LoginV2(c *gin.Context) {
+	response.Success(c, gin.H{"message": "login v2 endpoint"})
+}
+
+func (h *Handler) RegisterV2(c *gin.Context) {
+	response.Success(c, gin.H{"message": "register v2 endpoint"})
+}
+
+func (h *Handler) RefreshTokenV2(c *gin.Context) {
+	response.Success(c, gin.H{"message": "refresh token v2 endpoint"})
+}
+
+func (h *Handler) LogoutV2(c *gin.Context) {
+	response.Success(c, gin.H{"message": "logout v2 endpoint"})
+}
+
+func (h *Handler) GetProfileV2(c *gin.Context) {
+	response.Success(c, gin.H{"message": "get profile v2 endpoint"})
+}
+
+func (h *Handler) UpdateProfileV2(c *gin.Context) {
+	response.Success(c, gin.H{"message": "update profile v2 endpoint"})
+}

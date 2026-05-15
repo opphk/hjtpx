@@ -14,18 +14,38 @@ import (
 )
 
 type MockCaptchaService struct {
-	GenerateSliderResult *service.SliderCaptchaResult
-	GenerateSliderErr    error
-	VerifySliderResult  *service.SliderVerifyResult
-	VerifySliderErr     error
-	GenerateClickResult *service.ClickCaptchaResult
-	GenerateClickErr    error
-	VerifyClickResult   *service.ClickVerifyResult
-	VerifyClickErr      error
-	GeneratePuzzleResult *service.PuzzleCaptchaResult
-	GeneratePuzzleErr    error
-	VerifyPuzzleResult   *service.PuzzleVerifyResult
-	VerifyPuzzleErr      error
+	GenerateSliderResult  *service.SliderCaptchaResult
+	GenerateSliderErr     error
+	VerifySliderResult    *service.SliderVerifyResult
+	VerifySliderErr       error
+	GenerateClickResult   *service.ClickCaptchaResult
+	GenerateClickErr      error
+	VerifyClickResult     *service.ClickVerifyResult
+	VerifyClickErr        error
+	GeneratePuzzleResult  *service.PuzzleCaptchaResult
+	GeneratePuzzleErr     error
+	VerifyPuzzleResult    *service.PuzzleVerifyResult
+	VerifyPuzzleErr       error
+	GenerateRotateResult  *service.RotateCaptchaResult
+	GenerateRotateErr     error
+	VerifyRotateResult    *service.RotateVerifyResult
+	VerifyRotateErr       error
+	GenerateTextResult    *service.TextCaptchaResult
+	GenerateTextErr       error
+	VerifyTextResult      *service.TextVerifyResult
+	VerifyTextErr         error
+	GenerateIconResult    *service.IconCaptchaResult
+	GenerateIconErr       error
+	VerifyIconResult      *service.IconVerifyResult
+	VerifyIconErr         error
+	GenerateAudioResult   *service.AudioCaptchaResult
+	GenerateAudioErr      error
+	VerifyAudioResult     *service.AudioVerifyResult
+	VerifyAudioErr        error
+	GenerateBehaviorResult *service.BehaviorCaptchaResult
+	GenerateBehaviorErr    error
+	VerifyBehaviorResult   *service.BehaviorVerifyResult
+	VerifyBehaviorErr      error
 }
 
 func (m *MockCaptchaService) GenerateSliderCaptcha(ctx context.Context, appID, clientInfo string) (*service.SliderCaptchaResult, error) {
@@ -50,6 +70,46 @@ func (m *MockCaptchaService) GeneratePuzzleCaptcha(ctx context.Context, appID, c
 
 func (m *MockCaptchaService) VerifyPuzzleCaptcha(ctx context.Context, captchaID string, targetX, targetY int) (*service.PuzzleVerifyResult, error) {
 	return m.VerifyPuzzleResult, m.VerifyPuzzleErr
+}
+
+func (m *MockCaptchaService) GenerateRotateCaptcha(ctx context.Context, appID, clientInfo string) (*service.RotateCaptchaResult, error) {
+	return m.GenerateRotateResult, m.GenerateRotateErr
+}
+
+func (m *MockCaptchaService) VerifyRotateCaptcha(ctx context.Context, captchaID string, angle int) (*service.RotateVerifyResult, error) {
+	return m.VerifyRotateResult, m.VerifyRotateErr
+}
+
+func (m *MockCaptchaService) GenerateTextCaptcha(ctx context.Context, appID, clientInfo string) (*service.TextCaptchaResult, error) {
+	return m.GenerateTextResult, m.GenerateTextErr
+}
+
+func (m *MockCaptchaService) VerifyTextCaptcha(ctx context.Context, captchaID string, code string) (*service.TextVerifyResult, error) {
+	return m.VerifyTextResult, m.VerifyTextErr
+}
+
+func (m *MockCaptchaService) GenerateIconCaptcha(ctx context.Context, appID, clientInfo string) (*service.IconCaptchaResult, error) {
+	return m.GenerateIconResult, m.GenerateIconErr
+}
+
+func (m *MockCaptchaService) VerifyIconCaptcha(ctx context.Context, captchaID string, iconIDs []string) (*service.IconVerifyResult, error) {
+	return m.VerifyIconResult, m.VerifyIconErr
+}
+
+func (m *MockCaptchaService) GenerateAudioCaptcha(ctx context.Context, appID, clientInfo string) (*service.AudioCaptchaResult, error) {
+	return m.GenerateAudioResult, m.GenerateAudioErr
+}
+
+func (m *MockCaptchaService) VerifyAudioCaptcha(ctx context.Context, captchaID string, code string) (*service.AudioVerifyResult, error) {
+	return m.VerifyAudioResult, m.VerifyAudioErr
+}
+
+func (m *MockCaptchaService) GenerateBehaviorCaptcha(ctx context.Context, challengeType string) (*service.BehaviorCaptchaResult, error) {
+	return m.GenerateBehaviorResult, m.GenerateBehaviorErr
+}
+
+func (m *MockCaptchaService) VerifyBehaviorCaptcha(ctx context.Context, req *service.BehaviorVerifyRequest) (*service.BehaviorVerifyResult, error) {
+	return m.VerifyBehaviorResult, m.VerifyBehaviorErr
 }
 
 func (m *MockCaptchaService) LogVerification(ctx context.Context, appID, captchaType, captchaID string, success bool, message, ip string) {

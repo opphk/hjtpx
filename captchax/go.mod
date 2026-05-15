@@ -2,14 +2,16 @@ module captchax
 
 go 1.25.0
 
-replace github.com/captchax/sdk/go/captchax => ./sdk/go
+replace github.com/hjtpx/captchax/sdk/go => ./sdk/go
 
 require (
+	github.com/getsentry/sentry-go v0.46.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/google/uuid v1.5.0
 	github.com/gorilla/websocket v1.5.1
+	github.com/hjtpx/captchax/sdk/go v0.0.0-00010101000000-000000000000
 	github.com/lib/pq v1.12.3
 	github.com/redis/go-redis/v9 v9.19.0
 	golang.org/x/crypto v0.51.0
@@ -25,7 +27,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
-	github.com/getsentry/sentry-go v0.46.2 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect

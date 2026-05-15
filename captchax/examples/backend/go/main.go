@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/captchax/sdk/go/captchax"
+	"github.com/hjtpx/captchax/sdk/go/captchax"
 	"github.com/gin-gonic/gin"
 )
 

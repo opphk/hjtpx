@@ -91,6 +91,25 @@
                         </svg>
                         <span data-i18n="admin.stats">统计分析</span>
                     </a>
+                    <a href="/admin/users" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span data-i18n="admin.users">用户管理</span>
+                    </a>
+                    <a href="/admin/settings" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span data-i18n="admin.settings">系统设置</span>
+                    </a>
+                    <a href="/admin/audit" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        <span data-i18n="admin.audit">审计日志</span>
+                    </a>
                     <a href="/admin/config" class="sidebar-link flex items-center px-6 py-3 text-gray-700 transition">
                         <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
@@ -244,6 +263,57 @@
                     </div>
                 </div>
 
+                <!-- 用户统计卡片 -->
+                <div id="user-stats-container" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1" data-i18n="admin.stats_cards.total_users">总用户数</p>
+                                <p class="text-2xl font-bold text-gray-800" id="stat-total-users">0</p>
+                                <p class="text-xs text-gray-500 mt-1" data-i18n="admin.stats_cards.all_time">全部用户</p>
+                            </div>
+                            <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1" data-i18n="admin.stats_cards.today_new_users">今日新增用户</p>
+                                <p class="text-2xl font-bold text-green-600" id="stat-today-new-users">0</p>
+                                <p class="text-xs text-gray-500 mt-1" data-i18n="admin.stats_cards.registered_today">今日注册</p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="stat-card bg-white rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-500 mb-1" data-i18n="admin.stats_cards.system_health">系统健康状态</p>
+                                <p class="text-2xl font-bold text-green-600" id="stat-system-health">正常</p>
+                                <p class="text-xs text-green-500 mt-1 flex items-center">
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 pulse-indicator"></span>
+                                    <span data-i18n="admin.stats_cards.all_systems_operational">所有系统运行正常</span>
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 图表区域 -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                     <div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
@@ -380,6 +450,32 @@
                     <div id="activity-list" class="space-y-4 max-h-96 overflow-y-auto">
                     </div>
                 </div>
+
+                <!-- 最近注册用户 -->
+                <div class="bg-white rounded-xl p-6 shadow-sm mt-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-semibold text-gray-800">最近注册用户</h3>
+                        <a href="/admin/users" class="text-sm text-blue-500 hover:text-blue-600">查看全部</a>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="text-left text-sm text-gray-500 border-b">
+                                    <th class="pb-3 font-medium">用户名</th>
+                                    <th class="pb-3 font-medium">邮箱</th>
+                                    <th class="pb-3 font-medium">角色</th>
+                                    <th class="pb-3 font-medium">注册时间</th>
+                                    <th class="pb-3 font-medium">状态</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-users-list" class="text-sm">
+                                <tr>
+                                    <td colspan="5" class="py-4 text-center text-gray-500">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </main>
         </div>
     </div>
@@ -436,6 +532,7 @@
 
                     loadIpRanking();
                     loadRecentActivity();
+                    loadRecentUsers();
 
                     document.getElementById('stats-container').classList.add('data-refresh');
                     setTimeout(() => {
@@ -454,6 +551,22 @@
                 document.getElementById('stat-success-rate').textContent = (dashboard.success_rate || 0).toFixed(1) + '%';
                 document.getElementById('stat-blocked-attacks').textContent = AdminUI.formatNumber(dashboard.blocked_attacks || 0);
                 document.getElementById('stat-active-users').textContent = AdminUI.formatNumber(dashboard.active_users || 0);
+
+                document.getElementById('stat-total-users').textContent = AdminUI.formatNumber(dashboard.admin_count || 0);
+                document.getElementById('stat-today-new-users').textContent = AdminUI.formatNumber(dashboard.today_new_users || 0);
+
+                const healthEl = document.getElementById('stat-system-health');
+                const healthStatus = dashboard.system_health || 'healthy';
+                if (healthStatus === 'degraded') {
+                    healthEl.textContent = '降级';
+                    healthEl.className = 'text-2xl font-bold text-yellow-600';
+                } else if (healthStatus === 'unhealthy') {
+                    healthEl.textContent = '异常';
+                    healthEl.className = 'text-2xl font-bold text-red-600';
+                } else {
+                    healthEl.textContent = '正常';
+                    healthEl.className = 'text-2xl font-bold text-green-600';
+                }
 
                 const changeEl = document.getElementById('stat-verifications-change');
                 const change = dashboard.verifications_change || 0;
@@ -525,6 +638,40 @@
                         </div>
                     </div>
                 `).join('');
+            }
+
+            function loadRecentUsers() {
+                const tbody = document.getElementById('recent-users-list');
+                const token = localStorage.getItem('admin_token') || '';
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                fetch('/admin/api/users?page=1&page_size=5', { headers: headers })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.code !== 0 || !data.data || !data.data.items) {
+                            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-500">暂无数据</td></tr>';
+                            return;
+                        }
+                        var users = data.data.items;
+                        if (users.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-500">暂无数据</td></tr>';
+                            return;
+                        }
+                        var roleLabels = { super_admin: '超级管理员', admin: '管理员', operator: '操作员', viewer: '观察者' };
+                        tbody.innerHTML = users.map(function(u) {
+                            var statusClass = u.status === 1 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600';
+                            var statusText = u.status === 1 ? '启用' : '禁用';
+                            return '<tr class="border-b border-gray-50 hover:bg-gray-50">' +
+                                '<td class="py-3 font-medium text-gray-800">' + (u.username || '-') + '</td>' +
+                                '<td class="py-3 text-gray-500">' + (u.email || '-') + '</td>' +
+                                '<td class="py-3">' + (roleLabels[u.role] || u.role || '-') + '</td>' +
+                                '<td class="py-3 text-gray-500">' + (u.created_at ? new Date(u.created_at).toLocaleString('zh-CN') : '-') + '</td>' +
+                                '<td class="py-3"><span class="px-2 py-0.5 rounded text-xs ' + statusClass + '">' + statusText + '</span></td>' +
+                            '</tr>';
+                        }).join('');
+                    })
+                    .catch(function() {
+                        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-500">加载失败</td></tr>';
+                    });
             }
 
             function generateMockTrendData() {

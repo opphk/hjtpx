@@ -241,7 +241,9 @@ func (s *RBACService) GetAdmin(ctx context.Context, id int64) (*model.Admin, err
 
 	roles, err := s.adminRoleRepo.GetAdminRoles(ctx, id)
 	if err == nil {
-		admin.Roles = roles
+		for _, r := range roles {
+			admin.Roles = append(admin.Roles, *r)
+		}
 	}
 
 	return admin, nil
@@ -282,7 +284,7 @@ func (s *RBACService) CreateAdmin(ctx context.Context, req *model.CreateAdminReq
 		if err := s.adminRoleRepo.AssignRole(ctx, int64(admin.ID), int64(role.ID)); err != nil {
 			return nil, err
 		}
-		admin.Roles = []*model.Role{role}
+		admin.Roles = append(admin.Roles, *role)
 	}
 
 	return admin, nil
@@ -352,7 +354,7 @@ func (s *RBACService) CheckPermission(c *gin.Context, permissionCode string) boo
 		return false
 	}
 
-	hasPermission, err := s.adminRoleRepo.HasPermission(context.Background(), adminID.(uint), permissionCode)
+	hasPermission, err := s.adminRoleRepo.HasPermission(context.Background(), int64(adminID.(uint)), permissionCode)
 	if err != nil {
 		return false
 	}
@@ -366,7 +368,7 @@ func (s *RBACService) CheckRole(c *gin.Context, roleCode string) bool {
 		return false
 	}
 
-	hasRole, err := s.adminRoleRepo.HasRole(context.Background(), adminID.(uint), roleCode)
+	hasRole, err := s.adminRoleRepo.HasRole(context.Background(), int64(adminID.(uint)), roleCode)
 	if err != nil {
 		return false
 	}

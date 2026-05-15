@@ -1196,7 +1196,11 @@ func (e *RiskEngine) TrainAIModel(ctx context.Context, behaviors []*BehaviorData
 		return nil, fmt.Errorf("AI is not enabled in config")
 	}
 
-	return e.aiTrainer.Train(ctx, behaviors, labels)
+	aiBehaviors := make([]*ai.BehaviorData, len(behaviors))
+	for i, b := range behaviors {
+		aiBehaviors[i] = convertToAIBehavior(b)
+	}
+	return e.aiTrainer.Train(ctx, aiBehaviors, labels)
 }
 
 func (e *RiskEngine) UpdateAIModelWithFeedback(ctx context.Context, behavior *BehaviorData, isBot bool) error {
@@ -1207,7 +1211,8 @@ func (e *RiskEngine) UpdateAIModelWithFeedback(ctx context.Context, behavior *Be
 		return fmt.Errorf("AI model is not enabled")
 	}
 
-	return e.aiTrainer.UpdateWithFeedback(ctx, behavior, isBot)
+	aiBehavior := convertToAIBehavior(behavior)
+	return e.aiTrainer.UpdateWithFeedback(ctx, aiBehavior, isBot)
 }
 
 func (e *RiskEngine) SaveAIModel(path string) error {
@@ -1255,10 +1260,73 @@ func (e *RiskEngine) GetAIStats() *AIStats {
 }
 
 type AIStats struct {
-	Enabled     bool
-	Ready       bool
-	Training    bool
-	ModelPath   string
-	BatchSize   int
+	Enabled      bool
+	Ready        bool
+	Training     bool
+	ModelPath    string
+	BatchSize    int
 	LearningRate float64
+}
+
+func convertToAIBehavior(from *BehaviorData) *ai.BehaviorData {
+	if from == nil {
+		return nil
+	}
+
+	data := &ai.BehaviorData{
+		UserID:     from.UserID,
+		SessionID:  from.SessionID,
+		SlideStart: from.SlideStart,
+		SlideEnd:   from.SlideEnd,
+		Success:    from.Success,
+		ClickTimes: make([]int64, len(from.ClickTimes)),
+	}
+
+	copy(data.ClickTimes, from.ClickTimes)
+
+	data.MouseTracks = make([]ai.MouseTrack, len(from.MouseTracks))
+	for i, track := range from.MouseTracks {
+		data.MouseTracks[i] = ai.MouseTrack{
+			X:            track.X,
+			Y:            track.Y,
+			Timestamp:    track.Timestamp,
+			Velocity:     track.Velocity,
+			Acceleration: track.Acceleration,
+			Pressure:     track.Pressure,
+			EventType:    track.EventType,
+		}
+	}
+
+	data.ClickEvents = make([]ai.ClickEvent, len(from.ClickEvents))
+	for i, click := range from.ClickEvents {
+		data.ClickEvents[i] = ai.ClickEvent{
+			Timestamp: click.Timestamp,
+			X:         click.X,
+			Y:         click.Y,
+			Pressure:  click.Pressure,
+			Duration:  click.Duration,
+		}
+	}
+
+	data.HesitationPoints = make([]ai.HesitationPoint, len(from.HesitationPoints))
+	for i, hp := range from.HesitationPoints {
+		data.HesitationPoints[i] = ai.HesitationPoint{
+			X:         hp.X,
+			Y:         hp.Y,
+			Timestamp: hp.Timestamp,
+			Duration:  hp.Duration,
+		}
+	}
+
+	data.SlidePath = make([]ai.Point, len(from.SlidePath))
+	for i, p := range from.SlidePath {
+		data.SlidePath[i] = ai.Point{X: p.X, Y: p.Y}
+	}
+
+	data.DeviceOrientation = make([]ai.Point, len(from.DeviceOrientation))
+	for i, p := range from.DeviceOrientation {
+		data.DeviceOrientation[i] = ai.Point{X: p.X, Y: p.Y}
+	}
+
+	return data
 }

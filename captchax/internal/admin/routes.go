@@ -12,9 +12,13 @@ import (
 )
 
 type Router struct {
-	handlers *AdminHandlers
-	rbacHandlers *RBACHandlers
-	auth     *AuthService
+	handlers       *AdminHandlers
+	rbacHandlers   *RBACHandlers
+	userHandlers   *UserManagementHandlers
+	settingsHandlers *SettingsHandlers
+	auditHandlers  *AuditHandlers
+	exportHandlers *ExportHandlers
+	auth           *AuthService
 }
 
 func NewRouter(
@@ -56,11 +60,18 @@ func NewRouter(
 
 	exportHandlers := NewExportHandlers(exportService)
 	rbacHandlers := NewRBACHandlers(rbacService)
+	userHandlers := NewUserManagementHandlers(db)
+	settingsHandlers := NewSettingsHandlers(db)
+	auditHandlers := NewAuditHandlers(db)
 
 	return &Router{
-		handlers: handlers,
-		rbacHandlers: rbacHandlers,
-		auth:     authService,
+		handlers:       handlers,
+		rbacHandlers:   rbacHandlers,
+		userHandlers:   userHandlers,
+		settingsHandlers: settingsHandlers,
+		auditHandlers:  auditHandlers,
+		exportHandlers: exportHandlers,
+		auth:           authService,
 	}
 }
 
@@ -78,6 +89,9 @@ func (r *Router) RegisterRoutes(router *gin.Engine) {
 	router.GET("/admin/blacklist", r.handlers.ShowBlacklistPage)
 	router.GET("/admin/admins", r.handlers.ShowAdminsPage)
 	router.GET("/admin/roles", r.handlers.ShowRolesPage)
+	router.GET("/admin/users", r.userHandlers.ShowUsersPage)
+	router.GET("/admin/settings", r.settingsHandlers.ShowSettingsPage)
+	router.GET("/admin/audit", r.auditHandlers.ShowAuditPage)
 
 	router.GET("/admin/ws", r.auth.AuthMiddleware(), r.handlers.HandleWebSocket)
 	router.GET("/admin/api/realtime/stats", r.auth.AuthMiddleware(), r.handlers.GetRealtimeStats)
@@ -105,10 +119,10 @@ func (r *Router) RegisterRoutes(router *gin.Engine) {
 			protected.GET("/analytics/devices", r.handlers.GetAnalyticsDevices)
 			protected.GET("/analytics/risk", r.handlers.GetAnalyticsRisk)
 
-			protected.GET("/export/count", exportHandlers.GetExportCount)
-			protected.GET("/export/captchas", exportHandlers.ExportCaptchas)
-			protected.GET("/export/stats", exportHandlers.ExportStats)
-			protected.GET("/export/logs", exportHandlers.ExportLogs)
+			protected.GET("/export/count", r.exportHandlers.GetExportCount)
+			protected.GET("/export/captchas", r.exportHandlers.ExportCaptchas)
+			protected.GET("/export/stats", r.exportHandlers.ExportStats)
+			protected.GET("/export/logs", r.exportHandlers.ExportLogs)
 
 			protected.GET("/config", r.handlers.GetConfig)
 			protected.POST("/config", r.auth.SuperAdminOnly(), r.handlers.UpdateConfig)
@@ -136,6 +150,20 @@ func (r *Router) RegisterRoutes(router *gin.Engine) {
 
 			protected.GET("/permissions", r.rbacHandlers.GetPermissions)
 			protected.GET("/me/permissions", r.rbacHandlers.GetMyPermissions)
+
+			protected.GET("/users", r.userHandlers.GetUsers)
+			protected.GET("/users/:id", r.userHandlers.GetUser)
+			protected.POST("/users", r.auth.SuperAdminOnly(), r.userHandlers.CreateUser)
+			protected.PUT("/users/:id", r.userHandlers.UpdateUser)
+			protected.DELETE("/users/:id", r.auth.SuperAdminOnly(), r.userHandlers.DeleteUser)
+			protected.PUT("/users/:id/role", r.auth.SuperAdminOnly(), r.userHandlers.UpdateUserRole)
+			protected.PUT("/users/:id/status", r.userHandlers.UpdateUserStatus)
+
+			protected.GET("/settings", r.settingsHandlers.GetSettings)
+			protected.PUT("/settings", r.auth.SuperAdminOnly(), r.settingsHandlers.UpdateSettings)
+
+			protected.GET("/audit-logs", r.auditHandlers.GetAuditLogs)
+			protected.GET("/audit-logs/export", r.auditHandlers.ExportAuditLogs)
 		}
 	}
 

@@ -2,8 +2,6 @@ package ai
 
 import (
 	"math"
-
-	"captchax/internal/risk"
 )
 
 const (
@@ -584,65 +582,4 @@ func (fe *FeatureExtractor) ExtractFromMultiple(behaviors []*BehaviorData) []*Ex
 	return results
 }
 
-func ConvertFromRiskBehavior(from *risk.BehaviorData) *BehaviorData {
-	if from == nil {
-		return nil
-	}
 
-	data := &BehaviorData{
-		UserID:       from.UserID,
-		SessionID:    from.SessionID,
-		SlideStart:   from.SlideStart,
-		SlideEnd:     from.SlideEnd,
-		Success:      from.Success,
-		ClickTimes:   make([]int64, len(from.ClickTimes)),
-	}
-
-	copy(data.ClickTimes, from.ClickTimes)
-
-	data.MouseTracks = make([]MouseTrack, len(from.MouseTracks))
-	for i, track := range from.MouseTracks {
-		data.MouseTracks[i] = MouseTrack{
-			X:           track.X,
-			Y:           track.Y,
-			Timestamp:   track.Timestamp,
-			Velocity:    track.Velocity,
-			Acceleration: track.Acceleration,
-			Pressure:    track.Pressure,
-			EventType:   track.EventType,
-		}
-	}
-
-	data.ClickEvents = make([]ClickEvent, len(from.ClickEvents))
-	for i, click := range from.ClickEvents {
-		data.ClickEvents[i] = ClickEvent{
-			Timestamp: click.Timestamp,
-			X:         click.X,
-			Y:         click.Y,
-			Pressure:  click.Pressure,
-			Duration:  click.Duration,
-		}
-	}
-
-	data.HesitationPoints = make([]HesitationPoint, len(from.HesitationPoints))
-	for i, hp := range from.HesitationPoints {
-		data.HesitationPoints[i] = HesitationPoint{
-			X:         hp.X,
-			Y:         hp.Y,
-			Timestamp: hp.Timestamp,
-			Duration:  hp.Duration,
-		}
-	}
-
-	data.SlidePath = make([]Point, len(from.SlidePath))
-	for i, p := range from.SlidePath {
-		data.SlidePath[i] = Point{X: p.X, Y: p.Y}
-	}
-
-	data.DeviceOrientation = make([]Point, len(from.DeviceOrientation))
-	for i, p := range from.DeviceOrientation {
-		data.DeviceOrientation[i] = Point{X: p.X, Y: p.Y}
-	}
-
-	return data
-}

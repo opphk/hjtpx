@@ -2,7 +2,6 @@ package sentry
 
 import (
 	"log"
-	"os"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -70,7 +69,7 @@ func Middleware() gin.HandlerFunc {
 		ctx := sentry.SetHubOnContext(c.Request.Context(), hub)
 
 		span := sentry.StartSpan(ctx, "http.server",
-			sentry.TransactionName(c.Request.Method+" "+c.FullPath()),
+			sentry.WithTransactionName(c.Request.Method+" "+c.FullPath()),
 		)
 		defer span.Finish()
 

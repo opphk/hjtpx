@@ -1,7 +1,10 @@
 package api
 
 import (
+	"captchax/internal/file"
 	"captchax/internal/middleware"
+	"captchax/internal/notification"
+	"captchax/internal/search"
 	"captchax/internal/service"
 	"compress/gzip"
 
@@ -9,27 +12,30 @@ import (
 )
 
 type Server struct {
-	router         *gin.Engine
-	captchaService *service.CaptchaService
-	handler        *Handler
+	router              *gin.Engine
+	captchaService      *service.CaptchaService
+	handler             *Handler
+	fileHandler         *file.Handler
+	searchHandler       *search.Handler
+	notificationHandler *notification.Handler
 }
 
 type ServerConfig struct {
-	EnableV1          bool
-	EnableV2          bool
-	EnableCompression bool
+	EnableV1            bool
+	EnableV2            bool
+	EnableCompression   bool
 	EnableDeduplication bool
-	EnableCache       bool
-	GzipLevel         int
+	EnableCache         bool
+	GzipLevel           int
 }
 
 var defaultServerConfig = &ServerConfig{
-	EnableV1:           true,
-	EnableV2:           true,
-	EnableCompression:  true,
+	EnableV1:            true,
+	EnableV2:            true,
+	EnableCompression:   true,
 	EnableDeduplication: true,
-	EnableCache:        true,
-	GzipLevel:          gzip.DefaultCompression,
+	EnableCache:         true,
+	GzipLevel:           gzip.DefaultCompression,
 }
 
 func NewServer(captchaService *service.CaptchaService) *Server {
@@ -54,6 +60,18 @@ func NewServerWithConfig(captchaService *service.CaptchaService, config *ServerC
 	server.setupRoutes(config)
 
 	return server
+}
+
+func (s *Server) RegisterFileHandler(fh *file.Handler) {
+	s.fileHandler = fh
+}
+
+func (s *Server) RegisterSearchHandler(sh *search.Handler) {
+	s.searchHandler = sh
+}
+
+func (s *Server) RegisterNotificationHandler(nh *notification.Handler) {
+	s.notificationHandler = nh
 }
 
 func (s *Server) setupMiddleware(config *ServerConfig) {
@@ -117,6 +135,34 @@ func (s *Server) setupV1Routes(api *gin.RouterGroup) {
 		captcha.POST("/icon/verify", s.handler.verifyIconCaptcha)
 		captcha.POST("/audio", s.handler.getAudioCaptcha)
 		captcha.POST("/audio/verify", s.handler.verifyAudioCaptcha)
+	}
+
+	if s.fileHandler != nil {
+		files := api.Group("/files")
+		{
+			files.POST("/upload", s.fileHandler.Upload)
+			files.GET("/:id/download", s.fileHandler.Download)
+			files.DELETE("/:id", s.fileHandler.Delete)
+			files.GET("", s.fileHandler.List)
+		}
+	}
+
+	if s.searchHandler != nil {
+		search := api.Group("/search")
+		{
+			search.GET("", s.searchHandler.Search)
+		}
+	}
+
+	if s.notificationHandler != nil {
+		notifications := api.Group("/notifications")
+		{
+			notifications.GET("", s.notificationHandler.GetNotifications)
+			notifications.GET("/unread-count", s.notificationHandler.GetUnreadCount)
+			notifications.PUT("/:id/read", s.notificationHandler.MarkAsRead)
+			notifications.PUT("/read-all", s.notificationHandler.MarkAllAsRead)
+			notifications.DELETE("/:id", s.notificationHandler.DeleteNotification)
+		}
 	}
 }
 

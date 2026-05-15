@@ -17,6 +17,7 @@ type Config struct {
 	Log      LogConfig      `yaml:"log"`
 	Captcha  CaptchaConfig  `yaml:"captcha"`
 	Admin    AdminConfig    `yaml:"admin"`
+	User     UserConfig     `yaml:"user"`
 	Sentry   SentryConfig   `yaml:"sentry"`
 	AI       AIConfig       `yaml:"ai_model"`
 }
@@ -33,6 +34,11 @@ type AdminConfig struct {
 	JWTSecret        string `yaml:"jwt_secret"`
 	TokenTTLSeconds  int    `yaml:"token_ttl_seconds"`
 	CookieName       string `yaml:"cookie_name"`
+}
+
+type UserConfig struct {
+	JWTSecret       string `yaml:"jwt_secret"`
+	TokenTTLSeconds int    `yaml:"token_ttl_seconds"`
 }
 
 type ServerConfig struct {

@@ -40,6 +40,10 @@ admin:
   token_ttl_seconds: 86400
   cookie_name: "admin_token"
 
+user:
+  jwt_secret: "captchax-user-jwt-secret-change-in-production-2026"
+  token_ttl_seconds: 86400
+
 sentry:
   dsn: ""
   environment: "development"

@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -308,7 +309,6 @@ func (nn *NeuralNetwork) Train(inputs [][]float64, labels []float64, config *Mod
 				end = len(inputs)
 			}
 
-			batchLoss := 0.0
 			for _, idx := range indices[i:end] {
 				input := inputs[idx]
 				label := labels[idx]
