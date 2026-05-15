@@ -53,7 +53,8 @@ export default defineConfig({
       output: {
         manualChunks: id => {
           if (id.includes('node_modules')) {
-            if (id.includes('react')) {
+            // 将 React 相关库打包在一起，避免循环依赖
+            if (id.includes('react') || id.includes('scheduler') || id.includes('use-sync-external-store')) {
               return 'vendor-react';
             }
             if (id.includes('socket.io')) {
@@ -71,8 +72,9 @@ export default defineConfig({
             if (id.includes('papaparse')) {
               return 'vendor-csv';
             }
+            // prop-types 和 warning 合并到 react chunk 避免循环依赖
             if (id.includes('prop-types') || id.includes('warning')) {
-              return 'vendor-polyfills';
+              return 'vendor-react';
             }
             if (id.includes('@vitejs') || id.includes('vite')) {
               return 'vendor-build';

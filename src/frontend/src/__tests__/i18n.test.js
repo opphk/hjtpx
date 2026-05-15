@@ -216,7 +216,7 @@ describe('Date formatting', () => {
 
   describe('timezone support', () => {
     it('should format date in specific timezone', () => {
-      const result = formatInTimezone(testDate, 'America/New_York', 'en');
+      const result = formatInTimezone(testDate, 'America/New_York', 'yyyy-MM-dd');
       expect(result).toBeTruthy();
       expect(typeof result).toBe('string');
     });

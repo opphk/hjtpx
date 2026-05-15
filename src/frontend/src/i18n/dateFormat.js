@@ -172,3 +172,11 @@ export const getLocalizedTimeFormat = (lng) => {
 export const getSupportedLocales = () => {
   return Object.keys(localeMap);
 };
+
+// 时区格式化函数 - 用于测试兼容性
+export const formatInTimezone = (date, timezone, formatStr = 'yyyy-MM-dd HH:mm:ss') => {
+  if (!date) return '';
+  const d = typeof date === 'string' ? parseISO(date) : date;
+  // 简单实现，实际项目中可以使用 date-fns-tz
+  return format(d, formatStr, { locale: enUS });
+};

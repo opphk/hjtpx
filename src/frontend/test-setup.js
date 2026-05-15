@@ -1,4 +1,4 @@
-import { expect, afterEach } from 'vitest';
+import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
@@ -6,18 +6,29 @@ afterEach(() => {
   cleanup();
 });
 
-global.localStorage = {
-  getItem: () => null,
-  setItem: () => {},
-  removeItem: () => {},
-  clear: () => {}
-};
+// Mock localStorage with working implementation
+const localStorageMock = (() => {
+  let store = {};
+  return {
+    getItem: (key) => store[key] || null,
+    setItem: (key, value) => { store[key] = String(value); },
+    removeItem: (key) => { delete store[key]; },
+    clear: () => { store = {}; }
+  };
+})();
+
+global.localStorage = localStorageMock;
 
 global.sessionStorage = {
   getItem: () => null,
   setItem: () => {},
   removeItem: () => {},
   clear: () => {}
+};
+
+// Mock jest for compatibility
+global.jest = {
+  fn: vi.fn
 };
 
 Object.defineProperty(window, 'matchMedia', {
