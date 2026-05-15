@@ -26,7 +26,7 @@ describe('Pool Mock', () => {
 
 describe('Auth Service Functions', () => {
   describe('Password Validation Logic', () => {
-    const validatePassword = (password) => {
+    const validatePassword = password => {
       if (!password || password.length < 8) {
         throw new Error('Password must be at least 8 characters long');
       }
@@ -72,7 +72,7 @@ describe('Auth Service Functions', () => {
   });
 
   describe('Token Generation Logic', () => {
-    const generateToken = (payload) => {
+    const generateToken = payload => {
       return Buffer.from(JSON.stringify(payload)).toString('base64');
     };
 
@@ -110,7 +110,7 @@ describe('Role Constants', () => {
 });
 
 describe('Auth Middleware Logic', () => {
-  const extractBearerToken = (authHeader) => {
+  const extractBearerToken = authHeader => {
     if (!authHeader) {
       return { error: 'No token provided' };
     }

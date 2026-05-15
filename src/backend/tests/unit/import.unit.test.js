@@ -1,7 +1,8 @@
-const request = require('supertest');
-const express = require('express');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+
+const express = require('express');
+const request = require('supertest');
 
 const mockImportService = {
   importFromFile: jest.fn(),
@@ -14,11 +15,7 @@ const mockImportService = {
 jest.mock('../../services/importService', () => mockImportService);
 
 const importRoutes = require('../../routes/import');
-const {
-  generateToken,
-  testPassword,
-  HTTP_STATUS
-} = require('../helpers/testFixtures');
+const { generateToken, testPassword, HTTP_STATUS } = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
@@ -67,9 +64,7 @@ describe('Import API Unit Tests', () => {
       { email: 'test1@example.com', name: 'Test 1' },
       { email: 'test2@example.com', name: 'Test 2' }
     ]);
-    mockImportService.parseJSON.mockResolvedValue([
-      { email: 'json1@example.com', name: 'JSON 1' }
-    ]);
+    mockImportService.parseJSON.mockResolvedValue([{ email: 'json1@example.com', name: 'JSON 1' }]);
   });
 
   describe('POST /api/v1/import/csv', () => {
@@ -81,7 +76,7 @@ describe('Import API Unit Tests', () => {
       });
 
       const csvContent = 'email,name\ntest1@example.com,Test 1\ntest2@example.com,Test 2';
-      
+
       const response = await request(app)
         .post('/api/v1/import/csv')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -99,7 +94,7 @@ describe('Import API Unit Tests', () => {
       });
 
       const csvContent = 'email,name\ntest1@example.com,Test 1';
-      
+
       const response = await request(app)
         .post('/api/v1/import/csv')
         .set('Authorization', `Bearer ${managerToken}`)
@@ -121,7 +116,7 @@ describe('Import API Unit Tests', () => {
 
     it('should fail without table name', async () => {
       const csvContent = 'email,name\ntest@example.com,Test';
-      
+
       const response = await request(app)
         .post('/api/v1/import/csv')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -133,7 +128,7 @@ describe('Import API Unit Tests', () => {
 
     it('should deny access for regular user', async () => {
       const csvContent = 'email,name\ntest@example.com,Test';
-      
+
       const response = await request(app)
         .post('/api/v1/import/csv')
         .set('Authorization', `Bearer ${regularToken}`)
@@ -145,7 +140,7 @@ describe('Import API Unit Tests', () => {
 
     it('should fail without authentication', async () => {
       const csvContent = 'email,name\ntest@example.com,Test';
-      
+
       const response = await request(app)
         .post('/api/v1/import/csv')
         .field('table', 'users')
@@ -163,10 +158,8 @@ describe('Import API Unit Tests', () => {
         errors: []
       });
 
-      const jsonContent = JSON.stringify([
-        { email: 'test1@example.com', name: 'Test 1' }
-      ]);
-      
+      const jsonContent = JSON.stringify([{ email: 'test1@example.com', name: 'Test 1' }]);
+
       const response = await request(app)
         .post('/api/v1/import/json')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -183,10 +176,8 @@ describe('Import API Unit Tests', () => {
         errors: []
       });
 
-      const jsonContent = JSON.stringify([
-        { email: 'test1@example.com', name: 'Test 1' }
-      ]);
-      
+      const jsonContent = JSON.stringify([{ email: 'test1@example.com', name: 'Test 1' }]);
+
       const response = await request(app)
         .post('/api/v1/import/json')
         .set('Authorization', `Bearer ${managerToken}`)
@@ -208,7 +199,7 @@ describe('Import API Unit Tests', () => {
 
     it('should fail without table name', async () => {
       const jsonContent = JSON.stringify([{ email: 'test@example.com', name: 'Test' }]);
-      
+
       const response = await request(app)
         .post('/api/v1/import/json')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -220,7 +211,7 @@ describe('Import API Unit Tests', () => {
 
     it('should deny access for regular user', async () => {
       const jsonContent = JSON.stringify([{ email: 'test@example.com', name: 'Test' }]);
-      
+
       const response = await request(app)
         .post('/api/v1/import/json')
         .set('Authorization', `Bearer ${regularToken}`)
@@ -239,8 +230,9 @@ describe('Import API Unit Tests', () => {
         { email: 'preview3@example.com', name: 'Preview 3' }
       ]);
 
-      const csvContent = 'email,name\npreview1@example.com,Preview 1\npreview2@example.com,Preview 2\npreview3@example.com,Preview 3';
-      
+      const csvContent =
+        'email,name\npreview1@example.com,Preview 1\npreview2@example.com,Preview 2\npreview3@example.com,Preview 3';
+
       const response = await request(app)
         .post('/api/v1/import/preview')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -258,10 +250,8 @@ describe('Import API Unit Tests', () => {
         { email: 'json1@example.com', name: 'JSON 1' }
       ]);
 
-      const jsonContent = JSON.stringify([
-        { email: 'json1@example.com', name: 'JSON 1' }
-      ]);
-      
+      const jsonContent = JSON.stringify([{ email: 'json1@example.com', name: 'JSON 1' }]);
+
       const response = await request(app)
         .post('/api/v1/import/preview')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -273,10 +263,10 @@ describe('Import API Unit Tests', () => {
     });
 
     it('should limit preview to 10 rows', async () => {
-      const csvContent = 'email,name\n' + Array.from({ length: 15 }, (_, i) => 
-        `row${i+1}@example.com,Row ${i+1}`
-      ).join('\n');
-      
+      const csvContent =
+        'email,name\n' +
+        Array.from({ length: 15 }, (_, i) => `row${i + 1}@example.com,Row ${i + 1}`).join('\n');
+
       const response = await request(app)
         .post('/api/v1/import/preview')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -298,7 +288,7 @@ describe('Import API Unit Tests', () => {
 
     it('should deny access for regular user', async () => {
       const csvContent = 'email,name\ntest@example.com,Test';
-      
+
       const response = await request(app)
         .post('/api/v1/import/preview')
         .set('Authorization', `Bearer ${regularToken}`)

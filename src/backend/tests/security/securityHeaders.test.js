@@ -1,6 +1,11 @@
-const request = require('supertest');
 const express = require('express');
-const { securityHeaders, additionalSecurityHeaders, nonceMiddleware } = require('../../middleware/securityHeaders');
+const request = require('supertest');
+
+const {
+  securityHeaders,
+  additionalSecurityHeaders,
+  nonceMiddleware
+} = require('../../middleware/securityHeaders');
 
 describe('Security Headers Middleware', () => {
   let app;

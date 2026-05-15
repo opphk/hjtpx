@@ -10,7 +10,10 @@ module.exports = {
     maxFiles: process.env.LOG_MAX_FILES || '30d',
     datePattern: 'YYYY-MM-DD',
     zippedArchive: process.env.LOG_ZIP !== 'false',
-    sensitiveFields: (process.env.LOG_SENSITIVE_FIELDS || 'password,token,authorization,cookie,secret,apiKey,creditCard').split(','),
+    sensitiveFields: (
+      process.env.LOG_SENSITIVE_FIELDS ||
+      'password,token,authorization,cookie,secret,apiKey,creditCard'
+    ).split(','),
     serviceName: process.env.SERVICE_NAME || 'hjtpx-api',
     appVersion: process.env.APP_VERSION || '1.0.0',
     environment: process.env.NODE_ENV || 'development'

@@ -1,14 +1,10 @@
-const request = require('supertest');
 const express = require('express');
+const request = require('supertest');
 
 const pool = require('../../../config/database/db');
 const exportRoutes = require('../../routes/export');
 const { userFactory } = require('../factories');
-const {
-  generateToken,
-  testPassword,
-  HTTP_STATUS
-} = require('../helpers/testFixtures');
+const { generateToken, testPassword, HTTP_STATUS } = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
@@ -117,9 +113,7 @@ describe('Export API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .get('/api/v1/export/csv')
-        .query({ table: 'users' });
+      const response = await request(app).get('/api/v1/export/csv').query({ table: 'users' });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

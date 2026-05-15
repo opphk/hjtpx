@@ -1,6 +1,6 @@
-const request = require('supertest');
 const express = require('express');
 const mongoose = require('mongoose');
+const request = require('supertest');
 
 const mockNotificationService = {
   getUserNotifications: jest.fn(),
@@ -15,10 +15,7 @@ const mockNotificationService = {
 jest.mock('../../services/notificationService', () => mockNotificationService);
 
 const notificationsRoutes = require('../../routes/v1/notifications');
-const {
-  generateToken,
-  HTTP_STATUS
-} = require('../helpers/testFixtures');
+const { generateToken, HTTP_STATUS } = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
@@ -49,7 +46,7 @@ describe('Notifications API Unit Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     testToken = generateToken(mockUser);
-    
+
     mockNotificationService.getUserNotifications.mockResolvedValue([mockNotification]);
     mockNotificationService.getUnreadCount.mockResolvedValue(5);
     mockNotificationService.getNotificationById.mockResolvedValue(mockNotification);
@@ -144,8 +141,7 @@ describe('Notifications API Unit Tests', () => {
     it('should fail without authentication', async () => {
       const notificationId = mockNotification._id.toString();
 
-      const response = await request(app)
-        .get(`/api/v1/notifications/${notificationId}`);
+      const response = await request(app).get(`/api/v1/notifications/${notificationId}`);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -177,8 +173,7 @@ describe('Notifications API Unit Tests', () => {
     it('should fail without authentication', async () => {
       const notificationId = mockNotification._id.toString();
 
-      const response = await request(app)
-        .put(`/api/v1/notifications/${notificationId}/read`);
+      const response = await request(app).put(`/api/v1/notifications/${notificationId}/read`);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -195,8 +190,7 @@ describe('Notifications API Unit Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .put('/api/v1/notifications/read-all');
+      const response = await request(app).put('/api/v1/notifications/read-all');
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -228,8 +222,7 @@ describe('Notifications API Unit Tests', () => {
     it('should fail without authentication', async () => {
       const notificationId = mockNotification._id.toString();
 
-      const response = await request(app)
-        .delete(`/api/v1/notifications/${notificationId}`);
+      const response = await request(app).delete(`/api/v1/notifications/${notificationId}`);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -264,13 +257,11 @@ describe('Notifications API Unit Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .post('/api/v1/notifications/send')
-        .send({
-          userId: mockUser.id,
-          title: 'New Notification',
-          message: 'This is a new notification'
-        });
+      const response = await request(app).post('/api/v1/notifications/send').send({
+        userId: mockUser.id,
+        title: 'New Notification',
+        message: 'This is a new notification'
+      });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

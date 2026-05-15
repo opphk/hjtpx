@@ -104,13 +104,19 @@ class CacheMonitor {
       );
     }
 
-    if (currentMetrics.latency && currentMetrics.latency.l2 >= this.alertThresholds.latency.critical) {
+    if (
+      currentMetrics.latency &&
+      currentMetrics.latency.l2 >= this.alertThresholds.latency.critical
+    ) {
       this.triggerAlert(
         'critical',
         'Cache Latency Critical',
         `L2 cache latency is at ${currentMetrics.latency.l2}ms (critical: >${this.alertThresholds.latency.critical}ms)`
       );
-    } else if (currentMetrics.latency && currentMetrics.latency.l2 >= this.alertThresholds.latency.warning) {
+    } else if (
+      currentMetrics.latency &&
+      currentMetrics.latency.l2 >= this.alertThresholds.latency.warning
+    ) {
       this.triggerAlert(
         'warning',
         'Cache Latency High',
@@ -394,7 +400,8 @@ class CacheMonitor {
 
     if (format === 'json') {
       return JSON.stringify(report, null, 2);
-    } else if (format === 'csv') {
+    }
+    if (format === 'csv') {
       return this.exportToCSV(report);
     }
 

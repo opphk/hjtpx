@@ -1,5 +1,5 @@
-const redisClient = require('../../../config/redis/client');
 const db = require('../../../config/database/db');
+const redisClient = require('../../../config/redis/client');
 
 const CACHE_KEYS = {
   SESSION: 'session:',

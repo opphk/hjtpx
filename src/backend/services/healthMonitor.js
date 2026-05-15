@@ -1,6 +1,7 @@
 const os = require('os');
 
 const { logInfo, logDebug } = require('../utils/productionLogger');
+
 const { alertManager } = require('./alertService');
 
 let cacheService = null;
@@ -314,20 +315,19 @@ if (redisClient) {
       }
 
       const pong = await redisClient.ping();
-      
+
       if (pong === 'PONG') {
         return {
           healthy: true,
           message: 'Redis client is healthy',
           details: { isOpen: true, ping: 'PONG' }
         };
-      } else {
-        return {
-          healthy: false,
-          message: 'Redis ping failed',
-          details: { isOpen: true, ping: pong }
-        };
       }
+      return {
+        healthy: false,
+        message: 'Redis ping failed',
+        details: { isOpen: true, ping: pong }
+      };
     } catch (error) {
       return {
         healthy: false,

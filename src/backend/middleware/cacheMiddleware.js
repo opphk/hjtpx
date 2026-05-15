@@ -11,12 +11,42 @@ const CACHE_INVALIDATION_STRATEGIES = {
 };
 
 const cacheConfig = {
-  '/api/v1/users': { ttl: 60, isPublic: false, tags: ['users'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE },
-  '/api/v1/notifications': { ttl: 30, isPublic: false, tags: ['notifications'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE },
-  '/api/v1/health': { ttl: 5, isPublic: true, tags: ['health'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.TTL_BASED },
-  '/api/v1/analytics': { ttl: 60, isPublic: false, tags: ['analytics'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.DEFERRED },
-  '/api/v1/permissions': { ttl: 300, isPublic: false, tags: ['permissions'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE },
-  '/api/docs': { ttl: 3600, isPublic: true, tags: ['docs'], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.TTL_BASED }
+  '/api/v1/users': {
+    ttl: 60,
+    isPublic: false,
+    tags: ['users'],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE
+  },
+  '/api/v1/notifications': {
+    ttl: 30,
+    isPublic: false,
+    tags: ['notifications'],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE
+  },
+  '/api/v1/health': {
+    ttl: 5,
+    isPublic: true,
+    tags: ['health'],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.TTL_BASED
+  },
+  '/api/v1/analytics': {
+    ttl: 60,
+    isPublic: false,
+    tags: ['analytics'],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.DEFERRED
+  },
+  '/api/v1/permissions': {
+    ttl: 300,
+    isPublic: false,
+    tags: ['permissions'],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE
+  },
+  '/api/docs': {
+    ttl: 3600,
+    isPublic: true,
+    tags: ['docs'],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.TTL_BASED
+  }
 };
 
 function generateCacheKey(req) {
@@ -89,7 +119,12 @@ function getCacheConfig(path) {
       return config;
     }
   }
-  return { ttl: DEFAULT_TTL, isPublic: true, tags: [], invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE };
+  return {
+    ttl: DEFAULT_TTL,
+    isPublic: true,
+    tags: [],
+    invalidationStrategy: CACHE_INVALIDATION_STRATEGIES.IMMEDIATE
+  };
 }
 
 function apiCache(ttl = DEFAULT_TTL, options = {}) {
@@ -98,9 +133,7 @@ function apiCache(ttl = DEFAULT_TTL, options = {}) {
       return next();
     }
 
-    const cacheKey = options.keyGenerator
-      ? options.keyGenerator(req)
-      : generateCacheKey(req);
+    const cacheKey = options.keyGenerator ? options.keyGenerator(req) : generateCacheKey(req);
     const config = getCacheConfig(req.path);
     const effectiveTtl = options.ttl || config.ttl || ttl;
     const tags = options.tags || config.tags || [];
@@ -133,7 +166,7 @@ function apiCache(ttl = DEFAULT_TTL, options = {}) {
       let responseData = null;
       let hasCached = false;
 
-      res.json = (data) => {
+      res.json = data => {
         if (!hasCached && shouldCacheResponse(res)) {
           responseData = data;
           hasCached = true;
@@ -141,8 +174,11 @@ function apiCache(ttl = DEFAULT_TTL, options = {}) {
         return originalJson(data);
       };
 
-      res.send = (data) => {
-        if (!hasCached && shouldCacheResponse(res) && typeof data !== 'string' || !data.startsWith('<')) {
+      res.send = data => {
+        if (
+          (!hasCached && shouldCacheResponse(res) && typeof data !== 'string') ||
+          !data.startsWith('<')
+        ) {
           responseData = data;
           hasCached = true;
         }
@@ -183,9 +219,7 @@ function apiCacheWithValidation(ttl = DEFAULT_TTL, options = {}) {
       return next();
     }
 
-    const cacheKey = options.keyGenerator
-      ? options.keyGenerator(req)
-      : generateCacheKey(req);
+    const cacheKey = options.keyGenerator ? options.keyGenerator(req) : generateCacheKey(req);
     const config = getCacheConfig(req.path);
     const effectiveTtl = options.ttl || config.ttl || ttl;
     const tags = options.tags || config.tags || [];
@@ -221,7 +255,7 @@ function apiCacheWithValidation(ttl = DEFAULT_TTL, options = {}) {
       let responseData = null;
       let hasCached = false;
 
-      res.json = (data) => {
+      res.json = data => {
         if (!hasCached && shouldCacheResponse(res)) {
           responseData = data;
           hasCached = true;
@@ -229,8 +263,11 @@ function apiCacheWithValidation(ttl = DEFAULT_TTL, options = {}) {
         return originalJson(data);
       };
 
-      res.send = (data) => {
-        if (!hasCached && shouldCacheResponse(res) && typeof data !== 'string' || !data.startsWith('<')) {
+      res.send = data => {
+        if (
+          (!hasCached && shouldCacheResponse(res) && typeof data !== 'string') ||
+          !data.startsWith('<')
+        ) {
           responseData = data;
           hasCached = true;
         }
@@ -350,9 +387,11 @@ function userCacheMiddleware() {
       }
 
       const originalJson = res.json.bind(res);
-      res.json = (data) => {
+      res.json = data => {
         if (res.statusCode === 200 && data && data.data && data.data.id === userId) {
-          cacheService.setCachedUser(cacheKey, data.data, undefined, [`user:${userId}`, 'user']).catch(() => {});
+          cacheService
+            .setCachedUser(cacheKey, data.data, undefined, [`user:${userId}`, 'user'])
+            .catch(() => {});
         }
         return originalJson(data);
       };
@@ -414,13 +453,16 @@ function cacheHealthMiddleware() {
         const isHealthy = await cacheService.isHealthy();
         const stats = cacheService.getStats();
 
-        return res.success({
-          healthy: isHealthy,
-          redisConnected: stats.isRedisConnected,
-          memoryCacheSize: stats.memoryCacheSize,
-          maxMemoryCacheSize: stats.maxMemoryCacheSize,
-          memoryCachePercent: stats.overall.memoryCachePercent
-        }, 'Cache health status retrieved successfully');
+        return res.success(
+          {
+            healthy: isHealthy,
+            redisConnected: stats.isRedisConnected,
+            memoryCacheSize: stats.memoryCacheSize,
+            maxMemoryCacheSize: stats.maxMemoryCacheSize,
+            memoryCachePercent: stats.overall.memoryCachePercent
+          },
+          'Cache health status retrieved successfully'
+        );
       } catch (error) {
         console.error('Cache health check error:', error);
         return res.error('Failed to retrieve cache health status', 500);
@@ -437,11 +479,13 @@ function cacheInvalidationStatsMiddleware() {
         const { pattern, tag, userId, bulk } = req.body;
 
         if (bulk && Array.isArray(bulk)) {
-          await Promise.all(bulk.map(item => {
-            if (item.pattern) return cacheService.invalidateApiCache(item.pattern);
-            if (item.tag) return cacheService.invalidateTag(item.tag);
-            return Promise.resolve();
-          }));
+          await Promise.all(
+            bulk.map(item => {
+              if (item.pattern) return cacheService.invalidateApiCache(item.pattern);
+              if (item.tag) return cacheService.invalidateTag(item.tag);
+              return Promise.resolve();
+            })
+          );
         } else if (pattern) {
           await cacheService.invalidateApiCache(pattern);
         } else if (tag) {

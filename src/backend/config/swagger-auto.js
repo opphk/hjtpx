@@ -1,7 +1,8 @@
-const swaggerJsdoc = require('swagger-jsdoc');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+
+const swaggerJsdoc = require('swagger-jsdoc');
 
 const packageJson = require('../../../package.json');
 
@@ -30,7 +31,7 @@ const options = {
         name: 'MIT',
         url: 'https://opensource.org/licenses/MIT'
       },
-      "x-build": {
+      'x-build': {
         commitHash: getGitCommitHash(),
         buildTime: new Date().toISOString()
       }
@@ -236,9 +237,7 @@ const options = {
         }
       }
     },
-    security: [
-      { bearerAuth: [] }
-    ]
+    security: [{ bearerAuth: [] }]
   },
   apis: [
     './src/backend/routes/*.js',
@@ -253,15 +252,15 @@ const generateSwaggerSpec = () => {
 
 const saveSwaggerSpec = (outputDir = './docs') => {
   const spec = generateSwaggerSpec();
-  
+
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
-  
+
   const jsonPath = path.join(outputDir, 'openapi.json');
   fs.writeFileSync(jsonPath, JSON.stringify(spec, null, 2));
   console.log(`✅ Swagger JSON saved to: ${jsonPath}`);
-  
+
   try {
     const yaml = require('js-yaml');
     const yamlPath = path.join(outputDir, 'openapi.yaml');
@@ -270,7 +269,7 @@ const saveSwaggerSpec = (outputDir = './docs') => {
   } catch (e) {
     console.log('⚠️ YAML generation skipped (js-yaml not available)');
   }
-  
+
   return spec;
 };
 

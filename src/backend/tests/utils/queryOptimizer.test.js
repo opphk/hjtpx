@@ -80,7 +80,8 @@ describe('queryOptimizer', () => {
   describe('batchQuery', () => {
     test('should execute multiple queries in a transaction', async () => {
       const mockClient = {
-        query: jest.fn()
+        query: jest
+          .fn()
           .mockResolvedValueOnce()
           .mockResolvedValueOnce({ rows: [{ id: 1 }] })
           .mockResolvedValueOnce({ rows: [{ id: 2 }] })
@@ -104,7 +105,8 @@ describe('queryOptimizer', () => {
 
     test('should rollback on error', async () => {
       const mockClient = {
-        query: jest.fn()
+        query: jest
+          .fn()
           .mockResolvedValueOnce()
           .mockRejectedValueOnce(new Error('DB Error'))
           .mockResolvedValueOnce(),
@@ -113,9 +115,7 @@ describe('queryOptimizer', () => {
 
       db.getClient.mockResolvedValueOnce(mockClient);
 
-      const queries = [
-        { query: 'INSERT INTO users VALUES ($1)', params: ['user1'] }
-      ];
+      const queries = [{ query: 'INSERT INTO users VALUES ($1)', params: ['user1'] }];
 
       await expect(queryOptimizer.batchQuery(queries)).rejects.toThrow('DB Error');
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
@@ -130,7 +130,12 @@ describe('queryOptimizer', () => {
         { name: 'User 2', email: 'user2@example.com' }
       ];
 
-      db.query.mockResolvedValue({ rows: [{ id: 1, ...rows[0] }, { id: 2, ...rows[1] }] });
+      db.query.mockResolvedValue({
+        rows: [
+          { id: 1, ...rows[0] },
+          { id: 2, ...rows[1] }
+        ]
+      });
 
       const result = await queryOptimizer.batchInsert('users', rows, 100);
 
@@ -168,7 +173,8 @@ describe('queryOptimizer', () => {
       ];
 
       const mockClient = {
-        query: jest.fn()
+        query: jest
+          .fn()
           .mockResolvedValueOnce()
           .mockResolvedValueOnce({ rows: [{ id: 1 }] })
           .mockResolvedValueOnce({ rows: [{ id: 2 }] })
@@ -214,9 +220,7 @@ describe('queryOptimizer', () => {
     });
 
     test('should handle empty results', async () => {
-      db.query
-        .mockResolvedValueOnce({ rows: [{ total: 0 }] })
-        .mockResolvedValueOnce({ rows: [] });
+      db.query.mockResolvedValueOnce({ rows: [{ total: 0 }] }).mockResolvedValueOnce({ rows: [] });
 
       const result = await queryOptimizer.paginatedQuery('SELECT * FROM users', [], 1, 10);
 

@@ -929,39 +929,39 @@ const options = {
         User: {
           type: 'object',
           properties: {
-            id: { 
-              type: 'integer', 
+            id: {
+              type: 'integer',
               description: '用户唯一标识符',
               example: 1
             },
-            email: { 
-              type: 'string', 
+            email: {
+              type: 'string',
               format: 'email',
               description: '用户邮箱地址',
               example: 'user@example.com'
             },
-            name: { 
+            name: {
               type: 'string',
               description: '用户显示名称',
               example: 'John Doe'
             },
-            username: { 
+            username: {
               type: 'string',
               description: '用户名'
             },
-            role: { 
-              type: 'string', 
+            role: {
+              type: 'string',
               enum: ['user', 'admin', 'moderator'],
               description: '用户角色',
               example: 'user'
             },
-            createdAt: { 
-              type: 'string', 
+            createdAt: {
+              type: 'string',
               format: 'date-time',
               description: '创建时间'
             },
-            updatedAt: { 
-              type: 'string', 
+            updatedAt: {
+              type: 'string',
               format: 'date-time',
               description: '最后更新时间'
             }
@@ -987,44 +987,44 @@ const options = {
         Notification: {
           type: 'object',
           properties: {
-            id: { 
-              type: 'string', 
+            id: {
+              type: 'string',
               format: 'uuid',
               description: '通知唯一标识符'
             },
-            userId: { 
-              type: 'string', 
+            userId: {
+              type: 'string',
               format: 'uuid',
               description: '关联用户 ID'
             },
-            title: { 
+            title: {
               type: 'string',
               description: '通知标题'
             },
-            message: { 
+            message: {
               type: 'string',
               description: '通知内容'
             },
-            type: { 
-              type: 'string', 
+            type: {
+              type: 'string',
               enum: ['system', 'user', 'security', 'promotion'],
               description: '通知类型'
             },
-            status: { 
-              type: 'string', 
+            status: {
+              type: 'string',
               enum: ['unread', 'read', 'archived'],
               description: '通知状态'
             },
             channels: {
               type: 'array',
-              items: { 
-                type: 'string', 
-                enum: ['email', 'sms', 'push', 'in_app'] 
+              items: {
+                type: 'string',
+                enum: ['email', 'sms', 'push', 'in_app']
               },
               description: '通知渠道列表'
             },
-            createdAt: { 
-              type: 'string', 
+            createdAt: {
+              type: 'string',
               format: 'date-time'
             }
           }
@@ -1059,19 +1059,19 @@ const options = {
         Error: {
           type: 'object',
           properties: {
-            success: { 
-              type: 'boolean', 
+            success: {
+              type: 'boolean',
               default: false,
               example: false
             },
             error: {
               type: 'object',
               properties: {
-                message: { 
+                message: {
                   type: 'string',
                   example: 'Error message'
                 },
-                code: { 
+                code: {
                   type: 'string',
                   example: 'ERROR_CODE'
                 },
@@ -1090,16 +1090,16 @@ const options = {
         SuccessResponse: {
           type: 'object',
           properties: {
-            success: { 
-              type: 'boolean', 
+            success: {
+              type: 'boolean',
               default: true,
               example: true
             },
-            data: { 
+            data: {
               type: 'object',
               description: '响应数据'
             },
-            message: { 
+            message: {
               type: 'string',
               example: 'Operation successful'
             },
@@ -1220,14 +1220,9 @@ const options = {
         }
       }
     },
-    security: [
-      { bearerAuth: [] }
-    ]
+    security: [{ bearerAuth: [] }]
   },
-  apis: [
-    './src/backend/routes/*.js',
-    './src/backend/routes/v1/*.js'
-  ]
+  apis: ['./src/backend/routes/*.js', './src/backend/routes/v1/*.js']
 };
 
 const swaggerSpec = swaggerJsdoc(options);

@@ -1,7 +1,8 @@
 const express = require('express');
+
 const router = express.Router();
-const analyticsService = require('../services/analyticsService');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const analyticsService = require('../services/analyticsService');
 
 /**
  * @swagger

@@ -1,7 +1,9 @@
-const connectionManager = require('../connectionManager');
-const config = require('../../config/messageQueue');
-const { Event, createEvent } = require('./eventTypes');
 const { v4: uuidv4 } = require('uuid');
+
+const config = require('../../config/messageQueue');
+const connectionManager = require('../connectionManager');
+
+const { Event, createEvent } = require('./eventTypes');
 
 class EventPublisher {
   constructor() {
@@ -62,66 +64,90 @@ class EventPublisher {
   }
 
   async publishUserCreated(user, options = {}) {
-    const event = createEvent('user.created', {
-      userId: user._id || user.id,
-      username: user.username,
-      email: user.email,
-      createdAt: user.createdAt
-    }, { source: 'user-service', ...options });
+    const event = createEvent(
+      'user.created',
+      {
+        userId: user._id || user.id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt
+      },
+      { source: 'user-service', ...options }
+    );
 
     return await this.publish(event);
   }
 
   async publishUserUpdated(user, changes, options = {}) {
-    const event = createEvent('user.updated', {
-      userId: user._id || user.id,
-      changes,
-      updatedAt: new Date().toISOString()
-    }, { source: 'user-service', ...options });
+    const event = createEvent(
+      'user.updated',
+      {
+        userId: user._id || user.id,
+        changes,
+        updatedAt: new Date().toISOString()
+      },
+      { source: 'user-service', ...options }
+    );
 
     return await this.publish(event);
   }
 
   async publishUserLoggedIn(user, metadata = {}, options = {}) {
-    const event = createEvent('user.logged_in', {
-      userId: user._id || user.id,
-      username: user.username,
-      timestamp: new Date().toISOString(),
-      ...metadata
-    }, { source: 'auth-service', ...options });
+    const event = createEvent(
+      'user.logged_in',
+      {
+        userId: user._id || user.id,
+        username: user.username,
+        timestamp: new Date().toISOString(),
+        ...metadata
+      },
+      { source: 'auth-service', ...options }
+    );
 
     return await this.publish(event);
   }
 
   async publishNotificationCreated(notification, options = {}) {
-    const event = createEvent('notification.created', {
-      notificationId: notification._id || notification.id,
-      userId: notification.userId,
-      type: notification.type,
-      title: notification.title,
-      message: notification.message
-    }, { source: 'notification-service', ...options });
+    const event = createEvent(
+      'notification.created',
+      {
+        notificationId: notification._id || notification.id,
+        userId: notification.userId,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message
+      },
+      { source: 'notification-service', ...options }
+    );
 
     return await this.publish(event);
   }
 
   async publishExportCompleted(exportId, userId, downloadUrl, options = {}) {
-    const event = createEvent('export.completed', {
-      exportId,
-      userId,
-      downloadUrl,
-      completedAt: new Date().toISOString()
-    }, { source: 'export-service', ...options });
+    const event = createEvent(
+      'export.completed',
+      {
+        exportId,
+        userId,
+        downloadUrl,
+        completedAt: new Date().toISOString()
+      },
+      { source: 'export-service', ...options }
+    );
 
     return await this.publish(event);
   }
 
   async publishSecurityEvent(eventType, details, options = {}) {
-    const event = createEvent('security.event', {
-      eventType,
-      details,
-      timestamp: new Date().toISOString()
-    }, { source: 'security-service', severity: details.severity || 'medium', ...options });
+    const event = createEvent(
+      'security.event',
+      {
+        eventType,
+        details,
+        timestamp: new Date().toISOString()
+      },
+      { source: 'security-service', severity: details.severity || 'medium', ...options }
+    );
 
     return await this.publish(event);
   }

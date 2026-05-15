@@ -68,9 +68,7 @@ class RetryManager {
   }
 
   async executeWithRetry(operation, options = {}) {
-    const strategy = options.strategy
-      ? this.getStrategy(options.strategy)
-      : this.defaultStrategy;
+    const strategy = options.strategy ? this.getStrategy(options.strategy) : this.defaultStrategy;
 
     const context = {
       operationName: options.operationName || 'unknown',
@@ -100,14 +98,18 @@ class RetryManager {
 
         if (context.attempt < context.maxAttempts) {
           const delay = strategy.calculateDelay(context.attempt);
-          console.log(`[RetryManager] ${context.operationName} failed, retrying in ${delay}ms (attempt ${context.attempt}/${context.maxAttempts})`);
+          console.log(
+            `[RetryManager] ${context.operationName} failed, retrying in ${delay}ms (attempt ${context.attempt}/${context.maxAttempts})`
+          );
           await this.sleep(delay);
         }
       }
     }
 
     this.recordFailure(context);
-    const finalError = new Error(`Max retry attempts (${context.maxAttempts}) exceeded for ${context.operationName}`);
+    const finalError = new Error(
+      `Max retry attempts (${context.maxAttempts}) exceeded for ${context.operationName}`
+    );
     finalError.context = context;
     throw finalError;
   }
@@ -156,28 +158,37 @@ class RetryManager {
 
 const retryManager = new RetryManager();
 
-retryManager.registerStrategy('aggressive', new RetryStrategy({
-  maxAttempts: 3,
-  initialDelay: 500,
-  maxDelay: 10000,
-  backoffMultiplier: 2
-}));
+retryManager.registerStrategy(
+  'aggressive',
+  new RetryStrategy({
+    maxAttempts: 3,
+    initialDelay: 500,
+    maxDelay: 10000,
+    backoffMultiplier: 2
+  })
+);
 
-retryManager.registerStrategy('conservative', new RetryStrategy({
-  maxAttempts: 5,
-  initialDelay: 1000,
-  maxDelay: 60000,
-  backoffMultiplier: 2,
-  jitter: true
-}));
+retryManager.registerStrategy(
+  'conservative',
+  new RetryStrategy({
+    maxAttempts: 5,
+    initialDelay: 1000,
+    maxDelay: 60000,
+    backoffMultiplier: 2,
+    jitter: true
+  })
+);
 
-retryManager.registerStrategy('noRetry', new RetryStrategy({
-  maxAttempts: 1,
-  initialDelay: 0,
-  maxDelay: 0,
-  backoffMultiplier: 1,
-  jitter: false
-}));
+retryManager.registerStrategy(
+  'noRetry',
+  new RetryStrategy({
+    maxAttempts: 1,
+    initialDelay: 0,
+    maxDelay: 0,
+    backoffMultiplier: 1,
+    jitter: false
+  })
+);
 
 module.exports = {
   RetryStrategy,

@@ -1,6 +1,7 @@
+const { v4: uuidv4 } = require('uuid');
 const winston = require('winston');
 const DailyRotateFile = require('winston-daily-rotate-file');
-const { v4: uuidv4 } = require('uuid');
+
 const loggingConfig = require('../config/logging').logging;
 
 const { combine, timestamp, printf, errors, json, colorize, splat } = winston.format;
@@ -45,9 +46,7 @@ const sensitiveDataMasker = (data, sensitiveFields = loggingConfig.sensitiveFiel
 
   for (const [key, value] of Object.entries(data)) {
     const lowerKey = key.toLowerCase();
-    const isSensitive = sensitiveFields.some(field => 
-      lowerKey.includes(field.toLowerCase())
-    );
+    const isSensitive = sensitiveFields.some(field => lowerKey.includes(field.toLowerCase()));
 
     if (isSensitive) {
       masked[key] = '***MASKED***';
@@ -91,7 +90,9 @@ const consoleFormat = combine(
   printf(info => {
     const { level, message, timestamp, ...meta } = info;
     const maskedMeta = sensitiveDataMasker(meta);
-    const metaStr = Object.keys(maskedMeta).length ? `\n${JSON.stringify(maskedMeta, null, 2)}` : '';
+    const metaStr = Object.keys(maskedMeta).length
+      ? `\n${JSON.stringify(maskedMeta, null, 2)}`
+      : '';
     return `${timestamp} [${level}]: ${message}${metaStr}`;
   })
 );
@@ -236,8 +237,8 @@ const logRequest = (req, res, duration, meta = {}) => {
     body: sensitiveDataMasker(req.body),
     headers: sensitiveDataMasker(
       Object.fromEntries(
-        Object.entries(req.headers || {}).filter(([key]) => 
-          !['authorization', 'cookie'].includes(key.toLowerCase())
+        Object.entries(req.headers || {}).filter(
+          ([key]) => !['authorization', 'cookie'].includes(key.toLowerCase())
         )
       )
     ),

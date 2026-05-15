@@ -1,5 +1,6 @@
-const advancedCacheService = require('./advancedCacheService');
 const db = require('../../../config/database/db');
+
+const advancedCacheService = require('./advancedCacheService');
 
 class CacheWarmer {
   constructor() {

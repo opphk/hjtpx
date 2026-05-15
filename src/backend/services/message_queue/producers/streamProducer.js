@@ -1,6 +1,7 @@
-const connectionManager = require('../connectionManager');
-const config = require('../../config/messageQueue');
 const { v4: uuidv4 } = require('uuid');
+
+const config = require('../../config/messageQueue');
+const connectionManager = require('../connectionManager');
 
 class StreamProducer {
   constructor(queueName) {
@@ -113,7 +114,10 @@ class StreamProducer {
   async getPendingCount() {
     const client = connectionManager.getClient();
     try {
-      const info = await connectionManager.getConsumerGroupInfo(this.streamKey, this.queueConfig.consumerGroup);
+      const info = await connectionManager.getConsumerGroupInfo(
+        this.streamKey,
+        this.queueConfig.consumerGroup
+      );
       return info ? info.pending : 0;
     } catch (error) {
       return 0;

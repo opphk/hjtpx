@@ -7,7 +7,7 @@ module.exports = {
     keyPrefix: process.env.REDIS_KEY_PREFIX || 'hjtpx:',
     connectTimeout: parseInt(process.env.REDIS_CONNECT_TIMEOUT || '10000'),
     commandTimeout: parseInt(process.env.REDIS_COMMAND_TIMEOUT || '5000'),
-    retryStrategy: (times) => {
+    retryStrategy: times => {
       const delay = Math.min(times * 50, 2000);
       return delay;
     },

@@ -1,7 +1,8 @@
-const request = require('supertest');
-const express = require('express');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+
+const express = require('express');
+const request = require('supertest');
 
 const pool = require('../../../config/database/db');
 const filesRoutes = require('../../routes/files');
@@ -154,7 +155,7 @@ describe('Files API Integration Tests', () => {
       expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     });
 
-    it('should fail to get other user\'s file as regular user', async () => {
+    it("should fail to get other user's file as regular user", async () => {
       if (!testFile) {
         console.log('Skipping test: Could not create test file');
         return;
@@ -191,8 +192,7 @@ describe('Files API Integration Tests', () => {
         return;
       }
 
-      const response = await request(app)
-        .get(`/api/v1/files/${testFile.id}`);
+      const response = await request(app).get(`/api/v1/files/${testFile.id}`);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -232,7 +232,7 @@ describe('Files API Integration Tests', () => {
       expect(response.status).toBe(HTTP_STATUS.NOT_FOUND);
     });
 
-    it('should fail to delete other user\'s file as regular user', async () => {
+    it("should fail to delete other user's file as regular user", async () => {
       if (!fileToDelete) {
         console.log('Skipping test: Could not create file');
         return;
@@ -247,7 +247,7 @@ describe('Files API Integration Tests', () => {
         .set('Authorization', `Bearer ${otherToken}`);
 
       expect(response.status).toBe(HTTP_STATUS.FORBIDDEN);
-      
+
       cleanupFileIds.push(fileToDelete.id);
     });
 
@@ -270,11 +270,10 @@ describe('Files API Integration Tests', () => {
         return;
       }
 
-      const response = await request(app)
-        .delete(`/api/v1/files/${fileToDelete.id}`);
+      const response = await request(app).delete(`/api/v1/files/${fileToDelete.id}`);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
-      
+
       cleanupFileIds.push(fileToDelete.id);
     });
   });
@@ -310,7 +309,7 @@ describe('Files API Integration Tests', () => {
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
-      
+
       if (response.body.data && response.body.data.id) {
         cleanupFileIds.push(response.body.data.id);
       }
@@ -442,8 +441,7 @@ describe('Files API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .delete('/api/v1/files/folder/test');
+      const response = await request(app).delete('/api/v1/files/folder/test');
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

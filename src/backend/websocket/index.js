@@ -2,11 +2,12 @@ const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 
 const { logger } = require('../middleware/logger');
+
 const connectionManager = require('./connection_manager');
+const heartbeatSystem = require('./heartbeat_system');
+const messageBroadcaster = require('./message_broadcaster');
 const notificationSystem = require('./notification_system');
 const onlineStatusManager = require('./online_status_manager');
-const messageBroadcaster = require('./message_broadcaster');
-const heartbeatSystem = require('./heartbeat_system');
 
 class WebSocketServer {
   constructor(httpServer) {
@@ -44,7 +45,7 @@ class WebSocketServer {
 
     this.initializeSubsystems();
     this.setupHeartbeatMonitor();
-    
+
     this.metrics = {
       totalConnections: 0,
       totalDisconnections: 0,
@@ -75,7 +76,7 @@ class WebSocketServer {
       });
     });
 
-    this.io.engine.on('packet', (packet) => {
+    this.io.engine.on('packet', packet => {
       if (packet.type === 'pong') {
         const socket = this.findSocketByEngineSocket(this.io.engine);
         if (socket) {
@@ -759,12 +760,12 @@ class WebSocketServer {
 
   close() {
     logger.info('Closing WebSocket server');
-    
+
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-    
+
     this.clientHeartbeats.clear();
 
     heartbeatSystem.cleanup();

@@ -1,5 +1,5 @@
-const connectionManager = require('../connectionManager');
 const config = require('../../config/messageQueue');
+const connectionManager = require('../connectionManager');
 
 class DeadLetterQueueManager {
   constructor() {
@@ -90,8 +90,7 @@ class DeadLetterQueueManager {
         if (key.includes('Data') || key.includes('metadata')) {
           value = JSON.parse(value);
         }
-      } catch (e) {
-      }
+      } catch (e) {}
       data[key] = value;
     }
     return { id, ...data };

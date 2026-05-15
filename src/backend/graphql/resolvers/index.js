@@ -1,8 +1,9 @@
-const { GraphQLScalarType, Kind } = require('graphql');
 const bcrypt = require('bcryptjs');
+const { GraphQLScalarType, Kind } = require('graphql');
+
+const Notification = require('../../models/Notification');
 const authService = require('../../services/authService');
 const userService = require('../../services/userService');
-const Notification = require('../../models/Notification');
 const { requireAuth, requireAdmin, requireOwnerOrAdmin } = require('../middleware/auth');
 
 const JSONScalar = new GraphQLScalarType({
@@ -48,7 +49,7 @@ const JSONScalar = new GraphQLScalarType({
   }
 });
 
-const parseLiteral = (ast) => {
+const parseLiteral = ast => {
   if (ast.kind === Kind.STRING) return ast.value;
   if (ast.kind === Kind.INT) return parseInt(ast.value, 10);
   if (ast.kind === Kind.FLOAT) return parseFloat(ast.value);
@@ -67,7 +68,7 @@ const parseLiteral = (ast) => {
   return null;
 };
 
-const formatUser = (user) => {
+const formatUser = user => {
   if (!user) return null;
   return {
     id: user.id?.toString() || user._id?.toString(),
@@ -79,7 +80,7 @@ const formatUser = (user) => {
   };
 };
 
-const formatNotification = (notification) => {
+const formatNotification = notification => {
   if (!notification) return null;
   return {
     id: notification.id?.toString() || notification._id?.toString(),
@@ -110,7 +111,7 @@ const userResolver = {
     });
     return result.notifications.map(formatNotification);
   },
-  
+
   unreadNotificationsCount: async (user, args, context) => {
     requireAuth(context);
     return await Notification.getUnreadCount(user.id);
@@ -134,19 +135,19 @@ const queryResolver = {
     });
     return users.map(formatUser);
   },
-  
+
   user: async (_, { id }, context) => {
     requireAuth(context);
     const user = await userService.getUserById(id);
     return formatUser(user);
   },
-  
+
   me: async (_, __, context) => {
     const user = requireAuth(context);
     const fullUser = await userService.getUserById(user.id);
     return formatUser(fullUser);
   },
-  
+
   notifications: async (_, args, context) => {
     const user = requireAuth(context);
     const result = await Notification.getUserNotifications(user.id, args);
@@ -155,7 +156,7 @@ const queryResolver = {
       pagination: result.pagination
     };
   },
-  
+
   notification: async (_, { id }, context) => {
     const user = requireAuth(context);
     const notification = await Notification.findOne({
@@ -164,7 +165,7 @@ const queryResolver = {
     });
     return formatNotification(notification);
   },
-  
+
   unreadNotificationsCount: async (_, __, context) => {
     const user = requireAuth(context);
     return await Notification.getUnreadCount(user.id);
@@ -177,7 +178,7 @@ const mutationResolver = {
     const user = await userService.createUser(args);
     return formatUser(user);
   },
-  
+
   updateUser: async (_, { id, ...updates }, context) => {
     requireOwnerOrAdmin(context, id);
     if (context.user.role !== 'admin') {
@@ -186,13 +187,13 @@ const mutationResolver = {
     const user = await userService.updateUser(id, updates);
     return formatUser(user);
   },
-  
+
   deleteUser: async (_, { id }, context) => {
     requireAdmin(context);
     await userService.deleteUser(id);
     return true;
   },
-  
+
   createNotification: async (_, args, context) => {
     const user = requireAuth(context);
     const notificationData = {
@@ -202,7 +203,7 @@ const mutationResolver = {
     const notification = await Notification.createNotification(notificationData);
     return formatNotification(notification);
   },
-  
+
   markNotificationAsRead: async (_, { id }, context) => {
     const user = requireAuth(context);
     const result = await Notification.markAsRead(id, user.id);
@@ -212,19 +213,19 @@ const mutationResolver = {
     const notification = await Notification.findById(id);
     return formatNotification(notification);
   },
-  
+
   markAllNotificationsAsRead: async (_, __, context) => {
     const user = requireAuth(context);
     await Notification.markAllAsRead(user.id);
     return true;
   },
-  
+
   deleteNotification: async (_, { id }, context) => {
     const user = requireAuth(context);
     const result = await Notification.deleteOne({ _id: id, userId: user.id });
     return result.deletedCount > 0;
   },
-  
+
   login: async (_, { email, password }) => {
     const user = await authService.authenticate(email, password);
     if (!user) {
@@ -240,15 +241,15 @@ const mutationResolver = {
       user: formatUser(user)
     };
   },
-  
+
   register: async (_, { email, name, password }) => {
     const existingUser = await userService.getUserByEmail(email);
     if (existingUser) {
       throw new Error('User already exists');
     }
-    
+
     authService.validatePassword(password);
-    
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await userService.createUser({
       email,
@@ -256,13 +257,13 @@ const mutationResolver = {
       password: hashedPassword,
       role: 'user'
     });
-    
+
     const token = authService.generateToken({
       id: user.id,
       email: user.email,
       role: user.role
     });
-    
+
     return {
       token,
       user: formatUser(user)
@@ -272,10 +273,10 @@ const mutationResolver = {
 
 const resolvers = {
   JSON: JSONScalar,
-  
+
   User: userResolver,
   Notification: notificationResolver,
-  
+
   Query: queryResolver,
   Mutation: mutationResolver
 };

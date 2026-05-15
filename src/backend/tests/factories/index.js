@@ -1,6 +1,6 @@
-const userFactory = require('./userFactory');
-const notificationFactory = require('./notificationFactory');
 const fileFactory = require('./fileFactory');
+const notificationFactory = require('./notificationFactory');
+const userFactory = require('./userFactory');
 
 module.exports = {
   userFactory,

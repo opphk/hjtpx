@@ -1,5 +1,5 @@
-const { producerManager } = require('./producers/streamProducer');
 const { consumerManager } = require('./consumers/streamConsumer');
+const { producerManager } = require('./producers/streamProducer');
 
 class NotificationQueueService {
   constructor() {
@@ -7,15 +7,19 @@ class NotificationQueueService {
   }
 
   async sendNotification(userId, notification, options = {}) {
-    return await producerManager.send(this.queueName, {
-      userId,
-      notification,
-      options
-    }, {
-      type: 'push_notification',
-      priority: notification.priority || 0,
-      correlationId: options.correlationId
-    });
+    return await producerManager.send(
+      this.queueName,
+      {
+        userId,
+        notification,
+        options
+      },
+      {
+        type: 'push_notification',
+        priority: notification.priority || 0,
+        correlationId: options.correlationId
+      }
+    );
   }
 
   async sendBulkNotifications(userIds, notification, options = {}) {
@@ -25,20 +29,28 @@ class NotificationQueueService {
       options
     }));
 
-    return await producerManager.sendBatch(this.queueName, messages.map(msg => ({
-      ...msg,
-      type: 'push_notification'
-    })), options);
+    return await producerManager.sendBatch(
+      this.queueName,
+      messages.map(msg => ({
+        ...msg,
+        type: 'push_notification'
+      })),
+      options
+    );
   }
 
   async sendPushNotification(userId, title, body, data = {}, options = {}) {
-    return await this.sendNotification(userId, {
-      type: 'push',
-      title,
-      body,
-      data,
-      priority: options.priority || 0
-    }, options);
+    return await this.sendNotification(
+      userId,
+      {
+        type: 'push',
+        title,
+        body,
+        data,
+        priority: options.priority || 0
+      },
+      options
+    );
   }
 
   async sendInAppNotification(userId, notification) {
@@ -61,20 +73,25 @@ class NotificationQueueService {
       throw new Error('Scheduled time must be in the future');
     }
 
-    return await producerManager.sendWithDelay(this.queueName, {
-      userId,
-      notification,
-      options
-    }, delay, {
-      type: 'push_notification',
-      priority: notification.priority || 0
-    });
+    return await producerManager.sendWithDelay(
+      this.queueName,
+      {
+        userId,
+        notification,
+        options
+      },
+      delay,
+      {
+        type: 'push_notification',
+        priority: notification.priority || 0
+      }
+    );
   }
 
   async startConsumer(options = {}) {
     const consumer = await consumerManager.createConsumer(this.queueName, options);
 
-    consumer.registerHandler('push_notification', async (message) => {
+    consumer.registerHandler('push_notification', async message => {
       const notificationService = require('../notificationService');
       const Notification = require('../../models/Notification');
 

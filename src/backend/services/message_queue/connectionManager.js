@@ -1,4 +1,5 @@
 const Redis = require('ioredis');
+
 const config = require('../config/messageQueue');
 
 class StreamConnectionManager {
@@ -45,7 +46,7 @@ class StreamConnectionManager {
       this.emit('ready');
     });
 
-    this.client.on('error', (err) => {
+    this.client.on('error', err => {
       console.error('[StreamConnection] Redis error:', err.message);
       this.emit('error', err);
     });
@@ -181,7 +182,9 @@ class StreamConnectionManager {
     const client = this.getClient();
     try {
       await client.xgroup('CREATE', streamKey, groupName, startId, 'MKSTREAM');
-      console.log(`[StreamConnection] Created consumer group: ${groupName} for stream: ${streamKey}`);
+      console.log(
+        `[StreamConnection] Created consumer group: ${groupName} for stream: ${streamKey}`
+      );
     } catch (error) {
       if (!error.message.includes('BUSYGROUP')) {
         throw error;

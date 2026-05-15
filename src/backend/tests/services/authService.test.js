@@ -96,9 +96,7 @@ describe('authService', () => {
         created_at: new Date()
       };
 
-      pool.query
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [mockUser] });
+      pool.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [mockUser] });
 
       const result = await authService.register({
         email: 'newuser@example.com',
@@ -144,9 +142,7 @@ describe('authService', () => {
         created_at: new Date()
       };
 
-      pool.query
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [mockUser] });
+      pool.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [mockUser] });
 
       await authService.register({
         email: 'newuser@example.com',
@@ -167,9 +163,7 @@ describe('authService', () => {
         created_at: new Date()
       };
 
-      pool.query
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [mockUser] });
+      pool.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [mockUser] });
 
       const result = await authService.register({
         email: 'admin@example.com',
@@ -239,9 +233,7 @@ describe('authService', () => {
 
   describe('forgotPassword', () => {
     test('should return message for existing user', async () => {
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
-        .mockResolvedValueOnce({ rows: [] });
+      pool.query.mockResolvedValueOnce({ rows: [{ id: 1 }] }).mockResolvedValueOnce({ rows: [] });
 
       const result = await authService.forgotPassword('user@example.com');
 
@@ -261,9 +253,7 @@ describe('authService', () => {
     test('should generate reset token in development mode', async () => {
       process.env.NODE_ENV = 'development';
 
-      pool.query
-        .mockResolvedValueOnce({ rows: [{ id: 1 }] })
-        .mockResolvedValueOnce({ rows: [] });
+      pool.query.mockResolvedValueOnce({ rows: [{ id: 1 }] }).mockResolvedValueOnce({ rows: [] });
 
       const result = await authService.forgotPassword('user@example.com');
 
@@ -282,9 +272,7 @@ describe('authService', () => {
         reset_token_expires: new Date(Date.now() + 3600000)
       };
 
-      pool.query
-        .mockResolvedValueOnce({ rows: [mockUser] })
-        .mockResolvedValueOnce({ rows: [] });
+      pool.query.mockResolvedValueOnce({ rows: [mockUser] }).mockResolvedValueOnce({ rows: [] });
 
       const result = await authService.resetPassword({
         token: 'valid-reset-token',
@@ -371,9 +359,7 @@ describe('authService', () => {
     });
 
     test('should throw error for invalid token', async () => {
-      await expect(authService.validateSession('invalid-token')).rejects.toThrow(
-        'Invalid session'
-      );
+      await expect(authService.validateSession('invalid-token')).rejects.toThrow('Invalid session');
     });
 
     test('should throw error for expired token', async () => {

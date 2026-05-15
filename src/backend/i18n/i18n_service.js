@@ -2,7 +2,20 @@ class I18nService {
   constructor() {
     this.currentLocale = 'en';
     this.translations = {};
-    this.supportedLocales = ['en', 'zh', 'fr', 'de', 'es', 'ru', 'ja', 'ko', 'ar', 'pt', 'it', 'nl'];
+    this.supportedLocales = [
+      'en',
+      'zh',
+      'fr',
+      'de',
+      'es',
+      'ru',
+      'ja',
+      'ko',
+      'ar',
+      'pt',
+      'it',
+      'nl'
+    ];
     this.loadedLocales = new Set();
   }
 
@@ -19,7 +32,7 @@ class I18nService {
     } catch (error) {
       console.error(`Failed to load translations for locale: ${locale}`, error);
       if (locale !== 'en') {
-        return this.translations['en'] || {};
+        return this.translations.en || {};
       }
       return {};
     }
@@ -48,7 +61,7 @@ class I18nService {
       if (value && typeof value === 'object' && k in value) {
         value = value[k];
       } else {
-        value = this.translations['en'];
+        value = this.translations.en;
         for (const fallbackKey of keys) {
           if (value && typeof value === 'object' && fallbackKey in value) {
             value = value[fallbackKey];
@@ -98,7 +111,9 @@ class I18nService {
       style: 'currency',
       currency
     };
-    return new Intl.NumberFormat(defaultOptions.locale, { ...defaultOptions, ...options }).format(amount);
+    return new Intl.NumberFormat(defaultOptions.locale, { ...defaultOptions, ...options }).format(
+      amount
+    );
   }
 
   getSupportedLocales() {

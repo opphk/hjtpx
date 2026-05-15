@@ -11,23 +11,19 @@ const securityConfig = {
 
   ipControl: {
     enabled: process.env.IP_CONTROL_ENABLED !== 'false',
-    whitelist: process.env.IP_WHITELIST 
-      ? process.env.IP_WHITELIST.split(',') 
+    whitelist: process.env.IP_WHITELIST
+      ? process.env.IP_WHITELIST.split(',')
       : ['127.0.0.1', '::1'],
-    blacklist: process.env.IP_BLACKLIST 
-      ? process.env.IP_BLACKLIST.split(',') 
-      : [],
+    blacklist: process.env.IP_BLACKLIST ? process.env.IP_BLACKLIST.split(',') : [],
     defaultAction: process.env.IP_DEFAULT_ACTION || 'allow'
   },
 
   geoRestriction: {
     enabled: process.env.GEO_RESTRICTION_ENABLED === 'true',
-    allowedCountries: process.env.ALLOWED_COUNTRIES 
-      ? process.env.ALLOWED_COUNTRIES.split(',') 
+    allowedCountries: process.env.ALLOWED_COUNTRIES
+      ? process.env.ALLOWED_COUNTRIES.split(',')
       : ['CN', 'US', 'HK', 'TW', 'SG', 'JP', 'KR'],
-    blockedCountries: process.env.BLOCKED_COUNTRIES 
-      ? process.env.BLOCKED_COUNTRIES.split(',') 
-      : []
+    blockedCountries: process.env.BLOCKED_COUNTRIES ? process.env.BLOCKED_COUNTRIES.split(',') : []
   },
 
   rateLimiting: {
@@ -150,11 +146,11 @@ const securityConfig = {
       xssAttempt: parseInt(process.env.ALERT_XSS_ATTEMPT) || 3,
       sqlInjection: parseInt(process.env.ALERT_SQL_INJECTION) || 1
     },
-    alertMethods: process.env.SECURITY_ALERT_METHODS 
-      ? process.env.SECURITY_ALERT_METHODS.split(',') 
+    alertMethods: process.env.SECURITY_ALERT_METHODS
+      ? process.env.SECURITY_ALERT_METHODS.split(',')
       : ['email', 'slack'],
-    alertRecipients: process.env.SECURITY_ALERT_RECIPIENTS 
-      ? process.env.SECURITY_ALERT_RECIPIENTS.split(',') 
+    alertRecipients: process.env.SECURITY_ALERT_RECIPIENTS
+      ? process.env.SECURITY_ALERT_RECIPIENTS.split(',')
       : []
   },
 

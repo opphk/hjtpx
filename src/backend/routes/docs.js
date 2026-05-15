@@ -1,32 +1,38 @@
 const express = require('express');
+
 const router = express.Router();
 const swaggerUi = require('swagger-ui-express');
+
 const swaggerSpec = require('../config/swagger');
 const { generateSwaggerSpec } = require('../config/swagger-auto');
-const ApiVersionManager = require('../utils/apiVersionManager');
 const { getStatsService } = require('../middleware/apiStats');
+const ApiVersionManager = require('../utils/apiVersionManager');
 
 const versionManager = new ApiVersionManager();
 const statsService = getStatsService();
 
-router.use('/', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customCss: `
+router.use(
+  '/',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: `
     .swagger-ui .topbar { display: none }
     .swagger-ui .info .title { color: #2c3e50; }
     .swagger-ui .scheme-container { background-color: #f8f9fa; padding: 15px; }
   `,
-  customSiteTitle: 'HJTPX API Documentation',
-  customfavIcon: '/favicon.ico',
-  swaggerOptions: {
-    persistAuthorization: true,
-    displayRequestDuration: true,
-    docExpansion: 'list',
-    filter: true,
-    showExtensions: true,
-    showCommonExtensions: true,
-    tryItOutEnabled: true
-  }
-}));
+    customSiteTitle: 'HJTPX API Documentation',
+    customfavIcon: '/favicon.ico',
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      docExpansion: 'list',
+      filter: true,
+      showExtensions: true,
+      showCommonExtensions: true,
+      tryItOutEnabled: true
+    }
+  })
+);
 
 router.get('/json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');

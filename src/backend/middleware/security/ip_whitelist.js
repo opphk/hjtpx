@@ -24,16 +24,12 @@ class IPControl {
 
   removeWhitelist(ip) {
     this.whitelist.delete(ip);
-    this.cidrRanges.whitelist = this.cidrRanges.whitelist.filter(
-      range => range.ip !== ip
-    );
+    this.cidrRanges.whitelist = this.cidrRanges.whitelist.filter(range => range.ip !== ip);
   }
 
   removeBlacklist(ip) {
     this.blacklist.delete(ip);
-    this.cidrRanges.blacklist = this.cidrRanges.blacklist.filter(
-      range => range.ip !== ip
-    );
+    this.cidrRanges.blacklist = this.cidrRanges.blacklist.filter(range => range.ip !== ip);
   }
 
   isAllowed(ip) {
@@ -86,11 +82,11 @@ class IPControl {
   isValidIP(ip) {
     const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
     const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
-    
+
     if (ipv4Regex.test(ip)) {
       return ip.split('.').every(octet => parseInt(octet) <= 255);
     }
-    
+
     return ipv6Regex.test(ip) || ip === '::1' || ip === '::';
   }
 
@@ -112,8 +108,8 @@ class IPControl {
 }
 
 const ipControlMiddleware = async (req, res, next) => {
-  const ip = req.ip || req.connection.remoteAddress || 
-             req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+  const ip =
+    req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0]?.trim();
 
   const ipControl = global.ipControl || new IPControl();
 

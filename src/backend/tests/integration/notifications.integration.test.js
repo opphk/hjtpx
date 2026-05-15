@@ -1,7 +1,7 @@
-const request = require('supertest');
+const bcrypt = require('bcryptjs');
 const express = require('express');
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const request = require('supertest');
 
 const pool = require('../../../config/database/db');
 const notificationsRoutes = require('../../routes/v1/notifications');
@@ -59,10 +59,10 @@ describe('Notifications API Integration Tests', () => {
     } catch (error) {
       console.log('Notification cleanup skipped:', error.message);
     }
-    
+
     await userFactory.deleteUsers(cleanupUsers);
     await pool.end();
-    
+
     try {
       if (mongoose.connection.readyState !== 0) {
         await mongoose.connection.close();
@@ -138,7 +138,7 @@ describe('Notifications API Integration Tests', () => {
 
       expect(response.status).toBe(HTTP_STATUS.CREATED);
       expect(response.body.success).toBe(true);
-      
+
       if (response.body.data && response.body.data._id) {
         cleanupNotificationIds.push(response.body.data._id.toString());
       }
@@ -156,7 +156,7 @@ describe('Notifications API Integration Tests', () => {
         });
 
       expect(response.status).toBe(HTTP_STATUS.CREATED);
-      
+
       if (response.body.data && response.body.data._id) {
         cleanupNotificationIds.push(response.body.data._id.toString());
       }
@@ -174,7 +174,7 @@ describe('Notifications API Integration Tests', () => {
         });
 
       expect(response.status).toBe(HTTP_STATUS.CREATED);
-      
+
       if (response.body.data && response.body.data._id) {
         cleanupNotificationIds.push(response.body.data._id.toString());
       }
@@ -192,7 +192,7 @@ describe('Notifications API Integration Tests', () => {
         });
 
       expect(response.status).toBe(HTTP_STATUS.CREATED);
-      
+
       if (response.body.data && response.body.data._id) {
         cleanupNotificationIds.push(response.body.data._id.toString());
       }
@@ -210,9 +210,7 @@ describe('Notifications API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .post('/api/v1/notifications')
-        .send(notificationData);
+      const response = await request(app).post('/api/v1/notifications').send(notificationData);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -260,8 +258,9 @@ describe('Notifications API Integration Tests', () => {
         return;
       }
 
-      const response = await request(app)
-        .put(`/api/v1/notifications/${notificationToMark._id}/read`);
+      const response = await request(app).put(
+        `/api/v1/notifications/${notificationToMark._id}/read`
+      );
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -307,8 +306,9 @@ describe('Notifications API Integration Tests', () => {
         return;
       }
 
-      const response = await request(app)
-        .delete(`/api/v1/notifications/${notificationToDelete._id}`);
+      const response = await request(app).delete(
+        `/api/v1/notifications/${notificationToDelete._id}`
+      );
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -331,8 +331,7 @@ describe('Notifications API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .put('/api/v1/notifications/mark-all-read');
+      const response = await request(app).put('/api/v1/notifications/mark-all-read');
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

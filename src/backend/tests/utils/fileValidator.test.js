@@ -1,5 +1,15 @@
 describe('File Validator', () => {
-  const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx'];
+  const ALLOWED_EXTENSIONS = [
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.xls',
+    '.xlsx'
+  ];
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
   const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif'];

@@ -1,6 +1,6 @@
-const request = require('supertest');
-const express = require('express');
 const bcrypt = require('bcryptjs');
+const express = require('express');
+const request = require('supertest');
 
 const usersRoutes = require('../../routes/v1/users');
 const {
@@ -24,7 +24,7 @@ describe('Users API Integration Tests', () => {
 
   beforeAll(async () => {
     const hashedPassword = await bcrypt.hash(testPassword, 10);
-    
+
     regularUser = {
       id: 1,
       email: `regular_${Date.now()}@example.com`,
@@ -33,7 +33,7 @@ describe('Users API Integration Tests', () => {
       role: 'user',
       status: 'active'
     };
-    
+
     adminUser = {
       id: 2,
       email: `admin_${Date.now()}@example.com`,
@@ -42,9 +42,9 @@ describe('Users API Integration Tests', () => {
       role: 'admin',
       status: 'active'
     };
-    
+
     cleanupUsers.push(regularUser.id, adminUser.id);
-    
+
     regularToken = generateToken(regularUser);
     adminToken = generateToken(adminUser);
   });
@@ -100,9 +100,7 @@ describe('Users API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .put('/api/v1/users/me')
-        .send(userUpdateData);
+      const response = await request(app).put('/api/v1/users/me').send(userUpdateData);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(response.body.success).toBe(false);
@@ -273,26 +271,21 @@ describe('Users API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .post('/api/v1/users')
-        .send({
-          email: testEmail,
-          name: 'New User',
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/users').send({
+        email: testEmail,
+        name: 'New User',
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
 
     it('should fail with duplicate email', async () => {
-      await request(app)
-        .post('/api/v1/users')
-        .set('Authorization', `Bearer ${adminToken}`)
-        .send({
-          email: testEmail,
-          name: 'New User',
-          password: testPassword
-        });
+      await request(app).post('/api/v1/users').set('Authorization', `Bearer ${adminToken}`).send({
+        email: testEmail,
+        name: 'New User',
+        password: testPassword
+      });
 
       const response = await request(app)
         .post('/api/v1/users')
@@ -340,8 +333,7 @@ describe('Users API Integration Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .delete(`/api/v1/users/${userToDelete.id}`);
+      const response = await request(app).delete(`/api/v1/users/${userToDelete.id}`);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

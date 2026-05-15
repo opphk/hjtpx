@@ -1,5 +1,5 @@
-const request = require('supertest');
 const express = require('express');
+const request = require('supertest');
 
 const mockFileService = {
   getUserFiles: jest.fn(),
@@ -15,11 +15,7 @@ const mockFileService = {
 jest.mock('../../services/fileService', () => mockFileService);
 
 const filesRoutes = require('../../routes/files');
-const {
-  generateToken,
-  testPassword,
-  HTTP_STATUS
-} = require('../helpers/testFixtures');
+const { generateToken, testPassword, HTTP_STATUS } = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
@@ -177,8 +173,7 @@ describe('Files API Unit Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .get('/api/v1/files/1');
+      const response = await request(app).get('/api/v1/files/1');
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -305,8 +300,7 @@ describe('Files API Unit Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .delete('/api/v1/files/1');
+      const response = await request(app).delete('/api/v1/files/1');
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
@@ -323,8 +317,7 @@ describe('Files API Unit Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .delete('/api/v1/files/folder/test');
+      const response = await request(app).delete('/api/v1/files/folder/test');
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

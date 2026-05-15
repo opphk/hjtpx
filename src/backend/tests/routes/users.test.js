@@ -112,9 +112,9 @@ describe('Users Routes', () => {
     it('should handle createUser error', async () => {
       userService.createUser.mockRejectedValue(new Error('User already exists'));
 
-      await expect(
-        userService.createUser({ email: 'existing@example.com' })
-      ).rejects.toThrow('User already exists');
+      await expect(userService.createUser({ email: 'existing@example.com' })).rejects.toThrow(
+        'User already exists'
+      );
     });
   });
 });

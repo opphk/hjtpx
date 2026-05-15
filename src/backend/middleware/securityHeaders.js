@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+
 const helmet = require('helmet');
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -9,7 +10,7 @@ const nonceMiddleware = (req, res, next) => {
   next();
 };
 
-const getCSPDirectives = (nonce) => {
+const getCSPDirectives = nonce => {
   const directives = [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com`,
@@ -40,8 +41,21 @@ const getCSPDirectives = (nonce) => {
 const helmetMiddleware = (() => {
   const cspDirectives = {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'unpkg.com'],
-    styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
+    scriptSrc: [
+      "'self'",
+      "'unsafe-inline'",
+      "'unsafe-eval'",
+      'cdn.jsdelivr.net',
+      'cdnjs.cloudflare.com',
+      'unpkg.com'
+    ],
+    styleSrc: [
+      "'self'",
+      "'unsafe-inline'",
+      'fonts.googleapis.com',
+      'cdn.jsdelivr.net',
+      'cdnjs.cloudflare.com'
+    ],
     fontSrc: ["'self'", 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'],
     imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
     connectSrc: ["'self'", 'wss:', 'https:', 'https://api.captchax.com', 'https://api.hjtpx.com'],
@@ -108,17 +122,19 @@ const securityHeaders = (req, res, next) => {
 
   res.set({
     'Content-Security-Policy': cspHeader,
-    'Content-Security-Policy-Report-Only': process.env.CSP_REPORT_ONLY === 'true' ? cspHeader : undefined,
+    'Content-Security-Policy-Report-Only':
+      process.env.CSP_REPORT_ONLY === 'true' ? cspHeader : undefined,
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': isProduction ? 'DENY' : 'SAMEORIGIN',
     'X-XSS-Protection': '1; mode=block',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), fullscreen=(self), picture-in-picture=(self)',
+    'Permissions-Policy':
+      'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), fullscreen=(self), picture-in-picture=(self)',
     'X-Download-Options': 'noopen',
     'X-Permitted-Cross-Domain-Policies': 'none',
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-    'Pragma': 'no-cache',
+    Pragma: 'no-cache',
     'X-Request-ID': req.requestId || `req_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`,
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Cross-Origin-Resource-Policy': 'same-origin',
@@ -130,7 +146,7 @@ const securityHeaders = (req, res, next) => {
 
   if (isProduction) {
     res.set({
-      'Vary': 'Origin, X-Requested-With, Content-Type, Accept',
+      Vary: 'Origin, X-Requested-With, Content-Type, Accept',
       'X-Powered-By': ''
     });
   }
@@ -145,17 +161,18 @@ const additionalSecurityHeaders = (req, res, next) => {
     'X-XSS-Protection': '1; mode=block',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), fullscreen=(self), picture-in-picture=(self)',
+    'Permissions-Policy':
+      'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), fullscreen=(self), picture-in-picture=(self)',
     'X-Download-Options': 'noopen',
     'X-Permitted-Cross-Domain-Policies': 'none',
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-    'Pragma': 'no-cache',
+    Pragma: 'no-cache',
     'X-Request-ID': req.requestId || `req_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`
   });
 
   if (isProduction) {
     res.set({
-      'Vary': 'Origin, X-Requested-With, Content-Type, Accept'
+      Vary: 'Origin, X-Requested-With, Content-Type, Accept'
     });
   }
 

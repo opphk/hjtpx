@@ -1,6 +1,8 @@
 class GeoRestriction {
   constructor(options = {}) {
-    this.allowedCountries = new Set(options.allowedCountries || ['CN', 'US', 'HK', 'TW', 'SG', 'JP', 'KR']);
+    this.allowedCountries = new Set(
+      options.allowedCountries || ['CN', 'US', 'HK', 'TW', 'SG', 'JP', 'KR']
+    );
     this.blockedCountries = new Set(options.blockedCountries || []);
     this.countryCache = new Map();
     this.enabled = options.enabled !== false;
@@ -12,7 +14,7 @@ class GeoRestriction {
     }
 
     const code = countryCode?.toUpperCase();
-    
+
     if (!code) {
       return false;
     }
@@ -108,9 +110,8 @@ const geoRestrictionMiddleware = async (req, res, next) => {
     return next();
   }
 
-  const ip = req.ip || 
-             req.connection.remoteAddress || 
-             req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+  const ip =
+    req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for']?.split(',')[0]?.trim();
 
   try {
     const countryCode = await geoRestriction.getCountryByIP(ip);

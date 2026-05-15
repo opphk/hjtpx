@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+
 const pool = require('../../../config/database/db');
 
 const defaultUserAttributes = {
@@ -9,22 +10,22 @@ const defaultUserAttributes = {
 
 async function createUser(overrides = {}) {
   const attributes = { ...defaultUserAttributes, ...overrides };
-  
+
   if (!attributes.email) {
     attributes.email = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`;
   }
-  
+
   if (!attributes.password) {
     attributes.password = await bcrypt.hash('TestPassword123!', 10);
   } else if (!attributes.password.startsWith('$2')) {
     attributes.password = await bcrypt.hash(attributes.password, 10);
   }
-  
+
   const result = await pool.query(
     'INSERT INTO users (email, name, password, role, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
     [attributes.email, attributes.name, attributes.password, attributes.role, attributes.status]
   );
-  
+
   return result.rows[0];
 }
 

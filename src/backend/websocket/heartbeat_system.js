@@ -371,11 +371,11 @@ class HeartbeatSystem {
 
     if (timeSinceLastHeartbeat < this.heartbeatInterval) {
       return 'healthy';
-    } else if (timeSinceLastHeartbeat < this.heartbeatInterval + this.heartbeatTimeout) {
-      return 'warning';
-    } else {
-      return 'critical';
     }
+    if (timeSinceLastHeartbeat < this.heartbeatInterval + this.heartbeatTimeout) {
+      return 'warning';
+    }
+    return 'critical';
   }
 
   getStats() {

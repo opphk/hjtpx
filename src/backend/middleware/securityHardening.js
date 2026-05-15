@@ -5,17 +5,17 @@ const securityHeaders = helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:"],
-      connectSrc: ["'self'", "wss:", "https:"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
+      connectSrc: ["'self'", 'wss:', 'https:'],
       mediaSrc: ["'self'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: []
     }
   },
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
   dnsPrefetchControl: { allow: false },
   frameguard: { action: 'deny' },
   hidePoweredBy: true,
@@ -27,13 +27,13 @@ const securityHeaders = helmet({
   ieNoOpen: true,
   noSniff: true,
   originAgentCluster: true,
-  permittedCrossDomainPolicies: { permittedPolicies: "none" },
-  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   xssFilter: true
 });
 
 function sanitizeInput(req, res, next) {
-  const escapeHtml = (str) => {
+  const escapeHtml = str => {
     if (typeof str !== 'string') return str;
     return str
       .replace(/&/g, '&amp;')
@@ -44,7 +44,7 @@ function sanitizeInput(req, res, next) {
       .replace(/\//g, '&#x2F;');
   };
 
-  const sanitizeObject = (obj) => {
+  const sanitizeObject = obj => {
     if (typeof obj === 'string') {
       return escapeHtml(obj);
     }
@@ -88,7 +88,11 @@ function validateContentType(req, res, next) {
       });
     }
 
-    const allowedTypes = ['application/json', 'application/x-www-form-urlencoded', 'multipart/form-data'];
+    const allowedTypes = [
+      'application/json',
+      'application/x-www-form-urlencoded',
+      'multipart/form-data'
+    ];
     const isAllowed = allowedTypes.some(type => contentType.includes(type));
 
     if (!isAllowed) {
@@ -106,7 +110,11 @@ function validateContentType(req, res, next) {
 }
 
 function preventBruteForce(req, res, next) {
-  const sensitiveEndpoints = ['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/password/reset'];
+  const sensitiveEndpoints = [
+    '/api/v1/auth/login',
+    '/api/v1/auth/register',
+    '/api/v1/password/reset'
+  ];
   const isSensitive = sensitiveEndpoints.some(endpoint => req.path.includes(endpoint));
 
   if (!isSensitive) {
@@ -133,7 +141,7 @@ function preventBruteForce(req, res, next) {
         });
       }
 
-      const attempts = await redis.get(attemptKey) || '0';
+      const attempts = (await redis.get(attemptKey)) || '0';
       const newAttempts = parseInt(attempts) + 1;
 
       await redis.setEx(attemptKey, 900, newAttempts.toString());

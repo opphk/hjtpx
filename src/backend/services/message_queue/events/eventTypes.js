@@ -107,23 +107,31 @@ function createEvent(type, data, options = {}) {
 }
 
 function createUserEvent(type, userId, userData, options = {}) {
-  return createEvent(type, {
-    userId,
-    user: userData
-  }, {
-    source: 'user-service',
-    ...options
-  });
+  return createEvent(
+    type,
+    {
+      userId,
+      user: userData
+    },
+    {
+      source: 'user-service',
+      ...options
+    }
+  );
 }
 
 function createNotificationEvent(type, notificationId, notificationData, options = {}) {
-  return createEvent(type, {
-    notificationId,
-    notification: notificationData
-  }, {
-    source: 'notification-service',
-    ...options
-  });
+  return createEvent(
+    type,
+    {
+      notificationId,
+      notification: notificationData
+    },
+    {
+      source: 'notification-service',
+      ...options
+    }
+  );
 }
 
 function createSecurityEvent(type, details, options = {}) {

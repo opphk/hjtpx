@@ -1,5 +1,5 @@
-const connectionManager = require('../connectionManager');
 const config = require('../../config/messageQueue');
+const connectionManager = require('../connectionManager');
 
 class QueueMonitor {
   constructor() {
@@ -50,9 +50,11 @@ class QueueMonitor {
 
     let groupInfo = null;
     try {
-      groupInfo = await connectionManager.getConsumerGroupInfo(queueConfig.stream, queueConfig.consumerGroup);
-    } catch (error) {
-    }
+      groupInfo = await connectionManager.getConsumerGroupInfo(
+        queueConfig.stream,
+        queueConfig.consumerGroup
+      );
+    } catch (error) {}
 
     return {
       queueName,
@@ -132,7 +134,10 @@ class QueueMonitor {
 
     for (const [queueName, queueConfig] of Object.entries(config.queues)) {
       const metrics = this.metrics.get(queueName);
-      const groupInfo = await connectionManager.getConsumerGroupInfo(queueConfig.stream, queueConfig.consumerGroup);
+      const groupInfo = await connectionManager.getConsumerGroupInfo(
+        queueConfig.stream,
+        queueConfig.consumerGroup
+      );
 
       stats[queueName] = {
         ...metrics,

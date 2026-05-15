@@ -41,7 +41,7 @@ describe('CSRF Protection Tests', () => {
     test('should set CSRF token as HttpOnly cookie', () => {
       const token = 'test-token';
       CSRFTokenManager.setCookieToken(mockRes, token);
-      
+
       expect(mockRes.cookie).toHaveBeenCalledWith(
         '_csrf',
         token,
@@ -57,12 +57,16 @@ describe('CSRF Protection Tests', () => {
       const token = 'test-token';
       const options = { maxAge: 3600000, path: '/api' };
       CSRFTokenManager.setCookieToken(mockRes, token, options);
-      
-      expect(mockRes.cookie).toHaveBeenCalledWith('_csrf', token, expect.objectContaining({
-        httpOnly: true,
-        maxAge: 3600000,
-        path: '/api'
-      }));
+
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        '_csrf',
+        token,
+        expect.objectContaining({
+          httpOnly: true,
+          maxAge: 3600000,
+          path: '/api'
+        })
+      );
     });
   });
 
@@ -71,7 +75,7 @@ describe('CSRF Protection Tests', () => {
       const token = CSRFTokenManager.generateToken();
       mockReq.headers['x-csrf-token'] = token;
       mockReq.cookies._csrf = token;
-      
+
       const isValid = CSRFTokenManager.validateToken(mockReq);
       expect(isValid).toBe(true);
     });
@@ -79,7 +83,7 @@ describe('CSRF Protection Tests', () => {
     test('should reject mismatched tokens', () => {
       mockReq.headers['x-csrf-token'] = 'token-a';
       mockReq.cookies._csrf = 'token-b';
-      
+
       const isValid = CSRFTokenManager.validateToken(mockReq);
       expect(isValid).toBe(false);
     });
@@ -88,7 +92,7 @@ describe('CSRF Protection Tests', () => {
       mockReq.headers = {};
       mockReq.cookies = {};
       mockReq.body = {};
-      
+
       const isValid = CSRFTokenManager.validateToken(mockReq);
       expect(isValid).toBe(false);
     });
@@ -98,7 +102,7 @@ describe('CSRF Protection Tests', () => {
       mockReq.headers = {};
       mockReq.cookies = { _csrf: token };
       mockReq.body = { _csrf: token };
-      
+
       const isValid = CSRFTokenManager.validateToken(mockReq);
       expect(isValid).toBe(true);
     });
@@ -106,7 +110,7 @@ describe('CSRF Protection Tests', () => {
     test('should reject empty tokens', () => {
       mockReq.headers['x-csrf-token'] = '';
       mockReq.cookies._csrf = '';
-      
+
       const isValid = CSRFTokenManager.validateToken(mockReq);
       expect(isValid).toBe(false);
     });

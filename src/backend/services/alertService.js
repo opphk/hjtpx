@@ -28,7 +28,7 @@ class AlertManager {
     const now = Date.now();
 
     const lastAlert = this.alertCooldown.get(alertType);
-    if (lastAlert && (now - lastAlert) < (this.cooldownPeriod * 60 * 1000)) {
+    if (lastAlert && now - lastAlert < this.cooldownPeriod * 60 * 1000) {
       return null;
     }
 
@@ -158,19 +158,15 @@ class AlertManager {
   }
 
   getActiveAlerts() {
-    return Array.from(this.alerts.values()).filter(
-      alert => !alert.resolved
-    );
+    return Array.from(this.alerts.values()).filter(alert => !alert.resolved);
   }
 
   getAlertsByType(type) {
-    return Array.from(this.alerts.values()).filter(
-      alert => alert.type === type && !alert.resolved
-    );
+    return Array.from(this.alerts.values()).filter(alert => alert.type === type && !alert.resolved);
   }
 
   clearOldAlerts(maxAgeHours = 24) {
-    const cutoff = Date.now() - (maxAgeHours * 60 * 60 * 1000);
+    const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
     for (const [id, alert] of this.alerts) {
       if (new Date(alert.timestamp).getTime() < cutoff && alert.resolved) {
         this.alerts.delete(id);
@@ -190,35 +186,35 @@ class AlertManager {
 
 const alertManager = new AlertManager();
 
-alertManager.registerHandler('high_error_rate', async (alert) => {
+alertManager.registerHandler('high_error_rate', async alert => {
   logWarn('High error rate detected', alert.data);
 });
 
-alertManager.registerHandler('slow_response_time', async (alert) => {
+alertManager.registerHandler('slow_response_time', async alert => {
   logWarn('Slow response time detected', alert.data);
 });
 
-alertManager.registerHandler('high_cpu_usage', async (alert) => {
+alertManager.registerHandler('high_cpu_usage', async alert => {
   logWarn('High CPU usage detected', alert.data);
 });
 
-alertManager.registerHandler('high_memory_usage', async (alert) => {
+alertManager.registerHandler('high_memory_usage', async alert => {
   logWarn('High memory usage detected', alert.data);
 });
 
-alertManager.registerHandler('high_connection_count', async (alert) => {
+alertManager.registerHandler('high_connection_count', async alert => {
   logWarn('High connection count detected', alert.data);
 });
 
-alertManager.registerHandler('high_db_connections', async (alert) => {
+alertManager.registerHandler('high_db_connections', async alert => {
   logWarn('High database connection count detected', alert.data);
 });
 
-alertManager.registerHandler('low_cache_hit_ratio', async (alert) => {
+alertManager.registerHandler('low_cache_hit_ratio', async alert => {
   logWarn('Low cache hit ratio detected', alert.data);
 });
 
-alertManager.registerHandler('high_slow_query_count', async (alert) => {
+alertManager.registerHandler('high_slow_query_count', async alert => {
   logWarn('High slow query count detected', alert.data);
 });
 

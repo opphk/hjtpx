@@ -1,5 +1,5 @@
-const { producerManager } = require('./producers/streamProducer');
 const { consumerManager } = require('./consumers/streamConsumer');
+const { producerManager } = require('./producers/streamProducer');
 
 class ExportQueueService {
   constructor() {
@@ -7,69 +7,103 @@ class ExportQueueService {
   }
 
   async requestExport(userId, exportType, parameters = {}, options = {}) {
-    return await producerManager.send(this.queueName, {
-      userId,
-      exportType,
-      parameters,
-      status: 'pending',
-      createdAt: new Date().toISOString()
-    }, {
-      type: 'export_request',
-      priority: options.priority || 0,
-      correlationId: options.correlationId
-    });
+    return await producerManager.send(
+      this.queueName,
+      {
+        userId,
+        exportType,
+        parameters,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      },
+      {
+        type: 'export_request',
+        priority: options.priority || 0,
+        correlationId: options.correlationId
+      }
+    );
   }
 
   async exportUsers(userId, filters = {}, options = {}) {
-    return await this.requestExport(userId, 'users', {
-      filters,
-      fields: options.fields || ['id', 'username', 'email', 'createdAt']
-    }, options);
+    return await this.requestExport(
+      userId,
+      'users',
+      {
+        filters,
+        fields: options.fields || ['id', 'username', 'email', 'createdAt']
+      },
+      options
+    );
   }
 
   async exportAnalytics(userId, dateRange, options = {}) {
-    return await this.requestExport(userId, 'analytics', {
-      startDate: dateRange.startDate,
-      endDate: dateRange.endDate,
-      metrics: options.metrics || ['users', 'sessions', 'conversions']
-    }, options);
+    return await this.requestExport(
+      userId,
+      'analytics',
+      {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        metrics: options.metrics || ['users', 'sessions', 'conversions']
+      },
+      options
+    );
   }
 
   async exportNotifications(userId, filters = {}, options = {}) {
-    return await this.requestExport(userId, 'notifications', {
-      filters,
-      fields: options.fields || ['id', 'type', 'title', 'message', 'createdAt']
-    }, options);
+    return await this.requestExport(
+      userId,
+      'notifications',
+      {
+        filters,
+        fields: options.fields || ['id', 'type', 'title', 'message', 'createdAt']
+      },
+      options
+    );
   }
 
   async exportToCSV(userId, dataType, query = {}, options = {}) {
-    return await this.requestExport(userId, 'csv', {
-      dataType,
-      query,
+    return await this.requestExport(
+      userId,
+      'csv',
+      {
+        dataType,
+        query,
+        options
+      },
       options
-    }, options);
+    );
   }
 
   async exportToExcel(userId, dataType, query = {}, options = {}) {
-    return await this.requestExport(userId, 'excel', {
-      dataType,
-      query,
+    return await this.requestExport(
+      userId,
+      'excel',
+      {
+        dataType,
+        query,
+        options
+      },
       options
-    }, options);
+    );
   }
 
   async exportToPDF(userId, dataType, query = {}, options = {}) {
-    return await this.requestExport(userId, 'pdf', {
-      dataType,
-      query,
+    return await this.requestExport(
+      userId,
+      'pdf',
+      {
+        dataType,
+        query,
+        options
+      },
       options
-    }, options);
+    );
   }
 
   async startConsumer(options = {}) {
     const consumer = await consumerManager.createConsumer(this.queueName, options);
 
-    consumer.registerHandler('export_request', async (message) => {
+    consumer.registerHandler('export_request', async message => {
       const exportService = require('../exportService');
       const notificationService = require('../notificationService');
 
@@ -109,7 +143,6 @@ class ExportQueueService {
         });
 
         console.log(`[ExportQueue] Export ${exportType} completed for user ${userId}`);
-
       } catch (error) {
         console.error(`[ExportQueue] Export failed for user ${userId}:`, error);
 

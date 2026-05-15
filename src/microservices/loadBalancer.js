@@ -70,9 +70,7 @@ class LoadBalancer {
   }
 
   getActiveServices() {
-    return Array.from(this.services.values()).filter(
-      service => service.status === 'healthy'
-    );
+    return Array.from(this.services.values()).filter(service => service.status === 'healthy');
   }
 
   roundRobin(services) {
@@ -137,7 +135,7 @@ class LoadBalancer {
     let hash = 0;
 
     for (let i = 0; i < clientIp.length; i++) {
-      hash = ((hash << 5) - hash) + clientIp.charCodeAt(i);
+      hash = (hash << 5) - hash + clientIp.charCodeAt(i);
       hash = hash & hash;
     }
 
@@ -207,9 +205,7 @@ class LoadBalancer {
     if (!service) return null;
 
     const errorRate =
-      service.requests > 0
-        ? ((service.failures / service.requests) * 100).toFixed(2) + '%'
-        : '0%';
+      service.requests > 0 ? ((service.failures / service.requests) * 100).toFixed(2) + '%' : '0%';
 
     return {
       id: service.id,

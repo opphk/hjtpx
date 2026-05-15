@@ -155,7 +155,7 @@ describe('CacheService', () => {
   describe('Pattern Invalidation', () => {
     test('should invalidate pattern', async () => {
       const baseKey = 'test:pattern:invalidate';
-      
+
       await cacheService.set(`${baseKey}:1`, { data: 1 }, 60);
       await cacheService.set(`${baseKey}:2`, { data: 2 }, 60);
       await cacheService.set(`${baseKey}:3`, { data: 3 }, 60);
@@ -175,7 +175,7 @@ describe('CacheService', () => {
   describe('Statistics', () => {
     test('should track cache hits and misses', async () => {
       const key = 'test:stats:track';
-      
+
       await cacheService.set(key, { data: 'value' }, 60);
       await cacheService.get(key);
       await cacheService.get('test:stats:non-existent');
@@ -223,14 +223,14 @@ describe('CacheService', () => {
     test('should generate session key', () => {
       const sessionToken = 'abc123';
       const key = cacheService.generateSessionKey(sessionToken);
-      
+
       expect(key).toBe('session:abc123');
     });
 
     test('should generate user key', () => {
       const userId = 'user-123';
       const key = cacheService.generateUserKey(userId);
-      
+
       expect(key).toBe('user:user-123');
     });
 
@@ -238,7 +238,7 @@ describe('CacheService', () => {
       const endpoint = '/api/profile';
       const userId = 'user-123';
       const key = cacheService.generateApiKey(endpoint, userId);
-      
+
       expect(key).toContain('api:/api/profile:user:user-123');
     });
 
@@ -246,7 +246,7 @@ describe('CacheService', () => {
       const endpoint = '/api/users';
       const params = { page: 1, limit: 10 };
       const key = cacheService.generateApiKey(endpoint, null, params);
-      
+
       expect(key).toContain('api:/api/users');
       expect(key).toContain('limit=10');
       expect(key).toContain('page=1');

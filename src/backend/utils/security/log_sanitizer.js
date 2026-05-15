@@ -94,10 +94,10 @@ class LogSanitizer {
 
     let result = value;
 
-    result = result.replace(emailPattern, (match) => this.maskEmail(match));
-    result = result.replace(phonePattern, (match) => this.maskPhone(match));
-    result = result.replace(idCardPattern, (match) => this.maskIdCard(match));
-    result = result.replace(creditCardPattern, (match) => this.maskCreditCard(match));
+    result = result.replace(emailPattern, match => this.maskEmail(match));
+    result = result.replace(phonePattern, match => this.maskPhone(match));
+    result = result.replace(idCardPattern, match => this.maskIdCard(match));
+    result = result.replace(creditCardPattern, match => this.maskCreditCard(match));
 
     return result;
   }
@@ -171,7 +171,7 @@ class LogSanitizer {
   }
 
   static createSanitizer(options = {}) {
-    return (obj) => this.sanitize(obj, options);
+    return obj => this.sanitize(obj, options);
   }
 }
 

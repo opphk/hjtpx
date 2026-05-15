@@ -1,6 +1,7 @@
-const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+
+const nodemailer = require('nodemailer');
 
 class EmailService {
   constructor() {
@@ -37,7 +38,7 @@ class EmailService {
 
   loadTemplates() {
     const templatesDir = path.join(__dirname, '../../templates/email');
-    
+
     if (fs.existsSync(templatesDir)) {
       const files = fs.readdirSync(templatesDir);
       files.forEach(file => {

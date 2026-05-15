@@ -2,7 +2,7 @@ jest.mock('../../../config/database/db');
 
 describe('API Routes', () => {
   describe('Health Check Logic', () => {
-    const checkHealth = (services) => {
+    const checkHealth = services => {
       const results = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -14,7 +14,7 @@ describe('API Routes', () => {
           status: service.healthy ? 'up' : 'down',
           latency: service.latency || 0
         };
-        
+
         if (!service.healthy) {
           results.status = 'degraded';
         }
@@ -64,34 +64,34 @@ describe('API Routes', () => {
   describe('Request Validation Logic', () => {
     const validateRequest = (body, rules) => {
       const errors = [];
-      
+
       for (const [field, rule] of Object.entries(rules)) {
         const value = body[field];
-        
+
         if (rule.required && (value === undefined || value === null || value === '')) {
           errors.push(`${field} is required`);
           continue;
         }
-        
+
         if (value !== undefined && value !== null && value !== '') {
           if (rule.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
             errors.push(`${field} must be a valid email`);
           }
-          
+
           if (rule.type === 'number' && isNaN(Number(value))) {
             errors.push(`${field} must be a number`);
           }
-          
+
           if (rule.minLength && value.length < rule.minLength) {
             errors.push(`${field} must be at least ${rule.minLength} characters`);
           }
-          
+
           if (rule.maxLength && value.length > rule.maxLength) {
             errors.push(`${field} must be at most ${rule.maxLength} characters`);
           }
         }
       }
-      
+
       return { valid: errors.length === 0, errors };
     };
 

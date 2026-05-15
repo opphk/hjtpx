@@ -1,5 +1,6 @@
-const connectionManager = require('../connectionManager');
 const config = require('../../config/messageQueue');
+const connectionManager = require('../connectionManager');
+
 const { Event, EventTypes } = require('./eventTypes');
 
 class EventSubscription {

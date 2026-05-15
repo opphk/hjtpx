@@ -7,17 +7,24 @@ require('dotenv').config({
         : '.env'
 });
 
-const http = require('http');
 const cluster = require('cluster');
+const http = require('http');
 const os = require('os');
 
 const compression = require('compression');
 const express = require('express');
 
 const productionConfig = require('./backend/config/production');
-const { securityHeaders, additionalSecurityHeaders, helmetMiddleware } = require('./backend/middleware/securityHeaders');
 const { initSentry, Sentry } = require('./backend/config/sentry');
 const { createApolloServer, setupPlayground } = require('./backend/graphql');
+const { apiStatsMiddleware } = require('./backend/middleware/apiStats');
+const { cacheStatsMiddleware } = require('./backend/middleware/cacheMiddleware');
+const { corsMiddleware } = require('./backend/middleware/cors');
+const {
+  securityHeaders,
+  additionalSecurityHeaders,
+  helmetMiddleware
+} = require('./backend/middleware/securityHeaders');
 
 const app = express();
 
@@ -31,8 +38,6 @@ if (isProduction && productionConfig.production.trustProxy) {
   app.set('trust proxy', 1);
 }
 
-const { corsMiddleware } = require('./backend/middleware/cors');
-const { cacheStatsMiddleware } = require('./backend/middleware/cacheMiddleware');
 const errorHandler = require('./backend/middleware/errorHandler');
 const { logger, logError } = require('./backend/middleware/logger');
 const { performanceMiddleware } = require('./backend/middleware/performanceMonitor');
@@ -44,13 +49,12 @@ const {
   SUPPORTED_VERSIONS,
   DEFAULT_VERSION
 } = require('./backend/middleware/versionControl');
-const { apiStatsMiddleware } = require('./backend/middleware/apiStats');
+const oauthRoutes = require('./backend/oauth');
+const docsRoutes = require('./backend/routes/docs');
 const v1Routes = require('./backend/routes/v1');
 const v2Routes = require('./backend/routes/v2');
-const docsRoutes = require('./backend/routes/docs');
-const oauthRoutes = require('./backend/oauth');
-const websocketService = require('./backend/services/websocketService');
 const cacheService = require('./backend/services/cacheService');
+const websocketService = require('./backend/services/websocketService');
 
 if (process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.requestHandler());

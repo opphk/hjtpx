@@ -69,7 +69,7 @@ const versionNegotiator = (req, res, next) => {
   }
 
   if (!version) {
-    const preferHeader = req.headers['prefer'];
+    const preferHeader = req.headers.prefer;
     if (preferHeader) {
       const preferMatch = preferHeader.match(/version=(v\d+)/);
       if (preferMatch && SUPPORTED_VERSIONS.includes(preferMatch[1])) {
@@ -89,7 +89,7 @@ const versionNegotiator = (req, res, next) => {
   negotiationDetails.resolvedVersion = version;
   negotiationDetails.isLatest = version === LATEST_STABLE_VERSION;
   negotiationDetails.isDeprecated = VERSIONS[version]?.deprecated || false;
-  
+
   negotiationDetails.alternatives = SUPPORTED_VERSIONS.filter(v => v !== version);
 
   req.apiVersion = version;
@@ -115,11 +115,11 @@ const deprecationWarning = (req, res, next) => {
   if (versionInfo.deprecated) {
     const warningMessage = `API ${versionInfo.version} is deprecated. Please upgrade to the latest version.`;
     res.setHeader('Warning', `299 - "${warningMessage}"`);
-    
+
     if (versionInfo.deprecationDate) {
       res.setHeader('X-API-Deprecation-Date', versionInfo.deprecationDate);
     }
-    
+
     if (versionInfo.sunsetDate) {
       res.setHeader('X-API-Sunset-Date', versionInfo.sunsetDate);
     }
@@ -136,15 +136,21 @@ const deprecationWarning = (req, res, next) => {
       const sunsetDate = new Date(req.apiVersionInfo.sunsetDate);
       const currentDate = new Date();
       const daysUntilSunset = Math.ceil((sunsetDate - currentDate) / (1000 * 60 * 60 * 24));
-      
+
       if (daysUntilSunset > 0) {
         res.setHeader('X-API-Days-Until-Sunset', daysUntilSunset);
-        
+
         if (daysUntilSunset <= 30) {
-          res.setHeader('Warning', `299 - "API ${versionInfo.version} will be sunset in ${daysUntilSunset} days. Urgent upgrade required."`);
+          res.setHeader(
+            'Warning',
+            `299 - "API ${versionInfo.version} will be sunset in ${daysUntilSunset} days. Urgent upgrade required."`
+          );
         }
       } else {
-        res.setHeader('Warning', `299 - "API ${versionInfo.version} has been sunset. Requests will fail."`);
+        res.setHeader(
+          'Warning',
+          `299 - "API ${versionInfo.version} has been sunset. Requests will fail."`
+        );
       }
     }
 
@@ -162,14 +168,16 @@ const deprecationWarning = (req, res, next) => {
     req.deprecationInfo = deprecationInfo;
 
     const originalJson = res.json.bind(res);
-    res.json = (body) => {
+    res.json = body => {
       if (body && typeof body === 'object') {
         body.deprecation = deprecationInfo;
       }
       return originalJson(body);
     };
-  } else if (req.versionNegotiation?.requestedVersion && 
-             req.versionNegotiation?.requestedVersion !== req.apiVersion) {
+  } else if (
+    req.versionNegotiation?.requestedVersion &&
+    req.versionNegotiation?.requestedVersion !== req.apiVersion
+  ) {
     const upgradeMessage = `Version ${req.versionNegotiation.requestedVersion} not available. Using ${req.apiVersion}.`;
     res.setHeader('X-API-Version-Upgrade', upgradeMessage);
   }
@@ -181,9 +189,8 @@ const versionRouter = (req, res, next) => {
   const versionInfo = req.apiVersionInfo;
   if (versionInfo && versionInfo.routes) {
     return versionInfo.routes(req, res, next);
-  } else {
-    res.notFound(`API version ${req.apiVersion} not found`);
   }
+  res.notFound(`API version ${req.apiVersion} not found`);
 };
 
 module.exports = {
@@ -194,9 +201,9 @@ module.exports = {
   DEFAULT_VERSION,
   SUPPORTED_VERSIONS,
   LATEST_STABLE_VERSION,
-  getVersionInfo: (version) => VERSIONS[version] || null,
-  isVersionSupported: (version) => SUPPORTED_VERSIONS.includes(version),
-  getDeprecationStatus: (version) => {
+  getVersionInfo: version => VERSIONS[version] || null,
+  isVersionSupported: version => SUPPORTED_VERSIONS.includes(version),
+  getDeprecationStatus: version => {
     const info = VERSIONS[version];
     if (!info) return { supported: false, deprecated: null };
     return {
@@ -204,12 +211,12 @@ module.exports = {
       deprecated: info.deprecated,
       status: info.status,
       sunsetDate: info.sunsetDate,
-      daysUntilSunset: info.sunsetDate 
+      daysUntilSunset: info.sunsetDate
         ? Math.ceil((new Date(info.sunsetDate) - new Date()) / (1000 * 60 * 60 * 24))
         : null
     };
   },
-  getMigrationInfo: (version) => {
+  getMigrationInfo: version => {
     const info = VERSIONS[version];
     if (!info) return null;
     return {
@@ -218,7 +225,9 @@ module.exports = {
       isLatest: version === LATEST_STABLE_VERSION,
       breakingChanges: info.breakingChanges || [],
       migrationGuide: info.migrationGuide,
-      estimatedMigrationTime: info.breakingChanges?.length ? `${info.breakingChanges.length * 2} hours` : null
+      estimatedMigrationTime: info.breakingChanges?.length
+        ? `${info.breakingChanges.length * 2} hours`
+        : null
     };
   }
 };

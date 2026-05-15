@@ -33,7 +33,7 @@ class ApiUsageStats {
 
   recordRequest(method, path, statusCode, responseTime, timestamp = new Date()) {
     const endpointKey = `${method.toUpperCase()} ${path}`;
-    
+
     if (!this.stats.endpoints[endpointKey]) {
       this.stats.endpoints[endpointKey] = {
         method: method.toUpperCase(),
@@ -49,14 +49,14 @@ class ApiUsageStats {
     endpoint.calls++;
     endpoint.totalResponseTime += responseTime;
     endpoint.lastCalled = timestamp.toISOString();
-    
+
     if (statusCode >= 400) {
       endpoint.errors++;
       this.stats.totalErrors++;
     }
-    
+
     this.stats.totalRequests++;
-    
+
     this.saveStats();
   }
 
@@ -71,7 +71,10 @@ class ApiUsageStats {
       summary: {
         totalRequests: this.stats.totalRequests,
         totalErrors: this.stats.totalErrors,
-        errorRate: this.stats.totalRequests > 0 ? (this.stats.totalErrors / this.stats.totalRequests) * 100 : 0,
+        errorRate:
+          this.stats.totalRequests > 0
+            ? (this.stats.totalErrors / this.stats.totalRequests) * 100
+            : 0,
         startTime: this.stats.startTime,
         uniqueEndpoints: endpoints.length
       },

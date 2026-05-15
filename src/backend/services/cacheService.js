@@ -136,11 +136,7 @@ class CacheService {
         stats: { ...this.stats }
       };
 
-      await redisClient.setEx(
-        CACHE_KEYS.METRICS,
-        CACHE_TTL.MEDIUM,
-        JSON.stringify(metrics)
-      );
+      await redisClient.setEx(CACHE_KEYS.METRICS, CACHE_TTL.MEDIUM, JSON.stringify(metrics));
     } catch (error) {
       console.error('Failed to collect metrics:', error);
     }
@@ -206,7 +202,8 @@ class CacheService {
     if (userId) {
       return `${base}:user:${userId}`;
     }
-    const paramHash = Object.keys(params).sort()
+    const paramHash = Object.keys(params)
+      .sort()
       .map(k => `${k}=${params[k]}`)
       .join('&');
     return paramHash ? `${base}:${paramHash}` : base;
@@ -734,7 +731,8 @@ class CacheService {
         errors: this.stats.errors,
         uptime: Date.now() - this.startTime,
         memoryCacheUsage: `${this.memoryCache.size}/${this.maxMemoryCacheSize}`,
-        memoryCachePercent: ((this.memoryCache.size / this.maxMemoryCacheSize) * 100).toFixed(2) + '%',
+        memoryCachePercent:
+          ((this.memoryCache.size / this.maxMemoryCacheSize) * 100).toFixed(2) + '%',
         latency: {
           avgGet: this.calculateAverageLatency('get') + 'ms',
           avgSet: this.calculateAverageLatency('set') + 'ms',
@@ -749,7 +747,10 @@ class CacheService {
         sets: this.stats.session.sets,
         deletes: this.stats.session.deletes,
         extensions: this.stats.session.extensions,
-        hitRate: sessionTotal > 0 ? ((this.stats.session.hits / sessionTotal) * 100).toFixed(2) + '%' : '0%'
+        hitRate:
+          sessionTotal > 0
+            ? ((this.stats.session.hits / sessionTotal) * 100).toFixed(2) + '%'
+            : '0%'
       },
       api: {
         hits: this.stats.api.hits,
@@ -771,7 +772,10 @@ class CacheService {
         misses: this.stats.permissions.misses,
         sets: this.stats.permissions.sets,
         deletes: this.stats.permissions.deletes,
-        hitRate: permissionsTotal > 0 ? ((this.stats.permissions.hits / permissionsTotal) * 100).toFixed(2) + '%' : '0%'
+        hitRate:
+          permissionsTotal > 0
+            ? ((this.stats.permissions.hits / permissionsTotal) * 100).toFixed(2) + '%'
+            : '0%'
       },
       tags: {
         hits: this.stats.tags.hits,

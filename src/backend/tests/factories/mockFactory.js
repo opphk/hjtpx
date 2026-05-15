@@ -13,17 +13,17 @@ const defaultUserAttributes = {
 
 async function createUser(overrides = {}) {
   const attributes = { ...defaultUserAttributes, ...overrides };
-  
+
   if (!attributes.email) {
     attributes.email = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@example.com`;
   }
-  
+
   if (!attributes.password) {
     attributes.password = await bcrypt.hash('TestPassword123!', 10);
   } else if (!attributes.password.startsWith('$2')) {
     attributes.password = await bcrypt.hash(attributes.password, 10);
   }
-  
+
   const user = {
     id: Math.floor(Math.random() * 1000000) + 1,
     email: attributes.email,
@@ -33,9 +33,9 @@ async function createUser(overrides = {}) {
     status: attributes.status,
     created_at: new Date()
   };
-  
+
   testUsers.set(user.id, user);
-  
+
   return user;
 }
 
@@ -79,7 +79,7 @@ const defaultFileAttributes = {
 
 async function createFile(userId, overrides = {}) {
   const attributes = { ...defaultFileAttributes, ...overrides };
-  
+
   const file = {
     id: Math.floor(Math.random() * 1000000) + 1,
     user_id: userId,
@@ -91,9 +91,9 @@ async function createFile(userId, overrides = {}) {
     file_path: `/uploads/${attributes.folder}/${attributes.filename}`,
     created_at: new Date()
   };
-  
+
   testFiles.set(file.id, file);
-  
+
   return file;
 }
 
@@ -143,7 +143,7 @@ async function createNotification(userId, overrides = {}) {
     userId,
     ...overrides
   };
-  
+
   const notification = {
     _id: new (require('mongoose').Types.ObjectId)(),
     userId: attributes.userId,
@@ -156,7 +156,7 @@ async function createNotification(userId, overrides = {}) {
     createdAt: new Date(),
     updatedAt: new Date()
   };
-  
+
   testNotifications.push(notification);
   return notification;
 }

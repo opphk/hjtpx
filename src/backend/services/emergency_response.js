@@ -1,6 +1,7 @@
-const { defaultSecurityMonitor } = require('./security_monitor');
 const { IPControl } = require('../middleware/security/ip_whitelist');
 const { defaultAuditLogger } = require('../utils/security/audit_logger');
+
+const { defaultSecurityMonitor } = require('./security_monitor');
 
 class EmergencyResponse {
   constructor(options = {}) {
@@ -10,7 +11,7 @@ class EmergencyResponse {
     this.autoBlockEnabled = options.autoBlock !== false;
     this.notificationCallbacks = new Set();
     this.incidentHandlers = new Map();
-    
+
     this.severityLevels = {
       LOW: 1,
       MEDIUM: 2,
@@ -23,17 +24,17 @@ class EmergencyResponse {
   }
 
   initDefaultHandlers() {
-    this.registerHandler('sql_injection', async (incident) => {
+    this.registerHandler('sql_injection', async incident => {
       await this.blockIP(incident.source);
       return { action: 'ip_blocked', reason: 'sql_injection_detected' };
     });
 
-    this.registerHandler('xss_attempt', async (incident) => {
+    this.registerHandler('xss_attempt', async incident => {
       await this.logIncident(incident);
       return { action: 'logged', reason: 'xss_attempt' };
     });
 
-    this.registerHandler('brute_force', async (incident) => {
+    this.registerHandler('brute_force', async incident => {
       if (incident.count >= 20) {
         await this.blockIP(incident.source);
         await this.disableAccount(incident.target);
@@ -42,13 +43,13 @@ class EmergencyResponse {
       return { action: 'monitoring', reason: 'brute_force_attack' };
     });
 
-    this.registerHandler('suspicious_activity', async (incident) => {
+    this.registerHandler('suspicious_activity', async incident => {
       await this.logIncident(incident);
       await this.notifySecurityTeam(incident);
       return { action: 'notified', reason: 'suspicious_activity' };
     });
 
-    this.registerHandler('data_breach', async (incident) => {
+    this.registerHandler('data_breach', async incident => {
       await this.blockIP(incident.source);
       await this.revokeAllSessions();
       await this.notifySecurityTeam(incident, true);
@@ -56,7 +57,7 @@ class EmergencyResponse {
       return { action: 'full_response', reason: 'data_breach_detected' };
     });
 
-    this.registerHandler('ddos_attack', async (incident) => {
+    this.registerHandler('ddos_attack', async incident => {
       await this.enableEmergencyMode();
       await this.activateDDoSProtection(incident);
       return { action: 'ddos_protection_activated', reason: 'ddos_attack_detected' };
@@ -69,7 +70,7 @@ class EmergencyResponse {
 
   async handleSecurityIncident(incident) {
     const normalizedIncident = this.normalizeIncident(incident);
-    
+
     this.incidentHistory.push(normalizedIncident);
     if (this.incidentHistory.length > this.maxHistorySize) {
       this.incidentHistory.shift();
@@ -79,7 +80,11 @@ class EmergencyResponse {
     normalizedIncident.severity = severity;
 
     if (defaultAuditLogger) {
-      defaultAuditLogger.log('SECURITY_INCIDENT', normalizedIncident.target || null, normalizedIncident);
+      defaultAuditLogger.log(
+        'SECURITY_INCIDENT',
+        normalizedIncident.target || null,
+        normalizedIncident
+      );
     }
 
     if (defaultSecurityMonitor) {
@@ -134,7 +139,7 @@ class EmergencyResponse {
 
   evaluateSeverity(incident) {
     const baseSeverity = this.severityLevels[incident.severity?.toUpperCase()] || 2;
-    
+
     const typeSeverity = {
       data_breach: 5,
       ddos_attack: 5,
@@ -146,7 +151,7 @@ class EmergencyResponse {
     };
 
     const maxSeverity = typeSeverity[incident.type] || baseSeverity;
-    
+
     if (incident.count && incident.count > 10) {
       return Math.min(maxSeverity + 1, 5);
     }
@@ -156,7 +161,7 @@ class EmergencyResponse {
 
   async blockIP(ip, duration = null) {
     this.ipControl.addBlacklist(ip);
-    
+
     const blockEntry = {
       ip,
       blockedAt: new Date().toISOString(),
@@ -175,7 +180,7 @@ class EmergencyResponse {
 
   async unblockIP(ip) {
     this.ipControl.removeBlacklist(ip);
-    
+
     if (defaultAuditLogger) {
       defaultAuditLogger.log('IP_UNBLOCKED', null, { ip, unblockedAt: new Date().toISOString() });
     }
@@ -241,7 +246,9 @@ class EmergencyResponse {
       defaultAuditLogger.log('ALL_SESSIONS_REVOKED', userId, action);
     }
 
-    console.warn(`[Emergency Response] All sessions revoked${userId ? ` for user: ${userId}` : ''}`);
+    console.warn(
+      `[Emergency Response] All sessions revoked${userId ? ` for user: ${userId}` : ''}`
+    );
 
     return action;
   }
@@ -264,7 +271,10 @@ class EmergencyResponse {
       }
     }
 
-    console.warn(`[Emergency Response] Security team notified${urgent ? ' (URGENT)' : ''}:`, notification);
+    console.warn(
+      `[Emergency Response] Security team notified${urgent ? ' (URGENT)' : ''}:`,
+      notification
+    );
   }
 
   async initiateIncidentResponse(incident) {
@@ -290,7 +300,7 @@ class EmergencyResponse {
 
   async enableEmergencyMode() {
     console.warn('[Emergency Response] EMERGENCY MODE ENABLED');
-    
+
     if (defaultAuditLogger) {
       defaultAuditLogger.log('EMERGENCY_MODE_ENABLED', null, {
         timestamp: new Date().toISOString()
@@ -300,7 +310,7 @@ class EmergencyResponse {
 
   async disableEmergencyMode() {
     console.log('[Emergency Response] Emergency mode disabled');
-    
+
     if (defaultAuditLogger) {
       defaultAuditLogger.log('EMERGENCY_MODE_DISABLED', null, {
         timestamp: new Date().toISOString()
@@ -378,7 +388,7 @@ class EmergencyResponse {
 
   resolveIncident(incidentId, resolution) {
     const incident = this.incidentHistory.find(i => i.id === incidentId);
-    
+
     if (incident) {
       incident.status = 'resolved';
       incident.resolution = resolution;

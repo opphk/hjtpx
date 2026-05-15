@@ -26,7 +26,7 @@ describe('Cache Middleware', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockReq = {
       method: 'GET',
       originalUrl: '/api/v1/users',
@@ -40,8 +40,8 @@ describe('Cache Middleware', () => {
     mockRes = {
       statusCode: 200,
       set: jest.fn(),
-      json: jest.fn((data) => data),
-      send: jest.fn((data) => data),
+      json: jest.fn(data => data),
+      send: jest.fn(data => data),
       on: jest.fn()
     };
 
@@ -75,9 +75,9 @@ describe('Cache Middleware', () => {
       mockReq.method = 'GET';
       mockReq.originalUrl = '/api/v1/users';
       mockReq.user = null;
-      
+
       const key = generateCacheKey(mockReq);
-      
+
       expect(key).toContain('GET:/api/v1/users');
     });
 
@@ -85,9 +85,9 @@ describe('Cache Middleware', () => {
       mockReq.method = 'GET';
       mockReq.originalUrl = '/api/v1/profile';
       mockReq.user = { id: 'user-123' };
-      
+
       const key = generateCacheKey(mockReq);
-      
+
       expect(key).toContain('user-123');
     });
 
@@ -96,9 +96,9 @@ describe('Cache Middleware', () => {
       mockReq.originalUrl = '/api/v1/users';
       mockReq.query = { page: 1, limit: 10 };
       mockReq.user = null;
-      
+
       const key = generateCacheKey(mockReq);
-      
+
       expect(key).toContain('page=1');
       expect(key).toContain('limit=10');
     });
@@ -107,27 +107,27 @@ describe('Cache Middleware', () => {
   describe('getCacheConfig', () => {
     test('should return config for users endpoint', () => {
       const config = getCacheConfig('/api/v1/users');
-      
+
       expect(config).toHaveProperty('ttl');
       expect(config).toHaveProperty('isPublic');
     });
 
     test('should return default config for unknown endpoint', () => {
       const config = getCacheConfig('/api/v1/unknown');
-      
+
       expect(config).toHaveProperty('ttl');
       expect(config).toHaveProperty('isPublic');
     });
 
     test('should return config for health endpoint', () => {
       const config = getCacheConfig('/api/v1/health');
-      
+
       expect(config.ttl).toBeLessThanOrEqual(10);
     });
 
     test('should return config for notifications endpoint', () => {
       const config = getCacheConfig('/api/v1/notifications');
-      
+
       expect(config).toHaveProperty('ttl');
     });
   });
@@ -135,10 +135,10 @@ describe('Cache Middleware', () => {
   describe('apiCache middleware', () => {
     test('should call next for non-cacheable requests', async () => {
       mockReq.method = 'POST';
-      
+
       const middleware = apiCache();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockNext).toHaveBeenCalled();
       expect(cacheService.getCachedApiResponse).not.toHaveBeenCalled();
     });
@@ -146,46 +146,46 @@ describe('Cache Middleware', () => {
     test('should return cached response on cache hit', async () => {
       const cachedData = { users: [{ id: 1, name: 'Test User' }] };
       cacheService.getCachedApiResponse.mockResolvedValue(cachedData);
-      
+
       const middleware = apiCache();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockRes.set).toHaveBeenCalledWith('X-Cache', 'HIT');
       expect(mockRes.json).toHaveBeenCalledWith(cachedData);
     });
 
     test('should set X-Cache header to MISS on cache miss', async () => {
       cacheService.getCachedApiResponse.mockResolvedValue(null);
-      
+
       const middleware = apiCache();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockRes.set).toHaveBeenCalledWith('X-Cache', 'MISS');
       expect(mockNext).toHaveBeenCalled();
     });
 
     test('should not cache admin user responses', async () => {
       mockReq.user = { id: 1, role: 'admin' };
-      
+
       const middleware = apiCache();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockNext).toHaveBeenCalled();
       expect(cacheService.getCachedApiResponse).not.toHaveBeenCalled();
     });
 
     test('should cache responses when cacheService is available', async () => {
       cacheService.getCachedApiResponse.mockResolvedValue(null);
-      
+
       mockRes.on = jest.fn((event, callback) => {
         if (event === 'finish') {
           mockRes.finishCallback = callback;
         }
       });
-      
+
       const middleware = apiCache(300);
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockNext).toHaveBeenCalled();
       expect(mockRes.on).toHaveBeenCalledWith('finish', expect.any(Function));
     });
@@ -194,20 +194,20 @@ describe('Cache Middleware', () => {
   describe('invalidateCache middleware', () => {
     test('should call next and invalidate pattern', async () => {
       cacheService.invalidateApiCache.mockResolvedValue(true);
-      
+
       const middleware = invalidateCache('users:*');
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(cacheService.invalidateApiCache).toHaveBeenCalledWith('users:*');
       expect(mockNext).toHaveBeenCalled();
     });
 
     test('should call next even on error', async () => {
       cacheService.invalidateApiCache.mockRejectedValue(new Error('Cache error'));
-      
+
       const middleware = invalidateCache('*');
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockNext).toHaveBeenCalled();
     });
   });
@@ -216,10 +216,10 @@ describe('Cache Middleware', () => {
     test('should skip for non-GET requests', async () => {
       mockReq.method = 'POST';
       mockReq.user = { id: 'user-123' };
-      
+
       const middleware = userCacheMiddleware();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockNext).toHaveBeenCalled();
       expect(cacheService.getCachedUser).not.toHaveBeenCalled();
     });
@@ -227,10 +227,10 @@ describe('Cache Middleware', () => {
     test('should skip for unauthenticated requests', async () => {
       mockReq.method = 'GET';
       mockReq.user = null;
-      
+
       const middleware = userCacheMiddleware();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockNext).toHaveBeenCalled();
       expect(cacheService.getCachedUser).not.toHaveBeenCalled();
     });
@@ -238,26 +238,26 @@ describe('Cache Middleware', () => {
     test('should set X-User-Cache header to HIT on cache hit', async () => {
       const cachedUser = { id: 'user-123', name: 'Test User' };
       cacheService.getCachedUser.mockResolvedValue(cachedUser);
-      
+
       mockReq.method = 'GET';
       mockReq.user = { id: 'user-123' };
-      
+
       const middleware = userCacheMiddleware();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockRes.set).toHaveBeenCalledWith('X-User-Cache', 'HIT');
       expect(mockReq.cachedUser).toEqual(cachedUser);
     });
 
     test('should set X-User-Cache header to MISS on cache miss', async () => {
       cacheService.getCachedUser.mockResolvedValue(null);
-      
+
       mockReq.method = 'GET';
       mockReq.user = { id: 'user-123' };
-      
+
       const middleware = userCacheMiddleware();
       await middleware(mockReq, mockRes, mockNext);
-      
+
       expect(mockRes.set).toHaveBeenCalledWith('X-User-Cache', 'MISS');
       expect(mockNext).toHaveBeenCalled();
     });

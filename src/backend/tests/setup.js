@@ -7,7 +7,7 @@ let testPool;
 
 beforeAll(async () => {
   console.log('Test environment initialized');
-  
+
   if (process.env.RUN_INTEGRATION_TESTS === 'true') {
     testPool = new Pool({
       host: process.env.TEST_DB_HOST || 'localhost',
@@ -17,9 +17,9 @@ beforeAll(async () => {
       password: process.env.TEST_DB_PASSWORD || 'postgres',
       max: 5,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 2000
     });
-    
+
     try {
       await testPool.query('SELECT 1');
       console.log('Test database connected successfully');
@@ -32,7 +32,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   console.log('Test environment cleanup completed');
-  
+
   if (testPool) {
     try {
       await testPool.end();

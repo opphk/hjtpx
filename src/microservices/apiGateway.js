@@ -1,9 +1,10 @@
-const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
-const helmet = require('helmet');
-const cors = require('cors');
+
 const compression = require('compression');
+const cors = require('cors');
+const express = require('express');
+const helmet = require('helmet');
+const { Server } = require('socket.io');
 
 class ApiGateway {
   constructor(options = {}) {
@@ -28,15 +29,19 @@ class ApiGateway {
   }
 
   setupDefaultMiddleware() {
-    this.app.use(helmet({
-      contentSecurityPolicy: false
-    }));
+    this.app.use(
+      helmet({
+        contentSecurityPolicy: false
+      })
+    );
 
-    this.app.use(cors({
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
-    }));
+    this.app.use(
+      cors({
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID']
+      })
+    );
 
     this.app.use(compression({ level: 6 }));
 
@@ -69,8 +74,9 @@ class ApiGateway {
     });
 
     this.app.get('/ready', (req, res) => {
-      const healthyServices = Array.from(this.services.values())
-        .filter(s => s.status === 'healthy');
+      const healthyServices = Array.from(this.services.values()).filter(
+        s => s.status === 'healthy'
+      );
 
       if (healthyServices.length === 0) {
         return res.status(503).json({
@@ -87,15 +93,15 @@ class ApiGateway {
   }
 
   setupWebSocket() {
-    this.io.on('connection', (socket) => {
+    this.io.on('connection', socket => {
       console.log('Client connected:', socket.id);
 
-      socket.on('service:register', (data) => {
+      socket.on('service:register', data => {
         this.registerService(data);
         socket.emit('service:registered', { success: true });
       });
 
-      socket.on('service:heartbeat', (data) => {
+      socket.on('service:heartbeat', data => {
         this.updateServiceHealth(data.serviceId, 'healthy');
       });
 
@@ -219,22 +225,26 @@ class ApiGateway {
 
     service.requestCount++;
 
-    const proxyReq = http.request(targetUrl, {
-      method: req.method,
-      headers: {
-        ...req.headers,
-        host: new URL(service.url).host
+    const proxyReq = http.request(
+      targetUrl,
+      {
+        method: req.method,
+        headers: {
+          ...req.headers,
+          host: new URL(service.url).host
+        }
+      },
+      proxyRes => {
+        res.status(proxyRes.statusCode);
+        proxyRes.headers['x-gateway-service'] = serviceName;
+        Object.entries(proxyRes.headers).forEach(([key, value]) => {
+          res.setHeader(key, value);
+        });
+        proxyRes.pipe(res);
       }
-    }, (proxyRes) => {
-      res.status(proxyRes.statusCode);
-      proxyRes.headers['x-gateway-service'] = serviceName;
-      Object.entries(proxyRes.headers).forEach(([key, value]) => {
-        res.setHeader(key, value);
-      });
-      proxyRes.pipe(res);
-    });
+    );
 
-    proxyReq.on('error', (error) => {
+    proxyReq.on('error', error => {
       console.error(`Proxy error for ${serviceName}:`, error.message);
       service.consecutiveFailures++;
       res.status(502).json({
@@ -275,7 +285,10 @@ class ApiGateway {
 
     for (const [key, route] of this.routes) {
       const [method, path] = key.split(':');
-      this.app[method.toLowerCase()](path, this.createRouteHandler(method, path, route.serviceName, route.servicePath));
+      this.app[method.toLowerCase()](
+        path,
+        this.createRouteHandler(method, path, route.serviceName, route.servicePath)
+      );
     }
 
     this.app.use((req, res) => {
@@ -288,7 +301,7 @@ class ApiGateway {
       });
     });
 
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.server.listen(this.port, () => {
         console.log(`API Gateway running on port ${this.port}`);
         resolve(this);

@@ -1,4 +1,5 @@
 const request = require('supertest');
+
 const app = require('../../../src/index');
 
 describe('API Versioning', () => {
@@ -17,14 +18,14 @@ describe('API Versioning', () => {
 
     test('should return deprecation warnings for v1', async () => {
       const response = await request(app).get('/api/v1/health');
-      expect(response.headers['warning']).toBeDefined();
+      expect(response.headers.warning).toBeDefined();
       expect(response.headers['x-api-deprecation-date']).toBe('2026-01-01');
       expect(response.headers['x-api-sunset-date']).toBe('2026-07-01');
     });
 
     test('should not return deprecation warnings for v2', async () => {
       const response = await request(app).get('/api/v2/health');
-      expect(response.headers['warning']).toBeUndefined();
+      expect(response.headers.warning).toBeUndefined();
     });
 
     test('should include X-API-Version header in all responses', async () => {

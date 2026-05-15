@@ -1,7 +1,7 @@
-const request = require('supertest');
-const express = require('express');
 const bcrypt = require('bcryptjs');
+const express = require('express');
 const jwt = require('jsonwebtoken');
+const request = require('supertest');
 
 const authRoutes = require('../../routes/v1/auth');
 const {
@@ -48,13 +48,11 @@ describe('Auth API Integration Tests', () => {
   describe('POST /api/v1/auth/register', () => {
     it('should register a new user successfully', async () => {
       const uniqueEmail = `newuser_${Date.now()}@example.com`;
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send({
-          email: uniqueEmail,
-          name: 'New Test User',
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/auth/register').send({
+        email: uniqueEmail,
+        name: 'New Test User',
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.CREATED);
       expect(response.body.success).toBe(true);
@@ -63,9 +61,7 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should fail with invalid email format', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(invalidEmailFormat);
+      const response = await request(app).post('/api/v1/auth/register').send(invalidEmailFormat);
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -84,13 +80,11 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should fail when email already exists', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send({
-          email: testUser.email,
-          name: 'Duplicate User',
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/auth/register').send({
+        email: testUser.email,
+        name: 'Duplicate User',
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -109,12 +103,10 @@ describe('Auth API Integration Tests', () => {
 
   describe('POST /api/v1/auth/login', () => {
     it('should login successfully with valid credentials', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: testUser.email,
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/auth/login').send({
+        email: testUser.email,
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
@@ -124,30 +116,24 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should fail with incorrect password', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: testUser.email,
-          password: 'WrongPassword123!'
-        });
+      const response = await request(app).post('/api/v1/auth/login').send({
+        email: testUser.email,
+        password: 'WrongPassword123!'
+      });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(response.body.success).toBe(false);
     });
 
     it('should fail with non-existent email', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(invalidUserCredentials);
+      const response = await request(app).post('/api/v1/auth/login').send(invalidUserCredentials);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(response.body.success).toBe(false);
     });
 
     it('should fail with missing credentials', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({});
+      const response = await request(app).post('/api/v1/auth/login').send({});
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -172,9 +158,7 @@ describe('Auth API Integration Tests', () => {
 
   describe('POST /api/v1/auth/verify', () => {
     it('should verify valid token successfully', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/verify')
-        .send({ token: testToken });
+      const response = await request(app).post('/api/v1/auth/verify').send({ token: testToken });
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
@@ -192,22 +176,16 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should fail with expired token', async () => {
-      const expiredToken = jwt.sign(
-        { id: testUser.id, email: testUser.email },
-        JWT_SECRET,
-        { expiresIn: '-1h' }
-      );
-      const response = await request(app)
-        .post('/api/v1/auth/verify')
-        .send({ token: expiredToken });
+      const expiredToken = jwt.sign({ id: testUser.id, email: testUser.email }, JWT_SECRET, {
+        expiresIn: '-1h'
+      });
+      const response = await request(app).post('/api/v1/auth/verify').send({ token: expiredToken });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });
 
     it('should fail without token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/verify')
-        .send({});
+      const response = await request(app).post('/api/v1/auth/verify').send({});
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
     });
@@ -215,9 +193,7 @@ describe('Auth API Integration Tests', () => {
 
   describe('POST /api/v1/auth/refresh', () => {
     it('should refresh token successfully', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .send({ token: testToken });
+      const response = await request(app).post('/api/v1/auth/refresh').send({ token: testToken });
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
@@ -235,11 +211,9 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should fail with expired token', async () => {
-      const expiredToken = jwt.sign(
-        { id: testUser.id, email: testUser.email },
-        JWT_SECRET,
-        { expiresIn: '-1h' }
-      );
+      const expiredToken = jwt.sign({ id: testUser.id, email: testUser.email }, JWT_SECRET, {
+        expiresIn: '-1h'
+      });
       const response = await request(app)
         .post('/api/v1/auth/refresh')
         .send({ token: expiredToken });
@@ -248,9 +222,7 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should fail without token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .send({});
+      const response = await request(app).post('/api/v1/auth/refresh').send({});
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -269,8 +241,7 @@ describe('Auth API Integration Tests', () => {
     });
 
     it('should logout successfully even without token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/logout');
+      const response = await request(app).post('/api/v1/auth/logout');
 
       expect(response.status).toBe(HTTP_STATUS.OK);
     });

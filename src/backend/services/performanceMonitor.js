@@ -28,8 +28,7 @@ class PerformanceMonitor {
     }
 
     this.metrics.totalResponseTime += responseTime;
-    this.metrics.avgResponseTime =
-      this.metrics.totalResponseTime / this.metrics.requests;
+    this.metrics.avgResponseTime = this.metrics.totalResponseTime / this.metrics.requests;
 
     if (responseTime < this.metrics.minResponseTime) {
       this.metrics.minResponseTime = responseTime;
@@ -89,9 +88,10 @@ class PerformanceMonitor {
       requests: {
         total: this.metrics.requests,
         errors: this.metrics.errors,
-        errorRate: this.metrics.requests > 0
-          ? ((this.metrics.errors / this.metrics.requests) * 100).toFixed(2) + '%'
-          : '0%'
+        errorRate:
+          this.metrics.requests > 0
+            ? ((this.metrics.errors / this.metrics.requests) * 100).toFixed(2) + '%'
+            : '0%'
       },
       responseTime: {
         avg: Math.round(this.metrics.avgResponseTime * 100) / 100,

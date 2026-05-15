@@ -68,15 +68,7 @@ class SecurityMonitor {
         id: 'THR006',
         name: 'Suspicious User Agent',
         severity: 'medium',
-        patterns: [
-          /sqlmap/i,
-          /nikto/i,
-          /nmap/i,
-          /masscan/i,
-          /hydra/i,
-          /burp/i,
-          /scanner/i
-        ]
+        patterns: [/sqlmap/i, /nikto/i, /nmap/i, /masscan/i, /hydra/i, /burp/i, /scanner/i]
       },
       {
         id: 'THR007',
@@ -256,9 +248,7 @@ class SecurityMonitor {
       filtered = filtered.filter(a => a.acknowledged === acknowledged);
     }
 
-    return filtered
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, limit);
+    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, limit);
   }
 
   getThreats(options = {}) {
@@ -270,9 +260,7 @@ class SecurityMonitor {
       filtered = filtered.filter(t => t.severity === severity);
     }
 
-    return filtered
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, limit);
+    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, limit);
   }
 
   getSuspiciousActivities(options = {}) {
@@ -284,9 +272,7 @@ class SecurityMonitor {
       filtered = filtered.filter(a => a.type === type);
     }
 
-    return filtered
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .slice(0, limit);
+    return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, limit);
   }
 
   getStatistics() {
@@ -318,8 +304,7 @@ class SecurityMonitor {
   clearOldData(hoursToKeep = 168) {
     const cutoff = Date.now() - hoursToKeep * 3600000;
 
-    const filterByTime = items =>
-      items.filter(item => new Date(item.timestamp).getTime() > cutoff);
+    const filterByTime = items => items.filter(item => new Date(item.timestamp).getTime() > cutoff);
 
     this.alerts = filterByTime(this.alerts);
     this.threats = filterByTime(this.threats);

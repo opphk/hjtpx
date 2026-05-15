@@ -143,7 +143,10 @@ class MessageQueue extends EventEmitter {
 
       const message = queue.messages[0];
 
-      if (message.properties.expiration && Date.now() > message.metadata.publishedAt + message.properties.expiration) {
+      if (
+        message.properties.expiration &&
+        Date.now() > message.metadata.publishedAt + message.properties.expiration
+      ) {
         queue.messages.shift();
         this.emit('message:expired', { queue: queueName, messageId: message.id });
         continue;

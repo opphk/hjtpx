@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+
 const { LogSanitizer } = require('./log_sanitizer');
 
 class AuditLogger {
@@ -12,7 +13,7 @@ class AuditLogger {
     this.buffers = new Map();
     this.flushInterval = options.flushInterval || 60000;
     this.retentionDays = options.retentionDays || 365;
-    
+
     this.init();
     this.startAutoFlush();
     this.startCleanup();
@@ -90,7 +91,7 @@ class AuditLogger {
   rotateLog(logFile) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const rotatedFile = logFile.replace('.log', `-${timestamp}.log`);
-    
+
     try {
       if (fs.existsSync(logFile)) {
         fs.renameSync(logFile, rotatedFile);
@@ -102,7 +103,8 @@ class AuditLogger {
   }
 
   compressOldLogs() {
-    const files = fs.readdirSync(this.logDir)
+    const files = fs
+      .readdirSync(this.logDir)
       .filter(f => f.endsWith('.log') && !f.endsWith('.gz'))
       .map(f => ({
         name: f,
@@ -133,20 +135,23 @@ class AuditLogger {
   }
 
   startCleanup() {
-    setInterval(() => {
-      this.cleanupOldLogs();
-    }, 24 * 60 * 60 * 1000);
+    setInterval(
+      () => {
+        this.cleanupOldLogs();
+      },
+      24 * 60 * 60 * 1000
+    );
   }
 
   cleanupOldLogs() {
-    const cutoff = Date.now() - (this.retentionDays * 24 * 60 * 60 * 1000);
-    
+    const cutoff = Date.now() - this.retentionDays * 24 * 60 * 60 * 1000;
+
     try {
       const files = fs.readdirSync(this.logDir);
       for (const file of files) {
         const filePath = path.join(this.logDir, file);
         const stats = fs.statSync(filePath);
-        
+
         if (stats.mtimeMs < cutoff) {
           fs.unlinkSync(filePath);
         }
@@ -159,7 +164,7 @@ class AuditLogger {
   query(filters = {}) {
     const results = [];
     const searchPatterns = this.buildSearchPatterns(filters);
-    
+
     try {
       const content = fs.readFileSync(this.currentLogFile, 'utf-8');
       const lines = content.split('\n').filter(line => line.trim());
@@ -188,7 +193,7 @@ class AuditLogger {
     if (filters.severity && entry.severity !== filters.severity) return false;
     if (filters.startDate && new Date(entry.timestamp) < new Date(filters.startDate)) return false;
     if (filters.endDate && new Date(entry.timestamp) > new Date(filters.endDate)) return false;
-    
+
     return true;
   }
 

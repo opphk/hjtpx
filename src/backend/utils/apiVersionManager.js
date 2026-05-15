@@ -35,7 +35,7 @@ class ApiVersionManager {
 
     const metadata = this.loadMetadata();
     const existingIndex = metadata.versions.findIndex(v => v.version === version);
-    
+
     const versionInfo = {
       version,
       createdAt: timestamp,
@@ -96,7 +96,7 @@ class ApiVersionManager {
   compareVersions(version1, version2) {
     const spec1 = this.loadVersionSpec(version1);
     const spec2 = this.loadVersionSpec(version2);
-    
+
     if (!spec1 || !spec2) {
       return null;
     }

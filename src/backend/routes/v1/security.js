@@ -1,9 +1,14 @@
 const express = require('express');
+
 const { createCSPReportEndpoint } = require('../../middleware/securityHeaders');
 
 const router = express.Router();
 
-router.post('/csp-report', express.json({ type: ['application/csp-report', 'application/json'] }), createCSPReportEndpoint());
+router.post(
+  '/csp-report',
+  express.json({ type: ['application/csp-report', 'application/json'] }),
+  createCSPReportEndpoint()
+);
 
 router.get('/headers', (req, res) => {
   res.json({

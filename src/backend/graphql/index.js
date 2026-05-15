@@ -1,23 +1,24 @@
+const http = require('http');
+
 const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const { ApolloServerPluginDrainHttpServer } = require('@apollo/server/plugin/drainHttpServer');
 const { makeExecutableSchema } = require('@graphql-tools/schema');
-const { WebSocketServer } = require('ws');
-const { useServer } = require('graphql-ws/use/ws');
-const express = require('express');
-const http = require('http');
 const cors = require('cors');
-
-const typeDefs = require('./schema');
-const resolvers = require('./resolvers');
-const { subscriptionResolver, pubsub } = require('./subscriptions');
-const { createLoaders } = require('./loaders');
+const express = require('express');
+const { useServer } = require('graphql-ws/use/ws');
+const { WebSocketServer } = require('ws');
 
 const authService = require('../services/authService');
 
-const createContext = async (contextParams) => {
+const { createLoaders } = require('./loaders');
+const resolvers = require('./resolvers');
+const typeDefs = require('./schema');
+const { subscriptionResolver, pubsub } = require('./subscriptions');
+
+const createContext = async contextParams => {
   let user = null;
-  
+
   if (contextParams.req?.headers?.authorization) {
     const token = contextParams.req.headers.authorization.replace('Bearer ', '');
     try {
@@ -27,7 +28,7 @@ const createContext = async (contextParams) => {
       user = null;
     }
   }
-  
+
   return {
     user,
     loaders: createLoaders(),
@@ -45,22 +46,22 @@ const createApolloServer = async (app, httpServer) => {
       Subscription: subscriptionResolver
     }
   });
-  
+
   const wsServer = new WebSocketServer({
     server: httpServer,
     path: '/graphql'
   });
-  
+
   const serverCleanup = useServer(
     {
       schema,
-      context: async (ctx) => {
+      context: async ctx => {
         return await createContext({ req: ctx.extra.request });
       }
     },
     wsServer
   );
-  
+
   const server = new ApolloServer({
     schema,
     plugins: [
@@ -77,7 +78,7 @@ const createApolloServer = async (app, httpServer) => {
     ],
     formatError: (formattedError, error) => {
       console.error('GraphQL Error:', error);
-      
+
       if (error.originalError?.extensions?.code === 'BAD_USER_INPUT') {
         return {
           message: error.message,
@@ -87,7 +88,7 @@ const createApolloServer = async (app, httpServer) => {
           }
         };
       }
-      
+
       if (error.originalError?.extensions?.code === 'AUTHENTICATION_ERROR') {
         return {
           message: 'Authentication required',
@@ -96,7 +97,7 @@ const createApolloServer = async (app, httpServer) => {
           }
         };
       }
-      
+
       if (error.originalError?.extensions?.code === 'FORBIDDEN') {
         return {
           message: 'You do not have permission to perform this action',
@@ -105,7 +106,7 @@ const createApolloServer = async (app, httpServer) => {
           }
         };
       }
-      
+
       return {
         message: formattedError.message,
         locations: formattedError.locations,
@@ -113,15 +114,14 @@ const createApolloServer = async (app, httpServer) => {
       };
     }
   });
-  
+
   await server.start();
-  
+
   app.use(
     '/graphql',
     cors({
-      origin: process.env.NODE_ENV === 'production' 
-        ? process.env.ALLOWED_ORIGINS?.split(',') || []
-        : '*',
+      origin:
+        process.env.NODE_ENV === 'production' ? process.env.ALLOWED_ORIGINS?.split(',') || [] : '*',
       credentials: true
     }),
     express.json({ limit: '10mb' }),
@@ -129,11 +129,11 @@ const createApolloServer = async (app, httpServer) => {
       context: async ({ req }) => await createContext({ req })
     })
   );
-  
+
   return server;
 };
 
-const setupPlayground = (app) => {
+const setupPlayground = app => {
   if (process.env.NODE_ENV !== 'production') {
     app.get('/playground', (req, res) => {
       res.send(`

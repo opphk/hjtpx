@@ -65,7 +65,7 @@ const publishNotificationCreated = async (notification, userId = null) => {
       createdAt: notification.createdAt?.toISOString?.() || new Date().toISOString()
     }
   };
-  
+
   if (userId) {
     await pubsub.publish(`${NOTIFICATION_CREATED}_${userId}`, payload);
   }
@@ -96,7 +96,7 @@ const publishNotificationDeleted = async (notificationId, userId) => {
   });
 };
 
-const publishUserUpdated = async (user) => {
+const publishUserUpdated = async user => {
   await pubsub.publish(USER_UPDATED, {
     userUpdated: {
       id: user.id?.toString() || user._id?.toString(),

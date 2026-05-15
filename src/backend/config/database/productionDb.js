@@ -42,11 +42,9 @@ const createOptimizedPool = (config = {}) => {
   return pool;
 };
 
-const productionPool = process.env.NODE_ENV === 'production'
-  ? createOptimizedPool()
-  : null;
+const productionPool = process.env.NODE_ENV === 'production' ? createOptimizedPool() : null;
 
-const healthCheck = async (pool) => {
+const healthCheck = async pool => {
   const start = Date.now();
   try {
     const result = await pool.query('SELECT 1 as health');

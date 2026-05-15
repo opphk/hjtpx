@@ -20,14 +20,14 @@ class ForbiddenError extends GraphQLError {
   }
 }
 
-const requireAuth = (context) => {
+const requireAuth = context => {
   if (!context.user) {
     throw new AuthenticationError('Authentication required');
   }
   return context.user;
 };
 
-const requireAdmin = (context) => {
+const requireAdmin = context => {
   const user = requireAuth(context);
   if (user.role !== 'admin') {
     throw new ForbiddenError('Admin privileges required');
@@ -35,7 +35,7 @@ const requireAdmin = (context) => {
   return user;
 };
 
-const requireModerator = (context) => {
+const requireModerator = context => {
   const user = requireAuth(context);
   if (user.role !== 'admin' && user.role !== 'moderator') {
     throw new ForbiddenError('Moderator privileges required');

@@ -3,11 +3,9 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'hjtpx-secret-key-change-in-production';
 
 function generateToken(user) {
-  return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+    expiresIn: '1h'
+  });
 }
 
 const testPassword = 'TestPassword123!';

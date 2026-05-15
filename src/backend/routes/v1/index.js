@@ -5,11 +5,11 @@ const router = express.Router();
 const adminRoutes = require('./admin');
 const authRoutes = require('./auth');
 const healthRoutes = require('./health');
+const monitoringRoutes = require('./monitoring');
 const passwordRoutes = require('./password');
 const performanceRoutes = require('./performance');
-const usersRoutes = require('./users');
-const monitoringRoutes = require('./monitoring');
 const securityRoutes = require('./security');
+const usersRoutes = require('./users');
 
 router.use('/health', healthRoutes);
 router.use('/users', usersRoutes);

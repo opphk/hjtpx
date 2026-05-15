@@ -1,17 +1,16 @@
 const connectionManager = require('./connectionManager');
-const { producerManager } = require('./producers/streamProducer');
 const { consumerManager } = require('./consumers/streamConsumer');
-const { retryManager } = require('./retry/retryStrategy');
-const deadLetterQueue = require('./retry/deadLetterQueue');
+const emailQueueService = require('./emailQueueService');
+const { eventProcessor } = require('./events/eventProcessor');
 const eventPublisher = require('./events/eventPublisher');
 const eventSubscriber = require('./events/eventSubscriber');
-const { eventProcessor } = require('./events/eventProcessor');
-const queueMonitor = require('./monitoring/queueMonitor');
-
-const emailQueueService = require('./emailQueueService');
-const notificationQueueService = require('./notificationQueueService');
 const exportQueueService = require('./exportQueueService');
 const loggingQueueService = require('./loggingQueueService');
+const queueMonitor = require('./monitoring/queueMonitor');
+const notificationQueueService = require('./notificationQueueService');
+const { producerManager } = require('./producers/streamProducer');
+const deadLetterQueue = require('./retry/deadLetterQueue');
+const { retryManager } = require('./retry/retryStrategy');
 
 class MessageQueueManager {
   constructor() {

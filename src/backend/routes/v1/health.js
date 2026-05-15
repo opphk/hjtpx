@@ -114,7 +114,7 @@ router.get('/detailed', async (req, res) => {
     if (cacheService) {
       const cacheHealth = await cacheService.isHealthy();
       const cacheStats = cacheService.getStats();
-      
+
       healthStatus.checks.cache = {
         status: cacheHealth ? 'healthy' : 'degraded',
         message: cacheHealth ? 'Cache service is healthy' : 'Cache service is degraded',
@@ -211,9 +211,10 @@ router.get('/pool-stats', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' 
-        ? error.message 
-        : 'Failed to retrieve pool statistics'
+      error:
+        process.env.NODE_ENV === 'development'
+          ? error.message
+          : 'Failed to retrieve pool statistics'
     });
   }
 });
@@ -238,9 +239,7 @@ router.get('/pool-health', async (req, res) => {
   } catch (error) {
     res.status(503).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' 
-        ? error.message 
-        : 'Health check failed'
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Health check failed'
     });
   }
 });
@@ -287,9 +286,8 @@ router.post('/pool-stats/reset', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' 
-        ? error.message 
-        : 'Failed to reset pool statistics'
+      error:
+        process.env.NODE_ENV === 'development' ? error.message : 'Failed to reset pool statistics'
     });
   }
 });

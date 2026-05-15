@@ -1,5 +1,5 @@
-const http = require('http');
 const EventEmitter = require('events');
+const http = require('http');
 
 class ServiceDiscovery extends EventEmitter {
   constructor(options = {}) {
@@ -103,9 +103,7 @@ class ServiceDiscovery extends EventEmitter {
     }
 
     if (tags.length > 0) {
-      candidates = candidates.filter(s =>
-        tags.every(tag => s.tags.includes(tag))
-      );
+      candidates = candidates.filter(s => tags.every(tag => s.tags.includes(tag)));
     }
 
     if (candidates.length === 0) {
@@ -129,9 +127,7 @@ class ServiceDiscovery extends EventEmitter {
     }
 
     if (tags.length > 0) {
-      candidates = candidates.filter(s =>
-        tags.every(tag => s.tags.includes(tag))
-      );
+      candidates = candidates.filter(s => tags.every(tag => s.tags.includes(tag)));
     }
 
     return candidates;
@@ -215,7 +211,7 @@ class ServiceDiscovery extends EventEmitter {
   async performHealthCheck(service) {
     return new Promise((resolve, reject) => {
       const url = new URL(service.healthCheckUrl);
-      const req = http.request(url, { method: 'GET', timeout: 5000 }, (res) => {
+      const req = http.request(url, { method: 'GET', timeout: 5000 }, res => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve(res);
         } else {
@@ -239,8 +235,7 @@ class ServiceDiscovery extends EventEmitter {
 
     service.requestCount++;
     service.avgResponseTime =
-      (service.avgResponseTime * (service.requestCount - 1) + responseTime) /
-      service.requestCount;
+      (service.avgResponseTime * (service.requestCount - 1) + responseTime) / service.requestCount;
 
     if (!success) {
       service.errorCount++;

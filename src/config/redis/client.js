@@ -2,22 +2,42 @@ const isTestEnv = process.env.NODE_ENV === 'test';
 
 if (isTestEnv) {
   const mockFunctions = {
-    get: function() { return Promise.resolve(null); },
-    set: function() { return Promise.resolve('OK'); },
-    del: function() { return Promise.resolve(1); },
-    exists: function() { return Promise.resolve(0); },
-    keys: function() { return Promise.resolve([]); },
-    expire: function() { return Promise.resolve(1); },
-    ping: function() { return Promise.resolve('PONG'); },
-    sendCommand: function() { return Promise.resolve(null); },
+    get: function () {
+      return Promise.resolve(null);
+    },
+    set: function () {
+      return Promise.resolve('OK');
+    },
+    del: function () {
+      return Promise.resolve(1);
+    },
+    exists: function () {
+      return Promise.resolve(0);
+    },
+    keys: function () {
+      return Promise.resolve([]);
+    },
+    expire: function () {
+      return Promise.resolve(1);
+    },
+    ping: function () {
+      return Promise.resolve('PONG');
+    },
+    sendCommand: function () {
+      return Promise.resolve(null);
+    }
   };
 
   module.exports = {
-    createClient: function() {
+    createClient: function () {
       const mockClient = {
         isOpen: true,
-        connect: function() { return Promise.resolve(); },
-        disconnect: function() { return Promise.resolve(); },
+        connect: function () {
+          return Promise.resolve();
+        },
+        disconnect: function () {
+          return Promise.resolve();
+        }
       };
 
       for (const key in mockFunctions) {
@@ -39,22 +59,42 @@ if (isTestEnv) {
     };
   } catch (error) {
     const mockFunctions = {
-      get: function() { return Promise.resolve(null); },
-      set: function() { return Promise.resolve('OK'); },
-      del: function() { return Promise.resolve(1); },
-      exists: function() { return Promise.resolve(0); },
-      keys: function() { return Promise.resolve([]); },
-      expire: function() { return Promise.resolve(1); },
-      ping: function() { return Promise.resolve('PONG'); },
-      sendCommand: function() { return Promise.resolve(null); },
+      get: function () {
+        return Promise.resolve(null);
+      },
+      set: function () {
+        return Promise.resolve('OK');
+      },
+      del: function () {
+        return Promise.resolve(1);
+      },
+      exists: function () {
+        return Promise.resolve(0);
+      },
+      keys: function () {
+        return Promise.resolve([]);
+      },
+      expire: function () {
+        return Promise.resolve(1);
+      },
+      ping: function () {
+        return Promise.resolve('PONG');
+      },
+      sendCommand: function () {
+        return Promise.resolve(null);
+      }
     };
 
     module.exports = {
-      createClient: function() {
+      createClient: function () {
         const mockClient = {
           isOpen: true,
-          connect: function() { return Promise.resolve(); },
-          disconnect: function() { return Promise.resolve(); },
+          connect: function () {
+            return Promise.resolve();
+          },
+          disconnect: function () {
+            return Promise.resolve();
+          }
         };
 
         for (const key in mockFunctions) {

@@ -1,5 +1,5 @@
-const request = require('supertest');
 const express = require('express');
+const request = require('supertest');
 
 const mockExportService = {
   exportData: jest.fn(),
@@ -10,11 +10,7 @@ const mockExportService = {
 jest.mock('../../services/exportService', () => mockExportService);
 
 const exportRoutes = require('../../routes/export');
-const {
-  generateToken,
-  testPassword,
-  HTTP_STATUS
-} = require('../helpers/testFixtures');
+const { generateToken, testPassword, HTTP_STATUS } = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
@@ -141,9 +137,7 @@ describe('Export API Unit Tests', () => {
     });
 
     it('should fail without authentication', async () => {
-      const response = await request(app)
-        .get('/api/v1/export/csv')
-        .query({ table: 'users' });
+      const response = await request(app).get('/api/v1/export/csv').query({ table: 'users' });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

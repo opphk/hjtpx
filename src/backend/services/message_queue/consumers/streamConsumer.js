@@ -1,7 +1,7 @@
-const connectionManager = require('../connectionManager');
 const config = require('../../config/messageQueue');
-const { retryManager } = require('../retry/retryStrategy');
+const connectionManager = require('../connectionManager');
 const deadLetterQueue = require('../retry/deadLetterQueue');
+const { retryManager } = require('../retry/retryStrategy');
 
 class StreamConsumer {
   constructor(queueName, options = {}) {
@@ -30,16 +30,14 @@ class StreamConsumer {
     }
 
     await connectionManager.ensureStream(this.streamKey, config.streams.maxLen);
-    await connectionManager.ensureConsumerGroup(
-      this.streamKey,
-      this.groupName,
-      '0'
-    );
+    await connectionManager.ensureConsumerGroup(this.streamKey, this.groupName, '0');
 
     await deadLetterQueue.initialize(this.queueConfig, this.queueConfig.deadLetterStream);
 
     this.isInitialized = true;
-    console.log(`[StreamConsumer] Initialized consumer for queue: ${this.queueName} (group: ${this.groupName})`);
+    console.log(
+      `[StreamConsumer] Initialized consumer for queue: ${this.queueName} (group: ${this.groupName})`
+    );
   }
 
   registerHandler(type, handler) {
@@ -125,17 +123,21 @@ class StreamConsumer {
         const processingTime = Date.now() - startTime;
         console.log(`[StreamConsumer] Processed message ${messageId} in ${processingTime}ms`);
         return;
-
       } catch (error) {
         retryCount++;
-        console.error(`[StreamConsumer] Error processing message ${messageId} (attempt ${retryCount}/${this.queueConfig.maxRetries}):`, error.message);
+        console.error(
+          `[StreamConsumer] Error processing message ${messageId} (attempt ${retryCount}/${this.queueConfig.maxRetries}):`,
+          error.message
+        );
 
         if (retryCount <= this.queueConfig.maxRetries) {
           const delay = this.queueConfig.retryDelay * retryCount;
           console.log(`[StreamConsumer] Retrying in ${delay}ms...`);
           await this.sleep(delay);
         } else {
-          console.error(`[StreamConsumer] Max retries exceeded for message ${messageId}, sending to DLQ`);
+          console.error(
+            `[StreamConsumer] Max retries exceeded for message ${messageId}, sending to DLQ`
+          );
           await deadLetterQueue.sendToDLQ(error, {
             stream: this.streamKey,
             messageId,
@@ -156,8 +158,7 @@ class StreamConsumer {
 
       try {
         value = JSON.parse(value);
-      } catch (e) {
-      }
+      } catch (e) {}
 
       data[key] = value;
     }
@@ -165,8 +166,7 @@ class StreamConsumer {
     if (data.payload) {
       try {
         data.payload = JSON.parse(data.payload);
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
     return data;
@@ -217,7 +217,10 @@ class StreamConsumer {
       const client = connectionManager.getClient();
       await client.ping();
 
-      const groupInfo = await connectionManager.getConsumerGroupInfo(this.streamKey, this.groupName);
+      const groupInfo = await connectionManager.getConsumerGroupInfo(
+        this.streamKey,
+        this.groupName
+      );
       const streamLength = await client.xlen(this.streamKey);
 
       return {
@@ -268,9 +271,11 @@ class ConsumerManager {
   async startAll() {
     const promises = [];
     for (const [name, consumer] of this.consumers) {
-      promises.push(consumer.consume().catch(err => {
-        console.error(`[ConsumerManager] Consumer ${name} error:`, err);
-      }));
+      promises.push(
+        consumer.consume().catch(err => {
+          console.error(`[ConsumerManager] Consumer ${name} error:`, err);
+        })
+      );
     }
     await Promise.all(promises);
   }

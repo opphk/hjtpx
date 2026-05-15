@@ -86,7 +86,7 @@ describe('Logger', () => {
   });
 
   describe('Error Logging', () => {
-    const formatError = (error) => {
+    const formatError = error => {
       return {
         message: error.message,
         stack: error.stack,
@@ -115,7 +115,7 @@ describe('Logger', () => {
 });
 
 describe('Search Optimizer', () => {
-  const normalizeSearchQuery = (query) => {
+  const normalizeSearchQuery = query => {
     if (!query) return '';
     return query.toLowerCase().trim().replace(/\s+/g, ' ');
   };

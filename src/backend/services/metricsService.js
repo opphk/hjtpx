@@ -231,15 +231,15 @@ const recordAuthAttempt = (type, result) => {
   authenticationAttempts.inc({ type, result });
 };
 
-const recordRateLimitHit = (type) => {
+const recordRateLimitHit = type => {
   rateLimitHits.inc({ type });
 };
 
-const recordCacheHit = (cacheType) => {
+const recordCacheHit = cacheType => {
   cacheHits.inc({ cache_type: cacheType, status: 'hit' });
 };
 
-const recordCacheMiss = (cacheType) => {
+const recordCacheMiss = cacheType => {
   cacheMisses.inc({ cache_type: cacheType });
 };
 
@@ -247,11 +247,11 @@ const setBusinessMetric = (name, value) => {
   businessMetrics.set({ metric_name: name }, value);
 };
 
-const recordBusinessEvent = (eventType) => {
+const recordBusinessEvent = eventType => {
   businessMetricEvents.inc({ event_type: eventType });
 };
 
-const updateConnectionMetrics = (wsCount) => {
+const updateConnectionMetrics = wsCount => {
   websocketConnections.set(wsCount);
 };
 
@@ -263,15 +263,15 @@ const recordWebSocketMessageReceived = () => {
   websocketMessagesReceived.inc();
 };
 
-const recordWebSocketError = (errorType) => {
+const recordWebSocketError = errorType => {
   websocketErrors.inc({ error_type: errorType });
 };
 
-const recordWebSocketConnectionDuration = (durationSeconds) => {
+const recordWebSocketConnectionDuration = durationSeconds => {
   websocketConnectionDuration.observe(durationSeconds);
 };
 
-const recordWebSocketHeartbeat = (type) => {
+const recordWebSocketHeartbeat = type => {
   websocketHeartbeats.inc({ type });
 };
 

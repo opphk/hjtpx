@@ -1,5 +1,5 @@
-const request = require('supertest');
 const express = require('express');
+const request = require('supertest');
 
 const mockAuthService = {
   login: jest.fn(),
@@ -52,12 +52,10 @@ describe('Auth API Unit Tests', () => {
         token: 'valid-token'
       });
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: mockUser.email,
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/auth/login').send({
+        email: mockUser.email,
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
@@ -68,12 +66,10 @@ describe('Auth API Unit Tests', () => {
     it('should fail with incorrect password', async () => {
       mockAuthService.login.mockRejectedValue(new Error('Invalid credentials'));
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({
-          email: mockUser.email,
-          password: 'WrongPassword123!'
-        });
+      const response = await request(app).post('/api/v1/auth/login').send({
+        email: mockUser.email,
+        password: 'WrongPassword123!'
+      });
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(response.body.success).toBe(false);
@@ -82,18 +78,14 @@ describe('Auth API Unit Tests', () => {
     it('should fail with non-existent email', async () => {
       mockAuthService.login.mockRejectedValue(new Error('Invalid credentials'));
 
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send(invalidUserCredentials);
+      const response = await request(app).post('/api/v1/auth/login').send(invalidUserCredentials);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
       expect(response.body.success).toBe(false);
     });
 
     it('should fail with missing credentials', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/login')
-        .send({});
+      const response = await request(app).post('/api/v1/auth/login').send({});
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -125,13 +117,11 @@ describe('Auth API Unit Tests', () => {
       });
       mockUserService.createUser.mockResolvedValue(newUser);
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send({
-          email: 'newuser@example.com',
-          name: 'New Test User',
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/auth/register').send({
+        email: 'newuser@example.com',
+        name: 'New Test User',
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.CREATED);
       expect(response.body.success).toBe(true);
@@ -140,18 +130,14 @@ describe('Auth API Unit Tests', () => {
     });
 
     it('should fail with invalid email format', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(invalidEmailFormat);
+      const response = await request(app).post('/api/v1/auth/register').send(invalidEmailFormat);
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
     });
 
     it('should fail with weak password', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send(weakPasswordData);
+      const response = await request(app).post('/api/v1/auth/register').send(weakPasswordData);
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -162,24 +148,20 @@ describe('Auth API Unit Tests', () => {
       error.code = '23505';
       mockUserService.createUser.mockRejectedValue(error);
 
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send({
-          email: mockUser.email,
-          name: 'Duplicate User',
-          password: testPassword
-        });
+      const response = await request(app).post('/api/v1/auth/register').send({
+        email: mockUser.email,
+        name: 'Duplicate User',
+        password: testPassword
+      });
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
     });
 
     it('should fail with missing required fields', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/register')
-        .send({
-          email: 'missing@example.com'
-        });
+      const response = await request(app).post('/api/v1/auth/register').send({
+        email: 'missing@example.com'
+      });
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
     });
@@ -190,9 +172,7 @@ describe('Auth API Unit Tests', () => {
       const testToken = generateToken(mockUser);
       mockAuthService.verifyToken.mockResolvedValue(mockUser);
 
-      const response = await request(app)
-        .post('/api/v1/auth/verify')
-        .send({ token: testToken });
+      const response = await request(app).post('/api/v1/auth/verify').send({ token: testToken });
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
@@ -212,9 +192,7 @@ describe('Auth API Unit Tests', () => {
     });
 
     it('should fail without token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/verify')
-        .send({});
+      const response = await request(app).post('/api/v1/auth/verify').send({});
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
     });
@@ -226,9 +204,7 @@ describe('Auth API Unit Tests', () => {
       const newToken = 'refreshed-token';
       mockAuthService.refreshToken.mockResolvedValue({ token: newToken });
 
-      const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .send({ token: oldToken });
+      const response = await request(app).post('/api/v1/auth/refresh').send({ token: oldToken });
 
       expect(response.status).toBe(HTTP_STATUS.OK);
       expect(response.body.success).toBe(true);
@@ -248,9 +224,7 @@ describe('Auth API Unit Tests', () => {
     });
 
     it('should fail without token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .send({});
+      const response = await request(app).post('/api/v1/auth/refresh').send({});
 
       expect(response.status).toBe(HTTP_STATUS.BAD_REQUEST);
       expect(response.body.success).toBe(false);
@@ -271,8 +245,7 @@ describe('Auth API Unit Tests', () => {
     });
 
     it('should logout successfully even without token', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/logout');
+      const response = await request(app).post('/api/v1/auth/logout');
 
       expect(response.status).toBe(HTTP_STATUS.OK);
     });

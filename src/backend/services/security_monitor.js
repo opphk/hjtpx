@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const { LogSanitizer } = require('../utils/security/log_sanitizer');
+
 const { defaultAuditLogger } = require('../utils/security/audit_logger');
+const { LogSanitizer } = require('../utils/security/log_sanitizer');
 
 class SecurityMonitor {
   constructor(options = {}) {
@@ -21,7 +22,7 @@ class SecurityMonitor {
     this.alertHandlers = new Set();
     this.alertMethods = options.alertMethods || ['email', 'slack', 'webhook'];
     this.alertRecipients = options.alertRecipients || [];
-    
+
     this.startCleanupInterval();
   }
 
@@ -33,7 +34,7 @@ class SecurityMonitor {
     const { type, severity, source, details } = this.normalizeEvent(event);
 
     this.updateCounter(type, source);
-    
+
     const count = this.getCounter(type, source);
     const threshold = this.alertThreshold[type] || 5;
 
@@ -132,7 +133,9 @@ class SecurityMonitor {
       await this.sendWebhookAlert(alert);
     }
 
-    console.warn(`[SECURITY ALERT] ${alert.severity.toUpperCase()}: ${alert.type} from ${alert.source} (count: ${alert.count})`);
+    console.warn(
+      `[SECURITY ALERT] ${alert.severity.toUpperCase()}: ${alert.type} from ${alert.source} (count: ${alert.count})`
+    );
   }
 
   async sendEmailAlert(alert) {
@@ -169,16 +172,18 @@ Security Alert Details:
 
     const payload = {
       text: `${severityEmoji[alert.severity]} Security Alert: ${alert.type}`,
-      attachments: [{
-        color: this.getSeverityColor(alert.severity),
-        fields: [
-          { title: 'Severity', value: alert.severity.toUpperCase(), short: true },
-          { title: 'Source', value: alert.source, short: true },
-          { title: 'Count', value: String(alert.count), short: true },
-          { title: 'Threshold', value: String(alert.threshold), short: true },
-          { title: 'Timestamp', value: alert.timestamp, short: false }
-        ]
-      }]
+      attachments: [
+        {
+          color: this.getSeverityColor(alert.severity),
+          fields: [
+            { title: 'Severity', value: alert.severity.toUpperCase(), short: true },
+            { title: 'Source', value: alert.source, short: true },
+            { title: 'Count', value: String(alert.count), short: true },
+            { title: 'Threshold', value: String(alert.threshold), short: true },
+            { title: 'Timestamp', value: alert.timestamp, short: false }
+          ]
+        }
+      ]
     };
 
     console.log('[Slack Alert] Would send to Slack');
@@ -258,7 +263,7 @@ Security Alert Details:
 
   calculateRiskScore(summary) {
     let score = 0;
-    
+
     score += summary.bySeverity.critical * 10;
     score += summary.bySeverity.high * 5;
     score += summary.bySeverity.medium * 2;
@@ -309,15 +314,18 @@ Security Alert Details:
   }
 
   startCleanupInterval() {
-    setInterval(() => {
-      const oneHourAgo = Date.now() - (60 * 60 * 1000);
-      
-      for (const [key, value] of this.counters.entries()) {
-        if (value.lastSeen < oneHourAgo) {
-          this.counters.delete(key);
+    setInterval(
+      () => {
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+        for (const [key, value] of this.counters.entries()) {
+          if (value.lastSeen < oneHourAgo) {
+            this.counters.delete(key);
+          }
         }
-      }
-    }, 60 * 60 * 1000);
+      },
+      60 * 60 * 1000
+    );
   }
 
   getStats() {

@@ -99,7 +99,7 @@ class SMSService {
     const result = await vonage.sms.send({ to: phoneNumber, from: this.senderId, text: content });
 
     return {
-      success: result.messages[0]['status'] === '0',
+      success: result.messages[0].status === '0',
       messageId: result.messages[0]['message-id'],
       provider: 'nexmo'
     };
@@ -114,16 +114,18 @@ class SMSService {
       region: process.env.AWS_REGION || 'us-east-1'
     });
 
-    const result = await sns.publish({
-      PhoneNumber: phoneNumber,
-      Message: content,
-      MessageAttributes: {
-        'AWS.SNS.SMS.SenderID': {
-          DataType: 'String',
-          StringValue: this.senderId
+    const result = await sns
+      .publish({
+        PhoneNumber: phoneNumber,
+        Message: content,
+        MessageAttributes: {
+          'AWS.SNS.SMS.SenderID': {
+            DataType: 'String',
+            StringValue: this.senderId
+          }
         }
-      }
-    }).promise();
+      })
+      .promise();
 
     return {
       success: true,

@@ -3,7 +3,7 @@ jest.mock('../../services/sessionService');
 
 describe('Auth Middleware Logic', () => {
   describe('Token Extraction', () => {
-    const extractToken = (authHeader) => {
+    const extractToken = authHeader => {
       if (!authHeader) {
         return null;
       }
@@ -107,7 +107,7 @@ describe('Auth Middleware Logic', () => {
   });
 
   describe('Session Validation Logic', () => {
-    const isSessionValid = (session) => {
+    const isSessionValid = session => {
       if (!session) return false;
       if (new Date(session.expires_at) < new Date()) return false;
       return true;

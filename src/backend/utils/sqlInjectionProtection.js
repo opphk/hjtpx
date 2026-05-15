@@ -28,7 +28,7 @@ class SQLInjectionProtection {
     let str = String(input);
 
     str = str.replace(/'/g, "''");
-    
+
     for (const pattern of this.dangerousPatterns) {
       str = str.replace(pattern, '');
     }

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+
 const Notification = require('../../models/Notification');
 
 const defaultNotificationAttributes = {
@@ -16,7 +17,7 @@ async function createNotification(userId, overrides = {}) {
     userId,
     ...overrides
   };
-  
+
   try {
     const notification = await Notification.create(attributes);
     return notification;

@@ -11,7 +11,7 @@ describe('SQL Injection Tests', () => {
     });
 
     test('should block OR 1=1 attacks', () => {
-      const maliciousInput = "1 OR 1=1";
+      const maliciousInput = '1 OR 1=1';
       const sanitized = SQLInjectionProtection.sanitize(maliciousInput);
       expect(sanitized).toContain('1');
       expect(sanitized).not.toContain(' OR ');
@@ -24,7 +24,7 @@ describe('SQL Injection Tests', () => {
     });
 
     test('should block UNION SELECT attacks', () => {
-      const maliciousInput = "1 UNION SELECT password FROM users--";
+      const maliciousInput = '1 UNION SELECT password FROM users--';
       const sanitized = SQLInjectionProtection.sanitize(maliciousInput);
       expect(sanitized).not.toContain('UNION');
       expect(sanitized).not.toContain('SELECT');
@@ -63,7 +63,7 @@ describe('SQL Injection Tests', () => {
     });
 
     test('should block boolean-based blind injection', () => {
-      const maliciousInput = "1 AND 1=1";
+      const maliciousInput = '1 AND 1=1';
       const sanitized = SQLInjectionProtection.sanitize(maliciousInput);
       expect(sanitized).not.toContain('AND');
     });

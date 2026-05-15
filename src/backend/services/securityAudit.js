@@ -13,7 +13,7 @@ class SecurityAudit {
         id: 'SEC001',
         name: 'Hardcoded Secrets Detection',
         severity: 'critical',
-        check: (code) => {
+        check: code => {
           const patterns = [
             /password\s*=\s*['"][^'"]+['"]/i,
             /api[_-]?key\s*=\s*['"][^'"]+['"]/i,
@@ -27,7 +27,7 @@ class SecurityAudit {
         id: 'SEC002',
         name: 'SQL Injection Vulnerability',
         severity: 'critical',
-        check: (code) => {
+        check: code => {
           const patterns = [
             /query\s*\(\s*['"`]\s*\$/,
             /execute\s*\(\s*['"`]\s*\+/,
@@ -40,7 +40,7 @@ class SecurityAudit {
         id: 'SEC003',
         name: 'XSS Vulnerability',
         severity: 'high',
-        check: (code) => {
+        check: code => {
           const patterns = [
             /innerHTML\s*=\s*(?!.*sanitize)/,
             /dangerouslySetInnerHTML/i,
@@ -53,7 +53,7 @@ class SecurityAudit {
         id: 'SEC004',
         name: 'Weak Cryptography',
         severity: 'high',
-        check: (code) => {
+        check: code => {
           const weakAlg = ['md5', 'sha1', 'des', 'rc4'];
           return weakAlg.some(alg => code.includes(alg));
         }
@@ -62,7 +62,7 @@ class SecurityAudit {
         id: 'SEC005',
         name: 'Insecure Direct Object Reference',
         severity: 'medium',
-        check: (code) => {
+        check: code => {
           const patterns = [
             /req\.params\.id(?!\s*(?:===|!==|==|!=))/,
             /req\.body\.id(?!\s*(?:===|!==|==|!=))/
@@ -82,7 +82,7 @@ class SecurityAudit {
         id: 'SEC007',
         name: 'Missing CSRF Protection',
         severity: 'medium',
-        check: (code) => {
+        check: code => {
           return !code.includes('csrf') && !code.includes('csurf');
         }
       },
@@ -90,7 +90,7 @@ class SecurityAudit {
         id: 'SEC008',
         name: 'Weak Password Policy',
         severity: 'medium',
-        check: (code) => {
+        check: code => {
           const hasWeakPassword = /password.*min.*[0-4]/.test(code);
           const hasNoComplexity = !/pattern.*(?=.*[A-Z])(?=.*[a-z])(?=.*\d])/.test(code);
           return hasWeakPassword || hasNoComplexity;
@@ -100,7 +100,7 @@ class SecurityAudit {
         id: 'SEC009',
         name: 'Missing Input Validation',
         severity: 'medium',
-        check: (code) => {
+        check: code => {
           return !code.includes('joi') && !code.includes('validate') && !code.includes('schema');
         }
       },
@@ -116,11 +116,8 @@ class SecurityAudit {
         id: 'SEC011',
         name: 'Verbose Error Messages',
         severity: 'low',
-        check: (code) => {
-          const patterns = [
-            /console\.log.*error/i,
-            /res\.json.*error.*stack/
-          ];
+        check: code => {
+          const patterns = [/console\.log.*error/i, /res\.json.*error.*stack/];
           return patterns.some(p => p.test(code));
         }
       },
@@ -128,7 +125,7 @@ class SecurityAudit {
         id: 'SEC012',
         name: 'Missing HTTPS Enforcement',
         severity: 'medium',
-        check: (code) => {
+        check: code => {
           return !code.includes('https') && !code.includes('ssl') && !code.includes('TLS');
         }
       }
@@ -161,13 +158,17 @@ class SecurityAudit {
   getRecommendation(ruleId) {
     const recommendations = {
       SEC001: 'Move secrets to environment variables. Never commit credentials to version control.',
-      SEC002: 'Use parameterized queries or ORM methods. Never concatenate user input into SQL queries.',
-      SEC003: 'Use React\'s default escaping or sanitize HTML with DOMPurify before setting innerHTML.',
+      SEC002:
+        'Use parameterized queries or ORM methods. Never concatenate user input into SQL queries.',
+      SEC003:
+        "Use React's default escaping or sanitize HTML with DOMPurify before setting innerHTML.",
       SEC004: 'Use strong algorithms like AES-256-GCM, bcrypt, or Argon2 for cryptography.',
       SEC005: 'Always verify user ownership of requested resources before returning data.',
       SEC006: 'Implement rate limiting on sensitive endpoints to prevent brute force attacks.',
-      SEC007: 'Implement CSRF tokens for state-changing operations, especially for authenticated users.',
-      SEC008: 'Enforce strong password policies: minimum 8 chars, mixed case, numbers, and special chars.',
+      SEC007:
+        'Implement CSRF tokens for state-changing operations, especially for authenticated users.',
+      SEC008:
+        'Enforce strong password policies: minimum 8 chars, mixed case, numbers, and special chars.',
       SEC009: 'Validate all user input using a validation library like Joi or express-validator.',
       SEC010: 'Add security headers using helmet.js: X-Frame-Options, CSP, HSTS, etc.',
       SEC011: 'Log errors internally but return generic messages to users in production.',

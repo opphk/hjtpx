@@ -1,17 +1,14 @@
-const request = require('supertest');
-const express = require('express');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
+
+const express = require('express');
+const request = require('supertest');
 const { v4: uuidv4 } = require('uuid');
 
 const pool = require('../../../config/database/db');
 const importRoutes = require('../../routes/import');
 const { userFactory } = require('../factories');
-const {
-  generateToken,
-  testPassword,
-  HTTP_STATUS
-} = require('../helpers/testFixtures');
+const { generateToken, testPassword, HTTP_STATUS } = require('../helpers/testFixtures');
 
 const app = express();
 app.use(express.json());
@@ -64,7 +61,8 @@ describe('Import API Integration Tests', () => {
     });
 
     it('should import CSV file successfully as admin', async () => {
-      const csvContent = 'email,name,role\ntest1@example.com,Test User 1,user\ntest2@example.com,Test User 2,user';
+      const csvContent =
+        'email,name,role\ntest1@example.com,Test User 1,user\ntest2@example.com,Test User 2,user';
       const csvPath = path.join(testUploadDir, 'test-import.csv');
       fs.writeFileSync(csvPath, csvContent);
 
@@ -80,7 +78,8 @@ describe('Import API Integration Tests', () => {
     });
 
     it('should import CSV file successfully as manager', async () => {
-      const csvContent = 'email,name\nmanager_test1@example.com,Manager Test 1\nmanager_test2@example.com,Manager Test 2';
+      const csvContent =
+        'email,name\nmanager_test1@example.com,Manager Test 1\nmanager_test2@example.com,Manager Test 2';
       const csvPath = path.join(testUploadDir, 'test-manager-import.csv');
       fs.writeFileSync(csvPath, csvContent);
 
@@ -198,9 +197,7 @@ describe('Import API Integration Tests', () => {
 
     it('should import JSON file successfully as manager', async () => {
       const jsonContent = JSON.stringify({
-        data: [
-          { email: 'manager_json1@example.com', name: 'Manager JSON 1' }
-        ]
+        data: [{ email: 'manager_json1@example.com', name: 'Manager JSON 1' }]
       });
       const jsonPath = path.join(testUploadDir, 'test-manager-json.json');
       fs.writeFileSync(jsonPath, jsonContent);
@@ -284,7 +281,8 @@ describe('Import API Integration Tests', () => {
     });
 
     it('should preview CSV file successfully', async () => {
-      const csvContent = 'email,name\npreview1@example.com,Preview 1\npreview2@example.com,Preview 2\npreview3@example.com,Preview 3';
+      const csvContent =
+        'email,name\npreview1@example.com,Preview 1\npreview2@example.com,Preview 2\npreview3@example.com,Preview 3';
       const csvPath = path.join(testUploadDir, 'test-preview.csv');
       fs.writeFileSync(csvPath, csvContent);
 
@@ -322,7 +320,8 @@ describe('Import API Integration Tests', () => {
     });
 
     it('should limit preview to 10 rows', async () => {
-      const csvContent = 'email,name\nrow1@example.com,Row 1\nrow2@example.com,Row 2\nrow3@example.com,Row 3\nrow4@example.com,Row 4\nrow5@example.com,Row 5\nrow6@example.com,Row 6\nrow7@example.com,Row 7\nrow8@example.com,Row 8\nrow9@example.com,Row 9\nrow10@example.com,Row 10\nrow11@example.com,Row 11\nrow12@example.com,Row 12';
+      const csvContent =
+        'email,name\nrow1@example.com,Row 1\nrow2@example.com,Row 2\nrow3@example.com,Row 3\nrow4@example.com,Row 4\nrow5@example.com,Row 5\nrow6@example.com,Row 6\nrow7@example.com,Row 7\nrow8@example.com,Row 8\nrow9@example.com,Row 9\nrow10@example.com,Row 10\nrow11@example.com,Row 11\nrow12@example.com,Row 12';
       const csvPath = path.join(testUploadDir, 'test-limit.csv');
       fs.writeFileSync(csvPath, csvContent);
 
@@ -363,9 +362,7 @@ describe('Import API Integration Tests', () => {
       const csvPath = path.join(testUploadDir, 'test-preview-noauth.csv');
       fs.writeFileSync(csvPath, csvContent);
 
-      const response = await request(app)
-        .post('/api/v1/import/preview')
-        .attach('file', csvPath);
+      const response = await request(app).post('/api/v1/import/preview').attach('file', csvPath);
 
       expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
     });

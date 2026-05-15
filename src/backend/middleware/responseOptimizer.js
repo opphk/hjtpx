@@ -7,10 +7,7 @@ function getCacheKey(req) {
 }
 
 function generateETag(data) {
-  const hash = require('crypto')
-    .createHash('md5')
-    .update(JSON.stringify(data))
-    .digest('hex');
+  const hash = require('crypto').createHash('md5').update(JSON.stringify(data)).digest('hex');
   return `"${hash}"`;
 }
 
@@ -59,7 +56,7 @@ function cacheResponse(req, res, next) {
 
     res.set({
       'X-Cache': 'HIT',
-      'ETag': cached.etag,
+      ETag: cached.etag,
       'Cache-Control': 'public, max-age=60',
       'Last-Modified': new Date(cached.timestamp).toUTCString()
     });
@@ -86,7 +83,7 @@ function setResponseCache(req, res, next) {
   const cacheKey = getCacheKey(req);
 
   const originalJson = res.json.bind(res);
-  res.json = function(data) {
+  res.json = function (data) {
     if (data && data.success !== false) {
       const etag = generateETag(data);
 

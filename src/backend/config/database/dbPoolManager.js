@@ -1,7 +1,8 @@
-const { Pool } = require('pg');
 const EventEmitter = require('events');
 const fs = require('fs');
 const path = require('path');
+
+const { Pool } = require('pg');
 
 class DatabasePoolManager extends EventEmitter {
   constructor() {
@@ -50,7 +51,7 @@ class DatabasePoolManager extends EventEmitter {
   _getOptimizedConfig() {
     const cpuCores = require('os').cpus().length;
     const isProduction = process.env.NODE_ENV === 'production';
-    
+
     const baseConfig = {
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT) || 5432,
@@ -64,7 +65,7 @@ class DatabasePoolManager extends EventEmitter {
     if (isProduction) {
       const envMax = parseInt(process.env.DB_POOL_MAX);
       const envMin = parseInt(process.env.DB_POOL_MIN);
-      
+
       poolSize = {
         min: envMin || Math.max(5, Math.floor(cpuCores * 1.5)),
         max: envMax || Math.min(50, cpuCores * 10)
@@ -91,17 +92,19 @@ class DatabasePoolManager extends EventEmitter {
       keepAliveInitialDelayMillis: 30000,
       keepAliveInitialDelay: 30000,
       application_name: process.env.APP_NAME || 'hjtpx',
-      ...(isProduction ? {
-        ssl: this._getSSLConfig(),
-        types: {
-          getTypeParser: (oid) => {
-            if (oid === 1082) return (val) => val; 
-            if (oid === 1114) return (val) => val;
-            if (oid === 1184) return (val) => val;
-            return null;
+      ...(isProduction
+        ? {
+            ssl: this._getSSLConfig(),
+            types: {
+              getTypeParser: oid => {
+                if (oid === 1082) return val => val;
+                if (oid === 1114) return val => val;
+                if (oid === 1184) return val => val;
+                return null;
+              }
+            }
           }
-        }
-      } : {})
+        : {})
     };
   }
 
@@ -109,7 +112,7 @@ class DatabasePoolManager extends EventEmitter {
     const sslConfig = {
       rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false'
     };
-    
+
     if (process.env.DB_SSL_CERT) {
       sslConfig.cert = process.env.DB_SSL_CERT;
     }
@@ -119,7 +122,7 @@ class DatabasePoolManager extends EventEmitter {
     if (process.env.DB_SSL_CA) {
       sslConfig.ca = process.env.DB_SSL_CA;
     }
-    
+
     return sslConfig;
   }
 
@@ -137,12 +140,14 @@ class DatabasePoolManager extends EventEmitter {
     this.initialized = true;
 
     console.log('Database pool initialized with optimized configuration');
-    console.log(`Pool config: min=${this.config.min}, max=${this.config.max}, idleTimeout=${this.config.idleTimeoutMillis}ms`);
-    
+    console.log(
+      `Pool config: min=${this.config.min}, max=${this.config.max}, idleTimeout=${this.config.idleTimeoutMillis}ms`
+    );
+
     if (this.isProduction) {
       console.log('Production mode: SSL enabled, detailed logging disabled');
     }
-    
+
     return this.pool;
   }
 
@@ -155,18 +160,18 @@ class DatabasePoolManager extends EventEmitter {
       this.emit('poolError', { error: err, timestamp: new Date().toISOString() });
     });
 
-    this.pool.on('connect', (client) => {
+    this.pool.on('connect', client => {
       if (this.isProduction) {
         console.log('New client connected to database pool');
       }
       this.emit('clientConnected', { timestamp: new Date().toISOString() });
     });
 
-    this.pool.on('acquire', (client) => {
+    this.pool.on('acquire', client => {
       this.emit('clientAcquired', { timestamp: new Date().toISOString() });
     });
 
-    this.pool.on('remove', (client) => {
+    this.pool.on('remove', client => {
       if (this.isProduction) {
         console.log('Client removed from pool');
       }
@@ -176,16 +181,18 @@ class DatabasePoolManager extends EventEmitter {
 
   _logQuery(query, params, duration) {
     if (!this.queryLogFile) return;
-    
+
     const logEntry = {
       timestamp: new Date().toISOString(),
       query: query.substring(0, 1000),
-      params: params ? params.map(p => 
-        typeof p === 'string' && p.length > 100 ? p.substring(0, 100) + '...' : p
-      ) : null,
+      params: params
+        ? params.map(p =>
+            typeof p === 'string' && p.length > 100 ? p.substring(0, 100) + '...' : p
+          )
+        : null,
       duration: `${duration}ms`
     };
-    
+
     try {
       fs.appendFileSync(this.queryLogFile, JSON.stringify(logEntry) + '\n');
     } catch (e) {
@@ -201,7 +208,7 @@ class DatabasePoolManager extends EventEmitter {
       duration: `${duration}ms`,
       threshold: this.slowQueryThreshold
     };
-    
+
     try {
       fs.appendFileSync(slowQueryLogFile, JSON.stringify(logEntry) + '\n');
     } catch (e) {
@@ -211,17 +218,17 @@ class DatabasePoolManager extends EventEmitter {
 
   _startHealthCheck() {
     const interval = parseInt(process.env.DB_HEALTH_CHECK_INTERVAL) || 30000;
-    
+
     this.healthCheckInterval = setInterval(async () => {
       const health = await this.healthCheck();
       this.lastHealthCheck = health;
       this.emit('healthCheck', health);
-      
+
       this.healthCheckHistory.push(health);
       if (this.healthCheckHistory.length > 100) {
         this.healthCheckHistory.shift();
       }
-      
+
       if (!health.healthy) {
         this.stats.healthCheckFailures++;
         console.error('Database health check failed:', health.error);
@@ -233,15 +240,15 @@ class DatabasePoolManager extends EventEmitter {
 
   _startConnectionReaping() {
     const reapingInterval = parseInt(process.env.DB_REAPING_INTERVAL) || 60000;
-    
+
     this.reapingInterval = setInterval(async () => {
       if (!this.pool) return;
-      
+
       try {
         const result = await this.pool.query('SELECT 1');
         const idleCount = this.pool.idleCount;
         const totalCount = this.pool.totalCount;
-        
+
         if (idleCount > this.config.min) {
           const excessIdle = idleCount - this.config.min;
           console.log(`Connection reaping: ${excessIdle} idle connections available for cleanup`);
@@ -256,14 +263,14 @@ class DatabasePoolManager extends EventEmitter {
 
   _startLeakDetection() {
     const leakThreshold = parseInt(process.env.DB_LEAK_THRESHOLD) || 30000;
-    
+
     this.leakCheckInterval = setInterval(() => {
       const now = Date.now();
       const leakedClients = [];
-      
+
       for (const [clientId, { client, checkedOutAt, stackTrace }] of this.checkedOutClients) {
         const duration = now - checkedOutAt;
-        
+
         if (duration > leakThreshold) {
           this.stats.connectionLeaks++;
           const leakEvent = {
@@ -274,18 +281,23 @@ class DatabasePoolManager extends EventEmitter {
           };
           this.stats.connectionLeakEvents.push(leakEvent);
           leakedClients.push(leakEvent);
-          
+
           if (this.stats.connectionLeakEvents.length > 100) {
             this.stats.connectionLeakEvents.shift();
           }
-          
-          console.warn(`Potential connection leak detected: client checked out for ${duration}ms`, stackTrace);
+
+          console.warn(
+            `Potential connection leak detected: client checked out for ${duration}ms`,
+            stackTrace
+          );
           this.emit('connectionLeak', leakEvent);
         }
       }
-      
+
       if (leakedClients.length > 0 && this.stats.connectionLeaks > 10) {
-        console.error(`Connection leak warning: ${leakedClients.length} leaks detected, total: ${this.stats.connectionLeaks}`);
+        console.error(
+          `Connection leak warning: ${leakedClients.length} leaks detected, total: ${this.stats.connectionLeaks}`
+        );
       }
     }, 10000);
 
@@ -312,7 +324,7 @@ class DatabasePoolManager extends EventEmitter {
 
         this.stats.avgQueryTime =
           this.queryTimes.reduce((a, b) => a + b, 0) / this.queryTimes.length;
-        
+
         this.stats.maxQueryTime = Math.max(this.stats.maxQueryTime, duration);
         this.stats.minQueryTime = Math.min(this.stats.minQueryTime, duration);
 
@@ -322,7 +334,11 @@ class DatabasePoolManager extends EventEmitter {
           this.stats.slowQueries++;
           console.warn(`Slow query (${duration}ms): ${text.substring(0, 200)}`);
           this._logSlowQuery(text, duration);
-          this.emit('slowQuery', { query: text.substring(0, 500), duration, timestamp: new Date().toISOString() });
+          this.emit('slowQuery', {
+            query: text.substring(0, 500),
+            duration,
+            timestamp: new Date().toISOString()
+          });
         }
       }
 
@@ -330,7 +346,11 @@ class DatabasePoolManager extends EventEmitter {
     } catch (error) {
       this.stats.errors++;
       this.stats.lastError = error.message;
-      this.emit('queryError', { error: error.message, query: text.substring(0, 200), timestamp: new Date().toISOString() });
+      this.emit('queryError', {
+        error: error.message,
+        query: text.substring(0, 200),
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   }
@@ -395,7 +415,7 @@ class DatabasePoolManager extends EventEmitter {
         this.pool.query('SELECT pg_database_size($1) as db_size', [this.config.database]),
         this.getPoolStats()
       ]);
-      
+
       const duration = Date.now() - start;
       return {
         healthy: true,
@@ -410,9 +430,10 @@ class DatabasePoolManager extends EventEmitter {
           waiting: connectionResult.waiting,
           checkedOut: connectionResult.checkedOut
         },
-        capacityUsage: connectionResult.total > 0 
-          ? ((connectionResult.busy / connectionResult.total) * 100).toFixed(2) + '%'
-          : '0%'
+        capacityUsage:
+          connectionResult.total > 0
+            ? ((connectionResult.busy / connectionResult.total) * 100).toFixed(2) + '%'
+            : '0%'
       };
     } catch (error) {
       return {
@@ -428,12 +449,12 @@ class DatabasePoolManager extends EventEmitter {
     if (!this.pool) {
       return { error: 'Pool not initialized' };
     }
-    
+
     const total = this.pool.totalCount;
     const idle = this.pool.idleCount;
     const busy = total - idle;
     const waiting = this.pool.waitingCount || 0;
-    
+
     return {
       total,
       idle,
@@ -459,31 +480,33 @@ class DatabasePoolManager extends EventEmitter {
     const checks = {
       poolHealth: this.stats.errors === 0 ? 1 : 0.5,
       connectionHealth: this.stats.connectionErrors === 0 ? 1 : 0.5,
-      leakHealth: this.stats.connectionLeaks < 10 ? 1 : (this.stats.connectionLeaks < 50 ? 0.5 : 0),
-      queryHealth: this.stats.queries > 0 
-        ? (1 - (this.stats.slowQueries / this.stats.queries)) 
-        : 1
+      leakHealth: this.stats.connectionLeaks < 10 ? 1 : this.stats.connectionLeaks < 50 ? 0.5 : 0,
+      queryHealth: this.stats.queries > 0 ? 1 - this.stats.slowQueries / this.stats.queries : 1
     };
-    
-    const score = (checks.poolHealth + checks.connectionHealth + checks.leakHealth + checks.queryHealth) / 4;
+
+    const score =
+      (checks.poolHealth + checks.connectionHealth + checks.leakHealth + checks.queryHealth) / 4;
     return (score * 100).toFixed(2) + '%';
   }
 
   getQueryStats() {
-    const hitRate = this.stats.queries > 0
-      ? ((1 - this.stats.slowQueries / this.stats.queries) * 100).toFixed(2) + '%'
-      : '100%';
-    
+    const hitRate =
+      this.stats.queries > 0
+        ? ((1 - this.stats.slowQueries / this.stats.queries) * 100).toFixed(2) + '%'
+        : '100%';
+
     const p50 = this._calculatePercentile(50);
     const p75 = this._calculatePercentile(75);
     const p95 = this._calculatePercentile(95);
     const p99 = this._calculatePercentile(99);
-    
+
     return {
       ...this.stats,
       avgQueryTime: Math.round(this.stats.avgQueryTime * 100) / 100,
-      maxQueryTime: this.stats.maxQueryTime === 0 ? 0 : Math.round(this.stats.maxQueryTime * 100) / 100,
-      minQueryTime: this.stats.minQueryTime === Infinity ? 0 : Math.round(this.stats.minQueryTime * 100) / 100,
+      maxQueryTime:
+        this.stats.maxQueryTime === 0 ? 0 : Math.round(this.stats.maxQueryTime * 100) / 100,
+      minQueryTime:
+        this.stats.minQueryTime === Infinity ? 0 : Math.round(this.stats.minQueryTime * 100) / 100,
       p50QueryTime: p50,
       p75QueryTime: p75,
       p95QueryTime: p95,
@@ -491,9 +514,10 @@ class DatabasePoolManager extends EventEmitter {
       hitRate,
       recentLeakCount: this.stats.connectionLeakEvents.length,
       totalQueryTime: Math.round(this.stats.totalQueryTime),
-      errorRate: this.stats.queries > 0 
-        ? ((this.stats.errors / this.stats.queries) * 100).toFixed(2) + '%'
-        : '0%',
+      errorRate:
+        this.stats.queries > 0
+          ? ((this.stats.errors / this.stats.queries) * 100).toFixed(2) + '%'
+          : '0%',
       lastSuccessfulQuery: this.stats.lastSuccessfulQuery,
       lastError: this.stats.lastError
     };
@@ -517,9 +541,9 @@ class DatabasePoolManager extends EventEmitter {
 
   _calculatePercentile(percentile) {
     if (this.queryTimes.length === 0) return 0;
-    
+
     const sorted = [...this.queryTimes].sort((a, b) => a - b);
-    const index = Math.ceil(percentile / 100 * sorted.length) - 1;
+    const index = Math.ceil((percentile / 100) * sorted.length) - 1;
     return sorted[index] || 0;
   }
 
@@ -533,23 +557,23 @@ class DatabasePoolManager extends EventEmitter {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
-    
+
     if (this.leakCheckInterval) {
       clearInterval(this.leakCheckInterval);
       this.leakCheckInterval = null;
     }
-    
+
     if (this.reapingInterval) {
       clearInterval(this.reapingInterval);
       this.reapingInterval = null;
     }
-    
+
     if (this.pool) {
       const idleConnections = this.pool.idleCount;
       if (idleConnections > 0) {
         console.log(`Closing pool with ${idleConnections} idle connections`);
       }
-      
+
       await this.pool.end();
       this.pool = null;
       this.initialized = false;

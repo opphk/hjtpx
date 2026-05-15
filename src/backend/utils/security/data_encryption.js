@@ -33,11 +33,7 @@ class SensitiveDataEncryption {
     }
 
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(
-      this.algorithm,
-      Buffer.from(this.masterKey, 'hex'),
-      iv
-    );
+    const cipher = crypto.createCipheriv(this.algorithm, Buffer.from(this.masterKey, 'hex'), iv);
 
     let encrypted = cipher.update(plaintext, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -61,7 +57,7 @@ class SensitiveDataEncryption {
     try {
       const iv = Buffer.from(encrypted.iv, 'hex');
       const authTag = Buffer.from(encrypted.tag, 'hex');
-      
+
       const decipher = crypto.createDecipheriv(
         encrypted.algorithm || this.algorithm,
         Buffer.from(this.masterKey, 'hex'),
@@ -81,9 +77,7 @@ class SensitiveDataEncryption {
   }
 
   shouldEncrypt(key) {
-    return SENSITIVE_FIELDS.some(field => 
-      key.toLowerCase().includes(field.toLowerCase())
-    );
+    return SENSITIVE_FIELDS.some(field => key.toLowerCase().includes(field.toLowerCase()));
   }
 
   encryptObject(obj) {

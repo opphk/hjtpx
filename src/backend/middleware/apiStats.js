@@ -10,11 +10,11 @@ const apiStatsMiddleware = (req, res, next) => {
   res.end = function (...args) {
     const responseTime = Date.now() - startTime;
     const statusCode = res.statusCode;
-    
+
     if (!path.startsWith('/api-docs') && !path.startsWith('/docs') && !path.startsWith('/static')) {
       statsService.recordRequest(method, path, statusCode, responseTime);
     }
-    
+
     originalEnd.apply(res, args);
   };
 

@@ -1,6 +1,7 @@
-const pool = require('../../../config/database/db');
 const fs = require('fs');
 const path = require('path');
+
+const pool = require('../../../config/database/db');
 
 const defaultFileAttributes = {
   filename: 'test-file.txt',
@@ -12,7 +13,7 @@ const defaultFileAttributes = {
 
 async function createFile(userId, overrides = {}) {
   const attributes = { ...defaultFileAttributes, ...overrides };
-  
+
   const result = await pool.query(
     `INSERT INTO files (user_id, filename, original_name, mime_type, size, folder, file_path) 
      VALUES ($1, $2, $3, $4, $5, $6, $7) 
@@ -27,7 +28,7 @@ async function createFile(userId, overrides = {}) {
       `/uploads/${attributes.folder}/${attributes.filename}`
     ]
   );
-  
+
   return result.rows[0];
 }
 

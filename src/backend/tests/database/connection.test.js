@@ -18,9 +18,7 @@ describe('Database Connection Tests', () => {
     });
 
     test('should mock successful query execution', async () => {
-      const mockUsers = [
-        { id: 1, email: 'test@example.com', name: 'Test User' }
-      ];
+      const mockUsers = [{ id: 1, email: 'test@example.com', name: 'Test User' }];
       pool.query.mockResolvedValue({ rows: mockUsers });
 
       const result = await pool.query('SELECT * FROM users');
@@ -129,13 +127,17 @@ describe('Database Connection Tests', () => {
     test('should handle unique constraint violation', async () => {
       pool.query.mockRejectedValue(new Error('duplicate key value violates unique constraint'));
 
-      await expect(pool.query('INSERT INTO users (email) VALUES ($1)', ['existing@example.com'])).rejects.toThrow();
+      await expect(
+        pool.query('INSERT INTO users (email) VALUES ($1)', ['existing@example.com'])
+      ).rejects.toThrow();
     });
 
     test('should handle foreign key violation', async () => {
       pool.query.mockRejectedValue(new Error('foreign key constraint violation'));
 
-      await expect(pool.query('INSERT INTO orders (user_id) VALUES ($1)', [9999])).rejects.toThrow();
+      await expect(
+        pool.query('INSERT INTO orders (user_id) VALUES ($1)', [9999])
+      ).rejects.toThrow();
     });
 
     test('should handle connection timeout', async () => {
@@ -195,9 +197,7 @@ describe('Database Connection Tests', () => {
     test('should handle concurrent queries', async () => {
       pool.query.mockResolvedValue({ rows: [] });
 
-      const queries = Array.from({ length: 10 }, (_, i) =>
-        pool.query(`SELECT ${i} as num`)
-      );
+      const queries = Array.from({ length: 10 }, (_, i) => pool.query(`SELECT ${i} as num`));
 
       const results = await Promise.all(queries);
 

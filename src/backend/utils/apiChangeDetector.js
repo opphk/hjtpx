@@ -14,7 +14,8 @@ class ApiChangeDetector {
   }
 
   getLatestVersionPath() {
-    const files = fs.readdirSync(this.specsDir)
+    const files = fs
+      .readdirSync(this.specsDir)
       .filter(f => f.endsWith('.json') && f.startsWith('openapi-'))
       .sort()
       .reverse();
@@ -54,21 +55,34 @@ class ApiChangeDetector {
     const oldPaths = oldSpec.paths || {};
     const newPaths = newSpec.paths || {};
 
-    const allPaths = new Set([
-      ...Object.keys(oldPaths),
-      ...Object.keys(newPaths)
-    ]);
+    const allPaths = new Set([...Object.keys(oldPaths), ...Object.keys(newPaths)]);
 
     allPaths.forEach(pathKey => {
       const oldPath = oldPaths[pathKey];
       const newPath = newPaths[pathKey];
 
       if (!oldPath) {
-        changes.added.push({ type: 'endpoint', path: pathKey, message: `Added endpoint: ${pathKey}` });
-        changes.nonBreaking.push({ type: 'endpoint', path: pathKey, message: `Added endpoint: ${pathKey}` });
+        changes.added.push({
+          type: 'endpoint',
+          path: pathKey,
+          message: `Added endpoint: ${pathKey}`
+        });
+        changes.nonBreaking.push({
+          type: 'endpoint',
+          path: pathKey,
+          message: `Added endpoint: ${pathKey}`
+        });
       } else if (!newPath) {
-        changes.removed.push({ type: 'endpoint', path: pathKey, message: `Removed endpoint: ${pathKey}` });
-        changes.breaking.push({ type: 'endpoint', path: pathKey, message: `Removed endpoint: ${pathKey}` });
+        changes.removed.push({
+          type: 'endpoint',
+          path: pathKey,
+          message: `Removed endpoint: ${pathKey}`
+        });
+        changes.breaking.push({
+          type: 'endpoint',
+          path: pathKey,
+          message: `Removed endpoint: ${pathKey}`
+        });
       } else {
         this.comparePath(pathKey, oldPath, newPath, changes);
       }
@@ -80,21 +94,38 @@ class ApiChangeDetector {
   }
 
   comparePath(pathKey, oldPath, newPath, changes) {
-    const allMethods = new Set([
-      ...Object.keys(oldPath),
-      ...Object.keys(newPath)
-    ]);
+    const allMethods = new Set([...Object.keys(oldPath), ...Object.keys(newPath)]);
 
     allMethods.forEach(method => {
       const oldMethod = oldPath[method];
       const newMethod = newPath[method];
 
       if (!oldMethod) {
-        changes.added.push({ type: 'method', path: pathKey, method, message: `Added ${method.toUpperCase()} ${pathKey}` });
-        changes.nonBreaking.push({ type: 'method', path: pathKey, method, message: `Added ${method.toUpperCase()} ${pathKey}` });
+        changes.added.push({
+          type: 'method',
+          path: pathKey,
+          method,
+          message: `Added ${method.toUpperCase()} ${pathKey}`
+        });
+        changes.nonBreaking.push({
+          type: 'method',
+          path: pathKey,
+          method,
+          message: `Added ${method.toUpperCase()} ${pathKey}`
+        });
       } else if (!newMethod) {
-        changes.removed.push({ type: 'method', path: pathKey, method, message: `Removed ${method.toUpperCase()} ${pathKey}` });
-        changes.breaking.push({ type: 'method', path: pathKey, method, message: `Removed ${method.toUpperCase()} ${pathKey}` });
+        changes.removed.push({
+          type: 'method',
+          path: pathKey,
+          method,
+          message: `Removed ${method.toUpperCase()} ${pathKey}`
+        });
+        changes.breaking.push({
+          type: 'method',
+          path: pathKey,
+          method,
+          message: `Removed ${method.toUpperCase()} ${pathKey}`
+        });
       } else {
         this.compareOperation(pathKey, method, oldMethod, newMethod, changes);
       }
@@ -107,8 +138,20 @@ class ApiChangeDetector {
 
     oldParams.forEach(paramKey => {
       if (!newParams.includes(paramKey)) {
-        changes.removed.push({ type: 'parameter', path: pathKey, method, param: paramKey, message: `Removed parameter ${paramKey} from ${method.toUpperCase()} ${pathKey}` });
-        changes.breaking.push({ type: 'parameter', path: pathKey, method, param: paramKey, message: `Removed parameter ${paramKey} from ${method.toUpperCase()} ${pathKey}` });
+        changes.removed.push({
+          type: 'parameter',
+          path: pathKey,
+          method,
+          param: paramKey,
+          message: `Removed parameter ${paramKey} from ${method.toUpperCase()} ${pathKey}`
+        });
+        changes.breaking.push({
+          type: 'parameter',
+          path: pathKey,
+          method,
+          param: paramKey,
+          message: `Removed parameter ${paramKey} from ${method.toUpperCase()} ${pathKey}`
+        });
       }
     });
 
@@ -116,11 +159,35 @@ class ApiChangeDetector {
       if (!oldParams.includes(paramKey)) {
         const param = (newOp.parameters || []).find(p => `${p.name}:${p.in}` === paramKey);
         if (param && param.required) {
-          changes.added.push({ type: 'parameter', path: pathKey, method, param: paramKey, message: `Added required parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}` });
-          changes.breaking.push({ type: 'parameter', path: pathKey, method, param: paramKey, message: `Added required parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}` });
+          changes.added.push({
+            type: 'parameter',
+            path: pathKey,
+            method,
+            param: paramKey,
+            message: `Added required parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}`
+          });
+          changes.breaking.push({
+            type: 'parameter',
+            path: pathKey,
+            method,
+            param: paramKey,
+            message: `Added required parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}`
+          });
         } else {
-          changes.added.push({ type: 'parameter', path: pathKey, method, param: paramKey, message: `Added optional parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}` });
-          changes.nonBreaking.push({ type: 'parameter', path: pathKey, method, param: paramKey, message: `Added optional parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}` });
+          changes.added.push({
+            type: 'parameter',
+            path: pathKey,
+            method,
+            param: paramKey,
+            message: `Added optional parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}`
+          });
+          changes.nonBreaking.push({
+            type: 'parameter',
+            path: pathKey,
+            method,
+            param: paramKey,
+            message: `Added optional parameter ${paramKey} to ${method.toUpperCase()} ${pathKey}`
+          });
         }
       }
     });
@@ -130,8 +197,20 @@ class ApiChangeDetector {
 
     oldResponses.forEach(status => {
       if (!newResponses.includes(status)) {
-        changes.removed.push({ type: 'response', path: pathKey, method, status, message: `Removed response ${status} from ${method.toUpperCase()} ${pathKey}` });
-        changes.breaking.push({ type: 'response', path: pathKey, method, status, message: `Removed response ${status} from ${method.toUpperCase()} ${pathKey}` });
+        changes.removed.push({
+          type: 'response',
+          path: pathKey,
+          method,
+          status,
+          message: `Removed response ${status} from ${method.toUpperCase()} ${pathKey}`
+        });
+        changes.breaking.push({
+          type: 'response',
+          path: pathKey,
+          method,
+          status,
+          message: `Removed response ${status} from ${method.toUpperCase()} ${pathKey}`
+        });
       }
     });
   }
@@ -180,7 +259,9 @@ class ApiChangeDetector {
   printChangeSummary(changes) {
     console.log('\n📊 API Change Summary:');
     console.log('========================================');
-    console.log(`Total changes: ${changes.added.length + changes.removed.length + changes.modified.length}`);
+    console.log(
+      `Total changes: ${changes.added.length + changes.removed.length + changes.modified.length}`
+    );
     console.log(`  Added: ${changes.added.length}`);
     console.log(`  Removed: ${changes.removed.length}`);
     console.log(`  Modified: ${changes.modified.length}`);
@@ -204,10 +285,13 @@ class ApiChangeDetector {
     const changes = this.compareSpecs(latestSpec, currentSpec);
     this.printChangeSummary(changes);
 
-    if (autoSave && (changes.added.length > 0 || changes.removed.length > 0 || changes.modified.length > 0)) {
+    if (
+      autoSave &&
+      (changes.added.length > 0 || changes.removed.length > 0 || changes.modified.length > 0)
+    ) {
       const savedPath = this.saveSpec(currentSpec);
       console.log(`💾 Saved new spec version: ${savedPath}`);
-      
+
       const reportPath = path.join(this.specsDir, `changes-${currentSpec.info.version}.json`);
       this.generateChangeReport(changes, reportPath);
     }

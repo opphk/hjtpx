@@ -13,8 +13,8 @@ class AdvancedRateLimiter {
       name = 'default',
       windowMs = this.defaultWindowMs,
       max = this.defaultMax,
-      keyGenerator = (req) => req.ip,
-      skip = (req) => false,
+      keyGenerator = req => req.ip,
+      skip = req => false,
       handler = (req, res) => {
         res.status(429).json({
           error: 'too_many_requests',
@@ -114,7 +114,7 @@ class AdvancedRateLimiter {
   get memoryStore() {
     if (!this._memoryStore) {
       this._memoryStore = new Map();
-      
+
       setInterval(() => {
         const now = Date.now();
         for (const [key, record] of this._memoryStore.entries()) {
