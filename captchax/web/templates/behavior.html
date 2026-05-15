@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行为验证码演示 - CaptchaX</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .demo-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .demo-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .demo-title {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .demo-subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        .demo-section {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .demo-section-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .captcha-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .captcha-option {
+            padding: 10px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fff;
+        }
+        .captcha-option:hover {
+            border-color: #1890ff;
+        }
+        .captcha-option.active {
+            border-color: #1890ff;
+            background: #e6f7ff;
+        }
+        .captcha-option input {
+            display: none;
+        }
+        .demo-button {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .demo-button:hover {
+            background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(24,144,255,0.4);
+        }
+        .demo-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        #captcha-container {
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .result-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            display: none;
+        }
+        .result-section.show {
+            display: block;
+        }
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .result-label {
+            color: #666;
+        }
+        .result-value {
+            color: #333;
+            font-weight: 500;
+        }
+        .result-success {
+            color: #52c41a;
+        }
+        .result-error {
+            color: #f5222d;
+        }
+        .code-section {
+            margin-top: 20px;
+            background: #272822;
+            border-radius: 6px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        .code-section pre {
+            color: #f8f8f2;
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .code-title {
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <h1 class="demo-title">🛡️ 行为验证码演示</h1>
+            <p class="demo-subtitle">CaptchaX Behavior Captcha - 基于鼠标轨迹和交互行为的安全验证</p>
+        </div>
+
+        <div class="demo-section">
+            <h3 class="demo-section-title">选择验证类型</h3>
+            <div class="captcha-options">
+                <label class="captcha-option active">
+                    <input type="radio" name="challenge-type" value="click_order" checked>
+                    <span>📍 点击顺序</span>
+                </label>
+                <label class="captcha-option">
+                    <input type="radio" name="challenge-type" value="drag_path">
+                    <span>🖱️ 拖拽路径</span>
+                </label>
+                <label class="captcha-option">
+                    <input type="radio" name="challenge-type" value="hover_sequence">
+                    <span>⏳ 悬停序列</span>
+                </label>
+            </div>
+            <button id="show-captcha-btn" class="demo-button">
+                显示验证码
+            </button>
+        </div>
+
+        <div class="demo-section">
+            <h3 class="demo-section-title">验证码区域</h3>
+            <div id="captcha-container">
+                <p style="color: #999;">点击上方按钮加载验证码</p>
+            </div>
+        </div>
+
+        <div id="result-section" class="result-section">
+            <h3 class="demo-section-title">验证结果</h3>
+            <div id="result-content"></div>
+        </div>
+
+        <div class="code-section">
+            <div class="code-title">📋 使用代码</div>
+            <pre><code id="usage-code">&lt;!-- 引入 JS --&gt;
+&lt;script src="/static/behavior.js"&gt;&lt;/script&gt;
+
+&lt;!-- 初始化并显示验证码 --&gt;
+&lt;script&gt;
+BehaviorCaptcha.init({ serverUrl: '' }).then(function() {
+    BehaviorCaptcha.verify({
+        container: '#captcha-container',
+        challengeType: 'click_order'
+    }).then(function(result) {
+        console.log('验证成功:', result);
+    }).catch(function(error) {
+        console.error('验证失败:', error);
+    });
+});
+&lt;/script&gt;</code></pre>
+        </div>
+    </div>
+
+    <script src="/static/behavior.js"></script>
+    <script>
+        let currentChallengeType = 'click_order';
+
+        document.querySelectorAll('.captcha-option').forEach(function(option) {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.captcha-option').forEach(function(opt) {
+                    opt.classList.remove('active');
+                });
+                this.classList.add('active');
+                currentChallengeType = this.querySelector('input').value;
+                updateUsageCode();
+            });
+        });
+
+        function updateUsageCode() {
+            var code = '<!-- 引入 JS -->\n' +
+                '<script src="/static/behavior.js"><\/script>\n\n' +
+                '<!-- 初始化并显示验证码 -->\n' +
+                '<script>\n' +
+                'BehaviorCaptcha.init({ serverUrl: \'\' }).then(function() {\n' +
+                '    BehaviorCaptcha.verify({\n' +
+                '        container: \'#captcha-container\',\n' +
+                '        challengeType: \'' + currentChallengeType + '\'\n' +
+                '    }).then(function(result) {\n' +
+                '        console.log(\'验证成功:\', result);\n' +
+                '    }).catch(function(error) {\n' +
+                '        console.error(\'验证失败:\', error);\n' +
+                '    });\n' +
+                '});\n' +
+                '<\/script>';
+            document.getElementById('usage-code').textContent = code;
+        }
+
+        document.getElementById('show-captcha-btn').addEventListener('click', function() {
+            var container = document.getElementById('captcha-container');
+            container.innerHTML = '';
+
+            BehaviorCaptcha.init({ serverUrl: '' }).then(function() {
+                BehaviorCaptcha.verify({
+                    container: container,
+                    challengeType: currentChallengeType,
+                    autoClose: false
+                }).then(function(result) {
+                    showResult(true, result);
+                }).catch(function(error) {
+                    showResult(false, { error: error.message || '验证失败' });
+                });
+            }).catch(function(err) {
+                container.innerHTML = '<p style="color: #f5222d;">初始化失败: ' + err.message + '</p>';
+            });
+        });
+
+        function showResult(success, data) {
+            var resultSection = document.getElementById('result-section');
+            var resultContent = document.getElementById('result-content');
+
+            var html = '<div class="result-item"><span class="result-label">状态</span><span class="result-value ' + (success ? 'result-success' : 'result-error') + '">' + (success ? '✅ 验证成功' : '❌ 验证失败') + '</span></div>';
+
+            if (success) {
+                html += '<div class="result-item"><span class="result-label">Token</span><span class="result-value" style="font-size: 12px;word-break: break-all;">' + (data.token || 'N/A') + '</span></div>';
+                html += '<div class="result-item"><span class="result-label">风险评分</span><span class="result-value">' + (data.score || 0).toFixed(2) + '</span></div>';
+                html += '<div class="result-item"><span class="result-label">风险等级</span><span class="result-value">' + (data.response?.risk_level || 'N/A') + '</span></div>';
+            } else {
+                html += '<div class="result-item"><span class="result-label">错误信息</span><span class="result-value result-error">' + (data.error || '未知错误') + '</span></div>';
+            }
+
+            resultContent.innerHTML = html;
+            resultSection.classList.add('show');
+        }
+
+        updateUsageCode();
+    </script>
+</body>
+</html>

@@ -52,7 +52,6 @@ type CaptchaService struct {
 	behaviorGen  *behavior.BehaviorCaptcha
 	behaviorVerify *behavior.VerifyService
 }
-}
 
 type SliderCaptchaResult struct {
 	ID            string `json:"id"`
@@ -221,9 +220,9 @@ func NewCaptchaService(
 	iconGen := icon.New(&cfg.Captcha, redisClient)
 	iconVerify := icon.NewVerifyService(&cfg.Captcha, iconCache)
 
-	audioCache = audio.NewCacheManager(&cfg.Captcha, redisClient)
-	audioGen = audio.New(&cfg.Captcha, redisClient)
-	audioVerify = audio.NewVerifier(audioCache)
+	audioCache := audio.NewCacheManager(&cfg.Captcha, redisClient)
+	audioGen := audio.New(&cfg.Captcha, redisClient)
+	audioVerify := audio.NewVerifier(audioCache)
 
 	riskEngine := risk.NewRiskEngine(riskCfg, ipLimit, whitelist)
 
