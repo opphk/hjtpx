@@ -1,0 +1,43 @@
+{
+  "name": "@captchax/vue",
+  "version": "1.0.0",
+  "description": "CaptchaX Vue 3 Plugin",
+  "main": "dist/captchax-vue.cjs.js",
+  "module": "dist/captchax-vue.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/captchax-vue.esm.js",
+      "require": "./dist/captchax-vue.cjs.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "vitest"
+  },
+  "keywords": [
+    "captcha",
+    "vue",
+    "vue3",
+    "verification",
+    "security"
+  ],
+  "author": "CaptchaX Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "vue": "^3.0.0"
+  },
+  "dependencies": {
+    "@captchax/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.0.0",
+    "vite": "^4.0.0",
+    "vitest": "^0.28.0"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@captchax/nuxt",
+  "version": "1.0.0",
+  "description": "CaptchaX Nuxt 3 Module",
+  "main": "dist/module.cjs.js",
+  "types": "dist/module.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/module.mjs",
+      "require": "./dist/module.cjs.js",
+      "types": "./dist/module.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "nuxt-build-modules",
+    "dev": "nuxt-build-modules --watch",
+    "test": "vitest"
+  },
+  "keywords": [
+    "captcha",
+    "nuxt",
+    "nuxt3",
+    "verification",
+    "security"
+  ],
+  "author": "CaptchaX Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "nuxt": "^3.0.0"
+  },
+  "dependencies": {
+    "@nuxt/kit": "^3.0.0"
+  },
+  "devDependencies": {
+    "nuxt": "^3.0.0",
+    "vitest": "^0.28.0"
+  }
+}
