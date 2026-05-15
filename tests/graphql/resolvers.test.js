@@ -1,5 +1,3 @@
-const { createContext } = require('../../src/backend/graphql');
-const { createLoaders } = require('../../src/backend/graphql/loaders');
 const resolvers = require('../../src/backend/graphql/resolvers');
 const { subscriptionResolver, pubsub } = require('../../src/backend/graphql/subscriptions');
 
@@ -33,7 +31,13 @@ describe('GraphQL Resolvers', () => {
     jest.clearAllMocks();
     context = {
       user: mockUser,
-      loaders: createLoaders(),
+      loaders: {
+        user: { load: jest.fn() },
+        users: { load: jest.fn() },
+        notification: { load: jest.fn() },
+        userNotifications: { load: jest.fn() },
+        unreadCount: { load: jest.fn() }
+      },
       pubsub
     };
   });
@@ -322,8 +326,8 @@ describe('GraphQL Resolvers', () => {
 
     describe('login', () => {
       it('should login user with valid credentials', async () => {
-        authService.authenticate.mockResolvedValue(mockUser);
-        authService.generateToken.mockReturnValue('test-token');
+        authService.authenticate = jest.fn().mockResolvedValue(mockUser);
+        authService.generateToken = jest.fn().mockReturnValue('test-token');
 
         const result = await resolvers.Mutation.login(
           null,
@@ -337,7 +341,7 @@ describe('GraphQL Resolvers', () => {
       });
 
       it('should throw error for invalid credentials', async () => {
-        authService.authenticate.mockResolvedValue(null);
+        authService.authenticate = jest.fn().mockResolvedValue(null);
 
         await expect(
           resolvers.Mutation.login(
@@ -353,8 +357,8 @@ describe('GraphQL Resolvers', () => {
       it('should register new user', async () => {
         userService.getUserByEmail.mockResolvedValue(null);
         userService.createUser.mockResolvedValue(mockUser);
-        authService.validatePassword.mockReturnValue(true);
-        authService.generateToken.mockReturnValue('test-token');
+        authService.validatePassword = jest.fn().mockReturnValue(true);
+        authService.generateToken = jest.fn().mockReturnValue('test-token');
 
         const result = await resolvers.Mutation.register(
           null,
@@ -382,29 +386,26 @@ describe('GraphQL Resolvers', () => {
 
   describe('Subscription Resolvers', () => {
     describe('notificationCreated', () => {
-      it('should subscribe to notification creation', async => {
-        const subscription = subscriptionResolver.notificationCreated.subscribe;
-
-        expect(subscription).toBeDefined();
-        expect(typeof subscription).toBe('function');
+      it('should have subscribe function defined', () => {
+        expect(subscriptionResolver.notificationCreated).toBeDefined();
+        expect(subscriptionResolver.notificationCreated.subscribe).toBeDefined();
+        expect(typeof subscriptionResolver.notificationCreated.subscribe).toBe('function');
       });
     });
 
     describe('notificationUpdated', () => {
-      it('should subscribe to notification updates', async => {
-        const subscription = subscriptionResolver.notificationUpdated.subscribe;
-
-        expect(subscription).toBeDefined();
-        expect(typeof subscription).toBe('function');
+      it('should have subscribe function defined', () => {
+        expect(subscriptionResolver.notificationUpdated).toBeDefined();
+        expect(subscriptionResolver.notificationUpdated.subscribe).toBeDefined();
+        expect(typeof subscriptionResolver.notificationUpdated.subscribe).toBe('function');
       });
     });
 
     describe('userUpdated', () => {
-      it('should subscribe to user updates', async => {
-        const subscription = subscriptionResolver.userUpdated.subscribe;
-
-        expect(subscription).toBeDefined();
-        expect(typeof subscription).toBe('function');
+      it('should have subscribe function defined', () => {
+        expect(subscriptionResolver.userUpdated).toBeDefined();
+        expect(subscriptionResolver.userUpdated.subscribe).toBeDefined();
+        expect(typeof subscriptionResolver.userUpdated.subscribe).toBe('function');
       });
     });
   });
