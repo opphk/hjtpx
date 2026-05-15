@@ -3,9 +3,35 @@ const { GraphQLScalarType, Kind } = require('graphql');
 const userService = require('../services/userService');
 const Notification = require('../models/Notification');
 
+const parseLiteralValue = (ast) => {
+  switch (ast.kind) {
+    case Kind.STRING:
+      return ast.value;
+    case Kind.INT:
+      return parseInt(ast.value, 10);
+    case Kind.FLOAT:
+      return parseFloat(ast.value);
+    case Kind.BOOLEAN:
+      return ast.value;
+    case Kind.NULL:
+      return null;
+    case Kind.OBJECT: {
+      const obj = {};
+      ast.fields.forEach(field => {
+        obj[field.name.value] = parseLiteralValue(field.value);
+      });
+      return obj;
+    }
+    case Kind.LIST:
+      return ast.values.map(parseLiteralValue);
+    default:
+      return null;
+  }
+};
+
 const JSONScalar = new GraphQLScalarType({
   name: 'JSON',
-  description: 'The `JSON` scalar type represents JSON values as specified by [ECMA-404.',
+  description: 'The JSON scalar type represents JSON values as specified by ECMA-404',
   serialize(value) {
     return value;
   },
@@ -13,63 +39,9 @@ const JSONScalar = new GraphQLScalarType({
     return value;
   },
   parseLiteral(ast) {
-    if (ast.kind === Kind.STRING) {
-      return JSON.parse(ast.value);
-    }
-    if (ast.kind === Kind.OBJECT) {
-      const obj = {};
-      ast.fields.forEach(field => {
-        obj[field.name.value] = parseLiteral(field.value);
-      });
-      return obj;
-    }
-    if (ast.kind === Kind.LIST) {
-      return ast.values.map(parseLiteral);
-    }
-    if (ast.kind === Kind.INT) {
-      return parseInt(ast.value, 10);
-    }
-    if (ast.kind === Kind.FLOAT) {
-      return parseFloat(ast.value);
-    }
-    if (ast.kind === Kind.BOOLEAN) {
-      return ast.value;
-    }
-    if (ast.kind === Kind.NULL) {
-      return null;
-    }
-    return null;
+    return parseLiteralValue(ast);
   }
 });
-
-const parseLiteral = (ast) => {
-  if (ast.kind === Kind.STRING) {
-    return ast.value;
-  }
-  if (ast.kind === Kind.INT) {
-    return parseInt(ast.value, 10);
-  }
-  if (ast.kind === Kind.FLOAT) {
-    return parseFloat(ast.value);
-  }
-  if (ast.kind === Kind.BOOLEAN) {
-    return ast.value;
-  }
-  if (ast.kind === Kind.NULL) {
-    return null;
-  }
-  if (ast.kind === Kind.OBJECT) {
-    const obj = {};
-    ast.fields.forEach(field => {
-      obj[field.name.value] = parseLiteral(field.value);
-    });
-    return obj;
-  }
-  if (ast.kind === Kind.LIST) {
-    return ast.values.map(parseLiteral);
-  }
-  return null;
-};
 
 const resolvers = {
   JSON: JSONScalar,
