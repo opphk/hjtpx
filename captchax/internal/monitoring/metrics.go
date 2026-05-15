@@ -1,14 +1,11 @@
 package monitoring
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Metrics provides atomic-based metrics tracking for high-performance concurrent scenarios.
-// Optimizations:
-// - Uses atomic operations instead of mutex locks for all counter fields
-// - Reduces lock contention significantly in high-throughput environments
 type Metrics struct {
 	requestsTotal   int64
 	requestsSuccess int64
@@ -16,11 +13,14 @@ type Metrics struct {
 	requestDuration *Histogram
 	cacheHit        int64
 	cacheMiss       int64
+	mu              sync.Mutex
+	lastSnapshotTime time.Time
+	snapshotCache    MetricsSnapshot
 }
 
-// Histogram uses atomic operations for lock-free observations.
 type Histogram struct {
 	counts [11]int64
+	mu     sync.Mutex
 }
 
 func (h *Histogram) Observe(duration time.Duration) {
@@ -43,6 +43,40 @@ func (h *Histogram) GetBucket(index int) int64 {
 		return 0
 	}
 	return atomic.LoadInt64(&h.counts[index])
+}
+
+func (h *Histogram) GetPercentiles(p50, p90, p99, p999 *float64) {
+	counts := h.GetCounts()
+	total := int64(0)
+	for _, c := range counts {
+		total += c
+	}
+
+	if total == 0 {
+		return
+	}
+
+	targets := []struct {
+		percent float64
+		result  *float64
+	}{
+		{0.50, p50},
+		{0.90, p90},
+		{0.99, p99},
+		{0.999, p999},
+	}
+
+	for _, target := range targets {
+		cumulative := int64(0)
+		threshold := int64(float64(total) * target.percent)
+		for i, count := range counts {
+			cumulative += count
+			if cumulative >= threshold {
+				*target.result = float64((i + 1) * 10)
+				break
+			}
+		}
+	}
 }
 
 func (m *Metrics) RecordRequest(duration time.Duration, success bool) {
@@ -69,6 +103,10 @@ type MetricsSnapshot struct {
 	SuccessRate   float64
 	AvgDuration   time.Duration
 	CacheHitRate  float64
+	P50Latency    float64
+	P90Latency    float64
+	P99Latency    float64
+	P999Latency   float64
 }
 
 func (m *Metrics) Snapshot() MetricsSnapshot {
@@ -82,11 +120,25 @@ func (m *Metrics) Snapshot() MetricsSnapshot {
 	miss := atomic.LoadInt64(&m.cacheMiss)
 	cacheTotal := hit + miss
 
-	return MetricsSnapshot{
+	m.mu.Lock()
+	if time.Since(m.lastSnapshotTime) < 100*time.Millisecond && m.snapshotCache.RequestsTotal == total {
+		m.mu.Unlock()
+		return m.snapshotCache
+	}
+
+	snapshot := MetricsSnapshot{
 		RequestsTotal: total,
 		SuccessRate:  float64(success) / float64(total),
 		CacheHitRate: float64(hit) / float64(cacheTotal),
 	}
+
+	m.requestDuration.GetPercentiles(&snapshot.P50Latency, &snapshot.P90Latency, &snapshot.P99Latency, &snapshot.P999Latency)
+
+	m.snapshotCache = snapshot
+	m.lastSnapshotTime = time.Now()
+	m.mu.Unlock()
+
+	return snapshot
 }
 
 func NewMetrics() *Metrics {
@@ -106,4 +158,42 @@ func (m *Metrics) GetResponseTimeDistribution() []int64 {
 
 func (m *Metrics) GetHistogram() *Histogram {
 	return m.requestDuration
+}
+
+func (m *Metrics) Reset() {
+	atomic.StoreInt64(&m.requestsTotal, 0)
+	atomic.StoreInt64(&m.requestsSuccess, 0)
+	atomic.StoreInt64(&m.requestsFailed, 0)
+	atomic.StoreInt64(&m.cacheHit, 0)
+	atomic.StoreInt64(&m.cacheMiss, 0)
+
+	if m.requestDuration != nil {
+		for i := 0; i < 11; i++ {
+			atomic.StoreInt64(&m.requestDuration.counts[i], 0)
+		}
+	}
+
+	m.mu.Lock()
+	m.lastSnapshotTime = time.Time{}
+	m.mu.Unlock()
+}
+
+func (m *Metrics) GetRequestsTotal() int64 {
+	return atomic.LoadInt64(&m.requestsTotal)
+}
+
+func (m *Metrics) GetRequestsSuccess() int64 {
+	return atomic.LoadInt64(&m.requestsSuccess)
+}
+
+func (m *Metrics) GetRequestsFailed() int64 {
+	return atomic.LoadInt64(&m.requestsFailed)
+}
+
+func (m *Metrics) GetCacheHit() int64 {
+	return atomic.LoadInt64(&m.cacheHit)
+}
+
+func (m *Metrics) GetCacheMiss() int64 {
+	return atomic.LoadInt64(&m.cacheMiss)
 }
