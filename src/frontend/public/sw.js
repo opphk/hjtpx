@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2.1.0';
+const CACHE_VERSION = 'v2.2.0';
 const CACHE_NAME = `hjtpx-${CACHE_VERSION}`;
 const STATIC_CACHE = `hjtpx-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `hjtpx-dynamic-${CACHE_VERSION}`;
@@ -26,6 +26,9 @@ const MAX_CACHE_AGE = {
   images: 30 * 24 * 60 * 60 * 1000,
   api: 5 * 60 * 1000
 };
+
+const OFFLINE_URL = '/offline.html';
+const API_TIMEOUT = 5000;
 
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing service worker...', CACHE_VERSION);
@@ -118,6 +121,32 @@ async function cacheFirst(request, cacheName) {
   const cachedResponse = await cache.match(request);
   
   if (cachedResponse) {
+    const cacheDate = cachedResponse.headers.get('sw-cache-date');
+    if (cacheDate) {
+      const age = Date.now() - parseInt(cacheDate, 10);
+      if (age > MAX_CACHE_AGE.static) {
+        cache.delete(request);
+        try {
+          const networkResponse = await fetch(request);
+          
+          if (networkResponse.ok) {
+            const headers = new Headers(networkResponse.headers);
+            headers.append('sw-cache-date', Date.now().toString());
+            const responseToCache = new Response(await networkResponse.clone().blob(), {
+              status: networkResponse.status,
+              statusText: networkResponse.statusText,
+              headers: headers
+            });
+            cache.put(request, responseToCache);
+          }
+          
+          return networkResponse;
+        } catch (error) {
+          console.error('[SW] Cache first failed:', error);
+          return cachedResponse;
+        }
+      }
+    }
     return cachedResponse;
   }
 
@@ -125,7 +154,14 @@ async function cacheFirst(request, cacheName) {
     const networkResponse = await fetch(request);
     
     if (networkResponse.ok) {
-      cache.put(request, networkResponse.clone());
+      const headers = new Headers(networkResponse.headers);
+      headers.append('sw-cache-date', Date.now().toString());
+      const responseToCache = new Response(await networkResponse.clone().blob(), {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: headers
+      });
+      cache.put(request, responseToCache);
     }
     
     return networkResponse;
@@ -136,16 +172,28 @@ async function cacheFirst(request, cacheName) {
 }
 
 async function networkFirst(request, cacheName, fallback = null) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+  
   try {
-    const networkResponse = await fetch(request);
+    const networkResponse = await fetch(request, { signal: controller.signal });
+    clearTimeout(timeoutId);
     
     if (networkResponse.ok) {
       const cache = await caches.open(cacheName);
-      cache.put(request, networkResponse.clone());
+      const headers = new Headers(networkResponse.headers);
+      headers.append('sw-cache-date', Date.now().toString());
+      const responseToCache = new Response(await networkResponse.clone().blob(), {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: headers
+      });
+      cache.put(request, responseToCache);
     }
     
     return networkResponse;
   } catch (error) {
+    clearTimeout(timeoutId);
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
@@ -164,7 +212,14 @@ async function staleWhileRevalidate(request, cacheName) {
   const fetchPromise = fetch(request)
     .then((networkResponse) => {
       if (networkResponse.ok) {
-        cache.put(request, networkResponse.clone());
+        const headers = new Headers(networkResponse.headers);
+        headers.append('sw-cache-date', Date.now().toString());
+        const responseToCache = new Response(await networkResponse.clone().blob(), {
+          status: networkResponse.status,
+          statusText: networkResponse.statusText,
+          headers: headers
+        });
+        cache.put(request, responseToCache);
       }
       return networkResponse;
     })
@@ -199,13 +254,45 @@ function createOfflineResponse() {
 self.addEventListener('sync', (event) => {
   console.log('[SW] Background sync:', event.tag);
   
-  if (event.tag.startsWith('sync-')) {
+  if (event.tag === 'sync-notifications') {
+    event.waitUntil(syncNotifications());
+  } else if (event.tag === 'sync-user-data') {
+    event.waitUntil(syncUserData());
+  } else if (event.tag.startsWith('sync-')) {
     event.waitUntil(syncData(event.tag));
   }
 });
 
-async function syncData(tag) {
+async function syncNotifications() {
   try {
+    console.log('[SW] Syncing notifications...');
+    const response = await fetch('/api/v1/notifications/unread', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.notifications && data.notifications.length > 0) {
+        self.registration.showNotification('HJTPX 系统', {
+          body: `您有 ${data.notifications.length} 条未读通知`,
+          icon: '/favicon.png',
+          badge: '/favicon.png',
+          tag: 'sync-notification',
+          vibrate: [100, 50, 100]
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[SW] Notification sync failed:', error);
+  }
+}
+
+async function syncUserData() {
+  try {
+    console.log('[SW] Syncing user data...');
     const db = await openDatabase();
     const tx = db.transaction('pendingRequests', 'readonly');
     const store = tx.objectStore('pendingRequests');
@@ -272,17 +359,22 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const options = {
+    body: data.body,
+    icon: data.icon || '/favicon.png',
+    badge: data.badge || '/favicon.png',
+    tag: data.tag || 'default-' + Date.now(),
+    data: data.data || {},
+    vibrate: data.vibrate || [100, 50, 100],
+    renotify: data.renotify !== false,
+    requireInteraction: data.requireInteraction || false,
+    actions: data.actions || [],
+    dir: data.dir || 'ltr',
+    lang: data.lang || 'zh-CN'
+  };
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon,
-      badge: data.badge,
-      tag: data.tag || 'default',
-      data: data.data || {},
-      vibrate: data.vibrate || [100, 50, 100],
-      renotify: data.renotify !== false,
-      requireInteraction: data.requireInteraction || false
-    })
+    self.registration.showNotification(data.title, options)
   );
 });
 
@@ -291,21 +383,71 @@ self.addEventListener('notificationclick', (event) => {
   
   event.notification.close();
 
+  const notificationData = event.notification.data || {};
+  const targetUrl = notificationData.url || '/';
+  const action = event.action;
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
+      .then(async (clientList) => {
+        if (action && notificationData.actionUrls && notificationData.actionUrls[action]) {
+          const actionUrl = notificationData.actionUrls[action];
+          
+          for (const client of clientList) {
+            if (client.url === actionUrl && 'focus' in client) {
+              await client.focus();
+              client.postMessage({
+                action: 'notificationAction',
+                type: action,
+                notification: notificationData
+              });
+              return;
+            }
+          }
+          
+          if (clients.openWindow) {
+            const newClient = await clients.openWindow(actionUrl);
+            if (newClient) {
+              newClient.postMessage({
+                action: 'notificationAction',
+                type: action,
+                notification: notificationData
+              });
+            }
+            return;
+          }
+        }
+
         for (const client of clientList) {
           if ('focus' in client) {
-            return client.focus();
+            await client.focus();
+            client.postMessage({
+              action: 'notificationClick',
+              notification: notificationData
+            });
+            return;
           }
         }
         
         if (clients.openWindow) {
-          const url = event.notification.data.url || '/';
-          return clients.openWindow(url);
+          const newClient = await clients.openWindow(targetUrl);
+          if (newClient) {
+            newClient.postMessage({
+              action: 'notificationClick',
+              notification: notificationData
+            });
+          }
         }
       })
   );
+});
+
+self.addEventListener('notificationclose', (event) => {
+  console.log('[SW] Notification closed');
+  
+  if (event.notification.data && event.notification.data.id) {
+    console.log('[SW] Notification ID:', event.notification.data.id);
+  }
 });
 
 self.addEventListener('message', (event) => {
@@ -353,4 +495,54 @@ self.addEventListener('message', (event) => {
         })
     );
   }
+  
+  if (event.data.action === 'showNotification') {
+    event.waitUntil(
+      self.registration.showNotification(event.data.title, {
+        body: event.data.body,
+        icon: event.data.icon || '/favicon.png',
+        badge: event.data.badge || '/favicon.png',
+        tag: event.data.tag || 'custom-' + Date.now(),
+        data: event.data.data || {},
+        vibrate: event.data.vibrate || [100, 50, 100],
+        requireInteraction: event.data.requireInteraction || false,
+        actions: event.data.actions || []
+      })
+    );
+  }
+  
+  if (event.data.action === 'getVersion') {
+    event.source.postMessage({
+      action: 'version',
+      version: CACHE_VERSION
+    });
+  }
+  
+  if (event.data.action === 'prefetch') {
+    event.waitUntil(
+      prefetchResources(event.data.urls)
+        .then(() => {
+          event.source.postMessage({ action: 'prefetchComplete', success: true });
+        })
+        .catch((error) => {
+          event.source.postMessage({ action: 'prefetchFailed', error: error.message });
+        })
+    );
+  }
 });
+
+async function prefetchResources(urls) {
+  const cache = await caches.open(STATIC_CACHE);
+  
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        await cache.put(url, response);
+        console.log('[SW] Prefetched:', url);
+      }
+    } catch (error) {
+      console.error('[SW] Prefetch failed for:', url, error);
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Loading from './components/ui/Loading';
 import DashboardLayout from './components/DashboardLayout';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
@@ -174,6 +175,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
+        <PWAInstallPrompt delay={3000} />
       </AuthProvider>
     </BrowserRouter>
   );
