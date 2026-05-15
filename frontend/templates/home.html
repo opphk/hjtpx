@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户端 - 首页</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <header class="bg-white shadow-sm sticky-top">
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-light">
+                <div class="container-fluid px-0">
+                    <a class="navbar-brand fw-bold text-primary" href="/">用户端</a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item"><a class="nav-link active" href="/">首页</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/products">产品</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/contact">联系我们</a></li>
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
+                            <a href="/register" class="btn btn-primary btn-sm">注册</a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="min-vh-100">
+        <section class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="container py-5">
+                <h1 class="display-4 fw-bold mb-3">欢迎来到用户端</h1>
+                <p class="lead mb-4">专业、高效、便捷的服务体验</p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="/products" class="btn btn-light btn-lg px-4">浏览产品</a>
+                    <a href="/about" class="btn btn-outline-light btn-lg px-4">了解更多</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5">
+            <div class="container">
+                <h2 class="text-center fw-bold mb-5">我们的特色</h2>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center p-4">
+                                <div class="display-1 mb-3">🚀</div>
+                                <h5 class="card-title">快速响应</h5>
+                                <p class="card-text text-muted">极速处理您的请求，让您的体验更加流畅</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center p-4">
+                                <div class="display-1 mb-3">🔒</div>
+                                <h5 class="card-title">安全可靠</h5>
+                                <p class="card-text text-muted">采用先进的安全技术，保护您的数据安全</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center p-4">
+                                <div class="display-1 mb-3">💬</div>
+                                <h5 class="card-title">优质服务</h5>
+                                <p class="card-text text-muted">专业的客服团队，随时为您提供帮助</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5 bg-light">
+            <div class="container">
+                <h2 class="text-center fw-bold mb-5">最新产品</h2>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style="height: 200px;">产品图片</div>
+                            <div class="card-body">
+                                <h5 class="card-title">产品名称 1</h5>
+                                <p class="card-text fw-bold text-primary fs-4">¥ 99.00</p>
+                                <a href="#" class="btn btn-outline-primary">查看详情</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style="height: 200px;">产品图片</div>
+                            <div class="card-body">
+                                <h5 class="card-title">产品名称 2</h5>
+                                <p class="card-text fw-bold text-primary fs-4">¥ 199.00</p>
+                                <a href="#" class="btn btn-outline-primary">查看详情</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style="height: 200px;">产品图片</div>
+                            <div class="card-body">
+                                <h5 class="card-title">产品名称 3</h5>
+                                <p class="card-text fw-bold text-primary fs-4">¥ 299.00</p>
+                                <a href="#" class="btn btn-outline-primary">查看详情</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="bg-dark text-white py-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <h5>关于我们</h5>
+                    <p class="text-white-50">专业的服务团队，为您提供优质的体验。</p>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <h5>快速链接</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
+                        <li><a href="/products" class="text-white-50 text-decoration-none">产品</a></li>
+                        <li><a href="/about" class="text-white-50 text-decoration-none">关于</a></li>
+                        <li><a href="/contact" class="text-white-50 text-decoration-none">联系我们</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <h5>联系方式</h5>
+                    <p class="text-white-50">邮箱: contact@example.com</p>
+                    <p class="text-white-50">电话: 400-888-8888</p>
+                </div>
+            </div>
+            <hr class="border-white-50">
+            <p class="text-center text-white-50 mb-0">&copy; 2026 用户端. All rights reserved.</p>
+        </div>
+    </footer>
+    
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

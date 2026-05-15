@@ -1,5 +1,6 @@
 let logCurrentPage = 1;
 let logPageSize = 20;
+let currentLogs = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     loadLogs();
@@ -36,7 +37,7 @@ async function loadLogs() {
     let logs = mockLogs;
 
     try {
-        const level = document.getElementById('logLevel')?.value || '';
+        const status = document.getElementById('logStatus')?.value || '';
         const startDate = document.getElementById('startDate')?.value || '';
         const endDate = document.getElementById('endDate')?.value || '';
         const keyword = document.getElementById('keyword')?.value || '';
@@ -44,15 +45,16 @@ async function loadLogs() {
         const params = new URLSearchParams({
             page: logCurrentPage,
             size: logPageSize,
-            level,
+            status,
             startDate,
             endDate,
             keyword
         });
 
-        const result = await auth.request(`/logs?${params.toString()}`);
+        const result = await auth.request(`/admin/logs?${params.toString()}`);
         if (result.code === 0) {
             logs = result.data.list || [];
+            currentLogs = logs;
             renderLogPagination(result.data.total || logs.length);
         } else {
             renderLogPagination(logs.length);
@@ -190,10 +192,10 @@ function closeLogDetailModal() {
 }
 
 function exportLogs() {
-    const mockLogs = getMockLogs();
+    const logsToExport = currentLogs.length > 0 ? currentLogs : getMockLogs();
     const csvContent = [
         ['ID', '级别', '消息', '时间', '来源'].join(','),
-        ...mockLogs.map(log => [
+        ...logsToExport.map(log => [
             log.id,
             log.level,
             `"${log.message.replace(/"/g, '""')}"`,

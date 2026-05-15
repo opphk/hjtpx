@@ -34,6 +34,13 @@ var (
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanupExpiredSessions()
+		}
+	}()
 }
 
 func generateSessionID() string {
@@ -231,15 +238,15 @@ func VerifyCaptcha(c *gin.Context) {
 	duration := time.Since(startTime).Milliseconds()
 
 	verification := &models.Verification{
-		SessionID:    req.SessionID,
-		CaptchaType:  req.Type,
+		SessionID:     req.SessionID,
+		CaptchaType:   req.Type,
 		ApplicationID: req.ApplicationID,
-		UserID:       0,
-		Status:       status,
-		IPAddress:    c.ClientIP(),
-		UserAgent:    c.GetHeader("User-Agent"),
-		RiskScore:    riskScore,
-		BehaviorData: behaviorDataList,
+		UserID:        1, // 默认用户ID，生产环境应从认证中间件获取
+		Status:        status,
+		IPAddress:     c.ClientIP(),
+		UserAgent:     c.GetHeader("User-Agent"),
+		RiskScore:     riskScore,
+		BehaviorData:  behaviorDataList,
 	}
 
 	if err := db.Create(verification).Error; err != nil {
@@ -281,4 +288,15 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+func cleanupExpiredSessions() {
+	sessionMutex.Lock()
+	defer sessionMutex.Unlock()
+	now := time.Now()
+	for id, session := range captchaSessions {
+		if now.Sub(session.CreatedAt) > 10*time.Minute {
+			delete(captchaSessions, id)
+		}
+	}
 }

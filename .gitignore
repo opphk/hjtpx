@@ -6,6 +6,7 @@
 *.dylib
 server
 backend/server
+backend/api
 
 # Test binary, built with `go test -c`
 *.test

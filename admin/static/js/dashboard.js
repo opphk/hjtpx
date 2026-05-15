@@ -12,7 +12,7 @@ async function loadDashboardStats() {
     };
 
     try {
-        const data = await auth.request('/dashboard/stats');
+        const data = await auth.request('/admin/dashboard/stats');
         if (data.code === 0) {
             updateStats(data.data);
         } else {
@@ -75,7 +75,7 @@ async function loadRecentActivity() {
     let activities = mockActivities;
 
     try {
-        const data = await auth.request('/dashboard/activity');
+        const data = await auth.request('/admin/dashboard/activity');
         if (data.code === 0 && data.data) {
             activities = data.data;
         }

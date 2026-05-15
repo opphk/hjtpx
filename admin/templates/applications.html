@@ -4,130 +4,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理后台 - 应用管理</title>
-    <link rel="stylesheet" href="/admin/static/css/style.css">
-    <link rel="stylesheet" href="/admin/static/css/applications.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
+        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
+        .main-wrapper { flex: 1; min-width: 0; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .secret-code { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-family: monospace; }
+    </style>
 </head>
-<body class="admin-layout">
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h2>管理后台</h2>
-        </div>
-        <nav class="sidebar-nav">
-            <ul>
-                <li><a href="/admin/">
-                    <span class="icon">📊</span>
-                    <span>仪表盘</span>
-                </a></li>
-                <li><a href="/admin/stats">
-                    <span class="icon">📈</span>
-                    <span>统计分析</span>
-                </a></li>
-                <li><a href="/admin/applications" class="active">
-                    <span class="icon">📱</span>
-                    <span>应用管理</span>
-                </a></li>
-                <li><a href="/admin/logs">
-                    <span class="icon">📋</span>
-                    <span>日志查询</span>
-                </a></li>
-            </ul>
-        </nav>
-        <div class="sidebar-footer">
-            <a href="#" id="logoutBtn" class="logout-btn">
-                <span class="icon">🚪</span>
-                <span>退出登录</span>
-            </a>
-        </div>
-    </div>
-    
-    <div class="main-wrapper">
-        <header class="topbar">
-            <div class="topbar-left">
-                <h1>应用管理</h1>
+<body>
+    <div class="d-flex">
+        <div class="sidebar d-flex flex-column flex-shrink-0">
+            <div class="sidebar-header p-3"><h5 class="text-white mb-0">管理后台</h5></div>
+            <nav class="nav flex-column mt-2">
+                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                <a class="nav-link active" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+            </nav>
+            <div class="sidebar-footer mt-auto p-3">
+                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
             </div>
-            <div class="topbar-right">
-                <button id="createAppBtn" class="btn btn-primary">+ 创建应用</button>
-                <div class="user-info">
-                    <span class="username" id="usernameDisplay">管理员</span>
-                    <div class="user-avatar" id="userAvatar">A</div>
-                </div>
-            </div>
-        </header>
+        </div>
         
-        <main class="main-content">
-            <div class="applications-page">
-                <div class="filter-bar">
-                    <div class="form-group">
-                        <label for="searchApp">搜索应用</label>
-                        <input type="text" id="searchApp" placeholder="输入应用名称或ID">
+        <div class="main-wrapper">
+            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">应用管理</h5>
+                <div class="d-flex align-items-center gap-3">
+                    <button id="createAppBtn" class="btn btn-primary btn-sm"><i class="fas fa-plus me-1"></i>创建应用</button>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted" id="usernameDisplay">管理员</span>
+                        <div class="user-avatar" id="userAvatar">A</div>
                     </div>
-                    <div class="form-group">
-                        <label for="appStatus">状态</label>
-                        <select id="appStatus">
-                            <option value="">全部</option>
-                            <option value="active">活跃</option>
-                            <option value="inactive">停用</option>
-                            <option value="suspended">暂停</option>
-                        </select>
+                </div>
+            </header>
+            
+            <main class="p-4 bg-light min-vh-100">
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">搜索应用</label>
+                                <input type="text" class="form-control" id="searchApp" placeholder="输入应用名称或ID">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">状态</label>
+                                <select class="form-select" id="appStatus">
+                                    <option value="">全部</option>
+                                    <option value="active">活跃</option>
+                                    <option value="inactive">停用</option>
+                                    <option value="suspended">暂停</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button id="searchBtn" class="btn btn-secondary w-100">搜索</button>
+                            </div>
+                        </div>
                     </div>
-                    <button id="searchBtn" class="btn">搜索</button>
                 </div>
                 
-                <div class="apps-list">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>应用ID</th>
-                                <th>应用名称</th>
-                                <th>应用密钥</th>
-                                <th>状态</th>
-                                <th>创建时间</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="appsTableBody">
-                        </tbody>
-                    </table>
-                    
-                    <div class="pagination" id="pagination">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr><th>应用ID</th><th>应用名称</th><th>应用密钥</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+                                </thead>
+                                <tbody id="appsTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
+                    <div class="card-footer bg-white" id="pagination"></div>
                 </div>
-            </div>
-        </main>
-    </div>
-    
-    <div id="appModal" class="modal hidden">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">创建应用</h2>
-                <button class="close-btn" id="closeModal">&times;</button>
-            </div>
-            <form id="appForm" class="modal-body">
-                <input type="hidden" id="appId">
-                <div class="form-group">
-                    <label for="appName">应用名称 *</label>
-                    <input type="text" id="appName" required>
-                </div>
-                <div class="form-group">
-                    <label for="appDescription">应用描述</label>
-                    <textarea id="appDescription" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="appStatusSelect">状态</label>
-                    <select id="appStatusSelect">
-                        <option value="active">活跃</option>
-                        <option value="inactive">停用</option>
-                        <option value="suspended">暂停</option>
-                    </select>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" id="cancelBtn">取消</button>
-                    <button type="submit" class="btn btn-primary">保存</button>
-                </div>
-            </form>
+            </main>
         </div>
     </div>
     
+    <div class="modal fade" id="appModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">创建应用</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="appForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="appId">
+                        <div class="mb-3">
+                            <label class="form-label">应用名称 *</label>
+                            <input type="text" class="form-control" id="appName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">应用描述</label>
+                            <textarea class="form-control" id="appDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="appStatusSelect">
+                                <option value="active">活跃</option>
+                                <option value="inactive">停用</option>
+                                <option value="suspended">暂停</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
     <script src="/admin/static/js/applications.js"></script>
 </body>
