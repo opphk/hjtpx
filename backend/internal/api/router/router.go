@@ -111,6 +111,44 @@ func SetupRouter() *gin.Engine {
 		api.GET("/detect/fingerprint", handler.GetFingerprintInfo)
 		api.GET("/detect/stats", handler.GetFingerprintStats)
 
+		// 无感验证与可信度评估路由
+		trust := api.Group("/trust")
+		{
+			trust.POST("/evaluate", handler.GetTrustHandler().EvaluateTrust)
+			trust.GET("/info/:fingerprint", handler.GetTrustHandler().GetTrustInfo)
+			trust.POST("/verify", handler.GetTrustHandler().VerifyDevice)
+			trust.POST("/event", handler.GetTrustHandler().RecordEvent)
+			trust.GET("/history/:fingerprint", handler.GetTrustHandler().GetTrustHistory)
+			trust.POST("/analyze", handler.GetTrustHandler().AnalyzeFingerprint)
+			trust.POST("/risk", handler.GetTrustHandler().SetRiskScore)
+			trust.GET("/stats", handler.GetTrustHandler().GetStatistics)
+			trust.POST("/batch", handler.GetTrustHandler().BatchEvaluate)
+		}
+
+		// 渐进式验证路由
+		progressive := api.Group("/progressive")
+		{
+			progressive.POST("/start", handler.GetProgressiveVerificationHandler().StartVerification)
+			progressive.POST("/challenge", handler.GetProgressiveVerificationHandler().CompleteChallenge)
+			progressive.GET("/status/:session_id", handler.GetProgressiveVerificationHandler().GetSessionStatus)
+			progressive.DELETE("/cancel/:session_id", handler.GetProgressiveVerificationHandler().CancelVerification)
+			progressive.GET("/levels", handler.GetProgressiveVerificationHandler().GetVerificationLevels)
+			progressive.POST("/result", handler.GetProgressiveVerificationHandler().RecordVerificationResult)
+		}
+
+		// 白名单管理路由
+		whitelist := api.Group("/whitelist")
+		{
+			whitelist.POST("", handler.GetWhitelistHandler().AddWhitelist)
+			whitelist.DELETE("/:target", handler.GetWhitelistHandler().RemoveWhitelist)
+			whitelist.GET("", handler.GetWhitelistHandler().ListWhitelist)
+			whitelist.GET("/check", handler.GetWhitelistHandler().CheckWhitelist)
+			whitelist.PUT("/:target", handler.GetWhitelistHandler().UpdateWhitelist)
+			whitelist.GET("/stats", handler.GetWhitelistHandler().GetWhitelistStats)
+			whitelist.POST("/bulk", handler.GetWhitelistHandler().BulkAddWhitelist)
+			whitelist.GET("/export", handler.GetWhitelistHandler().ExportWhitelist)
+		}
+
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
 		{
