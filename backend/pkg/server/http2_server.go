@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,8 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 type HTTP2Server struct {
@@ -97,13 +94,12 @@ func (s *HTTP2Server) Start(handler http.Handler) error {
 	serverMetrics.StartTime = time.Now()
 
 	s.server = &http.Server{
-		Addr:              ":8080",
-		Handler:           s.wrapHandler(handler),
-		ReadTimeout:       s.readTimeout,
-		WriteTimeout:      s.writeTimeout,
-		IdleTimeout:       s.idleTimeout,
-		MaxHeaderBytes:   s.maxHeaderBytes,
-		KeepAlive:         s.keepAliveTimeout,
+		Addr:           ":8080",
+		Handler:        s.wrapHandler(handler),
+		ReadTimeout:    s.readTimeout,
+		WriteTimeout:   s.writeTimeout,
+		IdleTimeout:    s.idleTimeout,
+		MaxHeaderBytes: s.maxHeaderBytes,
 	}
 
 	if s.enableHTTP2 {
@@ -143,7 +139,7 @@ func (s *HTTP2Server) createTLSConfig() (*tls.Config, error) {
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:  tls.VersionTLS12,
+		MinVersion: tls.VersionTLS12,
 		CurvePreferences: []tls.CurveID{
 			tls.CurveP256,
 			tls.X25519,
@@ -171,7 +167,7 @@ func (s *HTTP2Server) addHTTP2Support(handler http.Handler) http.Handler {
 		start := time.Now()
 		rw := &responseWriter{
 			ResponseWriter: w,
-			statusCode:     http.StatusOK,
+			statusCode:    http.StatusOK,
 		}
 
 		handler.ServeHTTP(rw, r)
@@ -198,7 +194,7 @@ func (s *HTTP2Server) addHTTP2Support(handler http.Handler) http.Handler {
 		} else {
 			atomic.AddInt64(&serverMetrics.RequestsFailed, 1)
 		}
-		atomic.AddInt64(&serverMetrics.BytesSent, rw.bytesWritten)
+		atomic.AddInt64(&serverMetrics.BytesSent, int64(rw.bytesWritten))
 	})
 }
 
@@ -208,9 +204,9 @@ func (s *HTTP2Server) wrapHandler(handler http.Handler) http.Handler {
 
 type responseWriter struct {
 	http.ResponseWriter
-	statusCode    int
-	bytesWritten  int
-	wroteHeader   bool
+	statusCode   int
+	bytesWritten int64
+	wroteHeader  bool
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -226,7 +222,7 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 		rw.WriteHeader(http.StatusOK)
 	}
 	n, err := rw.ResponseWriter.Write(b)
-	rw.bytesWritten += n
+	rw.bytesWritten += int64(n)
 	return n, err
 }
 
@@ -252,8 +248,7 @@ func (s *HTTP2Server) cleanupOldMetrics() {
 
 	cutoff := time.Now().Add(-1 * time.Hour)
 	serverMetrics.Uptime = time.Since(serverMetrics.StartTime)
-	if serverMetrics.StartTime.Before(cutoff) {
-	}
+	_ = cutoff
 }
 
 func (s *HTTP2Server) collectSystemMetrics() {
@@ -275,13 +270,12 @@ func (s *HTTP2Server) collectSystemMetrics() {
 
 			if wallElapsed > 0 && lastCPUTime > 0 {
 				cpuUsage := float64(cpuTime-lastCPUTime) / float64(wallElapsed) * 100
-				if cpuUsage > 100 {
-					cpuUsage = 100
-				}
+				_ = cpuUsage
 			}
 
 			lastCPUTime = cpuTime
 			lastWallTime = now
+			_ = m
 		}
 	}
 }
@@ -306,8 +300,8 @@ func GetServerMetrics() *ServerMetrics {
 		RequestsTotal:     atomic.LoadInt64(&serverMetrics.RequestsTotal),
 		RequestsSuccess:   atomic.LoadInt64(&serverMetrics.RequestsSuccess),
 		RequestsFailed:    atomic.LoadInt64(&serverMetrics.RequestsFailed),
-		BytesSent:         atomic.LoadInt64(&serverMetrics.BytesSent),
-		BytesReceived:    atomic.Load64(&serverMetrics.BytesReceived),
+		BytesSent:        atomic.LoadInt64(&serverMetrics.BytesSent),
+		BytesReceived:    atomic.LoadInt64(&serverMetrics.BytesReceived),
 		ActiveConnections: atomic.LoadInt64(&serverMetrics.ActiveConnections),
 		TotalConnections:  atomic.LoadInt64(&serverMetrics.TotalConnections),
 		Uptime:            time.Since(serverMetrics.StartTime),
@@ -398,7 +392,7 @@ func NewOptimizedTransport() *OptimizedTransport {
 			TLSHandshakeTimeout: 10 * time.Second,
 			DisableKeepAlives:   false,
 			DisableCompression:  false,
-			WriteBufferSize:     32 * 1024,
+			WriteBufferSize:    32 * 1024,
 			ReadBufferSize:     32 * 1024,
 		},
 		poolConfig: &ConnectionPoolConfig{
@@ -426,9 +420,9 @@ func (t *OptimizedTransport) SetPoolConfig(config *ConnectionPoolConfig) {
 func (t *OptimizedTransport) GetPoolStats() map[string]interface{} {
 	if transport, ok := t.RoundTripper.(*http.Transport); ok {
 		return map[string]interface{}{
-			"max_idle_conns":         transport.MaxIdleConns,
+			"max_idle_conns":          transport.MaxIdleConns,
 			"max_idle_conns_per_host": transport.MaxIdleConnsPerHost,
-			"idle_conn_timeout":      transport.IdleConnTimeout.String(),
+			"idle_conn_timeout":       transport.IdleConnTimeout.String(),
 		}
 	}
 	return nil
