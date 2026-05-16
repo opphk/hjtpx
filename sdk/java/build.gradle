@@ -1,0 +1,103 @@
+distributionBase=https://repo.maven.apache.org/maven2
+distributionUrl=https://repo.maven.apache.org/maven2/
+pluginRepositoryManagement(
+    pluginManagement {
+        repositories {
+            maven {
+                name = 'central'
+                url = 'https://repo.maven.apache.org/maven2'
+            }
+            gradlePluginPortal()
+        }
+    }
+)
+
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+}
+
+group = 'com.hjtpx'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    withJavadocJar()
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.2'
+    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+    implementation 'org.slf4j:slf4j-api:2.0.7'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.0'
+    testImplementation 'org.mockito:mockito-core:5.5.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.5.0'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            pom {
+                name = 'hjtpx Java SDK'
+                description = 'A comprehensive Java SDK for hjtpx captcha services'
+                url = 'https://github.com/hjtpx/hjtpx'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'hjtpx'
+                        name = 'hjtpx Team'
+                        email = 'team@hjtpx.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git@github.com:hjtpx/hjtpx.git'
+                    developerConnection = 'scm:git@github.com:hjtpx/hjtpx.git'
+                    url = 'https://github.com/hjtpx/hjtpx'
+                }
+            }
+        }
+    }
+
+    repositories {
+        maven {
+            name = 'MavenCentral'
+            if (version.endsWith('SNAPSHOT')) {
+                url = 'https://oss.sonatype.org/content/repositories/snapshots'
+            } else {
+                url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+            }
+            credentials {
+                username = System.getenv('MAVEN_USERNAME')
+                password = System.getenv('MAVEN_PASSWORD')
+            }
+        }
+    }
+}
+
+signing {
+    if (project.hasProperty('signingKey')) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign publishing.publications.mavenJava
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

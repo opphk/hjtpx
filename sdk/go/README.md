@@ -18,6 +18,14 @@ A comprehensive Go SDK for hjtpx captcha services, providing support for image c
 go get github.com/hjtpx/hjtpx/sdk/go
 ```
 
+Or clone and install:
+
+```bash
+git clone https://github.com/hjtpx/hjtpx.git
+cd hjtpx/sdk/go
+go mod tidy
+```
+
 ## Quick Start
 
 ```go
@@ -454,3 +462,9 @@ go test -bench=. -benchmem
 ## License
 
 MIT License
+
+## See Also
+
+- [Python SDK](../python/README.md)
+- [Java SDK](../java/README.md)
+- [JavaScript/TypeScript SDK](../javascript/packages/hjtpx-sdk/README.md)
