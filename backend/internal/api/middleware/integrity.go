@@ -4,12 +4,11 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
-	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -542,16 +541,6 @@ func VerifyIntegrityChallenge(challengeID, response string) bool {
 		}
 	}
 	return false
-}
-
-func randomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-		time.Sleep(time.Nanosecond)
-	}
-	return string(result)
 }
 
 type IntegrityMiddlewareAdvanced struct {

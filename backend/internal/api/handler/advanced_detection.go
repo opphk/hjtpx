@@ -3,7 +3,6 @@ package handler
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -52,7 +51,7 @@ type AdvancedScriptResponse struct {
 
 var (
 	advancedDetector = service.GetAdvancedDetector()
-	sessionMutex    sync.RWMutex
+	advSessionMutex  sync.RWMutex
 	sessions         = make(map[string]*service.AdvancedEnvironmentData)
 )
 
@@ -141,9 +140,9 @@ func SubmitAdvancedDetection(c *gin.Context) {
 	result := advancedDetector.AnalyzeEnvironment(analysisData)
 	result.SessionID = req.SessionID
 
-	sessionMutex.Lock()
+	advSessionMutex.Lock()
 	sessions[req.SessionID] = result
-	sessionMutex.Unlock()
+	advSessionMutex.Unlock()
 
 	advancedDetector.UpdateSession(result.ID, result)
 
@@ -185,9 +184,9 @@ func GetAdvancedDetectionResult(c *gin.Context) {
 		return
 	}
 
-	sessionMutex.RLock()
+	advSessionMutex.RLock()
 	session, exists := sessions[sessionID]
-	sessionMutex.RUnlock()
+	advSessionMutex.RUnlock()
 
 	if !exists {
 		session = advancedDetector.GetSession(sessionID)
@@ -536,6 +535,45 @@ func isBot(uaLower string) bool {
 	return false
 }
 
+type detectVMReq struct {
+	WebGLRenderer string
+	ScreenSize    string
+	CPUCores      int
+	DeviceMemory  float64
+	UserAgent     string
+}
+
+type detectCloudReq struct {
+	IPAddress    string
+	UserAgent    string
+	ISP          string
+	Organization string
+}
+
+type detectContainerReq struct {
+	CPUCores     int
+	DeviceMemory float64
+	UserAgent    string
+	Platform     string
+}
+
+type detectHeadlessReq struct {
+	UserAgent         string
+	NavigatorWebdriver bool
+	ChromeRuntime     bool
+	PluginsCount      int
+	Languages         []string
+	Permissions       map[string]string
+}
+
+type analyzeWebGLReq struct {
+	WebGLData      string
+	Extensions     []string
+	MaxTextureSize int
+	Renderer       string
+	Vendor         string
+}
+
 func DetectVMEnvironment(c *gin.Context) {
 	var req struct {
 		WebGLRenderer string `json:"webgl_renderer"`
@@ -553,7 +591,13 @@ func DetectVMEnvironment(c *gin.Context) {
 		return
 	}
 
-	result := detectVMIndicators(req)
+	result := detectVMIndicators(detectVMReq{
+		WebGLRenderer: req.WebGLRenderer,
+		ScreenSize:    req.ScreenSize,
+		CPUCores:      req.CPUCores,
+		DeviceMemory:  req.DeviceMemory,
+		UserAgent:     req.UserAgent,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -638,7 +682,12 @@ func DetectCloudEnvironment(c *gin.Context) {
 		return
 	}
 
-	result := detectCloudIndicators(req)
+	result := detectCloudIndicators(detectCloudReq{
+		IPAddress:    req.IPAddress,
+		UserAgent:    req.UserAgent,
+		ISP:          req.ISP,
+		Organization: req.Organization,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -718,7 +767,12 @@ func DetectContainerEnvironment(c *gin.Context) {
 		return
 	}
 
-	result := detectContainerIndicators(req)
+	result := detectContainerIndicators(detectContainerReq{
+		CPUCores:     req.CPUCores,
+		DeviceMemory: req.DeviceMemory,
+		UserAgent:    req.UserAgent,
+		Platform:     req.Platform,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -785,12 +839,19 @@ func DetectHeadlessBrowser(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			message: "invalid request",
+			"message": "invalid request",
 		})
 		return
 	}
 
-	result := detectHeadlessIndicators(req)
+	result := detectHeadlessIndicators(detectHeadlessReq{
+		UserAgent:         req.UserAgent,
+		NavigatorWebdriver: req.NavigatorWebdriver,
+		ChromeRuntime:     req.ChromeRuntime,
+		PluginsCount:      req.PluginsCount,
+		Languages:         req.Languages,
+		Permissions:       req.Permissions,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -940,7 +1001,13 @@ func EnhancedWebGLFingerprint(c *gin.Context) {
 		return
 	}
 
-	result := analyzeEnhancedWebGL(req)
+	result := analyzeEnhancedWebGL(analyzeWebGLReq{
+		WebGLData:      req.WebGLData,
+		Extensions:     req.Extensions,
+		MaxTextureSize: req.MaxTextureSize,
+		Renderer:       req.Renderer,
+		Vendor:         req.Vendor,
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1015,8 +1082,8 @@ func BatchDetection(c *gin.Context) {
 
 	results := make([]AdvancedDetectionResponse, 0)
 
-	sessionMutex.RLock()
-	defer sessionMutex.RUnlock()
+	advSessionMutex.RLock()
+	defer advSessionMutex.RUnlock()
 
 	for _, sessionID := range req.Sessions {
 		if session, exists := sessions[sessionID]; exists {

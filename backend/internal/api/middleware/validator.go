@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -1207,12 +1206,9 @@ func (m *ValidationMiddleware) Handler() gin.HandlerFunc {
 func (m *ValidationMiddleware) getFieldValue(c *gin.Context, field string) interface{} {
 	if strings.HasPrefix(field, "body.") {
 		fieldName := strings.TrimPrefix(field, "body.")
-		if m, ok := c.Get(gin.ContextKey); ok {
-			if ctx, ok := m.(context.Context); ok {
-				body, _ := ctx.Value("requestBody")
-				if bodyMap, ok := body.(map[string]interface{}); ok {
-					return bodyMap[fieldName]
-				}
+		if bodyMap, ok := c.Get("requestBody"); ok {
+			if body, ok := bodyMap.(map[string]interface{}); ok {
+				return body[fieldName]
 			}
 		}
 		

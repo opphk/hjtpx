@@ -136,7 +136,7 @@ func (h *WhitelistHandler) ListWhitelist(c *gin.Context) {
 
 	var items []map[string]interface{}
 	if whitelistType == "fingerprint" {
-		statsMap := stats["trust_distribution"].(map[string]int)
+		_ = stats["trust_distribution"].(map[string]int)
 		for fp := range getFingerprintsFromCache() {
 			trustInfo := h.trustService.GetTrustInfo(fp)
 			if trustInfo != nil && trustInfo.IsVerified {

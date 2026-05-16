@@ -440,7 +440,7 @@ func (rm *RiskManager) ValidateConfig(config *RiskConfig) ([]string, error) {
 	}
 
 	if len(validationErrors) > 0 {
-		return validationErrors, validationErrors[0]
+		return validationErrors, fmt.Errorf("validation failed: %s", validationErrors[0])
 	}
 
 	return nil, nil

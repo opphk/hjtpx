@@ -100,8 +100,8 @@ func SetupRouter() *gin.Engine {
 			captcha.GET("/rotation", handler.GenerateRotationCaptcha)
 			captcha.POST("/rotation/verify", handler.VerifyRotationCaptcha)
 			captcha.POST("/verify", handler.VerifyCaptcha)
-			captcha.GET("/shuffle/click", handler.GetShuffleClickCaptcha)
-			captcha.POST("/shuffle/verify", handler.VerifyShuffleClickCaptcha)
+			// captcha.GET("/shuffle/click", handler.GetShuffleClickCaptcha)
+			// captcha.POST("/shuffle/verify", handler.VerifyShuffleClickCaptcha)
 		}
 
 		// 环境检测路由
@@ -249,13 +249,13 @@ func SetupRouter() *gin.Engine {
 		})
 
 		// 性能监控路由
-		metrics := api.Group("/metrics")
-		{
-			metrics.GET("/performance", handler.GetPerformanceMetrics)
-			metrics.GET("/endpoints", handler.GetEndpointStats)
-			metrics.GET("/health", handler.GetHealthCheckMetrics)
-			metrics.POST("/reset", handler.ResetMetrics)
-		}
+		// metrics := api.Group("/metrics")
+		// {
+		// 	metrics.GET("/performance", handler.GetPerformanceMetrics)
+		// 	metrics.GET("/endpoints", handler.GetEndpointStats)
+		// 	metrics.GET("/health", handler.GetHealthCheckMetrics)
+		// 	metrics.POST("/reset", handler.ResetMetrics)
+		// }
 	}
 
 	return r
