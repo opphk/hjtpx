@@ -1,607 +1,551 @@
+
 let currentPage = 1;
-let pageSize = 10;
-let currentApps = [];
-let currentView = 'table';
-let appStatsChart = null;
+const pageSize = 10;
+let totalApps = 0;
+let appList = [];
+let selectedApps = new Set();
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadApplicationsSummary();
-    loadApplications();
-    setupEventListeners();
-});
-
-function setupEventListeners() {
-    const createAppBtn = document.getElementById('createAppBtn');
-    if (createAppBtn) {
-        createAppBtn.addEventListener('click', () => openAppModal());
+document.addEventListener('DOMContentLoaded', function() {
+    if (!Auth.requireAuth()) {
+        return;
     }
 
-    const searchBtn = document.getElementById('searchBtn');
-    if (searchBtn) {
-        searchBtn.addEventListener('click', () => {
+    const user = Auth.getCurrentUser();
+    if (user && user.username) {
+        Auth.updateUserDisplay(user.username);
+    }
+
+    loadApplications();
+    initEventListeners();
+});
+
+function initEventListeners() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentPage = 1;
+                loadApplications();
+            }, 500);
+        });
+    }
+
+    const statusFilter = document.getElementById('statusFilter');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', function() {
             currentPage = 1;
             loadApplications();
         });
     }
 
-    const viewButtons = document.querySelectorAll('[data-view]');
-    viewButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            viewButtons.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            switchView(e.target.dataset.view);
+    const platformFilter = document.getElementById('platformFilter');
+    if (platformFilter) {
+        platformFilter.addEventListener('change', function() {
+            currentPage = 1;
+            loadApplications();
         });
-    });
-
-    const appForm = document.getElementById('appForm');
-    if (appForm) {
-        appForm.addEventListener('submit', handleAppSubmit);
     }
 
-    document.getElementById('appModal')?.addEventListener('hidden.bs.modal', () => {
-        document.getElementById('appForm')?.reset();
-    });
-}
-
-async function loadApplicationsSummary() {
-    const mockSummary = getMockAppsSummary();
-
-    try {
-        const data = await auth.request('/admin/applications/summary');
-        if (data.code === 0) {
-            updateAppsSummary(data.data);
-        } else {
-            updateAppsSummary(mockSummary);
-        }
-    } catch (error) {
-        updateAppsSummary(mockSummary);
+    const resetBtn = document.getElementById('resetFilterBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('statusFilter').value = '';
+            document.getElementById('platformFilter').value = '';
+            currentPage = 1;
+            loadApplications();
+        });
     }
-}
 
-function getMockAppsSummary() {
-    return {
-        total: 156,
-        active: 142,
-        totalApiCalls: 8234567,
-        successRate: 98.5,
-        totalUsers: 124560
-    };
-}
-
-function updateAppsSummary(summary) {
-    const totalEl = document.getElementById('totalApps');
-    const activeEl = document.getElementById('activeApps');
-    const apiCallsEl = document.getElementById('totalApiCalls');
-    const successEl = document.getElementById('successRate');
-    const usersEl = document.getElementById('totalUsers');
-
-    if (totalEl) totalEl.textContent = summary.total;
-    if (activeEl) activeEl.textContent = summary.active;
-    if (apiCallsEl) apiCallsEl.textContent = formatNumber(summary.totalApiCalls);
-    if (successEl) successEl.textContent = `${summary.successRate.toFixed(1)}%`;
-    if (usersEl) usersEl.textContent = formatNumber(summary.totalUsers);
-}
-
-function formatNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
+    const addAppBtn = document.getElementById('addAppBtn');
+    if (addAppBtn) {
+        addAppBtn.addEventListener('click', function() {
+            openAppModal();
+        });
     }
-    return num.toString();
+
+    const saveAppBtn = document.getElementById('saveAppBtn');
+    if (saveAppBtn) {
+        saveAppBtn.addEventListener('click', function() {
+            saveApplication();
+        });
+    }
+
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.app-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+                const appId = checkbox.getAttribute('data-id');
+                if (this.checked) {
+                    selectedApps.add(appId);
+                } else {
+                    selectedApps.delete(appId);
+                }
+            });
+            updateBulkActions();
+        });
+    }
 }
 
 async function loadApplications() {
-    const keyword = document.getElementById('searchApp')?.value || '';
-    const status = document.getElementById('appStatus')?.value || '';
-    const sort = document.getElementById('appSort')?.value || 'created';
-    const mockApps = getMockApplications();
-
     try {
+        const searchQuery = document.getElementById('searchInput')?.value || '';
+        const statusFilter = document.getElementById('statusFilter')?.value || '';
+        const platformFilter = document.getElementById('platformFilter')?.value || '';
+
         const params = new URLSearchParams({
             page: currentPage,
-            size: pageSize,
-            keyword: encodeURIComponent(keyword),
-            status,
-            sort
+            pageSize: pageSize,
+            search: searchQuery,
+            status: statusFilter,
+            platform: platformFilter
         });
 
-        const result = await auth.request(`/admin/applications?${params.toString()}`);
-        if (result.code === 0) {
-            currentApps = result.data.list || [];
-            renderPagination(result.data.total || currentApps.length);
-            renderAppsCount(result.data.total || currentApps.length);
-        } else {
-            currentApps = filterApps(mockApps, keyword, status);
-            currentApps = sortApps(currentApps, sort);
-            renderPagination(currentApps.length);
-            renderAppsCount(currentApps.length);
-        }
-    } catch (error) {
-        currentApps = filterApps(mockApps, keyword, status);
-        currentApps = sortApps(currentApps, sort);
-        renderPagination(currentApps.length);
-        renderAppsCount(currentApps.length);
-    }
+        const response = await fetch(`/admin/api/applications?${params}`);
+        if (!response.ok) throw new Error('获取应用列表失败');
 
-    renderApplications();
+        const data = await response.json();
+        appList = data.apps || [];
+        totalApps = data.total || 0;
+
+        renderApplicationTable(appList);
+        renderPagination();
+        updateTotalCount();
+    } catch (error) {
+        console.error('加载应用列表失败:', error);
+        loadMockApplications();
+    }
 }
 
-function getMockApplications() {
-    return [
+function loadMockApplications() {
+    const mockApps = [
         {
-            id: 1, name: '用户中心', secret: 'sk_abc123def456',
-            status: 'active', requestsPerDay: 12345,
-            createdAt: '2024-01-01 10:00:00',
-            description: '用户认证和授权服务',
-            callbackUrl: 'https://user.example.com/callback',
-            captchaTypes: ['slide', 'click', 'rotate']
+            id: 1,
+            name: '示例应用1',
+            appId: 'app_001',
+            platform: 'ios',
+            status: 'active',
+            createdAt: '2024-01-15 10:30:00',
+            requestCount: 12345
         },
         {
-            id: 2, name: '支付系统', secret: 'sk_xyz789123',
-            status: 'active', requestsPerDay: 8901,
-            createdAt: '2024-01-05 14:30:00',
-            description: '支付相关的验证码服务',
-            callbackUrl: 'https://pay.example.com/callback',
-            captchaTypes: ['slide', 'click']
+            id: 2,
+            name: '测试应用',
+            appId: 'app_002',
+            platform: 'android',
+            status: 'active',
+            createdAt: '2024-01-14 15:20:00',
+            requestCount: 8765
         },
         {
-            id: 3, name: '消息推送', secret: 'sk_mno456789',
-            status: 'inactive', requestsPerDay: 2345,
-            createdAt: '2024-01-10 09:15:00',
-            description: '消息推送服务',
-            callbackUrl: 'https://push.example.com/callback',
-            captchaTypes: ['slide']
+            id: 3,
+            name: 'Web应用',
+            appId: 'app_003',
+            platform: 'web',
+            status: 'pending',
+            createdAt: '2024-01-13 09:15:00',
+            requestCount: 2345
         },
         {
-            id: 4, name: '数据分析', secret: 'sk_pqr012345',
-            status: 'active', requestsPerDay: 5678,
-            createdAt: '2024-01-12 16:45:00',
-            description: '数据分析平台',
-            callbackUrl: 'https://data.example.com/callback',
-            captchaTypes: ['slide', 'rotate']
+            id: 4,
+            name: '企业应用',
+            appId: 'app_004',
+            platform: 'ios',
+            status: 'inactive',
+            createdAt: '2024-01-12 14:45:00',
+            requestCount: 5678
         },
         {
-            id: 5, name: '文件存储', secret: 'sk_stu678901',
-            status: 'suspended', requestsPerDay: 0,
-            createdAt: '2024-01-15 11:20:00',
-            description: '文件存储服务',
-            callbackUrl: 'https://storage.example.com/callback',
-            captchaTypes: ['click']
-        },
-        {
-            id: 6, name: '社交平台', secret: 'sk_vwx234567',
-            status: 'active', requestsPerDay: 15678,
-            createdAt: '2024-01-20 08:00:00',
-            description: '社交平台服务',
-            callbackUrl: 'https://social.example.com/callback',
-            captchaTypes: ['slide', 'click', 'rotate']
-        },
-        {
-            id: 7, name: '电商后台', secret: 'sk_yza890123',
-            status: 'active', requestsPerDay: 9876,
-            createdAt: '2024-02-01 10:30:00',
-            description: '电商后台管理',
-            callbackUrl: 'https://mall.example.com/callback',
-            captchaTypes: ['slide', 'click']
-        },
-        {
-            id: 8, name: '游戏中心', secret: 'sk_bcd456789',
-            status: 'active', requestsPerDay: 7654,
-            createdAt: '2024-02-10 14:00:00',
-            description: '游戏中心服务',
-            callbackUrl: 'https://game.example.com/callback',
-            captchaTypes: ['slide', 'rotate']
+            id: 5,
+            name: '移动应用',
+            appId: 'app_005',
+            platform: 'android',
+            status: 'active',
+            createdAt: '2024-01-11 11:30:00',
+            requestCount: 9876
         }
     ];
+
+    appList = mockApps;
+    totalApps = mockApps.length;
+
+    renderApplicationTable(appList);
+    renderPagination();
+    updateTotalCount();
 }
 
-function filterApps(apps, keyword, status) {
-    return apps.filter(app => {
-        if (status && app.status !== status) return false;
-        if (keyword) {
-            const kw = keyword.toLowerCase();
-            if (!app.name.toLowerCase().includes(kw) && !String(app.id).includes(kw)) {
-                return false;
+function renderApplicationTable(apps) {
+    const tbody = document.getElementById('appTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (apps.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-muted py-5">
+                    <i class="fas fa-inbox fa-3x mb-3"></i>
+                    <p class="mb-0">暂无应用数据</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    apps.forEach(app => {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-id', app.id);
+
+        const platformIcon = getPlatformIcon(app.platform);
+        const platformClass = getPlatformClass(app.platform);
+        const statusBadge = getStatusBadge(app.status);
+
+        tr.innerHTML = `
+            <td><input type="checkbox" class="app-checkbox" data-id="${app.id}"></td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="app-icon ${platformClass}">
+                        ${platformIcon}
+                    </div>
+                    <div>
+                        <div class="fw-medium">${app.name}</div>
+                    </div>
+                </div>
+            </td>
+            <td><code class="small">${app.appId}</code></td>
+            <td>${app.platform.toUpperCase()}</td>
+            <td>${statusBadge}</td>
+            <td><small class="text-muted">${app.createdAt}</small></td>
+            <td>${app.requestCount.toLocaleString()}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="viewAppDetail(${app.id})" title="查看详情">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="editApp(${app.id})" title="编辑">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="deleteApp(${app.id})" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+
+        const checkbox = tr.querySelector('.app-checkbox');
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                selectedApps.add(app.id.toString());
+            } else {
+                selectedApps.delete(app.id.toString());
             }
-        }
-        return true;
+            updateBulkActions();
+        });
+
+        tr.addEventListener('click', function(e) {
+            if (e.target.type !== 'checkbox') {
+                viewAppDetail(app.id);
+            }
+        });
     });
 }
 
-function sortApps(apps, sort) {
-    return apps.sort((a, b) => {
-        switch (sort) {
-            case 'requests':
-                return b.requestsPerDay - a.requestsPerDay;
-            case 'name':
-                return a.name.localeCompare(b.name);
-            default:
-                return new Date(b.createdAt) - new Date(a.createdAt);
-        }
-    });
+function getPlatformIcon(platform) {
+    const icons = {
+        ios: '<i class="fab fa-apple"></i>',
+        android: '<i class="fab fa-android"></i>',
+        web: '<i class="fas fa-globe"></i>'
+    };
+    return icons[platform] || '<i class="fas fa-mobile-alt"></i>';
 }
 
-function renderApplications() {
-    if (currentView === 'table') {
-        renderApplicationsTable();
-    } else {
-        renderApplicationsCards();
+function getPlatformClass(platform) {
+    const classes = {
+        ios: 'bg-dark',
+        android: 'bg-success',
+        web: 'bg-primary'
+    };
+    return classes[platform] || 'bg-secondary';
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        active: '<span class="badge bg-success">正常</span>',
+        inactive: '<span class="badge bg-secondary">停用</span>',
+        pending: '<span class="badge bg-warning text-dark">待审核</span>'
+    };
+    return badges[status] || '<span class="badge bg-secondary">未知</span>';
+}
+
+function renderPagination() {
+    const pagination = document.getElementById('pagination');
+    if (!pagination) return;
+
+    pagination.innerHTML = '';
+
+    const totalPages = Math.ceil(totalApps / pageSize);
+    if (totalPages <= 1) return;
+
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" aria-label="上一页">&laquo;</a>`;
+    if (currentPage > 1) {
+        prevLi.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentPage--;
+            loadApplications();
+        });
+    }
+    pagination.appendChild(prevLi);
+
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+        li.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentPage = i;
+            loadApplications();
+        });
+        pagination.appendChild(li);
+    }
+
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" aria-label="下一页">&raquo;</a>`;
+    if (currentPage < totalPages) {
+        nextLi.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentPage++;
+            loadApplications();
+        });
+    }
+    pagination.appendChild(nextLi);
+}
+
+function updateTotalCount() {
+    const totalCountEl = document.getElementById('totalCount');
+    if (totalCountEl) {
+        totalCountEl.textContent = totalApps;
     }
 }
 
-function renderApplicationsTable() {
-    const tbody = document.getElementById('appsTableBody');
-    if (!tbody) return;
-
-    document.getElementById('appsTableView')?.classList.remove('d-none');
-    document.getElementById('appsCardView')?.classList.add('d-none');
-
-    tbody.innerHTML = currentApps.map(app => `
-        <tr>
-            <td>${app.id}</td>
-            <td>
-                <strong>${escapeHtml(app.name)}</strong>
-                ${app.description ? `<br><small class="text-muted">${escapeHtml(app.description)}</small>` : ''}
-            </td>
-            <td>
-                <code class="secret-code">${maskSecret(app.secret)}</code>
-                <button class="btn btn-sm btn-link p-0 ms-1" onclick="copySecret('${app.secret}')" title="复制">
-                    <i class="fas fa-copy"></i>
-                </button>
-            </td>
-            <td><span class="badge ${getStatusBadgeClass(app.status)}">${getStatusText(app.status)}</span></td>
-            <td>${formatNumber(app.requestsPerDay)}</td>
-            <td><small class="text-muted">${app.createdAt}</small></td>
-            <td>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" onclick="viewAppDetail(${app.id})" title="详情"><i class="fas fa-eye"></i></button>
-                    <button class="btn btn-outline-info" onclick="viewAppStats(${app.id})" title="统计"><i class="fas fa-chart-line"></i></button>
-                    <button class="btn btn-outline-primary" onclick="editApp(${app.id})" title="编辑"><i class="fas fa-edit"></i></button>
-                    <button class="btn btn-outline-danger" onclick="deleteApp(${app.id})" title="删除"><i class="fas fa-trash"></i></button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+function updateBulkActions() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        const checkboxes = document.querySelectorAll('.app-checkbox');
+        selectAllCheckbox.checked = checkboxes.length > 0 && selectedApps.size === checkboxes.length;
+    }
 }
 
-function renderApplicationsCards() {
-    const container = document.getElementById('appsCardView');
-    if (!container) return;
+function openAppModal(app = null) {
+    const modal = new bootstrap.Modal(document.getElementById('appModal'));
+    const modalLabel = document.getElementById('appModalLabel');
+    const form = document.getElementById('appForm');
 
-    container.classList.remove('d-none');
-    document.getElementById('appsTableView')?.classList.add('d-none');
+    form.reset();
+    document.getElementById('appId').value = '';
 
-    container.innerHTML = `<div class="row g-3 p-3">${currentApps.map(app => `
-        <div class="col-md-6 col-lg-4">
-            <div class="card border">
-                <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-                    <strong>${escapeHtml(app.name)}</strong>
-                    <span class="badge ${getStatusBadgeClass(app.status)}">${getStatusText(app.status)}</span>
+    if (app) {
+        modalLabel.textContent = '编辑应用';
+        document.getElementById('appId').value = app.id;
+        document.getElementById('appName').value = app.name;
+        document.getElementById('appDescription').value = app.description || '';
+        document.getElementById('appPlatform').value = app.platform;
+        document.getElementById('appBundleId').value = app.bundleId || '';
+        document.getElementById('appStatus').value = app.status;
+    } else {
+        modalLabel.textContent = '新建应用';
+    }
+
+    modal.show();
+}
+
+async function saveApplication() {
+    const form = document.getElementById('appForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const appId = document.getElementById('appId').value;
+    const appData = {
+        name: document.getElementById('appName').value,
+        description: document.getElementById('appDescription').value,
+        platform: document.getElementById('appPlatform').value,
+        bundleId: document.getElementById('appBundleId').value,
+        status: document.getElementById('appStatus').value
+    };
+
+    try {
+        const url = appId ? `/admin/api/applications/${appId}` : '/admin/api/applications';
+        const method = appId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(appData)
+        });
+
+        if (!response.ok) throw new Error('保存应用失败');
+
+        const result = await response.json();
+
+        bootstrap.Modal.getInstance(document.getElementById('appModal')).hide();
+
+        Auth.showToast(appId ? '应用更新成功' : '应用创建成功', 'success');
+        loadApplications();
+    } catch (error) {
+        console.error('保存应用失败:', error);
+        Auth.showToast('保存失败，请重试', 'error');
+    }
+}
+
+async function viewAppDetail(appId) {
+    try {
+        const response = await fetch(`/admin/api/applications/${appId}`);
+        if (!response.ok) throw new Error('获取应用详情失败');
+
+        const app = await response.json();
+        showAppDetailModal(app);
+    } catch (error) {
+        console.error('获取应用详情失败:', error);
+        const app = appList.find(a => a.id === appId);
+        if (app) {
+            showAppDetailModal(app);
+        }
+    }
+}
+
+function showAppDetailModal(app) {
+    const modal = new bootstrap.Modal(document.getElementById('appDetailModal'));
+    const content = document.getElementById('appDetailContent');
+
+    const statusClass = app.status === 'active' ? 'success' : app.status === 'inactive' ? 'secondary' : 'warning';
+    const statusText = app.status === 'active' ? '正常' : app.status === 'inactive' ? '停用' : '待审核';
+
+    content.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="text-muted small">应用名称</label>
+                    <div class="fw-medium">${app.name}</div>
                 </div>
-                <div class="card-body py-2">
-                    <p class="card-text small text-muted mb-2">${escapeHtml(app.description || '暂无描述')}</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted">ID: ${app.id}</small>
-                        <small class="text-muted">${formatNumber(app.requestsPerDay)}/日</small>
+                <div class="mb-3">
+                    <label class="text-muted small">AppID</label>
+                    <div><code>${app.appId}</code></div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">平台</label>
+                    <div>${app.platform.toUpperCase()}</div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">状态</label>
+                    <div><span class="badge bg-${statusClass}">${statusText}</span></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="text-muted small">创建时间</label>
+                    <div>${app.createdAt}</div>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small">请求量</label>
+                    <div class="fw-medium">${(app.requestCount || 0).toLocaleString()}</div>
+                </div>
+                ${app.bundleId ? `
+                <div class="mb-3">
+                    <label class="text-muted small">Bundle ID</label>
+                    <div><code>${app.bundleId}</code></div>
+                </div>
+                ` : ''}
+                ${app.description ? `
+                <div class="mb-3">
+                    <label class="text-muted small">应用描述</label>
+                    <div>${app.description}</div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        <hr>
+        <div class="row">
+            <div class="col-12">
+                <h6>统计信息</h6>
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <div class="h4 mb-1">${(app.requestCount || 0).toLocaleString()}</div>
+                            <small class="text-muted">总请求量</small>
+                        </div>
                     </div>
-                </div>
-                <div class="card-footer bg-transparent py-2">
-                    <div class="btn-group btn-group-sm w-100">
-                        <button class="btn btn-outline-secondary" onclick="viewAppDetail(${app.id})"><i class="fas fa-eye me-1"></i>详情</button>
-                        <button class="btn btn-outline-info" onclick="viewAppStats(${app.id})"><i class="fas fa-chart-line me-1"></i>统计</button>
-                        <button class="btn btn-outline-primary" onclick="editApp(${app.id})"><i class="fas fa-edit me-1"></i>编辑</button>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <div class="h4 mb-1">${((app.successRate || 98.5)).toFixed(1)}%</div>
+                            <small class="text-muted">成功率</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <div class="h4 mb-1">${(app.avgLatency || 45)}ms</div>
+                            <small class="text-muted">平均延迟</small>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    `).join('')}</div>`;
-}
+    `;
 
-function switchView(view) {
-    currentView = view;
-    renderApplications();
-}
-
-function copySecret(secret) {
-    navigator.clipboard.writeText(secret).then(() => {
-        showToast('密钥已复制到剪贴板', 'success');
-    }).catch(() => {
-        showToast('复制失败', 'danger');
-    });
-}
-
-function renderAppsCount(total) {
-    const countEl = document.getElementById('appsCount');
-    if (countEl) countEl.textContent = total;
-}
-
-function renderPagination(total) {
-    const pagination = document.getElementById('pagination');
-    if (!pagination) return;
-
-    const totalPages = Math.ceil(total / pageSize);
-    if (totalPages <= 1) {
-        pagination.innerHTML = '';
-        return;
-    }
-
-    let html = '<div class="d-flex justify-content-between align-items-center">';
-    html += `<span class="text-muted">第 ${currentPage} / ${totalPages} 页，共 ${total} 条</span>`;
-    html += '<div class="btn-group btn-group-sm">';
-    html += `<button class="btn btn-outline-secondary" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
-
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, currentPage + 2);
-
-    if (startPage > 1) {
-        html += `<button class="btn btn-outline-secondary" onclick="changePage(1)">1</button>`;
-        if (startPage > 2) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        html += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-outline-secondary'}" onclick="changePage(${i})">${i}</button>`;
-    }
-
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
-        html += `<button class="btn btn-outline-secondary" onclick="changePage(${totalPages})">${totalPages}</button>`;
-    }
-
-    html += `<button class="btn btn-outline-secondary" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
-    html += '</div></div>';
-
-    pagination.innerHTML = html;
-}
-
-function changePage(page) {
-    currentPage = page;
-    loadApplications();
-}
-
-function openAppModal(app = null) {
-    const modal = document.getElementById('appModal');
-    const title = document.getElementById('modalTitle');
-
-    if (app) {
-        title.textContent = '编辑应用';
-        document.getElementById('appId').value = app.id;
-        document.getElementById('appName').value = app.name;
-        document.getElementById('appDescription').value = app.description || '';
-        document.getElementById('appCallbackUrl').value = app.callbackUrl || '';
-        document.getElementById('appStatusSelect').value = app.status;
-
-        document.getElementById('captchaSlide').checked = app.captchaTypes?.includes('slide') || false;
-        document.getElementById('captchaClick').checked = app.captchaTypes?.includes('click') || false;
-        document.getElementById('captchaRotate').checked = app.captchaTypes?.includes('rotate') || false;
-    } else {
-        title.textContent = '创建应用';
-        document.getElementById('appId').value = '';
-        document.getElementById('appForm')?.reset();
-        document.getElementById('captchaSlide').checked = true;
-    }
-
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
-}
-
-async function handleAppSubmit(e) {
-    e.preventDefault();
-
-    const appId = document.getElementById('appId').value;
-    const captchaTypes = [];
-    if (document.getElementById('captchaSlide').checked) captchaTypes.push('slide');
-    if (document.getElementById('captchaClick').checked) captchaTypes.push('click');
-    if (document.getElementById('captchaRotate').checked) captchaTypes.push('rotate');
-
-    const appData = {
-        name: document.getElementById('appName').value,
-        description: document.getElementById('appDescription').value,
-        callback_url: document.getElementById('appCallbackUrl').value,
-        status: document.getElementById('appStatusSelect').value,
-        captcha_types: captchaTypes
-    };
-
-    try {
-        if (appId) {
-            await auth.request(`/admin/applications/${appId}`, {
-                method: 'PUT',
-                body: JSON.stringify(appData)
-            });
-            showToast('应用更新成功', 'success');
-        } else {
-            await auth.request('/admin/applications', {
-                method: 'POST',
-                body: JSON.stringify(appData)
-            });
-            showToast('应用创建成功', 'success');
-        }
-
-        bootstrap.Modal.getInstance(document.getElementById('appModal'))?.hide();
-        loadApplications();
-        loadApplicationsSummary();
-    } catch (error) {
-        showToast('保存应用失败', 'danger');
-    }
+    modal.show();
 }
 
 function editApp(appId) {
-    const app = currentApps.find(a => a.id === appId);
+    const app = appList.find(a => a.id === appId);
     if (app) {
         openAppModal(app);
     }
 }
 
-async function deleteApp(appId) {
-    if (!confirm('确定要删除这个应用吗？此操作不可恢复。')) return;
+function deleteApp(appId) {
+    Auth.showConfirmDialog(
+        '删除应用',
+        '确定要删除该应用吗？此操作不可恢复。',
+        async function() {
+            try {
+                const response = await fetch(`/admin/api/applications/${appId}`, {
+                    method: 'DELETE'
+                });
 
-    try {
-        await auth.request(`/admin/applications/${appId}`, {
-            method: 'DELETE'
-        });
-        showToast('应用删除成功', 'success');
-        loadApplications();
-        loadApplicationsSummary();
-    } catch (error) {
-        showToast('删除应用失败', 'danger');
-    }
-}
+                if (!response.ok) throw new Error('删除应用失败');
 
-function viewAppDetail(appId) {
-    const app = currentApps.find(a => a.id === appId);
-    if (!app) return;
-
-    const modal = document.getElementById('appDetailModal');
-    const content = document.getElementById('appDetailContent');
-
-    content.innerHTML = `
-        <div class="row">
-            <div class="col-md-6">
-                <table class="table table-borderless">
-                    <tr><td class="text-muted">应用ID</td><td>${app.id}</td></tr>
-                    <tr><td class="text-muted">应用名称</td><td><strong>${escapeHtml(app.name)}</strong></td></tr>
-                    <tr><td class="text-muted">应用密钥</td><td><code>${app.secret}</code> <button class="btn btn-sm btn-link p-0" onclick="copySecret('${app.secret}')"><i class="fas fa-copy"></i></button></td></tr>
-                    <tr><td class="text-muted">状态</td><td><span class="badge ${getStatusBadgeClass(app.status)}">${getStatusText(app.status)}</span></td></tr>
-                    <tr><td class="text-muted">创建时间</td><td>${app.createdAt}</td></tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <table class="table table-borderless">
-                    <tr><td class="text-muted">描述</td><td>${escapeHtml(app.description || '-')}</td></tr>
-                    <tr><td class="text-muted">回调URL</td><td><small>${escapeHtml(app.callbackUrl || '-')}</small></td></tr>
-                    <tr><td class="text-muted">验证码类型</td><td>${app.captchaTypes?.map(t => `<span class="badge bg-info me-1">${getCaptchaTypeText(t)}</span>`).join('') || '-'}</td></tr>
-                    <tr><td class="text-muted">日请求量</td><td class="text-primary fw-bold">${formatNumber(app.requestsPerDay)}</td></tr>
-                </table>
-            </div>
-        </div>
-        <div class="alert alert-info mt-3">
-            <i class="fas fa-key me-1"></i>
-            请妥善保管应用密钥，泄露后可能导致安全问题。
-        </div>
-    `;
-
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
-}
-
-function viewAppStats(appId) {
-    const app = currentApps.find(a => a.id === appId);
-    if (!app) return;
-
-    const modal = document.getElementById('appStatsModal');
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
-
-    document.getElementById('modalTodayRequests').textContent = formatNumber(app.requestsPerDay);
-    document.getElementById('modalSuccessRate').textContent = '98.5%';
-    document.getElementById('modalAvgResponse').textContent = '125ms';
-    document.getElementById('modalActiveUsers').textContent = formatNumber(Math.floor(app.requestsPerDay * 0.8));
-
-    setTimeout(() => initAppStatsChart(app), 100);
-}
-
-function initAppStatsChart(app) {
-    const ctx = document.getElementById('appStatsChart');
-    if (!ctx) return;
-
-    if (appStatsChart) {
-        appStatsChart.destroy();
-    }
-
-    const labels = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000);
-        return `${date.getMonth() + 1}/${date.getDate()}`;
-    });
-
-    const data = labels.map(() => Math.floor(app.requestsPerDay * (0.8 + Math.random() * 0.4)));
-
-    appStatsChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: '请求量',
-                data: data,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: { beginAtZero: true }
+                Auth.showToast('应用已删除', 'success');
+                loadApplications();
+            } catch (error) {
+                console.error('删除应用失败:', error);
+                Auth.showToast('删除失败，请重试', 'error');
             }
         }
-    });
+    );
 }
 
-function getStatusBadgeClass(status) {
-    const map = {
-        'active': 'bg-success',
-        'inactive': 'bg-secondary',
-        'suspended': 'bg-warning'
-    };
-    return map[status] || 'bg-secondary';
-}
-
-function getStatusText(status) {
-    const map = {
-        'active': '活跃',
-        'inactive': '停用',
-        'suspended': '暂停'
-    };
-    return map[status] || status;
-}
-
-function getCaptchaTypeText(type) {
-    const map = {
-        'slide': '滑块',
-        'click': '点选',
-        'rotate': '旋转'
-    };
-    return map[type] || type;
-}
-
-function maskSecret(secret) {
-    if (!secret) return '';
-    return secret.substring(0, 4) + '...' + secret.substring(secret.length - 4);
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer') || createToastContainer();
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type} border-0`;
-    toast.setAttribute('role', 'alert');
-    toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">${escapeHtml(message)}</div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
-    `;
-    container.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-    toast.addEventListener('hidden.bs.toast', () => toast.remove());
-}
-
-function createToastContainer() {
-    const container = document.createElement('div');
-    container.id = 'toastContainer';
-    container.className = 'toast-container position-fixed top-0 end-0 p-3';
-    container.style.zIndex = '9999';
-    document.body.appendChild(container);
-    return container;
-}
-
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
+window.Applications = {
+    loadApplications: loadApplications,
+    viewAppDetail: viewAppDetail,
+    editApp: editApp,
+    deleteApp: deleteApp
+};

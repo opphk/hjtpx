@@ -371,7 +371,8 @@ class Captcha {
                 startTime: Date.now(),
                 endTime: 0,
                 distance: 0,
-                maxSpeed: 0
+                maxSpeed: 0,
+                avgSpeed: 0
             };
             this.trajectoryData = [];
 
@@ -381,6 +382,8 @@ class Captcha {
             container.classList.add('is-dragging');
             this.elements.sliderText.textContent = this.i18n.t('sliding');
             this.announceToScreenReader(this.i18n.t('sliderDragStarted'), 'assertive');
+            
+            this.addHapticFeedback();
         };
 
         const drag = (e) => {
@@ -406,7 +409,8 @@ class Captcha {
                 x: deltaX,
                 y: this.sliderState.puzzleY,
                 time: currentTime,
-                speed: speed
+                speed: speed,
+                dt: dt
             });
 
             this.speedData.distance += distance;
@@ -418,6 +422,10 @@ class Captcha {
 
             this.animateSliderPosition(deltaX);
             this.updateSliderAccessibility();
+            
+            if (Math.abs(deltaX - prevX) > 0) {
+                this.addMicroFeedback();
+            }
         };
 
         const endDrag = (e) => {
@@ -425,6 +433,12 @@ class Captcha {
 
             this.sliderState.isDragging = false;
             this.speedData.endTime = Date.now();
+            
+            if (this.speedData.points.length > 0) {
+                const totalTime = (this.speedData.endTime - this.speedData.startTime) / 1000;
+                this.speedData.avgSpeed = totalTime > 0 ? this.speedData.distance / totalTime : 0;
+            }
+            
             button.classList.remove('dragging');
             this.elements.sliderContainer.classList.remove('is-dragging');
 
@@ -447,14 +461,61 @@ class Captcha {
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
     }
+    
+    addHapticFeedback() {
+        if ('vibrate' in navigator) {
+            navigator.vibrate(10);
+        }
+    }
+    
+    addMicroFeedback() {
+        const progress = this.sliderState.currentX / this.sliderState.maxX;
+        if (progress > 0.8 && progress < 0.95) {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(5);
+            }
+        }
+    }
 
     addTrajectoryPoint(x, y, event) {
+        const timestamp = Date.now();
+        const relativeTime = timestamp - this.speedData.startTime;
+        
         this.trajectoryData.push({
             x: Math.round(x),
             y: Math.round(y),
-            timestamp: Date.now(),
-            event: event
+            timestamp: timestamp,
+            relative_time: relativeTime,
+            event: event,
+            acceleration: this.calculateAcceleration(),
+            velocity_x: this.calculateVelocityX()
         });
+    }
+    
+    calculateAcceleration() {
+        if (this.speedData.points.length < 3) return 0;
+        
+        const points = this.speedData.points;
+        const lastPoint = points[points.length - 1];
+        const prevPoint = points[points.length - 2];
+        
+        if (!lastPoint.dt || lastPoint.dt === 0) return 0;
+        
+        const currentAcceleration = (lastPoint.speed - prevPoint.speed) / (lastPoint.dt / 1000);
+        return Math.abs(currentAcceleration);
+    }
+    
+    calculateVelocityX() {
+        if (this.speedData.points.length < 2) return 0;
+        
+        const points = this.speedData.points;
+        const lastPoint = points[points.length - 1];
+        const prevPoint = points[points.length - 2];
+        
+        if (!lastPoint.dt || lastPoint.dt === 0) return 0;
+        
+        const dx = lastPoint.x - prevPoint.x;
+        return dx / (lastPoint.dt / 1000);
     }
 
     animateSliderPosition(x) {
@@ -707,10 +768,16 @@ class Captcha {
         this.animateSkeletonIn();
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
             const response = await fetch(`${this.options.apiBase}/captcha/slider`, {
                 method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -730,6 +797,9 @@ class Captcha {
                 this.loadDemoSlider();
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                this.showResult(this.i18n.t('loadTimeout'), 'error');
+            }
             this.loadDemoSlider();
         }
     }
@@ -739,15 +809,25 @@ class Captcha {
         if (skeleton) {
             skeleton.classList.add('active');
             skeleton.style.display = 'block';
+            skeleton.style.opacity = '0';
+            
+            requestAnimationFrame(() => {
+                skeleton.style.transition = 'opacity 0.3s ease';
+                skeleton.style.opacity = '1';
+            });
         }
     }
 
     animateSkeletonOut() {
         const skeleton = this.elements.sliderSkeleton;
         if (skeleton) {
-            skeleton.classList.remove('active');
+            skeleton.style.transition = 'opacity 0.3s ease';
+            skeleton.style.opacity = '0';
+            
             setTimeout(() => {
+                skeleton.classList.remove('active');
                 skeleton.style.display = 'none';
+                skeleton.style.opacity = '1';
             }, 300);
         }
     }
@@ -854,10 +934,16 @@ class Captcha {
         this.animateClickSkeletonIn();
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
             const response = await fetch(`${this.options.apiBase}/captcha/click`, {
                 method: 'GET',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -872,6 +958,9 @@ class Captcha {
                 this.loadDemoClick();
             }
         } catch (error) {
+            if (error.name === 'AbortError') {
+                this.showResult(this.i18n.t('loadTimeout'), 'error');
+            }
             this.loadDemoClick();
         }
     }
@@ -964,24 +1053,42 @@ class Captcha {
         };
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
             const response = await fetch(`${this.options.apiBase}/captcha/verify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
 
             let success = false;
             if (response.ok) {
                 const data = await response.json();
                 success = data.success;
+                
+                if (data.error) {
+                    console.warn('Verify API warning:', data.error);
+                }
             } else {
                 success = this.simulateSliderVerify();
             }
 
             this.handleVerificationResult(success);
         } catch (error) {
-            const success = this.simulateSliderVerify();
-            this.handleVerificationResult(success);
+            if (error.name === 'AbortError') {
+                this.showResult(this.i18n.t('verifyTimeout'), 'error');
+                setTimeout(() => this.refresh(), 2000);
+            } else {
+                const success = this.simulateSliderVerify();
+                this.handleVerificationResult(success);
+            }
         } finally {
             setTimeout(() => {
                 this.hideLoading('slider');
@@ -1005,6 +1112,7 @@ class Captcha {
             this.showResult(this.i18n.t('verifySuccess'), 'success');
             this.announceToScreenReader(this.i18n.t('verifySuccess'), 'assertive');
             this.disableSlider();
+            this.showSuccessOverlay();
             if (this.options.onSuccess) {
                 this.options.onSuccess({ type: 'slider', session_id: this.sessionId });
             }
@@ -1014,11 +1122,78 @@ class Captcha {
             this.playErrorAnimation();
             this.showResult(this.i18n.t('verifyFailed'), 'error');
             this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
-            setTimeout(() => this.refresh(), 1500);
+            this.showErrorOverlay();
+            setTimeout(() => this.refresh(), 2000);
             if (this.options.onError) {
                 this.options.onError({ type: 'slider', error: this.i18n.t('verifyFailed') });
             }
         }
+    }
+    
+    showSuccessOverlay() {
+        const overlay = document.createElement('div');
+        overlay.className = 'captcha-success-overlay';
+        overlay.innerHTML = `
+            <div class="success-overlay-content">
+                <div class="success-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="success-text">${this.i18n.t('verifySuccess')}</div>
+            </div>
+        `;
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(82, 196, 26, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeInScale 0.3s ease;
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        setTimeout(() => {
+            overlay.style.animation = 'fadeOutScale 0.3s ease forwards';
+            setTimeout(() => overlay.remove(), 300);
+        }, 1000);
+    }
+    
+    showErrorOverlay() {
+        const overlay = document.createElement('div');
+        overlay.className = 'captcha-error-overlay';
+        overlay.innerHTML = `
+            <div class="error-overlay-content">
+                <div class="error-icon">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="error-text">${this.i18n.t('verifyFailed')}</div>
+            </div>
+        `;
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 77, 79, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: shakeOverlay 0.5s ease;
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        setTimeout(() => {
+            overlay.style.animation = 'fadeOutScale 0.3s ease forwards';
+            setTimeout(() => overlay.remove(), 300);
+        }, 1000);
     }
 
     disableSlider() {
@@ -1181,16 +1356,29 @@ class Captcha {
         };
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
             const response = await fetch(`${this.options.apiBase}/captcha/verify`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
 
             let success = false;
             if (response.ok) {
                 const data = await response.json();
                 success = data.success;
+                
+                if (data.error) {
+                    console.warn('Verify API warning:', data.error);
+                }
             } else {
                 success = this.simulateClickVerify();
             }
@@ -1206,23 +1394,28 @@ class Captcha {
                 this.showResult(this.i18n.t('verifyFailed'), 'error');
                 this.playClickErrorAnimation();
                 this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
-                setTimeout(() => this.refresh(), 1500);
+                setTimeout(() => this.refresh(), 2000);
                 if (this.options.onError) {
                     this.options.onError({ type: 'click', error: this.i18n.t('verifyFailed') });
                 }
             }
         } catch (error) {
-            const success = this.simulateClickVerify();
-            if (success) {
-                this.showResult(this.i18n.t('verifySuccess'), 'success');
-                this.playClickSuccessAnimation();
-                if (this.options.onSuccess) {
-                    this.options.onSuccess({ type: 'click', session_id: this.sessionId });
-                }
+            if (error.name === 'AbortError') {
+                this.showResult(this.i18n.t('verifyTimeout'), 'error');
+                setTimeout(() => this.refresh(), 2000);
             } else {
-                this.showResult(this.i18n.t('verifyFailed'), 'error');
-                this.playClickErrorAnimation();
-                setTimeout(() => this.refresh(), 1500);
+                const success = this.simulateClickVerify();
+                if (success) {
+                    this.showResult(this.i18n.t('verifySuccess'), 'success');
+                    this.playClickSuccessAnimation();
+                    if (this.options.onSuccess) {
+                        this.options.onSuccess({ type: 'click', session_id: this.sessionId });
+                    }
+                } else {
+                    this.showResult(this.i18n.t('verifyFailed'), 'error');
+                    this.playClickErrorAnimation();
+                    setTimeout(() => this.refresh(), 2000);
+                }
             }
         } finally {
             setTimeout(() => {
@@ -1479,6 +1672,7 @@ class CaptchaI18n {
                 refreshing: '正在刷新验证码',
                 loadedSuccess: '验证码加载成功',
                 loadFailed: '加载失败，请重试',
+                loadTimeout: '加载超时，请重试',
                 sliding: '滑动中...',
                 sliderDragStarted: '开始拖动滑块',
                 sliderProgress: '进度',
@@ -1493,6 +1687,7 @@ class CaptchaI18n {
                 switchedTo: '已切换到',
                 verifySuccess: '验证成功!',
                 verifyFailed: '验证失败，请重试',
+                verifyTimeout: '验证超时，请重试',
                 verifying: '验证中...',
                 secureConnection: '安全连接',
                 securityBadge: '安全验证保护',
@@ -1526,6 +1721,7 @@ class CaptchaI18n {
                 refreshing: 'Refreshing captcha',
                 loadedSuccess: 'Captcha loaded successfully',
                 loadFailed: 'Load failed, please retry',
+                loadTimeout: 'Load timeout, please retry',
                 sliding: 'Sliding...',
                 sliderDragStarted: 'Started dragging slider',
                 sliderProgress: 'Progress',
@@ -1540,6 +1736,7 @@ class CaptchaI18n {
                 switchedTo: 'Switched to',
                 verifySuccess: 'Verification successful!',
                 verifyFailed: 'Verification failed, please retry',
+                verifyTimeout: 'Verification timeout, please retry',
                 verifying: 'Verifying...',
                 secureConnection: 'Secure connection',
                 securityBadge: 'Security protection',

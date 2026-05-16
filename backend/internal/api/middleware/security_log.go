@@ -338,7 +338,7 @@ func (l *SecurityLog) writeConsole(event SecurityEvent) {
 	resetCode := "\033[0m"
 	timestamp := event.Timestamp.Format("2006/01/02 15:04:05")
 
-	message := fmt.Sprintf("%s[SECURITY %s] %s | %s | %s | %s | %s | %s%s",
+	message := fmt.Sprintf("%s[SECURITY %s] %s | %s | %s | %s | %s%s",
 		colorCode,
 		levelStr,
 		timestamp,

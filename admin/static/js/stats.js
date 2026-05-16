@@ -1,532 +1,495 @@
-let userGrowthChart, requestTrendChart, requestTypeChart, appDistributionChart, errorRateChart, geoDistributionChart;
-let currentChartType = 'line';
 
-document.addEventListener('DOMContentLoaded', () => {
-    initAllCharts();
-    setupEventListeners();
-    loadStatsData();
+let requestTrendChart = null;
+let requestDistributionChart = null;
+let appRankingChart = null;
+let errorDistributionChart = null;
+let currentPeriod = 'day';
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (!Auth.requireAuth()) {
+        return;
+    }
+
+    const user = Auth.getCurrentUser();
+    if (user && user.username) {
+        Auth.updateUserDisplay(user.username);
+    }
+
+    initCharts();
+    loadStatistics();
+    initEventListeners();
 });
 
-function setupEventListeners() {
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', loadStatsData);
-    }
-
-    const applyFilterBtn = document.getElementById('applyFilterBtn');
-    if (applyFilterBtn) {
-        applyFilterBtn.addEventListener('click', loadStatsData);
-    }
-
-    const dateRange = document.getElementById('dateRange');
-    if (dateRange) {
-        dateRange.addEventListener('change', loadStatsData);
-    }
-
-    const comparePeriod = document.getElementById('comparePeriod');
-    if (comparePeriod) {
-        comparePeriod.addEventListener('change', loadStatsData);
-    }
-
-    const chartTypeButtons = document.querySelectorAll('[data-chart-type]');
-    chartTypeButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            chartTypeButtons.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            const type = e.target.dataset.chartType || e.target.closest('button').dataset.chartType;
-            if (type) {
-                switchChartType(type);
-            }
+function initEventListeners() {
+    const periodButtons = document.querySelectorAll('.period-selector button');
+    periodButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            periodButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            currentPeriod = this.getAttribute('data-period');
+            loadRequestTrendData(currentPeriod);
         });
     });
 
-    const exportBtn = document.getElementById('exportStatsBtn');
-    if (exportBtn) {
-        exportBtn.addEventListener('click', exportStatsReport);
+    const refreshBtn = document.getElementById('refreshStatsBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            loadStatistics();
+            Auth.showToast('统计数据已刷新', 'success');
+        });
     }
 }
 
-function switchChartType(type) {
-    currentChartType = type;
-    if (requestTrendChart) {
-        requestTrendChart.config.type = type;
-        requestTrendChart.update();
-    }
-}
-
-async function loadStatsData() {
-    const dateRange = document.getElementById('dateRange')?.value || '30d';
-    const comparePeriod = document.getElementById('comparePeriod')?.value || '';
-    const mockData = getMockStatsData(dateRange);
-
-    try {
-        const result = await auth.request(`/admin/stats?range=${dateRange}&compare=${comparePeriod}`);
-        if (result.code === 0) {
-            updateAllStats(result.data);
-        } else {
-            updateAllStats(mockData);
-        }
-    } catch (error) {
-        updateAllStats(mockData);
-    }
-}
-
-function getMockStatsData(range) {
-    const labels = generateLabels(range);
-    const dataCount = labels.length;
-
-    return {
-        summary: {
-            totalRequests: 8234567,
-            avgResponseTime: 125,
-            successRate: 98.5,
-            activeUsers: 12456
-        },
-        changes: {
-            requests: 23.5,
-            responseTime: -12.3,
-            successRate: 2.1,
-            activeUsers: 15.8
-        },
-        requestTrend: {
-            labels: labels,
-            data: generateRandomData(dataCount, 5000, 20000)
-        },
-        requestType: {
-            labels: ['滑块验证', '点选验证', '旋转验证', '拼图验证', '文字识别'],
-            data: [45, 25, 15, 10, 5]
-        },
-        userGrowth: {
-            labels: labels,
-            data: generateGrowthData(dataCount, 8000, 15000)
-        },
-        appDistribution: {
-            labels: ['Web应用', '移动应用', '桌面应用', 'API服务', '其他'],
-            data: [42, 28, 15, 10, 5]
-        },
-        errorRate: {
-            labels: labels,
-            data: generateRandomData(dataCount, 0.5, 3.5)
-        },
-        geoDistribution: {
-            labels: ['北京', '上海', '广东', '浙江', '江苏', '四川', '其他'],
-            data: [25, 20, 18, 12, 10, 8, 7]
-        }
-    };
-}
-
-function generateLabels(range) {
-    const count = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 12 : 12;
-    const labels = [];
-
-    if (range === '7d') {
-        for (let i = 6; i >= 0; i--) {
-            const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-            labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
-        }
-    } else if (range === '30d') {
-        for (let i = 29; i >= 0; i--) {
-            const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-            labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
-        }
-    } else if (range === '90d') {
-        for (let i = 0; i < 12; i++) {
-            labels.push(`第${i + 1}周`);
-        }
-    } else {
-        for (let i = 11; i >= 0; i--) {
-            const date = new Date(Date.now() - i * 30 * 24 * 60 * 60 * 1000);
-            labels.push(`${date.getFullYear()}/${date.getMonth() + 1}`);
-        }
-    }
-
-    return labels;
-}
-
-function generateRandomData(count, min, max) {
-    return Array.from({ length: count }, () => Math.floor(Math.random() * (max - min) + min));
-}
-
-function generateGrowthData(count, start, end) {
-    const step = (end - start) / count;
-    return Array.from({ length: count }, (_, i) => Math.floor(start + step * i + Math.random() * 100));
-}
-
-function updateAllStats(data) {
-    updateSummaryCards(data.summary, data.changes);
-    updateCharts(data);
-}
-
-function updateSummaryCards(summary, changes) {
-    const totalRequestsEl = document.getElementById('statTotalRequests');
-    const avgResponseEl = document.getElementById('statAvgResponse');
-    const successRateEl = document.getElementById('statSuccessRate');
-    const activeUsersEl = document.getElementById('statActiveUsers');
-
-    if (totalRequestsEl) totalRequestsEl.textContent = formatLargeNumber(summary.totalRequests);
-    if (avgResponseEl) avgResponseEl.textContent = `${summary.avgResponseTime}ms`;
-    if (successRateEl) successRateEl.textContent = `${summary.successRate.toFixed(1)}%`;
-    if (activeUsersEl) activeUsersEl.textContent = formatLargeNumber(summary.activeUsers);
-
-    updateChangeIndicator('statRequestsChange', changes.requests);
-    updateChangeIndicator('statResponseChange', changes.responseTime, true);
-    updateChangeIndicator('statSuccessChange', changes.successRate);
-    updateChangeIndicator('statUsersChange', changes.activeUsers);
-}
-
-function updateChangeIndicator(elementId, value, isInverse = false) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-
-    const isPositive = value >= 0;
-    const isGood = isInverse ? !isPositive : isPositive;
-    const displayValue = Math.abs(value).toFixed(1);
-
-    el.className = isGood ? 'text-success' : 'text-danger';
-    el.innerHTML = `<i class="fas fa-arrow-${isPositive ? 'up' : 'down'} me-1"></i>${isPositive ? '+' : '-'}${displayValue}%`;
-}
-
-function formatLargeNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
-}
-
-function updateCharts(data) {
-    updateRequestTrendChart(data.requestTrend);
-    updateRequestTypeChart(data.requestType);
-    updateUserGrowthChart(data.userGrowth);
-    updateAppDistributionChart(data.appDistribution);
-    updateErrorRateChart(data.errorRate);
-    updateGeoDistributionChart(data.geoDistribution);
-}
-
-function initAllCharts() {
+function initCharts() {
     initRequestTrendChart();
-    initRequestTypeChart();
-    initUserGrowthChart();
-    initAppDistributionChart();
-    initErrorRateChart();
-    initGeoDistributionChart();
+    initRequestDistributionChart();
+    initAppRankingChart();
+    initErrorDistributionChart();
 }
 
 function initRequestTrendChart() {
     const ctx = document.getElementById('requestTrendChart');
     if (!ctx) return;
 
+    if (requestTrendChart) {
+        requestTrendChart.destroy();
+    }
+
     requestTrendChart = new Chart(ctx, {
         type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: '成功请求',
+                    data: [],
+                    borderColor: 'rgb(34, 197, 94)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: '失败请求',
+                    data: [],
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        drawBorder: false,
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false,
+                    }
+                }
+            }
+        }
+    });
+}
+
+function initRequestDistributionChart() {
+    const ctx = document.getElementById('requestDistributionChart');
+    if (!ctx) return;
+
+    if (requestDistributionChart) {
+        requestDistributionChart.destroy();
+    }
+
+    requestDistributionChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['iOS', 'Android', 'Web', '其他'],
+            datasets: [{
+                data: [300, 250, 200, 50],
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(34, 197, 94, 0.8)',
+                    'rgba(168, 85, 247, 0.8)',
+                    'rgba(107, 114, 128, 0.8)'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                }
+            }
+        }
+    });
+}
+
+function initAppRankingChart() {
+    const ctx = document.getElementById('appRankingChart');
+    if (!ctx) return;
+
+    if (appRankingChart) {
+        appRankingChart.destroy();
+    }
+
+    appRankingChart = new Chart(ctx, {
+        type: 'bar',
         data: {
             labels: [],
             datasets: [{
                 label: '请求量',
                 data: [],
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2,
-                pointHoverRadius: 6
-            }]
-        },
-        options: getChartOptions('line')
-    });
-}
-
-function initRequestTypeChart() {
-    const ctx = document.getElementById('requestTypeChart');
-    if (!ctx) return;
-
-    requestTypeChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [],
-            datasets: [{
-                data: [],
-                backgroundColor: [
-                    '#3b82f6',
-                    '#10b981',
-                    '#f59e0b',
-                    '#ef4444',
-                    '#8b5cf6'
-                ],
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: getChartOptions('doughnut')
-    });
-}
-
-function initUserGrowthChart() {
-    const ctx = document.getElementById('userGrowthChart');
-    if (!ctx) return;
-
-    userGrowthChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '用户增长',
-                data: [],
-                backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                borderColor: '#10b981',
-                borderWidth: 1,
-                borderRadius: 4
-            }]
-        },
-        options: getChartOptions('bar')
-    });
-}
-
-function initAppDistributionChart() {
-    const ctx = document.getElementById('appDistributionChart');
-    if (!ctx) return;
-
-    appDistributionChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: [],
-            datasets: [{
-                data: [],
-                backgroundColor: [
-                    '#3b82f6',
-                    '#10b981',
-                    '#f59e0b',
-                    '#ef4444',
-                    '#8b5cf6'
-                ],
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: getChartOptions('pie')
-    });
-}
-
-function initErrorRateChart() {
-    const ctx = document.getElementById('errorRateChart');
-    if (!ctx) return;
-
-    errorRateChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '错误率 (%)',
-                data: [],
-                borderColor: '#ef4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2,
-                pointBackgroundColor: '#ef4444'
+                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                borderColor: 'rgb(59, 130, 246)',
+                borderWidth: 1
             }]
         },
         options: {
-            ...getChartOptions('line'),
-            scales: {
-                ...getChartOptions('line').scales,
-                y: {
-                    ...getChartOptions('line').scales.y,
-                    beginAtZero: true,
-                    max: 10
-                }
-            }
-        }
-    });
-}
-
-function initGeoDistributionChart() {
-    const ctx = document.getElementById('geoDistributionChart');
-    if (!ctx) return;
-
-    geoDistributionChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '请求占比 (%)',
-                data: [],
-                backgroundColor: [
-                    'rgba(59, 130, 246, 0.8)',
-                    'rgba(16, 185, 129, 0.8)',
-                    'rgba(245, 158, 11, 0.8)',
-                    'rgba(239, 68, 68, 0.8)',
-                    'rgba(139, 92, 246, 0.8)',
-                    'rgba(236, 72, 153, 0.8)',
-                    'rgba(107, 114, 128, 0.8)'
-                ],
-                borderWidth: 0,
-                borderRadius: 4
-            }]
-        },
-        options: getChartOptions('bar')
-    });
-}
-
-function getChartOptions(type) {
-    const baseOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                display: type !== 'line' && type !== 'bar',
-                position: 'bottom',
-                labels: {
-                    padding: 15,
-                    usePointStyle: true,
-                    pointStyle: 'circle'
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: {
+                    display: false,
                 }
             },
-            tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                padding: 12,
-                titleFont: { size: 14 },
-                bodyFont: { size: 13 },
-                cornerRadius: 8,
-                displayColors: true,
-                callbacks: {
-                    label: function(context) {
-                        let label = context.dataset.label || '';
-                        if (label) {
-                            label += ': ';
-                        }
-                        if (context.parsed.y !== null) {
-                            label += formatChartValue(context.parsed.y);
-                        } else if (context.parsed !== null) {
-                            label += formatChartValue(context.parsed);
-                        }
-                        return label;
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        display: false,
+                    }
+                },
+                x: {
+                    grid: {
+                        drawBorder: false,
                     }
                 }
             }
-        },
-        animation: {
-            duration: 800,
-            easing: 'easeOutQuart'
         }
-    };
+    });
+}
 
-    if (type === 'line' || type === 'bar') {
-        baseOptions.scales = {
-            x: {
-                grid: {
-                    display: type === 'bar',
-                    color: 'rgba(0, 0, 0, 0.05)'
-                },
-                ticks: {
-                    maxRotation: 45,
-                    minRotation: 0
-                }
-            },
-            y: {
-                beginAtZero: true,
-                grid: {
-                    color: 'rgba(0, 0, 0, 0.05)'
+function initErrorDistributionChart() {
+    const ctx = document.getElementById('errorDistributionChart');
+    if (!ctx) return;
+
+    if (errorDistributionChart) {
+        errorDistributionChart.destroy();
+    }
+
+    errorDistributionChart = new Chart(ctx, {
+        type: 'polarArea',
+        data: {
+            labels: ['超时错误', '认证失败', '权限不足', '参数错误', '服务器错误'],
+            datasets: [{
+                data: [120, 80, 60, 45, 30],
+                backgroundColor: [
+                    'rgba(239, 68, 68, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(168, 85, 247, 0.8)',
+                    'rgba(107, 114, 128, 0.8)'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
                 }
             }
-        };
-    }
-
-    return baseOptions;
-}
-
-function formatChartValue(value) {
-    if (value >= 1000000) {
-        return (value / 1000000).toFixed(1) + 'M';
-    } else if (value >= 1000) {
-        return (value / 1000).toFixed(1) + 'K';
-    } else if (value % 1 !== 0) {
-        return value.toFixed(2);
-    }
-    return value.toString();
-}
-
-function updateRequestTrendChart(data) {
-    if (!requestTrendChart || !data) return;
-    requestTrendChart.data.labels = data.labels;
-    requestTrendChart.data.datasets[0].data = data.data;
-    requestTrendChart.config.type = currentChartType;
-    requestTrendChart.update();
-}
-
-function updateRequestTypeChart(data) {
-    if (!requestTypeChart || !data) return;
-    requestTypeChart.data.labels = data.labels;
-    requestTypeChart.data.datasets[0].data = data.data;
-    requestTypeChart.update();
-}
-
-function updateUserGrowthChart(data) {
-    if (!userGrowthChart || !data) return;
-    userGrowthChart.data.labels = data.labels;
-    userGrowthChart.data.datasets[0].data = data.data;
-    userGrowthChart.update();
-}
-
-function updateAppDistributionChart(data) {
-    if (!appDistributionChart || !data) return;
-    appDistributionChart.data.labels = data.labels;
-    appDistributionChart.data.datasets[0].data = data.data;
-    appDistributionChart.update();
-}
-
-function updateErrorRateChart(data) {
-    if (!errorRateChart || !data) return;
-    errorRateChart.data.labels = data.labels;
-    errorRateChart.data.datasets[0].data = data.data;
-    errorRateChart.update();
-}
-
-function updateGeoDistributionChart(data) {
-    if (!geoDistributionChart || !data) return;
-    geoDistributionChart.data.labels = data.labels;
-    geoDistributionChart.data.datasets[0].data = data.data;
-    geoDistributionChart.update();
-}
-
-function exportStatsReport() {
-    const dateRange = document.getElementById('dateRange')?.value || '30d';
-    const reportData = {
-        exportTime: new Date().toLocaleString('zh-CN'),
-        dateRange: dateRange,
-        summary: {
-            totalRequests: document.getElementById('statTotalRequests')?.textContent || '0',
-            avgResponse: document.getElementById('statAvgResponse')?.textContent || '0ms',
-            successRate: document.getElementById('statSuccessRate')?.textContent || '0%',
-            activeUsers: document.getElementById('statActiveUsers')?.textContent || '0'
         }
-    };
-
-    const csvContent = [
-        ['统计分析报表'].join(','),
-        [''].join(','),
-        ['导出时间', reportData.exportTime].join(','),
-        ['时间范围', reportData.dateRange].join(','),
-        [''].join(','),
-        ['指标', '数值'].join(','),
-        ['总请求量', reportData.summary.totalRequests].join(','),
-        ['平均响应时间', reportData.summary.avgResponse].join(','),
-        ['成功率', reportData.summary.successRate].join(','),
-        ['活跃用户', reportData.summary.activeUsers].join(',')
-    ].join('\n');
-
-    downloadFile(csvContent, `stats_report_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8');
+    });
 }
 
-function downloadFile(content, filename, mimeType) {
-    const blob = new Blob(['\ufeff' + content], { type: mimeType });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+async function loadStatistics() {
+    try {
+        await Promise.all([
+            loadSummaryStats(),
+            loadRequestTrendData(currentPeriod),
+            loadRequestDistributionData(),
+            loadAppRankingData(),
+            loadErrorDistributionData(),
+            loadDetailedTable()
+        ]);
+    } catch (error) {
+        console.error('加载统计数据失败:', error);
+        loadMockStatistics();
+    }
 }
+
+async function loadSummaryStats() {
+    try {
+        const response = await fetch('/admin/api/stats/summary');
+        if (!response.ok) throw new Error('获取统计数据失败');
+
+        const data = await response.json();
+
+        updateStatCard('totalUsers', data.totalUsers, data.usersTrend);
+        updateStatCard('totalApps', data.totalApps, data.appsTrend);
+        updateStatCard('totalRequests', data.totalRequests, data.requestsTrend);
+        updateLatencyCard(data.avgLatency, data.latencyTrend);
+    } catch (error) {
+        console.error('加载摘要统计数据失败:', error);
+        updateStatCard('totalUsers', 1234, 12.5);
+        updateStatCard('totalApps', 56, 8.3);
+        updateStatCard('totalRequests', 89765, 15.2);
+        updateLatencyCard(45, -5.2);
+    }
+}
+
+function updateStatCard(elementId, value, trend) {
+    const valueElement = document.getElementById(elementId);
+    const trendElement = document.getElementById(elementId.replace('total', '').toLowerCase() + 'Trend');
+
+    if (valueElement) {
+        valueElement.textContent = value.toLocaleString();
+    }
+
+    if (trendElement) {
+        const isPositive = trend >= 0;
+        trendElement.className = `trend ${isPositive ? 'up' : 'down'}`;
+        trendElement.innerHTML = `<i class="fas fa-arrow-${isPositive ? 'up' : 'down'} me-1"></i>${isPositive ? '+' : ''}${Math.abs(trend)}% 较上周`;
+    }
+}
+
+function updateLatencyCard(value, trend) {
+    const valueElement = document.getElementById('avgLatency');
+    const trendElement = document.getElementById('latencyTrend');
+
+    if (valueElement) {
+        valueElement.textContent = `${value}ms`;
+    }
+
+    if (trendElement) {
+        const isPositive = trend >= 0;
+        trendElement.className = `trend ${isPositive ? 'down' : 'up'}`;
+        trendElement.innerHTML = `<i class="fas fa-arrow-${isPositive ? 'up' : 'down'} me-1"></i>${isPositive ? '+' : ''}${Math.abs(trend)}% 较上周`;
+    }
+}
+
+async function loadRequestTrendData(period) {
+    try {
+        const response = await fetch(`/admin/api/stats/request-trend?period=${period}`);
+        if (!response.ok) throw new Error('获取请求趋势失败');
+
+        const data = await response.json();
+
+        if (requestTrendChart) {
+            requestTrendChart.data.labels = data.labels;
+            requestTrendChart.data.datasets[0].data = data.success;
+            requestTrendChart.data.datasets[1].data = data.failed;
+            requestTrendChart.update();
+        }
+    } catch (error) {
+        console.error('加载请求趋势数据失败:', error);
+        loadMockRequestTrendData(period);
+    }
+}
+
+function loadMockRequestTrendData(period) {
+    const labels = [];
+    const successData = [];
+    const failedData = [];
+
+    let count = period === 'day' ? 24 : period === 'week' ? 7 : 30;
+
+    for (let i = 0; i < count; i++) {
+        if (period === 'day') {
+            labels.push(`${i}:00`);
+        } else if (period === 'week') {
+            const date = new Date();
+            date.setDate(date.getDate() - (count - 1 - i));
+            labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+        } else {
+            const date = new Date();
+            date.setDate(date.getDate() - (count - 1 - i));
+            labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+        }
+        successData.push(Math.floor(Math.random() * 1000) + 500);
+        failedData.push(Math.floor(Math.random() * 50) + 10);
+    }
+
+    if (requestTrendChart) {
+        requestTrendChart.data.labels = labels;
+        requestTrendChart.data.datasets[0].data = successData;
+        requestTrendChart.data.datasets[1].data = failedData;
+        requestTrendChart.update();
+    }
+}
+
+async function loadRequestDistributionData() {
+    try {
+        const response = await fetch('/admin/api/stats/request-distribution');
+        if (!response.ok) throw new Error('获取请求分布失败');
+
+        const data = await response.json();
+
+        if (requestDistributionChart) {
+            requestDistributionChart.data.labels = data.labels;
+            requestDistributionChart.data.datasets[0].data = data.values;
+            requestDistributionChart.update();
+        }
+    } catch (error) {
+        console.error('加载请求分布数据失败:', error);
+        if (requestDistributionChart) {
+            requestDistributionChart.data.datasets[0].data = [300, 250, 200, 50];
+            requestDistributionChart.update();
+        }
+    }
+}
+
+async function loadAppRankingData() {
+    try {
+        const response = await fetch('/admin/api/stats/app-ranking');
+        if (!response.ok) throw new Error('获取应用排名失败');
+
+        const data = await response.json();
+
+        if (appRankingChart) {
+            appRankingChart.data.labels = data.labels;
+            appRankingChart.data.datasets[0].data = data.values;
+            appRankingChart.update();
+        }
+    } catch (error) {
+        console.error('加载应用排名数据失败:', error);
+        if (appRankingChart) {
+            appRankingChart.data.labels = ['应用A', '应用B', '应用C', '应用D', '应用E'];
+            appRankingChart.data.datasets[0].data = [1200, 980, 750, 520, 380];
+            appRankingChart.update();
+        }
+    }
+}
+
+async function loadErrorDistributionData() {
+    try {
+        const response = await fetch('/admin/api/stats/error-distribution');
+        if (!response.ok) throw new Error('获取错误分布失败');
+
+        const data = await response.json();
+
+        if (errorDistributionChart) {
+            errorDistributionChart.data.labels = data.labels;
+            errorDistributionChart.data.datasets[0].data = data.values;
+            errorDistributionChart.update();
+        }
+    } catch (error) {
+        console.error('加载错误分布数据失败:', error);
+        if (errorDistributionChart) {
+            errorDistributionChart.data.datasets[0].data = [120, 80, 60, 45, 30];
+            errorDistributionChart.update();
+        }
+    }
+}
+
+async function loadDetailedTable() {
+    try {
+        const response = await fetch('/admin/api/stats/detailed');
+        if (!response.ok) throw new Error('获取详细数据失败');
+
+        const data = await response.json();
+        renderStatsTable(data);
+    } catch (error) {
+        console.error('加载详细数据失败:', error);
+        loadMockDetailedTable();
+    }
+}
+
+function loadMockDetailedTable() {
+    const mockData = [
+        { time: '2024-01-15', success: 1250, failed: 45, successRate: 96.5, avgLatency: 42, p99Latency: 120 },
+        { time: '2024-01-14', success: 1180, failed: 38, successRate: 96.9, avgLatency: 38, p99Latency: 115 },
+        { time: '2024-01-13', success: 1320, failed: 52, successRate: 96.2, avgLatency: 45, p99Latency: 125 },
+        { time: '2024-01-12', success: 1090, failed: 30, successRate: 97.3, avgLatency: 35, p99Latency: 108 },
+        { time: '2024-01-11', success: 1255, failed: 42, successRate: 96.8, avgLatency: 40, p99Latency: 118 }
+    ];
+    renderStatsTable(mockData);
+}
+
+function renderStatsTable(data) {
+    const tbody = document.getElementById('statsTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (data.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-5">
+                    暂无数据
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+        const successRateClass = row.successRate >= 95 ? 'text-success' : row.successRate >= 90 ? 'text-warning' : 'text-danger';
+
+        tr.innerHTML = `
+            <td><small class="text-muted">${row.time}</small></td>
+            <td>${row.success.toLocaleString()}</td>
+            <td class="text-danger">${row.failed.toLocaleString()}</td>
+            <td class="${successRateClass} fw-medium">${row.successRate.toFixed(1)}%</td>
+            <td>${row.avgLatency}ms</td>
+            <td>${row.p99Latency}ms</td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function loadMockStatistics() {
+    updateStatCard('totalUsers', 1234, 12.5);
+    updateStatCard('totalApps', 56, 8.3);
+    updateStatCard('totalRequests', 89765, 15.2);
+    updateLatencyCard(45, -5.2);
+
+    loadMockRequestTrendData(currentPeriod);
+
+    if (requestDistributionChart) {
+        requestDistributionChart.data.datasets[0].data = [300, 250, 200, 50];
+        requestDistributionChart.update();
+    }
+
+    if (appRankingChart) {
+        appRankingChart.data.labels = ['应用A', '应用B', '应用C', '应用D', '应用E'];
+        appRankingChart.data.datasets[0].data = [1200, 980, 750, 520, 380];
+        appRankingChart.update();
+    }
+
+    if (errorDistributionChart) {
+        errorDistributionChart.data.datasets[0].data = [120, 80, 60, 45, 30];
+        errorDistributionChart.update();
+    }
+
+    loadMockDetailedTable();
+}
+
+window.Stats = {
+    loadStatistics: loadStatistics,
+    loadRequestTrendData: loadRequestTrendData
+};
