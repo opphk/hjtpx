@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +22,591 @@ const (
 	ClickCaptchaPath   = "/api/v1/captcha/click"
 	VerifyCaptchaPath  = "/api/v1/captcha/verify"
 )
+
+var (
+	ErrNetworkError       = errors.New("network error")
+	ErrTimeout           = errors.New("request timeout")
+	ErrInvalidResponse   = errors.New("invalid response")
+	ErrServerError       = errors.New("server error")
+	ErrInvalidParams     = errors.New("invalid parameters")
+	ErrVerificationFailed = errors.New("verification failed")
+	ErrRateLimited       = errors.New("rate limited")
+	ErrUnauthorized      = errors.New("unauthorized")
+	ErrInternalError     = errors.New("internal error")
+)
+
+type SDKError struct {
+	Code    int
+	Message string
+	Err     error
+}
+
+func (e *SDKError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("SDKError(code=%d, message=%s): %v", e.Code, e.Message, e.Err)
+	}
+	return fmt.Sprintf("SDKError(code=%d, message=%s)", e.Code, e.Message)
+}
+
+func (e *SDKError) Unwrap() error {
+	return e.Err
+}
+
+func IsSDKError(err error) bool {
+	var sdkErr *SDKError
+	return errors.As(err, &sdkErr)
+}
+
+func GetSDKErrorCode(err error) int {
+	var sdkErr *SDKError
+	if errors.As(err, &sdkErr) {
+		return sdkErr.Code
+	}
+	return 0
+}
+
+func wrapSDKError(code int, message string, err error) *SDKError {
+	return &SDKError{
+		Code:    code,
+		Message: message,
+		Err:     err,
+	}
+}
+
+func NewSDKError(code int, message string) *SDKError {
+	return &SDKError{
+		Code:    code,
+		Message: message,
+	}
+}
+
+func (e *SDKError) Is(target error) bool {
+	return errors.Is(e.Err, target)
+}
+
+type Config struct {
+	MaxIdleConns    int
+	MaxOpenConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+
+	HTTPTimeout  time.Duration
+	DialTimeout  time.Duration
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+
+	MaxRetries int
+	RetryDelay time.Duration
+
+	BaseURL   string
+	AppID     string
+	AppSecret string
+	DebugMode bool
+}
+
+func (c *Config) setDefaults() {
+	if c.MaxIdleConns == 0 {
+		c.MaxIdleConns = 10
+	}
+	if c.MaxOpenConns == 0 {
+		c.MaxOpenConns = 100
+	}
+	if c.ConnMaxLifetime == 0 {
+		c.ConnMaxLifetime = 30 * time.Minute
+	}
+	if c.ConnMaxIdleTime == 0 {
+		c.ConnMaxIdleTime = 5 * time.Minute
+	}
+	if c.HTTPTimeout == 0 {
+		c.HTTPTimeout = 30 * time.Second
+	}
+	if c.DialTimeout == 0 {
+		c.DialTimeout = 10 * time.Second
+	}
+	if c.ReadTimeout == 0 {
+		c.ReadTimeout = 15 * time.Second
+	}
+	if c.WriteTimeout == 0 {
+		c.WriteTimeout = 15 * time.Second
+	}
+	if c.MaxRetries == 0 {
+		c.MaxRetries = 3
+	}
+	if c.RetryDelay == 0 {
+		c.RetryDelay = 100 * time.Millisecond
+	}
+	if c.BaseURL == "" {
+		c.BaseURL = DefaultAPIEndpoint
+	}
+}
+
+type poolStats struct {
+	mu                   sync.RWMutex
+	activeConns          int
+	idleConns            int
+	totalRequests        int64
+	failedRequests       int64
+	successfulRequests    int64
+	retriedRequests       int64
+	lastError            error
+	lastErrorTime        time.Time
+}
+
+type CaptchaClient struct {
+	httpClient  *http.Client
+	baseURL     string
+	appID       string
+	appSecret   string
+	config      *Config
+	pool        *poolStats
+	transport   *http.Transport
+	mu          sync.RWMutex
+	closed      bool
+}
+
+func NewCaptchaClient(appID, appSecret string, cfg *Config) *CaptchaClient {
+	if cfg == nil {
+		cfg = &Config{}
+	}
+	cfg.setDefaults()
+
+	transport := &http.Transport{
+		MaxIdleConns:        cfg.MaxIdleConns,
+		MaxIdleConnsPerHost: cfg.MaxIdleConns,
+		MaxConnsPerHost:     cfg.MaxOpenConns,
+		IdleConnTimeout:     cfg.ConnMaxIdleTime,
+	}
+
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   cfg.HTTPTimeout,
+	}
+
+	return &CaptchaClient{
+		httpClient: httpClient,
+		baseURL:    cfg.BaseURL,
+		appID:      appID,
+		appSecret:  appSecret,
+		config:     cfg,
+		pool: &poolStats{
+			activeConns: 0,
+			idleConns:   cfg.MaxIdleConns,
+		},
+		transport: transport,
+	}
+}
+
+func (c *CaptchaClient) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil
+	}
+
+	c.httpClient.CloseIdleConnections()
+	c.closed = true
+	return nil
+}
+
+func (c *CaptchaClient) SetPoolConfig(cfg *Config) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return errors.New("client is closed")
+	}
+
+	if cfg.MaxIdleConns > 0 {
+		c.transport.MaxIdleConns = cfg.MaxIdleConns
+	}
+	if cfg.MaxOpenConns > 0 {
+		c.transport.MaxConnsPerHost = cfg.MaxOpenConns
+	}
+	if cfg.ConnMaxLifetime > 0 {
+		c.transport.ResponseHeaderTimeout = cfg.ConnMaxLifetime
+	}
+	if cfg.ConnMaxIdleTime > 0 {
+		c.transport.IdleConnTimeout = cfg.ConnMaxIdleTime
+	}
+	if cfg.HTTPTimeout > 0 {
+		c.httpClient.Timeout = cfg.HTTPTimeout
+	}
+	if cfg.MaxRetries > 0 {
+		c.config.MaxRetries = cfg.MaxRetries
+	}
+	if cfg.RetryDelay > 0 {
+		c.config.RetryDelay = cfg.RetryDelay
+	}
+
+	return nil
+}
+
+func (c *CaptchaClient) doRequestWithRetry(req *http.Request) (*http.Response, error) {
+	var lastErr error
+	maxRetries := c.config.MaxRetries
+
+	for i := 0; i <= maxRetries; i++ {
+		if i > 0 {
+			delay := c.config.RetryDelay * time.Duration(i)
+			time.Sleep(delay)
+			c.pool.mu.Lock()
+			c.pool.retriedRequests++
+			c.pool.mu.Unlock()
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			if strings.Contains(err.Error(), "timeout") {
+				lastErr = fmt.Errorf("%w: %v", ErrTimeout, err)
+				continue
+			}
+			if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "no such host") {
+				lastErr = fmt.Errorf("%w: %v", ErrNetworkError, err)
+				continue
+			}
+			lastErr = fmt.Errorf("%w: %v", ErrNetworkError, err)
+			continue
+		}
+
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("%w: status code %d", ErrServerError, resp.StatusCode)
+			continue
+		}
+
+		if resp.StatusCode == 429 {
+			resp.Body.Close()
+			lastErr = ErrRateLimited
+			retryAfter := resp.Header.Get("Retry-After")
+			if retryAfter != "" {
+				if delay, parseErr := time.ParseDuration(retryAfter + "s"); parseErr == nil {
+					time.Sleep(delay)
+				}
+			}
+			continue
+		}
+
+		if resp.StatusCode == 401 {
+			resp.Body.Close()
+			lastErr = ErrUnauthorized
+			continue
+		}
+
+		c.pool.mu.Lock()
+		c.pool.successfulRequests++
+		c.pool.mu.Unlock()
+
+		return resp, nil
+	}
+
+	c.pool.mu.Lock()
+	c.pool.failedRequests++
+	c.pool.lastError = lastErr
+	c.pool.lastErrorTime = time.Now()
+	c.pool.mu.Unlock()
+
+	return nil, lastErr
+}
+
+func (c *CaptchaClient) buildURL(path string) string {
+	return c.baseURL + path
+}
+
+func (c *CaptchaClient) doRequest(method, path string, body interface{}) (*SDKResponse, error) {
+	var reqBody io.Reader
+	if body != nil {
+		jsonData, err := json.Marshal(body)
+		if err != nil {
+			return nil, wrapSDKError(400, "failed to marshal request body", err)
+		}
+		reqBody = bytes.NewBuffer(jsonData)
+	}
+
+	req, err := http.NewRequest(method, c.buildURL(path), reqBody)
+	if err != nil {
+		return nil, wrapSDKError(400, "failed to create request", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.appID != "" {
+		req.Header.Set("X-App-ID", c.appID)
+	}
+	if c.appSecret != "" {
+		req.Header.Set("X-App-Secret", c.appSecret)
+	}
+
+	c.pool.mu.Lock()
+	c.pool.totalRequests++
+	c.pool.activeConns++
+	c.pool.mu.Unlock()
+
+	defer func() {
+		c.pool.mu.Lock()
+		c.pool.activeConns--
+		c.pool.mu.Unlock()
+	}()
+
+	resp, err := c.doRequestWithRetry(req)
+	if err != nil {
+		if errors.Is(err, ErrTimeout) {
+			return nil, wrapSDKError(408, "request timeout", err)
+		}
+		if errors.Is(err, ErrRateLimited) {
+			return nil, wrapSDKError(429, "rate limited", err)
+		}
+		if errors.Is(err, ErrUnauthorized) {
+			return nil, wrapSDKError(401, "unauthorized", err)
+		}
+		if errors.Is(err, ErrServerError) {
+			return nil, wrapSDKError(500, "server error", err)
+		}
+		return nil, wrapSDKError(500, "request failed", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, wrapSDKError(500, "failed to read response body", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, wrapSDKError(resp.StatusCode, fmt.Sprintf("unexpected status code: %d", resp.StatusCode), nil)
+	}
+
+	var sdkResp SDKResponse
+	if err := json.Unmarshal(respBody, &sdkResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal response", err)
+	}
+
+	if sdkResp.Code != 0 {
+		return nil, wrapSDKError(sdkResp.Code, sdkResp.Message, nil)
+	}
+
+	return &sdkResp, nil
+}
+
+func (c *CaptchaClient) SetDebugMode(debug bool) {
+	c.config.DebugMode = debug
+}
+
+func (c *CaptchaClient) debug(format string, args ...interface{}) {
+	if c.config.DebugMode {
+		fmt.Printf(format+"\n", args...)
+	}
+}
+
+func (c *CaptchaClient) GenerateSliderCaptcha() (*SliderCaptchaResponse, error) {
+	sdkResp, err := c.doRequest("GET", SliderCaptchaPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var sliderResp SliderCaptchaResponse
+	if err := json.Unmarshal(sdkResp.Data, &sliderResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal slider response", err)
+	}
+
+	return &sliderResp, nil
+}
+
+func (c *CaptchaClient) VerifySliderCaptcha(captchaID, answer string) (*VerifyCaptchaResponse, error) {
+	if captchaID == "" {
+		return nil, wrapSDKError(400, "captcha_id is required", ErrInvalidParams)
+	}
+	if answer == "" {
+		return nil, wrapSDKError(400, "answer is required", ErrInvalidParams)
+	}
+
+	req := &VerifyCaptchaRequest{
+		ChallengeID: captchaID,
+		Action:     "slide",
+		Data: map[string]interface{}{
+			"offset": answer,
+		},
+	}
+
+	sdkResp, err := c.doRequest("POST", VerifyCaptchaPath, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var verifyResp VerifyCaptchaResponse
+	if err := json.Unmarshal(sdkResp.Data, &verifyResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal verify response", err)
+	}
+
+	return &verifyResp, nil
+}
+
+func (c *CaptchaClient) GenerateClickCaptcha() (*ClickCaptchaResponse, error) {
+	sdkResp, err := c.doRequest("GET", ClickCaptchaPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var clickResp ClickCaptchaResponse
+	if err := json.Unmarshal(sdkResp.Data, &clickResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal click response", err)
+	}
+
+	return &clickResp, nil
+}
+
+func (c *CaptchaClient) VerifyClickCaptcha(captchaID string, clicks []ClickData) (*VerifyCaptchaResponse, error) {
+	if captchaID == "" {
+		return nil, wrapSDKError(400, "captcha_id is required", ErrInvalidParams)
+	}
+	if len(clicks) == 0 {
+		return nil, wrapSDKError(400, "clicks data is required", ErrInvalidParams)
+	}
+
+	req := &VerifyCaptchaRequest{
+		ChallengeID: captchaID,
+		Action:     "click",
+		Data: map[string]interface{}{
+			"clicks": clicks,
+		},
+	}
+
+	sdkResp, err := c.doRequest("POST", VerifyCaptchaPath, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var verifyResp VerifyCaptchaResponse
+	if err := json.Unmarshal(sdkResp.Data, &verifyResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal verify response", err)
+	}
+
+	return &verifyResp, nil
+}
+
+func (c *CaptchaClient) GenerateImageCaptcha(req *ImageCaptchaRequest) (*ImageCaptchaResponse, error) {
+	if req == nil {
+		req = &ImageCaptchaRequest{}
+	}
+
+	queryParams := url.Values{}
+	if req.Type != "" {
+		queryParams.Set("type", string(req.Type))
+	}
+	if req.Count > 0 {
+		queryParams.Set("count", fmt.Sprintf("%d", req.Count))
+	}
+	if req.CustomSet != "" {
+		queryParams.Set("custom_set", req.CustomSet)
+	}
+	if req.NoiseMode > 0 {
+		queryParams.Set("noise_mode", fmt.Sprintf("%d", req.NoiseMode))
+	}
+	if req.LineMode > 0 {
+		queryParams.Set("line_mode", fmt.Sprintf("%d", req.LineMode))
+	}
+
+	path := ImageCaptchaPath
+	if len(queryParams) > 0 {
+		path = path + "?" + queryParams.Encode()
+	}
+
+	sdkResp, err := c.doRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var captchaResp ImageCaptchaResponse
+	if err := json.Unmarshal(sdkResp.Data, &captchaResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal captcha response", err)
+	}
+
+	return &captchaResp, nil
+}
+
+func (c *CaptchaClient) VerifyImageCaptcha(captchaID, answer string) (*VerifyImageCaptchaResponse, error) {
+	if captchaID == "" {
+		return nil, wrapSDKError(400, "captcha_id is required", ErrInvalidParams)
+	}
+	if answer == "" {
+		return nil, wrapSDKError(400, "answer is required", ErrInvalidParams)
+	}
+
+	req := &VerifyImageCaptchaRequest{
+		ChallengeID: captchaID,
+		Answer:     answer,
+	}
+
+	sdkResp, err := c.doRequest("POST", ImageVerifyPath, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var verifyResp VerifyImageCaptchaResponse
+	if err := json.Unmarshal(sdkResp.Data, &verifyResp); err != nil {
+		return nil, wrapSDKError(500, "failed to unmarshal verify response", err)
+	}
+
+	return &verifyResp, nil
+}
+
+func (c *CaptchaClient) ExtractBase64Image(dataURI string) ([]byte, error) {
+	if dataURI == "" {
+		return nil, errors.New("data URI is empty")
+	}
+
+	prefix := "data:image/png;base64,"
+	if len(dataURI) > len(prefix) && dataURI[:len(prefix)] == prefix {
+		return base64.StdEncoding.DecodeString(dataURI[len(prefix):])
+	}
+
+	prefixJPEG := "data:image/jpeg;base64,"
+	if len(dataURI) > len(prefixJPEG) && dataURI[:len(prefixJPEG)] == prefixJPEG {
+		return base64.StdEncoding.DecodeString(dataURI[len(prefixJPEG):])
+	}
+
+	return nil, errors.New("unsupported image format")
+}
+
+func (c *CaptchaClient) GetStats() PoolStats {
+	c.pool.mu.RLock()
+	defer c.pool.mu.RUnlock()
+
+	return PoolStats{
+		ActiveConnections:   c.pool.activeConns,
+		IdleConnections:     c.pool.idleConns,
+		TotalRequests:       c.pool.totalRequests,
+		FailedRequests:      c.pool.failedRequests,
+		SuccessfulRequests:  c.pool.successfulRequests,
+		RetriedRequests:     c.pool.retriedRequests,
+		SuccessRate:        calculateSuccessRate(c.pool.totalRequests, c.pool.successfulRequests),
+		LastError:          c.pool.lastError,
+		LastErrorTime:      c.pool.lastErrorTime,
+	}
+}
+
+func calculateSuccessRate(total, success int64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(success) / float64(total) * 100
+}
+
+type PoolStats struct {
+	ActiveConnections   int
+	IdleConnections     int
+	TotalRequests       int64
+	FailedRequests      int64
+	SuccessfulRequests  int64
+	RetriedRequests     int64
+	SuccessRate         float64
+	LastError           error
+	LastErrorTime       time.Time
+}
+
+type ClickData struct {
+	X        int   `json:"x"`
+	Y        int   `json:"y"`
+	Duration int64 `json:"duration"`
+}
 
 type CaptchaType string
 
