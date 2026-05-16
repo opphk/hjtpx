@@ -1472,3 +1472,620 @@ func (s *BehaviorAnalysisService) skewness(values []float64) float64 {
 	}
 	return sum / float64(len(values))
 }
+
+type TrajectoryPoint struct {
+	X         int
+	Y         int
+	Timestamp int64
+}
+
+type ClickData struct {
+	X         int
+	Y         int
+	Timestamp int64
+}
+
+type BehaviorFeatures struct {
+	AvgSpeed              float64
+	MaxSpeed              float64
+	MinSpeed              float64
+	SpeedVariation        float64
+	Acceleration          float64
+	TrajectorySmoothness  float64
+	ClickInterval         float64
+	ClickPositionVariance float64
+	PathSimilarity        float64
+	PathComplexity        float64
+	RiskScore             float64
+	IsBot                 bool
+}
+
+func ExtractFeatures(trajectory []TrajectoryPoint) *BehaviorFeatures {
+	features := &BehaviorFeatures{}
+
+	if len(trajectory) < 2 {
+		return features
+	}
+
+	features.AvgSpeed = CalculateAverageSpeed(trajectory)
+	features.MaxSpeed = CalculateMaxSpeed(trajectory)
+	features.MinSpeed = CalculateMinSpeed(trajectory)
+	features.SpeedVariation = CalculateSpeedVariation(trajectory)
+	features.Acceleration = CalculateAcceleration(trajectory)
+	features.TrajectorySmoothness = CalculateTrajectorySmoothness(trajectory)
+	features.PathComplexity = CalculatePathComplexity(trajectory)
+
+	clicks := convertToClickData(trajectory)
+	if len(clicks) > 1 {
+		features.ClickInterval = CalculateClickInterval(clicks)
+		features.ClickPositionVariance = CalculateClickPositionVariance(clicks)
+	}
+
+	features.PathSimilarity = CompareWithHumanTrajectory(trajectory)
+	features.RiskScore = CalculateRiskScore(features)
+	features.IsBot = IsRobot(features)
+
+	return features
+}
+
+func CalculateAverageSpeed(points []TrajectoryPoint) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+
+	totalSpeed := 0.0
+	count := 0
+
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speed := distance / dt
+			totalSpeed += speed
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalSpeed / float64(count)
+}
+
+func CalculateMaxSpeed(points []TrajectoryPoint) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+
+	maxSpeed := 0.0
+
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speed := distance / dt
+			if speed > maxSpeed {
+				maxSpeed = speed
+			}
+		}
+	}
+
+	return maxSpeed
+}
+
+func CalculateMinSpeed(points []TrajectoryPoint) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+
+	minSpeed := math.MaxFloat64
+
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speed := distance / dt
+			if speed < minSpeed {
+				minSpeed = speed
+			}
+		}
+	}
+
+	if minSpeed == math.MaxFloat64 {
+		return 0
+	}
+
+	return minSpeed
+}
+
+func CalculateSpeedVariation(points []TrajectoryPoint) float64 {
+	if len(points) < 3 {
+		return 0
+	}
+
+	speeds := []float64{}
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speed := distance / dt
+			speeds = append(speeds, speed)
+		}
+	}
+
+	if len(speeds) < 2 {
+		return 0
+	}
+
+	mean := 0.0
+	for _, s := range speeds {
+		mean += s
+	}
+	mean /= float64(len(speeds))
+
+	variance := 0.0
+	for _, s := range speeds {
+		variance += math.Pow(s-mean, 2)
+	}
+	variance /= float64(len(speeds))
+
+	if mean == 0 {
+		return 0
+	}
+
+	return math.Sqrt(variance) / mean
+}
+
+func CalculateAcceleration(points []TrajectoryPoint) float64 {
+	if len(points) < 3 {
+		return 0
+	}
+
+	speeds := []float64{}
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speed := distance / dt
+			speeds = append(speeds, speed)
+		}
+	}
+
+	if len(speeds) < 2 {
+		return 0
+	}
+
+	accelerations := []float64{}
+	for i := 1; i < len(speeds); i++ {
+		dt := float64(points[i+1].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			accel := (speeds[i] - speeds[i-1]) / dt
+			accelerations = append(accelerations, accel)
+		}
+	}
+
+	if len(accelerations) == 0 {
+		return 0
+	}
+
+	mean := 0.0
+	for _, a := range accelerations {
+		mean += a
+	}
+	return mean / float64(len(accelerations))
+}
+
+func CalculateTrajectorySmoothness(points []TrajectoryPoint) float64 {
+	if len(points) < 3 {
+		return 1.0
+	}
+
+	totalAngleChange := 0.0
+	angleChanges := []float64{}
+
+	for i := 1; i < len(points); i++ {
+		if i == 0 || i == len(points)-1 {
+			continue
+		}
+
+		v1x := float64(points[i].X - points[i-1].X)
+		v1y := float64(points[i].Y - points[i-1].Y)
+		v2x := float64(points[i+1].X - points[i].X)
+		v2y := float64(points[i+1].Y - points[i].Y)
+
+		dot := v1x*v2x + v1y*v2y
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			angleChanges = append(angleChanges, math.Abs(angle))
+		}
+	}
+
+	if len(angleChanges) == 0 {
+		return 1.0
+	}
+
+	for _, a := range angleChanges {
+		totalAngleChange += a
+	}
+	avgAngleChange := totalAngleChange / float64(len(angleChanges))
+
+	maxPossibleAngle := math.Pi * 2
+	smoothness := 1.0 - (avgAngleChange / maxPossibleAngle)
+
+	return math.Max(0, math.Min(1, smoothness))
+}
+
+func CalculateClickInterval(clicks []ClickData) float64 {
+	if len(clicks) < 2 {
+		return 0
+	}
+
+	totalInterval := 0.0
+	count := 0
+
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			totalInterval += interval
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalInterval / float64(count)
+}
+
+func CalculateClickPositionVariance(clicks []ClickData) float64 {
+	if len(clicks) < 2 {
+		return 0
+	}
+
+	meanX := 0.0
+	meanY := 0.0
+
+	for _, c := range clicks {
+		meanX += float64(c.X)
+		meanY += float64(c.Y)
+	}
+
+	meanX /= float64(len(clicks))
+	meanY /= float64(len(clicks))
+
+	varianceX := 0.0
+	varianceY := 0.0
+
+	for _, c := range clicks {
+		varianceX += math.Pow(float64(c.X)-meanX, 2)
+		varianceY += math.Pow(float64(c.Y)-meanY, 2)
+	}
+
+	varianceX /= float64(len(clicks))
+	varianceY /= float64(len(clicks))
+
+	return varianceX + varianceY
+}
+
+func CalculatePathComplexity(points []TrajectoryPoint) float64 {
+	if len(points) < 3 {
+		return 0
+	}
+
+	totalDistance := 0.0
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		totalDistance += math.Sqrt(dx*dx + dy*dy)
+	}
+
+	if totalDistance == 0 {
+		return 0
+	}
+
+	startX := float64(points[0].X)
+	startY := float64(points[0].Y)
+	endX := float64(points[len(points)-1].X)
+	endY := float64(points[len(points)-1].Y)
+
+	straightDistance := math.Sqrt(math.Pow(endX-startX, 2) + math.Pow(endY-startY, 2))
+
+	if straightDistance == 0 {
+		return 0
+	}
+
+	complexity := (totalDistance - straightDistance) / totalDistance
+
+	return math.Max(0, math.Min(1, complexity))
+}
+
+func DTWDistance(seq1, seq2 []TrajectoryPoint) float64 {
+	n := len(seq1)
+	m := len(seq2)
+
+	if n == 0 || m == 0 {
+		return math.MaxFloat64
+	}
+
+	dtw := make([][]float64, n+1)
+	for i := range dtw {
+		dtw[i] = make([]float64, m+1)
+		for j := range dtw[i] {
+			dtw[i][j] = math.MaxFloat64
+		}
+	}
+	dtw[0][0] = 0
+
+	for i := 1; i <= n; i++ {
+		for j := 1; j <= m; j++ {
+			dist := pointDist(seq1[i-1], seq2[j-1])
+			dtw[i][j] = dist + math.Min(math.Min(dtw[i-1][j], dtw[i][j-1]), dtw[i-1][j-1])
+		}
+	}
+
+	return dtw[n][m]
+}
+
+func pointDist(p1, p2 TrajectoryPoint) float64 {
+	dx := float64(p1.X - p2.X)
+	dy := float64(p1.Y - p2.Y)
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+var humanTrajectoryTemplates = [][]TrajectoryPoint{
+	{
+		{X: 100, Y: 100, Timestamp: 0},
+		{X: 120, Y: 115, Timestamp: 50},
+		{X: 145, Y: 135, Timestamp: 100},
+		{X: 175, Y: 160, Timestamp: 160},
+		{X: 210, Y: 190, Timestamp: 230},
+		{X: 250, Y: 220, Timestamp: 310},
+		{X: 290, Y: 255, Timestamp: 400},
+		{X: 330, Y: 285, Timestamp: 500},
+	},
+	{
+		{X: 50, Y: 200, Timestamp: 0},
+		{X: 90, Y: 190, Timestamp: 60},
+		{X: 130, Y: 175, Timestamp: 130},
+		{X: 180, Y: 165, Timestamp: 210},
+		{X: 230, Y: 180, Timestamp: 300},
+		{X: 270, Y: 210, Timestamp: 400},
+		{X: 300, Y: 250, Timestamp: 510},
+	},
+	{
+		{X: 200, Y: 50, Timestamp: 0},
+		{X: 195, Y: 100, Timestamp: 70},
+		{X: 185, Y: 155, Timestamp: 150},
+		{X: 170, Y: 210, Timestamp: 240},
+		{X: 150, Y: 260, Timestamp: 340},
+		{X: 125, Y: 300, Timestamp: 450},
+		{X: 95, Y: 330, Timestamp: 570},
+	},
+}
+
+func CompareWithHumanTrajectory(trajectory []TrajectoryPoint) float64 {
+	if len(trajectory) < 3 || len(humanTrajectoryTemplates) == 0 {
+		return 0
+	}
+
+	scaledTrajectory := normalizeTrajectory(trajectory)
+
+	maxSimilarity := 0.0
+
+	for _, template := range humanTrajectoryTemplates {
+		dtwDist := DTWDistance(scaledTrajectory, template)
+
+		maxPossibleDist := 1000.0
+		similarity := 1.0 - math.Min(dtwDist/maxPossibleDist, 1.0)
+
+		if similarity > maxSimilarity {
+			maxSimilarity = similarity
+		}
+	}
+
+	return maxSimilarity
+}
+
+func normalizeTrajectory(points []TrajectoryPoint) []TrajectoryPoint {
+	if len(points) == 0 {
+		return points
+	}
+
+	minX, maxX := points[0].X, points[0].X
+	minY, maxY := points[0].Y, points[0].Y
+
+	for _, p := range points {
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.X > maxX {
+			maxX = p.X
+		}
+		if p.Y < minY {
+			minY = p.Y
+		}
+		if p.Y > maxY {
+			maxY = p.Y
+		}
+	}
+
+	rangeX := maxX - minX
+	rangeY := maxY - minY
+
+	if rangeX == 0 && rangeY == 0 {
+		return points
+	}
+
+	normalized := make([]TrajectoryPoint, len(points))
+
+	for i, p := range points {
+		normalized[i] = TrajectoryPoint{
+			X:         p.X - minX,
+			Y:         p.Y - minY,
+			Timestamp: p.Timestamp,
+		}
+	}
+
+	return normalized
+}
+
+func CalculateRiskScore(features *BehaviorFeatures) float64 {
+	score := 0.0
+
+	if features.AvgSpeed > 1500 {
+		score += 30
+	} else if features.AvgSpeed > 1000 {
+		score += 15
+	}
+
+	if features.TrajectorySmoothness > 0.95 {
+		score += 25
+	} else if features.TrajectorySmoothness > 0.9 {
+		score += 15
+	}
+
+	if features.Acceleration < 0.1 && features.AvgSpeed > 100 {
+		score += 20
+	}
+
+	if features.PathComplexity < 0.3 {
+		score += 15
+	}
+
+	if features.PathSimilarity < 0.5 {
+		score += 25
+	} else if features.PathSimilarity < 0.7 {
+		score += 10
+	}
+
+	if features.SpeedVariation < 0.1 && features.AvgSpeed > 50 {
+		score += 20
+	}
+
+	if features.ClickInterval > 0 && features.ClickInterval < 50 {
+		score += 15
+	}
+
+	return math.Min(score, 100)
+}
+
+func IsRobot(features *BehaviorFeatures) bool {
+	return features.RiskScore >= 50
+}
+
+type ScoreCard struct {
+	Weights    map[string]float64
+	Thresholds map[string]float64
+}
+
+func NewScoreCard() *ScoreCard {
+	return &ScoreCard{
+		Weights: map[string]float64{
+			"speed":               0.20,
+			"trajectory_smooth":   0.15,
+			"acceleration":       0.15,
+			"path_complexity":    0.15,
+			"human_similarity":    0.20,
+			"speed_variation":    0.10,
+			"click_pattern":      0.05,
+		},
+		Thresholds: map[string]float64{
+			"speed":               1500,
+			"trajectory_smooth":   0.95,
+			"acceleration":       0.1,
+			"path_complexity":    0.3,
+			"human_similarity":    0.5,
+			"speed_variation":    0.1,
+			"click_interval":     50,
+		},
+	}
+}
+
+func (sc *ScoreCard) Evaluate(features *BehaviorFeatures) float64 {
+	if features == nil {
+		return 0
+	}
+
+	score := 0.0
+
+	if features.AvgSpeed > sc.Thresholds["speed"] {
+		score += sc.Weights["speed"] * 100
+	} else {
+		score += (features.AvgSpeed / sc.Thresholds["speed"]) * sc.Weights["speed"] * 100
+	}
+
+	if features.TrajectorySmoothness > sc.Thresholds["trajectory_smooth"] {
+		score += sc.Weights["trajectory_smooth"] * 100
+	} else {
+		score += features.TrajectorySmoothness * sc.Weights["trajectory_smooth"] * 100
+	}
+
+	if features.Acceleration < sc.Thresholds["acceleration"] && features.AvgSpeed > 100 {
+		score += sc.Weights["acceleration"] * 100
+	} else {
+		score += math.Max(0, features.Acceleration) * sc.Weights["acceleration"] * 10
+	}
+
+	if features.PathComplexity < sc.Thresholds["path_complexity"] {
+		score += sc.Weights["path_complexity"] * 100
+	} else {
+		score += features.PathComplexity * sc.Weights["path_complexity"] * 100
+	}
+
+	score += (1 - features.PathSimilarity) * sc.Weights["human_similarity"] * 100
+
+	if features.SpeedVariation < sc.Thresholds["speed_variation"] && features.AvgSpeed > 50 {
+		score += sc.Weights["speed_variation"] * 100
+	} else {
+		score += features.SpeedVariation * sc.Weights["speed_variation"] * 100
+	}
+
+	if features.ClickInterval > 0 && features.ClickInterval < sc.Thresholds["click_interval"] {
+		score += sc.Weights["click_pattern"] * 100
+	}
+
+	return math.Min(score, 100)
+}
+
+func convertToClickData(trajectory []TrajectoryPoint) []ClickData {
+	clicks := make([]ClickData, 0)
+
+	for _, p := range trajectory {
+		if p.Timestamp > 0 {
+			clicks = append(clicks, ClickData{
+				X:         p.X,
+				Y:         p.Y,
+				Timestamp: p.Timestamp,
+			})
+		}
+	}
+
+	return clicks
+}
