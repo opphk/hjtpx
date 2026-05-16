@@ -37,6 +37,21 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '${APP_CPU_LIMIT:-1.0}'
+          memory: ${APP_MEMORY_LIMIT:-512M}
+        reservations:
+          cpus: '${APP_CPU_RESERVE:-0.5}'
+          memory: ${APP_MEMORY_RESERVE:-256M}
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+    shm_size: 128M
     networks:
       - hjtpx-network
 
@@ -60,6 +75,21 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '${POSTGRES_CPU_LIMIT:-1.5}'
+          memory: ${POSTGRES_MEMORY_LIMIT:-1G}
+        reservations:
+          cpus: '${POSTGRES_CPU_RESERVE:-0.5}'
+          memory: ${POSTGRES_MEMORY_RESERVE:-512M}
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
+        compress: "true"
+    shm_size: 256M
     networks:
       - hjtpx-network
 
@@ -84,6 +114,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '${REDIS_CPU_LIMIT:-0.5}'
+          memory: ${REDIS_MEMORY_LIMIT:-512M}
+        reservations:
+          cpus: '${REDIS_CPU_RESERVE:-0.25}'
+          memory: ${REDIS_MEMORY_RESERVE:-128M}
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
     networks:
       - hjtpx-network
 
@@ -108,6 +152,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '${NGINX_CPU_LIMIT:-0.5}'
+          memory: ${NGINX_MEMORY_LIMIT:-256M}
+        reservations:
+          cpus: '${NGINX_CPU_RESERVE:-0.25}'
+          memory: ${NGINX_MEMORY_RESERVE:-128M}
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
     networks:
       - hjtpx-network
 
