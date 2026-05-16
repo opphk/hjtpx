@@ -4,114 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>墨盾验证 · 管理后台 · 风控规则</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        :root {
-            --ink: #1a1a2e; --ink-light: #2d2d44; --ink-lighter: #3d3d5c;
-            --cinnabar: #c23a2b; --cinnabar-light: #d94a3a; --cinnabar-dark: #a32e22;
-            --gold: #c9a96e; --gold-light: #dcc48c; --gold-dark: #b8924e;
-            --paper: #faf6ef; --paper-dark: #f0e8d8; --paper-darker: #e6dcc8;
-            --text-primary: #2c2c2c; --text-secondary: #6b6b6b; --text-muted: #999;
-            --sidebar-width: 260px; --header-height: 64px;
-            --font-serif: 'Noto Serif SC', serif; --font-sans: 'Noto Sans SC', sans-serif;
-            --shadow-card: 0 2px 12px rgba(26,26,46,0.08);
-            --shadow-sidebar: 2px 0 16px rgba(0,0,0,0.3);
-        }
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:var(--font-sans); background:var(--paper); color:var(--text-primary); overflow-x:hidden; }
-        .sidebar { position:fixed; top:0; left:0; width:var(--sidebar-width); height:100vh; background:var(--ink); display:flex; flex-direction:column; z-index:1000; box-shadow:var(--shadow-sidebar); overflow-y:auto; }
-        .sidebar-brand { padding:24px 20px 20px; border-bottom:1px solid rgba(201,169,110,0.15); display:flex; align-items:center; gap:14px; }
-        .sidebar-brand-icon { width:44px; height:44px; background:linear-gradient(135deg,var(--cinnabar),#8b2a1e); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--gold); flex-shrink:0; position:relative; box-shadow:0 2px 8px rgba(194,58,43,0.3); }
-        .sidebar-brand-icon::after { content:''; position:absolute; inset:2px; border:1px solid rgba(201,169,110,0.3); border-radius:8px; }
-        .sidebar-brand-text { font-family:var(--font-serif); font-weight:700; font-size:20px; color:var(--gold); line-height:1.3; }
-        .sidebar-brand-sub { font-family:var(--font-sans); font-size:11px; color:rgba(201,169,110,0.5); font-weight:300; letter-spacing:2px; }
-        .sidebar-nav { flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:2px; }
-        .sidebar-nav .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; color:rgba(255,255,255,0.55); text-decoration:none; border-radius:8px; font-size:14px; font-weight:400; transition:all 0.25s ease; position:relative; }
-        .sidebar-nav .nav-link i { width:20px; text-align:center; font-size:16px; color:rgba(255,255,255,0.35); transition:color 0.25s; }
-        .sidebar-nav .nav-link:hover { background:rgba(201,169,110,0.08); color:var(--gold-light); }
-        .sidebar-nav .nav-link:hover i { color:var(--gold-light); }
-        .sidebar-nav .nav-link.active { background:rgba(201,169,110,0.12); color:var(--gold); font-weight:500; }
-        .sidebar-nav .nav-link.active i { color:var(--gold); }
-        .sidebar-nav .nav-link.active::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:20px; background:var(--gold); border-radius:0 3px 3px 0; }
-        .sidebar-divider { height:1px; background:linear-gradient(to right,transparent,rgba(201,169,110,0.15),transparent); margin:8px 16px; }
-        .sidebar-footer { padding:16px 12px; border-top:1px solid rgba(201,169,110,0.1); }
-        .sidebar-footer .nav-link { display:flex; align-items:center; gap:12px; padding:10px 16px; color:rgba(255,255,255,0.5); text-decoration:none; border-radius:8px; font-size:14px; transition:all 0.25s ease; }
-        .sidebar-footer .nav-link i { width:20px; text-align:center; font-size:16px; }
-        .sidebar-footer .nav-link:hover { background:rgba(194,58,43,0.12); color:var(--cinnabar-light); }
-        .main-wrapper { margin-left:var(--sidebar-width); min-height:100vh; }
-        .top-header { height:var(--header-height); background:var(--paper); border-bottom:1px solid var(--paper-darker); display:flex; align-items:center; justify-content:space-between; padding:0 32px; position:sticky; top:0; z-index:500; }
-        .top-header-left { display:flex; align-items:center; gap:16px; }
-        .page-title { font-family:var(--font-serif); font-size:20px; font-weight:700; color:var(--ink); margin:0; position:relative; padding-left:16px; }
-        .page-title::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:22px; background:var(--cinnabar); border-radius:2px; }
-        .top-header-right { display:flex; align-items:center; gap:16px; }
-        .user-display { display:flex; align-items:center; gap:10px; }
-        .user-name { font-size:13px; color:var(--text-secondary); font-weight:400; }
-        .user-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,var(--cinnabar),var(--cinnabar-dark)); color:var(--gold); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; font-family:var(--font-serif); box-shadow:0 2px 6px rgba(194,58,43,0.2); }
-        .main-content { padding:28px 32px; min-height:calc(100vh - var(--header-height)); }
-        .brush-divider { height:4px; background:linear-gradient(to right,var(--gold),transparent); border:none; margin:0 0 24px; opacity:0.6; border-radius:2px; }
-        .seal-stamp { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border:1.5px solid var(--cinnabar); color:var(--cinnabar); font-family:var(--font-serif); font-size:9px; font-weight:900; transform:rotate(-8deg); line-height:1; margin-left:4px; flex-shrink:0; padding:1px; }
-        .card { background:var(--paper); border:1px solid var(--paper-darker); border-radius:10px; box-shadow:var(--shadow-card); transition:box-shadow 0.3s ease, transform 0.3s ease; }
-        .card:hover { box-shadow:0 4px 20px rgba(26,26,46,0.12); }
-        .card-header { background:transparent; border-bottom:1px solid var(--paper-darker); padding:16px 20px; font-family:var(--font-serif); font-weight:600; color:var(--ink); display:flex; align-items:center; justify-content:space-between; }
-        .card-header h5, .card-header h6 { font-family:var(--font-serif); font-weight:600; margin:0; color:var(--ink); }
-        .card-body { padding:20px; }
-        .card-footer { background:transparent; border-top:1px solid var(--paper-darker); padding:12px 20px; }
-        .stat-card { transition:transform 0.3s ease,box-shadow 0.3s ease; cursor:default; }
-        .stat-card:hover { transform:translateY(-4px); box-shadow:0 6px 24px rgba(26,26,46,0.12); }
-        .stat-card .stat-value { font-family:var(--font-serif); font-weight:700; font-size:28px; color:var(--ink); line-height:1.2; }
-        .stat-card .stat-label { font-size:12px; color:var(--text-muted); font-weight:400; letter-spacing:0.5px; }
-        .btn-ink { background:var(--ink); border:1px solid var(--ink); color:var(--gold); font-family:var(--font-sans); font-weight:500; padding:8px 20px; border-radius:6px; transition:all 0.25s ease; }
-        .btn-ink:hover { background:var(--ink-light); color:var(--gold-light); border-color:var(--ink-light); }
-        .btn-cinnabar { background:var(--cinnabar); border:1px solid var(--cinnabar); color:#fff; font-family:var(--font-sans); font-weight:500; padding:8px 20px; border-radius:6px; transition:all 0.25s ease; }
-        .btn-cinnabar:hover { background:var(--cinnabar-light); border-color:var(--cinnabar-light); color:#fff; }
-        .btn-outline-gold { background:transparent; border:1px solid var(--gold); color:var(--gold-dark); font-family:var(--font-sans); font-weight:500; padding:6px 16px; border-radius:6px; transition:all 0.25s ease; }
-        .btn-outline-gold:hover { background:var(--gold); color:var(--ink); border-color:var(--gold); }
-        .btn-outline-cinnabar { background:transparent; border:1px solid var(--cinnabar); color:var(--cinnabar); font-family:var(--font-sans); font-weight:500; padding:6px 16px; border-radius:6px; transition:all 0.25s ease; }
-        .btn-outline-cinnabar:hover { background:var(--cinnabar); color:#fff; }
-        .form-label { font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px; }
-        .form-control, .form-select { background:var(--paper); border:1px solid var(--paper-darker); border-radius:6px; color:var(--text-primary); font-family:var(--font-sans); font-size:14px; padding:8px 14px; transition:border-color 0.25s ease,box-shadow 0.25s ease; }
-        .form-control:focus, .form-select:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,169,110,0.15); background:var(--paper); color:var(--text-primary); }
-        .btn-group .btn-outline-secondary { border-color:var(--paper-darker); color:var(--text-secondary); background:transparent; }
-        .btn-group .btn-outline-secondary:hover { background:rgba(201,169,110,0.1); border-color:var(--gold); color:var(--gold-dark); }
-        .btn-group .btn-outline-secondary.active { background:var(--ink); border-color:var(--ink); color:var(--gold); }
-        .table { color:var(--text-primary); margin-bottom:0; }
-        .table thead th { font-family:var(--font-sans); font-weight:500; font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; border-bottom:2px solid var(--paper-darker); padding:12px 16px; background:transparent; }
-        .table tbody td { padding:12px 16px; vertical-align:middle; border-color:var(--paper-darker); font-size:13px; }
-        .table-hover tbody tr:hover { background:rgba(201,169,110,0.06); }
-        .badge { font-weight:500; font-size:11px; padding:4px 10px; border-radius:4px; letter-spacing:0.3px; }
-        .badge-bg-success { background:rgba(46,160,67,0.1); color:#1a7f37; }
-        .badge-bg-danger { background:rgba(194,58,43,0.1); color:var(--cinnabar); }
-        .badge-bg-warning { background:rgba(201,169,110,0.15); color:#8b7535; }
-        .badge-bg-info { background:rgba(56,139,253,0.1); color:#1f6feb; }
-        .badge-bg-secondary { background:rgba(153,153,153,0.1); color:#666; }
-        .modal-content { background:var(--paper); border:1px solid var(--paper-darker); border-radius:12px; box-shadow:0 8px 32px rgba(26,26,46,0.15); }
-        .modal-header { border-bottom:1px solid var(--paper-darker); padding:18px 24px; }
-        .modal-header .modal-title { font-family:var(--font-serif); font-weight:600; color:var(--ink); }
-        .modal-header .btn-close { filter:brightness(0.6); }
-        .modal-body { padding:24px; }
-        .modal-footer { border-top:1px solid var(--paper-darker); padding:14px 24px; }
-        .form-check-input:checked { background-color:var(--gold); border-color:var(--gold); }
-        .card.bg-light { background:var(--paper-dark); }
-        .card.bg-light .card-header { background:transparent; border-bottom:1px solid var(--paper-darker); }
-        .pagination { margin:0; gap:4px; }
-        .page-link { border:1px solid var(--paper-darker); color:var(--text-secondary); background:transparent; border-radius:6px; padding:6px 14px; font-size:13px; transition:all 0.2s; }
-        .page-link:hover { background:rgba(201,169,110,0.1); border-color:var(--gold); color:var(--gold-dark); }
-        .page-item.active .page-link { background:var(--ink); border-color:var(--ink); color:var(--gold); }
-        .page-item.disabled .page-link { opacity:0.4; pointer-events:none; }
-        .input-group-text { background:var(--paper-darker); border:1px solid var(--paper-darker); color:var(--text-secondary); font-size:13px; }
-        ::-webkit-scrollbar { width:6px; }
-        ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:var(--paper-darker); border-radius:3px; }
-        ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
-        @media (max-width:768px) { .sidebar { width:100%; height:auto; position:relative; } .main-wrapper { margin-left:0; } .main-content { padding:16px; } .top-header { padding:0 16px; } }
-    </style>
 </head>
 <body>
-    <div class="sidebar">
+    <div class="bg-dark d-flex flex-column">
         <div class="sidebar-brand">
             <div class="sidebar-brand-icon"><i class="fas fa-shield-halved"></i></div>
             <div>
@@ -128,13 +25,13 @@
             <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
             <div class="sidebar-divider"></div>
         </nav>
-        <div class="sidebar-footer">
+        <div class="border-top border-secondary p-3 mt-auto">
             <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
         </div>
     </div>
 
     <div class="main-wrapper">
-        <header class="top-header">
+        <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
             <div class="top-header-left">
                 <h1 class="page-title">风控规则配置</h1>
                 <span class="seal-stamp">墨盾</span>
@@ -143,7 +40,7 @@
                 <button id="addRuleBtn" class="btn-cinnabar btn-sm"><i class="fas fa-plus me-1"></i>添加规则</button>
                 <div class="user-display">
                     <span class="user-name" id="usernameDisplay">管理员</span>
-                    <div class="user-avatar" id="userAvatar">A</div>
+                    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar">A</div>
                 </div>
             </div>
         </header>
@@ -151,25 +48,25 @@
         <main class="main-content">
             <div class="row g-4 mb-4">
                 <div class="col-md-3">
-                    <div class="card stat-card text-center">
+                    <div class="card shadow-sm border text-center">
                         <div class="card-body">
                             <div class="stat-label mb-1">总规则数</div>
                             <div class="stat-value" id="totalRules">0</div>
-                            <small style="color:var(--text-muted);font-size:12px;">启用中 <span id="activeRules">0</span> 条</small>
+                            <small class="text-muted" style="font-size:12px;">启用中 <span id="activeRules">0</span> 条</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card stat-card text-center">
+                    <div class="card shadow-sm border text-center">
                         <div class="card-body">
                             <div class="stat-label mb-1">拦截请求</div>
-                            <div class="stat-value" style="color:var(--cinnabar);" id="blockedRequests">0</div>
-                            <small style="color:var(--cinnabar);font-size:12px;"><i class="fas fa-arrow-up me-1"></i>今日</small>
+                            <div class="stat-value text-danger" id="blockedRequests">0</div>
+                            <small class="text-danger" style="font-size:12px;"><i class="fas fa-arrow-up me-1"></i>今日</small>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card stat-card text-center">
+                    <div class="card shadow-sm border text-center">
                         <div class="card-body">
                             <div class="stat-label mb-1">风险预警</div>
                             <div class="stat-value" style="color:#8b7535;" id="riskAlerts">0</div>
@@ -178,7 +75,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card stat-card text-center">
+                    <div class="card shadow-sm border text-center">
                         <div class="card-body">
                             <div class="stat-label mb-1">拦截率</div>
                             <div class="stat-value" style="color:#1a7f37;" id="blockRate">0%</div>
@@ -188,7 +85,7 @@
                 </div>
             </div>
 
-            <div class="card mb-4">
+            <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-3">
@@ -220,9 +117,9 @@
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card shadow-sm">
                 <div class="card-header">
-                    <span style="color:var(--text-muted);font-size:13px;">共 <span id="rulesCount">0</span> 条规则</span>
+                    <span class="text-muted small">共 <span id="rulesCount">0</span> 条规则</span>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary active" data-view="table"><i class="fas fa-list"></i></button>
                         <button class="btn btn-outline-secondary" data-view="card"><i class="fas fa-th"></i></button>
@@ -288,7 +185,7 @@
                             <label class="form-label">规则描述</label>
                             <textarea class="form-control" id="ruleDescription" rows="2" placeholder="描述规则的用途"></textarea>
                         </div>
-                        <div class="card mb-3" style="background:var(--paper-dark);border-color:var(--paper-darker);">
+                        <div class="card mb-3 bg-light">
                             <div class="card-header" style="padding:12px 16px;"><h6 style="font-size:14px;"><i class="fas fa-cog me-2"></i>触发条件</h6></div>
                             <div class="card-body">
                                 <div class="row g-3">
@@ -369,7 +266,7 @@
                                 <option value="2">支付系统</option>
                                 <option value="3">消息推送</option>
                             </select>
-                            <small style="color:var(--text-muted);font-size:11px;">按住 Ctrl 多选</small>
+                            <small class="text-muted" style="font-size:11px;">按住 Ctrl 多选</small>
                         </div>
                         <div class="mb-3">
                             <div class="form-check form-switch">
