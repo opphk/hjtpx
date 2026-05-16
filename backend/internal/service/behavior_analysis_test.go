@@ -1485,7 +1485,7 @@ func TestCompareWithHumanTrajectory(t *testing.T) {
 	}
 }
 
-func TestCalculateRiskScore(t *testing.T) {
+func TestCalculateRiskScoreAdvanced(t *testing.T) {
 	tests := []struct {
 		name     string
 		features *BehaviorFeatures
