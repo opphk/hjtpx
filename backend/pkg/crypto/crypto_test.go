@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGenerateRandomKey(t *testing.T) {
@@ -644,5 +645,193 @@ func TestRSAKeySizeBounds(t *testing.T) {
 	_, _, err = GenerateRSAKeyPair(8192)
 	if err != nil {
 		t.Fatalf("GenerateRSAKeyPair with 8192 should cap to 4096: %v", err)
+	}
+}
+
+func TestSaltManager_NewSaltManager(t *testing.T) {
+	sm := NewSaltManager(16)
+	if sm == nil {
+		t.Fatal("SaltManager should not be nil")
+	}
+
+	currentSalt := sm.GetCurrentSalt()
+	if currentSalt == "" {
+		t.Fatal("initial salt should not be empty")
+	}
+
+	if len(currentSalt) != 16 {
+		t.Fatalf("expected salt length 16, got %d", len(currentSalt))
+	}
+}
+
+func TestSaltManager_GetCurrentSalt(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	salt1 := sm.GetCurrentSalt()
+	salt2 := sm.GetCurrentSalt()
+
+	if salt1 != salt2 {
+		t.Fatal("GetCurrentSalt should return the same salt")
+	}
+}
+
+func TestSaltManager_RotateSalt(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	oldSalt := sm.GetCurrentSalt()
+
+	err := sm.RotateSalt()
+	if err != nil {
+		t.Fatalf("RotateSalt failed: %v", err)
+	}
+
+	newSalt := sm.GetCurrentSalt()
+	if oldSalt == newSalt {
+		t.Fatal("salt should have changed after rotation")
+	}
+
+	if len(newSalt) != 16 {
+		t.Fatalf("expected new salt length 16, got %d", len(newSalt))
+	}
+}
+
+func TestSaltManager_ValidateWithHistoricalSalts(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	initialSalt := sm.GetCurrentSalt()
+	if !sm.ValidateWithHistoricalSalts(initialSalt) {
+		t.Fatal("initial salt should be valid")
+	}
+
+	err := sm.RotateSalt()
+	if err != nil {
+		t.Fatalf("RotateSalt failed: %v", err)
+	}
+
+	newSalt := sm.GetCurrentSalt()
+	if !sm.ValidateWithHistoricalSalts(newSalt) {
+		t.Fatal("new salt should be valid after rotation")
+	}
+
+	if !sm.ValidateWithHistoricalSalts(initialSalt) {
+		t.Fatal("old salt should still be valid in historical salts")
+	}
+
+	if sm.ValidateWithHistoricalSalts("invalid-salt") {
+		t.Fatal("invalid salt should not be valid")
+	}
+}
+
+func TestSaltManager_MultipleRotations(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	salts := make(map[string]bool)
+	initialSalt := sm.GetCurrentSalt()
+	salts[initialSalt] = true
+
+	for i := 0; i < 5; i++ {
+		err := sm.RotateSalt()
+		if err != nil {
+			t.Fatalf("RotateSalt iteration %d failed: %v", i, err)
+		}
+
+		currentSalt := sm.GetCurrentSalt()
+		if salts[currentSalt] {
+			t.Fatalf("salt %d is not unique", i+1)
+		}
+		salts[currentSalt] = true
+	}
+
+	historicalCount := sm.GetHistoricalSaltsCount()
+	if historicalCount < 6 {
+		t.Fatalf("expected at least 6 historical salts, got %d", historicalCount)
+	}
+}
+
+func TestSaltManager_ShouldRotate(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	sm.SetRotationPeriod(1 * time.Second)
+
+	if sm.ShouldRotate() {
+		t.Fatal("should not need rotation immediately after creation")
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+
+	if !sm.ShouldRotate() {
+		t.Fatal("should need rotation after rotation period")
+	}
+}
+
+func TestSaltManager_GetSetRotationPeriod(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	period := sm.GetRotationPeriod()
+	if period != 5*time.Minute {
+		t.Fatalf("expected default rotation period 5m, got %v", period)
+	}
+
+	sm.SetRotationPeriod(10 * time.Minute)
+	period = sm.GetRotationPeriod()
+	if period != 10*time.Minute {
+		t.Fatalf("expected new rotation period 10m, got %v", period)
+	}
+}
+
+func TestSaltManager_HistoricalSaltsLimit(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	for i := 0; i < 15; i++ {
+		sm.RotateSalt()
+	}
+
+	count := sm.GetHistoricalSaltsCount()
+	if count != 10 {
+		t.Fatalf("expected 10 historical salts (limit), got %d", count)
+	}
+}
+
+func TestSaltManager_ConcurrentAccess(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	done := make(chan bool, 10)
+
+	for i := 0; i < 10; i++ {
+		go func() {
+			for j := 0; j < 10; j++ {
+				_ = sm.GetCurrentSalt()
+				sm.ValidateWithHistoricalSalts("test-salt")
+			}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestSaltManager_ConcurrentRotation(t *testing.T) {
+	sm := NewSaltManager(16)
+
+	done := make(chan bool, 5)
+
+	for i := 0; i < 5; i++ {
+		go func() {
+			for j := 0; j < 10; j++ {
+				sm.RotateSalt()
+			}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 5; i++ {
+		<-done
+	}
+
+	count := sm.GetHistoricalSaltsCount()
+	if count < 1 {
+		t.Fatal("should have at least one historical salt after rotations")
 	}
 }

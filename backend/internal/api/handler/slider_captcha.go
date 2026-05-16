@@ -3,8 +3,12 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -17,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/crypto"
 	"github.com/hjtpx/hjtpx/pkg/redis"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
@@ -35,6 +40,191 @@ type TrajectoryPoint struct {
 	X int   `json:"x"`
 	Y int   `json:"y"`
 	T int64 `json:"t"`
+}
+
+type EncryptedTrajectoryPayload struct {
+	Timestamp    int64  `json:"timestamp"`
+	Salt         string `json:"salt"`
+	EncryptedData string `json:"encrypted_data"`
+	Signature    string `json:"signature"`
+}
+
+type TrajectoryEncryption struct {
+	secretKey       []byte
+	saltManager     *crypto.SaltManager
+	maxTimeDrift    time.Duration
+	maxPayloadAge   time.Duration
+	compressionEnabled bool
+}
+
+var (
+	trajectoryEncryptor *TrajectoryEncryption
+	encryptorOnce        sync.Once
+)
+
+func init() {
+	go cleanupExpiredSliderSessions()
+}
+
+func getTrajectoryEncryptor() *TrajectoryEncryption {
+	encryptorOnce.Do(func() {
+		secretKey := []byte("captcha-trajectory-secret-key-2024")
+		trajectoryEncryptor = NewTrajectoryEncryption(secretKey)
+	})
+	return trajectoryEncryptor
+}
+
+func NewTrajectoryEncryption(secretKey []byte) *TrajectoryEncryption {
+	return &TrajectoryEncryption{
+		secretKey:          secretKey,
+		saltManager:        crypto.NewSaltManager(16),
+		maxTimeDrift:       5 * time.Minute,
+		maxPayloadAge:      10 * time.Minute,
+		compressionEnabled: true,
+	}
+}
+
+func (te *TrajectoryEncryption) EncryptTrajectory(trajectory []TrajectoryPoint) (*EncryptedTrajectoryPayload, error) {
+	if len(trajectory) == 0 {
+		return nil, errors.New("empty trajectory data")
+	}
+
+	timestamp := time.Now().UnixMilli()
+	salt, err := crypto.GenerateRandomString(16)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	trajectoryJSON, err := json.Marshal(trajectory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal trajectory: %w", err)
+	}
+
+	encryptedData, err := te.encryptData(trajectoryJSON, salt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encrypt trajectory: %w", err)
+	}
+
+	signature := te.generateSignature(timestamp, salt, encryptedData)
+
+	return &EncryptedTrajectoryPayload{
+		Timestamp:     timestamp,
+		Salt:         salt,
+		EncryptedData: encryptedData,
+		Signature:    signature,
+	}, nil
+}
+
+func (te *TrajectoryEncryption) DecryptTrajectory(payload *EncryptedTrajectoryPayload) ([]TrajectoryPoint, error) {
+	if payload == nil {
+		return nil, errors.New("nil payload")
+	}
+
+	if err := te.validateTimestamp(payload.Timestamp); err != nil {
+		return nil, err
+	}
+
+	if err := te.validateSalt(payload.Salt); err != nil {
+		return nil, err
+	}
+
+	if err := te.validateSignature(payload.Timestamp, payload.Salt, payload.EncryptedData, payload.Signature); err != nil {
+		return nil, err
+	}
+
+	decryptedData, err := te.decryptData(payload.EncryptedData, payload.Salt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt trajectory: %w", err)
+	}
+
+	var trajectory []TrajectoryPoint
+	if err := json.Unmarshal(decryptedData, &trajectory); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal trajectory: %w", err)
+	}
+
+	return trajectory, nil
+}
+
+func (te *TrajectoryEncryption) encryptData(data []byte, salt string) (string, error) {
+	key := te.deriveKey(salt)
+
+	ciphertext, err := crypto.AESEncrypt(data, key)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+func (te *TrajectoryEncryption) decryptData(encryptedData string, salt string) ([]byte, error) {
+	key := te.deriveKey(salt)
+
+	ciphertext, err := base64.StdEncoding.DecodeString(encryptedData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	return crypto.AESDecrypt(ciphertext, key)
+}
+
+func (te *TrajectoryEncryption) deriveKey(salt string) []byte {
+	h := hmac.New(sha256.New, te.secretKey)
+	h.Write([]byte(salt))
+	return h.Sum(nil)[:32]
+}
+
+func (te *TrajectoryEncryption) generateSignature(timestamp int64, salt, encryptedData string) string {
+	data := fmt.Sprintf("%d:%s:%s", timestamp, salt, encryptedData)
+	mac := hmac.New(sha256.New, te.secretKey)
+	mac.Write([]byte(data))
+	return base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func (te *TrajectoryEncryption) validateTimestamp(timestamp int64) error {
+	now := time.Now().UnixMilli()
+	drift := time.Duration(now-timestamp) * time.Millisecond
+
+	if drift < 0 {
+		drift = -drift
+	}
+
+	if drift > te.maxTimeDrift {
+		return fmt.Errorf("timestamp drift too large: %v (max: %v)", drift, te.maxTimeDrift)
+	}
+
+	return nil
+}
+
+func (te *TrajectoryEncryption) validateSalt(salt string) error {
+	if len(salt) != 16 {
+		return fmt.Errorf("invalid salt length: %d (expected: 16)", len(salt))
+	}
+
+	for _, c := range salt {
+		if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+			return errors.New("salt contains invalid characters")
+		}
+	}
+
+	return nil
+}
+
+func (te *TrajectoryEncryption) validateSignature(timestamp int64, salt, encryptedData, signature string) error {
+	expectedSignature := te.generateSignature(timestamp, salt, encryptedData)
+
+	if subtle.ConstantTimeCompare([]byte(signature), []byte(expectedSignature)) != 1 {
+		return errors.New("signature verification failed")
+	}
+
+	return nil
+}
+
+func (te *TrajectoryEncryption) RotateSalt() error {
+	return te.saltManager.RotateSalt()
+}
+
+func (te *TrajectoryEncryption) ShouldRotate() bool {
+	return te.saltManager.ShouldRotate()
 }
 
 type TrajectoryResult struct {
@@ -102,10 +292,11 @@ type GenerateSliderResponse struct {
 }
 
 type VerifySliderRequest struct {
-	SessionID string            `json:"session_id" binding:"required"`
-	X         int               `json:"x" binding:"required"`
-	Y         int               `json:"y"`
-	Trajectory []TrajectoryPoint `json:"trajectory,omitempty"`
+	SessionID        string                   `json:"session_id" binding:"required"`
+	X                int                      `json:"x" binding:"required"`
+	Y                int                      `json:"y"`
+	Trajectory       []TrajectoryPoint        `json:"trajectory,omitempty"`
+	EncryptedTrajectory *EncryptedTrajectoryPayload `json:"encrypted_trajectory,omitempty"`
 }
 
 type VerifySliderResponse struct {
@@ -1048,8 +1239,33 @@ func VerifySliderCaptcha(c *gin.Context) {
 	yDistance := intAbs(req.Y - session.SecretY)
 
 	var trajResult *TrajectoryResult
-	if len(req.Trajectory) > 0 {
-		trajResult = verifyTrajectory(req.Trajectory, distance)
+	var trajectory []TrajectoryPoint
+
+	if req.EncryptedTrajectory != nil {
+		encryptor := getTrajectoryEncryptor()
+
+		if encryptor.ShouldRotate() {
+			encryptor.RotateSalt()
+		}
+
+		decryptedTrajectory, err := encryptor.DecryptTrajectory(req.EncryptedTrajectory)
+		if err != nil {
+			remaining := defaultSliderConfig.MaxAttempts - session.Attempts
+			response.Success(c, VerifySliderResponse{
+				Success:          false,
+				Message:          "轨迹解密失败: " + err.Error(),
+				Remaining:        remaining,
+				TrajectoryResult: nil,
+			})
+			return
+		}
+		trajectory = decryptedTrajectory
+	} else if len(req.Trajectory) > 0 {
+		trajectory = req.Trajectory
+	}
+
+	if len(trajectory) > 0 {
+		trajResult = verifyTrajectory(trajectory, distance)
 	}
 
 	if distance <= tolerance && yDistance <= tolerance {
