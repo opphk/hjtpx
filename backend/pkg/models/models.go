@@ -114,3 +114,27 @@ type VerificationLog struct {
 	Verification   Verification   `gorm:"foreignKey:VerificationID" json:"verification,omitempty"`
 	Application    Application    `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
 }
+
+type DeviceFingerprint struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	Fingerprint   string    `gorm:"uniqueIndex;size:64" json:"fingerprint"`
+	CanvasHash    string    `gorm:"size:64" json:"canvas_hash"`
+	WebGLVendor   string    `gorm:"size:100" json:"webgl_vendor"`
+	WebGLRenderer string    `gorm:"size:100" json:"webgl_renderer"`
+	UserAgent     string    `gorm:"size:500" json:"user_agent"`
+	IPAddress     string    `gorm:"size:45" json:"ip_address"`
+	ScreenInfo    string    `gorm:"size:100" json:"screen_info"`
+	Timezone      string    `gorm:"size:100" json:"timezone"`
+	Language      string    `gorm:"size:50" json:"language"`
+	Fonts         string    `gorm:"size:500" json:"fonts"`
+	Plugins       string    `gorm:"size:500" json:"plugins"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastSeen      time.Time `json:"last_seen"`
+	VisitCount    int       `gorm:"default:1" json:"visit_count"`
+	IsBot         bool      `gorm:"default:false" json:"is_bot"`
+	RiskLevel     string    `gorm:"size:20;default:low" json:"risk_level"`
+	RiskScore     float64   `gorm:"default:0" json:"risk_score"`
+	ProxyDetected bool      `gorm:"default:false" json:"proxy_detected"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}

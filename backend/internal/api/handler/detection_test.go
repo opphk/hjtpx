@@ -375,3 +375,364 @@ func TestDetectionMethodsContainNewMethods(t *testing.T) {
 		assert.Contains(t, methodNames, nm, "new detection method should exist: "+nm)
 	}
 }
+
+func TestEnvironmentCheckAPI(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/detect/check", EnvironmentCheck)
+
+	body := `{
+		"fingerprint": "test-fingerprint-123",
+		"canvas_hash": "abc123def456",
+		"webgl_vendor": "Google Inc.",
+		"webgl_renderer": "ANGLE (Intel)",
+		"fonts": ["Arial", "Helvetica", "Roboto"],
+		"plugins": ["PDF Viewer", "Chrome PDF Viewer"],
+		"proxy_detected": false,
+		"screen_info": {"width": 1920, "height": 1080},
+		"timezone": "UTC",
+		"language": "en-US",
+		"user_agent": "Mozilla/5.0 Chrome/120.0"
+	}`
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/detect/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, true, resp["success"])
+
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(t, "test-fingerprint-123", data["fingerprint"])
+	assert.NotNil(t, data["risk_level"])
+	assert.NotNil(t, data["risk_score"])
+}
+
+func TestEnvironmentCheckAPI_ProxyDetected(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/detect/check", EnvironmentCheck)
+
+	body := `{
+		"fingerprint": "proxy-test-fp",
+		"proxy_detected": true,
+		"user_agent": "Mozilla/5.0"
+	}`
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/detect/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].(map[string]interface{})
+
+	score := data["risk_score"].(float64)
+	assert.Greater(t, score, 0.0)
+	flags := data["detected_flags"].([]interface{})
+	assert.Contains(t, flags, "proxy_detected")
+}
+
+func TestEnvironmentCheckAPI_HeadlessBrowser(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/detect/check", EnvironmentCheck)
+
+	body := `{
+		"fingerprint": "headless-test",
+		"user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36"
+	}`
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/detect/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].(map[string]interface{})
+
+	score := data["risk_score"].(float64)
+	assert.Greater(t, score, 20.0)
+	flags := data["detected_flags"].([]interface{})
+	assert.Contains(t, flags, "headless_browser")
+}
+
+func TestEnvironmentCheckAPI_SoftwareRenderer(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/detect/check", EnvironmentCheck)
+
+	body := `{
+		"fingerprint": "swiftshader-test",
+		"webgl_renderer": "SwiftShader for Chrome"
+	}`
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/detect/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].(map[string]interface{})
+
+	flags := data["detected_flags"].([]interface{})
+	assert.Contains(t, flags, "software_renderer")
+}
+
+func TestEnvironmentCheckAPI_MissingFields(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/detect/check", EnvironmentCheck)
+
+	body := `{}`
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/api/v1/detect/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestAnalyzeEnvironment(t *testing.T) {
+	testCases := []struct {
+		name           string
+		req            *EnvironmentCheckRequest
+		minScore       float64
+		expectedFlag   string
+		expectedBot    bool
+		expectedLevel  string
+	}{
+		{
+			name: "normal browser",
+			req: &EnvironmentCheckRequest{
+				Fingerprint:  "normal-fp",
+				CanvasHash:  "abc123def456",
+				WebGLVendor: "Google Inc.",
+				Fonts:       []string{"Arial", "Helvetica", "Roboto"},
+				Plugins:     []string{"PDF Viewer"},
+				UserAgent:   "Mozilla/5.0 Chrome/120.0",
+			},
+			minScore:      0,
+			expectedFlag:  "",
+			expectedBot:   false,
+			expectedLevel: "low",
+		},
+		{
+			name: "headless browser",
+			req: &EnvironmentCheckRequest{
+				Fingerprint: "headless-fp",
+				UserAgent:   "Mozilla/5.0 HeadlessChrome",
+			},
+			minScore:      20,
+			expectedFlag:  "headless_browser",
+			expectedBot:   false,
+			expectedLevel: "medium",
+		},
+		{
+			name: "with proxy",
+			req: &EnvironmentCheckRequest{
+				Fingerprint:   "proxy-fp",
+				ProxyDetected: true,
+			},
+			minScore:      20,
+			expectedFlag:  "proxy_detected",
+			expectedBot:   false,
+			expectedLevel: "medium",
+		},
+		{
+			name: "incomplete fingerprint",
+			req: &EnvironmentCheckRequest{
+				Fingerprint: "incomplete-fp",
+			},
+			minScore:      10,
+			expectedFlag:  "incomplete_fingerprint",
+			expectedBot:   false,
+			expectedLevel: "low",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := analyzeEnvironment(tc.req)
+			assert.GreaterOrEqual(t, result.RiskScore, tc.minScore)
+			if tc.expectedFlag != "" {
+				assert.Contains(t, result.DetectedFlags, tc.expectedFlag)
+			}
+			assert.Equal(t, tc.expectedLevel, result.RiskLevel)
+		})
+	}
+}
+
+func TestDetectCanvasFingerprint(t *testing.T) {
+	assert.True(t, detectCanvasFingerprint(""))
+	assert.True(t, detectCanvasFingerprint("abc"))
+	assert.False(t, detectCanvasFingerprint("abc123def456"))
+	assert.False(t, detectCanvasFingerprint("abcdefghij"))
+}
+
+func TestDetectWebGLFingerprint(t *testing.T) {
+	assert.True(t, detectWebGLFingerprint("", ""))
+	assert.True(t, detectWebGLFingerprint("Vendor", ""))
+	assert.True(t, detectWebGLFingerprint("", "Renderer"))
+	assert.True(t, detectWebGLFingerprint("Google Inc.", "SwiftShader"))
+	assert.True(t, detectWebGLFingerprint("Intel", "llvmpipe"))
+	assert.False(t, detectWebGLFingerprint("Google Inc.", "ANGLE (Intel)"))
+	assert.False(t, detectWebGLFingerprint("NVIDIA", "GeForce RTX 3080"))
+}
+
+func TestDetectProxyVPN(t *testing.T) {
+	testCases := []struct {
+		name          string
+		req           *EnvironmentCheckRequest
+		expectedVPN   bool
+	}{
+		{
+			name: "no proxy",
+			req: &EnvironmentCheckRequest{
+				ProxyDetected: false,
+				IPAddress:     "8.8.8.8",
+			},
+			expectedVPN: false,
+		},
+		{
+			name: "proxy detected flag",
+			req: &EnvironmentCheckRequest{
+				ProxyDetected: true,
+				IPAddress:     "8.8.8.8",
+			},
+			expectedVPN: true,
+		},
+		{
+			name: "private IP 10.x.x.x",
+			req: &EnvironmentCheckRequest{
+				ProxyDetected: false,
+				IPAddress:     "10.0.0.1",
+			},
+			expectedVPN: true,
+		},
+		{
+			name: "private IP 192.168.x.x",
+			req: &EnvironmentCheckRequest{
+				ProxyDetected: false,
+				IPAddress:     "192.168.1.100",
+			},
+			expectedVPN: true,
+		},
+		{
+			name: "private IP 172.16.x.x",
+			req: &EnvironmentCheckRequest{
+				ProxyDetected: false,
+				IPAddress:     "172.16.0.1",
+			},
+			expectedVPN: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := detectProxyVPN(tc.req)
+			assert.Equal(t, tc.expectedVPN, result)
+		})
+	}
+}
+
+func TestCalculateEnvironmentRisk(t *testing.T) {
+	testCases := []struct {
+		name     string
+		req      *EnvironmentCheckRequest
+		minRisk  float64
+	}{
+		{
+			name: "normal environment",
+			req: &EnvironmentCheckRequest{
+				CanvasHash:    "abc123def456",
+				WebGLVendor:   "Google Inc.",
+				WebGLRenderer: "ANGLE",
+				Fonts:         []string{"Arial", "Helvetica", "Roboto", "Times", "Verdana"},
+				Plugins:       []string{"PDF Viewer"},
+			},
+			minRisk: 0,
+		},
+		{
+			name: "incomplete canvas",
+			req: &EnvironmentCheckRequest{
+				CanvasHash:    "",
+				WebGLVendor:   "Google Inc.",
+				WebGLRenderer: "ANGLE",
+			},
+			minRisk: 15,
+		},
+		{
+			name: "missing webgl",
+			req: &EnvironmentCheckRequest{
+				CanvasHash:  "abc123",
+				WebGLVendor: "",
+			},
+			minRisk: 15,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			risk := calculateEnvironmentRisk(tc.req)
+			assert.GreaterOrEqual(t, risk, tc.minRisk)
+			assert.LessOrEqual(t, risk, 100.0)
+		})
+	}
+}
+
+func TestGetFingerprintInfo(t *testing.T) {
+	r := gin.New()
+	r.GET("/api/v1/detect/fingerprint", GetFingerprintInfo)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/detect/fingerprint?fingerprint=test-data", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, true, resp["success"])
+	assert.NotEmpty(t, resp["fingerprint"])
+	assert.Equal(t, "test-data", resp["query"])
+}
+
+func TestGetFingerprintInfo_MissingParam(t *testing.T) {
+	r := gin.New()
+	r.GET("/api/v1/detect/fingerprint", GetFingerprintInfo)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/detect/fingerprint", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestGetFingerprintStats(t *testing.T) {
+	r := gin.New()
+	r.GET("/api/v1/detect/stats", GetFingerprintStats)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/detect/stats", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Equal(t, true, resp["success"])
+	assert.NotNil(t, resp["data"])
+}

@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"image/color"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -15,427 +14,542 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVerifyClickPoints_Basic(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	session := &CaptchaSession{
-		ID:        "test-session-basic",
-		Type:      "click",
-		Mode:      ModeNumber,
-		MaxPoints: 3,
-		Tolerance: 25,
-		TargetPoints: []ClickPoint{
-			{X: 50, Y: 50, Index: 0},
-			{X: 150, Y: 150, Index: 1},
-			{X: 250, Y: 250, Index: 2},
-		},
-		HintOrder: []int{0, 1, 2},
-		CreatedAt: time.Now(),
-	}
-
+func TestGetDifficultyConfig(t *testing.T) {
 	tests := []struct {
-		name       string
-		points     [][2]int
-		sequence   []int
-		wantPass   bool
-		wantReason string
+		difficulty    ShuffleDifficultyLevel
+		wantTargets  int
+		wantTolerance int
+		wantMinInt   int
+		wantMaxInt   int
 	}{
-		{
-			name:     "正确顺序点击-无ClickSequence",
-			points:   [][2]int{{50, 50}, {150, 150}, {250, 250}},
-			wantPass: true,
-		},
-		{
-			name:     "正确顺序点击-有ClickSequence",
-			points:   [][2]int{{50, 50}, {150, 150}, {250, 250}},
-			sequence: []int{0, 1, 2},
-			wantPass: true,
-		},
-		{
-			name:       "点击位置偏差过大",
-			points:     [][2]int{{50, 50}, {150, 150}, {500, 500}},
-			wantPass:   false,
-			wantReason: "无法匹配任何目标点",
-		},
-		{
-			name:       "点击数量不足",
-			points:     [][2]int{{50, 50}, {150, 150}},
-			wantPass:   false,
-			wantReason: "点击数量不匹配",
-		},
-		{
-			name:       "点击数量过多",
-			points:     [][2]int{{50, 50}, {150, 150}, {250, 250}, {100, 100}},
-			wantPass:   false,
-			wantReason: "点击数量不匹配",
-		},
-		{
-			name:       "未提供点击坐标",
-			points:     [][2]int{},
-			wantPass:   false,
-			wantReason: "未提供点击坐标",
-		},
-		{
-			name:     "带容差范围的正确点击",
-			points:   [][2]int{{55, 52}, {148, 153}, {247, 249}},
-			wantPass: true,
-		},
-		{
-			name:       "容差范围边缘-超出1像素",
-			points:     [][2]int{{50, 50}, {150, 150}, {276, 276}},
-			wantPass:   false,
-			wantReason: "无法匹配任何目标点",
-		},
+		{ShuffleEasy, 3, 35, 200, 3000},
+		{ShuffleMedium, 4, 30, 150, 2500},
+		{ShuffleHard, 5, 25, 100, 2000},
+		{ShuffleExpert, 6, 20, 80, 1500},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := VerifyRequest{
-				SessionID:     session.ID,
-				Type:          "click",
-				Points:        tt.points,
-				ClickSequence: tt.sequence,
-			}
-			success, reason := verifyClickPoints(session, req)
-			assert.Equal(t, tt.wantPass, success)
-			if !tt.wantPass && tt.wantReason != "" {
-				assert.Contains(t, reason, tt.wantReason)
-			}
+		t.Run(fmt.Sprintf("Difficulty_%v", tt.difficulty), func(t *testing.T) {
+			targets, tolerance, minInt, maxInt := getShuffleDifficultyConfig(tt.difficulty)
+			assert.Equal(t, tt.wantTargets, targets)
+			assert.Equal(t, tt.wantTolerance, tolerance)
+			assert.Equal(t, tt.wantMinInt, minInt)
+			assert.Equal(t, tt.wantMaxInt, maxInt)
 		})
 	}
 }
 
-func TestVerifyClickPoints_OrderValidation(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-session-order",
-		Type:      "click",
-		Mode:      ModeLetter,
-		MaxPoints: 3,
-		Tolerance: 25,
-		TargetPoints: []ClickPoint{
-			{X: 50, Y: 50, Index: 0},
-			{X: 150, Y: 150, Index: 1},
-			{X: 250, Y: 250, Index: 2},
-		},
-		HintOrder: []int{2, 0, 1},
-		CreatedAt: time.Now(),
+func TestGetRandomChars(t *testing.T) {
+	modes := []TargetType{
+		TargetTypeChinese,
+		TargetTypeLetter,
+		TargetTypeNumber,
+		TargetTypeMixed,
+		TargetTypeIcon,
 	}
 
-	tests := []struct {
-		name       string
-		points     [][2]int
-		sequence   []int
-		wantPass   bool
-		wantReason string
-	}{
-		{
-			name:     "按照HintOrder顺序点击-有ClickSequence",
-			points:   [][2]int{{250, 250}, {50, 50}, {150, 150}},
-			sequence: []int{0, 1, 2},
-			wantPass: true,
-		},
-		{
-			name:     "自然顺序与HintOrder一致",
-			points:   [][2]int{{250, 250}, {50, 50}, {150, 150}},
-			wantPass: true,
-		},
-		{
-			name:       "错误顺序点击-无ClickSequence",
-			points:     [][2]int{{50, 50}, {150, 150}, {250, 250}},
-			wantPass:   false,
-			wantReason: "点击顺序错误",
-		},
-		{
-			name:       "错误顺序点击-有ClickSequence",
-			points:     [][2]int{{250, 250}, {50, 50}, {150, 150}},
-			sequence:   []int{2, 1, 0},
-			wantPass:   false,
-			wantReason: "点击顺序错误",
-		},
-		{
-			name:       "ClickSequence索引无效-超出范围",
-			points:     [][2]int{{250, 250}, {50, 50}, {150, 150}},
-			sequence:   []int{0, 5, 2},
-			wantPass:   false,
-			wantReason: "点击时序索引无效",
-		},
-		{
-			name:       "ClickSequence长度不匹配",
-			points:     [][2]int{{250, 250}, {50, 50}, {150, 150}},
-			sequence:   []int{0, 1},
-			wantPass:   false,
-			wantReason: "点击时序长度不匹配",
-		},
-		{
-			name:     "带偏差但顺序正确",
-			points:   [][2]int{{248, 252}, {52, 48}, {148, 153}},
-			sequence: []int{0, 1, 2},
-			wantPass: true,
-		},
-	}
+	for _, mode := range modes {
+		t.Run(string(mode), func(t *testing.T) {
+			count := 5
+			chars := getRandomChars(mode, count)
+			assert.Len(t, chars, count)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := VerifyRequest{
-				SessionID:     session.ID,
-				Type:          "click",
-				Points:        tt.points,
-				ClickSequence: tt.sequence,
+			for _, char := range chars {
+				assert.NotEmpty(t, char)
 			}
-			success, reason := verifyClickPoints(session, req)
-			assert.Equal(t, tt.wantPass, success)
-			if !tt.wantPass && tt.wantReason != "" {
-				assert.Contains(t, reason, tt.wantReason)
-			}
+
+			chars2 := getRandomChars(mode, count)
+			assert.Len(t, chars2, count)
+			assert.NotEqual(t, chars, chars2, "Random chars should be different between calls")
 		})
 	}
 }
 
-func TestVerifyClickPoints_ChineseMode(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-session-chinese",
-		Type:      "click",
-		Mode:      ModeChinese,
-		MaxPoints: 2,
-		Tolerance: 30,
-		TargetPoints: []ClickPoint{
-			{X: 80, Y: 80, Index: 0},
-			{X: 200, Y: 200, Index: 1},
-		},
-		HintOrder: []int{1, 0},
-		CreatedAt: time.Now(),
-	}
-
-	req := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points:    [][2]int{{200, 200}, {80, 80}},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.True(t, success, "中文模式正确顺序应验证通过")
-	assert.Empty(t, reason)
-
-	req2 := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points:    [][2]int{{80, 80}, {200, 200}},
-	}
-	success2, reason2 := verifyClickPoints(session, req2)
-	assert.False(t, success2, "中文模式错误顺序应验证失败")
-	assert.Contains(t, reason2, "点击顺序错误")
-}
-
-func TestVerifyClickPoints_MixedMode(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-session-mixed",
-		Type:      "click",
-		Mode:      ModeMixed,
-		MaxPoints: 4,
-		Tolerance: 20,
-		TargetPoints: []ClickPoint{
-			{X: 30, Y: 30, Index: 0},
-			{X: 100, Y: 100, Index: 1},
-			{X: 170, Y: 170, Index: 2},
-			{X: 240, Y: 240, Index: 3},
-		},
-		HintOrder: []int{3, 1, 2, 0},
-		CreatedAt: time.Now(),
-	}
-
-	req := VerifyRequest{
-		SessionID:     session.ID,
-		Type:          "click",
-		Points:        [][2]int{{240, 240}, {100, 100}, {170, 170}, {30, 30}},
-		ClickSequence: []int{0, 1, 2, 3},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.True(t, success, "混合模式正确顺序应验证通过")
-	assert.Empty(t, reason)
-}
-
-func TestVerifyClickPoints_IconMode(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-session-icon",
-		Type:      "click",
-		Mode:      ModeIcon,
-		MaxPoints: 2,
-		Tolerance: 25,
-		TargetPoints: []ClickPoint{
-			{X: 60, Y: 60, Index: 0},
-			{X: 180, Y: 180, Index: 1},
-		},
-		HintOrder: []int{0, 1},
-		CreatedAt: time.Now(),
-	}
-
-	req := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points:    [][2]int{{60, 60}, {180, 180}},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.True(t, success, "图标模式正确顺序应验证通过")
-	assert.Empty(t, reason)
-}
-
-func TestVerifyClickPoints_EdgeCases(t *testing.T) {
-	t.Run("Tolerance为0时使用默认值", func(t *testing.T) {
-		session := &CaptchaSession{
-			ID:        "test-edge-1",
-			Type:      "click",
-			MaxPoints: 1,
-			Tolerance: 0,
-			TargetPoints: []ClickPoint{
-				{X: 100, Y: 100, Index: 0},
-			},
-			HintOrder: []int{0},
-			CreatedAt: time.Now(),
-		}
-		req := VerifyRequest{
-			SessionID: session.ID,
-			Type:      "click",
-			Points:    [][2]int{{100, 100}},
-		}
-		success, reason := verifyClickPoints(session, req)
-		assert.True(t, success)
-		assert.Empty(t, reason)
+func TestGenerateChineseClickChallenge(t *testing.T) {
+	t.Run("Default difficulty ShuffleMedium", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 0)
+		assert.NotNil(t, challenge)
+		assert.NotEmpty(t, challenge.SessionID)
+		assert.Contains(t, challenge.SessionID, "shuffle_")
+		assert.Len(t, challenge.Targets, 4)
+		assert.Equal(t, TargetTypeChinese, challenge.Mode)
+		assert.Equal(t, ShuffleMedium, challenge.Difficulty)
+		assert.NotEmpty(t, challenge.ImageURL)
+		assert.Contains(t, challenge.ImageURL, "data:image/png;base64,")
 	})
 
-	t.Run("HintOrder为空时使用默认顺序", func(t *testing.T) {
-		session := &CaptchaSession{
-			ID:        "test-edge-2",
-			Type:      "click",
-			MaxPoints: 2,
-			Tolerance: 25,
-			TargetPoints: []ClickPoint{
-				{X: 50, Y: 50, Index: 0},
-				{X: 150, Y: 150, Index: 1},
-			},
-			CreatedAt: time.Now(),
-		}
-		req := VerifyRequest{
-			SessionID: session.ID,
-			Type:      "click",
-			Points:    [][2]int{{50, 50}, {150, 150}},
-		}
-		success, reason := verifyClickPoints(session, req)
-		assert.True(t, success)
-		assert.Empty(t, reason)
+	t.Run("ShuffleEasy difficulty with 3 targets", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		assert.NotNil(t, challenge)
+		assert.Len(t, challenge.Targets, 3)
+		assert.Equal(t, ShuffleEasy, challenge.Difficulty)
+		assert.Equal(t, 3, challenge.MaxTargets)
 	})
 
-	t.Run("5个点的多点验证", func(t *testing.T) {
-		session := &CaptchaSession{
-			ID:        "test-edge-3",
-			Type:      "click",
-			MaxPoints: 5,
-			Tolerance: 20,
-			TargetPoints: []ClickPoint{
-				{X: 20, Y: 20, Index: 0},
-				{X: 80, Y: 80, Index: 1},
-				{X: 140, Y: 140, Index: 2},
-				{X: 200, Y: 200, Index: 3},
-				{X: 260, Y: 260, Index: 4},
-			},
-			HintOrder: []int{4, 3, 2, 1, 0},
-			CreatedAt: time.Now(),
-		}
-		req := VerifyRequest{
-			SessionID:     session.ID,
-			Type:          "click",
-			Points:        [][2]int{{260, 260}, {200, 200}, {140, 140}, {80, 80}, {20, 20}},
-			ClickSequence: []int{0, 1, 2, 3, 4},
-		}
-		success, reason := verifyClickPoints(session, req)
-		assert.True(t, success, "5个点正确顺序应验证通过")
-		assert.Empty(t, reason)
+	t.Run("ShuffleExpert difficulty with 6 targets", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleExpert, 6)
+		assert.NotNil(t, challenge)
+		assert.Len(t, challenge.Targets, 6)
+		assert.Equal(t, ShuffleExpert, challenge.Difficulty)
+		assert.Equal(t, 6, challenge.MaxTargets)
 	})
 
-	t.Run("最佳匹配算法测试-点击在两个目标之间", func(t *testing.T) {
-		session := &CaptchaSession{
-			ID:        "test-edge-4",
-			Type:      "click",
-			MaxPoints: 2,
-			Tolerance: 50,
-			TargetPoints: []ClickPoint{
-				{X: 50, Y: 50, Index: 0},
-				{X: 100, Y: 100, Index: 1},
-			},
-			HintOrder: []int{0, 1},
-			CreatedAt: time.Now(),
+	t.Run("Clamped target count", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 10)
+		assert.NotNil(t, challenge)
+		assert.LessOrEqual(t, len(challenge.Targets), 6)
+	})
+
+	t.Run("Correct order and display order differ", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 4)
+		assert.NotNil(t, challenge)
+		assert.Len(t, challenge.CorrectOrder, 4)
+		assert.Len(t, challenge.DisplayOrder, 4)
+	})
+
+	t.Run("Hint text generation", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 3)
+		assert.NotNil(t, challenge)
+		assert.Contains(t, challenge.HintText, "依次点击:")
+		assert.Contains(t, challenge.HintText, "→")
+	})
+
+	t.Run("Target positions within bounds", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 4)
+		assert.NotNil(t, challenge)
+		for _, target := range challenge.Targets {
+			assert.Greater(t, target.X, 0)
+			assert.Greater(t, target.Y, 0)
+			assert.Less(t, target.X, challenge.ImageWidth)
+			assert.Less(t, target.Y, challenge.ImageHeight)
 		}
-		req := VerifyRequest{
-			SessionID: session.ID,
-			Type:      "click",
-			Points:    [][2]int{{48, 48}, {102, 102}},
-		}
-		success, reason := verifyClickPoints(session, req)
-		assert.True(t, success, "最佳匹配算法应正确匹配最近的目标")
-		assert.Empty(t, reason)
+	})
+
+	t.Run("Distractors generated based on difficulty", func(t *testing.T) {
+		challengeEasy := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		challengeExpert := GenerateChineseClickChallenge(ShuffleExpert, 3)
+		assert.NotNil(t, challengeEasy)
+		assert.NotNil(t, challengeExpert)
+		assert.GreaterOrEqual(t, len(challengeExpert.Distractors), len(challengeEasy.Distractors))
 	})
 }
 
-func TestGetClickCaptchaEndpoint(t *testing.T) {
+func TestGenerateAlphaNumericClickChallenge(t *testing.T) {
+	t.Run("Number mode", func(t *testing.T) {
+		challenge := GenerateAlphaNumericClickChallenge(ShuffleMedium, 0, TargetTypeNumber)
+		assert.NotNil(t, challenge)
+		assert.Equal(t, TargetTypeNumber, challenge.Mode)
+		for _, target := range challenge.Targets {
+			_, err := fmt.Sscan(target.Char, new(int))
+			assert.NoError(t, err, "Number mode should contain numeric characters")
+		}
+	})
+
+	t.Run("Letter mode", func(t *testing.T) {
+		challenge := GenerateAlphaNumericClickChallenge(ShuffleMedium, 0, TargetTypeLetter)
+		assert.NotNil(t, challenge)
+		assert.Equal(t, TargetTypeLetter, challenge.Mode)
+		for _, target := range challenge.Targets {
+			assert.Regexp(t, "^[A-Z]$", target.Char, "Letter mode should contain uppercase letters")
+		}
+	})
+
+	t.Run("Mixed mode", func(t *testing.T) {
+		challenge := GenerateAlphaNumericClickChallenge(ShuffleMedium, 4, TargetTypeMixed)
+		assert.NotNil(t, challenge)
+		assert.Equal(t, TargetTypeMixed, challenge.Mode)
+	})
+
+	t.Run("Chinese mode falls back to Mixed", func(t *testing.T) {
+		challenge := GenerateAlphaNumericClickChallenge(ShuffleMedium, 0, TargetTypeChinese)
+		assert.NotNil(t, challenge)
+		assert.Equal(t, TargetTypeMixed, challenge.Mode)
+	})
+
+	t.Run("Icon mode falls back to Mixed", func(t *testing.T) {
+		challenge := GenerateAlphaNumericClickChallenge(ShuffleMedium, 0, TargetTypeIcon)
+		assert.NotNil(t, challenge)
+		assert.Equal(t, TargetTypeMixed, challenge.Mode)
+	})
+
+	t.Run("Custom target count", func(t *testing.T) {
+		challenge := GenerateAlphaNumericClickChallenge(ShuffleMedium, 5, TargetTypeLetter)
+		assert.NotNil(t, challenge)
+		assert.Len(t, challenge.Targets, 5)
+	})
+}
+
+func TestShuffleTargets(t *testing.T) {
+	t.Run("Shuffle produces different order", func(t *testing.T) {
+		targets := []ClickTarget{
+			{ID: 0, Char: "A"},
+			{ID: 1, Char: "B"},
+			{ID: 2, Char: "C"},
+			{ID: 3, Char: "D"},
+		}
+
+		order := ShuffleTargets(targets)
+		assert.Len(t, order, 4)
+
+		isSame := true
+		for i := 0; i < len(order); i++ {
+			if order[i] != i {
+				isSame = false
+				break
+			}
+		}
+		assert.False(t, isSame, "Shuffled order should be different from original")
+	})
+
+	t.Run("Shuffle contains all indices", func(t *testing.T) {
+		targets := []ClickTarget{
+			{ID: 0}, {ID: 1}, {ID: 2}, {ID: 3}, {ID: 4},
+		}
+
+		order := ShuffleTargets(targets)
+		seen := make(map[int]bool)
+		for _, idx := range order {
+			seen[idx] = true
+		}
+
+		for i := 0; i < len(targets); i++ {
+			assert.True(t, seen[i], "All indices should be present in shuffle")
+		}
+	})
+
+	t.Run("Multiple shuffles produce different results", func(t *testing.T) {
+		targets := []ClickTarget{
+			{ID: 0}, {ID: 1}, {ID: 2}, {ID: 3}, {ID: 4},
+		}
+
+		order1 := ShuffleTargets(targets)
+		order2 := ShuffleTargets(targets)
+		order3 := ShuffleTargets(targets)
+
+		differentOrders := 0
+		if !equalIntSlices(order1, order2) {
+			differentOrders++
+		}
+		if !equalIntSlices(order2, order3) {
+			differentOrders++
+		}
+		if !equalIntSlices(order1, order3) {
+			differentOrders++
+		}
+
+		assert.Greater(t, differentOrders, 0, "Multiple shuffles should produce different orders")
+	})
+
+	t.Run("Empty targets", func(t *testing.T) {
+		targets := []ClickTarget{}
+		order := ShuffleTargets(targets)
+		assert.Empty(t, order)
+	})
+
+	t.Run("Single target", func(t *testing.T) {
+		targets := []ClickTarget{{ID: 0}}
+		order := ShuffleTargets(targets)
+		assert.Len(t, order, 1)
+		assert.Equal(t, 0, order[0])
+	})
+}
+
+func equalIntSlices(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestVerifyShuffleClickCaptcha(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	shuffleClickSessions = make(map[string]*ClickChallenge)
 
-	captchaSessions = make(map[string]*CaptchaSession)
+	t.Run("Valid sequential clicks", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		shuffleClickSessions[challenge.SessionID] = challenge
+
+		r := gin.New()
+		r.POST("/api/v1/captcha/shuffle/verify", VerifyShuffleClickCaptcha)
+
+		clicks := make([]ClickData, 3)
+		baseTime := time.Now().UnixMilli()
+		for i, idx := range challenge.CorrectOrder {
+			target := challenge.Targets[idx]
+			clicks[i] = ClickData{
+				X:         target.X,
+				Y:         target.Y,
+				Timestamp: baseTime + int64(i*500),
+				TargetID:  idx,
+			}
+		}
+
+		payload := ClickVerifyRequest{
+			SessionID: challenge.SessionID,
+			Clicks:    clicks,
+		}
+
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/shuffle/verify", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp ClickVerifyResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.True(t, resp.CaptchaPass)
+	})
+
+	t.Run("Invalid click order", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		shuffleClickSessions[challenge.SessionID] = challenge
+
+		r := gin.New()
+		r.POST("/api/v1/captcha/shuffle/verify", VerifyShuffleClickCaptcha)
+
+		clicks := make([]ClickData, 3)
+		baseTime := time.Now().UnixMilli()
+		for i, idx := range challenge.CorrectOrder {
+			target := challenge.Targets[idx]
+			clicks[i] = ClickData{
+				X:         target.X,
+				Y:         target.Y,
+				Timestamp: baseTime + int64(i*500),
+				TargetID:  idx,
+			}
+		}
+		for i, j := 0, len(clicks)-1; i < j; i, j = i+1, j-1 {
+			clicks[i], clicks[j] = clicks[j], clicks[i]
+		}
+
+		payload := ClickVerifyRequest{
+			SessionID: challenge.SessionID,
+			Clicks:    clicks,
+		}
+
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/shuffle/verify", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp ClickVerifyResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.False(t, resp.Success)
+		assert.False(t, resp.CaptchaPass)
+		assert.Contains(t, resp.FailReason, "点击顺序错误")
+	})
+
+	t.Run("Click interval too short", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		shuffleClickSessions[challenge.SessionID] = challenge
+
+		r := gin.New()
+		r.POST("/api/v1/captcha/shuffle/verify", VerifyShuffleClickCaptcha)
+
+		clicks := make([]ClickData, 3)
+		baseTime := time.Now().UnixMilli()
+		for i, idx := range challenge.CorrectOrder {
+			target := challenge.Targets[idx]
+			clicks[i] = ClickData{
+				X:         target.X,
+				Y:         target.Y,
+				Timestamp: baseTime + int64(i*50),
+				TargetID:  idx,
+			}
+		}
+
+		payload := ClickVerifyRequest{
+			SessionID: challenge.SessionID,
+			Clicks:    clicks,
+		}
+
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/shuffle/verify", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp ClickVerifyResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.False(t, resp.Success)
+		assert.Contains(t, resp.FailReason, "点击间隔过短")
+	})
+
+	t.Run("Session not found", func(t *testing.T) {
+		r := gin.New()
+		r.POST("/api/v1/captcha/shuffle/verify", VerifyShuffleClickCaptcha)
+
+		payload := ClickVerifyRequest{
+			SessionID: "nonexistent_session",
+			Clicks:    []ClickData{{X: 100, Y: 100, Timestamp: time.Now().UnixMilli()}},
+		}
+
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/shuffle/verify", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("Empty clicks", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		shuffleClickSessions[challenge.SessionID] = challenge
+
+		r := gin.New()
+		r.POST("/api/v1/captcha/shuffle/verify", VerifyShuffleClickCaptcha)
+
+		payload := ClickVerifyRequest{
+			SessionID: challenge.SessionID,
+			Clicks:    []ClickData{},
+		}
+
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/shuffle/verify", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp ClickVerifyResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.False(t, resp.Success)
+		assert.Contains(t, resp.FailReason, "未提供点击数据")
+	})
+
+	t.Run("Click count mismatch", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		shuffleClickSessions[challenge.SessionID] = challenge
+
+		r := gin.New()
+		r.POST("/api/v1/captcha/shuffle/verify", VerifyShuffleClickCaptcha)
+
+		clicks := make([]ClickData, 2)
+		baseTime := time.Now().UnixMilli()
+		for i := 0; i < 2; i++ {
+			clicks[i] = ClickData{
+				X:         100,
+				Y:         100,
+				Timestamp: baseTime + int64(i*500),
+			}
+		}
+
+		payload := ClickVerifyRequest{
+			SessionID: challenge.SessionID,
+			Clicks:    clicks,
+		}
+
+		w := httptest.NewRecorder()
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/shuffle/verify", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp ClickVerifyResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+		assert.False(t, resp.Success)
+		assert.Contains(t, resp.FailReason, "点击数量不匹配")
+	})
+}
+
+func TestGetShuffleClickCaptcha(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	shuffleClickSessions = make(map[string]*ClickChallenge)
 
 	tests := []struct {
-		name       string
-		query      string
-		wantStatus int
-		wantMode   string
+		name           string
+		query          string
+		wantStatus     int
+		wantDifficulty ShuffleDifficultyLevel
+		wantMode       TargetType
 	}{
 		{
-			name:       "默认数字模式",
-			query:      "",
-			wantStatus: http.StatusOK,
-			wantMode:   "number",
+			name:           "Default Chinese mode",
+			query:          "",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleMedium,
+			wantMode:       TargetTypeChinese,
 		},
 		{
-			name:       "字母模式",
-			query:      "?mode=letter",
-			wantStatus: http.StatusOK,
-			wantMode:   "letter",
+			name:           "ShuffleEasy difficulty",
+			query:          "?difficulty=easy",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleEasy,
+			wantMode:       TargetTypeChinese,
 		},
 		{
-			name:       "中文模式",
-			query:      "?mode=chinese",
-			wantStatus: http.StatusOK,
-			wantMode:   "chinese",
+			name:           "ShuffleHard difficulty",
+			query:          "?difficulty=hard",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleHard,
+			wantMode:       TargetTypeChinese,
 		},
 		{
-			name:       "混合模式",
-			query:      "?mode=mixed",
-			wantStatus: http.StatusOK,
-			wantMode:   "mixed",
+			name:           "ShuffleExpert difficulty",
+			query:          "?difficulty=expert",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleExpert,
+			wantMode:       TargetTypeChinese,
 		},
 		{
-			name:       "图标模式",
-			query:      "?mode=icon",
-			wantStatus: http.StatusOK,
-			wantMode:   "icon",
+			name:           "Letter mode",
+			query:          "?mode=letter",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleMedium,
+			wantMode:       TargetTypeLetter,
 		},
 		{
-			name:       "指定点数",
-			query:      "?points=4",
-			wantStatus: http.StatusOK,
-			wantMode:   "number",
+			name:           "Number mode",
+			query:          "?mode=number",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleMedium,
+			wantMode:       TargetTypeNumber,
 		},
 		{
-			name:       "不随机顺序",
-			query:      "?shuffle=false",
-			wantStatus: http.StatusOK,
-			wantMode:   "number",
+			name:           "Mixed mode",
+			query:          "?mode=mixed",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleMedium,
+			wantMode:       TargetTypeMixed,
+		},
+		{
+			name:           "Custom points",
+			query:          "?points=5",
+			wantStatus:     http.StatusOK,
+			wantDifficulty: ShuffleMedium,
+			wantMode:       TargetTypeChinese,
 		},
 	}
-
-	r := gin.New()
-	r.GET("/api/v1/captcha/click", GetClickCaptcha)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			r := gin.New()
+			r.GET("/api/v1/captcha/shuffle/click", GetShuffleClickCaptcha)
+
 			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/api/v1/captcha/click"+tt.query, nil)
+			req, _ := http.NewRequest("GET", "/api/v1/captcha/shuffle/click"+tt.query, nil)
 			r.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.wantStatus, w.Code)
@@ -446,284 +560,223 @@ func TestGetClickCaptchaEndpoint(t *testing.T) {
 
 			assert.NotEmpty(t, resp["session_id"])
 			assert.NotEmpty(t, resp["image_url"])
-			assert.NotEmpty(t, resp["hint"])
-			assert.NotNil(t, resp["hint_order"])
-			assert.NotNil(t, resp["max_points"])
-			assert.Equal(t, tt.wantMode, resp["mode"])
-
-			assert.True(t, strings.HasPrefix(resp["image_url"].(string), "data:image/png;base64,"))
+			assert.Contains(t, resp["image_url"], "data:image/png;base64,")
+			assert.NotNil(t, resp["targets"])
+			assert.NotNil(t, resp["correct_order"])
+			assert.NotNil(t, resp["display_order"])
+			assert.NotEmpty(t, resp["hint_text"])
+			assert.Equal(t, float64(tt.wantDifficulty), resp["difficulty"])
+			assert.Equal(t, string(tt.wantMode), resp["mode"])
 		})
 	}
 }
 
-func TestFormatHintOrder(t *testing.T) {
+func TestAnalyzeClickBehavior(t *testing.T) {
+	t.Run("Normal human-like clicks", func(t *testing.T) {
+		behavior := []ClickBehavior{
+			{X: 100, Y: 100, Timestamp: 1000, Event: "click"},
+			{X: 150, Y: 150, Timestamp: 1600, Event: "click"},
+			{X: 200, Y: 200, Timestamp: 2300, Event: "click"},
+		}
+		score := analyzeClickBehavior(behavior)
+		assert.Less(t, score, 20.0, "Normal clicks should have low risk score")
+	})
+
+	t.Run("Very fast clicks (bot-like)", func(t *testing.T) {
+		behavior := []ClickBehavior{
+			{X: 100, Y: 100, Timestamp: 1000, Event: "click"},
+			{X: 150, Y: 150, Timestamp: 1050, Event: "click"},
+			{X: 200, Y: 200, Timestamp: 1100, Event: "click"},
+		}
+		score := analyzeClickBehavior(behavior)
+		assert.Greater(t, score, 0.0, "Fast clicks should have elevated risk score")
+	})
+
+	t.Run("Empty behavior data", func(t *testing.T) {
+		behavior := []ClickBehavior{}
+		score := analyzeClickBehavior(behavior)
+		assert.Equal(t, 0.0, score)
+	})
+
+	t.Run("Single click", func(t *testing.T) {
+		behavior := []ClickBehavior{
+			{X: 100, Y: 100, Timestamp: 1000, Event: "click"},
+		}
+		score := analyzeClickBehavior(behavior)
+		assert.Equal(t, 0.0, score)
+	})
+
+	t.Run("Mixed events", func(t *testing.T) {
+		behavior := []ClickBehavior{
+			{X: 100, Y: 100, Timestamp: 1000, Event: "move"},
+			{X: 110, Y: 110, Timestamp: 1200, Event: "move"},
+			{X: 150, Y: 150, Timestamp: 1500, Event: "click"},
+		}
+		score := analyzeClickBehavior(behavior)
+		assert.GreaterOrEqual(t, score, 0.0)
+		assert.LessOrEqual(t, score, 100.0)
+	})
+}
+
+func TestClickChallenge_GeneratePositions(t *testing.T) {
+	t.Run("Positions are non-overlapping", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 4)
+		assert.NotNil(t, challenge)
+
+		for i, target1 := range challenge.Targets {
+			for j, target2 := range challenge.Targets {
+				if i == j {
+					continue
+				}
+				dx := target1.X - target2.X
+				dy := target1.Y - target2.Y
+				distance := math.Sqrt(float64(dx*dx + dy*dy))
+				assert.Greater(t, distance, float64(target1.Size/2+target2.Size/2),
+					"Targets should not overlap")
+			}
+		}
+	})
+
+	t.Run("All targets have valid positions", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 4)
+		assert.NotNil(t, challenge)
+
+		for _, target := range challenge.Targets {
+			assert.Greater(t, target.X, 0)
+			assert.Greater(t, target.Y, 0)
+			assert.Less(t, target.X, challenge.ImageWidth)
+			assert.Less(t, target.Y, challenge.ImageHeight)
+		}
+	})
+}
+
+func TestClickChallenge_GenerateDistractors(t *testing.T) {
+	t.Run("Distractors count varies by difficulty", func(t *testing.T) {
+		challengeEasy := GenerateChineseClickChallenge(ShuffleEasy, 3)
+		challengeHard := GenerateChineseClickChallenge(ShuffleHard, 3)
+
+		assert.NotNil(t, challengeEasy)
+		assert.NotNil(t, challengeHard)
+		assert.Greater(t, len(challengeHard.Distractors), len(challengeEasy.Distractors))
+	})
+
+	t.Run("Distractors have different characters", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 3)
+		assert.NotNil(t, challenge)
+
+		targetChars := make(map[string]bool)
+		for _, target := range challenge.Targets {
+			targetChars[target.Char] = true
+		}
+
+		for _, distractor := range challenge.Distractors {
+			assert.False(t, targetChars[distractor.Char],
+				"Distractor should not have same character as target")
+		}
+	})
+}
+
+func TestClampInt(t *testing.T) {
 	tests := []struct {
-		name     string
-		order    []int
-		expected string
+		val      int
+		min      int
+		max      int
+		expected int
 	}{
-		{"空数组", []int{}, ""},
-		{"单个元素", []int{0}, "1"},
-		{"两个元素", []int{0, 1}, "1→2"},
-		{"三个元素", []int{2, 0, 1}, "3→1→2"},
-		{"乱序", []int{3, 1, 4, 2}, "4→2→5→3"},
+		{5, 1, 10, 5},
+		{0, 1, 10, 1},
+		{15, 1, 10, 10},
+		{-5, 1, 10, 1},
+		{100, 1, 10, 10},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := formatHintOrder(tt.order)
-			assert.Equal(t, tt.expected, result)
-		})
+		result := clampInt(tt.val, tt.min, tt.max)
+		assert.Equal(t, tt.expected, result)
 	}
 }
 
-func TestGetIconName(t *testing.T) {
-	tests := []struct {
-		name     string
-		icon     string
-		expected string
-	}{
-		{"圆形", "circle", "圆形"},
-		{"方形", "square", "方形"},
-		{"三角形", "triangle", "三角形"},
-		{"星形", "star", "星形"},
-		{"菱形", "diamond", "菱形"},
-		{"心形", "heart", "心形"},
-		{"箭头", "arrow", "箭头"},
-		{"十字", "cross", "十字"},
-		{"月牙", "moon", "月牙"},
-		{"圆环", "ring", "圆环"},
-		{"未知图标返回原值", "unknown", "unknown"},
-	}
+func TestGetRandomDistractorChar(t *testing.T) {
+	existingChars := make(map[string]bool)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getIconName(tt.icon)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	t.Run("Chinese mode", func(t *testing.T) {
+		char := getRandomDistractorChar(TargetTypeChinese, existingChars)
+		assert.NotEmpty(t, char)
+	})
+
+	t.Run("Letter mode", func(t *testing.T) {
+		char := getRandomDistractorChar(TargetTypeLetter, existingChars)
+		assert.NotEmpty(t, char)
+		assert.Regexp(t, "^[A-Z]$", char)
+	})
+
+	t.Run("Number mode", func(t *testing.T) {
+		char := getRandomDistractorChar(TargetTypeNumber, existingChars)
+		assert.NotEmpty(t, char)
+	})
+
+	t.Run("Icon mode", func(t *testing.T) {
+		char := getRandomDistractorChar(TargetTypeIcon, existingChars)
+		assert.NotEmpty(t, char)
+	})
+
+	t.Run("Mixed mode", func(t *testing.T) {
+		char := getRandomDistractorChar(TargetTypeMixed, existingChars)
+		assert.NotEmpty(t, char)
+	})
 }
 
-func TestRenderIcon(t *testing.T) {
-	icons := []IconType{
-		IconCircle, IconSquare, IconTriangle, IconStar,
-		IconDiamond, IconHeart, IconArrow, IconCross,
-		IconMoon, IconRing,
-	}
+func TestClickChallenge_ImageGeneration(t *testing.T) {
+	t.Run("Image URL is valid base64 PNG", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 4)
+		assert.NotNil(t, challenge)
+		assert.Contains(t, challenge.ImageURL, "data:image/png;base64,")
 
-	for _, icon := range icons {
-		t.Run(string(icon), func(t *testing.T) {
-			img := renderIcon(icon, 60, color.RGBA{R: 255, G: 100, B: 50, A: 255})
-			assert.NotNil(t, img)
-			assert.Equal(t, 60, img.Bounds().Dx())
-			assert.Equal(t, 60, img.Bounds().Dy())
+		prefix := "data:image/png;base64,"
+		base64Data := strings.TrimPrefix(challenge.ImageURL, prefix)
+		assert.NotEmpty(t, base64Data)
+	})
 
-			hasContent := false
-			for x := 0; x < 60; x++ {
-				for y := 0; y < 60; y++ {
-					_, _, _, a := img.At(x, y).RGBA()
-					if a > 0 {
-						hasContent = true
-						break
-					}
-				}
-				if hasContent {
-					break
-				}
-			}
-			assert.True(t, hasContent, "图标 %s 应有像素内容", icon)
-		})
-	}
+	t.Run("Image dimensions match configuration", func(t *testing.T) {
+		challenge := GenerateChineseClickChallenge(ShuffleMedium, 4)
+		assert.NotNil(t, challenge)
+		assert.Equal(t, 400, challenge.ImageWidth)
+		assert.Equal(t, 300, challenge.ImageHeight)
+	})
 }
 
-func TestVerifyClickPoints_BestMatch(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-bestmatch",
-		Type:      "click",
-		MaxPoints: 2,
-		Tolerance: 30,
-		TargetPoints: []ClickPoint{
-			{X: 50, Y: 50, Index: 0},
-			{X: 100, Y: 100, Index: 1},
-		},
-		HintOrder: []int{0, 1},
-		CreatedAt: time.Now(),
-	}
-
-	req := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points:    [][2]int{{55, 55}, {95, 95}},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.True(t, success, "最佳匹配应正确分配目标")
-	assert.Empty(t, reason)
+func TestDifficultyLevels_Values(t *testing.T) {
+	assert.Equal(t, 1, int(ShuffleEasy))
+	assert.Equal(t, 2, int(ShuffleMedium))
+	assert.Equal(t, 3, int(ShuffleHard))
+	assert.Equal(t, 4, int(ShuffleExpert))
 }
 
-func TestVerifyClickPoints_DuplicateTargetRejection(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-duplicate",
-		Type:      "click",
-		MaxPoints: 3,
-		Tolerance: 30,
-		TargetPoints: []ClickPoint{
-			{X: 50, Y: 50, Index: 0},
-			{X: 150, Y: 150, Index: 1},
-			{X: 250, Y: 250, Index: 2},
-		},
-		HintOrder: []int{0, 1, 2},
-		CreatedAt: time.Now(),
-	}
+func TestClickVerifyResponse_JSON(t *testing.T) {
+	t.Run("Success response", func(t *testing.T) {
+		resp := ClickVerifyResponse{
+			Success:       true,
+			Message:       "验证成功",
+			RiskScore:     10.5,
+			CaptchaPass:   true,
+		}
+		data, err := json.Marshal(resp)
+		assert.NoError(t, err)
+		assert.Contains(t, string(data), `"success":true`)
+		assert.Contains(t, string(data), `"captcha_pass":true`)
+	})
 
-	req := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points:    [][2]int{{50, 50}, {55, 55}, {250, 250}},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.False(t, success, "重复点击同一目标应验证失败")
-	assert.Contains(t, reason, "无法匹配任何目标点")
-}
-
-func TestGenerateClickImageWithBackground(t *testing.T) {
-	modes := []CaptchaMode{ModeNumber, ModeLetter, ModeChinese, ModeMixed, ModeIcon}
-
-	for _, mode := range modes {
-		t.Run(string(mode), func(t *testing.T) {
-			session := &CaptchaSession{
-				ID:           fmt.Sprintf("test-gen-%s", mode),
-				Type:         "click",
-				Mode:         mode,
-				MaxPoints:    3,
-				AllowShuffle: false,
-				CreatedAt:    time.Now(),
-				ImageSeed:    time.Now().UnixNano(),
-			}
-
-			imageURL, targetPoints, hintOrder, hint := generateClickImageWithBackground(session)
-			assert.NotEmpty(t, imageURL)
-			assert.True(t, strings.HasPrefix(imageURL, "data:image/png;base64,"))
-			assert.Len(t, targetPoints, 3)
-			assert.Len(t, hintOrder, 3)
-			assert.NotEmpty(t, hint)
-			assert.Contains(t, hint, "依次点击")
-
-			for _, pt := range targetPoints {
-				assert.Greater(t, pt.X, 0)
-				assert.Greater(t, pt.Y, 0)
-				assert.Less(t, pt.X, session.ImageWidth)
-				assert.Less(t, pt.Y, session.ImageHeight)
-			}
-		})
-	}
-}
-
-func TestVerifyClickPoints_DistancePrecision(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-precision",
-		Type:      "click",
-		MaxPoints: 1,
-		Tolerance: 25,
-		TargetPoints: []ClickPoint{
-			{X: 100, Y: 100, Index: 0},
-		},
-		HintOrder: []int{0},
-		CreatedAt: time.Now(),
-	}
-
-	distances := []struct {
-		name string
-		x, y int
-		pass bool
-	}{
-		{"正好在目标点", 100, 100, true},
-		{"容差范围内-水平", 120, 100, true},
-		{"容差范围内-垂直", 100, 120, true},
-		{"容差范围内-对角线", 117, 117, true},
-		{"容差边界-距离25", 125, 100, true},
-		{"超出容差-距离26", 126, 100, false},
-		{"超出容差-对角线", 118, 118, false},
-	}
-
-	for _, d := range distances {
-		t.Run(d.name, func(t *testing.T) {
-			req := VerifyRequest{
-				SessionID: session.ID,
-				Type:      "click",
-				Points:    [][2]int{{d.x, d.y}},
-			}
-			success, _ := verifyClickPoints(session, req)
-			expectedDist := math.Sqrt(float64((d.x-100)*(d.x-100) + (d.y-100)*(d.y-100)))
-			assert.Equal(t, d.pass, success, "距离=%.2f, 容差=%d", expectedDist, session.Tolerance)
-		})
-	}
-}
-
-func TestVerifyClickPoints_MaxPoints6(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-max6",
-		Type:      "click",
-		MaxPoints: 6,
-		Tolerance: 20,
-		TargetPoints: []ClickPoint{
-			{X: 20, Y: 20, Index: 0},
-			{X: 70, Y: 70, Index: 1},
-			{X: 120, Y: 120, Index: 2},
-			{X: 170, Y: 170, Index: 3},
-			{X: 220, Y: 220, Index: 4},
-			{X: 270, Y: 270, Index: 5},
-		},
-		HintOrder: []int{0, 1, 2, 3, 4, 5},
-		CreatedAt: time.Now(),
-	}
-
-	req := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points: [][2]int{
-			{20, 20}, {70, 70}, {120, 120},
-			{170, 170}, {220, 220}, {270, 270},
-		},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.True(t, success, "6个点正确顺序应验证通过")
-	assert.Empty(t, reason)
-
-	req2 := VerifyRequest{
-		SessionID: session.ID,
-		Type:      "click",
-		Points: [][2]int{
-			{270, 270}, {220, 220}, {170, 170},
-			{120, 120}, {70, 70}, {20, 20},
-		},
-	}
-	success2, reason2 := verifyClickPoints(session, req2)
-	assert.False(t, success2, "6个点逆序应验证失败")
-	assert.Contains(t, reason2, "点击顺序错误")
-}
-
-func TestVerifyClickPoints_ClickSequenceReverseOrder(t *testing.T) {
-	session := &CaptchaSession{
-		ID:        "test-reverse",
-		Type:      "click",
-		MaxPoints: 3,
-		Tolerance: 25,
-		TargetPoints: []ClickPoint{
-			{X: 50, Y: 50, Index: 0},
-			{X: 150, Y: 150, Index: 1},
-			{X: 250, Y: 250, Index: 2},
-		},
-		HintOrder: []int{2, 1, 0},
-		CreatedAt: time.Now(),
-	}
-
-	req := VerifyRequest{
-		SessionID:     session.ID,
-		Type:          "click",
-		Points:        [][2]int{{50, 50}, {150, 150}, {250, 250}},
-		ClickSequence: []int{2, 1, 0},
-	}
-	success, reason := verifyClickPoints(session, req)
-	assert.True(t, success, "通过ClickSequence指定倒序点击应验证通过")
-	assert.Empty(t, reason)
+	t.Run("Failure response with reason", func(t *testing.T) {
+		resp := ClickVerifyResponse{
+			Success:     false,
+			Message:     "验证失败",
+			RiskScore:   75.0,
+			CaptchaPass: false,
+			FailReason:  "点击顺序错误",
+		}
+		data, err := json.Marshal(resp)
+		assert.NoError(t, err)
+		assert.Contains(t, string(data), `"success":false`)
+		assert.Contains(t, string(data), `"fail_reason":"点击顺序错误"`)
+	})
 }

@@ -100,11 +100,16 @@ func SetupRouter() *gin.Engine {
 			captcha.GET("/rotation", handler.GenerateRotationCaptcha)
 			captcha.POST("/rotation/verify", handler.VerifyRotationCaptcha)
 			captcha.POST("/verify", handler.VerifyCaptcha)
+			captcha.GET("/shuffle/click", handler.GetShuffleClickCaptcha)
+			captcha.POST("/shuffle/verify", handler.VerifyShuffleClickCaptcha)
 		}
 
 		// 环境检测路由
 		api.GET("/detect/script", handler.GetDetectionScript)
 		api.POST("/detect/submit", handler.SubmitDetectionData)
+		api.POST("/detect/check", handler.EnvironmentCheck)
+		api.GET("/detect/fingerprint", handler.GetFingerprintInfo)
+		api.GET("/detect/stats", handler.GetFingerprintStats)
 
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")

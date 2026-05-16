@@ -733,3 +733,235 @@ func cleanupExpiredDetectionSessions() {
 		}
 	}
 }
+
+type EnvironmentCheckRequest struct {
+	Fingerprint   string                 `json:"fingerprint" binding:"required"`
+	CanvasHash   string                 `json:"canvas_hash"`
+	WebGLVendor  string                 `json:"webgl_vendor"`
+	WebGLRenderer string                `json:"webgl_renderer"`
+	Fonts        []string               `json:"fonts"`
+	Plugins      []string               `json:"plugins"`
+	ProxyDetected bool                 `json:"proxy_detected"`
+	ScreenInfo   map[string]interface{} `json:"screen_info"`
+	Timezone     string                `json:"timezone"`
+	Language     string                `json:"language"`
+	UserAgent    string                `json:"user_agent"`
+	IPAddress    string                `json:"ip_address"`
+}
+
+type EnvironmentCheckResponse struct {
+	IsBot        bool     `json:"is_bot"`
+	RiskLevel    string   `json:"risk_level"`
+	RiskScore    float64  `json:"risk_score"`
+	DetectedFlags []string `json:"detected_flags"`
+	Fingerprint  string   `json:"fingerprint"`
+	IsUnique     bool     `json:"is_unique"`
+}
+
+type FingerprintQueryRequest struct {
+	Fingerprint string `form:"fingerprint" binding:"required"`
+}
+
+type FingerprintStatsResponse struct {
+	TotalCount        int64                  `json:"total_count"`
+	BotCount          int64                  `json:"bot_count"`
+	ProxyCount        int64                  `json:"proxy_count"`
+	AverageRiskScore  float64                `json:"average_risk_score"`
+	RiskDistribution  map[string]int64       `json:"risk_distribution"`
+	TopFingerprints   []map[string]interface{} `json:"top_fingerprints"`
+}
+
+func EnvironmentCheck(c *gin.Context) {
+	var req EnvironmentCheckRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	result := analyzeEnvironment(&req)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+func analyzeEnvironment(req *EnvironmentCheckRequest) *EnvironmentCheckResponse {
+	response := &EnvironmentCheckResponse{
+		Fingerprint:   req.Fingerprint,
+		RiskScore:     0,
+		DetectedFlags: []string{},
+	}
+
+	if req.CanvasHash == "" && req.WebGLVendor == "" && len(req.Fonts) == 0 {
+		response.RiskScore += 10
+		response.DetectedFlags = append(response.DetectedFlags, "incomplete_fingerprint")
+	}
+
+	if req.ProxyDetected {
+		response.RiskScore += 20
+		response.DetectedFlags = append(response.DetectedFlags, "proxy_detected")
+	}
+
+	if len(req.Fonts) < 3 {
+		response.RiskScore += 10
+		response.DetectedFlags = append(response.DetectedFlags, "limited_fonts")
+	}
+
+	if len(req.Plugins) == 0 {
+		response.RiskScore += 5
+		response.DetectedFlags = append(response.DetectedFlags, "no_plugins")
+	}
+
+	if req.WebGLRenderer != "" {
+		if strings.Contains(strings.ToLower(req.WebGLRenderer), "swiftshader") ||
+			strings.Contains(strings.ToLower(req.WebGLRenderer), "llvmpipe") ||
+			strings.Contains(strings.ToLower(req.WebGLRenderer), "mesa") {
+			response.RiskScore += 15
+			response.DetectedFlags = append(response.DetectedFlags, "software_renderer")
+		}
+	}
+
+	if req.UserAgent != "" {
+		uaLower := strings.ToLower(req.UserAgent)
+		if strings.Contains(uaLower, "headless") {
+			response.RiskScore += 25
+			response.DetectedFlags = append(response.DetectedFlags, "headless_browser")
+		}
+		if strings.Contains(uaLower, "phantom") {
+			response.RiskScore += 30
+			response.DetectedFlags = append(response.DetectedFlags, "phantom_js")
+		}
+		if strings.Contains(uaLower, "selenium") {
+			response.RiskScore += 25
+			response.DetectedFlags = append(response.DetectedFlags, "selenium")
+		}
+		if strings.Contains(uaLower, "puppeteer") {
+			response.RiskScore += 25
+			response.DetectedFlags = append(response.DetectedFlags, "puppeteer")
+		}
+		if strings.Contains(uaLower, "playwright") {
+			response.RiskScore += 25
+			response.DetectedFlags = append(response.DetectedFlags, "playwright")
+		}
+	}
+
+	response.RiskScore = math.Min(math.Max(response.RiskScore, 0), 100)
+
+	if response.RiskScore > 60 {
+		response.RiskLevel = "high"
+		response.IsBot = true
+	} else if response.RiskScore > 30 {
+		response.RiskLevel = "medium"
+	} else {
+		response.RiskLevel = "low"
+	}
+
+	return response
+}
+
+func detectCanvasFingerprint(canvasHash string) bool {
+	return canvasHash == "" || len(canvasHash) < 10
+}
+
+func detectWebGLFingerprint(vendor, renderer string) bool {
+	if vendor == "" || renderer == "" {
+		return true
+	}
+	softwareIndicators := []string{"swiftshader", "llvmpipe", "mesa", "virtual", "software"}
+	rendererLower := strings.ToLower(renderer)
+	for _, indicator := range softwareIndicators {
+		if strings.Contains(rendererLower, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+func detectProxyVPN(req *EnvironmentCheckRequest) bool {
+	if req.ProxyDetected {
+		return true
+	}
+
+	if req.IPAddress != "" {
+		ip := net.ParseIP(req.IPAddress)
+		if ip != nil {
+			privateRanges := []string{
+				"10.", "172.16.", "172.17.", "172.18.", "172.19.",
+				"172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+				"172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+				"172.30.", "172.31.", "192.168.",
+			}
+			for _, prefix := range privateRanges {
+				if strings.HasPrefix(req.IPAddress, prefix) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+func calculateEnvironmentRisk(req *EnvironmentCheckRequest) float64 {
+	risk := 0.0
+
+	if detectCanvasFingerprint(req.CanvasHash) {
+		risk += 15
+	}
+
+	if detectWebGLFingerprint(req.WebGLVendor, req.WebGLRenderer) {
+		risk += 15
+	}
+
+	if detectProxyVPN(req) {
+		risk += 25
+	}
+
+	if len(req.Fonts) < 5 {
+		risk += 10
+	}
+
+	if len(req.Plugins) == 0 {
+		risk += 10
+	}
+
+	return math.Min(math.Max(risk, 0), 100)
+}
+
+func GetFingerprintInfo(c *gin.Context) {
+	var req FingerprintQueryRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "fingerprint parameter is required",
+		})
+		return
+	}
+
+	fingerprintHash := md5.Sum([]byte(req.Fingerprint))
+	fingerprintID := hex.EncodeToString(fingerprintHash[:])
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":     true,
+		"fingerprint": fingerprintID,
+		"query":       req.Fingerprint,
+	})
+}
+
+func GetFingerprintStats(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": FingerprintStatsResponse{
+			TotalCount:       0,
+			BotCount:         0,
+			ProxyCount:       0,
+			AverageRiskScore: 0,
+			RiskDistribution: make(map[string]int64),
+			TopFingerprints:  []map[string]interface{}{},
+		},
+	})
+}
