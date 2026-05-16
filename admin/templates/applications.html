@@ -24,6 +24,8 @@
             <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
             <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
             <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <a class="nav-link" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
+            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
             <div class="sidebar-divider"></div>
         </nav>
         <div class="border-top border-secondary p-3 mt-auto">
@@ -38,6 +40,7 @@
                 <span class="seal-stamp">墨盾</span>
             </div>
             <div class="top-header-right">
+                <button id="exportAppsBtn" class="btn-outline-gold"><i class="fas fa-download me-1"></i>导出</button>
                 <button id="createAppBtn" class="btn-cinnabar btn-sm"><i class="fas fa-plus me-1"></i>创建应用</button>
                 <div class="user-display">
                     <span class="user-name" id="usernameDisplay">管理员</span>
@@ -86,6 +89,83 @@
                 </div>
             </div>
 
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-key me-2" style="color:#b8924e;"></i>密钥管理设置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">自动轮换周期</label>
+                                    <select class="form-select form-select-sm" id="keyRotationPeriod">
+                                        <option value="0">不自动轮换</option>
+                                        <option value="30">30天</option>
+                                        <option value="60">60天</option>
+                                        <option value="90" selected>90天</option>
+                                        <option value="180">180天</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">密钥过期提醒</label>
+                                    <select class="form-select form-select-sm" id="keyExpiryReminder">
+                                        <option value="7" selected>提前7天</option>
+                                        <option value="14">提前14天</option>
+                                        <option value="30">提前30天</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableKeyRotation" checked>
+                                        <label class="form-check-label small" for="enableKeyRotation">启用自动密钥轮换</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="allowKeyRevocation">
+                                        <label class="form-check-label small" for="allowKeyRevocation">允许手动撤销密钥</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-shield-alt me-2" style="color:#c23a2b;"></i>权限控制配置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">默认权限级别</label>
+                                    <select class="form-select form-select-sm" id="defaultPermissionLevel">
+                                        <option value="read">只读</option>
+                                        <option value="write" selected>读写</option>
+                                        <option value="admin">管理</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">IP白名单模式</label>
+                                    <select class="form-select form-select-sm" id="ipWhitelistMode">
+                                        <option value="disabled" selected>禁用</option>
+                                        <option value="whitelist">白名单</option>
+                                        <option value="blacklist">黑名单</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableApiQuota">
+                                        <label class="form-check-label small" for="enableApiQuota">启用API配额限制</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small">每日最大调用次数</label>
+                                    <input type="number" class="form-control form-control-sm" id="dailyApiQuota" value="100000" min="1000" max="10000000" step="1000">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
@@ -118,7 +198,7 @@
             </div>
 
             <div class="card shadow-sm">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <span class="text-muted small">共 <span id="appsCount">0</span> 个应用</span>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary active" data-view="table"><i class="fas fa-list"></i></button>
@@ -135,6 +215,7 @@
                                     <th>应用密钥</th>
                                     <th>状态</th>
                                     <th>请求量/日</th>
+                                    <th>密钥状态</th>
                                     <th>创建时间</th>
                                     <th>操作</th>
                                 </tr>
@@ -204,6 +285,35 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">权限配置</label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permVerify" checked>
+                                        <label class="form-check-label" for="permVerify">验证码验证</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permStats">
+                                        <label class="form-check-label" for="permStats">统计数据</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permManage">
+                                        <label class="form-check-label" for="permManage">应用管理</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permWebhook">
+                                        <label class="form-check-label" for="permWebhook">Webhook</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
@@ -264,6 +374,114 @@
                         </div>
                     </div>
                     <canvas id="appStatsChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="keyRotationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-key me-2"></i>密钥轮换</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        密钥轮换将生成新的应用密钥，旧密钥将在<strong id="gracePeriod">24小时</strong>后失效。请及时更新您的应用配置。
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">应用名称</label>
+                        <input type="text" class="form-control" id="rotationAppName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">当前密钥</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="currentAppKey" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copyCurrentKey"><i class="fas fa-copy"></i></button>
+                        </div>
+                        <small class="text-muted">有效期至: <span id="currentKeyExpiry"></span></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新密钥</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="newAppKey" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copyNewKey"><i class="fas fa-copy"></i></button>
+                        </div>
+                        <small class="text-success">新密钥将在确认后立即生效</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">轮换模式</label>
+                        <select class="form-select" id="rotationMode">
+                            <option value="immediate">立即生效（立即禁用旧密钥）</option>
+                            <option value="graceful" selected>优雅模式（保留旧密钥24小时）</option>
+                            <option value="scheduled">定时轮换（指定日期）</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 d-none" id="scheduledDateGroup">
+                        <label class="form-label">计划轮换时间</label>
+                        <input type="datetime-local" class="form-control" id="scheduledRotationDate">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-cinnabar" id="confirmRotationBtn"><i class="fas fa-sync me-1"></i>确认轮换</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="apiKeyManagementModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-key me-2"></i>API密钥管理</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <h6>密钥列表</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>密钥</th>
+                                        <th>状态</th>
+                                        <th>创建时间</th>
+                                        <th>过期时间</th>
+                                        <th>最后使用</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="apiKeysTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="border-top pt-3">
+                        <h6>创建新密钥</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">密钥名称</label>
+                                <input type="text" class="form-control" id="newKeyName" placeholder="例如：生产环境密钥">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">过期时间</label>
+                                <select class="form-select" id="newKeyExpiry">
+                                    <option value="0">永不过期</option>
+                                    <option value="30">30天</option>
+                                    <option value="90">90天</option>
+                                    <option value="365">1年</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" id="createNewKeyBtn"><i class="fas fa-plus me-1"></i>创建</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>

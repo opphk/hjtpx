@@ -6,6 +6,7 @@
     <title>墨盾验证 · 管理后台 · 风控规则</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="bg-dark d-flex flex-column">
@@ -23,6 +24,8 @@
             <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
             <a class="nav-link active" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
             <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <a class="nav-link" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
+            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
             <div class="sidebar-divider"></div>
         </nav>
         <div class="border-top border-secondary p-3 mt-auto">
@@ -37,6 +40,9 @@
                 <span class="seal-stamp">墨盾</span>
             </div>
             <div class="top-header-right">
+                <button id="importRulesBtn" class="btn-outline-gold"><i class="fas fa-upload me-1"></i>导入</button>
+                <button id="exportRulesBtn" class="btn-outline-gold"><i class="fas fa-download me-1"></i>导出</button>
+                <button id="resetRulesBtn" class="btn-outline-cinnabar"><i class="fas fa-undo me-1"></i>重置</button>
                 <button id="addRuleBtn" class="btn-cinnabar btn-sm"><i class="fas fa-plus me-1"></i>添加规则</button>
                 <div class="user-display">
                     <span class="user-name" id="usernameDisplay">管理员</span>
@@ -85,6 +91,176 @@
                 </div>
             </div>
 
+            <div class="row g-4 mb-4">
+                <div class="col-md-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-tachometer-alt me-2" style="color:#c23a2b;"></i>速度阈值配置</h6></div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small">速度阈值 (ms)</label>
+                                <input type="range" class="form-range" id="speedThreshold" min="100" max="5000" value="1000" step="100">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>100ms</span>
+                                    <span id="speedThresholdValue">1000ms</span>
+                                    <span>5000ms</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small">每分钟最大请求数</label>
+                                <input type="number" class="form-control form-control-sm" id="maxRequestsPerMin" value="60" min="1" max="1000">
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="speedRuleEnabled" checked>
+                                <label class="form-check-label small" for="speedRuleEnabled">启用速度限制</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-route me-2" style="color:#b8924e;"></i>轨迹平滑度阈值</h6></div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small">平滑度阈值 (%)</label>
+                                <input type="range" class="form-range" id="smoothnessThreshold" min="30" max="100" value="60" step="5">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>30%</span>
+                                    <span id="smoothnessThresholdValue">60%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small">最小轨迹点数</label>
+                                <input type="number" class="form-control form-control-sm" id="minTrackPoints" value="10" min="5" max="50">
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="smoothnessRuleEnabled" checked>
+                                <label class="form-check-label small" for="smoothnessRuleEnabled">启用轨迹检测</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-mouse-pointer me-2" style="color:#3b82f6;"></i>点击间隔阈值</h6></div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small">最小点击间隔 (ms)</label>
+                                <input type="range" class="form-range" id="clickIntervalThreshold" min="50" max="1000" value="200" step="50">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>50ms</span>
+                                    <span id="clickIntervalThresholdValue">200ms</span>
+                                    <span>1000ms</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small">最大连续快速点击</label>
+                                <input type="number" class="form-control form-control-sm" id="maxRapidClicks" value="5" min="1" max="20">
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="clickIntervalRuleEnabled" checked>
+                                <label class="form-check-label small" for="clickIntervalRuleEnabled">启用点击检测</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-exclamation-circle me-2" style="color:#f59e0b;"></i>环境风险阈值</h6></div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small">环境风险分数阈值</label>
+                                <input type="range" class="form-range" id="envRiskThreshold" min="0" max="100" value="70" step="5">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>0</span>
+                                    <span id="envRiskThresholdValue">70</span>
+                                    <span>100</span>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label class="form-label small">IP代理检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="proxyDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="proxyDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">VPN检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="vpnDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="vpnDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">模拟器检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="emulatorDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="emulatorDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">虚拟机检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="vmDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="vmDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-fingerprint me-2" style="color:#8b5cf6;"></i>设备指纹风险阈值</h6></div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small">设备指纹相似度阈值 (%)</label>
+                                <input type="range" class="form-range" id="fingerprintSimilarityThreshold" min="50" max="100" value="85" step="5">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>50%</span>
+                                    <span id="fingerprintSimilarityThresholdValue">85%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label class="form-label small">设备指纹重复检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="fingerprintDuplicateDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="fingerprintDuplicateDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">浏览器特征检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="browserFeatureDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="browserFeatureDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">Canvas指纹检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="canvasFingerprintDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="canvasFingerprintDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">WebGL指纹检测</label>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="webglFingerprintDetectionEnabled" checked>
+                                        <label class="form-check-label small" for="webglFingerprintDetectionEnabled">启用</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
@@ -95,6 +271,7 @@
                                 <option value="rate_limit">频率限制</option>
                                 <option value="ip_block">IP封禁</option>
                                 <option value="behavior">行为分析</option>
+                                <option value="device_fingerprint">设备指纹</option>
                                 <option value="custom">自定义</option>
                             </select>
                         </div>
@@ -114,11 +291,21 @@
                             <button id="searchRulesBtn" class="btn-ink w-100"><i class="fas fa-search me-1"></i>搜索</button>
                         </div>
                     </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-12">
+                            <span class="text-muted small me-2">批量操作:</span>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-success" id="batchEnableBtn"><i class="fas fa-check me-1"></i>批量启用</button>
+                                <button class="btn btn-outline-secondary" id="batchDisableBtn"><i class="fas fa-ban me-1"></i>批量禁用</button>
+                                <button class="btn btn-outline-danger" id="batchDeleteBtn"><i class="fas fa-trash me-1"></i>批量删除</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="card shadow-sm">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <span class="text-muted small">共 <span id="rulesCount">0</span> 条规则</span>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary active" data-view="table"><i class="fas fa-list"></i></button>
@@ -294,6 +481,32 @@
                 <div class="modal-body" id="ruleDetailContent"></div>
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="importRulesModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-upload me-2"></i>导入规则</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">选择文件</label>
+                        <input type="file" class="form-control" id="importRulesFile" accept=".json,.csv">
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-1"></i>
+                        支持 JSON 和 CSV 格式。JSON格式示例：<br>
+                        <code>{"name":"规则名称","type":"rate_limit","threshold":100,"action":"block"}</code>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-ink" id="confirmImportRulesBtn"><i class="fas fa-upload me-1"></i>导入</button>
                 </div>
             </div>
         </div>

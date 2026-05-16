@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 告警通知</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="bg-dark d-flex flex-column">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-icon"><i class="fas fa-shield-halved"></i></div>
+            <div>
+                <div class="sidebar-brand-text">墨盾验证</div>
+                <div class="sidebar-brand-sub">· 管理后台 ·</div>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
+            <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
+            <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
+            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
+            <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
+            <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <a class="nav-link active" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
+            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
+            <div class="sidebar-divider"></div>
+        </nav>
+        <div class="border-top border-secondary p-3 mt-auto">
+            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
+            <div class="top-header-left">
+                <h1 class="page-title">告警通知</h1>
+                <span class="seal-stamp">墨盾</span>
+            </div>
+            <div class="top-header-right">
+                <button id="testNotificationBtn" class="btn-outline-gold"><i class="fas fa-paper-plane me-1"></i>发送测试</button>
+                <button id="addAlertRuleBtn" class="btn-cinnabar btn-sm"><i class="fas fa-plus me-1"></i>添加规则</button>
+                <div class="user-display">
+                    <span class="user-name" id="usernameDisplay">管理员</span>
+                    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        <hr class="brush-divider">
+        <main class="main-content">
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">告警规则</div>
+                            <div class="stat-value" id="totalAlertRules">0</div>
+                            <small class="text-muted" style="font-size:12px;">启用中 <span id="activeAlertRules">0</span></small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">今日告警</div>
+                            <div class="stat-value text-danger" id="todayAlerts">0</div>
+                            <small class="text-danger" style="font-size:12px;"><i class="fas fa-arrow-up me-1"></i>较昨日</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">未读告警</div>
+                            <div class="stat-value" style="color:#f59e0b;" id="unreadAlerts">0</div>
+                            <small style="color:#f59e0b;font-size:12px;"><i class="fas fa-exclamation-circle me-1"></i>待处理</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">告警成功率</div>
+                            <div class="stat-value" style="color:#1a7f37;" id="alertSuccessRate">0%</div>
+                            <small style="color:#1a7f37;font-size:12px;"><i class="fas fa-check-circle me-1"></i>本周</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-envelope me-2" style="color:#c23a2b;"></i>邮件通知配置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="emailNotificationEnabled" checked>
+                                        <label class="form-check-label" for="emailNotificationEnabled">启用邮件通知</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">SMTP服务器</label>
+                                    <input type="text" class="form-control form-control-sm" id="smtpServer" placeholder="smtp.example.com">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">SMTP端口</label>
+                                    <input type="number" class="form-control form-control-sm" id="smtpPort" value="587" min="1" max="65535">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">发件人邮箱</label>
+                                    <input type="email" class="form-control form-control-sm" id="smtpFrom" placeholder="noreply@example.com">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">收件人邮箱</label>
+                                    <input type="email" class="form-control form-control-sm" id="smtpTo" placeholder="admin@example.com">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">用户名</label>
+                                    <input type="text" class="form-control form-control-sm" id="smtpUsername" placeholder="username">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">密码</label>
+                                    <input type="password" class="form-control form-control-sm" id="smtpPassword" placeholder="••••••••">
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-sm btn-outline-secondary" id="testEmailBtn"><i class="fas fa-paper-plane me-1"></i>测试邮件</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-bell me-2" style="color:#b8924e;"></i>钉钉群通知配置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="dingtalkNotificationEnabled">
+                                        <label class="form-check-label" for="dingtalkNotificationEnabled">启用钉钉通知</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small">Webhook地址</label>
+                                    <input type="url" class="form-control form-control-sm" id="dingtalkWebhook" placeholder="https://oapi.dingtalk.com/robot/send?access_token=xxx">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">加签密钥(可选)</label>
+                                    <input type="text" class="form-control form-control-sm" id="dingtalkSecret" placeholder="SEC开头的密钥">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">消息类型</label>
+                                    <select class="form-select form-select-sm" id="dingtalkMsgType">
+                                        <option value="text">文本消息</option>
+                                        <option value="link">链接消息</option>
+                                        <option value="markdown">Markdown</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-sm btn-outline-secondary" id="testDingtalkBtn"><i class="fas fa-paper-plane me-1"></i>测试钉钉</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-comments me-2" style="color:#1a7f37;"></i>企业微信通知配置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="wechatNotificationEnabled">
+                                        <label class="form-check-label" for="wechatNotificationEnabled">启用企业微信通知</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small">Webhook地址</label>
+                                    <input type="url" class="form-control form-control-sm" id="wechatWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">消息类型</label>
+                                    <select class="form-select form-select-sm" id="wechatMsgType">
+                                        <option value="text">文本消息</option>
+                                        <option value="markdown">Markdown</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">部门/用户</label>
+                                    <input type="text" class="form-control form-control-sm" id="wechatToUser" placeholder="@all">
+                                </div>
+                                <div class="col-12">
+                                    <button class="btn btn-sm btn-outline-secondary" id="testWechatBtn"><i class="fas fa-paper-plane me-1"></i>测试企业微信</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-cog me-2" style="color:#3b82f6;"></i>通知策略配置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">告警级别</label>
+                                    <select class="form-select form-select-sm" id="alertSeverityLevel">
+                                        <option value="info">信息</option>
+                                        <option value="warning" selected>警告</option>
+                                        <option value="error">错误</option>
+                                        <option value="critical">严重</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">通知频率</label>
+                                    <select class="form-select form-select-sm" id="notificationFrequency">
+                                        <option value="immediate" selected>立即通知</option>
+                                        <option value="5min">每5分钟汇总</option>
+                                        <option value="15min">每15分钟汇总</option>
+                                        <option value="1hour">每小时汇总</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">最大通知数/小时</label>
+                                    <input type="number" class="form-control form-control-sm" id="maxNotificationsPerHour" value="10" min="1" max="100">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">静默期</label>
+                                    <select class="form-select form-select-sm" id="silentPeriod">
+                                        <option value="0">无静默</option>
+                                        <option value="30">30分钟</option>
+                                        <option value="60" selected>1小时</option>
+                                        <option value="240">4小时</option>
+                                        <option value="1440">24小时</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableNotificationGrouping" checked>
+                                        <label class="form-check-label small" for="enableNotificationGrouping">启用告警分组</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-2">
+                            <label class="form-label">告警级别</label>
+                            <select class="form-select" id="alertLevelFilter">
+                                <option value="">全部</option>
+                                <option value="info">信息</option>
+                                <option value="warning">警告</option>
+                                <option value="error">错误</option>
+                                <option value="critical">严重</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="alertStatusFilter">
+                                <option value="">全部</option>
+                                <option value="active">活跃</option>
+                                <option value="acknowledged">已确认</option>
+                                <option value="resolved">已解决</option>
+                                <option value="muted">已静默</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">时间范围</label>
+                            <select class="form-select" id="alertTimeRange">
+                                <option value="1h">最近1小时</option>
+                                <option value="6h">最近6小时</option>
+                                <option value="24h" selected>最近24小时</option>
+                                <option value="7d">最近7天</option>
+                                <option value="30d">最近30天</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">关键词</label>
+                            <input type="text" class="form-control" id="alertKeyword" placeholder="搜索告警内容">
+                        </div>
+                        <div class="col-md-3">
+                            <button id="searchAlertsBtn" class="btn-ink w-100"><i class="fas fa-search me-1"></i>搜索</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-chart-pie me-2" style="color:#b8924e;"></i>告警分布</h6></div>
+                        <div class="card-body">
+                            <canvas id="alertDistributionChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-chart-line me-2" style="color:#c23a2b;"></i>告警趋势</h6></div>
+                        <div class="card-body">
+                            <canvas id="alertTrendChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">告警历史 - 共 <span id="alertsCount">0</span> 条</span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary active" data-view="list"><i class="fas fa-list me-1"></i>列表</button>
+                        <button class="btn btn-outline-secondary" data-view="timeline"><i class="fas fa-clock me-1"></i>时间线</button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" id="alertsTableView">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px;"></th>
+                                    <th>时间</th>
+                                    <th>级别</th>
+                                    <th>告警名称</th>
+                                    <th>应用</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alertsTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="d-none" id="alertsTimelineView"></div>
+                </div>
+                <div class="card-footer" id="alertsPagination"></div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal fade" id="alertRuleModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="alertRuleModalTitle">添加告警规则</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="alertRuleForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="alertRuleId">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">规则名称 *</label>
+                                    <input type="text" class="form-control" id="alertRuleName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">告警级别 *</label>
+                                    <select class="form-select" id="alertRuleSeverity" required>
+                                        <option value="info">信息</option>
+                                        <option value="warning" selected>警告</option>
+                                        <option value="error">错误</option>
+                                        <option value="critical">严重</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">告警条件</label>
+                            <textarea class="form-control" id="alertRuleCondition" rows="2" placeholder="例如: error_count > 10 AND response_time > 1000"></textarea>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">触发条件</label>
+                                    <select class="form-select" id="alertRuleTrigger">
+                                        <option value="immediate">立即触发</option>
+                                        <option value="count">连续N次</option>
+                                        <option value="percentage">百分比</option>
+                                        <option value="threshold">阈值</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">阈值</label>
+                                    <input type="number" class="form-control" id="alertRuleThreshold" value="5" min="1">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">通知渠道</label>
+                            <div class="row g-2">
+                                <div class="col-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="notifyEmail" checked>
+                                        <label class="form-check-label" for="notifyEmail"><i class="fas fa-envelope me-1"></i>邮件</label>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="notifyDingtalk">
+                                        <label class="form-check-label" for="notifyDingtalk"><i class="fas fa-bell me-1"></i>钉钉</label>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="notifyWechat">
+                                        <label class="form-check-label" for="notifyWechat"><i class="fas fa-comments me-1"></i>企业微信</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="alertRuleEnabled" checked>
+                                <label class="form-check-label" for="alertRuleEnabled">启用规则</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn-ink">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="alertDetailModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">告警详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="alertDetailContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-secondary" id="acknowledgeAlertBtn"><i class="fas fa-check me-1"></i>确认</button>
+                    <button type="button" class="btn-outline-secondary" id="muteAlertBtn"><i class="fas fa-bell-slash me-1"></i>静默</button>
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="testNotificationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-paper-plane me-2"></i>发送测试通知</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">通知渠道</label>
+                        <select class="form-select" id="testChannel">
+                            <option value="email">邮件</option>
+                            <option value="dingtalk">钉钉</option>
+                            <option value="wechat">企业微信</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">告警级别</label>
+                        <select class="form-select" id="testSeverity">
+                            <option value="info">信息</option>
+                            <option value="warning">警告</option>
+                            <option value="error">错误</option>
+                            <option value="critical">严重</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">测试消息</label>
+                        <textarea class="form-control" id="testMessage" rows="3" placeholder="这是一条测试告警消息"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-cinnabar" id="confirmTestNotificationBtn"><i class="fas fa-paper-plane me-1"></i>发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/notifications.js"></script>
+</body>
+</html>
