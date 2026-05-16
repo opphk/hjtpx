@@ -2332,7 +2332,7 @@ class Captcha {
                 const data = await response.json();
                 this.sessionId = data.session_id;
                 this.gestureState.pattern = data.pattern;
-                
+
                 const bgCanvas = this.elements.gestureBackgroundCanvas;
                 const ctx = bgCanvas.getContext('2d');
                 const img = new Image();
@@ -2353,6 +2353,77 @@ class Captcha {
             console.error('Gesture refresh failed:', error);
             this.showResult(this.i18n.t('loadFailed'), 'error');
         }
+    }
+
+    async refreshPassive() {
+        try {
+            // Step 1: Update check UI
+            const envCheckEl = this.container.querySelector('#passive-check-env');
+            const behaviorCheckEl = this.container.querySelector('#passive-check-behavior');
+            const riskCheckEl = this.container.querySelector('#passive-check-risk');
+            const statusEl = this.container.querySelector('#passive-status');
+            const riskValueEl = this.container.querySelector('#passive-risk-value');
+
+            if (envCheckEl) {
+                await this.animateCheck(envCheckEl, this.i18n.t('passiveCheckEnvDone'));
+            }
+
+            // Step 2: Call seamless verify endpoint
+            const payload = this.environmentData || {};
+            const response = await fetch(`${this.options.apiBase}/seamless/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.sessionId = data.session_id;
+
+                if (behaviorCheckEl) {
+                    await this.animateCheck(behaviorCheckEl, this.i18n.t('passiveCheckBehaviorDone'));
+                }
+                if (riskCheckEl) {
+                    await this.animateCheck(riskCheckEl, this.i18n.t('passiveCheckRiskDone'));
+                }
+                if (riskValueEl) {
+                    riskValueEl.textContent = data.risk_score || 0;
+                }
+                if (statusEl) {
+                    statusEl.textContent = this.i18n.t('passiveSuccess');
+                }
+
+                if (data.decision === 'allow') {
+                    if (this.options.onSuccess) {
+                        this.options.onSuccess({
+                            session_id: data.session_id,
+                            risk_score: data.risk_score
+                        });
+                    }
+                    this.showResult(this.i18n.t('verifySuccess'), 'success');
+                } else {
+                    if (this.options.onError) {
+                        this.options.onError({ error: 'Verification failed' });
+                    }
+                    this.showResult(this.i18n.t('verifyFailed'), 'error');
+                }
+            } else {
+                this.showResult(this.i18n.t('loadFailed'), 'error');
+            }
+        } catch (error) {
+            console.error('Passive refresh failed:', error);
+            this.showResult(this.i18n.t('loadFailed'), 'error');
+        }
+    }
+
+    async animateCheck(element, text) {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                element.innerHTML = `<i class="fas fa-check-circle text-success me-2"></i>${text}`;
+                element.style.color = '#52c41a';
+                resolve();
+            }, 500);
+        });
     }
 
     startGestureDrawing(e) {
