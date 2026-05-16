@@ -753,3 +753,429 @@ func TestSliderSessionExpiry(t *testing.T) {
 	sliderSessionMu.RUnlock()
 	assert.False(t, exists, "expired session should be deleted")
 }
+
+func TestTrajectoryEncryption_EncryptDecrypt(t *testing.T) {
+	secretKey := []byte("test-secret-key-for-trajectory-encryption")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+		{X: 100, Y: 51, T: 200},
+		{X: 150, Y: 50, T: 300},
+	}
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+	assert.NotNil(t, encrypted)
+	assert.NotEmpty(t, encrypted.Salt)
+	assert.Len(t, encrypted.Salt, 16)
+	assert.NotEmpty(t, encrypted.EncryptedData)
+	assert.NotEmpty(t, encrypted.Signature)
+	assert.Greater(t, encrypted.Timestamp, int64(0))
+
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	assert.NoError(t, err)
+	assert.Equal(t, len(trajectory), len(decrypted))
+
+	for i, point := range trajectory {
+		assert.Equal(t, point.X, decrypted[i].X)
+		assert.Equal(t, point.Y, decrypted[i].Y)
+		assert.Equal(t, point.T, decrypted[i].T)
+	}
+}
+
+func TestTrajectoryEncryption_EmptyTrajectory(t *testing.T) {
+	secretKey := []byte("test-secret-key")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	encrypted, err := encryptor.EncryptTrajectory([]TrajectoryPoint{})
+	assert.Error(t, err)
+	assert.Nil(t, encrypted)
+}
+
+func TestTrajectoryEncryption_NilPayload(t *testing.T) {
+	secretKey := []byte("test-secret-key")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	decrypted, err := encryptor.DecryptTrajectory(nil)
+	assert.Error(t, err)
+	assert.Nil(t, decrypted)
+}
+
+func TestTrajectoryEncryption_InvalidTimestamp(t *testing.T) {
+	secretKey := []byte("test-secret-key")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	encryptor.maxTimeDrift = 100 * time.Millisecond
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+	}
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	assert.Error(t, err)
+	assert.Nil(t, decrypted)
+	assert.Contains(t, err.Error(), "timestamp drift too large")
+}
+
+func TestTrajectoryEncryption_InvalidSalt(t *testing.T) {
+	secretKey := []byte("test-secret-key")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+	}
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	encrypted.Salt = "short"
+
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	assert.Error(t, err)
+	assert.Nil(t, decrypted)
+}
+
+func TestTrajectoryEncryption_InvalidSignature(t *testing.T) {
+	secretKey := []byte("test-secret-key")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+	}
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	encrypted.Signature = "invalid-signature"
+
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	assert.Error(t, err)
+	assert.Nil(t, decrypted)
+	assert.Contains(t, err.Error(), "signature verification failed")
+}
+
+func TestTrajectoryEncryption_DifferentSecretKey(t *testing.T) {
+	secretKey1 := []byte("secret-key-one")
+	secretKey2 := []byte("secret-key-two")
+
+	encryptor1 := NewTrajectoryEncryption(secretKey1)
+	encryptor2 := NewTrajectoryEncryption(secretKey2)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+	}
+
+	encrypted, err := encryptor1.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	decrypted, err := encryptor2.DecryptTrajectory(encrypted)
+	assert.Error(t, err)
+	assert.Nil(t, decrypted)
+}
+
+func TestTrajectoryEncryption_LargeTrajectory(t *testing.T) {
+	secretKey := []byte("test-secret-key-for-trajectory")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := make([]TrajectoryPoint, 200)
+	for i := 0; i < 200; i++ {
+		trajectory[i] = TrajectoryPoint{
+			X: i * 2,
+			Y: 50 + (i % 5),
+			T: int64(i * 10),
+		}
+	}
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, encrypted.EncryptedData)
+
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	assert.NoError(t, err)
+	assert.Equal(t, len(trajectory), len(decrypted))
+}
+
+func TestTrajectoryEncryption_EncryptedDataSize(t *testing.T) {
+	secretKey := []byte("test-secret-key-for-trajectory")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := make([]TrajectoryPoint, 100)
+	for i := 0; i < 100; i++ {
+		trajectory[i] = TrajectoryPoint{
+			X: i * 2,
+			Y: 50 + (i % 5),
+			T: int64(i * 10),
+		}
+	}
+
+	trajectoryJSON, _ := json.Marshal(trajectory)
+	originalSize := len(trajectoryJSON)
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	encryptedSize := len(encrypted.EncryptedData)
+	assert.Less(t, float64(encryptedSize), float64(originalSize)*2.0,
+		"encrypted data should be less than 2x original size")
+}
+
+func TestTrajectoryEncryption_Performance(t *testing.T) {
+	secretKey := []byte("test-secret-key-for-performance")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := make([]TrajectoryPoint, 50)
+	for i := 0; i < 50; i++ {
+		trajectory[i] = TrajectoryPoint{
+			X: i * 3,
+			Y: 50 + (i % 3),
+			T: int64(i * 15),
+		}
+	}
+
+	encryptStart := time.Now()
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	encryptDuration := time.Since(encryptStart)
+	assert.NoError(t, err)
+	assert.Less(t, encryptDuration.Milliseconds(), int64(5),
+		"encryption should complete within 5ms")
+
+	decryptStart := time.Now()
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	decryptDuration := time.Since(decryptStart)
+	assert.NoError(t, err)
+	assert.Less(t, decryptDuration.Milliseconds(), int64(5),
+		"decryption should complete within 5ms")
+
+	_ = decrypted
+}
+
+func TestTrajectoryEncryption_ConcurrentAccess(t *testing.T) {
+	secretKey := []byte("test-secret-key-concurrent")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+		{X: 100, Y: 51, T: 200},
+	}
+
+	done := make(chan bool, 10)
+
+	for i := 0; i < 10; i++ {
+		go func() {
+			for j := 0; j < 10; j++ {
+				encrypted, err := encryptor.EncryptTrajectory(trajectory)
+				assert.NoError(t, err)
+				assert.NotNil(t, encrypted)
+
+				decrypted, err := encryptor.DecryptTrajectory(encrypted)
+				assert.NoError(t, err)
+				assert.Equal(t, len(trajectory), len(decrypted))
+			}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestTrajectoryEncryption_TamperedData(t *testing.T) {
+	secretKey := []byte("test-secret-key-tampered")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+	}
+
+	encrypted, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	encrypted.EncryptedData = encrypted.EncryptedData + "X"
+
+	decrypted, err := encryptor.DecryptTrajectory(encrypted)
+	assert.Error(t, err)
+	assert.Nil(t, decrypted)
+}
+
+func TestTrajectoryEncryption_MultipleEncryptions(t *testing.T) {
+	secretKey := []byte("test-secret-key-multiple")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectories := [][]TrajectoryPoint{
+		{{X: 0, Y: 50, T: 0}, {X: 50, Y: 52, T: 100}},
+		{{X: 10, Y: 30, T: 0}, {X: 60, Y: 32, T: 100}},
+		{{X: 20, Y: 70, T: 0}, {X: 70, Y: 72, T: 100}},
+	}
+
+	for i, traj := range trajectories {
+		encrypted, err := encryptor.EncryptTrajectory(traj)
+		assert.NoError(t, err)
+		assert.NotEqual(t, "", encrypted.Salt, "salt %d should not be empty", i)
+
+		decrypted, err := encryptor.DecryptTrajectory(encrypted)
+		assert.NoError(t, err)
+		assert.Equal(t, len(traj), len(decrypted))
+	}
+}
+
+func TestTrajectoryEncryption_ShouldRotate(t *testing.T) {
+	secretKey := []byte("test-secret-key-rotate")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	assert.False(t, encryptor.ShouldRotate())
+
+	err := encryptor.RotateSalt()
+	assert.NoError(t, err)
+
+	assert.False(t, encryptor.ShouldRotate())
+}
+
+func TestTrajectoryEncryption_WithSaltRotation(t *testing.T) {
+	secretKey := []byte("test-secret-key-salt-rotation")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	trajectory := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 50, Y: 52, T: 100},
+	}
+
+	encrypted1, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+
+	decrypted1, err := encryptor.DecryptTrajectory(encrypted1)
+	assert.NoError(t, err)
+	assert.Equal(t, len(trajectory), len(decrypted1))
+
+	encryptor.RotateSalt()
+
+	encrypted2, err := encryptor.EncryptTrajectory(trajectory)
+	assert.NoError(t, err)
+	assert.NotEqual(t, encrypted1.Salt, encrypted2.Salt)
+
+	decrypted2, err := encryptor.DecryptTrajectory(encrypted2)
+	assert.NoError(t, err)
+	assert.Equal(t, len(trajectory), len(decrypted2))
+
+	decrypted1Again, err := encryptor.DecryptTrajectory(encrypted1)
+	assert.NoError(t, err)
+	assert.Equal(t, len(trajectory), len(decrypted1Again))
+}
+
+func TestVerifySliderCaptcha_WithEncryptedTrajectory(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/slider/verify", VerifySliderCaptcha)
+
+	sliderSessionStore = make(map[string]*SliderSession)
+
+	secretKey := []byte("captcha-trajectory-secret-key-2024")
+	encryptor := NewTrajectoryEncryption(secretKey)
+
+	sessionID := "test-encrypted-traj-session"
+	session := &SliderSession{
+		SessionID: sessionID,
+		SecretX:   150,
+		SecretY:   60,
+		Tolerance: 8,
+		Shape:     ShapeCircle,
+		Attempts:  0,
+		Verified:  false,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+	sliderSessionStore[sessionID] = session
+
+	traj := generateHumanLikeTrajectory(0, 150, 60, 62, 30)
+	encryptedTraj, err := encryptor.EncryptTrajectory(traj)
+	assert.NoError(t, err)
+
+	body := VerifySliderRequest{
+		SessionID:            sessionID,
+		X:                    150,
+		Y:                    60,
+		EncryptedTrajectory:  encryptedTraj,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var apiResp response.Response
+	err = json.Unmarshal(w.Body.Bytes(), &apiResp)
+	assert.NoError(t, err)
+
+	dataJSON, _ := json.Marshal(apiResp.Data)
+	var resp VerifySliderResponse
+	err = json.Unmarshal(dataJSON, &resp)
+	assert.NoError(t, err)
+	assert.True(t, resp.Success, "encrypted trajectory with correct position should succeed")
+}
+
+func TestVerifySliderCaptcha_EncryptedTrajectoryInvalidSignature(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/slider/verify", VerifySliderCaptcha)
+
+	sliderSessionStore = make(map[string]*SliderSession)
+
+	sessionID := "test-invalid-sig-session"
+	session := &SliderSession{
+		SessionID: sessionID,
+		SecretX:   150,
+		SecretY:   60,
+		Tolerance: 8,
+		Shape:     ShapeCircle,
+		Attempts:  0,
+		Verified:  false,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+	sliderSessionStore[sessionID] = session
+
+	invalidPayload := EncryptedTrajectoryPayload{
+		Timestamp:     time.Now().UnixMilli(),
+		Salt:          "ABCDEFGHIJKLMNOP",
+		EncryptedData: "invalid-encrypted-data",
+		Signature:     "invalid-signature",
+	}
+
+	body := VerifySliderRequest{
+		SessionID:            sessionID,
+		X:                    150,
+		Y:                    60,
+		EncryptedTrajectory:  &invalidPayload,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var apiResp response.Response
+	err := json.Unmarshal(w.Body.Bytes(), &apiResp)
+	assert.NoError(t, err)
+
+	dataJSON, _ := json.Marshal(apiResp.Data)
+	var resp VerifySliderResponse
+	err = json.Unmarshal(dataJSON, &resp)
+	assert.NoError(t, err)
+	assert.False(t, resp.Success)
+	assert.Contains(t, resp.Message, "轨迹解密失败")
+}

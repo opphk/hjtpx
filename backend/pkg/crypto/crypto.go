@@ -777,3 +777,108 @@ func (e *EncryptedData) ToJSON() string {
 	return fmt.Sprintf(`{"c":"%s","i":"%s","t":"%s","v":%d,"a":"%s","ct":%d,"et":%d}`,
 		e.Ciphertext, e.IV, e.AuthTag, e.Version, e.Algorithm, e.CreatedAt, e.EncryptedAt)
 }
+
+type SaltManager struct {
+	currentSalt     string
+	previousSalt    string
+	lastRotation    time.Time
+	saltLength      int
+	rotationPeriod  time.Duration
+	historicalSalts []string
+	mu              sync.RWMutex
+}
+
+func NewSaltManager(saltLength int) *SaltManager {
+	sm := &SaltManager{
+		saltLength:     saltLength,
+		rotationPeriod: 5 * time.Minute,
+		historicalSalts: make([]string, 0, 10),
+		lastRotation:   time.Now(),
+	}
+
+	initialSalt, _ := GenerateRandomString(saltLength)
+	sm.currentSalt = initialSalt
+	sm.historicalSalts = append(sm.historicalSalts, initialSalt)
+
+	go sm.autoRotate()
+
+	return sm
+}
+
+func (sm *SaltManager) GetCurrentSalt() string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.currentSalt
+}
+
+func (sm *SaltManager) RotateSalt() error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	newSalt, err := GenerateRandomString(sm.saltLength)
+	if err != nil {
+		return fmt.Errorf("failed to generate new salt: %w", err)
+	}
+
+	sm.previousSalt = sm.currentSalt
+	sm.currentSalt = newSalt
+	sm.lastRotation = time.Now()
+
+	sm.historicalSalts = append(sm.historicalSalts, newSalt)
+	if len(sm.historicalSalts) > 10 {
+		sm.historicalSalts = sm.historicalSalts[len(sm.historicalSalts)-10:]
+	}
+
+	return nil
+}
+
+func (sm *SaltManager) ValidateWithHistoricalSalts(salt string) bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	for _, historicalSalt := range sm.historicalSalts {
+		if salt == historicalSalt {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (sm *SaltManager) ShouldRotate() bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	return time.Since(sm.lastRotation) >= sm.rotationPeriod
+}
+
+func (sm *SaltManager) GetRotationPeriod() time.Duration {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.rotationPeriod
+}
+
+func (sm *SaltManager) SetRotationPeriod(period time.Duration) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.rotationPeriod = period
+}
+
+func (sm *SaltManager) GetHistoricalSaltsCount() int {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return len(sm.historicalSalts)
+}
+
+func (sm *SaltManager) autoRotate() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if sm.ShouldRotate() {
+			if err := sm.RotateSalt(); err != nil {
+				fmt.Printf("Salt rotation failed: %v\n", err)
+			}
+		}
+	}
+}

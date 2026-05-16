@@ -1,3 +1,175 @@
+class TrajectoryEncryptor {
+    constructor() {
+        this.secretKey = 'captcha-trajectory-secret-key-2024';
+        this.saltLength = 16;
+    }
+
+    generateSalt() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let salt = '';
+        const randomValues = new Uint8Array(this.saltLength);
+        crypto.getRandomValues(randomValues);
+        for (let i = 0; i < this.saltLength; i++) {
+            salt += chars[randomValues[i] % chars.length];
+        }
+        return salt;
+    }
+
+    async encryptData(data, salt) {
+        const key = await this.deriveKey(salt);
+        const encoder = new TextEncoder();
+        const dataBytes = encoder.encode(JSON.stringify(data));
+
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+
+        const encryptedContent = await crypto.subtle.encrypt(
+            {
+                name: 'AES-GCM',
+                iv: iv
+            },
+            key,
+            dataBytes
+        );
+
+        const combined = new Uint8Array(iv.length + encryptedContent.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(encryptedContent), iv.length);
+
+        return this.arrayBufferToBase64(combined);
+    }
+
+    async deriveKey(salt) {
+        const encoder = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(this.secretKey),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveBits', 'deriveKey']
+        );
+
+        const saltBytes = encoder.encode(salt);
+
+        return crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: saltBytes,
+                iterations: 100000,
+                hash: 'SHA-256'
+            },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+    }
+
+    generateSignature(timestamp, salt, encryptedData) {
+        const data = `${timestamp}:${salt}:${encryptedData}`;
+        const encoder = new TextEncoder();
+        const key = encoder.encode(this.secretKey);
+
+        const signature = this.hmacSHA256(key, encoder.encode(data));
+        return this.arrayBufferToBase64(signature);
+    }
+
+    async hmacSHA256(key, data) {
+        const cryptoKey = await crypto.subtle.importKey(
+            'raw',
+            key,
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+
+        const signature = await crypto.subtle.sign('HMAC', cryptoKey, data);
+        return new Uint8Array(signature);
+    }
+
+    arrayBufferToBase64(buffer) {
+        const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    base64ToArrayBuffer(base64) {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    async decryptData(encryptedDataBase64, salt) {
+        const key = await this.deriveKey(salt);
+        const combined = this.base64ToArrayBuffer(encryptedDataBase64);
+
+        const iv = combined.slice(0, 12);
+        const ciphertext = combined.slice(12);
+
+        const decryptedContent = await crypto.subtle.decrypt(
+            {
+                name: 'AES-GCM',
+                iv: iv
+            },
+            key,
+            ciphertext
+        );
+
+        const decoder = new TextDecoder();
+        return JSON.parse(decoder.decode(decryptedContent));
+    }
+
+    async verifySignature(timestamp, salt, encryptedData, signature) {
+        const expectedSignature = this.generateSignature(timestamp, salt, encryptedData);
+        return this.constantTimeCompare(signature, expectedSignature);
+    }
+
+    constantTimeCompare(a, b) {
+        if (a.length !== b.length) {
+            return false;
+        }
+        let result = 0;
+        for (let i = 0; i < a.length; i++) {
+            result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+        }
+        return result === 0;
+    }
+
+    async encryptTrajectory(trajectory) {
+        if (!trajectory || trajectory.length === 0) {
+            throw new Error('Empty trajectory data');
+        }
+
+        const timestamp = Date.now();
+        const salt = this.generateSalt();
+
+        const encryptedData = await this.encryptData(trajectory, salt);
+        const signature = this.generateSignature(timestamp, salt, encryptedData);
+
+        return {
+            timestamp: timestamp,
+            salt: salt,
+            encrypted_data: encryptedData,
+            signature: signature
+        };
+    }
+
+    validateTimestamp(timestamp, maxDriftMs = 300000) {
+        const now = Date.now();
+        const drift = Math.abs(now - timestamp);
+        return drift <= maxDriftMs;
+    }
+
+    generateRequestPayload(trajectory) {
+        return this.encryptTrajectory(trajectory);
+    }
+}
+
 class Captcha {
     constructor(containerId, options = {}) {
         this.container = document.getElementById(containerId);
@@ -12,6 +184,7 @@ class Captcha {
             language: 'zh-CN',
             animationStyle: 'pulse',
             enableSound: false,
+            enableEncryption: true,
             onSuccess: null,
             onError: null,
             onRefresh: null,
@@ -19,6 +192,8 @@ class Captcha {
             onLoadEnd: null,
             ...options
         };
+
+        this.trajectoryEncryptor = new TrajectoryEncryptor();
 
         this.sliderState = {
             isDragging: false,
@@ -1390,7 +1565,7 @@ class Captcha {
 
         const speedData = this.calculateSpeedData();
 
-        const payload = {
+        let payload = {
             session_id: this.sessionId,
             x: Math.round(this.sliderState.currentX),
             y: this.sliderState.puzzleY,
@@ -1399,6 +1574,16 @@ class Captcha {
             speed_data: speedData,
             environment_data: this.environmentData
         };
+
+        if (this.options.enableEncryption && this.trajectoryData.length > 0) {
+            try {
+                const encryptedTrajectory = await this.trajectoryEncryptor.encryptTrajectory(this.trajectoryData);
+                payload.encrypted_trajectory = encryptedTrajectory;
+                delete payload.behavior_data;
+            } catch (error) {
+                console.error('Trajectory encryption failed:', error);
+            }
+        }
 
         try {
             const response = await fetch(`${this.options.apiBase}/captcha/verify`, {
@@ -2149,8 +2334,474 @@ class CaptchaLanguageManager {
     }
 }
 
+class ClickCaptcha {
+    constructor(containerId, options = {}) {
+        this.container = typeof containerId === 'string' 
+            ? document.getElementById(containerId) 
+            : containerId;
+        
+        if (!this.container) {
+            console.error('ClickCaptcha container not found');
+            return;
+        }
+
+        this.options = {
+            apiBase: '/api/v1',
+            difficulty: 'medium',
+            mode: 'chinese',
+            maxTargets: 4,
+            tolerance: 25,
+            minClickInterval: 100,
+            maxClickInterval: 3000,
+            enableSound: false,
+            onSuccess: null,
+            onError: null,
+            onRefresh: null,
+            onProgress: null,
+            ...options
+        };
+
+        this.sessionId = null;
+        this.targets = [];
+        this.clicks = [];
+        this.correctOrder = [];
+        this.displayOrder = [];
+        this.isVerified = false;
+        this.startTime = 0;
+        this.clickSequence = [];
+        
+        this.init();
+    }
+
+    init() {
+        this.setupUI();
+        this.bindEvents();
+        this.loadChallenge();
+    }
+
+    setupUI() {
+        this.container.innerHTML = `
+            <div class="click-captcha-container" role="application" aria-label="Shuffled Click Verification">
+                <div class="click-captcha-header">
+                    <h4>${this.options.mode === 'chinese' ? '汉字点选验证' : '点选验证'}</h4>
+                    <div class="difficulty-badge" id="difficulty-badge">${this.options.difficulty}</div>
+                </div>
+                <div class="click-captcha-body">
+                    <div class="challenge-image-wrapper">
+                        <canvas id="challenge-canvas" width="400" height="300" role="img" aria-label="Click verification image"></canvas>
+                        <div class="click-markers-layer" id="click-markers"></div>
+                        <button class="captcha-refresh-btn" id="refresh-btn" aria-label="Refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <div class="click-captcha-loading" id="captcha-loading">
+                            <div class="spinner"></div>
+                            <span>Loading...</span>
+                        </div>
+                    </div>
+                    <div class="click-hint-panel">
+                        <div class="hint-text" id="hint-text">
+                            <i class="fas fa-info-circle"></i>
+                            <span>请按正确顺序点击字符</span>
+                        </div>
+                        <div class="click-progress">
+                            <span class="progress-label">Progress:</span>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                            <span class="progress-count" id="progress-count">0/${this.options.maxTargets}</span>
+                        </div>
+                    </div>
+                    <div class="click-instruction">
+                        <div class="instruction-text">请依次点击以下字符:</div>
+                        <div class="sequence-display" id="sequence-display"></div>
+                    </div>
+                    <div class="click-actions">
+                        <button class="btn btn-secondary" id="clear-btn">
+                            <i class="fas fa-eraser"></i> Clear
+                        </button>
+                        <button class="btn btn-primary" id="verify-btn" disabled>
+                            <i class="fas fa-check"></i> Verify
+                        </button>
+                    </div>
+                </div>
+                <div class="click-captcha-result" id="result-panel" hidden></div>
+            </div>
+        `;
+
+        this.canvas = this.container.querySelector('#challenge-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.markersLayer = this.container.querySelector('#click-markers');
+        this.hintText = this.container.querySelector('#hint-text span');
+        this.progressFill = this.container.querySelector('#progress-fill');
+        this.progressCount = this.container.querySelector('#progress-count');
+        this.sequenceDisplay = this.container.querySelector('#sequence-display');
+        this.verifyBtn = this.container.querySelector('#verify-btn');
+        this.clearBtn = this.container.querySelector('#clear-btn');
+        this.refreshBtn = this.container.querySelector('#refresh-btn');
+        this.loadingOverlay = this.container.querySelector('#captcha-loading');
+        this.resultPanel = this.container.querySelector('#result-panel');
+    }
+
+    bindEvents() {
+        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        
+        this.clearBtn.addEventListener('click', () => this.clearClicks());
+        this.verifyBtn.addEventListener('click', () => this.verifyClicks());
+        this.refreshBtn.addEventListener('click', () => this.loadChallenge());
+    }
+
+    handleCanvasClick(e) {
+        if (this.isVerified) return;
+        if (this.clicks.length >= this.targets.length) return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const x = Math.round(e.clientX - rect.left);
+        const y = Math.round(e.clientY - rect.top);
+        const timestamp = Date.now();
+
+        const clickData = {
+            x: x,
+            y: y,
+            timestamp: timestamp,
+            targetId: -1
+        };
+
+        this.clicks.push(clickData);
+        this.clickSequence.push(this.clicks.length - 1);
+
+        this.addClickMarker(x, y, this.clicks.length);
+        this.updateProgress();
+        this.addBehaviorPoint(x, y, timestamp, 'click');
+
+        if (this.clicks.length === this.targets.length) {
+            this.verifyBtn.disabled = false;
+        }
+
+        if (this.options.onProgress) {
+            this.options.onProgress({
+                current: this.clicks.length,
+                total: this.targets.length,
+                clicks: this.clicks
+            });
+        }
+    }
+
+    handleMouseMove(e) {
+        if (this.clicks.length === 0) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const x = Math.round(e.clientX - rect.left);
+        const y = Math.round(e.clientY - rect.top);
+        const timestamp = Date.now();
+        
+        if (Math.random() < 0.2) {
+            this.addBehaviorPoint(x, y, timestamp, 'move');
+        }
+    }
+
+    addClickMarker(x, y, index) {
+        const marker = document.createElement('div');
+        marker.className = 'click-marker';
+        marker.style.left = `${x}px`;
+        marker.style.top = `${y}px`;
+        marker.textContent = index;
+        marker.dataset.index = index - 1;
+
+        marker.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.removeClick(index - 1);
+        });
+
+        this.markersLayer.appendChild(marker);
+        this.playMarkerAnimation(marker);
+    }
+
+    playMarkerAnimation(marker) {
+        marker.style.animation = 'marker-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+    }
+
+    removeClick(index) {
+        if (index >= 0 && index < this.clicks.length) {
+            this.clicks.splice(index, 1);
+            this.clickSequence.splice(index, 1);
+            this.updateMarkers();
+            this.updateProgress();
+            this.verifyBtn.disabled = true;
+        }
+    }
+
+    updateMarkers() {
+        this.markersLayer.innerHTML = '';
+        this.clicks.forEach((click, idx) => {
+            this.addClickMarker(click.x, click.y, idx + 1);
+        });
+    }
+
+    updateProgress() {
+        const progress = (this.clicks.length / this.targets.length) * 100;
+        this.progressFill.style.width = `${progress}%`;
+        this.progressCount.textContent = `${this.clicks.length}/${this.targets.length}`;
+    }
+
+    async loadChallenge() {
+        this.showLoading(true);
+        this.clearClicks();
+        this.isVerified = false;
+        this.resultPanel.hidden = true;
+
+        try {
+            const response = await fetch(`${this.options.apiBase}/captcha/shuffle/click`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.handleChallengeResponse(data);
+            } else {
+                this.showError('Failed to load challenge');
+            }
+        } catch (error) {
+            console.error('Load challenge error:', error);
+            this.showError('Network error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    handleChallengeResponse(data) {
+        this.sessionId = data.session_id;
+        this.targets = data.targets || [];
+        this.correctOrder = data.correct_order || [];
+        this.displayOrder = data.display_order || [];
+        this.options.maxTargets = data.max_targets || 4;
+        this.options.tolerance = data.tolerance || 25;
+        this.options.minClickInterval = data.min_click_interval || 100;
+        this.options.maxClickInterval = data.max_click_interval || 3000;
+
+        this.renderShuffledChallenge(data.image_url);
+        this.updateSequenceDisplay();
+        this.updateProgress();
+        this.verifyBtn.disabled = true;
+        this.startTime = Date.now();
+    }
+
+    renderShuffledChallenge(imageUrl) {
+        if (!this.canvas) return;
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        img.onload = () => {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+        };
+
+        img.onerror = () => {
+            this.drawDemoBackground();
+        };
+
+        img.src = imageUrl;
+    }
+
+    drawDemoBackground() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+
+        const gradient = ctx.createLinearGradient(0, 0, w, h);
+        gradient.addColorStop(0, '#667eea');
+        gradient.addColorStop(1, '#764ba2');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Click Verification', w / 2, h / 2);
+    }
+
+    updateSequenceDisplay() {
+        if (!this.sequenceDisplay) return;
+
+        const chars = this.correctOrder.map(idx => {
+            if (idx >= 0 && idx < this.targets.length) {
+                return this.targets[idx].char || this.targets[idx].Char || '?';
+            }
+            return '?';
+        });
+
+        this.sequenceDisplay.innerHTML = chars
+            .map((char, idx) => `<span class="seq-item" data-index="${idx}">${char}</span>`)
+            .join('<span class="seq-arrow">→</span>');
+
+        this.sequenceDisplay.querySelectorAll('.seq-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const idx = parseInt(item.dataset.index);
+                if (idx < this.clicks.length) {
+                    this.removeClick(idx);
+                }
+            });
+        });
+    }
+
+    clearClicks() {
+        this.clicks = [];
+        this.clickSequence = [];
+        this.markersLayer.innerHTML = '';
+        this.updateProgress();
+        this.verifyBtn.disabled = true;
+        this.startTime = Date.now();
+    }
+
+    async verifyClicks() {
+        if (this.clicks.length === 0) {
+            this.showError('No clicks recorded');
+            return;
+        }
+
+        this.showLoading(true);
+        this.verifyBtn.disabled = true;
+
+        const payload = {
+            session_id: this.sessionId,
+            clicks: this.clicks.map((click, idx) => ({
+                x: click.x,
+                y: click.y,
+                timestamp: click.timestamp,
+                target_id: click.targetId
+            }))
+        };
+
+        try {
+            const response = await fetch(`${this.options.apiBase}/captcha/shuffle/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.handleVerificationResult(data);
+            } else {
+                this.showError('Verification failed');
+            }
+        } catch (error) {
+            console.error('Verify error:', error);
+            this.showError('Network error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    handleVerificationResult(data) {
+        this.isVerified = true;
+
+        if (data.success) {
+            this.showSuccess(data.message || 'Verification successful!');
+            this.markSuccessMarkers();
+            
+            if (this.options.onSuccess) {
+                this.options.onSuccess({
+                    session_id: this.sessionId,
+                    risk_score: data.risk_score
+                });
+            }
+        } else {
+            this.showError(data.fail_reason || 'Verification failed');
+            this.markErrorMarkers();
+            
+            if (this.options.onError) {
+                this.options.onError({
+                    error: data.fail_reason
+                });
+            }
+
+            setTimeout(() => {
+                this.loadChallenge();
+            }, 2000);
+        }
+    }
+
+    markSuccessMarkers() {
+        const markers = this.markersLayer.querySelectorAll('.click-marker');
+        markers.forEach((marker, idx) => {
+            setTimeout(() => {
+                marker.classList.add('success');
+            }, idx * 150);
+        });
+    }
+
+    markErrorMarkers() {
+        const markers = this.markersLayer.querySelectorAll('.click-marker');
+        markers.forEach(marker => {
+            marker.classList.add('error');
+        });
+    }
+
+    showLoading(show) {
+        if (this.loadingOverlay) {
+            this.loadingOverlay.style.display = show ? 'flex' : 'none';
+        }
+    }
+
+    showSuccess(message) {
+        this.resultPanel.textContent = message;
+        this.resultPanel.className = 'click-captcha-result success show';
+        this.resultPanel.hidden = false;
+    }
+
+    showError(message) {
+        this.resultPanel.textContent = message;
+        this.resultPanel.className = 'click-captcha-result error show';
+        this.resultPanel.hidden = false;
+    }
+
+    addBehaviorPoint(x, y, timestamp, event) {
+    }
+
+    getClickData() {
+        return {
+            session_id: this.sessionId,
+            clicks: this.clicks,
+            click_sequence: this.clickSequence,
+            timestamp: Date.now()
+        };
+    }
+
+    setDifficulty(difficulty) {
+        this.options.difficulty = difficulty;
+        const badge = this.container.querySelector('#difficulty-badge');
+        if (badge) {
+            badge.textContent = difficulty;
+        }
+    }
+
+    setMode(mode) {
+        this.options.mode = mode;
+    }
+
+    reset() {
+        this.clearClicks();
+        this.isVerified = false;
+        this.resultPanel.hidden = true;
+        this.loadChallenge();
+    }
+
+    destroy() {
+        this.container.innerHTML = '';
+        this.targets = [];
+        this.clicks = [];
+        this.correctOrder = [];
+        this.displayOrder = [];
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     window.Captcha = Captcha;
     window.CaptchaI18n = CaptchaI18n;
     window.CaptchaLanguageManager = CaptchaLanguageManager;
+    window.TrajectoryEncryptor = TrajectoryEncryptor;
+    window.ClickCaptcha = ClickCaptcha;
 });
