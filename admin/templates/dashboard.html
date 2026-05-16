@@ -24,6 +24,8 @@
             <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
             <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
             <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <a class="nav-link" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
+            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
             <hr class="border-secondary my-2 mx-3">
         </nav>
         <div class="border-top border-secondary p-3 mt-auto">
@@ -42,7 +44,14 @@
                     <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" checked>
                     <label class="form-check-label" for="autoRefreshSwitch">实时更新</label>
                 </div>
+                <select class="form-select form-select-sm" id="refreshInterval" style="width:auto;">
+                    <option value="5">5秒</option>
+                    <option value="10" selected>10秒</option>
+                    <option value="30">30秒</option>
+                    <option value="60">1分钟</option>
+                </select>
                 <button id="refreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
+                <button id="exportDashboardBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出</button>
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-secondary" id="usernameDisplay">管理员</span>
                     <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
@@ -103,14 +112,66 @@
             </div>
 
             <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(59,130,246,0.1);color:#3b82f6;"><i class="fas fa-check-circle"></i></div>
+                            <div>
+                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">验证成功</div>
+                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalSuccess">0</div>
+                                <div class="text-success" style="font-size:12px;font-weight:500;" id="successRate">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;"><i class="fas fa-times-circle"></i></div>
+                            <div>
+                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">验证失败</div>
+                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalFail">0</div>
+                                <div class="text-danger" style="font-size:12px;font-weight:500;" id="failRate">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(245,158,11,0.1);color:#f59e0b;"><i class="fas fa-exclamation-circle"></i></div>
+                            <div>
+                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">风险预警</div>
+                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalRisk">0</div>
+                                <div class="text-warning" style="font-size:12px;font-weight:500;" id="riskLevel">低风险</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border h-100">
+                        <div class="card-body d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(139,92,246,0.1);color:#8b5cf6;"><i class="fas fa-tachometer-alt"></i></div>
+                            <div>
+                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">平均响应</div>
+                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="avgResponse">0ms</div>
+                                <div class="text-info" style="font-size:12px;font-weight:500;" id="responseStatus">良好</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
                 <div class="col-md-8">
                     <div class="card shadow-sm">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5><i class="fas fa-chart-area me-2" style="color:#b8924e;"></i>请求量趋势</h5>
                             <div class="btn-group btn-group-sm" role="group">
                                 <button type="button" class="btn btn-outline-secondary active" data-period="hour">小时</button>
                                 <button type="button" class="btn btn-outline-secondary" data-period="day">日</button>
                                 <button type="button" class="btn btn-outline-secondary" data-period="week">周</button>
+                                <button type="button" class="btn btn-outline-secondary" data-period="month">月</button>
                             </div>
                         </div>
                         <div class="card-body">
@@ -179,32 +240,151 @@
                 </div>
             </div>
 
-            <div class="row g-4">
+            <div class="row g-4 mb-4">
                 <div class="col-md-6">
                     <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-clock me-2" style="color:#b8924e;"></i>最近活动</h5></div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-hover mb-0">
-                                    <thead>
-                                        <tr><th>时间</th><th>事件</th><th>用户</th><th>状态</th></tr>
-                                    </thead>
-                                    <tbody id="recentActivity"></tbody>
-                                </table>
-                            </div>
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="fas fa-chart-pie me-2" style="color:#b8924e;"></i>风险分布</h5>
+                            <button class="btn btn-sm btn-outline-secondary" id="riskDetailBtn"><i class="fas fa-external-link-alt me-1"></i>详情</button>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="riskDistributionChart" height="260"></canvas>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-wave-square me-2" style="color:#c23a2b;"></i>实时请求监控</h5></div>
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="fas fa-trophy me-2" style="color:#b8924e;"></i>Top应用统计</h5>
+                            <select class="form-select form-select-sm" id="topAppsPeriod" style="width:auto;">
+                                <option value="today">今日</option>
+                                <option value="week" selected>本周</option>
+                                <option value="month">本月</option>
+                            </select>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="topAppsChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-wave-square me-2" style="color:#c23a2b;"></i>实时验证监控</h5></div>
                         <div class="card-body">
                             <canvas id="realtimeChart" height="200"></canvas>
                         </div>
                     </div>
                 </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-clock me-2" style="color:#b8924e;"></i>最近验证记录</h5></div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th>时间</th>
+                                            <th>应用</th>
+                                            <th>结果</th>
+                                            <th>风险</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentVerifications"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-th-large me-2" style="color:#b8924e;"></i>验证类型分布</h5></div>
+                        <div class="card-body">
+                            <canvas id="captchaTypeChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-chart-bar me-2" style="color:#b8924e;"></i>地区分布 Top 10</h5></div>
+                        <div class="card-body">
+                            <canvas id="geoDistributionChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
+    </div>
+
+    <div class="modal fade" id="exportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-download me-2"></i>导出数据</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">导出格式</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportCSV" value="csv" checked>
+                            <label class="btn btn-outline-primary" for="exportCSV"><i class="fas fa-file-csv me-1"></i>CSV</label>
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportExcel" value="excel">
+                            <label class="btn btn-outline-primary" for="exportExcel"><i class="fas fa-file-excel me-1"></i>Excel</label>
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportPDF" value="pdf">
+                            <label class="btn btn-outline-primary" for="exportPDF"><i class="fas fa-file-pdf me-1"></i>PDF</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">数据范围</label>
+                        <select class="form-select" id="exportRange">
+                            <option value="today">今日</option>
+                            <option value="week">本周</option>
+                            <option value="month" selected>本月</option>
+                            <option value="custom">自定义范围</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3 d-none" id="customDateRange">
+                        <div class="col-6">
+                            <label class="form-label">开始日期</label>
+                            <input type="date" class="form-control" id="exportStartDate">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">结束日期</label>
+                            <input type="date" class="form-control" id="exportEndDate">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">数据类型</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="exportOverview" checked disabled>
+                            <label class="form-check-label" for="exportOverview">概览统计</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="exportTrend" checked>
+                            <label class="form-check-label" for="exportTrend">趋势数据</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="exportRisk">
+                            <label class="form-check-label" for="exportRisk">风险分析</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="exportApps">
+                            <label class="form-check-label" for="exportApps">应用统计</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirmExportBtn"><i class="fas fa-download me-1"></i>导出</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>

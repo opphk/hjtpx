@@ -6,6 +6,7 @@
     <title>墨盾验证 · 管理后台 · 日志查询</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="bg-dark d-flex flex-column">
@@ -23,6 +24,8 @@
             <a class="nav-link active" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
             <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
             <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <a class="nav-link" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
+            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
             <div class="sidebar-divider"></div>
         </nav>
         <div class="border-top border-secondary p-3 mt-auto">
@@ -37,10 +40,8 @@
                 <span class="seal-stamp">墨盾</span>
             </div>
             <div class="top-header-right">
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="autoRefreshLogs" checked>
-                    <label class="form-check-label" for="autoRefreshLogs">实时</label>
-                </div>
+                <button id="saveQueryBtn" class="btn-outline-gold"><i class="fas fa-bookmark me-1"></i>保存查询</button>
+                <button id="loadQueryBtn" class="btn-outline-gold"><i class="fas fa-folder-open me-1"></i>加载查询</button>
                 <button id="exportBtn" class="btn-outline-gold"><i class="fas fa-download me-1"></i>导出</button>
                 <button id="clearLogsBtn" class="btn-outline-cinnabar"><i class="fas fa-trash me-1"></i>清理</button>
                 <div class="user-display">
@@ -87,7 +88,11 @@
             </div>
 
             <div class="card shadow-sm mb-4">
-                <div class="card-body">
+                <div class="card-header d-flex justify-content-between align-items-center" id="advancedSearchHeader">
+                    <div><i class="fas fa-search me-2"></i>高级搜索</div>
+                    <button class="btn btn-sm btn-link" id="toggleAdvancedSearch"><i class="fas fa-chevron-down me-1"></i>展开</button>
+                </div>
+                <div class="card-body" id="advancedSearchBody" style="display:none;">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-2">
                             <label class="form-label">日志级别</label>
@@ -97,6 +102,7 @@
                                 <option value="info">Info</option>
                                 <option value="warning">Warning</option>
                                 <option value="error">Error</option>
+                                <option value="critical">Critical</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -108,6 +114,16 @@
                                 <option value="api">API网关</option>
                                 <option value="db">数据库</option>
                                 <option value="cache">缓存服务</option>
+                                <option value="risk">风控服务</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">应用</label>
+                            <select class="form-select" id="logApp">
+                                <option value="">全部</option>
+                                <option value="1">用户中心</option>
+                                <option value="2">支付系统</option>
+                                <option value="3">消息推送</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -119,11 +135,34 @@
                             <input type="datetime-local" class="form-control" id="endDate">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">关键词</label>
-                            <input type="text" class="form-control" id="keyword" placeholder="搜索内容">
-                        </div>
-                        <div class="col-md-2">
                             <button id="searchLogsBtn" class="btn-ink w-100"><i class="fas fa-search me-1"></i>查询</button>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-12">
+                            <label class="form-label">关键词搜索（支持AND/OR/NOT）</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="keyword" placeholder="例如: error AND database">
+                                <select class="form-select" id="keywordMode" style="max-width:120px;">
+                                    <option value="contains">包含</option>
+                                    <option value="exact">精确</option>
+                                    <option value="regex">正则</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-12">
+                            <label class="form-label">快速时间选择</label>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary" data-time="15m">最近15分钟</button>
+                                <button class="btn btn-outline-secondary" data-time="1h">最近1小时</button>
+                                <button class="btn btn-outline-secondary" data-time="6h">最近6小时</button>
+                                <button class="btn btn-outline-secondary" data-time="24h" selected>最近24小时</button>
+                                <button class="btn btn-outline-secondary" data-time="7d">最近7天</button>
+                                <button class="btn btn-outline-secondary" data-time="30d">最近30天</button>
+                                <button class="btn btn-outline-secondary" data-time="custom">自定义</button>
+                            </div>
                         </div>
                     </div>
                     <div class="row g-3 mt-2">
@@ -138,23 +177,52 @@
                             </div>
                         </div>
                     </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-12">
+                            <button class="btn btn-sm btn-outline-secondary" id="addConditionBtn"><i class="fas fa-plus me-1"></i>添加条件</button>
+                            <button class="btn btn-sm btn-outline-secondary" id="clearConditionsBtn"><i class="fas fa-trash me-1"></i>清除条件</button>
+                        </div>
+                    </div>
+                    <div id="additionalConditions"></div>
                 </div>
             </div>
 
             <div class="card shadow-sm">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-3">
                         <span class="text-muted small">共 <span id="logsCount">0</span> 条日志</span>
                         <span class="text-muted small">|</span>
                         <span class="text-muted small">当前页: <span id="currentPage">1</span></span>
+                        <span class="text-muted small">|</span>
+                        <span class="text-muted small">查询耗时: <span id="queryTime">0</span>ms</span>
                     </div>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary active" data-display="list"><i class="fas fa-list me-1"></i>列表</button>
                         <button class="btn btn-outline-secondary" data-display="compact"><i class="fas fa-th me-1"></i>紧凑</button>
+                        <button class="btn btn-outline-secondary" data-display="json"><i class="fas fa-code me-1"></i>JSON</button>
                     </div>
                 </div>
                 <div class="card-body p-0" id="logsList"></div>
-                <div class="card-footer" id="pagination"></div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="text-muted small">每页显示:</label>
+                        <select class="form-select form-select-sm" id="pageSize" style="width:auto;">
+                            <option value="20">20条</option>
+                            <option value="50" selected>50条</option>
+                            <option value="100">100条</option>
+                            <option value="200">200条</option>
+                            <option value="500">500条</option>
+                        </select>
+                    </div>
+                    <div id="pagination"></div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" id="prevPageBtn"><i class="fas fa-chevron-left"></i></button>
+                        <input type="number" class="form-control form-control-sm" id="pageInput" value="1" style="width:60px;text-align:center;">
+                        <span class="text-muted">/ <span id="totalPages">1</span></span>
+                        <button class="btn btn-sm btn-outline-secondary" id="nextPageBtn"><i class="fas fa-chevron-right"></i></button>
+                        <button class="btn btn-sm btn-outline-primary" id="goToPageBtn">跳转</button>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -168,7 +236,8 @@
                 </div>
                 <div class="modal-body" id="logDetailContent"></div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-outline-gold" id="copyLogBtn"><i class="fas fa-copy me-1"></i>复制</button>
+                    <button type="button" class="btn-outline-secondary" id="copyLogBtn"><i class="fas fa-copy me-1"></i>复制</button>
+                    <button type="button" class="btn-outline-secondary" id="downloadLogBtn"><i class="fas fa-download me-1"></i>下载</button>
                     <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
@@ -189,7 +258,18 @@
                             <option value="3d">3天前的日志</option>
                             <option value="7d">7天前的日志</option>
                             <option value="30d">30天前的日志</option>
+                            <option value="90d">90天前的日志</option>
                             <option value="all">全部日志</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">清理条件</label>
+                        <select class="form-select" id="clearCondition">
+                            <option value="">全部日志</option>
+                            <option value="debug">仅Debug级别</option>
+                            <option value="info">仅Info级别</option>
+                            <option value="warning">仅Warning级别</option>
+                            <option value="error">仅Error级别</option>
                         </select>
                     </div>
                     <div class="alert alert-warning">
@@ -200,6 +280,131 @@
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
                     <button type="button" class="btn-outline-cinnabar" id="confirmClearBtn">确认清理</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="exportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-download me-2"></i>导出日志</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">导出格式</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportCSV" value="csv" checked>
+                            <label class="btn btn-outline-primary" for="exportCSV"><i class="fas fa-file-csv me-1"></i>CSV</label>
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportExcel" value="excel">
+                            <label class="btn btn-outline-primary" for="exportExcel"><i class="fas fa-file-excel me-1"></i>Excel</label>
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportJSON" value="json">
+                            <label class="btn btn-outline-primary" for="exportJSON"><i class="fas fa-file-code me-1"></i>JSON</label>
+                            <input type="radio" class="btn-check" name="exportFormat" id="exportPDF" value="pdf">
+                            <label class="btn btn-outline-primary" for="exportPDF"><i class="fas fa-file-pdf me-1"></i>PDF</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">导出范围</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportScope" id="exportCurrentPage" value="current" checked>
+                            <label class="form-check-label" for="exportCurrentPage">当前页 (<span id="currentPageCount">0</span> 条)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportScope" id="exportAllFiltered" value="filtered">
+                            <label class="form-check-label" for="exportAllFiltered">全部筛选结果 (<span id="filteredCount">0</span> 条)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="exportScope" id="exportCustom" value="custom">
+                            <label class="form-check-label" for="exportCustom">自定义范围</label>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3" id="exportCustomRange" style="display:none;">
+                        <div class="col-6">
+                            <label class="form-label">开始记录</label>
+                            <input type="number" class="form-control" id="exportStartRecord" value="1" min="1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">结束记录</label>
+                            <input type="number" class="form-control" id="exportEndRecord" value="1000" min="1">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">字段选择</label>
+                        <div class="row g-2">
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldTime" checked disabled>
+                                    <label class="form-check-label" for="exportFieldTime">时间</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldLevel" checked disabled>
+                                    <label class="form-check-label" for="exportFieldLevel">级别</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldSource" checked>
+                                    <label class="form-check-label" for="exportFieldSource">来源</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldMessage" checked>
+                                    <label class="form-check-label" for="exportFieldMessage">消息</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldApp">
+                                    <label class="form-check-label" for="exportFieldApp">应用</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldIP">
+                                    <label class="form-check-label" for="exportFieldIP">IP地址</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldUser">
+                                    <label class="form-check-label" for="exportFieldUser">用户</label>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="exportFieldTrace">
+                                    <label class="form-check-label" for="exportFieldTrace">追踪ID</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirmExportBtn"><i class="fas fa-download me-1"></i>导出</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="savedQueriesModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-bookmark me-2"></i>保存的查询</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="savedQueriesList"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>

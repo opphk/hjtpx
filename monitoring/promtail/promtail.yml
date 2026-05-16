@@ -6,12 +6,17 @@ server:
 
 positions:
   filename: /var/log/promtail/positions.yaml
+  ignore_invalid_lines: true
 
 client:
   url: http://loki:3100/loki/api/v1/push
-  timeout: 10s
+  timeout: 30s
   batchwait: 1s
   batchsize: 1048576
+  backoff_config:
+    min_period: 100ms
+    max_period: 30s
+    max_retries: 10
 
 scrape_configs:
   - job_name: nginx
@@ -20,6 +25,7 @@ scrape_configs:
           - localhost
         labels:
           job: nginx
+          env: ${ENV:-production}
           __path__: /var/log/nginx/*.log
     pipeline_stages:
       - regex:
@@ -37,18 +43,38 @@ scrape_configs:
           - localhost
         labels:
           job: hjtpx-app
+          env: ${ENV:-production}
           __path__: /var/log/hjtpx/*.log
     pipeline_stages:
       - json:
-          expression: "^(?P<time>\\d{4}/\\d{2}/\\d{2} \\d{2}:\\d{2}:\\d{2}) \\| (?P<status>\\d+) \\| (?P<latency>[^|]+) \\| (?P<ip>[^|]+) \\| (?P<method>[^|]+) \\| (?P<path>.*)$"
-          time: time
-          status: status
-          latency: latency
-          ip: ip
-          method: method
-          path: path
+          expressions:
+            time: time
+            status: status
+            latency: latency
+            ip: ip
+            method: method
+            path: path
+            error: error
+            request_id: request_id
+            user_id: user_id
       - labels:
           job: hjtpx-app
           status:
           method:
           path:
+          error:
+          request_id:
+          user_id:
+
+  - job_name: docker
+    type: journal
+    journal:
+      max_age: 12h
+      labels:
+        job: docker-logs
+        env: ${ENV:-production}
+    relabel_configs:
+      - source_labels: ['__journal_unit']
+        target_label: 'unit'
+      - source_labels: ['__journal_container_name']
+        target_label: 'container_name'
