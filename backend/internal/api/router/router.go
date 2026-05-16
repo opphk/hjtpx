@@ -97,8 +97,6 @@ func SetupRouter() *gin.Engine {
 		{
 			captcha.GET("/slider", handler.GetSliderCaptcha)
 			captcha.GET("/click", handler.GetClickCaptcha)
-			captcha.GET("/image", handler.GenerateImageCaptcha)
-			captcha.POST("/image/verify", handler.VerifyImageCaptcha)
 			captcha.GET("/rotation", handler.GenerateRotationCaptcha)
 			captcha.POST("/rotation/verify", handler.VerifyRotationCaptcha)
 			captcha.POST("/verify", handler.VerifyCaptcha)
