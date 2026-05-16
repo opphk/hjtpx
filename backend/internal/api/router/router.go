@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
+	"github.com/hjtpx/hjtpx/pkg/i18n"
 )
 
 // SetupRouter 设置路由
@@ -25,6 +26,17 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.GzipCompression())
 	r.Use(middleware.PerformanceMonitoring())
 	r.Use(middleware.RequestID())
+	// i18n 中间件
+	r.Use(i18n.Middleware())
+
+	// 翻译文件静态服务
+	translationsGroup := r.Group("/translations")
+	translationsGroup.Use(middleware.CacheControl(1 * time.Hour))
+	translationsGroup.Static("", "translations")
+
+	adminTranslationsGroup := r.Group("/admin/translations")
+	adminTranslationsGroup.Use(middleware.CacheControl(1 * time.Hour))
+	adminTranslationsGroup.Static("", "translations")
 
 	// 健康检查
 	r.GET("/health", handler.HealthCheck)
@@ -40,9 +52,14 @@ func SetupRouter() *gin.Engine {
 	adminStaticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
 	adminStaticGroup.Static("", "../admin/static")
 
-	// 加载HTML模板（合并前端和管理端模板，避免多次LoadHTMLGlob覆盖）
+	// 开发者工具静态文件服务
+	devtoolsStaticGroup := r.Group("/devtools/static")
+	devtoolsStaticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
+	devtoolsStaticGroup.Static("", "../devtools/static")
+
+	// 加载HTML模板（合并前端、管理端和开发者工具模板，避免多次LoadHTMLGlob覆盖）
 	templates := template.Must(template.New("").Parse(""))
-	for _, glob := range []string{"../frontend/templates/*", "../admin/templates/*"} {
+	for _, glob := range []string{"../frontend/templates/*", "../admin/templates/*", "../devtools/templates/*"} {
 		matches, err := filepath.Glob(glob)
 		if err != nil {
 			continue
@@ -111,6 +128,29 @@ func SetupRouter() *gin.Engine {
 		c.HTML(200, "real-time-screen.html", nil)
 	})
 
+	// 开发者工具页面路由
+	r.GET("/devtools", func(c *gin.Context) {
+		c.HTML(200, "api-console.html", gin.H{"Title": "API 调试控制台", "ActivePage": "api-console"})
+	})
+	r.GET("/devtools/api-console", func(c *gin.Context) {
+		c.HTML(200, "api-console.html", gin.H{"Title": "API 调试控制台", "ActivePage": "api-console"})
+	})
+	r.GET("/devtools/captcha-test", func(c *gin.Context) {
+		c.HTML(200, "captcha-test.html", gin.H{"Title": "验证码在线测试", "ActivePage": "captcha-test"})
+	})
+	r.GET("/devtools/code-generator", func(c *gin.Context) {
+		c.HTML(200, "code-generator.html", gin.H{"Title": "SDK 代码生成器", "ActivePage": "code-generator"})
+	})
+	r.GET("/devtools/examples", func(c *gin.Context) {
+		c.HTML(200, "examples.html", gin.H{"Title": "集成示例", "ActivePage": "examples"})
+	})
+	r.GET("/devtools/docs", func(c *gin.Context) {
+		c.HTML(200, "docs.html", gin.H{"Title": "API 文档", "ActivePage": "docs"})
+	})
+
+	// 初始化导出处理器
+	exportHandler := handler.NewExportHandler()
+
 	// API路由组
 	api := r.Group("/api/v1")
 	{
@@ -130,8 +170,7 @@ func SetupRouter() *gin.Engine {
 		api.GET("/detect/script", handler.GetDetectionScript)
 		api.POST("/detect/submit", handler.SubmitDetectionData)
 		api.POST("/detect/check", handler.EnvironmentCheck)
-		api.GET("/detect/fingerprint", handler.GetFingerprintInfo)
-		api.GET("/detect/stats", handler.GetFingerprintStats)
+		api.GET("/detect/fingerprint", handler.GetFingerprintStats)
 
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
@@ -214,10 +253,38 @@ func SetupRouter() *gin.Engine {
 					logs.GET("", handler.GetVerificationLogs)
 					logs.GET("/statistics", handler.GetLogStatistics)
 					logs.GET("/export", handler.ExportLogs)
+					logs.GET("/export/enhanced", exportHandler.EnhancedExportLogs) // 新增增强导出
 					logs.GET("/session/:session_id", handler.GetLogsBySession)
 					logs.DELETE("/cleanup", handler.DeleteOldLogs)
 					logs.POST("/clear", handler.ClearLogs)
 					logs.GET("/:id", handler.GetLogDetail)
+				}
+				
+				// 定时导出管理
+				scheduledExports := adminAuth.Group("/scheduled-exports")
+				{
+					scheduledExports.GET("", exportHandler.ListScheduledExports)
+					scheduledExports.POST("", exportHandler.CreateScheduledExport)
+					scheduledExports.GET("/:id", exportHandler.GetScheduledExport)
+					scheduledExports.PUT("/:id", exportHandler.UpdateScheduledExport)
+					scheduledExports.DELETE("/:id", exportHandler.DeleteScheduledExport)
+					scheduledExports.POST("/:id/execute", exportHandler.ExecuteScheduledExport)
+				}
+				
+				// 报表模板管理
+				reportTemplates := adminAuth.Group("/report-templates")
+				{
+					reportTemplates.GET("", exportHandler.ListReportTemplates)
+					reportTemplates.POST("", exportHandler.CreateReportTemplate)
+					reportTemplates.GET("/:id", exportHandler.GetReportTemplate)
+					reportTemplates.PUT("/:id", exportHandler.UpdateReportTemplate)
+					reportTemplates.DELETE("/:id", exportHandler.DeleteReportTemplate)
+				}
+				
+				// 导出历史
+				exportHistory := adminAuth.Group("/export-history")
+				{
+					exportHistory.GET("", exportHandler.ListExportHistory)
 				}
 
 				// 黑名单管理

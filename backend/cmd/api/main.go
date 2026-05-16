@@ -13,6 +13,7 @@ import (
 	"github.com/hjtpx/hjtpx/internal/api/router"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/database"
+	"github.com/hjtpx/hjtpx/pkg/i18n"
 	"github.com/hjtpx/hjtpx/pkg/jwt"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/postgres"
@@ -22,6 +23,26 @@ import (
 
 func main() {
 	cfg := config.LoadConfig()
+
+	// 初始化国际化
+	i18nConfig := i18n.LocaleConfig{
+		DefaultLang:     cfg.I18n.DefaultLang,
+		TranslationsDir: cfg.I18n.TranslationsDir,
+		SupportedLangs:  cfg.I18n.SupportedLangs,
+	}
+	if err := i18n.Init(i18nConfig); err != nil {
+		log.Printf("Warning: Failed to initialize i18n: %v", err)
+		log.Println("Continuing startup without i18n...")
+	} else {
+		log.Println("i18n initialized successfully")
+	}
+
+	// 设置默认时区
+	if err := i18n.SetDefaultTimezone(cfg.I18n.DefaultTimezone); err != nil {
+		log.Printf("Warning: Failed to set default timezone: %v", err)
+	} else {
+		log.Printf("Default timezone set to: %s", cfg.I18n.DefaultTimezone)
+	}
 
 	if err := database.InitDB(cfg); err != nil {
 		log.Printf("Warning: Failed to initialize database: %v", err)

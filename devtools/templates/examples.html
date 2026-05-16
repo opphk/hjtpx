@@ -1,0 +1,431 @@
+{{define "content"}}
+<div class="section-title">集成示例</div>
+<p class="section-desc">各种编程语言的完整集成代码示例</p>
+
+<ul class="nav nav-tabs mb-4" id="examplesTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="python-tab" data-bs-toggle="tab" data-bs-target="#python" type="button">Python</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="javascript-tab" data-bs-toggle="tab" data-bs-target="#javascript" type="button">JavaScript</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="go-tab" data-bs-toggle="tab" data-bs-target="#go" type="button">Go</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="java-tab" data-bs-toggle="tab" data-bs-target="#java" type="button">Java</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="php-tab" data-bs-toggle="tab" data-bs-target="#php" type="button">PHP</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="examplesTabsContent">
+    <div class="tab-pane fade show active" id="python">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-filetype-py"></i> Python 完整集成示例</span>
+                <button class="btn btn-outline-primary btn-sm copy-code" data-target="python-code">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="python-code">import requests
+import json
+
+class HJTPXCaptcha:
+    def __init__(self, api_url, app_id, app_key):
+        self.api_url = api_url
+        self.app_id = app_id
+        self.app_key = app_key
+    
+    def get_slider_captcha(self):
+        url = f"{self.api_url}/api/v1/captcha/slider"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    
+    def verify_slider_captcha(self, session_id, x):
+        url = f"{self.api_url}/api/v1/captcha/verify"
+        data = {
+            "session_id": session_id,
+            "answer": {"x": x}
+        }
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()
+    
+    def get_click_captcha(self):
+        url = f"{self.api_url}/api/v1/captcha/click"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    
+    def verify_click_captcha(self, session_id, points):
+        url = f"{self.api_url}/api/v1/captcha/verify"
+        data = {
+            "session_id": session_id,
+            "answer": {"points": points}
+        }
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()
+
+
+if __name__ == "__main__":
+    captcha = HJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key")
+    
+    try:
+        slider_data = captcha.get_slider_captcha()
+        print(f"滑动验证码: {slider_data}")
+        
+        result = captcha.verify_slider_captcha(slider_data["session_id"], 50)
+        print(f"验证结果: {result}")
+    except Exception as e:
+        print(f"错误: {e}")
+</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="javascript">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-filetype-js"></i> JavaScript 完整集成示例</span>
+                <button class="btn btn-outline-primary btn-sm copy-code" data-target="javascript-code">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="javascript-code">class HJTPXCaptcha {
+    constructor(apiUrl, appId, appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+    }
+    
+    async getSliderCaptcha() {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/slider\`);
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }
+    
+    async verifySliderCaptcha(sessionId, x) {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/verify\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                answer: { x: x }
+            })
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }
+    
+    async getClickCaptcha() {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/click\`);
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }
+    
+    async verifyClickCaptcha(sessionId, points) {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/verify\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                answer: { points: points }
+            })
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }
+}
+
+
+async function main() {
+    const captcha = new HJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key");
+    
+    try {
+        const sliderData = await captcha.getSliderCaptcha();
+        console.log("滑动验证码:", sliderData);
+        
+        const result = await captcha.verifySliderCaptcha(sliderData.session_id, 50);
+        console.log("验证结果:", result);
+    } catch (e) {
+        console.error("错误:", e);
+    }
+}
+
+main();
+</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="go">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-filetype-go"></i> Go 完整集成示例</span>
+                <button class="btn btn-outline-primary btn-sm copy-code" data-target="go-code">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="go-code">package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "net/http"
+)
+
+type HJTPXCaptcha struct {
+    APIUrl string
+    AppID  string
+    AppKey string
+}
+
+func NewHJTPXCaptcha(apiUrl, appID, appKey string) *HJTPXCaptcha {
+    return &HJTPXCaptcha{
+        APIUrl: apiUrl,
+        AppID:  appID,
+        AppKey: appKey,
+    }
+}
+
+func (c *HJTPXCaptcha) GetSliderCaptcha() (map[string]interface{}, error) {
+    resp, err := http.Get(c.APIUrl + "/api/v1/captcha/slider")
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}
+
+func (c *HJTPXCaptcha) VerifySliderCaptcha(sessionID string, x int) (map[string]interface{}, error) {
+    data := map[string]interface{}{
+        "session_id": sessionID,
+        "answer": map[string]interface{}{
+            "x": x,
+        },
+    }
+    
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := http.Post(c.APIUrl+"/api/v1/captcha/verify", "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}
+
+func main() {
+    captcha := NewHJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key")
+    
+    sliderData, err := captcha.GetSliderCaptcha()
+    if err != nil {
+        fmt.Printf("错误: %v\n", err)
+        return
+    }
+    fmt.Printf("滑动验证码: %v\n", sliderData)
+    
+    result, err := captcha.VerifySliderCaptcha(sliderData["session_id"].(string), 50)
+    if err != nil {
+        fmt.Printf("错误: %v\n", err)
+        return
+    }
+    fmt.Printf("验证结果: %v\n", result)
+}
+</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="java">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-filetype-java"></i> Java 完整集成示例</span>
+                <button class="btn btn-outline-primary btn-sm copy-code" data-target="java-code">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="java-code">import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.HashMap;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class HJTPXCaptcha {
+    private String apiUrl;
+    private String appId;
+    private String appKey;
+    private HttpClient client;
+    private ObjectMapper mapper;
+    
+    public HJTPXCaptcha(String apiUrl, String appId, String appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.client = HttpClient.newHttpClient();
+        this.mapper = new ObjectMapper();
+    }
+    
+    public Map<String, Object> getSliderCaptcha() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/slider"))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }
+    
+    public Map<String, Object> verifySliderCaptcha(String sessionId, int x) throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("session_id", sessionId);
+        Map<String, Object> answer = new HashMap<>();
+        answer.put("x", x);
+        data.put("answer", answer);
+        
+        String jsonBody = mapper.writeValueAsString(data);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/verify"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }
+    
+    public static void main(String[] args) {
+        try {
+            HJTPXCaptcha captcha = new HJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key");
+            
+            Map<String, Object> sliderData = captcha.getSliderCaptcha();
+            System.out.println("滑动验证码: " + sliderData);
+            
+            Map<String, Object> result = captcha.verifySliderCaptcha((String)sliderData.get("session_id"), 50);
+            System.out.println("验证结果: " + result);
+        } catch (Exception e) {
+            System.err.println("错误: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="php">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-filetype-php"></i> PHP 完整集成示例</span>
+                <button class="btn btn-outline-primary btn-sm copy-code" data-target="php-code">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="php-code"><?php
+
+class HJTPXCaptcha {
+    private $apiUrl;
+    private $appId;
+    private $appKey;
+    
+    public function __construct($apiUrl, $appId, $appKey) {
+        $this->apiUrl = $apiUrl;
+        $this->appId = $appId;
+        $this->appKey = $appKey;
+    }
+    
+    public function getSliderCaptcha() {
+        $url = $this->apiUrl . '/api/v1/captcha/slider';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }
+    
+    public function verifySliderCaptcha($sessionId, $x) {
+        $url = $this->apiUrl . '/api/v1/captcha/verify';
+        $data = [
+            'session_id' => $sessionId,
+            'answer' => ['x' => $x]
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }
+}
+
+
+$captcha = new HJTPXCaptcha("http://localhost:8080", "your_app_id", "your_app_key");
+
+$sliderData = $captcha->getSliderCaptcha();
+echo "滑动验证码: ";
+print_r($sliderData);
+
+$result = $captcha->verifySliderCaptcha($sliderData['session_id'], 50);
+echo "验证结果: ";
+print_r($result);
+</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.querySelectorAll('.copy-code').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const targetId = this.dataset.target;
+        const code = document.getElementById(targetId).textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            const originalHTML = this.innerHTML;
+            this.innerHTML = '<i class="bi bi-check"></i> 已复制';
+            setTimeout(() => {
+                this.innerHTML = originalHTML;
+            }, 2000);
+        });
+    });
+});
+</script>
+{{end}}

@@ -1,0 +1,138 @@
+{{define "content"}}
+<div class="section-title">API 文档</div>
+<p class="section-desc">HJTPX 验证码系统完整的完整 API 文档</p>
+
+<div class="row mb-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-info-circle"></i> 概述
+        </div>
+        <div class="card-body">
+            <p>欢迎使用 HJTPX 验证码系统 API。本系统提供多种类型的验证码服务，包括滑动验证码、点击验证码、手势验证码和拼图验证码。</p>
+            <h5>基础信息</h5>
+            <ul>
+                <li><strong>基础 URL:</strong> <code>/api/v1</code></li>
+                <li><strong>数据格式:</strong> JSON</li>
+                <li><strong>字符编码:</strong> UTF-8</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-shield-lock"></i> 滑动验证码
+        </div>
+        <div class="card-body">
+            <h5>获取滑动验证码</h5>
+            <pre class="code-block">GET /api/v1/captcha/slider</pre>
+            <h6>响应示例</h6>
+            <pre class="code-block">{
+  "success": true,
+  "session_id": "abc123",
+  "image": "base64_image_data",
+  "target_x": 150
+}</pre>
+            
+            <h5 class="mt-4">验证滑动验证码</h5>
+            <pre class="code-block">POST /api/v1/captcha/verify
+Content-Type: application/json
+
+{
+  "session_id": "abc123",
+  "answer": {
+    "x": 150
+  }
+}</pre>
+            <h6>响应示例</h6>
+            <pre class="code-block">{
+  "success": true,
+  "verified": true,
+  "message": "验证成功"
+}</pre>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-hand-index-thumb"></i> 点击验证码
+        </div>
+        <div class="card-body">
+            <h5>获取点击验证码</h5>
+            <pre class="code-block">GET /api/v1/captcha/click</pre>
+            
+            <h5 class="mt-4">验证点击验证码</h5>
+            <pre class="code-block">POST /api/v1/captcha/verify
+Content-Type: application/json
+
+{
+  "session_id": "abc123",
+  "answer": {
+    "points": [
+      {"x": 100, "y": 50},
+      {"x": 200, "y": 100}
+    ]
+  }
+}</pre>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-hand-draw"></i> 手势验证码
+        </div>
+        <div class="card-body">
+            <h5>获取手势验证码</h5>
+            <pre class="code-block">GET /api/v1/captcha/gesture</pre>
+            
+            <h5 class="mt-4">验证手势验证码</h5>
+            <pre class="code-block">POST /api/v1/captcha/gesture/verify
+Content-Type: application/json
+
+{
+  "session_id": "abc123",
+  "gesture": "1,2,3,4,5"
+}</pre>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-puzzle"></i> 拼图验证码
+        </div>
+        <div class="card-body">
+            <h5>获取拼图验证码</h5>
+            <pre class="code-block">GET /api/v1/captcha/jigsaw</pre>
+            
+            <h5 class="mt-4">验证拼图验证码</h5>
+            <pre class="code-block">POST /api/v1/captcha/jigsaw/verify
+Content-Type: application/json
+
+{
+  "session_id": "abc123",
+  "x": 150
+}</pre>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-activity"></i> 健康检查
+        </div>
+        <div class="card-body">
+            <h5>服务状态检查</h5>
+            <pre class="code-block">GET /health</pre>
+            <p>检查服务是否正常运行，返回 200 状态码表示服务正常。</p>
+        </div>
+    </div>
+</div>
+{{end}}

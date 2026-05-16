@@ -244,3 +244,62 @@ type AlertHistory struct {
 	PerformedBy uint       `json:"performed_by"`
 	Alert       *AlertRecord `gorm:"foreignKey:AlertID" json:"alert,omitempty"`
 }
+
+// ScheduledExport 定时导出任务模型
+type ScheduledExport struct {
+	gorm.Model
+	Name             string    `gorm:"size:255;not null;index:idx_scheduled_name" json:"name"`
+	Description      string    `gorm:"type:text" json:"description,omitempty"`
+	CronExpression   string    `gorm:"size:100;not null" json:"cron_expression"`
+	ExportFormat     string    `gorm:"size:20;default:xlsx" json:"export_format"`
+	ExportType       string    `gorm:"size:50;default:logs" json:"export_type"`
+	Filters          string    `gorm:"type:text" json:"filters,omitempty"` // JSON格式的过滤条件
+	EmailRecipients  string    `gorm:"type:text" json:"email_recipients,omitempty"` // 收件人，逗号分隔
+	IsEnabled        bool      `gorm:"default:true;index:idx_scheduled_enabled" json:"is_enabled"`
+	LastRunAt        *time.Time `json:"last_run_at,omitempty"`
+	NextRunAt        *time.Time `json:"next_run_at,omitempty"`
+	LastStatus       string    `gorm:"size:20;default:pending" json:"last_status"`
+	LastErrorMessage string    `gorm:"type:text" json:"last_error_message,omitempty"`
+	CreatedBy        uint      `json:"created_by"`
+}
+
+// ExportHistory 导出历史记录模型
+type ExportHistory struct {
+	gorm.Model
+	ScheduledExportID *uint           `gorm:"index:idx_export_history_scheduled" json:"scheduled_export_id,omitempty"`
+	Name              string          `gorm:"size:255" json:"name"`
+	ExportType        string          `gorm:"size:50" json:"export_type"`
+	ExportFormat      string          `gorm:"size:20" json:"export_format"`
+	FileSize          int64           `json:"file_size"`
+	RecordCount       int             `json:"record_count"`
+	FilePath          string          `gorm:"size:500" json:"file_path"`
+	Status            string          `gorm:"size:20;default:completed" json:"status"`
+	ErrorMessage      string          `gorm:"type:text" json:"error_message,omitempty"`
+	TriggeredBy       string          `gorm:"size:100" json:"triggered_by"`
+	ScheduledExport   *ScheduledExport `gorm:"foreignKey:ScheduledExportID" json:"scheduled_export,omitempty"`
+}
+
+// ReportTemplate 报表模板模型
+type ReportTemplate struct {
+	gorm.Model
+	Name             string    `gorm:"size:255;not null;index:idx_template_name" json:"name"`
+	Description      string    `gorm:"type:text" json:"description,omitempty"`
+	ReportType       string    `gorm:"size:50;not null" json:"report_type"`
+	Layout           string    `gorm:"type:text" json:"layout,omitempty"` // 布局配置JSON
+	Columns          string    `gorm:"type:text" json:"columns,omitempty"` // 列配置JSON
+	Filters          string    `gorm:"type:text" json:"filters,omitempty"` // 默认过滤条件JSON
+	Styles           string    `gorm:"type:text" json:"styles,omitempty"` // 样式配置JSON
+	IsPublic         bool      `gorm:"default:false" json:"is_public"`
+	CreatedBy        uint      `json:"created_by"`
+}
+
+// VisualizationChart 可视化图表配置
+type VisualizationChart struct {
+	gorm.Model
+	Name              string    `gorm:"size:255;not null" json:"name"`
+	ChartType         string    `gorm:"size:50;not null" json:"chart_type"` // line, bar, pie, etc.
+	DataConfig        string    `gorm:"type:text" json:"data_config,omitempty"` // 数据配置JSON
+	StyleConfig       string    `gorm:"type:text" json:"style_config,omitempty"` // 样式配置JSON
+	ReportTemplateID  uint      `gorm:"index:idx_chart_template" json:"report_template_id"`
+	ReportTemplate    *ReportTemplate `gorm:"foreignKey:ReportTemplateID" json:"report_template,omitempty"`
+}

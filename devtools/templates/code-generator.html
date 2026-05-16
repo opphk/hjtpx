@@ -1,0 +1,988 @@
+{{define "content"}}
+<div class="section-title">SDK代码生成器</div>
+<p class="section-desc">自动生成不同编程语言的验证码集成代码</p>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> 配置
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">编程语言</label>
+                    <select class="form-select" id="languageSelect">
+                        <option value="python">Python</option>
+                        <option value="javascript">JavaScript</option>
+                        <option value="go">Go</option>
+                        <option value="java">Java</option>
+                        <option value="php">PHP</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">验证码类型</label>
+                    <select class="form-select" id="captchaTypeSelect">
+                        <option value="slider">滑动验证码</option>
+                        <option value="click">点击验证码</option>
+                        <option value="gesture">手势验证码</option>
+                        <option value="jigsaw">拼图验证码</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">API地址</label>
+                    <input type="text" class="form-control" id="apiUrl" value="http://localhost:8080">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">应用ID</label>
+                    <input type="text" class="form-control" id="appId" placeholder="your-app-id">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">应用密钥</label>
+                    <input type="text" class="form-control" id="appKey" placeholder="your-app-key">
+                </div>
+                <button class="btn btn-primary w-100" id="generateBtn">
+                    <i class="bi bi-code"></i> 生成代码
+                </button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-file-earmark-code"></i> 功能选择
+            </div>
+            <div class="card-body">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="includeGet" checked>
+                    <label class="form-check-label" for="includeGet">获取验证码</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="includeVerify" checked>
+                    <label class="form-check-label" for="includeVerify">验证验证码</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="includeErrorHandling">
+                    <label class="form-check-label" for="includeErrorHandling">错误处理</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="includeComments">
+                    <label class="form-check-label" for="includeComments">详细注释</label>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-code-slash"></i> 生成的代码</span>
+                <button class="btn btn-outline-primary btn-sm" id="copyBtn">
+                    <i class="bi bi-clipboard"></i> 复制代码
+                </button>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="generatedCode">点击"生成代码"按钮开始...</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+const codeTemplates = {
+    python: {
+        slider: {
+            get: `import requests
+import json
+
+class HJTPXCaptcha:
+    def __init__(self, api_url, app_id, app_key):
+        self.api_url = api_url
+        self.app_id = app_id
+        self.app_key = app_key
+    
+    def get_slider_captcha(self):
+        url = f"{self.api_url}/api/v1/captcha/slider"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()`,
+            verify: `    def verify_slider_captcha(self, session_id, x):
+        url = f"{self.api_url}/api/v1/captcha/verify"
+        data = {
+            "session_id": session_id,
+            "answer": {"x": x}
+        }
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()`
+        },
+        click: {
+            get: `import requests
+import json
+
+class HJTPXCaptcha:
+    def __init__(self, api_url, app_id, app_key):
+        self.api_url = api_url
+        self.app_id = app_id
+        self.app_key = app_key
+    
+    def get_click_captcha(self):
+        url = f"{self.api_url}/api/v1/captcha/click"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()`,
+            verify: `    def verify_click_captcha(self, session_id, points):
+        url = f"{self.api_url}/api/v1/captcha/verify"
+        data = {
+            "session_id": session_id,
+            "answer": {"points": points}
+        }
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()`
+        },
+        gesture: {
+            get: `import requests
+import json
+
+class HJTPXCaptcha:
+    def __init__(self, api_url, app_id, app_key):
+        self.api_url = api_url
+        self.app_id = app_id
+        self.app_key = app_key
+    
+    def get_gesture_captcha(self):
+        url = f"{self.api_url}/api/v1/captcha/gesture"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()`,
+            verify: `    def verify_gesture_captcha(self, session_id, gesture):
+        url = f"{self.api_url}/api/v1/captcha/gesture/verify"
+        data = {
+            "session_id": session_id,
+            "gesture": gesture
+        }
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()`
+        },
+        jigsaw: {
+            get: `import requests
+import json
+
+class HJTPXCaptcha:
+    def __init__(self, api_url, app_id, app_key):
+        self.api_url = api_url
+        self.app_id = app_id
+        self.app_key = app_key
+    
+    def get_jigsaw_captcha(self):
+        url = f"{self.api_url}/api/v1/captcha/jigsaw"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()`,
+            verify: `    def verify_jigsaw_captcha(self, session_id, x):
+        url = f"{self.api_url}/api/v1/captcha/jigsaw/verify"
+        data = {
+            "session_id": session_id,
+            "x": x
+        }
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return response.json()`
+        }
+    },
+    javascript: {
+        slider: {
+            get: `class HJTPXCaptcha {
+    constructor(apiUrl, appId, appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+    }
+    
+    async getSliderCaptcha() {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/slider\`);
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`,
+            verify: `    
+    async verifySliderCaptcha(sessionId, x) {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/verify\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                answer: { x: x }
+            })
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`
+        },
+        click: {
+            get: `class HJTPXCaptcha {
+    constructor(apiUrl, appId, appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+    }
+    
+    async getClickCaptcha() {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/click\`);
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`,
+            verify: `    
+    async verifyClickCaptcha(sessionId, points) {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/verify\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                answer: { points: points }
+            })
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`
+        },
+        gesture: {
+            get: `class HJTPXCaptcha {
+    constructor(apiUrl, appId, appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+    }
+    
+    async getGestureCaptcha() {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/gesture\`);
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`,
+            verify: `    
+    async verifyGestureCaptcha(sessionId, gesture) {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/gesture/verify\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                gesture: gesture
+            })
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`
+        },
+        jigsaw: {
+            get: `class HJTPXCaptcha {
+    constructor(apiUrl, appId, appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+    }
+    
+    async getJigsawCaptcha() {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/jigsaw\`);
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`,
+            verify: `    
+    async verifyJigsawCaptcha(sessionId, x) {
+        const response = await fetch(\`\${this.apiUrl}/api/v1/captcha/jigsaw/verify\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                x: x
+            })
+        });
+        if (!response.ok) throw new Error('Request failed');
+        return await response.json();
+    }`
+        }
+    },
+    go: {
+        slider: {
+            get: `package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "net/http"
+)
+
+type HJTPXCaptcha struct {
+    APIUrl string
+    AppID  string
+    AppKey string
+}
+
+func NewHJTPXCaptcha(apiUrl, appID, appKey string) *HJTPXCaptcha {
+    return &HJTPXCaptcha{
+        APIUrl: apiUrl,
+        AppID:  appID,
+        AppKey: appKey,
+    }
+}
+
+func (c *HJTPXCaptcha) GetSliderCaptcha() (map[string]interface{}, error) {
+    resp, err := http.Get(c.APIUrl + "/api/v1/captcha/slider")
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`,
+            verify: `
+
+func (c *HJTPXCaptcha) VerifySliderCaptcha(sessionID string, x int) (map[string]interface{}, error) {
+    data := map[string]interface{}{
+        "session_id": sessionID,
+        "answer": map[string]interface{}{
+            "x": x,
+        },
+    }
+    
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := http.Post(c.APIUrl+"/api/v1/captcha/verify", "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`
+        },
+        click: {
+            get: `package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "net/http"
+)
+
+type HJTPXCaptcha struct {
+    APIUrl string
+    AppID  string
+    AppKey string
+}
+
+func NewHJTPXCaptcha(apiUrl, appID, appKey string) *HJTPXCaptcha {
+    return &HJTPXCaptcha{
+        APIUrl: apiUrl,
+        AppID:  appID,
+        AppKey: appKey,
+    }
+}
+
+func (c *HJTPXCaptcha) GetClickCaptcha() (map[string]interface{}, error) {
+    resp, err := http.Get(c.APIUrl + "/api/v1/captcha/click")
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`,
+            verify: `
+
+func (c *HJTPXCaptcha) VerifyClickCaptcha(sessionID string, points []map[string]int) (map[string]interface{}, error) {
+    data := map[string]interface{}{
+        "session_id": sessionID,
+        "answer": map[string]interface{}{
+            "points": points,
+        },
+    }
+    
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := http.Post(c.APIUrl+"/api/v1/captcha/verify", "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`
+        },
+        gesture: {
+            get: `package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "net/http"
+)
+
+type HJTPXCaptcha struct {
+    APIUrl string
+    AppID  string
+    AppKey string
+}
+
+func NewHJTPXCaptcha(apiUrl, appID, appKey string) *HJTPXCaptcha {
+    return &HJTPXCaptcha{
+        APIUrl: apiUrl,
+        AppID:  appID,
+        AppKey: appKey,
+    }
+}
+
+func (c *HJTPXCaptcha) GetGestureCaptcha() (map[string]interface{}, error) {
+    resp, err := http.Get(c.APIUrl + "/api/v1/captcha/gesture")
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`,
+            verify: `
+
+func (c *HJTPXCaptcha) VerifyGestureCaptcha(sessionID string, gesture string) (map[string]interface{}, error) {
+    data := map[string]interface{}{
+        "session_id": sessionID,
+        "gesture": gesture,
+    }
+    
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := http.Post(c.APIUrl+"/api/v1/captcha/gesture/verify", "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`
+        },
+        jigsaw: {
+            get: `package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "net/http"
+)
+
+type HJTPXCaptcha struct {
+    APIUrl string
+    AppID  string
+    AppKey string
+}
+
+func NewHJTPXCaptcha(apiUrl, appID, appKey string) *HJTPXCaptcha {
+    return &HJTPXCaptcha{
+        APIUrl: apiUrl,
+        AppID:  appID,
+        AppKey: appKey,
+    }
+}
+
+func (c *HJTPXCaptcha) GetJigsawCaptcha() (map[string]interface{}, error) {
+    resp, err := http.Get(c.APIUrl + "/api/v1/captcha/jigsaw")
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`,
+            verify: `
+
+func (c *HJTPXCaptcha) VerifyJigsawCaptcha(sessionID string, x int) (map[string]interface{}, error) {
+    data := map[string]interface{}{
+        "session_id": sessionID,
+        "x": x,
+    }
+    
+    jsonData, err := json.Marshal(data)
+    if err != nil {
+        return nil, err
+    }
+    
+    resp, err := http.Post(c.APIUrl+"/api/v1/captcha/jigsaw/verify", "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    return result, err
+}`
+        }
+    },
+    java: {
+        slider: {
+            get: `import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class HJTPXCaptcha {
+    private String apiUrl;
+    private String appId;
+    private String appKey;
+    private HttpClient client;
+    private ObjectMapper mapper;
+    
+    public HJTPXCaptcha(String apiUrl, String appId, String appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.client = HttpClient.newHttpClient();
+        this.mapper = new ObjectMapper();
+    }
+    
+    public Map<String, Object> getSliderCaptcha() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/slider"))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`,
+            verify: `    
+    public Map<String, Object> verifySliderCaptcha(String sessionId, int x) throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("session_id", sessionId);
+        Map<String, Object> answer = new HashMap<>();
+        answer.put("x", x);
+        data.put("answer", answer);
+        
+        String jsonBody = mapper.writeValueAsString(data);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/verify"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`
+        },
+        click: {
+            get: `import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class HJTPXCaptcha {
+    private String apiUrl;
+    private String appId;
+    private String appKey;
+    private HttpClient client;
+    private ObjectMapper mapper;
+    
+    public HJTPXCaptcha(String apiUrl, String appId, String appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.client = HttpClient.newHttpClient();
+        this.mapper = new ObjectMapper();
+    }
+    
+    public Map<String, Object> getClickCaptcha() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/click"))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`,
+            verify: `    
+    public Map<String, Object> verifyClickCaptcha(String sessionId, List<Map<String, Integer>> points) throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("session_id", sessionId);
+        Map<String, Object> answer = new HashMap<>();
+        answer.put("points", points);
+        data.put("answer", answer);
+        
+        String jsonBody = mapper.writeValueAsString(data);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/verify"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`
+        },
+        gesture: {
+            get: `import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class HJTPXCaptcha {
+    private String apiUrl;
+    private String appId;
+    private String appKey;
+    private HttpClient client;
+    private ObjectMapper mapper;
+    
+    public HJTPXCaptcha(String apiUrl, String appId, String appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.client = HttpClient.newHttpClient();
+        this.mapper = new ObjectMapper();
+    }
+    
+    public Map<String, Object> getGestureCaptcha() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/gesture"))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`,
+            verify: `    
+    public Map<String, Object> verifyGestureCaptcha(String sessionId, String gesture) throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("session_id", sessionId);
+        data.put("gesture", gesture);
+        
+        String jsonBody = mapper.writeValueAsString(data);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/gesture/verify"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`
+        },
+        jigsaw: {
+            get: `import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class HJTPXCaptcha {
+    private String apiUrl;
+    private String appId;
+    private String appKey;
+    private HttpClient client;
+    private ObjectMapper mapper;
+    
+    public HJTPXCaptcha(String apiUrl, String appId, String appKey) {
+        this.apiUrl = apiUrl;
+        this.appId = appId;
+        this.appKey = appKey;
+        this.client = HttpClient.newHttpClient();
+        this.mapper = new ObjectMapper();
+    }
+    
+    public Map<String, Object> getJigsawCaptcha() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/jigsaw"))
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`,
+            verify: `    
+    public Map<String, Object> verifyJigsawCaptcha(String sessionId, int x) throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("session_id", sessionId);
+        data.put("x", x);
+        
+        String jsonBody = mapper.writeValueAsString(data);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl + "/api/v1/captcha/jigsaw/verify"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+            .build();
+        
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return mapper.readValue(response.body(), Map.class);
+    }`
+        }
+    },
+    php: {
+        slider: {
+            get: `<?php
+
+class HJTPXCaptcha {
+    private $apiUrl;
+    private $appId;
+    private $appKey;
+    
+    public function __construct($apiUrl, $appId, $appKey) {
+        $this->apiUrl = $apiUrl;
+        $this->appId = $appId;
+        $this->appKey = $appKey;
+    }
+    
+    public function getSliderCaptcha() {
+        $url = $this->apiUrl . '/api/v1/captcha/slider';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`,
+            verify: `    
+    public function verifySliderCaptcha($sessionId, $x) {
+        $url = $this->apiUrl . '/api/v1/captcha/verify';
+        $data = [
+            'session_id' => $sessionId,
+            'answer' => ['x' => $x]
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`
+        },
+        click: {
+            get: `<?php
+
+class HJTPXCaptcha {
+    private $apiUrl;
+    private $appId;
+    private $appKey;
+    
+    public function __construct($apiUrl, $appId, $appKey) {
+        $this->apiUrl = $apiUrl;
+        $this->appId = $appId;
+        $this->appKey = $appKey;
+    }
+    
+    public function getClickCaptcha() {
+        $url = $this->apiUrl . '/api/v1/captcha/click';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`,
+            verify: `    
+    public function verifyClickCaptcha($sessionId, $points) {
+        $url = $this->apiUrl . '/api/v1/captcha/verify';
+        $data = [
+            'session_id' => $sessionId,
+            'answer' => ['points' => $points]
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`
+        },
+        gesture: {
+            get: `<?php
+
+class HJTPXCaptcha {
+    private $apiUrl;
+    private $appId;
+    private $appKey;
+    
+    public function __construct($apiUrl, $appId, $appKey) {
+        $this->apiUrl = $apiUrl;
+        $this->appId = $appId;
+        $this->appKey = $appKey;
+    }
+    
+    public function getGestureCaptcha() {
+        $url = $this->apiUrl . '/api/v1/captcha/gesture';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`,
+            verify: `    
+    public function verifyGestureCaptcha($sessionId, $gesture) {
+        $url = $this->apiUrl . '/api/v1/captcha/gesture/verify';
+        $data = [
+            'session_id' => $sessionId,
+            'gesture' => $gesture
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`
+        },
+        jigsaw: {
+            get: `<?php
+
+class HJTPXCaptcha {
+    private $apiUrl;
+    private $appId;
+    private $appKey;
+    
+    public function __construct($apiUrl, $appId, $appKey) {
+        $this->apiUrl = $apiUrl;
+        $this->appId = $appId;
+        $this->appKey = $appKey;
+    }
+    
+    public function getJigsawCaptcha() {
+        $url = $this->apiUrl . '/api/v1/captcha/jigsaw';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`,
+            verify: `    
+    public function verifyJigsawCaptcha($sessionId, $x) {
+        $url = $this->apiUrl . '/api/v1/captcha/jigsaw/verify';
+        $data = [
+            'session_id' => $sessionId,
+            'x' => $x
+        ];
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return json_decode($response, true);
+    }`
+        }
+    }
+};
+
+function generateCode() {
+    const language = document.getElementById('languageSelect').value;
+    const captchaType = document.getElementById('captchaTypeSelect').value;
+    const apiUrl = document.getElementById('apiUrl').value;
+    const appId = document.getElementById('appId').value;
+    const appKey = document.getElementById('appKey').value;
+    const includeGet = document.getElementById('includeGet').checked;
+    const includeVerify = document.getElementById('includeVerify').checked;
+    
+    let code = '';
+    const template = codeTemplates[language][captchaType];
+    
+    if (includeGet && template.get) {
+        code += template.get;
+    }
+    
+    if (includeVerify && template.verify) {
+        code += template.verify;
+    }
+    
+    document.getElementById('generatedCode').textContent = code;
+}
+
+document.getElementById('generateBtn').addEventListener('click', generateCode);
+
+document.getElementById('copyBtn').addEventListener('click', function() {
+    const code = document.getElementById('generatedCode').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        this.innerHTML = '<i class="bi bi-check"></i> 已复制';
+        setTimeout(() => {
+            this.innerHTML = '<i class="bi bi-clipboard"></i> 复制代码';
+        }, 2000);
+    });
+});
+</script>
+{{end}}

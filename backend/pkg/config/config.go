@@ -12,6 +12,7 @@ type Config struct {
 	JWT      JWTConfig
 	Database DatabaseConfig
 	Alert    AlertConfig
+	I18n     I18nConfig
 }
 
 type DatabaseConfig struct {
@@ -82,6 +83,14 @@ type AlertConfig struct {
 	MaxAlertCount    int  `yaml:"max_alert_count"`
 	SlackEnabled     bool `yaml:"slack_enabled"`
 	WebhookEnabled   bool `yaml:"webhook_enabled"`
+}
+
+type I18nConfig struct {
+	DefaultLang       string   `yaml:"default_lang"`
+	SupportedLangs    []string `yaml:"supported_langs"`
+	TranslationsDir   string   `yaml:"translations_dir"`
+	DefaultTimezone   string   `yaml:"default_timezone"`
+	SupportedTimezones []string `yaml:"supported_timezones"`
 }
 
 var globalConfig *Config
@@ -203,6 +212,13 @@ func LoadConfig() *Config {
 			MaxAlertCount:  getEnvAsInt("ALERT_MAX_COUNT", 1000),
 			SlackEnabled:   getEnvAsBool("ALERT_SLACK_ENABLED", true),
 			WebhookEnabled: getEnvAsBool("ALERT_WEBHOOK_ENABLED", true),
+		},
+		I18n: I18nConfig{
+			DefaultLang:       getEnv("DEFAULT_LANG", "zh-CN"),
+			SupportedLangs: []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "de-DE", "es-ES", "pt-BR", "it-IT", "ru-RU", "ar-SA"},
+			TranslationsDir:  getEnv("TRANSLATIONS_DIR", "translations"),
+			DefaultTimezone:  getEnv("DEFAULT_TIMEZONE", "Asia/Shanghai"),
+			SupportedTimezones: []string{"Asia/Shanghai", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney", "Pacific/Auckland"},
 		},
 	}
 }

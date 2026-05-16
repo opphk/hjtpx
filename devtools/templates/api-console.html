@@ -1,0 +1,259 @@
+{{define "content"}}
+<div class="section-title">API调试控制台</div>
+<p class="section-desc">在线调试HJTPX验证码系统API接口，快速验证接口功能</p>
+
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-sliders"></i> 请求配置
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-2">
+                <select class="form-select" id="method">
+                    <option value="GET" selected>GET</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            <div class="col-md-8">
+                <input type="text" class="form-control" id="url" value="/api/v1/captcha/slider" placeholder="API路径">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" id="sendBtn">
+                    <i class="bi bi-send"></i> 发送请求
+                </button>
+            </div>
+        </div>
+        
+        <ul class="nav nav-tabs mb-3" id="apiTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="headers-tab" data-bs-toggle="tab" data-bs-target="#headers" type="button">请求头</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="body-tab" data-bs-toggle="tab" data-bs-target="#body" type="button">请求体</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="presets-tab" data-bs-toggle="tab" data-bs-target="#presets" type="button">常用请求</button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="apiTabsContent">
+            <div class="tab-pane fade show active" id="headers">
+                <div id="headersContainer">
+                    <div class="row mb-2 header-row">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control header-key" placeholder="Header Key" value="Content-Type">
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" class="form-control header-value" placeholder="Header Value" value="application/json">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-danger btn-sm remove-header">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-outline-primary btn-sm mt-2" id="addHeader">
+                    <i class="bi bi-plus"></i> 添加Header
+                </button>
+            </div>
+            
+            <div class="tab-pane fade" id="body">
+                <textarea class="form-control" id="body" rows="6" placeholder='{"key": "value"}'></textarea>
+            </div>
+            
+            <div class="tab-pane fade" id="presets">
+                <div class="list-group">
+                    <a href="#" class="list-group-item list-group-item-action preset-item" data-method="GET" data-url="/api/v1/captcha/slider">
+                        <strong>获取滑动验证码</strong><br>
+                        <small class="text-muted">GET /api/v1/captcha/slider</small>
+                    </a>
+                    <a href="#" class="list-group-item list-group-item-action preset-item" data-method="GET" data-url="/api/v1/captcha/click">
+                        <strong>获取点击验证码</strong><br>
+                        <small class="text-muted">GET /api/v1/captcha/click</small>
+                    </a>
+                    <a href="#" class="list-group-item list-group-item-action preset-item" data-method="POST" data-url="/api/v1/captcha/verify" data-body='{"session_id": "", "answer": {}}'>
+                        <strong>验证验证码</strong><br>
+                        <small class="text-muted">POST /api/v1/captcha/verify</small>
+                    </a>
+                    <a href="#" class="list-group-item list-group-item-action preset-item" data-method="GET" data-url="/health">
+                        <strong>健康检查</strong><br>
+                        <small class="text-muted">GET /health</small>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-response"></i> 响应结果</span>
+        <div>
+            <span class="badge" id="statusBadge">-</span>
+            <span class="ms-2 text-muted" id="timeBadge">-</span>
+        </div>
+    </div>
+    <div class="card-body">
+        <ul class="nav nav-tabs mb-3" id="responseTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="response-body-tab" data-bs-toggle="tab" data-bs-target="#response-body" type="button">响应体</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="response-headers-tab" data-bs-toggle="tab" data-bs-target="#response-headers" type="button">响应头</button>
+            </li>
+        </ul>
+        <div class="tab-content" id="responseTabsContent">
+            <div class="tab-pane fade show active" id="response-body">
+                <pre class="code-block" id="responseBody">点击"发送请求"开始调试...</pre>
+            </div>
+            <div class="tab-pane fade" id="response-headers">
+                <pre class="code-block" id="responseHeaders">-</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sendBtn = document.getElementById('sendBtn');
+    const methodSelect = document.getElementById('method');
+    const urlInput = document.getElementById('url');
+    const bodyTextarea = document.getElementById('body');
+    const responseBody = document.getElementById('responseBody');
+    const responseHeaders = document.getElementById('responseHeaders');
+    const statusBadge = document.getElementById('statusBadge');
+    const timeBadge = document.getElementById('timeBadge');
+    const addHeaderBtn = document.getElementById('addHeader');
+    const headersContainer = document.getElementById('headersContainer');
+    
+    addHeaderBtn.addEventListener('click', function() {
+        const row = document.createElement('div');
+        row.className = 'row mb-2 header-row';
+        row.innerHTML = `
+            <div class="col-md-5">
+                <input type="text" class="form-control header-key" placeholder="Header Key">
+            </div>
+            <div class="col-md-5">
+                <input type="text" class="form-control header-value" placeholder="Header Value">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-danger btn-sm remove-header">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        `;
+        headersContainer.appendChild(row);
+    });
+    
+    headersContainer.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-header')) {
+            e.target.closest('.header-row').remove();
+        }
+    });
+    
+    document.querySelectorAll('.preset-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            methodSelect.value = this.dataset.method;
+            urlInput.value = this.dataset.url;
+            if (this.dataset.body) {
+                bodyTextarea.value = this.dataset.body;
+            }
+            document.querySelector('#headers-tab').click();
+        });
+    });
+    
+    function getHeaders() {
+        const headers = {};
+        document.querySelectorAll('.header-row').forEach(row => {
+            const key = row.querySelector('.header-key').value.trim();
+            const value = row.querySelector('.header-value').value.trim();
+            if (key && value) {
+                headers[key] = value;
+            }
+        });
+        return headers;
+    }
+    
+    function syntaxHighlight(json) {
+        if (typeof json !== 'string') {
+            json = JSON.stringify(json, undefined, 2);
+        }
+        json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+            let cls = 'json-number';
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = 'json-key';
+                } else {
+                    cls = 'json-string';
+                }
+            } else if (/true|false/.test(match)) {
+                cls = 'json-boolean';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+        });
+    }
+    
+    sendBtn.addEventListener('click', async function() {
+        const method = methodSelect.value;
+        const url = urlInput.value;
+        const headers = getHeaders();
+        let body = bodyTextarea.value;
+        
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> 发送中...';
+        
+        const startTime = Date.now();
+        
+        try {
+            const options = {
+                method: method,
+                headers: headers
+            };
+            
+            if (method !== 'GET' && method !== 'HEAD' && body) {
+                options.body = body;
+            }
+            
+            const response = await fetch(url, options);
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+            
+            statusBadge.className = 'badge ' + (response.ok ? 'bg-success' : 'bg-danger');
+            statusBadge.textContent = response.status + ' ' + response.statusText;
+            timeBadge.textContent = duration + 'ms';
+            
+            let headersText = '';
+            response.headers.forEach((value, key) => {
+                headersText += key + ': ' + value + '\n';
+            });
+            responseHeaders.textContent = headersText || '(无响应头)';
+            
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const json = await response.json();
+                responseBody.innerHTML = syntaxHighlight(json);
+            } else {
+                const text = await response.text();
+                responseBody.textContent = text || '(无响应内容)';
+            }
+        } catch (error) {
+            statusBadge.className = 'badge bg-danger';
+            statusBadge.textContent = 'Error';
+            timeBadge.textContent = '-';
+            responseBody.textContent = '请求失败: ' + error.message;
+            responseHeaders.textContent = '-';
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="bi bi-send"></i> 发送请求';
+        }
+    });
+});
+</script>
+{{end}}

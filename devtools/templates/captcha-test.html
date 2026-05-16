@@ -1,0 +1,313 @@
+{{define "content"}}
+<div class="section-title">验证码在线测试</div>
+<p class="section-desc">在线测试各种类型的验证码功能</p>
+
+<ul class="nav nav-tabs mb-4" id="captchaTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="slider-tab" data-bs-toggle="tab" data-bs-target="#slider" type="button">滑动验证码</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="click-tab" data-bs-toggle="tab" data-bs-target="#click" type="button">点击验证码</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="gesture-tab" data-bs-toggle="tab" data-bs-target="#gesture" type="button">手势验证码</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="jigsaw-tab" data-bs-toggle="tab" data-bs-target="#jigsaw" type="button">拼图验证码</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="captchaTabsContent">
+    <div class="tab-pane fade show active" id="slider">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-arrows-move"></i> 滑动验证码测试
+                    </div>
+                    <div class="card-body text-center">
+                        <div id="sliderCaptcha" class="mb-3">
+                            <button class="btn btn-primary" id="getSlider">获取滑动验证码</button>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label">滑动距离</label>
+                            <input type="range" class="form-range" id="sliderRange" min="0" max="100" value="50">
+                            <span id="sliderValue">50</span>
+                        </div>
+                        <button class="btn btn-success mt-3" id="verifySlider" disabled>验证滑动</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle"></i> 测试结果
+                    </div>
+                    <div class="card-body">
+                        <pre class="code-block" id="sliderResult">点击"获取滑动验证码"开始测试...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-pane fade" id="click">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-hand-index-thumb"></i> 点击验证码测试
+                    </div>
+                    <div class="card-body text-center">
+                        <div id="clickCaptcha" class="mb-3">
+                            <button class="btn btn-primary" id="getClick">获取点击验证码</button>
+                        </div>
+                        <div class="mt-3" id="clickPoints" style="display: none;">
+                            <p class="text-muted">点击位置将显示在此处</p>
+                        </div>
+                        <button class="btn btn-success mt-3" id="verifyClick" disabled>验证点击</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle"></i> 测试结果
+                    </div>
+                    <div class="card-body">
+                        <pre class="code-block" id="clickResult">点击"获取点击验证码"开始测试...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-pane fade" id="gesture">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-hand-draw"></i> 手势验证码测试
+                    </div>
+                    <div class="card-body text-center">
+                        <div id="gestureCaptcha" class="mb-3">
+                            <button class="btn btn-primary" id="getGesture">获取手势验证码</button>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label">手势轨迹</label>
+                            <input type="text" class="form-control" id="gesturePath" placeholder="例如: 1,2,3,4,5">
+                        </div>
+                        <button class="btn btn-success mt-3" id="verifyGesture" disabled>验证手势</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle"></i> 测试结果
+                    </div>
+                    <div class="card-body">
+                        <pre class="code-block" id="gestureResult">点击"获取手势验证码"开始测试...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="tab-pane fade" id="jigsaw">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-puzzle"></i> 拼图验证码测试
+                    </div>
+                    <div class="card-body text-center">
+                        <div id="jigsawCaptcha" class="mb-3">
+                            <button class="btn btn-primary" id="getJigsaw">获取拼图验证码</button>
+                        </div>
+                        <div class="mt-3">
+                            <label class="form-label">拼图位置</label>
+                            <input type="number" class="form-control" id="jigsawPosition" placeholder="X坐标">
+                        </div>
+                        <button class="btn btn-success mt-3" id="verifyJigsaw" disabled>验证拼图</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-info-circle"></i> 测试结果
+                    </div>
+                    <div class="card-body">
+                        <pre class="code-block" id="jigsawResult">点击"获取拼图验证码"开始测试...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+let currentSession = {
+    slider: null,
+    click: null,
+    gesture: null,
+    jigsaw: null
+};
+
+function syntaxHighlight(json) {
+    if (typeof json !== 'string') {
+        json = JSON.stringify(json, undefined, 2);
+    }
+    json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'json-number';
+        if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+                cls = 'json-key';
+            } else {
+                cls = 'json-string';
+            }
+        } else if (/true|false/.test(match)) {
+            cls = 'json-boolean';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+    });
+}
+
+document.getElementById('getSlider').addEventListener('click', async function() {
+    const resultEl = document.getElementById('sliderResult');
+    try {
+        const response = await fetch('/api/v1/captcha/slider');
+        const data = await response.json();
+        currentSession.slider = data.session_id;
+        resultEl.innerHTML = syntaxHighlight(data);
+        document.getElementById('verifySlider').disabled = false;
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('sliderRange').addEventListener('input', function() {
+    document.getElementById('sliderValue').textContent = this.value;
+});
+
+document.getElementById('verifySlider').addEventListener('click', async function() {
+    if (!currentSession.slider) return;
+    const resultEl = document.getElementById('sliderResult');
+    try {
+        const response = await fetch('/api/v1/captcha/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSession.slider,
+                answer: { x: parseInt(document.getElementById('sliderRange').value) }
+            })
+        });
+        const data = await response.json();
+        resultEl.innerHTML = syntaxHighlight(data);
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('getClick').addEventListener('click', async function() {
+    const resultEl = document.getElementById('clickResult');
+    try {
+        const response = await fetch('/api/v1/captcha/click');
+        const data = await response.json();
+        currentSession.click = data.session_id;
+        resultEl.innerHTML = syntaxHighlight(data);
+        document.getElementById('verifyClick').disabled = false;
+        document.getElementById('clickPoints').style.display = 'block';
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('verifyClick').addEventListener('click', async function() {
+    if (!currentSession.click) return;
+    const resultEl = document.getElementById('clickResult');
+    try {
+        const response = await fetch('/api/v1/captcha/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSession.click,
+                answer: { points: [{x: 100, y: 100}] }
+            })
+        });
+        const data = await response.json();
+        resultEl.innerHTML = syntaxHighlight(data);
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('getGesture').addEventListener('click', async function() {
+    const resultEl = document.getElementById('gestureResult');
+    try {
+        const response = await fetch('/api/v1/captcha/gesture');
+        const data = await response.json();
+        currentSession.gesture = data.session_id;
+        resultEl.innerHTML = syntaxHighlight(data);
+        document.getElementById('verifyGesture').disabled = false;
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('verifyGesture').addEventListener('click', async function() {
+    if (!currentSession.gesture) return;
+    const resultEl = document.getElementById('gestureResult');
+    try {
+        const response = await fetch('/api/v1/captcha/gesture/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSession.gesture,
+                gesture: document.getElementById('gesturePath').value
+            })
+        });
+        const data = await response.json();
+        resultEl.innerHTML = syntaxHighlight(data);
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('getJigsaw').addEventListener('click', async function() {
+    const resultEl = document.getElementById('jigsawResult');
+    try {
+        const response = await fetch('/api/v1/captcha/jigsaw');
+        const data = await response.json();
+        currentSession.jigsaw = data.session_id;
+        resultEl.innerHTML = syntaxHighlight(data);
+        document.getElementById('verifyJigsaw').disabled = false;
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+
+document.getElementById('verifyJigsaw').addEventListener('click', async function() {
+    if (!currentSession.jigsaw) return;
+    const resultEl = document.getElementById('jigsawResult');
+    try {
+        const response = await fetch('/api/v1/captcha/jigsaw/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSession.jigsaw,
+                x: parseInt(document.getElementById('jigsawPosition').value) || 0
+            })
+        });
+        const data = await response.json();
+        resultEl.innerHTML = syntaxHighlight(data);
+    } catch (e) {
+        resultEl.textContent = '错误: ' + e.message;
+    }
+});
+</script>
+{{end}}
