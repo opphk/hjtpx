@@ -135,10 +135,6 @@ class Captcha {
                             <span class="tab-icon"><i class="fas fa-undo-alt" aria-hidden="true"></i></span>
                             <span class="tab-text">${this.i18n.t('rotationVerify')}</span>
                         </button>
-                        <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="passive-captcha" data-type="passive" tabindex="0" id="tab-passive">
-                            <span class="tab-icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></span>
-                            <span class="tab-text">${this.i18n.t('passiveVerify')}</span>
-                        </button>
                     </div>
 
                     <div class="captcha-content active" id="slider-captcha" role="tabpanel" aria-labelledby="tab-slider">
@@ -267,48 +263,6 @@ class Captcha {
                         </div>
                     </div>
 
-                    <div class="captcha-content" id="passive-captcha" role="tabpanel" aria-labelledby="tab-passive" hidden>
-                        <div class="captcha-loading-overlay" id="passive-loading-overlay" hidden>
-                            <div class="captcha-loading-container">
-                                <div class="loading-animation-${this.options.animationStyle}">
-                                    <div class="loading-dots">
-                                        <span></span><span></span><span></span><span></span><span></span>
-                                    </div>
-                                </div>
-                                <div class="loading-progress-bar">
-                                    <div class="loading-progress-fill" id="passive-progress-fill"></div>
-                                </div>
-                                <div class="loading-message" id="passive-loading-message">${this.i18n.t('loading')}</div>
-                            </div>
-                        </div>
-                        <div class="passive-captcha-display" style="text-align:center;padding:2rem;">
-                            <div class="passive-icon" style="font-size:3rem;color:#52c41a;margin-bottom:1rem;">
-                                <i class="fas fa-shield-alt" aria-hidden="true"></i>
-                            </div>
-                            <div class="passive-status" id="passive-status" style="font-size:1.1rem;color:#333;margin-bottom:0.5rem;">
-                                ${this.i18n.t('passiveChecking')}
-                            </div>
-                            <div class="passive-detail" style="font-size:0.85rem;color:#999;margin-bottom:1.5rem;">
-                                ${this.i18n.t('passiveDetail')}
-                            </div>
-                            <div class="passive-risk-score" style="margin-bottom:1rem;">
-                                <span style="font-size:0.85rem;color:#666;">${this.i18n.t('riskScore')}: </span>
-                                <span id="passive-risk-value" style="font-size:1.2rem;font-weight:bold;color:#52c41a;">--</span>
-                            </div>
-                            <div class="passive-checks" style="text-align:left;max-width:300px;margin:0 auto;">
-                                <div class="passive-check-item" id="passive-check-env" style="padding:0.3rem 0;font-size:0.85rem;color:#999;">
-                                    <i class="fas fa-spinner fa-pulse me-2"></i>${this.i18n.t('passiveCheckEnv')}
-                                </div>
-                                <div class="passive-check-item" id="passive-check-behavior" style="padding:0.3rem 0;font-size:0.85rem;color:#999;">
-                                    <i class="fas fa-spinner fa-pulse me-2"></i>${this.i18n.t('passiveCheckBehavior')}
-                                </div>
-                                <div class="passive-check-item" id="passive-check-risk" style="padding:0.3rem 0;font-size:0.85rem;color:#999;">
-                                    <i class="fas fa-spinner fa-pulse me-2"></i>${this.i18n.t('passiveCheckRisk')}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="captcha-result" id="captcha-result" role="alert" aria-live="assertive" hidden></div>
                 </div>
                 <div class="captcha-footer">
@@ -359,9 +313,6 @@ class Captcha {
             rotationSliderButton: this.container.querySelector('#rotation-slider-button'),
             rotationSliderText: this.container.querySelector('#rotation-slider-text'),
             rotationAngleValue: this.container.querySelector('#rotation-angle-value'),
-            passiveLoadingOverlay: this.container.querySelector('#passive-loading-overlay'),
-            passiveProgressFill: this.container.querySelector('#passive-progress-fill'),
-            passiveLoadingMessage: this.container.querySelector('#passive-loading-message'),
             result: this.container.querySelector('#captcha-result')
         };
 
@@ -869,8 +820,7 @@ class Captcha {
         this.elements.contents.forEach(content => {
             const isActive = (type === 'slider' && content.id === 'slider-captcha') ||
                            (type === 'click' && content.id === 'click-captcha') ||
-                           (type === 'rotation' && content.id === 'rotation-captcha') ||
-                           (type === 'passive' && content.id === 'passive-captcha');
+                           (type === 'rotation' && content.id === 'rotation-captcha');
             content.classList.toggle('active', isActive);
             content.hidden = !isActive;
         });
@@ -884,8 +834,7 @@ class Captcha {
         const tabNames = {
             slider: this.i18n.t('sliderVerify'),
             click: this.i18n.t('clickVerify'),
-            rotation: this.i18n.t('rotationVerify'),
-            passive: this.i18n.t('passiveVerify')
+            rotation: this.i18n.t('rotationVerify')
         };
         this.announceToScreenReader(`${this.i18n.t('switchedTo')} ${tabNames[type] || type}`);
     }
@@ -911,8 +860,6 @@ class Captcha {
                 await this.refreshClick();
             } else if (this.options.type === 'rotation') {
                 await this.refreshRotation();
-            } else if (this.options.type === 'passive') {
-                await this.refreshPassive();
             }
             this.announceToScreenReader(this.i18n.t('loadedSuccess'));
         } catch (error) {
@@ -1196,65 +1143,6 @@ class Captcha {
                 skeleton.style.display = 'none';
             }, 300);
         }
-    }
-
-    async refreshPassive() {
-        this.showLoading('passive');
-        try {
-            const envCheck = document.getElementById('passive-check-env');
-            const behaviorCheck = document.getElementById('passive-check-behavior');
-            const riskCheck = document.getElementById('passive-check-risk');
-            const statusEl = document.getElementById('passive-status');
-            const riskValue = document.getElementById('passive-risk-value');
-
-            await this.sleep(800);
-            if (envCheck) {
-                envCheck.innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>' + this.i18n.t('passiveCheckEnvDone');
-                envCheck.style.color = '#52c41a';
-            }
-
-            await this.sleep(600);
-            if (behaviorCheck) {
-                behaviorCheck.innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>' + this.i18n.t('passiveCheckBehaviorDone');
-                behaviorCheck.style.color = '#52c41a';
-            }
-
-            await this.sleep(500);
-            const riskScore = Math.floor(Math.random() * 20) + 10;
-            if (riskValue) {
-                riskValue.textContent = riskScore + '%';
-                riskValue.style.color = riskScore < 30 ? '#52c41a' : (riskScore < 60 ? '#faad14' : '#ff4d4f');
-            }
-            if (riskCheck) {
-                riskCheck.innerHTML = '<i class="fas fa-check-circle text-success me-2"></i>' + this.i18n.t('passiveCheckRiskDone');
-                riskCheck.style.color = '#52c41a';
-            }
-
-            if (statusEl) {
-                statusEl.textContent = this.i18n.t('passiveSuccess');
-                statusEl.style.color = '#52c41a';
-            }
-
-            this.showResult(this.i18n.t('verifySuccess'), 'success');
-            this.announceToScreenReader(this.i18n.t('verifySuccess'), 'assertive');
-            if (this.options.onSuccess) {
-                this.options.onSuccess({ type: 'passive', session_id: 'passive_' + Date.now() });
-            }
-        } catch (error) {
-            this.showResult(this.i18n.t('verifyFailed'), 'error');
-            this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
-            if (this.options.onError) {
-                this.options.onError({ type: 'passive', error: error.message || this.i18n.t('verifyFailed') });
-            }
-        } finally {
-            setTimeout(() => {
-                this.hideLoading('passive');
-            }, 500);
-        }
-    }
-
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     loadDemoRotation() {
@@ -1735,9 +1623,7 @@ class Captcha {
             this.elements.sliderLoadingOverlay :
             type === 'click' ?
             this.elements.clickLoadingOverlay :
-            type === 'rotation' ?
-            this.elements.rotationLoadingOverlay :
-            this.elements.passiveLoadingOverlay;
+            this.elements.rotationLoadingOverlay;
 
         if (overlay) {
             overlay.hidden = false;
@@ -1760,16 +1646,12 @@ class Captcha {
             this.elements.sliderProgressFill :
             type === 'click' ?
             this.elements.clickProgressFill :
-            type === 'rotation' ?
-            this.elements.rotationProgressFill :
-            this.elements.passiveProgressFill;
+            this.elements.rotationProgressFill;
         const loadingMessage = type === 'slider' ?
             this.elements.sliderLoadingMessage :
             type === 'click' ?
             this.elements.clickLoadingMessage :
-            type === 'rotation' ?
-            this.elements.rotationLoadingMessage :
-            this.elements.passiveLoadingMessage;
+            this.elements.rotationLoadingMessage;
 
         const messages = [
             this.i18n.t('loading'),
@@ -1807,9 +1689,7 @@ class Captcha {
             this.elements.sliderLoadingMessage :
             type === 'click' ?
             this.elements.clickLoadingMessage :
-            type === 'rotation' ?
-            this.elements.rotationLoadingMessage :
-            this.elements.passiveLoadingMessage;
+            this.elements.rotationLoadingMessage;
         if (loadingMessage) {
             loadingMessage.textContent = message;
         }
@@ -1823,9 +1703,7 @@ class Captcha {
             this.elements.sliderLoadingOverlay :
             type === 'click' ?
             this.elements.clickLoadingOverlay :
-            type === 'rotation' ?
-            this.elements.rotationLoadingOverlay :
-            this.elements.passiveLoadingOverlay;
+            this.elements.rotationLoadingOverlay;
 
         if (overlay) {
             this.animateLoadingOut(overlay);
@@ -1878,8 +1756,7 @@ class Captcha {
                 const tabNames = {
                     slider: this.i18n.t('sliderVerify'),
                     click: this.i18n.t('clickVerify'),
-                    rotation: this.i18n.t('rotationVerify'),
-                    passive: this.i18n.t('passiveVerify')
+                    rotation: this.i18n.t('rotationVerify')
                 };
                 textSpan.textContent = tabNames[tab.dataset.type] || tab.dataset.type;
             }
@@ -1917,7 +1794,6 @@ class CaptchaI18n {
                 sliderVerify: '滑块验证',
                 clickVerify: '点选验证',
                 rotationVerify: '旋转验证',
-                passiveVerify: '无感验证',
                 sliderImageAlt: '滑块验证码图片',
                 puzzlePiece: '拼图块',
                 refresh: '刷新验证码',
@@ -1962,17 +1838,7 @@ class CaptchaI18n {
                 dragToRotate: '拖动旋转图片',
                 rotating: '旋转中...',
                 rotationDragStarted: '开始拖动旋转',
-                rotationAngle: '旋转角度',
-                passiveChecking: '正在检测环境...',
-                passiveDetail: '系统正在后台进行安全检测，无需任何操作',
-                passiveSuccess: '环境安全，验证通过',
-                riskScore: '风险评分',
-                passiveCheckEnv: '环境安全检测',
-                passiveCheckBehavior: '行为特征分析',
-                passiveCheckRisk: '风险综合评估',
-                passiveCheckEnvDone: '环境安全检测完成',
-                passiveCheckBehaviorDone: '行为特征分析完成',
-                passiveCheckRiskDone: '风险综合评估完成'
+                rotationAngle: '旋转角度'
             },
             'en-US': {
                 captchaLabel: 'Security captcha component',
@@ -1982,7 +1848,6 @@ class CaptchaI18n {
                 sliderVerify: 'Slider Verification',
                 clickVerify: 'Click Verification',
                 rotationVerify: 'Rotation Verification',
-                passiveVerify: 'Passive Verification',
                 sliderImageAlt: 'Slider captcha image',
                 puzzlePiece: 'Puzzle piece',
                 refresh: 'Refresh captcha',
@@ -2027,17 +1892,7 @@ class CaptchaI18n {
                 dragToRotate: 'Drag to rotate',
                 rotating: 'Rotating...',
                 rotationDragStarted: 'Started rotating',
-                rotationAngle: 'Rotation angle',
-                passiveChecking: 'Checking environment...',
-                passiveDetail: 'System is performing security checks in the background',
-                passiveSuccess: 'Environment secure, verification passed',
-                riskScore: 'Risk Score',
-                passiveCheckEnv: 'Environment security check',
-                passiveCheckBehavior: 'Behavior analysis',
-                passiveCheckRisk: 'Risk assessment',
-                passiveCheckEnvDone: 'Environment check complete',
-                passiveCheckBehaviorDone: 'Behavior analysis complete',
-                passiveCheckRiskDone: 'Risk assessment complete'
+                rotationAngle: 'Rotation angle'
             },
             'ja-JP': {
                 captchaLabel: 'セキュリティキャプチャコンポーネント',
@@ -2047,7 +1902,6 @@ class CaptchaI18n {
                 sliderVerify: 'スライダー確認',
                 clickVerify: 'クリック確認',
                 rotationVerify: '回転確認',
-                passiveVerify: 'パッシブ確認',
                 sliderImageAlt: 'スライダーキャプチャ画像',
                 puzzlePiece: 'パズルピース',
                 refresh: 'キャプチャを更新',
@@ -2092,17 +1946,7 @@ class CaptchaI18n {
                 dragToRotate: 'ドラッグして回転',
                 rotating: '回転中...',
                 rotationDragStarted: '回転を開始しました',
-                rotationAngle: '回転角度',
-                passiveChecking: '環境を確認中...',
-                passiveDetail: 'システムがバックグラウンドでセキュリティチェックを実行中',
-                passiveSuccess: '環境安全、確認完了',
-                riskScore: 'リスクスコア',
-                passiveCheckEnv: '環境セキュリティチェック',
-                passiveCheckBehavior: '行動分析',
-                passiveCheckRisk: 'リスク評価',
-                passiveCheckEnvDone: '環境チェック完了',
-                passiveCheckBehaviorDone: '行動分析完了',
-                passiveCheckRiskDone: 'リスク評価完了'
+                rotationAngle: '回転角度'
             }
         };
     }
