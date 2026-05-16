@@ -2,67 +2,164 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="description" content="安全验证码系统 - 保护您的账户安全">
+    <meta name="theme-color" content="#667eea">
     <title>行为验证码 - 安全验证</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
-    <header class="bg-white shadow-sm sticky-top">
+    <a href="#main-content" class="visually-hidden focus-visible">跳转到主要内容</a>
+    
+    <header class="bg-white shadow-sm sticky-top" role="banner">
         <div class="container">
-            <nav class="navbar navbar-expand-lg navbar-light">
+            <nav class="navbar navbar-expand-lg navbar-light" role="navigation" aria-label="主导航">
                 <div class="container-fluid px-0">
-                    <a class="navbar-brand fw-bold text-primary" href="/">用户端</a>
-                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <a class="navbar-brand fw-bold text-primary" href="/" aria-label="返回首页">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i> 用户端
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航菜单">
                         <span class="navbar-toggler-icon"></span>
                     </button>
                     <div class="collapse navbar-collapse" id="navbarNav">
                         <ul class="navbar-nav me-auto">
-                            <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/products">产品</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/contact">联系我们</a></li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/">
+                                    <i class="fas fa-home" aria-hidden="true"></i> 首页
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/products">
+                                    <i class="fas fa-box" aria-hidden="true"></i> 产品
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/about">
+                                    <i class="fas fa-info-circle" aria-hidden="true"></i> 关于
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/contact">
+                                    <i class="fas fa-envelope" aria-hidden="true"></i> 联系我们
+                                </a>
+                            </li>
                         </ul>
                         <div class="d-flex gap-2">
-                            <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
-                            <a href="/register" class="btn btn-primary btn-sm">注册</a>
+                            <a href="/login" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-sign-in-alt" aria-hidden="true"></i> 登录
+                            </a>
+                            <a href="/register" class="btn btn-primary btn-sm">
+                                <i class="fas fa-user-plus" aria-hidden="true"></i> 注册
+                            </a>
                         </div>
                     </div>
                 </div>
             </nav>
         </div>
     </header>
-    
-    <main class="min-vh-100">
-        <div class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+
+    <main id="main-content" class="min-vh-100" role="main">
+        <div class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" role="banner">
             <div class="container">
-                <h1 class="fw-bold mb-3">安全验证系统</h1>
+                <h1 class="fw-bold mb-3">
+                    <i class="fas fa-lock" aria-hidden="true"></i> 安全验证系统
+                </h1>
                 <p class="lead text-white-50">请完成下方验证以继续</p>
             </div>
         </div>
 
-        <section class="py-5">
+        <section class="py-5" aria-label="验证码验证区域">
             <div class="container">
                 <div class="row justify-content-center">
-                    <div class="col-md-6">
-                        <div id="captcha-container"></div>
+                    <div class="col-12 col-md-6">
+                        <div id="captcha-container" role="region" aria-label="验证码组件"></div>
                     </div>
                 </div>
-                
+
                 <div class="row justify-content-center mt-5">
-                    <div class="col-md-8">
-                        <div class="card shadow-sm">
+                    <div class="col-12 col-md-8">
+                        <div class="card shadow-sm" role="region" aria-label="验证说明">
                             <div class="card-body">
-                                <h5 class="card-title text-primary mb-4">使用说明</h5>
-                                
-                                <h6 class="fw-bold text-primary">滑块验证</h6>
-                                <p class="text-muted mb-3">将滑块从左侧拖动到右侧，使拼图块对齐到正确位置即可完成验证。</p>
-                                
-                                <h6 class="fw-bold text-primary">点选验证</h6>
+                                <h5 class="card-title text-primary mb-4">
+                                    <i class="fas fa-book" aria-hidden="true"></i> 使用说明
+                                </h5>
+
+                                <h6 class="fw-bold text-primary">
+                                    <i class="fas fa-puzzle-piece" aria-hidden="true"></i> 滑块验证
+                                </h6>
+                                <p class="text-muted mb-3">将滑块从左侧拖动到右侧，使拼图块对齐到正确位置即可完成验证。系统会检测滑动速度和轨迹以确保是人类用户在操作。</p>
+
+                                <h6 class="fw-bold text-primary">
+                                    <i class="fas fa-hand-pointer" aria-hidden="true"></i> 点选验证
+                                </h6>
                                 <p class="text-muted mb-3">按照提示文字，依次点击图片中的对应位置，完成后点击确认按钮。</p>
-                                
-                                <h6 class="fw-bold text-primary">刷新验证码</h6>
+
+                                <h6 class="fw-bold text-primary">
+                                    <i class="fas fa-shapes" aria-hidden="true"></i> 拼图块样式
+                                </h6>
+                                <p class="text-muted mb-3">系统支持多种拼图块样式，包括方形、圆形、三角形、菱形和六边形，增加了验证码的安全性。</p>
+
+                                <h6 class="fw-bold text-primary">
+                                    <i class="fas fa-sync" aria-hidden="true"></i> 刷新验证码
+                                </h6>
                                 <p class="text-muted mb-0">点击右上角的刷新按钮可以更换新的验证码图片。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row justify-content-center mt-4">
+                    <div class="col-12 col-md-8">
+                        <div class="alert alert-info" role="alert">
+                            <h6 class="alert-heading">
+                                <i class="fas fa-universal-access" aria-hidden="true"></i> 无障碍支持
+                            </h6>
+                            <ul class="mb-0">
+                                <li>支持键盘操作：使用 Tab 键导航，Enter 或空格键确认</li>
+                                <li>支持屏幕阅读器：所有交互元素都有完整的 ARIA 标签</li>
+                                <li>支持减弱动画：检测到系统偏好时自动减少动画效果</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-4 bg-light" aria-label="功能特性">
+            <div class="container">
+                <h2 class="text-center fw-bold mb-4">我们的优势</h2>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fas fa-fingerprint fa-3x text-primary" aria-hidden="true"></i>
+                                </div>
+                                <h5 class="card-title">行为分析</h5>
+                                <p class="card-text text-muted">智能分析用户行为轨迹，精准识别机器人和真人</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fas fa-bolt fa-3x text-warning" aria-hidden="true"></i>
+                                </div>
+                                <h5 class="card-title">极速体验</h5>
+                                <p class="card-text text-muted">优化验证流程，平均验证时间少于3秒</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center p-4">
+                                <div class="mb-3">
+                                    <i class="fas fa-mobile-alt fa-3x text-info" aria-hidden="true"></i>
+                                </div>
+                                <h5 class="card-title">完美适配</h5>
+                                <p class="card-text text-muted">响应式设计，完美支持桌面和移动设备</p>
                             </div>
                         </div>
                     </div>
@@ -70,42 +167,53 @@
             </div>
         </section>
     </main>
-    
-    <footer class="bg-dark text-white py-5">
+
+    <footer class="bg-dark text-white py-5" role="contentinfo">
         <div class="container">
             <div class="row">
                 <div class="col-md-4 mb-4">
-                    <h5>关于我们</h5>
+                    <h5>
+                        <i class="fas fa-building" aria-hidden="true"></i> 关于我们
+                    </h5>
                     <p class="text-white-50">专业的服务团队，为您提供优质的体验。</p>
                 </div>
                 <div class="col-md-4 mb-4">
-                    <h5>快速链接</h5>
+                    <h5>
+                        <i class="fas fa-link" aria-hidden="true"></i> 快速链接
+                    </h5>
                     <ul class="list-unstyled">
-                        <li><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
-                        <li><a href="/products" class="text-white-50 text-decoration-none">产品</a></li>
-                        <li><a href="/about" class="text-white-50 text-decoration-none">关于</a></li>
-                        <li><a href="/contact" class="text-white-50 text-decoration-none">联系我们</a></li>
+                        <li><a href="/" class="text-white-50 text-decoration-none"><i class="fas fa-home" aria-hidden="true"></i> 首页</a></li>
+                        <li><a href="/products" class="text-white-50 text-decoration-none"><i class="fas fa-box" aria-hidden="true"></i> 产品</a></li>
+                        <li><a href="/about" class="text-white-50 text-decoration-none"><i class="fas fa-info-circle" aria-hidden="true"></i> 关于</a></li>
+                        <li><a href="/contact" class="text-white-50 text-decoration-none"><i class="fas fa-envelope" aria-hidden="true"></i> 联系我们</a></li>
                     </ul>
                 </div>
                 <div class="col-md-4 mb-4">
-                    <h5>联系方式</h5>
-                    <p class="text-white-50">邮箱: contact@example.com</p>
-                    <p class="text-white-50">电话: 400-888-8888</p>
+                    <h5>
+                        <i class="fas fa-phone" aria-hidden="true"></i> 联系方式
+                    </h5>
+                    <p class="text-white-50"><i class="fas fa-envelope" aria-hidden="true"></i> 邮箱: contact@example.com</p>
+                    <p class="text-white-50"><i class="fas fa-phone" aria-hidden="true"></i> 电话: 400-888-8888</p>
                 </div>
             </div>
             <hr class="border-white-50">
-            <p class="text-center text-white-50 mb-0">&copy; 2026 用户端. All rights reserved.</p>
+            <p class="text-center text-white-50 mb-0">
+                <i class="fas fa-copyright" aria-hidden="true"></i> 2026 用户端. All rights reserved.
+            </p>
         </div>
     </footer>
-    
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/captcha.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const langManager = new CaptchaLanguageManager();
+            
             const captcha = new Captcha('captcha-container', {
                 apiBase: '/api/v1',
                 type: 'slider',
+                language: langManager.getLocale(),
                 onSuccess: function(result) {
                     console.log('验证成功:', result);
                     setTimeout(function() {

@@ -8,8 +8,10 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,8 +32,11 @@ const (
 )
 
 type GenerateImageCaptchaRequest struct {
-	Type  CaptchaType `form:"type" json:"type"`
-	Count int         `form:"count" json:"count"`
+	Type       CaptchaType `form:"type" json:"type"`
+	Count      int         `form:"count" json:"count"`
+	CustomSet  string      `form:"custom_set" json:"custom_set"`
+	NoiseMode  int         `form:"noise_mode" json:"noise_mode"`
+	LineMode   int         `form:"line_mode" json:"line_mode"`
 }
 
 type GenerateImageCaptchaResponse struct {
@@ -49,16 +54,17 @@ type VerifyImageCaptchaResponse struct {
 }
 
 const (
-	captchaWidth  = 120
-	captchaHeight = 40
+	captchaWidth  = 140
+	captchaHeight = 50
 	captchaTTL    = 5 * time.Minute
 )
 
 var (
-	digitChars    = "0123456789"
-	letterChars   = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
-	allChars      = digitChars + letterChars
-	r             *rand.Rand
+	digitCharSet    = "0123456789"
+	letterCharSet   = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
+	allCharSet      = digitCharSet + letterCharSet
+	r               *rand.Rand
+	rMu             sync.Mutex
 )
 
 func init() {
@@ -77,19 +83,30 @@ func GenerateImageCaptcha(c *gin.Context) {
 	}
 
 	var chars string
-	switch req.Type {
-	case CaptchaTypeNumber:
-		chars = digitChars
-	case CaptchaTypeLetter:
-		chars = letterChars
-	default:
-		chars = allChars
+	if req.CustomSet != "" {
+		chars = req.CustomSet
+	} else {
+		switch req.Type {
+		case CaptchaTypeNumber:
+			chars = digitCharSet
+		case CaptchaTypeLetter:
+			chars = letterCharSet
+		default:
+			chars = allCharSet
+		}
+	}
+
+	if req.NoiseMode <= 0 {
+		req.NoiseMode = randInt(1, 5)
+	}
+	if req.LineMode <= 0 {
+		req.LineMode = randInt(1, 5)
 	}
 
 	answer := generateRandomString(chars, req.Count)
 	challengeID := uuid.New().String()
 
-	img := generateCaptchaImage(answer)
+	img := generateCaptchaImage(answer, req.NoiseMode, req.LineMode)
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
@@ -99,7 +116,6 @@ func GenerateImageCaptcha(c *gin.Context) {
 
 	imageBase64 := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 
-	// 使用我们的辅助函数存储答案
 	setCaptchaAnswer(challengeID, answer)
 
 	response.Success(c, GenerateImageCaptchaResponse{
@@ -108,10 +124,8 @@ func GenerateImageCaptcha(c *gin.Context) {
 	})
 }
 
-// 为了测试，我们保存一个内存存储作为Redis的后备方案
 var fallbackCaptchaStore = make(map[string]string)
 
-// setCaptchaAnswer 存储验证码答案
 func setCaptchaAnswer(challengeID, answer string) {
 	if redis.Client != nil {
 		ctx := context.Background()
@@ -121,7 +135,6 @@ func setCaptchaAnswer(challengeID, answer string) {
 	}
 }
 
-// getCaptchaAnswer 获取验证码答案
 func getCaptchaAnswer(challengeID string) (string, bool) {
 	if redis.Client != nil {
 		ctx := context.Background()
@@ -135,7 +148,6 @@ func getCaptchaAnswer(challengeID string) (string, bool) {
 	return answer, ok
 }
 
-// deleteCaptchaAnswer 删除验证码答案
 func deleteCaptchaAnswer(challengeID string) {
 	if redis.Client != nil {
 		ctx := context.Background()
@@ -152,7 +164,6 @@ func VerifyImageCaptcha(c *gin.Context) {
 		return
 	}
 
-	// 使用我们的辅助函数获取答案
 	storedAnswer, found := getCaptchaAnswer(req.ChallengeID)
 	if !found {
 		response.NotFound(c, "captcha expired or not found")
@@ -170,7 +181,15 @@ func VerifyImageCaptcha(c *gin.Context) {
 	})
 }
 
+func randInt(min, max int) int {
+	rMu.Lock()
+	defer rMu.Unlock()
+	return min + r.Intn(max-min+1)
+}
+
 func generateRandomString(chars string, length int) string {
+	rMu.Lock()
+	defer rMu.Unlock()
 	result := make([]byte, length)
 	for i := range result {
 		result[i] = chars[r.Intn(len(chars))]
@@ -178,59 +197,340 @@ func generateRandomString(chars string, length int) string {
 	return string(result)
 }
 
-func generateCaptchaImage(text string) *image.RGBA {
+func generateCaptchaImage(text string, noiseMode, lineMode int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, captchaWidth, captchaHeight))
 
 	bgColor := randomLightColor()
 	draw.Draw(img, img.Bounds(), &image.Uniform{C: bgColor}, image.Point{}, draw.Src)
 
-	addNoiseLines(img)
-	addNoiseDots(img)
+	addComplexNoise(img, noiseMode)
+	addComplexLines(img, lineMode)
 
-	drawText(img, text)
+	drawWarpedText(img, text)
 
 	return img
 }
 
 func randomLightColor() color.RGBA {
 	return color.RGBA{
-		R: uint8(200 + r.Intn(55)),
-		G: uint8(200 + r.Intn(55)),
-		B: uint8(200 + r.Intn(55)),
+		R: uint8(200 + randInt(0, 55)),
+		G: uint8(200 + randInt(0, 55)),
+		B: uint8(200 + randInt(0, 55)),
 		A: 255,
 	}
 }
 
 func randomDarkColor() color.RGBA {
 	return color.RGBA{
-		R: uint8(r.Intn(100)),
-		G: uint8(r.Intn(100)),
-		B: uint8(r.Intn(100)),
+		R: uint8(randInt(10, 100)),
+		G: uint8(randInt(10, 100)),
+		B: uint8(randInt(10, 100)),
 		A: 255,
 	}
 }
 
-func addNoiseLines(img *image.RGBA) {
-	for i := 0; i < 4; i++ {
-		x1 := r.Intn(captchaWidth)
-		y1 := r.Intn(captchaHeight)
-		x2 := r.Intn(captchaWidth)
-		y2 := r.Intn(captchaHeight)
-		drawLine(img, x1, y1, x2, y2, randomDarkColor())
+func randomVividColor() color.RGBA {
+	h := float64(randInt(0, 360))
+	s := float64(randInt(50, 100)) / 100.0
+	l := float64(randInt(30, 60)) / 100.0
+
+	return hslToRgb(h, s, l)
+}
+
+func hslToRgb(h, s, l float64) color.RGBA {
+	var r, g, b float64
+
+	if s == 0 {
+		r, g, b = l, l, l
+	} else {
+		h = h / 360
+		var q float64
+		if l < 0.5 {
+			q = l * (1 + s)
+		} else {
+			q = l + s - l*s
+		}
+		p := 2*l - q
+		r = hueToRgb(p, q, h+1.0/3.0)
+		g = hueToRgb(p, q, h)
+		b = hueToRgb(p, q, h-1.0/3.0)
+	}
+
+	return color.RGBA{
+		R: uint8(r * 255),
+		G: uint8(g * 255),
+		B: uint8(b * 255),
+		A: 255,
 	}
 }
 
-func addNoiseDots(img *image.RGBA) {
-	for i := 0; i < 80; i++ {
-		x := r.Intn(captchaWidth)
-		y := r.Intn(captchaHeight)
+func hueToRgb(p, q, t float64) float64 {
+	if t < 0 {
+		t += 1
+	}
+	if t > 1 {
+		t -= 1
+	}
+	if t < 1.0/6.0 {
+		return p + (q-p)*6*t
+	}
+	if t < 1.0/2.0 {
+		return q
+	}
+	if t < 2.0/3.0 {
+		return p + (q-p)*(2.0/3.0-t)*6
+	}
+	return p
+}
+
+func addComplexNoise(img *image.RGBA, mode int) {
+	switch mode {
+	case 1:
+		addDotNoise(img)
+	case 2:
+		addLineNoise(img)
+	case 3:
+		addGridNoise(img)
+	case 4:
+		addWaveNoise(img)
+	case 5:
+		addSpiralNoise(img)
+	default:
+		addDotNoise(img)
+	}
+}
+
+func addDotNoise(img *image.RGBA) {
+	for i := 0; i < 120; i++ {
+		x := randInt(0, captchaWidth)
+		y := randInt(0, captchaHeight)
 		img.Set(x, y, randomDarkColor())
 	}
+	for i := 0; i < 60; i++ {
+		x := randInt(0, captchaWidth)
+		y := randInt(0, captchaHeight)
+		size := randInt(1, 2)
+		for dx := 0; dx < size; dx++ {
+			for dy := 0; dy < size; dy++ {
+				if x+dx < captchaWidth && y+dy < captchaHeight {
+					img.Set(x+dx, y+dy, randomDarkColor())
+				}
+			}
+		}
+	}
 }
 
-func drawLine(img *image.RGBA, x1, y1, x2, y2 int, col color.Color) {
-	dx := abs(x2 - x1)
-	dy := abs(y2 - y1)
+func addLineNoise(img *image.RGBA) {
+	for i := 0; i < 30; i++ {
+		x1 := randInt(0, captchaWidth)
+		y1 := randInt(0, captchaHeight)
+		length := randInt(5, 20)
+		angle := float64(randInt(0, 360)) * math.Pi / 180
+		x2 := x1 + int(float64(length)*math.Cos(angle))
+		y2 := y1 + int(float64(length)*math.Sin(angle))
+		drawThickLine(img, x1, y1, x2, y2, randInt(1, 2), randomDarkColor())
+	}
+}
+
+func addGridNoise(img *image.RGBA) {
+	for x := 0; x < captchaWidth; x += randInt(8, 15) {
+		for y := 0; y < captchaHeight; y += randInt(8, 15) {
+			if randInt(0, 10) > 7 {
+				size := randInt(1, 3)
+				for dx := 0; dx < size; dx++ {
+					for dy := 0; dy < size; dy++ {
+						if x+dx < captchaWidth && y+dy < captchaHeight {
+							img.Set(x+dx, y+dy, randomDarkColor())
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func addWaveNoise(img *image.RGBA) {
+	for i := 0; i < 8; i++ {
+		startX := randInt(0, captchaWidth)
+		startY := randInt(0, captchaHeight)
+		amplitude := float64(randInt(3, 10))
+		frequency := float64(randInt(1, 5)) * 0.1
+		length := randInt(30, 80)
+		phase := float64(randInt(0, 628)) / 100.0
+
+		for x := 0; x < length && startX+x < captchaWidth; x++ {
+			y := startY + int(amplitude*math.Sin(float64(x)*frequency+phase))
+			if y >= 0 && y < captchaHeight {
+				img.Set(startX+x, y, randomDarkColor())
+				if y+1 < captchaHeight {
+					img.Set(startX+x, y+1, randomDarkColor())
+				}
+			}
+		}
+	}
+}
+
+func addSpiralNoise(img *image.RGBA) {
+	centerX := randInt(captchaWidth/4, captchaWidth*3/4)
+	centerY := randInt(captchaHeight/4, captchaHeight*3/4)
+	maxRadius := randInt(15, 30)
+	turns := float64(randInt(1, 3))
+
+	for radius := 0; radius < maxRadius; radius++ {
+		for angle := 0.0; angle < turns*2*math.Pi; angle += 0.1 {
+			x := centerX + int(float64(radius)*math.Cos(angle))
+			y := centerY + int(float64(radius)*math.Sin(angle))
+			if x >= 0 && x < captchaWidth && y >= 0 && y < captchaHeight {
+				img.Set(x, y, randomDarkColor())
+			}
+		}
+	}
+}
+
+func addComplexLines(img *image.RGBA, mode int) {
+	switch mode {
+	case 1:
+		addSimpleCurvedLines(img)
+	case 2:
+		addBezierLines(img)
+	case 3:
+		addWavyLines(img)
+	case 4:
+		addArcLines(img)
+	case 5:
+		addMixedLines(img)
+	default:
+		addSimpleCurvedLines(img)
+	}
+}
+
+func addSimpleCurvedLines(img *image.RGBA) {
+	for i := 0; i < 5; i++ {
+		x1 := randInt(0, captchaWidth)
+		y1 := randInt(0, captchaHeight)
+		x2 := randInt(0, captchaWidth)
+		y2 := randInt(0, captchaHeight)
+		ctrlX := randInt(0, captchaWidth)
+		ctrlY := randInt(0, captchaHeight)
+		drawQuadraticBezier(img, x1, y1, ctrlX, ctrlY, x2, y2, randomDarkColor())
+	}
+}
+
+func addBezierLines(img *image.RGBA) {
+	for i := 0; i < 4; i++ {
+		x1 := randInt(0, captchaWidth)
+		y1 := randInt(0, captchaHeight)
+		x2 := randInt(0, captchaWidth)
+		y2 := randInt(0, captchaHeight)
+		ctrlX1 := randInt(0, captchaWidth)
+		ctrlY1 := randInt(0, captchaHeight)
+		ctrlX2 := randInt(0, captchaWidth)
+		ctrlY2 := randInt(0, captchaHeight)
+		drawCubicBezier(img, x1, y1, ctrlX1, ctrlY1, ctrlX2, ctrlY2, x2, y2, randomDarkColor())
+	}
+}
+
+func addWavyLines(img *image.RGBA) {
+	for i := 0; i < 3; i++ {
+		startY := randInt(5, captchaHeight-5)
+		amplitude := float64(randInt(5, 15))
+		frequency := float64(randInt(2, 5)) * 0.05
+		phase := float64(randInt(0, 628)) / 100.0
+		thickness := randInt(1, 3)
+
+		for x := 0; x < captchaWidth; x++ {
+			y := startY + int(amplitude*math.Sin(float64(x)*frequency+phase))
+			if y >= 0 && y < captchaHeight {
+				for t := 0; t < thickness; t++ {
+					if y+t < captchaHeight {
+						img.Set(x, y+t, randomDarkColor())
+					}
+				}
+			}
+		}
+	}
+}
+
+func addArcLines(img *image.RGBA) {
+	for i := 0; i < 4; i++ {
+		centerX := randInt(captchaWidth/4, captchaWidth*3/4)
+		centerY := randInt(captchaHeight/4, captchaHeight*3/4)
+		radius := randInt(20, 50)
+		startAngle := float64(randInt(0, 360)) * math.Pi / 180
+		endAngle := startAngle + float64(randInt(60, 180))*math.Pi/180
+		thickness := randInt(1, 2)
+
+		for angle := startAngle; angle < endAngle; angle += 0.05 {
+			x := centerX + int(float64(radius)*math.Cos(angle))
+			y := centerY + int(float64(radius)*math.Sin(angle))
+			if x >= 0 && x < captchaWidth && y >= 0 && y < captchaHeight {
+				for t := 0; t < thickness; t++ {
+					if x+t < captchaWidth {
+						img.Set(x+t, y, randomDarkColor())
+					}
+				}
+			}
+		}
+	}
+}
+
+func addMixedLines(img *image.RGBA) {
+	addSimpleCurvedLines(img)
+	addWavyLines(img)
+	addArcLines(img)
+}
+
+func drawQuadraticBezier(img *image.RGBA, x0, y0, cx, cy, x1, y1 int, col color.Color) {
+	points := calculateQuadraticBezierPoints(x0, y0, cx, cy, x1, y1, 50)
+	for _, p := range points {
+		if p.X >= 0 && p.X < captchaWidth && p.Y >= 0 && p.Y < captchaHeight {
+			img.Set(p.X, p.Y, col)
+		}
+	}
+}
+
+func drawCubicBezier(img *image.RGBA, x0, y0, cx1, cy1, cx2, cy2, x1, y1 int, col color.Color) {
+	points := calculateCubicBezierPoints(x0, y0, cx1, cy1, cx2, cy2, x1, y1, 50)
+	for _, p := range points {
+		if p.X >= 0 && p.X < captchaWidth && p.Y >= 0 && p.Y < captchaHeight {
+			img.Set(p.X, p.Y, col)
+		}
+	}
+}
+
+type point struct {
+	X, Y int
+}
+
+func calculateQuadraticBezierPoints(x0, y0, cx, cy, x1, y1, steps int) []point {
+	points := make([]point, 0, steps)
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		mt := 1 - t
+		x := int(mt*mt*float64(x0) + 2*mt*t*float64(cx) + t*t*float64(x1))
+		y := int(mt*mt*float64(y0) + 2*mt*t*float64(cy) + t*t*float64(y1))
+		points = append(points, point{X: x, Y: y})
+	}
+	return points
+}
+
+func calculateCubicBezierPoints(x0, y0, cx1, cy1, cx2, cy2, x1, y1, steps int) []point {
+	points := make([]point, 0, steps)
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		mt := 1 - t
+		mt2 := mt * mt
+		t2 := t * t
+		x := int(mt2*mt*float64(x0) + 3*mt2*t*float64(cx1) + 3*mt*t2*float64(cx2) + t2*t*float64(x1))
+		y := int(mt2*mt*float64(y0) + 3*mt2*t*float64(cy1) + 3*mt*t2*float64(cy2) + t2*t*float64(y1))
+		points = append(points, point{X: x, Y: y})
+	}
+	return points
+}
+
+func drawThickLine(img *image.RGBA, x1, y1, x2, y2, thickness int, col color.Color) {
+	dx := imageAbs(x2 - x1)
+	dy := imageAbs(y2 - y1)
 	sx := -1
 	if x1 < x2 {
 		sx = 1
@@ -242,7 +542,14 @@ func drawLine(img *image.RGBA, x1, y1, x2, y2 int, col color.Color) {
 	err := dx - dy
 
 	for {
-		img.Set(x1, y1, col)
+		for t := 0; t < thickness; t++ {
+			if x1 >= 0 && x1 < captchaWidth && y1+t >= 0 && y1+t < captchaHeight {
+				img.Set(x1, y1+t, col)
+			}
+			if x1+t >= 0 && x1+t < captchaWidth && y1 >= 0 && y1 < captchaHeight {
+				img.Set(x1+t, y1, col)
+			}
+		}
 		if x1 == x2 && y1 == y2 {
 			break
 		}
@@ -258,26 +565,73 @@ func drawLine(img *image.RGBA, x1, y1, x2, y2 int, col color.Color) {
 	}
 }
 
-func drawText(img *image.RGBA, text string) {
-	f := basicfont.Face7x13
+func drawWarpedText(img *image.RGBA, text string) {
 	charWidth := captchaWidth / len(text)
+	face := basicfont.Face7x13
+
+	textColor := randomDarkColor()
 
 	for i, char := range text {
-		x := i*charWidth + (charWidth-7)/2
-		y := captchaHeight/2 + 5
+		baseX := i*charWidth + (charWidth-7)/2
+		baseY := captchaHeight/2 + 5
 
-		offset := r.Intn(6) - 3
-		y += offset
+		offsetX := randInt(-3, 3)
+		offsetY := randInt(-4, 4)
+		baseX += offsetX
+		baseY += offsetY
 
 		d := &font.Drawer{
 			Dst:  img,
-			Src:  image.NewUniform(randomDarkColor()),
-			Face: f,
+			Src:  image.NewUniform(textColor),
+			Face: face,
 			Dot: fixed.Point26_6{
-				X: fixed.I(x),
-				Y: fixed.I(y),
+				X: fixed.I(baseX),
+				Y: fixed.I(baseY),
 			},
 		}
 		d.DrawString(string(char))
 	}
+
+	applyTextWarpEffect(img, text)
+}
+
+func applyTextWarpEffect(img *image.RGBA, text string) {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	newImg := image.NewRGBA(image.Rect(0, 0, width, height))
+	copyBounds := newImg.Bounds()
+	draw.Draw(newImg, copyBounds, &image.Uniform{C: randomLightColor()}, image.Point{}, draw.Src)
+
+	charWidth := width / len(text)
+	for i := 0; i < width; i++ {
+		for j := 0; j < height; j++ {
+			charIndex := i / charWidth
+			charCenter := charIndex*charWidth + charWidth/2
+			_ = charCenter
+			waveAmplitude := float64(charWidth) * 0.1
+			waveFrequency := 0.1
+			phase := float64(charIndex) * 0.5
+			offset := int(waveAmplitude * math.Sin(float64(j)*waveFrequency+phase))
+
+			srcY := j - offset
+			if srcY >= 0 && srcY < height {
+				newImg.Set(i, j, img.At(i, srcY))
+			}
+		}
+	}
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			img.Set(x, y, newImg.At(x, y))
+		}
+	}
+}
+
+func imageAbs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

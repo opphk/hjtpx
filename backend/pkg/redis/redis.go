@@ -12,6 +12,10 @@ import (
 var Client *redis.Client
 var ctx = context.Background()
 
+func GetContext() context.Context {
+	return ctx
+}
+
 // ConnectRedis 建立Redis连接
 func ConnectRedis(cfg *config.RedisConfig) error {
 	Client = redis.NewClient(&redis.Options{

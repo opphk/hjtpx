@@ -6,17 +6,7 @@
     <title>管理后台 - 统计分析</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
-        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
-        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
-        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
-        .main-wrapper { flex: 1; min-width: 0; }
-        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
-        .chart-card canvas { width: 100% !important; height: 300px !important; }
-    </style>
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="d-flex">
@@ -27,21 +17,27 @@
                 <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
                 <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
                 <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt me-2"></i>风控规则</a>
+                <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban me-2"></i>黑名单</a>
             </nav>
             <div class="sidebar-footer mt-auto p-3">
                 <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
             </div>
         </div>
-        
+
         <div class="main-wrapper">
             <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">统计分析</h5>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" id="usernameDisplay">管理员</span>
-                    <div class="user-avatar" id="userAvatar">A</div>
+                <div class="d-flex align-items-center gap-3">
+                    <button id="exportStatsBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出报表</button>
+                    <button id="refreshBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted" id="usernameDisplay">管理员</span>
+                        <div class="user-avatar" id="userAvatar">A</div>
+                    </div>
                 </div>
             </header>
-            
+
             <main class="p-4 bg-light min-vh-100">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-body">
@@ -55,43 +51,128 @@
                                     <option value="1y">最近1年</option>
                                 </select>
                             </div>
+                            <div class="col-md-3">
+                                <label class="form-label">对比周期</label>
+                                <select class="form-select" id="comparePeriod">
+                                    <option value="">不对比</option>
+                                    <option value="prev">上一周期</option>
+                                    <option value="prev_year">去年同期</option>
+                                </select>
+                            </div>
                             <div class="col-md-2">
-                                <button id="refreshBtn" class="btn btn-secondary w-100"><i class="fas fa-sync me-1"></i>刷新数据</button>
+                                <button id="applyFilterBtn" class="btn btn-primary w-100"><i class="fas fa-filter me-1"></i>应用筛选</button>
                             </div>
                         </div>
                     </div>
                 </div>
-                
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">总请求量</h6>
+                                <h3 class="mb-1" id="statTotalRequests">0</h3>
+                                <small class="text-success" id="statRequestsChange"><i class="fas fa-arrow-up me-1"></i>+0%</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">平均响应时间</h6>
+                                <h3 class="mb-1" id="statAvgResponse">0ms</h3>
+                                <small class="text-danger" id="statResponseChange"><i class="fas fa-arrow-down me-1"></i>-0%</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">成功率</h6>
+                                <h3 class="mb-1" id="statSuccessRate">0%</h3>
+                                <small class="text-success" id="statSuccessChange"><i class="fas fa-arrow-up me-1"></i>+0%</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">活跃用户</h6>
+                                <h3 class="mb-1" id="statActiveUsers">0</h3>
+                                <small class="text-success" id="statUsersChange"><i class="fas fa-arrow-up me-1"></i>+0%</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-8">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">请求量趋势</h5>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-secondary active" data-chart-type="line"><i class="fas fa-line-chart"></i></button>
+                                    <button type="button" class="btn btn-outline-secondary" data-chart-type="bar"><i class="fas fa-bar-chart"></i></button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="requestTrendChart" height="280"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">请求类型分布</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="requestTypeChart" height="280"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">用户增长趋势</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="userGrowthChart" height="260"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">应用分布</h5>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="appDistributionChart" height="260"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row g-4">
                     <div class="col-md-6">
                         <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">错误率分析</h5>
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title mb-3">用户增长趋势</h5>
-                                <canvas id="userGrowthChart" height="300"></canvas>
+                                <canvas id="errorRateChart" height="260"></canvas>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="card shadow-sm border-0">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3">请求量统计</h5>
-                                <canvas id="requestChart" height="300"></canvas>
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">地理分布</h5>
                             </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
                             <div class="card-body">
-                                <h5 class="card-title mb-3">应用分布</h5>
-                                <canvas id="appDistributionChart" height="300"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3">错误率分析</h5>
-                                <canvas id="errorRateChart" height="300"></canvas>
+                                <canvas id="geoDistributionChart" height="260"></canvas>
                             </div>
                         </div>
                     </div>
@@ -99,9 +180,8 @@
             </main>
         </div>
     </div>
-    
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
     <script src="/admin/static/js/stats.js"></script>
 </body>

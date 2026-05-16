@@ -4,10 +4,25 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
+
+type StatsHandler struct {
+	statsService *service.StatsService
+}
+
+func NewStatsHandler() *StatsHandler {
+	return &StatsHandler{
+		statsService: service.NewStatsService(),
+	}
+}
+
+func GetStatsHandler() *StatsHandler {
+	return NewStatsHandler()
+}
 
 type DashboardStats struct {
 	TotalUsers    int64 `json:"totalUsers"`
@@ -43,72 +58,91 @@ type ChartData struct {
 	Total   []ChartDataPoint `json:"total"`
 }
 
-// GetVerificationStats 获取验证统计数据
 func GetVerificationStats(c *gin.Context) {
-	var stats VerificationStats
+	handler := GetStatsHandler()
 
-	database.DB.Model(&models.Verification{}).Count(&stats.Total)
-	database.DB.Model(&models.Verification{}).Where("status = ?", "pending").Count(&stats.Pending)
-	database.DB.Model(&models.Verification{}).Where("status = ?", "success").Count(&stats.Success)
-	database.DB.Model(&models.Verification{}).Where("status = ?", "failed").Count(&stats.Failed)
-	database.DB.Model(&models.Application{}).Count(&stats.Applications)
-	database.DB.Model(&models.User{}).Count(&stats.Users)
-
-	response.Success(c, stats)
-}
-
-// GetChartData 获取图表数据
-func GetChartData(c *gin.Context) {
-	var chartData ChartData
-
-	days := 7
-	now := time.Now()
-
-	for i := days - 1; i >= 0; i-- {
-		date := now.AddDate(0, 0, -i).Format("2006-01-02")
-		startTime := time.Date(now.Year(), now.Month(), now.Day()-i, 0, 0, 0, 0, now.Location())
-		endTime := startTime.Add(24 * time.Hour)
-
-		var successCount int64
-		database.DB.Model(&models.Verification{}).
-			Where("status = ? AND created_at >= ? AND created_at < ?", "success", startTime, endTime).
-			Count(&successCount)
-		chartData.Success = append(chartData.Success, ChartDataPoint{Date: date, Count: successCount})
-
-		var failedCount int64
-		database.DB.Model(&models.Verification{}).
-			Where("status = ? AND created_at >= ? AND created_at < ?", "failed", startTime, endTime).
-			Count(&failedCount)
-		chartData.Failed = append(chartData.Failed, ChartDataPoint{Date: date, Count: failedCount})
-
-		var totalCount int64
-		database.DB.Model(&models.Verification{}).
-			Where("created_at >= ? AND created_at < ?", startTime, endTime).
-			Count(&totalCount)
-		chartData.Total = append(chartData.Total, ChartDataPoint{Date: date, Count: totalCount})
+	stats, err := handler.statsService.GetOverviewStats()
+	if err != nil {
+		response.InternalServerError(c, "获取统计数据失败")
+		return
 	}
 
-	response.Success(c, chartData)
+	captchaStats, err := handler.statsService.GetCaptchaTypeStats()
+	if err != nil {
+		response.InternalServerError(c, "获取验证码类型统计失败")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"total":              stats.TotalVerifications,
+		"success":            stats.SuccessCount,
+		"failed":             stats.FailedCount,
+		"pending":            stats.PendingCount,
+		"success_rate":       stats.SuccessRate,
+		"avg_risk_score":     stats.AvgRiskScore,
+		"total_applications": stats.TotalApplications,
+		"total_users":        stats.TotalUsers,
+		"captcha_stats":      captchaStats,
+	})
 }
 
-// GetDashboardStats 获取仪表盘统计数据
+func GetChartData(c *gin.Context) {
+	handler := GetStatsHandler()
+	days := 7
+
+	trendData, err := handler.statsService.GetTrendData(days)
+	if err != nil {
+		response.InternalServerError(c, "获取趋势数据失败")
+		return
+	}
+
+	var successData, failedData, totalData []ChartDataPoint
+	for _, point := range trendData {
+		totalData = append(totalData, ChartDataPoint{Date: point.Date, Count: point.TotalCount})
+		successData = append(successData, ChartDataPoint{Date: point.Date, Count: point.SuccessCount})
+		failedData = append(failedData, ChartDataPoint{Date: point.Date, Count: point.FailedCount})
+	}
+
+	response.Success(c, ChartData{
+		Success: successData,
+		Failed:  failedData,
+		Total:   totalData,
+	})
+}
+
 func GetDashboardStats(c *gin.Context) {
-	var stats DashboardStats
+	handler := GetStatsHandler()
 
-	database.DB.Model(&models.User{}).Count(&stats.TotalUsers)
-	database.DB.Model(&models.Application{}).Count(&stats.TotalApps)
-	database.DB.Model(&models.Verification{}).Count(&stats.TotalRequests)
-	database.DB.Model(&models.Verification{}).Where("status = ?", "failed").Count(&stats.TotalErrors)
+	stats, err := handler.statsService.GetOverviewStats()
+	if err != nil {
+		response.InternalServerError(c, "获取仪表盘数据失败")
+		return
+	}
 
-	response.Success(c, stats)
+	response.Success(c, DashboardStats{
+		TotalUsers:    stats.TotalUsers,
+		TotalApps:     stats.TotalApplications,
+		TotalRequests: stats.TotalVerifications,
+		TotalErrors:   stats.FailedCount,
+	})
 }
 
-// GetRecentActivity 获取最近活动
 func GetRecentActivity(c *gin.Context) {
-	var logs []models.VerificationLog
+	handler := GetStatsHandler()
 	var activities []ActivityItem
 
-	database.DB.Order("created_at DESC").Limit(10).Find(&logs)
+	logs, err := handler.getRecentLogs(10)
+	if err != nil || len(logs) == 0 {
+		activities = []ActivityItem{
+			{"2024-01-15 14:32:18", "用户登录", "admin", "success"},
+			{"2024-01-15 14:28:45", "创建应用", "developer1", "success"},
+			{"2024-01-15 14:25:12", "API请求失败", "app_001", "error"},
+			{"2024-01-15 14:20:33", "更新配置", "admin", "success"},
+			{"2024-01-15 14:15:09", "用户注册", "new_user", "success"},
+		}
+		response.Success(c, activities)
+		return
+	}
 
 	for _, log := range logs {
 		activities = append(activities, ActivityItem{
@@ -119,15 +153,131 @@ func GetRecentActivity(c *gin.Context) {
 		})
 	}
 
-	if len(activities) == 0 {
-		activities = []ActivityItem{
-			{"2024-01-15 14:32:18", "用户登录", "admin", "success"},
-			{"2024-01-15 14:28:45", "创建应用", "developer1", "success"},
-			{"2024-01-15 14:25:12", "API请求失败", "app_001", "error"},
-			{"2024-01-15 14:20:33", "更新配置", "admin", "success"},
-			{"2024-01-15 14:15:09", "用户注册", "new_user", "success"},
+	response.Success(c, activities)
+}
+
+func (h *StatsHandler) getRecentLogs(limit int) ([]models.VerificationLog, error) {
+	var logs []models.VerificationLog
+	err := database.DB.Order("created_at DESC").Limit(limit).Find(&logs).Error
+	return logs, err
+}
+
+func GetTrendData(c *gin.Context) {
+	handler := GetStatsHandler()
+	days := 7
+
+	trendData, err := handler.statsService.GetTrendData(days)
+	if err != nil {
+		response.InternalServerError(c, "获取趋势数据失败")
+		return
+	}
+
+	response.Success(c, trendData)
+}
+
+func GetHourlyStats(c *gin.Context) {
+	handler := GetStatsHandler()
+	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+
+	hourlyStats, err := handler.statsService.GetHourlyStats(date)
+	if err != nil {
+		response.InternalServerError(c, "获取小时统计失败")
+		return
+	}
+
+	response.Success(c, hourlyStats)
+}
+
+func GetRealtimeStats(c *gin.Context) {
+	handler := GetStatsHandler()
+
+	realtimeStats, err := handler.statsService.GetRealtimeStats()
+	if err != nil {
+		response.InternalServerError(c, "获取实时统计失败")
+		return
+	}
+
+	response.Success(c, realtimeStats)
+}
+
+func GetRiskDistribution(c *gin.Context) {
+	handler := GetStatsHandler()
+
+	distribution, err := handler.statsService.GetRiskDistribution()
+	if err != nil {
+		response.InternalServerError(c, "获取风险分布失败")
+		return
+	}
+
+	response.Success(c, distribution)
+}
+
+func GetTopIPs(c *gin.Context) {
+	handler := GetStatsHandler()
+	limit := 10
+
+	topIPs, err := handler.statsService.GetTopIPs(limit)
+	if err != nil {
+		response.InternalServerError(c, "获取Top IP失败")
+		return
+	}
+
+	response.Success(c, topIPs)
+}
+
+func GetApplicationStats(c *gin.Context) {
+	handler := GetStatsHandler()
+	limit := 10
+
+	applicationStats, err := handler.statsService.GetApplicationStats(limit)
+	if err != nil {
+		response.InternalServerError(c, "获取应用统计失败")
+		return
+	}
+
+	response.Success(c, applicationStats)
+}
+
+func GetCaptchaTypeStats(c *gin.Context) {
+	handler := GetStatsHandler()
+
+	captchaStats, err := handler.statsService.GetCaptchaTypeStats()
+	if err != nil {
+		response.InternalServerError(c, "获取验证码类型统计失败")
+		return
+	}
+
+	response.Success(c, captchaStats)
+}
+
+type GenerateReportRequest struct {
+	ReportType string `form:"report_type" binding:"required"`
+	StartDate  string `form:"start_date"`
+	EndDate    string `form:"end_date"`
+}
+
+func GenerateReport(c *gin.Context) {
+	handler := GetStatsHandler()
+	var req GenerateReportRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数")
+		return
+	}
+
+	startDate := time.Now()
+	if req.StartDate != "" {
+		if parsed, err := time.Parse("2006-01-02", req.StartDate); err == nil {
+			startDate = parsed
 		}
 	}
 
-	response.Success(c, activities)
+	report, err := handler.statsService.GenerateReport(req.ReportType, startDate, startDate)
+	if err != nil {
+		response.InternalServerError(c, "生成报告失败")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"report": report,
+	})
 }

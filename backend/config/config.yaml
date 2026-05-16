@@ -1,0 +1,49 @@
+server:
+  port: 8080
+  mode: release
+
+postgres:
+  host: postgres
+  port: 5432
+  user: postgres
+  password: postgres
+  db_name: hjtpx_db
+  sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime: 300
+
+redis:
+  host: redis
+  port: 6379
+  password: ""
+  db: 0
+  max_retries: 3
+
+jwt:
+  secret: change-me-in-production
+  expire_hours: 24
+
+security:
+  enable_csrf: true
+  enable_xss: true
+  enable_signature: true
+  signature_expire_secs: 300
+  signature_key: ""
+  whitelist_ips: []
+
+logging:
+  level: info
+  format: json
+  output_path: /var/log/hjtpx/app.log
+  max_size_mb: 100
+  max_backups: 7
+  max_age_days: 30
+  compress: true
+
+rate_limit:
+  enabled: true
+  default_limit: 100
+  window_secs: 60
+  burst_limit: 200
+  cleanup_interval_ms: 60000

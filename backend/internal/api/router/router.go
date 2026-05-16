@@ -21,6 +21,8 @@ func SetupRouter() *gin.Engine {
 
 	// 健康检查
 	r.GET("/health", handler.HealthCheck)
+	r.GET("/healthz", handler.Liveness)
+	r.GET("/readyz", handler.Readiness)
 
 	// 静态文件服务
 	r.Static("/static", "../frontend/static")
@@ -93,9 +95,25 @@ func SetupRouter() *gin.Engine {
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
 		{
-			auth.POST("/login", handler.UserLogin)
-			auth.POST("/logout", handler.Logout)
-			auth.POST("/register", handler.Register)
+			userHandler := handler.GetUserHandler()
+			auth.POST("/register", userHandler.Register)
+			auth.POST("/login", userHandler.Login)
+			auth.POST("/logout", userHandler.Logout)
+			auth.POST("/refresh", userHandler.RefreshToken)
+			auth.GET("/verify-email", userHandler.VerifyEmail)
+			auth.POST("/resend-verification", userHandler.ResendVerification)
+			auth.POST("/request-password-reset", userHandler.RequestPasswordReset)
+			auth.POST("/reset-password", userHandler.ResetPassword)
+		}
+
+		// 用户路由
+		user := api.Group("/user")
+		user.Use(middleware.UserAuthMiddleware())
+		{
+			userHandler := handler.GetUserHandler()
+			user.GET("/profile", userHandler.GetProfile)
+			user.PUT("/profile", userHandler.UpdateProfile)
+			user.POST("/change-password", userHandler.ChangePassword)
 		}
 
 		// 管理员路由
@@ -120,6 +138,14 @@ func SetupRouter() *gin.Engine {
 				{
 					stats.GET("/verification", handler.GetVerificationStats)
 					stats.GET("/chart", handler.GetChartData)
+					stats.GET("/trend", handler.GetTrendData)
+					stats.GET("/hourly", handler.GetHourlyStats)
+					stats.GET("/realtime", handler.GetRealtimeStats)
+					stats.GET("/risk-distribution", handler.GetRiskDistribution)
+					stats.GET("/top-ips", handler.GetTopIPs)
+					stats.GET("/application", handler.GetApplicationStats)
+					stats.GET("/captcha-type", handler.GetCaptchaTypeStats)
+					stats.GET("/report", handler.GenerateReport)
 				}
 
 				// 应用管理
@@ -127,8 +153,13 @@ func SetupRouter() *gin.Engine {
 				{
 					applications.GET("", handler.ListApplications)
 					applications.POST("", handler.CreateApplication)
+					applications.GET("/:id", handler.GetApplication)
 					applications.PUT("/:id", handler.UpdateApplication)
 					applications.DELETE("/:id", handler.DeleteApplication)
+					applications.POST("/:id/regenerate-key", handler.RegenerateApplicationKey)
+					applications.GET("/:id/config", handler.GetApplicationConfig)
+					applications.PUT("/:id/config", handler.UpdateApplicationConfig)
+					applications.GET("/:id/statistics", handler.GetApplicationStatistics)
 				}
 
 				// 验证日志查询
@@ -136,6 +167,9 @@ func SetupRouter() *gin.Engine {
 				{
 					logs.GET("", handler.GetVerificationLogs)
 					logs.GET("/statistics", handler.GetLogStatistics)
+					logs.GET("/export", handler.ExportLogs)
+					logs.GET("/session/:session_id", handler.GetLogsBySession)
+					logs.DELETE("/cleanup", handler.DeleteOldLogs)
 					logs.GET("/:id", handler.GetLogDetail)
 				}
 

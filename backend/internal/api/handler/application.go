@@ -4,111 +4,117 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/hjtpx/hjtpx/pkg/database"
-	"github.com/hjtpx/hjtpx/pkg/models"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/response"
-	"gorm.io/gorm"
 )
 
+type ApplicationHandler struct {
+	applicationService *service.ApplicationService
+}
+
+func NewApplicationHandler() *ApplicationHandler {
+	return &ApplicationHandler{
+		applicationService: service.NewApplicationService(),
+	}
+}
+
 type CreateApplicationRequest struct {
-	Name        string `json:"name" binding:"required"`
+	Name        string `json:"name" binding:"required,min=1,max=255"`
 	UserID      uint   `json:"user_id" binding:"required"`
-	Description string `json:"description"`
+	Description string `json:"description" binding:"max=1000"`
+	Domain      string `json:"domain" binding:"max=255"`
+	Website     string `json:"website" binding:"max=255"`
 }
 
 type UpdateApplicationRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IsActive    *bool  `json:"is_active"`
+	Name        *string `json:"name" binding:"omitempty,max=255"`
+	Description *string `json:"description" binding:"omitempty,max=1000"`
+	IsActive    *bool   `json:"is_active"`
+	Domain      *string `json:"domain" binding:"omitempty,max=255"`
+	Website     *string `json:"website" binding:"omitempty,max=255"`
 }
 
 type ListApplicationsQuery struct {
-	Page     int    `form:"page,default=1"`
-	PageSize int    `form:"page_size,default=10"`
-	Keyword  string `form:"keyword"`
+	Page      int    `form:"page,default=1"`
+	PageSize  int    `form:"page_size,default=10"`
+	Keyword   string `form:"keyword"`
+	UserID    uint   `form:"user_id"`
+	IsActive  *bool  `form:"is_active"`
+	SortField string `form:"sort_field"`
+	SortOrder string `form:"sort_order"`
 }
 
-type PaginatedApplications struct {
-	Data  []models.Application `json:"data"`
-	Total int64                `json:"total"`
-	Page  int                  `json:"page"`
-	PageSize int               `json:"page_size"`
+type UpdateConfigRequest struct {
+	CaptchaTypes         []string               `json:"captcha_types"`
+	MaxVerifyPerMinute   int                    `json:"max_verify_per_minute"`
+	MaxVerifyPerDay      int                    `json:"max_verify_per_day"`
+	AllowedIPs           []string               `json:"allowed_ips"`
+	BlockRefusedRequests bool                   `json:"block_refused_requests"`
+	CustomSettings       map[string]interface{} `json:"custom_settings"`
 }
 
-// ListApplications 获取应用列表
+func GetApplicationHandler() *ApplicationHandler {
+	return NewApplicationHandler()
+}
+
 func ListApplications(c *gin.Context) {
 	var query ListApplicationsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		response.BadRequest(c, "invalid query parameters")
+		response.BadRequest(c, "invalid query parameters: "+err.Error())
 		return
 	}
 
-	if query.Page < 1 {
-		query.Page = 1
-	}
-	if query.PageSize < 1 || query.PageSize > 100 {
-		query.PageSize = 10
-	}
-
-	db := database.DB.Model(&models.Application{})
-
-	if query.Keyword != "" {
-		db = db.Where("name LIKE ? OR description LIKE ?", "%"+query.Keyword+"%", "%"+query.Keyword+"%")
-	}
-
-	var total int64
-	db.Count(&total)
-
-	var applications []models.Application
-	offset := (query.Page - 1) * query.PageSize
-	db.Preload("User").Offset(offset).Limit(query.PageSize).Order("created_at DESC").Find(&applications)
-
-	response.Success(c, PaginatedApplications{
-		Data:      applications,
-		Total:     total,
+	filter := &service.ListApplicationsFilter{
 		Page:      query.Page,
 		PageSize:  query.PageSize,
-	})
+		Keyword:   query.Keyword,
+		UserID:    query.UserID,
+		IsActive:  query.IsActive,
+		SortField: query.SortField,
+		SortOrder: query.SortOrder,
+	}
+
+	result, err := service.NewApplicationService().ListApplications(filter)
+	if err != nil {
+		response.InternalServerError(c, "failed to list applications: "+err.Error())
+		return
+	}
+
+	response.Success(c, result)
 }
 
-// CreateApplication 创建应用
 func CreateApplication(c *gin.Context) {
 	var req CreateApplicationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request parameters")
+		response.BadRequest(c, "invalid request parameters: "+err.Error())
 		return
 	}
 
-	var user models.User
-	if err := database.DB.First(&user, req.UserID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			response.NotFound(c, "user not found")
-		} else {
-			response.InternalServerError(c, "")
-		}
-		return
-	}
-
-	apiKey := uuid.New().String()
-
-	application := models.Application{
+	input := &service.CreateApplicationInput{
 		Name:        req.Name,
 		UserID:      req.UserID,
 		Description: req.Description,
-		APIKey:      apiKey,
-		IsActive:    true,
+		Domain:      req.Domain,
+		Website:     req.Website,
 	}
 
-	if err := database.DB.Create(&application).Error; err != nil {
-		response.InternalServerError(c, "")
+	app, err := service.NewApplicationService().CreateApplication(input)
+	if err != nil {
+		if err == service.ErrUserNotFoundApp {
+			response.NotFound(c, "user not found")
+			return
+		}
+		if err == service.ErrInvalidInput {
+			response.BadRequest(c, "invalid application name")
+			return
+		}
+		response.InternalServerError(c, "failed to create application: "+err.Error())
 		return
 	}
 
-	response.Success(c, application)
+	response.Success(c, service.ToApplicationResponse(app))
 }
 
-// UpdateApplication 更新应用
 func UpdateApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -119,43 +125,31 @@ func UpdateApplication(c *gin.Context) {
 
 	var req UpdateApplicationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request parameters")
+		response.BadRequest(c, "invalid request parameters: "+err.Error())
 		return
 	}
 
-	var application models.Application
-	if err := database.DB.First(&application, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	input := &service.UpdateApplicationInput{
+		Name:        req.Name,
+		Description: req.Description,
+		IsActive:    req.IsActive,
+		Domain:      req.Domain,
+		Website:     req.Website,
+	}
+
+	app, err := service.NewApplicationService().UpdateApplication(uint(id), input)
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
 			response.NotFound(c, "application not found")
-		} else {
-			response.InternalServerError(c, "")
-		}
-		return
-	}
-
-	updates := make(map[string]interface{})
-	if req.Name != "" {
-		updates["name"] = req.Name
-	}
-	if req.Description != "" {
-		updates["description"] = req.Description
-	}
-	if req.IsActive != nil {
-		updates["is_active"] = *req.IsActive
-	}
-
-	if len(updates) > 0 {
-		if err := database.DB.Model(&application).Updates(updates).Error; err != nil {
-			response.InternalServerError(c, "")
 			return
 		}
+		response.InternalServerError(c, "failed to update application: "+err.Error())
+		return
 	}
 
-	database.DB.Preload("User").First(&application, id)
-	response.Success(c, application)
+	response.Success(c, service.ToApplicationResponse(app))
 }
 
-// DeleteApplication 删除应用
 func DeleteApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -164,20 +158,145 @@ func DeleteApplication(c *gin.Context) {
 		return
 	}
 
-	var application models.Application
-	if err := database.DB.First(&application, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+	err = service.NewApplicationService().DeleteApplication(uint(id))
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
 			response.NotFound(c, "application not found")
-		} else {
-			response.InternalServerError(c, "")
+			return
 		}
+		response.InternalServerError(c, "failed to delete application: "+err.Error())
 		return
 	}
 
-	if err := database.DB.Delete(&application).Error; err != nil {
-		response.InternalServerError(c, "")
+	response.Success(c, gin.H{"message": "application deleted successfully"})
+}
+
+func RegenerateApplicationKey(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid application id")
 		return
 	}
 
-	response.Success(c, nil)
+	app, oldKey, err := service.NewApplicationService().RegenerateAPIKey(uint(id))
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "application not found")
+			return
+		}
+		response.InternalServerError(c, "failed to regenerate API key: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"application": service.ToApplicationResponse(app),
+		"old_key":     oldKey,
+		"warning":     "please save the new API key securely, the old key has been invalidated",
+	})
+}
+
+func GetApplicationConfig(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid application id")
+		return
+	}
+
+	config, err := service.NewApplicationService().GetApplicationConfig(uint(id))
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "application not found")
+			return
+		}
+		response.InternalServerError(c, "failed to get application config: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"application_id": id,
+		"config":         config,
+	})
+}
+
+func UpdateApplicationConfig(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid application id")
+		return
+	}
+
+	var req UpdateConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request parameters: "+err.Error())
+		return
+	}
+
+	config := &service.ApplicationConfig{
+		CaptchaTypes:         req.CaptchaTypes,
+		MaxVerifyPerMinute:   req.MaxVerifyPerMinute,
+		MaxVerifyPerDay:      req.MaxVerifyPerDay,
+		AllowedIPs:           req.AllowedIPs,
+		BlockRefusedRequests: req.BlockRefusedRequests,
+		CustomSettings:       req.CustomSettings,
+	}
+
+	app, err := service.NewApplicationService().UpdateApplicationConfig(uint(id), config)
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "application not found")
+			return
+		}
+		response.InternalServerError(c, "failed to update application config: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":     "configuration updated successfully",
+		"application": service.ToApplicationResponse(app),
+	})
+}
+
+func GetApplicationStatistics(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid application id")
+		return
+	}
+
+	stats, err := service.NewApplicationService().GetApplicationStatistics(uint(id))
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "application not found")
+			return
+		}
+		response.InternalServerError(c, "failed to get application statistics: "+err.Error())
+		return
+	}
+
+	response.Success(c, stats)
+}
+
+func GetApplication(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "invalid application id")
+		return
+	}
+
+	app, err := service.NewApplicationService().GetApplicationByID(uint(id))
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "application not found")
+			return
+		}
+		response.InternalServerError(c, "failed to get application: "+err.Error())
+		return
+	}
+
+	response.Success(c, service.ToApplicationResponse(app))
 }

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 风控规则</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar d-flex flex-column flex-shrink-0">
+            <div class="sidebar-header p-3"><h5 class="text-white mb-0">管理后台</h5></div>
+            <nav class="nav flex-column mt-2">
+                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link active" href="/admin/risk-rules"><i class="fas fa-shield-alt me-2"></i>风控规则</a>
+                <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban me-2"></i>黑名单</a>
+            </nav>
+            <div class="sidebar-footer mt-auto p-3">
+                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
+            </div>
+        </div>
+
+        <div class="main-wrapper">
+            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">风控规则配置</h5>
+                <div class="d-flex align-items-center gap-3">
+                    <button id="addRuleBtn" class="btn btn-primary btn-sm"><i class="fas fa-plus me-1"></i>添加规则</button>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted" id="usernameDisplay">管理员</span>
+                        <div class="user-avatar" id="userAvatar">A</div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="p-4 bg-light min-vh-100">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">总规则数</h6>
+                                <h3 class="mb-1" id="totalRules">0</h3>
+                                <small class="text-muted">启用中 <span id="activeRules">0</span> 条</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">拦截请求</h6>
+                                <h3 class="mb-1 text-danger" id="blockedRequests">0</h3>
+                                <small class="text-danger"><i class="fas fa-arrow-up me-1"></i>今日</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">风险预警</h6>
+                                <h3 class="mb-1 text-warning" id="riskAlerts">0</h3>
+                                <small class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>待处理</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted mb-2">拦截率</h6>
+                                <h3 class="mb-1 text-success" id="blockRate">0%</h3>
+                                <small class="text-success"><i class="fas fa-check-circle me-1"></i>本周</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">规则类型</label>
+                                <select class="form-select" id="ruleTypeFilter">
+                                    <option value="">全部类型</option>
+                                    <option value="rate_limit">频率限制</option>
+                                    <option value="ip_block">IP封禁</option>
+                                    <option value="behavior">行为分析</option>
+                                    <option value="custom">自定义</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">状态</label>
+                                <select class="form-select" id="ruleStatusFilter">
+                                    <option value="">全部状态</option>
+                                    <option value="enabled">启用</option>
+                                    <option value="disabled">禁用</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">关键词搜索</label>
+                                <input type="text" class="form-control" id="ruleKeyword" placeholder="输入规则名称">
+                            </div>
+                            <div class="col-md-3">
+                                <button id="searchRulesBtn" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i>搜索</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span class="text-muted">共 <span id="rulesCount">0</span> 条规则</span>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary active" data-view="table"><i class="fas fa-list"></i></button>
+                            <button class="btn btn-outline-secondary" data-view="card"><i class="fas fa-th"></i></button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" id="rulesTableView">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" id="selectAllRules"></th>
+                                        <th>规则名称</th>
+                                        <th>规则类型</th>
+                                        <th>触发条件</th>
+                                        <th>处置方式</th>
+                                        <th>优先级</th>
+                                        <th>状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rulesTableBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="d-none" id="rulesCardView"></div>
+                    </div>
+                    <div class="card-footer bg-white" id="rulesPagination"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="ruleModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ruleModalTitle">添加规则</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="ruleForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="ruleId">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">规则名称 *</label>
+                                    <input type="text" class="form-control" id="ruleName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">规则类型 *</label>
+                                    <select class="form-select" id="ruleType" required>
+                                        <option value="">请选择</option>
+                                        <option value="rate_limit">频率限制</option>
+                                        <option value="ip_block">IP封禁</option>
+                                        <option value="behavior">行为分析</option>
+                                        <option value="device_fingerprint">设备指纹</option>
+                                        <option value="custom">自定义</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">规则描述</label>
+                            <textarea class="form-control" id="ruleDescription" rows="2" placeholder="描述规则的用途"></textarea>
+                        </div>
+
+                        <div class="card bg-light mb-3">
+                            <div class="card-header"><h6 class="mb-0"><i class="fas fa-cog me-2"></i>触发条件</h6></div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">字段</label>
+                                        <select class="form-select" id="conditionField">
+                                            <option value="ip">IP地址</option>
+                                            <option value="user_id">用户ID</option>
+                                            <option value="app_id">应用ID</option>
+                                            <option value="session_id">会话ID</option>
+                                            <option value="device_id">设备ID</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">运算符</label>
+                                        <select class="form-select" id="conditionOperator">
+                                            <option value="gt">大于</option>
+                                            <option value="gte">大于等于</option>
+                                            <option value="lt">小于</option>
+                                            <option value="lte">小于等于</option>
+                                            <option value="eq">等于</option>
+                                            <option value="neq">不等于</option>
+                                            <option value="contains">包含</option>
+                                            <option value="regex">正则匹配</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">阈值</label>
+                                        <input type="text" class="form-control" id="conditionValue" placeholder="输入阈值">
+                                    </div>
+                                </div>
+                                <div class="row g-3 mt-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label">时间窗口</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="timeWindow" value="60" min="1">
+                                            <span class="input-group-text">秒</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">累计次数</label>
+                                        <input type="number" class="form-control" id="triggerCount" value="5" min="1">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">处置方式 *</label>
+                                    <select class="form-select" id="ruleAction" required>
+                                        <option value="">请选择</option>
+                                        <option value="block">直接拦截</option>
+                                        <option value="captcha">验证码验证</option>
+                                        <option value="rate_limit">限流</option>
+                                        <option value="warning">警告日志</option>
+                                        <option value="review">人工审核</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">优先级</label>
+                                    <select class="form-select" id="rulePriority">
+                                        <option value="1">低</option>
+                                        <option value="5" selected>中</option>
+                                        <option value="10">高</option>
+                                        <option value="100">紧急</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">适用应用</label>
+                            <select class="form-select" id="ruleApps" multiple>
+                                <option value="all" selected>全部应用</option>
+                                <option value="1">用户中心</option>
+                                <option value="2">支付系统</option>
+                                <option value="3">消息推送</option>
+                            </select>
+                            <small class="text-muted">按住 Ctrl 多选</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="ruleEnabled" checked>
+                                <label class="form-check-label" for="ruleEnabled">立即启用规则</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary">保存规则</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="ruleDetailModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">规则详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="ruleDetailContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/risk-rules.js"></script>
+</body>
+</html>

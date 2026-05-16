@@ -27,6 +27,7 @@ func main() {
 	}
 
 	jwt.InitJWT(cfg.JWT.Secret)
+	jwt.InitUserJWT(cfg.JWT.Secret)
 
 	seedAdmin()
 

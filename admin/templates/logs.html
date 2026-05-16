@@ -6,18 +6,6 @@
     <title>管理后台 - 日志查询</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
-        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
-        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
-        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
-        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
-        .main-wrapper { flex: 1; min-width: 0; }
-        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
-        .log-item { cursor: pointer; transition: background 0.2s; }
-        .log-item:hover { background: #f8f9fa; }
-    </style>
 </head>
 <body>
     <div class="d-flex">
@@ -28,58 +16,133 @@
                 <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
                 <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
                 <a class="nav-link active" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt me-2"></i>风控规则</a>
+                <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban me-2"></i>黑名单</a>
             </nav>
             <div class="sidebar-footer mt-auto p-3">
                 <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
             </div>
         </div>
-        
+
         <div class="main-wrapper">
             <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">日志查询</h5>
                 <div class="d-flex align-items-center gap-3">
-                    <button id="exportBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出日志</button>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoRefreshLogs" checked>
+                        <label class="form-check-label" for="autoRefreshLogs">实时</label>
+                    </div>
+                    <button id="exportBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出</button>
+                    <button id="clearLogsBtn" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash me-1"></i>清理</button>
                     <div class="d-flex align-items-center gap-2">
                         <span class="text-muted" id="usernameDisplay">管理员</span>
                         <div class="user-avatar" id="userAvatar">A</div>
                     </div>
                 </div>
             </header>
-            
+
             <main class="p-4 bg-light min-vh-100">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center py-3">
+                                <h6 class="text-muted mb-1">总日志数</h6>
+                                <h4 class="mb-0" id="totalLogCount">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center py-3">
+                                <h6 class="text-muted mb-1">错误日志</h6>
+                                <h4 class="mb-0 text-danger" id="errorLogCount">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center py-3">
+                                <h6 class="text-muted mb-1">警告日志</h6>
+                                <h4 class="mb-0 text-warning" id="warningLogCount">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body text-center py-3">
+                                <h6 class="text-muted mb-1">今日新增</h6>
+                                <h4 class="mb-0 text-success" id="todayLogCount">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-body">
                         <div class="row g-3 align-items-end">
                             <div class="col-md-2">
-                                <label class="form-label">日志状态</label>
-                                <select class="form-select" id="logStatus">
+                                <label class="form-label">日志级别</label>
+                                <select class="form-select" id="logLevel">
                                     <option value="">全部</option>
-                                    <option value="success">成功</option>
-                                    <option value="failed">失败</option>
+                                    <option value="debug">Debug</option>
+                                    <option value="info">Info</option>
+                                    <option value="warning">Warning</option>
+                                    <option value="error">Error</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label class="form-label">来源服务</label>
+                                <select class="form-select" id="logSource">
+                                    <option value="">全部</option>
+                                    <option value="auth">认证服务</option>
+                                    <option value="captcha">验证码服务</option>
+                                    <option value="api">API网关</option>
+                                    <option value="db">数据库</option>
+                                    <option value="cache">缓存服务</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <label class="form-label">开始时间</label>
                                 <input type="datetime-local" class="form-control" id="startDate">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">结束时间</label>
                                 <input type="datetime-local" class="form-control" id="endDate">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">关键词</label>
-                                <input type="text" class="form-control" id="keyword" placeholder="搜索关键词">
+                                <input type="text" class="form-control" id="keyword" placeholder="搜索内容">
                             </div>
                             <div class="col-md-2">
                                 <button id="searchLogsBtn" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i>查询</button>
                             </div>
                         </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-12">
+                                <div class="btn-group btn-group-sm me-2">
+                                    <button class="btn btn-outline-secondary active" data-level="all">全部</button>
+                                    <button class="btn btn-outline-danger" data-level="error"><i class="fas fa-times-circle me-1"></i>错误</button>
+                                    <button class="btn btn-outline-warning" data-level="warning"><i class="fas fa-exclamation-triangle me-1"></i>警告</button>
+                                    <button class="btn btn-outline-info" data-level="info"><i class="fas fa-info-circle me-1"></i>信息</button>
+                                    <button class="btn btn-outline-secondary" data-level="debug"><i class="fas fa-bug me-1"></i>调试</button>
+                                </div>
+                                <label class="form-check-label text-muted me-2">快速筛选:</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
+
                 <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white">
-                        <span class="text-muted" id="logsCount">共 0 条日志</span>
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="text-muted">共 <span id="logsCount">0</span> 条日志</span>
+                            <span class="text-muted">|</span>
+                            <span class="text-muted">当前页: <span id="currentPage">1</span></span>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary active" data-display="list"><i class="fas fa-list me-1"></i>列表</button>
+                            <button class="btn btn-outline-secondary" data-display="compact"><i class="fas fa-th me-1"></i>紧凑</button>
+                        </div>
                     </div>
                     <div class="card-body p-0" id="logsList"></div>
                     <div class="card-footer bg-white" id="pagination"></div>
@@ -87,22 +150,53 @@
             </main>
         </div>
     </div>
-    
+
     <div class="modal fade" id="logDetailModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">日志详情</h5>
+                    <h5 class="modal-title"><i class="fas fa-file-alt me-2"></i>日志详情</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="logDetailContent"></div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" id="copyLogBtn"><i class="fas fa-copy me-1"></i>复制</button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>
     </div>
-    
+
+    <div class="modal fade" id="clearLogsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger"><i class="fas fa-exclamation-triangle me-2"></i>清理日志</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">清理范围</label>
+                        <select class="form-select" id="clearRange">
+                            <option value="3d">3天前的日志</option>
+                            <option value="7d">7天前的日志</option>
+                            <option value="30d">30天前的日志</option>
+                            <option value="all">全部日志</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-warning me-1"></i>
+                        清理后的日志无法恢复，请谨慎操作！
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmClearBtn">确认清理</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
     <script src="/admin/static/js/logs.js"></script>
