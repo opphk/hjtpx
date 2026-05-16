@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 实时风控大屏</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        .risk-screen {
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .risk-header {
+            background: rgba(194,58,43,0.15);
+            border-bottom: 2px solid rgba(194,58,43,0.5);
+            padding: 20px 0;
+        }
+        .risk-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #c9a96e;
+            text-shadow: 0 0 20px rgba(201,169,110,0.5);
+        }
+        .risk-stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .risk-stat-card:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-5px);
+        }
+        .risk-stat-value {
+            font-size: 42px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+        .risk-stat-label {
+            font-size: 14px;
+            color: rgba(255,255,255,0.6);
+            margin-top: 5px;
+        }
+        .risk-stat-change {
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .risk-chart-container {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .risk-alert-item {
+            background: rgba(239,68,68,0.1);
+            border-left: 4px solid #ef4444;
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            animation: pulse-red 2s infinite;
+        }
+        .risk-alert-item.warning {
+            background: rgba(245,158,11,0.1);
+            border-left-color: #f59e0b;
+        }
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .realtime-indicator {
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .threat-level {
+            font-size: 48px;
+            font-weight: 700;
+            text-align: center;
+        }
+        .threat-low { color: #10b981; }
+        .threat-medium { color: #f59e0b; }
+        .threat-high { color: #ef4444; }
+        .threat-critical { color: #dc2626; text-shadow: 0 0 20px rgba(220,38,38,0.8); }
+        .map-placeholder {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255,255,255,0.4);
+        }
+        .region-bar {
+            height: 24px;
+            background: linear-gradient(90deg, rgba(59,130,246,0.6) var(--width), rgba(59,130,246,0.2) var(--width));
+            border-radius: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+        .region-bar span {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="risk-screen">
+    <header class="risk-header">
+        <div class="container-fluid px-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center justify-content-center" style="width:50px;height:50px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:12px;font-size:24px;color:#c9a96e;">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div>
+                        <div class="risk-title">🛡️ 实时风控大屏</div>
+                        <div class="text-white-50" style="font-size:12px;">Real-time Risk Control Dashboard</div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="realtime-indicator"></div>
+                        <span style="font-size:14px;">实时监控中</span>
+                    </div>
+                    <div class="text-white">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="currentTime"></span>
+                    </div>
+                    <a href="/admin/" class="btn btn-outline-light btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i>返回后台
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container-fluid px-4 py-4">
+        <div class="row g-4 mb-4">
+            <div class="col-md-2">
+                <div class="risk-stat-card">
+                    <div class="risk-stat-value text-danger" id="totalThreats">0</div>
+                    <div class="risk-stat-label">威胁总数</div>
+                    <div class="risk-stat-change text-danger"><i class="fas fa-arrow-up me-1"></i>今日</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="risk-stat-card">
+                    <div class="risk-stat-value text-warning" id="blockedCount">0</div>
+                    <div class="risk-stat-label">已拦截</div>
+                    <div class="risk-stat-change text-success"><i class="fas fa-shield-alt me-1"></i>防护中</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="risk-stat-card">
+                    <div class="risk-stat-value text-info" id="totalVerifications">0</div>
+                    <div class="risk-stat-label">验证总数</div>
+                    <div class="risk-stat-change"><i class="fas fa-check-circle me-1"></i>成功率 98.5%</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="risk-stat-card">
+                    <div class="risk-stat-value" style="color:#c9a96e;" id="activeRules">0</div>
+                    <div class="risk-stat-label">活跃规则</div>
+                    <div class="risk-stat-change text-muted"><i class="fas fa-cog me-1"></i>全部在线</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="risk-stat-card">
+                    <div class="risk-stat-value text-success" id="safeUsers">0</div>
+                    <div class="risk-stat-label">正常用户</div>
+                    <div class="risk-stat-change"><i class="fas fa-user-check me-1"></i>安全</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="risk-stat-card">
+                    <div class="threat-level" id="threatLevel">低</div>
+                    <div class="risk-stat-label">威胁等级</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-md-8">
+                <div class="risk-chart-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0"><i class="fas fa-chart-line me-2" style="color:#3b82f6;"></i>实时请求趋势</h5>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-light active" data-ptype="1m">1分钟</button>
+                            <button type="button" class="btn btn-outline-light" data-ptype="5m">5分钟</button>
+                            <button type="button" class="btn btn-outline-light" data-ptype="1h">1小时</button>
+                        </div>
+                    </div>
+                    <canvas id="realtimeTrendChart" height="180"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="risk-chart-container" style="height:100%;">
+                    <h5 class="mb-3"><i class="fas fa-exclamation-triangle me-2" style="color:#ef4444;"></i>实时告警</h5>
+                    <div style="max-height:220px;overflow-y:auto;" id="alertsContainer">
+                        <div class="risk-alert-item">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">IP异常访问</span>
+                                <small class="text-muted">刚刚</small>
+                            </div>
+                            <div class="text-white-50" style="font-size:12px;">192.168.1.100 请求频率异常</div>
+                        </div>
+                        <div class="risk-alert-item warning">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">设备指纹重复</span>
+                                <small class="text-muted">2分钟前</small>
+                            </div>
+                            <div class="text-white-50" style="font-size:12px;">检测到3个账户使用相同设备</div>
+                        </div>
+                        <div class="risk-alert-item">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">模拟器检测</span>
+                                <small class="text-muted">5分钟前</small>
+                            </div>
+                            <div class="text-white-50" style="font-size:12px;">用户设备疑似模拟器环境</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="risk-chart-container">
+                    <h5 class="mb-3"><i class="fas fa-chart-pie me-2" style="color:#10b981;"></i>风险类型分布</h5>
+                    <canvas id="riskTypeChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="risk-chart-container">
+                    <h5 class="mb-3"><i class="fas fa-globe me-2" style="color:#8b5cf6;"></i>攻击来源分布 Top 10</h5>
+                    <div id="regionList">
+                        <div class="region-bar" style="--width:85%;"><span>北京</span><span class="ms-auto">85%</span></div>
+                        <div class="region-bar" style="--width:62%;"><span>上海</span><span class="ms-auto">62%</span></div>
+                        <div class="region-bar" style="--width:45%;"><span>广东</span><span class="ms-auto">45%</span></div>
+                        <div class="region-bar" style="--width:28%;"><span>浙江</span><span class="ms-auto">28%</span></div>
+                        <div class="region-bar" style="--width:22%;"><span>江苏</span><span class="ms-auto">22%</span></div>
+                        <div class="region-bar" style="--width:18%;"><span>境外</span><span class="ms-auto">18%</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="risk-chart-container">
+                    <h5 class="mb-3"><i class="fas fa-bolt me-2" style="color:#f59e0b;"></i>拦截处置分布</h5>
+                    <canvas id="actionDistributionChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="risk-chart-container">
+                    <h5 class="mb-3"><i class="fas fa-users me-2" style="color:#3b82f6;"></i>高风险用户监控</h5>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>用户ID</th>
+                                    <th>风险分数</th>
+                                    <th>风险类型</th>
+                                    <th>最近活动</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="highRiskUsers">
+                                <tr>
+                                    <td><code>user_1234</code></td>
+                                    <td><span class="badge bg-danger">85</span></td>
+                                    <td>频繁更换IP</td>
+                                    <td>3分钟前</td>
+                                    <td><button class="btn btn-sm btn-outline-danger">封禁</button></td>
+                                </tr>
+                                <tr>
+                                    <td><code>user_5678</code></td>
+                                    <td><span class="badge bg-warning">72</span></td>
+                                    <td>设备指纹异常</td>
+                                    <td>8分钟前</td>
+                                    <td><button class="btn btn-sm btn-outline-warning">审查</button></td>
+                                </tr>
+                                <tr>
+                                    <td><code>user_9012</code></td>
+                                    <td><span class="badge bg-warning">68</span></td>
+                                    <td>行为模式可疑</td>
+                                    <td>15分钟前</td>
+                                    <td><button class="btn btn-sm btn-outline-info">监控</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="risk-chart-container">
+                    <h5 class="mb-3"><i class="fas fa-shield-virus me-2" style="color:#ef4444;"></i>最近拦截记录</h5>
+                    <div style="max-height:200px;overflow-y:auto;">
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary">
+                            <div>
+                                <div class="text-white">192.168.1.50</div>
+                                <small class="text-white-50">机器人行为 · 刚刚</small>
+                            </div>
+                            <span class="badge bg-danger">拦截</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary">
+                            <div>
+                                <div class="text-white">10.0.0.123</div>
+                                <small class="text-white-50">IP频率超限 · 2分钟前</small>
+                            </div>
+                            <span class="badge bg-warning">验证码</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary">
+                            <div>
+                                <div class="text-white">172.16.0.89</div>
+                                <small class="text-white-50">代理IP检测 · 5分钟前</small>
+                            </div>
+                            <span class="badge bg-info">标记</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary">
+                            <div>
+                                <div class="text-white">203.0.113.45</div>
+                                <small class="text-white-50">设备指纹重复 · 8分钟前</small>
+                            </div>
+                            <span class="badge bg-secondary">待审</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center py-2">
+                            <div>
+                                <div class="text-white">198.51.100.22</div>
+                                <small class="text-white-50">Headless浏览器 · 12分钟前</small>
+                            </div>
+                            <span class="badge bg-danger">拦截</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        let realtimeTrendChart, riskTypeChart, actionDistributionChart;
+        let realtimeData = [];
+        let updateInterval = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            startRealtimeUpdate();
+            updateTime();
+            setInterval(updateTime, 1000);
+            loadMockData();
+        });
+
+        function initCharts() {
+            initRealtimeTrendChart();
+            initRiskTypeChart();
+            initActionDistributionChart();
+        }
+
+        function initRealtimeTrendChart() {
+            const ctx = document.getElementById('realtimeTrendChart');
+            if (!ctx) return;
+
+            const now = Date.now();
+            realtimeData = Array.from({ length: 30 }, (_, i) => ({
+                x: new Date(now - (30 - i) * 2000),
+                y: Math.floor(Math.random() * 100) + 50
+            }));
+
+            realtimeTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: realtimeData.map(d => formatTime(d.x)),
+                    datasets: [{
+                        label: '请求量',
+                        data: realtimeData.map(d => d.y),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }, {
+                        label: '威胁',
+                        data: realtimeData.map(() => Math.floor(Math.random() * 20)),
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#fff', boxWidth: 12 }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: 'rgba(255, 255, 255, 0.6)' }
+                        }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+
+        function initRiskTypeChart() {
+            const ctx = document.getElementById('riskTypeChart');
+            if (!ctx) return;
+
+            riskTypeChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['机器人攻击', 'IP异常', '设备指纹异常', '行为异常', '其他'],
+                    datasets: [{
+                        data: [35, 25, 20, 15, 5],
+                        backgroundColor: ['#ef4444', '#f59e0b', '#8b5cf6', '#3b82f6', '#6b7280'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#fff', padding: 10, font: { size: 11 } }
+                        }
+                    },
+                    cutout: '60%'
+                }
+            });
+        }
+
+        function initActionDistributionChart() {
+            const ctx = document.getElementById('actionDistributionChart');
+            if (!ctx) return;
+
+            actionDistributionChart = new Chart(ctx, {
+                type: 'polarArea',
+                data: {
+                    labels: ['直接拦截', '验证码', '限流', '警告', '人工审核'],
+                    datasets: [{
+                        data: [45, 30, 12, 8, 5],
+                        backgroundColor: ['rgba(239, 68, 68, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(16, 185, 129, 0.7)', 'rgba(139, 92, 246, 0.7)']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#fff', padding: 8, font: { size: 10 } }
+                        }
+                    },
+                    scales: {
+                        r: {
+                            ticks: { display: false },
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function startRealtimeUpdate() {
+            updateInterval = setInterval(() => {
+                const now = new Date();
+                const newValue = Math.floor(Math.random() * 100) + 50;
+
+                realtimeData.push({ x: now, y: newValue });
+                if (realtimeData.length > 30) {
+                    realtimeData.shift();
+                }
+
+                if (realtimeTrendChart) {
+                    realtimeTrendChart.data.labels = realtimeData.map(d => formatTime(d.x));
+                    realtimeTrendChart.data.datasets[0].data = realtimeData.map(d => d.y);
+                    realtimeTrendChart.data.datasets[1].data = realtimeData.map(() => Math.floor(Math.random() * 20));
+                    realtimeTrendChart.update('none');
+                }
+
+                animateNumber('totalThreats', parseInt(document.getElementById('totalThreats').textContent) + Math.floor(Math.random() * 3));
+                animateNumber('blockedCount', parseInt(document.getElementById('blockedCount').textContent.replace(/[^\d]/g, '')) + Math.floor(Math.random() * 5));
+            }, 2000);
+        }
+
+        function animateNumber(elementId, target) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            element.textContent = formatNumber(target);
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function formatTime(date) {
+            return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleString('zh-CN');
+        }
+
+        function loadMockData() {
+            document.getElementById('totalThreats').textContent = '12,847';
+            document.getElementById('blockedCount').textContent = '8,234';
+            document.getElementById('totalVerifications').textContent = '1.2M';
+            document.getElementById('activeRules').textContent = '156';
+            document.getElementById('safeUsers').textContent = '98.5K';
+        }
+    </script>
+</body>
+</html>

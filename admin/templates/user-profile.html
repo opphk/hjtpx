@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 用户行为画像</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="bg-dark d-flex flex-column">
+        <div class="d-flex align-items-center gap-3 p-3 border-bottom border-secondary">
+            <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;flex-shrink:0;"><i class="fas fa-shield-halved"></i></div>
+            <div>
+                <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
+                <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
+            </div>
+        </div>
+        <nav class="d-flex flex-column p-3 gap-1 flex-grow-1">
+            <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
+            <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
+            <a class="nav-link" href="/admin/risk-monitor"><i class="fas fa-shield-alt"></i><span>实时风控</span></a>
+            <a class="nav-link active" href="/admin/user-profile"><i class="fas fa-user-circle"></i><span>用户画像</span></a>
+            <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
+            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
+            <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-sliders-h"></i><span>风控规则</span></a>
+            <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <hr class="border-secondary my-2 mx-3">
+        </nav>
+        <div class="border-top border-secondary p-3 mt-auto">
+            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
+        </div>
+    </div>
+
+    <div>
+        <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
+            <div class="d-flex align-items-center gap-3">
+                <h1 style="font-size:20px;font-weight:700;margin:0;padding-left:16px;position:relative;">用户行为画像</h1>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid #c23a2b;color:#c23a2b;font-size:9px;font-weight:900;transform:rotate(-8deg);flex-shrink:0;">墨盾</span>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <button id="exportProfileBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出画像</button>
+                <button id="refreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-secondary" id="usernameDisplay">管理员</span>
+                    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
+                </div>
+            </div>
+        </header>
+        <hr style="height:4px;background:linear-gradient(to right,#c9a96e,transparent);border:none;margin:0 0 24px;opacity:0.6;border-radius:2px;">
+        <main class="p-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label"><i class="fas fa-search me-1" style="color:#b8924e;"></i>用户ID / IP地址</label>
+                            <input type="text" class="form-control" id="searchInput" placeholder="输入用户ID或IP地址搜索">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">风险等级</label>
+                            <select class="form-select" id="riskLevelFilter">
+                                <option value="">全部</option>
+                                <option value="low">低风险</option>
+                                <option value="medium">中风险</option>
+                                <option value="high">高风险</option>
+                                <option value="critical">极高风险</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">时间范围</label>
+                            <select class="form-select" id="timeRangeFilter">
+                                <option value="24h">最近24小时</option>
+                                <option value="7d" selected>最近7天</option>
+                                <option value="30d">最近30天</option>
+                                <option value="all">全部</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="searchBtn" class="btn btn-dark w-100"><i class="fas fa-search me-1"></i>查询</button>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="viewRadarBtn" class="btn btn-outline-dark w-100"><i class="fas fa-chart-pie me-1"></i>雷达视图</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h5><i class="fas fa-user me-2" style="color:#b8924e;"></i>用户基本信息</h5></div>
+                        <div class="card-body">
+                            <div class="text-center mb-4">
+                                <div class="bg-secondary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:80px;height:80px;font-size:32px;font-weight:700;color:#fff;">U</div>
+                                <h4 class="mt-3 mb-1" id="userId">user_123456</h4>
+                                <span class="badge bg-success" id="userRiskBadge">低风险</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <tbody>
+                                        <tr><td class="text-muted">注册时间</td><td id="userRegTime">2024-01-15</td></tr>
+                                        <tr><td class="text-muted">最后活动</td><td id="userLastActive">5分钟前</td></tr>
+                                        <tr><td class="text-muted">验证次数</td><td id="userVerifyCount">1,256</td></tr>
+                                        <tr><td class="text-muted">失败次数</td><td id="userFailCount">23</td></tr>
+                                        <tr><td class="text-muted">成功率</td><td id="userSuccessRate">98.2%</td></tr>
+                                        <tr><td class="text-muted">设备数量</td><td id="userDeviceCount">3</td></tr>
+                                        <tr><td class="text-muted">IP地址数</td><td id="userIpCount">5</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h5><i class="fas fa-chart-radar me-2" style="color:#c23a2b;"></i>行为特征雷达图</h5></div>
+                        <div class="card-body">
+                            <canvas id="behaviorRadarChart" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-fingerprint me-2" style="color:#b8924e;"></i>设备指纹详情</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>设备ID</th>
+                                            <th>设备类型</th>
+                                            <th>浏览器</th>
+                                            <th>操作系统</th>
+                                            <th>最后使用</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="deviceTableBody">
+                                        <tr>
+                                            <td><code class="small">fp_a1b2c3d4</code></td>
+                                            <td><i class="fas fa-desktop me-1"></i>桌面</td>
+                                            <td>Chrome 120</td>
+                                            <td>Windows 11</td>
+                                            <td>刚刚</td>
+                                            <td><span class="badge bg-success">正常</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code class="small">fp_e5f6g7h8</code></td>
+                                            <td><i class="fas fa-mobile-alt me-1"></i>移动</td>
+                                            <td>Safari 17</td>
+                                            <td>iOS 17</td>
+                                            <td>2小时前</td>
+                                            <td><span class="badge bg-success">正常</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code class="small">fp_i9j0k1l2</code></td>
+                                            <td><i class="fas fa-tablet-alt me-1"></i>平板</td>
+                                            <td>Safari 16</td>
+                                            <td>iPadOS 16</td>
+                                            <td>3天前</td>
+                                            <td><span class="badge bg-secondary">未活跃</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-network-wired me-2" style="color:#b8924e;"></i>IP地址历史</h5></div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>IP地址</th>
+                                            <th>地区</th>
+                                            <th>网络类型</th>
+                                            <th>使用次数</th>
+                                            <th>首次出现</th>
+                                            <th>状态</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ipTableBody">
+                                        <tr>
+                                            <td><code>202.96.134.123</code></td>
+                                            <td>广东深圳</td>
+                                            <td><span class="badge bg-info">住宅宽带</span></td>
+                                            <td>856</td>
+                                            <td>2024-01-15</td>
+                                            <td><span class="badge bg-success">正常</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>118.123.45.67</code></td>
+                                            <td>北京朝阳</td>
+                                            <td><span class="badge bg-warning">移动网络</span></td>
+                                            <td>234</td>
+                                            <td>2024-02-20</td>
+                                            <td><span class="badge bg-success">正常</span></td>
+                                        </tr>
+                                        <tr>
+                                            <td><code>58.215.78.90</code></td>
+                                            <td>江苏无锡</td>
+                                            <td><span class="badge bg-info">企业网络</span></td>
+                                            <td>156</td>
+                                            <td>2024-03-10</td>
+                                            <td><span class="badge bg-warning">可疑</span></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-chart-line me-2" style="color:#b8924e;"></i>活动时间分布</h5></div>
+                        <div class="card-body">
+                            <canvas id="activityTimeChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm">
+                        <div class="card-header"><h5><i class="fas fa-mouse-pointer me-2" style="color:#b8924e;"></i>行为序列分析</h5></div>
+                        <div class="card-body">
+                            <canvas id="behaviorSequenceChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5><i class="fas fa-history me-2" style="color:#b8924e;"></i>行为日志</h5>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-secondary active" data-ftype="all">全部</button>
+                                <button class="btn btn-outline-secondary" data-ftype="verify">验证</button>
+                                <button class="btn btn-outline-secondary" data-ftype="login">登录</button>
+                                <button class="btn btn-outline-secondary" data-ftype="risk">风险</button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="sticky-top bg-white">
+                                        <tr>
+                                            <th>时间</th>
+                                            <th>事件类型</th>
+                                            <th>IP地址</th>
+                                            <th>设备</th>
+                                            <th>位置</th>
+                                            <th>风险分数</th>
+                                            <th>结果</th>
+                                            <th>详情</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="behaviorLogs">
+                                        <tr>
+                                            <td><small>2024-05-16 14:32:15</small></td>
+                                            <td><span class="badge bg-info">滑块验证</span></td>
+                                            <td><code>202.96.134.123</code></td>
+                                            <td>Chrome/Win11</td>
+                                            <td>广东深圳</td>
+                                            <td><span class="badge bg-success">15</span></td>
+                                            <td><span class="badge bg-success">通过</span></td>
+                                            <td><button class="btn btn-sm btn-link p-0">查看</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td><small>2024-05-16 14:25:03</small></td>
+                                            <td><span class="badge bg-warning">登录尝试</span></td>
+                                            <td><code>118.123.45.67</code></td>
+                                            <td>Safari/iOS</td>
+                                            <td>北京朝阳</td>
+                                            <td><span class="badge bg-warning">45</span></td>
+                                            <td><span class="badge bg-success">通过</span></td>
+                                            <td><button class="btn btn-sm btn-link p-0">查看</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td><small>2024-05-16 13:18:22</small></td>
+                                            <td><span class="badge bg-danger">风险操作</span></td>
+                                            <td><code>58.215.78.90</code></td>
+                                            <td>Chrome/Win10</td>
+                                            <td>江苏无锡</td>
+                                            <td><span class="badge bg-danger">78</span></td>
+                                            <td><span class="badge bg-warning">验证</span></td>
+                                            <td><button class="btn btn-sm btn-link p-0">查看</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td><small>2024-05-16 12:45:11</small></td>
+                                            <td><span class="badge bg-info">点选验证</span></td>
+                                            <td><code>202.96.134.123</code></td>
+                                            <td>Chrome/Win11</td>
+                                            <td>广东深圳</td>
+                                            <td><span class="badge bg-success">12</span></td>
+                                            <td><span class="badge bg-success">通过</span></td>
+                                            <td><button class="btn btn-sm btn-link p-0">查看</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td><small>2024-05-16 11:30:05</small></td>
+                                            <td><span class="badge bg-secondary">环境检测</span></td>
+                                            <td><code>202.96.134.123</code></td>
+                                            <td>Chrome/Win11</td>
+                                            <td>广东深圳</td>
+                                            <td><span class="badge bg-success">8</span></td>
+                                            <td><span class="badge bg-success">正常</span></td>
+                                            <td><button class="btn btn-sm btn-link p-0">查看</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        let behaviorRadarChart, activityTimeChart, behaviorSequenceChart;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            setupEventListeners();
+            loadUserProfile();
+        });
+
+        function setupEventListeners() {
+            const searchBtn = document.getElementById('searchBtn');
+            if (searchBtn) {
+                searchBtn.addEventListener('click', loadUserProfile);
+            }
+
+            const refreshBtn = document.getElementById('refreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', loadUserProfile);
+            }
+
+            const exportBtn = document.getElementById('exportProfileBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', exportUserProfile);
+            }
+
+            const filterBtns = document.querySelectorAll('[data-ftype]');
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    filterBtns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                });
+            });
+        }
+
+        function initCharts() {
+            initBehaviorRadarChart();
+            initActivityTimeChart();
+            initBehaviorSequenceChart();
+        }
+
+        function initBehaviorRadarChart() {
+            const ctx = document.getElementById('behaviorRadarChart');
+            if (!ctx) return;
+
+            behaviorRadarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['行为正常度', '设备一致性', 'IP一致性', '时间规律性', '操作频率', '风险历史'],
+                    datasets: [{
+                        label: '当前用户',
+                        data: [85, 72, 68, 90, 75, 95],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#3b82f6'
+                    }, {
+                        label: '正常用户基准',
+                        data: [80, 75, 70, 85, 70, 90],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointBackgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { usePointStyle: true }
+                        }
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { stepSize: 20 },
+                            grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                            pointLabels: { font: { size: 12 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initActivityTimeChart() {
+            const ctx = document.getElementById('activityTimeChart');
+            if (!ctx) return;
+
+            activityTimeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-4', '4-8', '8-12', '12-16', '16-20', '20-24'],
+                    datasets: [{
+                        label: '活动次数',
+                        data: [45, 120, 380, 450, 320, 180],
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: '24小时活动分布',
+                            font: { size: 12 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '时段 (小时)' }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: '活动次数' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initBehaviorSequenceChart() {
+            const ctx = document.getElementById('behaviorSequenceChart');
+            if (!ctx) return;
+
+            behaviorSequenceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['第1天', '第2天', '第3天', '第4天', '第5天', '第6天', '第7天'],
+                    datasets: [{
+                        label: '验证成功率',
+                        data: [95, 97, 96, 98, 99, 97, 98],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: '风险分数',
+                        data: [25, 22, 28, 18, 15, 20, 18],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadUserProfile() {
+            console.log('加载用户画像数据');
+        }
+
+        function exportUserProfile() {
+            const userId = document.getElementById('userId')?.textContent || 'unknown';
+            const profileData = {
+                userId: userId,
+                exportTime: new Date().toLocaleString('zh-CN'),
+                basicInfo: {
+                    riskLevel: document.getElementById('userRiskBadge')?.textContent,
+                    verifyCount: document.getElementById('userVerifyCount')?.textContent,
+                    successRate: document.getElementById('userSuccessRate')?.textContent
+                }
+            };
+
+            const csvContent = [
+                ['用户画像报告'].join(','),
+                [''].join(','),
+                ['导出时间', profileData.exportTime].join(','),
+                ['用户ID', profileData.userId].join(','),
+                [''].join(','),
+                ['基本信息'].join(','),
+                ['风险等级', profileData.basicInfo.riskLevel].join(','),
+                ['验证次数', profileData.basicInfo.verifyCount].join(','),
+                ['成功率', profileData.basicInfo.successRate].join(',')
+            ].join('\n');
+
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `user_profile_${userId}_${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+        }
+    </script>
+</body>
+</html>
