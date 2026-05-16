@@ -1,11 +1,7 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
 	"time"
 
 	captchago "github.com/hjtpx/hjtpx/sdk/go"
@@ -36,27 +32,6 @@ func main() {
 	fmt.Println()
 
 	demoErrorHandling()
-	fmt.Println()
-
-	demoAdvancedFeatures()
-	fmt.Println()
-
-	demoTimeoutConfiguration()
-	fmt.Println()
-
-	demoBatchGeneration()
-	fmt.Println()
-
-	demoSignatureDemo()
-	fmt.Println()
-
-	demoRetryConfiguration()
-	fmt.Println()
-
-	demoContextCancellation()
-	fmt.Println()
-
-	demoMockServer()
 	fmt.Println()
 
 	fmt.Println("======================================")
@@ -300,62 +275,18 @@ func demoErrorHandling() {
 	)
 
 	_, err := client.VerifyImageCaptcha(nil)
-	if sdkErr, ok := err.(*captchago.SDKError); ok {
-		fmt.Printf("  Nil request error: code=%d, message=%s\n", sdkErr.Code, sdkErr.Message)
-	} else {
-		fmt.Printf("  Nil request error: %v\n", err)
-	}
+	fmt.Printf("  Nil request error: %v\n", err)
 
 	_, err = client.VerifyImageCaptcha(&captchago.VerifyImageCaptchaRequest{})
-	if sdkErr, ok := err.(*captchago.SDKError); ok {
-		fmt.Printf("  Missing challenge_id error: code=%d, message=%s\n", sdkErr.Code, sdkErr.Message)
-	} else {
-		fmt.Printf("  Missing challenge_id error: %v\n", err)
-	}
+	fmt.Printf("  Missing challenge_id error: %v\n", err)
 
 	_, err = client.VerifyImageCaptcha(&captchago.VerifyImageCaptchaRequest{
 		ChallengeID: "test-id",
 	})
-	if sdkErr, ok := err.(*captchago.SDKError); ok {
-		fmt.Printf("  Missing answer error: code=%d, message=%s\n", sdkErr.Code, sdkErr.Message)
-	} else {
-		fmt.Printf("  Missing answer error: %v\n", err)
-	}
+	fmt.Printf("  Missing answer error: %v\n", err)
 
 	_, err = client.ExtractBase64Image("")
-	if sdkErr, ok := err.(*captchago.SDKError); ok {
-		fmt.Printf("  Invalid image data error: code=%d, message=%s\n", sdkErr.Code, sdkErr.Message)
-	} else {
-		fmt.Printf("  Invalid image data error: %v\n", err)
-	}
-}
-
-func demoAdvancedFeatures() {
-	fmt.Println("[Advanced Features]")
-
-	client := captchago.NewClient(
-		captchago.WithEndpoint("http://localhost:8080"),
-		captchago.WithAppID("app-12345"),
-		captchago.WithAppSecret("app-secret-67890"),
-		captchago.WithSignatureKey("signature-key-abcdef"),
-		captchago.WithDebugMode(true),
-	)
-
-	client.EnableSignature(true)
-
-	fmt.Printf("  App ID configured: %s\n", "app-12345")
-	fmt.Printf("  Signature enabled: %v\n", true)
-
-	signature := client.GenerateSignature("GET", "/api/v1/captcha/image", nil, nil)
-	fmt.Printf("  Generated signature: %s\n", signature)
-
-	resp, err := client.GenerateImageCaptcha(nil)
-	if err != nil {
-		fmt.Printf("  Error with signature: %v\n", err)
-		return
-	}
-
-	fmt.Printf("  Generated with advanced features: %s\n", resp.ChallengeID)
+	fmt.Printf("  Invalid image data error: %v\n", err)
 }
 
 func demoTimeoutConfiguration() {
@@ -381,161 +312,5 @@ func demoBatchGeneration() {
 			continue
 		}
 		fmt.Printf("  [%d] Generated: %s\n", i, resp.ChallengeID)
-	}
-}
-
-func demoSignatureDemo() {
-	fmt.Println("[Signature Demo]")
-
-	client := captchago.NewClient(
-		captchago.WithSignatureKey("my-secret-signature-key"),
-		captchago.WithDebugMode(true),
-	)
-
-	signature := client.GenerateSignature("POST", "/api/v1/captcha/verify",
-		map[string]string{"key": "value"},
-		[]byte(`{"test":"data"}`))
-	fmt.Printf("  Generated signature: %s\n", signature)
-
-	signature2 := client.GenerateSignature("POST", "/api/v1/captcha/verify",
-		map[string]string{"key": "value"},
-		[]byte(`{"test":"data"}`))
-	fmt.Printf("  Signature verification: %v\n", signature == signature2)
-
-	params := map[string]string{"a": "1", "b": "2", "c": "3"}
-	sig3 := client.GenerateSignature("GET", "/test", params, nil)
-	fmt.Printf("  Signature with sorted params: %s\n", sig3)
-}
-
-func demoRetryConfiguration() {
-	fmt.Println("[Retry Configuration]")
-
-	retryConfig := captchago.DefaultRetryConfig()
-	fmt.Printf("  Default max retries: %d\n", retryConfig.MaxRetries)
-	fmt.Printf("  Default initial delay: %v\n", retryConfig.InitialDelay)
-	fmt.Printf("  Default max delay: %v\n", retryConfig.MaxDelay)
-	fmt.Printf("  Default backoff factor: %.2f\n", retryConfig.BackoffFactor)
-
-	customConfig := &captchago.RetryConfig{
-		MaxRetries:     5,
-		InitialDelay:   200 * time.Millisecond,
-		MaxDelay:       10 * time.Second,
-		BackoffFactor:  2.5,
-		RetryableCodes: []int{429, 500, 502, 503, 504},
-	}
-	fmt.Printf("  Custom max retries: %d\n", customConfig.MaxRetries)
-
-	_ = captchago.NewClient(
-		captchago.WithRetryConfig(customConfig),
-	)
-
-	fmt.Printf("  Should retry 500: %v\n", customConfig.ShouldRetry(500))
-	fmt.Printf("  Should retry 400: %v\n", customConfig.ShouldRetry(400))
-	fmt.Printf("  Should retry 429: %v\n", customConfig.ShouldRetry(429))
-
-	delay := customConfig.NextDelay(0)
-	fmt.Printf("  Delay for attempt 0: %v\n", delay)
-	delay = customConfig.NextDelay(1)
-	fmt.Printf("  Delay for attempt 1: %v\n", delay)
-	delay = customConfig.NextDelay(2)
-	fmt.Printf("  Delay for attempt 2: %v\n", delay)
-}
-
-func demoContextCancellation() {
-	fmt.Println("[Context Cancellation]")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	customClient := &http.Client{
-		Timeout: 50 * time.Millisecond,
-	}
-
-	client := captchago.NewClient()
-	client.SetHTTPClient(customClient)
-
-	done := make(chan bool, 1)
-
-	go func() {
-		_, err := client.GenerateImageCaptcha(nil)
-		if err != nil {
-			fmt.Printf("  Context cancelled or timeout: %v\n", err)
-		}
-		done <- true
-	}()
-
-	select {
-	case <-done:
-		fmt.Printf("  Request completed\n")
-	case <-ctx.Done():
-		fmt.Printf("  Context timeout: %v\n", ctx.Err())
-	}
-}
-
-func demoMockServer() {
-	fmt.Println("[Mock Server Demo]")
-
-	mock := captchago.NewMockServer(18080)
-	if err := mock.Start(); err != nil {
-		fmt.Printf("  Failed to start mock server: %v\n", err)
-		return
-	}
-	defer mock.Stop()
-
-	time.Sleep(100 * time.Millisecond)
-
-	client := captchago.NewClient(
-		captchago.WithEndpoint("http://localhost:18080"),
-		captchago.WithDebugMode(false),
-	)
-
-	resp, err := client.GenerateImageCaptcha(nil)
-	if err != nil {
-		fmt.Printf("  Mock server test failed: %v\n", err)
-		return
-	}
-	fmt.Printf("  Mock server returned: %s\n", resp.ChallengeID)
-
-	mock.SetCorrectAnswer("test-answer")
-
-	verifyResp, err := client.VerifyImageCaptcha(&captchago.VerifyImageCaptchaRequest{
-		ChallengeID: "test-id",
-		Answer:     "test-answer",
-	})
-	if err != nil {
-		fmt.Printf("  Verification failed: %v\n", err)
-		return
-	}
-	fmt.Printf("  Mock verification result: %v\n", verifyResp.Success)
-	fmt.Printf("  Total verify calls: %d\n", mock.VerifyCalls)
-}
-
-func demoProductionReady() {
-	fmt.Println("[Production Ready Configuration]")
-
-	endpoint := os.Getenv("CAPTCHA_ENDPOINT")
-	if endpoint == "" {
-		endpoint = "http://localhost:8080"
-	}
-
-	apiKey := os.Getenv("CAPTCHA_API_KEY")
-	apiSecret := os.Getenv("CAPTCHA_API_SECRET")
-
-	_ = captchago.NewClient(
-		captchago.WithEndpoint(endpoint),
-		captchago.WithAPIKey(apiKey),
-		captchago.WithAPISecret(apiSecret),
-		captchago.WithTimeout(30*time.Second),
-		captchago.WithRetryConfig(&captchago.RetryConfig{
-			MaxRetries:     3,
-			InitialDelay:   100 * time.Millisecond,
-			MaxDelay:       5 * time.Second,
-			BackoffFactor:  2.0,
-			RetryableCodes: []int{429, 500, 502, 503, 504},
-		}),
-	)
-
-	if apiKey == "" || apiSecret == "" {
-		log.Println("Warning: API credentials not configured")
 	}
 }

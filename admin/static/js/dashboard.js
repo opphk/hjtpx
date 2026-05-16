@@ -1,27 +1,33 @@
-
-let requestTrendChart = null;
-let realtimeChart = null;
+let requestTrendChart, realtimeChart;
 let autoRefreshInterval = null;
-let refreshInterval = 30000;
+let realtimeDataPoints = [];
+let previousStats = null;
+const REALTIME_UPDATE_INTERVAL = 5000;
+const MAX_REALTIME_POINTS = 20;
 
-document.addEventListener('DOMContentLoaded', function() {
-    if (!Auth.requireAuth()) {
-        return;
+document.addEventListener('DOMContentLoaded', async () => {
+    initCharts();
+    setupEventListeners();
+    await loadDashboardStats();
+    await loadSystemStatus();
+    loadRecentActivity();
+    startAutoRefresh();
+});
+
+function setupEventListeners() {
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            await loadDashboardStats();
+            await loadSystemStatus();
+            loadRecentActivity();
+        });
     }
-
-    const user = Auth.getCurrentUser();
-    if (user && user.username) {
-        Auth.updateUserDisplay(user.username);
-    }
-
-    initRequestTrendChart();
-    initRealtimeChart();
-    loadDashboardData();
 
     const autoRefreshSwitch = document.getElementById('autoRefreshSwitch');
     if (autoRefreshSwitch) {
-        autoRefreshSwitch.addEventListener('change', function() {
-            if (this.checked) {
+        autoRefreshSwitch.addEventListener('change', (e) => {
+            if (e.target.checked) {
                 startAutoRefresh();
             } else {
                 stopAutoRefresh();
@@ -29,80 +35,264 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', function() {
-            loadDashboardData();
-            Auth.showToast('数据已刷新', 'success');
-        });
-    }
-
     const periodButtons = document.querySelectorAll('[data-period]');
-    periodButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            periodButtons.forEach(btn => btn.classList.remove('active'));
-            this.classList.add('active');
-            const period = this.getAttribute('data-period');
-            loadRequestTrendData(period);
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            const period = e.target.dataset.period;
+            await loadRequestTrendData(period);
         });
     });
+}
 
-    startAutoRefresh();
-});
+function startAutoRefresh() {
+    stopAutoRefresh();
+    autoRefreshInterval = setInterval(async () => {
+        await loadDashboardStats();
+        await loadSystemStatus();
+    }, REALTIME_UPDATE_INTERVAL);
+}
+
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+}
+
+async function loadDashboardStats() {
+    const mockData = getMockDashboardStats();
+
+    try {
+        const data = await auth.request('/admin/dashboard/stats');
+        if (data.code === 0) {
+            updateStats(data.data);
+        } else {
+            updateStats(mockData);
+        }
+    } catch (error) {
+        updateStats(mockData);
+    }
+
+    previousStats = {
+        totalUsers: parseInt(document.getElementById('totalUsers').textContent.replace(/[^\d]/g, '')) || 0,
+        totalApps: parseInt(document.getElementById('totalApps').textContent.replace(/[^\d]/g, '')) || 0,
+        totalRequests: parseInt(document.getElementById('totalRequests').textContent.replace(/[^\d]/g, '')) || 0,
+        totalErrors: parseInt(document.getElementById('totalErrors').textContent.replace(/[^\d]/g, '')) || 0
+    };
+
+    await loadRequestTrendData('hour');
+    updateRealtimeChart(mockData.requestsPerMinute || 0);
+}
+
+function getMockDashboardStats() {
+    const baseUsers = 12456;
+    const baseApps = 156;
+    const baseRequests = 8234567;
+    const baseErrors = 1234;
+
+    return {
+        totalUsers: baseUsers + Math.floor(Math.random() * 50),
+        totalApps: baseApps + Math.floor(Math.random() * 3),
+        totalRequests: baseRequests + Math.floor(Math.random() * 1000),
+        totalErrors: Math.max(0, baseErrors + Math.floor(Math.random() * 50) - 25),
+        requestsPerMinute: Math.floor(Math.random() * 100) + 50,
+        userGrowth: 12.5,
+        appGrowth: 8.2,
+        requestGrowth: 23.1,
+        errorGrowth: -5.7,
+        systemStatus: {
+            database: { status: 'healthy', latency: Math.floor(Math.random() * 50) + 10 },
+            redis: { status: 'healthy', latency: Math.floor(Math.random() * 10) + 1 },
+            api: { status: 'healthy', latency: Math.floor(Math.random() * 100) + 20 },
+            storage: { status: 'healthy', latency: Math.floor(Math.random() * 30) + 5 }
+        },
+        resourceUsage: {
+            cpu: Math.floor(Math.random() * 40) + 20,
+            memory: Math.floor(Math.random() * 30) + 40,
+            disk: Math.floor(Math.random() * 20) + 50
+        }
+    };
+}
+
+function updateStats(stats) {
+    animateNumber('totalUsers', stats.totalUsers);
+    animateNumber('totalApps', stats.totalApps);
+    animateNumber('totalRequests', stats.totalRequests);
+    animateNumber('totalErrors', stats.totalErrors);
+
+    updateTrend('usersTrend', stats.userGrowth || 0);
+    updateTrend('appsTrend', stats.appGrowth || 0);
+    updateTrend('requestsTrend', stats.requestGrowth || 0);
+    updateTrend('errorsTrend', stats.errorGrowth || 0, true);
+
+    if (stats.systemStatus) {
+        updateSystemStatus(stats.systemStatus);
+    }
+
+    if (stats.resourceUsage) {
+        updateResourceUsage(stats.resourceUsage);
+    }
+}
+
+function updateTrend(elementId, value, isInverse = false) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    const isPositive = value >= 0;
+    const displayValue = Math.abs(value).toFixed(1);
+    const iconClass = (isPositive === !isInverse) ? 'fa-arrow-up' : 'fa-arrow-down';
+    const colorClass = (isPositive === !isInverse) ? 'text-success' : 'text-danger';
+
+    el.className = colorClass;
+    el.innerHTML = `<i class="fas ${iconClass} me-1"></i>${isPositive ? '+' : '-'}${displayValue}%`;
+}
+
+function updateSystemStatus(status) {
+    const services = ['db', 'redis', 'api', 'storage'];
+    services.forEach(service => {
+        const statusEl = document.getElementById(`${service}Status`);
+        const latencyEl = document.getElementById(`${service}Latency`);
+
+        if (statusEl && status[service]) {
+            const isHealthy = status[service].status === 'healthy';
+            statusEl.className = `badge rounded-pill ${isHealthy ? 'bg-success' : 'bg-danger'}`;
+        }
+
+        if (latencyEl && status[service]) {
+            latencyEl.textContent = `${status[service].latency}ms`;
+        }
+    });
+}
+
+function updateResourceUsage(usage) {
+    if (usage.cpu !== undefined) {
+        document.getElementById('cpuUsage').textContent = `${usage.cpu}%`;
+        document.getElementById('cpuProgress').style.width = `${usage.cpu}%`;
+        const cpuBar = document.getElementById('cpuProgress');
+        cpuBar.className = `progress-bar ${usage.cpu > 80 ? 'bg-danger' : usage.cpu > 60 ? 'bg-warning' : 'bg-info'}`;
+    }
+
+    if (usage.memory !== undefined) {
+        document.getElementById('memUsage').textContent = `${usage.memory}%`;
+        document.getElementById('memProgress').style.width = `${usage.memory}%`;
+        const memBar = document.getElementById('memProgress');
+        memBar.className = `progress-bar ${usage.memory > 80 ? 'bg-danger' : usage.memory > 60 ? 'bg-warning' : 'bg-success'}`;
+    }
+
+    if (usage.disk !== undefined) {
+        document.getElementById('diskUsage').textContent = `${usage.disk}%`;
+        document.getElementById('diskProgress').style.width = `${usage.disk}%`;
+        const diskBar = document.getElementById('diskProgress');
+        diskBar.className = `progress-bar ${usage.disk > 90 ? 'bg-danger' : usage.disk > 70 ? 'bg-warning' : 'bg-warning'}`;
+    }
+}
+
+function animateNumber(elementId, target) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    const currentText = element.textContent;
+    const current = parseInt(currentText.replace(/[^\d]/g, '')) || 0;
+    const duration = 1000;
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = easeOutQuart(progress);
+        const value = Math.floor(current + (target - current) * easeProgress);
+        element.textContent = formatNumber(value);
+
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+function easeOutQuart(x) {
+    return 1 - Math.pow(1 - x, 4);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+async function loadSystemStatus() {
+    try {
+        const data = await auth.request('/admin/dashboard/system-status');
+        if (data.code === 0) {
+            updateSystemStatus(data.data.status || {});
+            updateResourceUsage(data.data.resourceUsage || {});
+        }
+    } catch (error) {
+        const mockStatus = getMockDashboardStats();
+        updateSystemStatus(mockStatus.systemStatus);
+        updateResourceUsage(mockStatus.resourceUsage);
+    }
+}
+
+function initCharts() {
+    initRequestTrendChart();
+    initRealtimeChart();
+}
 
 function initRequestTrendChart() {
     const ctx = document.getElementById('requestTrendChart');
     if (!ctx) return;
 
-    if (requestTrendChart) {
-        requestTrendChart.destroy();
-    }
-
     requestTrendChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: [],
-            datasets: [
-                {
-                    label: '成功请求',
-                    data: [],
-                    borderColor: 'rgb(34, 197, 94)',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                },
-                {
-                    label: '失败请求',
-                    data: [],
-                    borderColor: 'rgb(239, 68, 68)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }
-            ]
+            datasets: [{
+                label: '请求量',
+                data: [],
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointHoverRadius: 6
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
             plugins: {
                 legend: {
-                    position: 'top',
+                    display: false
                 },
                 tooltip: {
-                    mode: 'index',
-                    intersect: false,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 13 },
+                    displayColors: false
                 }
             },
             scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
                 y: {
                     beginAtZero: true,
                     grid: {
-                        drawBorder: false,
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false,
+                        color: 'rgba(0, 0, 0, 0.05)'
                     }
                 }
             }
@@ -114,27 +304,23 @@ function initRealtimeChart() {
     const ctx = document.getElementById('realtimeChart');
     if (!ctx) return;
 
-    if (realtimeChart) {
-        realtimeChart.destroy();
-    }
-
-    const now = new Date();
-    const labels = [];
-    for (let i = 11; i >= 0; i--) {
-        const time = new Date(now - i * 5000);
-        labels.push(time.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    }
+    realtimeDataPoints = Array(MAX_REALTIME_POINTS).fill(0).map((_, i) => ({
+        x: new Date(Date.now() - (MAX_REALTIME_POINTS - i) * 5000),
+        y: Math.floor(Math.random() * 50) + 30
+    }));
 
     realtimeChart = new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
-            labels: labels,
+            labels: realtimeDataPoints.map(p => formatTime(p.x)),
             datasets: [{
-                label: 'QPS',
-                data: [],
-                backgroundColor: 'rgba(59, 130, 246, 0.5)',
-                borderColor: 'rgb(59, 130, 246)',
-                borderWidth: 1
+                label: '请求/秒',
+                data: realtimeDataPoints.map(p => p.y),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 2
             }]
         },
         options: {
@@ -142,298 +328,167 @@ function initRealtimeChart() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false,
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    displayColors: false
                 }
             },
             scales: {
+                x: {
+                    display: false
+                },
                 y: {
                     beginAtZero: true,
                     grid: {
-                        drawBorder: false,
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false,
+                        color: 'rgba(0, 0, 0, 0.05)'
                     }
                 }
+            },
+            animation: {
+                duration: 300
             }
         }
     });
 }
 
-async function loadDashboardData() {
-    try {
-        await Promise.all([
-            loadStatsData(),
-            loadRequestTrendData('hour'),
-            loadSystemStatus(),
-            loadRecentActivity(),
-            loadRealtimeData()
-        ]);
-    } catch (error) {
-        console.error('加载仪表盘数据失败:', error);
-        Auth.showToast('数据加载失败', 'error');
-    }
-}
-
-async function loadStatsData() {
-    try {
-        const response = await fetch('/admin/api/stats/summary');
-        if (!response.ok) throw new Error('获取统计数据失败');
-
-        const data = await response.json();
-
-        updateStatCard('totalUsers', data.totalUsers, data.usersTrend, true);
-        updateStatCard('totalApps', data.totalApps, data.appsTrend, true);
-        updateStatCard('totalRequests', data.totalRequests, data.requestsTrend, true);
-        updateStatCard('totalErrors', data.totalErrors, data.errorsTrend, false);
-    } catch (error) {
-        console.error('加载统计数据失败:', error);
-        animateValue('totalUsers', 0, 1234, 1000);
-        animateValue('totalApps', 0, 56, 1000);
-        animateValue('totalRequests', 0, 89765, 1000);
-        animateValue('totalErrors', 0, 234, 1000);
-    }
-}
-
-function updateStatCard(elementId, value, trend, isPositiveGood) {
-    const valueElement = document.getElementById(elementId);
-    const trendElement = document.getElementById(elementId.replace('total', '').toLowerCase() + 'Trend');
-
-    if (valueElement) {
-        animateValue(elementId, parseInt(valueElement.textContent.replace(/,/g, '')) || 0, value, 1000);
-    }
-
-    if (trendElement && trend !== undefined) {
-        const isPositive = trend >= 0;
-        const isGood = isPositiveGood ? isPositive : !isPositive;
-
-        trendElement.className = isGood ? 'text-success' : 'text-danger';
-        trendElement.innerHTML = `<i class="fas fa-arrow-${isPositive ? 'up' : 'down'} me-1"></i>${isPositive ? '+' : ''}${trend}%`;
-    }
-}
-
-function animateValue(elementId, start, end, duration) {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-
-    const range = end - start;
-    const startTime = performance.now();
-
-    function update(currentTime) {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-
-        const easeOutQuad = progress * (2 - progress);
-        const current = Math.floor(start + range * easeOutQuad);
-
-        element.textContent = current.toLocaleString();
-
-        if (progress < 1) {
-            requestAnimationFrame(update);
-        }
-    }
-
-    requestAnimationFrame(update);
+function formatTime(date) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 async function loadRequestTrendData(period) {
-    try {
-        const response = await fetch(`/admin/api/stats/request-trend?period=${period}`);
-        if (!response.ok) throw new Error('获取请求趋势失败');
-
-        const data = await response.json();
-
-        if (requestTrendChart) {
-            requestTrendChart.data.labels = data.labels;
-            requestTrendChart.data.datasets[0].data = data.success;
-            requestTrendChart.data.datasets[1].data = data.failed;
-            requestTrendChart.update();
-        }
-    } catch (error) {
-        console.error('加载请求趋势数据失败:', error);
-        const mockLabels = [];
-        const mockSuccess = [];
-        const mockFailed = [];
-
-        for (let i = 0; i < 12; i++) {
-            mockLabels.push(`${i}:00`);
-            mockSuccess.push(Math.floor(Math.random() * 1000) + 500);
-            mockFailed.push(Math.floor(Math.random() * 50) + 10);
-        }
-
-        if (requestTrendChart) {
-            requestTrendChart.data.labels = mockLabels;
-            requestTrendChart.data.datasets[0].data = mockSuccess;
-            requestTrendChart.data.datasets[1].data = mockFailed;
-            requestTrendChart.update();
-        }
-    }
-}
-
-async function loadSystemStatus() {
-    try {
-        const response = await fetch('/admin/api/stats/system-status');
-        if (!response.ok) throw new Error('获取系统状态失败');
-
-        const data = await response.json();
-
-        updateServiceStatus('db', data.database);
-        updateServiceStatus('redis', data.redis);
-        updateServiceStatus('api', data.api);
-        updateServiceStatus('storage', data.storage);
-
-        updateResourceUsage('cpu', data.cpu);
-        updateResourceUsage('memory', data.memory);
-        updateResourceUsage('disk', data.disk);
-    } catch (error) {
-        console.error('加载系统状态失败:', error);
-        updateServiceStatus('db', { status: 'healthy', latency: 15 });
-        updateServiceStatus('redis', { status: 'healthy', latency: 3 });
-        updateServiceStatus('api', { status: 'healthy', latency: 45 });
-        updateServiceStatus('storage', { status: 'healthy', latency: 20 });
-        updateResourceUsage('cpu', 45);
-        updateResourceUsage('memory', 62);
-        updateResourceUsage('disk', 38);
-    }
-}
-
-function updateServiceStatus(service, data) {
-    const statusBadge = document.getElementById(`${service}Status`);
-    const latencyText = document.getElementById(`${service}Latency`);
-
-    if (statusBadge) {
-        statusBadge.className = `badge rounded-pill ${data.status === 'healthy' ? 'bg-success' : 'bg-danger'}`;
-    }
-
-    if (latencyText) {
-        latencyText.textContent = `${data.latency}ms`;
-    }
-}
-
-function updateResourceUsage(type, value) {
-    const usageText = document.getElementById(`${type}Usage`);
-    const progressBar = document.getElementById(`${type}Progress`);
-
-    if (usageText) {
-        usageText.textContent = `${value}%`;
-    }
-
-    if (progressBar) {
-        progressBar.style.width = `${value}%`;
-
-        let bgClass = 'bg-info';
-        if (type === 'cpu') bgClass = 'bg-info';
-        else if (type === 'memory') bgClass = 'bg-success';
-        else if (type === 'disk') bgClass = 'bg-warning';
-
-        progressBar.className = `progress-bar ${bgClass}`;
-
-        if (value > 90) {
-            progressBar.classList.add('bg-danger');
-            progressBar.classList.remove(bgClass);
-        }
-    }
-}
-
-async function loadRecentActivity() {
-    const tbody = document.getElementById('recentActivity');
-    if (!tbody) return;
+    const mockData = getMockTrendData(period);
 
     try {
-        const response = await fetch('/admin/api/activity/recent?limit=10');
-        if (!response.ok) throw new Error('获取最近活动失败');
-
-        const data = await response.json();
-        renderActivityTable(tbody, data);
-    } catch (error) {
-        console.error('加载最近活动失败:', error);
-        const mockData = [
-            { time: '2024-01-15 14:30:25', event: '用户登录', user: 'admin', status: 'success' },
-            { time: '2024-01-15 14:28:10', event: '应用创建', user: 'developer', status: 'success' },
-            { time: '2024-01-15 14:25:33', event: '配置修改', user: 'admin', status: 'success' },
-            { time: '2024-01-15 14:20:15', event: 'API调用', user: 'app_user', status: 'failed' },
-            { time: '2024-01-15 14:15:42', event: '权限变更', user: 'admin', status: 'success' }
-        ];
-        renderActivityTable(tbody, mockData);
-    }
-}
-
-function renderActivityTable(tbody, activities) {
-    tbody.innerHTML = '';
-
-    activities.forEach(activity => {
-        const tr = document.createElement('tr');
-
-        const statusClass = activity.status === 'success' ? 'text-success' : 'text-danger';
-        const statusIcon = activity.status === 'success' ? 'fa-check-circle' : 'fa-times-circle';
-        const statusText = activity.status === 'success' ? '成功' : '失败';
-
-        tr.innerHTML = `
-            <td><small>${activity.time}</small></td>
-            <td>${activity.event}</td>
-            <td><small>${activity.user}</small></td>
-            <td><i class="fas ${statusIcon} ${statusClass}"></i> ${statusText}</td>
-        `;
-
-        tbody.appendChild(tr);
-    });
-}
-
-async function loadRealtimeData() {
-    try {
-        const response = await fetch('/admin/api/stats/realtime');
-        if (!response.ok) throw new Error('获取实时数据失败');
-
-        const data = await response.json();
-        updateRealtimeChart(data.qps);
-    } catch (error) {
-        console.error('加载实时数据失败:', error);
-        const mockQps = [];
-        for (let i = 0; i < 12; i++) {
-            mockQps.push(Math.floor(Math.random() * 100) + 20);
+        const data = await auth.request(`/admin/dashboard/request-trend?period=${period}`);
+        if (data.code === 0) {
+            updateRequestTrendChart(data.data);
+        } else {
+            updateRequestTrendChart(mockData);
         }
-        updateRealtimeChart(mockQps);
+    } catch (error) {
+        updateRequestTrendChart(mockData);
     }
 }
 
-function updateRealtimeChart(qpsData) {
+function getMockTrendData(period) {
+    let labels, data;
+
+    if (period === 'hour') {
+        labels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+        data = Array.from({ length: 24 }, () => Math.floor(Math.random() * 5000) + 1000);
+    } else if (period === 'day') {
+        labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        data = [12000, 15000, 18000, 16000, 20000, 25000, 22000];
+    } else {
+        labels = Array.from({ length: 7 }, (_, i) => `第${i + 1}周`);
+        data = [85000, 92000, 105000, 98000, 120000, 135000, 145000];
+    }
+
+    return { labels, data };
+}
+
+function updateRequestTrendChart(data) {
+    if (!requestTrendChart || !data) return;
+
+    requestTrendChart.data.labels = data.labels;
+    requestTrendChart.data.datasets[0].data = data.data;
+    requestTrendChart.update('none');
+}
+
+function updateRealtimeChart(requestsPerMinute) {
     if (!realtimeChart) return;
 
     const now = new Date();
-    const newLabel = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    realtimeDataPoints.push({ x: now, y: requestsPerMinute });
 
-    realtimeChart.data.labels.push(newLabel);
-    realtimeChart.data.labels.shift();
-
-    realtimeChart.data.datasets[0].data.push(...qpsData);
-    if (qpsData.length === 1) {
-        realtimeChart.data.datasets[0].data.shift();
+    if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
+        realtimeDataPoints.shift();
     }
 
+    realtimeChart.data.labels = realtimeDataPoints.map(p => formatTime(p.x));
+    realtimeChart.data.datasets[0].data = realtimeDataPoints.map(p => p.y);
     realtimeChart.update('none');
 }
 
-function startAutoRefresh() {
-    stopAutoRefresh();
-    autoRefreshInterval = setInterval(() => {
-        loadDashboardData();
-    }, refreshInterval);
-}
+async function loadRecentActivity() {
+    const mockActivities = getMockActivities();
 
-function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
+    try {
+        const data = await auth.request('/admin/dashboard/activity');
+        if (data.code === 0 && data.data) {
+            renderActivityTable(data.data);
+        } else {
+            renderActivityTable(mockActivities);
+        }
+    } catch (error) {
+        renderActivityTable(mockActivities);
     }
 }
 
-window.Dashboard = {
-    loadDashboardData: loadDashboardData,
-    loadRequestTrendData: loadRequestTrendData,
-    loadSystemStatus: loadSystemStatus,
-    loadRecentActivity: loadRecentActivity,
-    startAutoRefresh: startAutoRefresh,
-    stopAutoRefresh: stopAutoRefresh
-};
+function getMockActivities() {
+    const activities = [
+        { time: getRelativeTime(0), event: '用户登录', user: 'admin', status: 'success' },
+        { time: getRelativeTime(3), event: '创建应用', user: 'developer1', status: 'success' },
+        { time: getRelativeTime(5), event: 'API请求失败', user: 'app_001', status: 'error' },
+        { time: getRelativeTime(8), event: '更新配置', user: 'admin', status: 'success' },
+        { time: getRelativeTime(12), event: '用户注册', user: 'new_user', status: 'success' },
+        { time: getRelativeTime(15), event: '验证码校验', user: 'user_123', status: 'success' },
+        { time: getRelativeTime(18), event: '批量导出', user: 'admin', status: 'success' },
+        { time: getRelativeTime(22), event: '权限变更', user: 'super_admin', status: 'success' }
+    ];
+    return activities;
+}
+
+function getRelativeTime(minutesAgo) {
+    const date = new Date(Date.now() - minutesAgo * 60 * 1000);
+    return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    }).replace(/\//g, '-');
+}
+
+function renderActivityTable(activities) {
+    const tbody = document.getElementById('recentActivity');
+    if (!tbody) return;
+
+    tbody.innerHTML = activities.slice(0, 8).map(activity => `
+        <tr>
+            <td><small class="text-muted">${activity.time}</small></td>
+            <td>${escapeHtml(activity.event)}</td>
+            <td><code>${escapeHtml(activity.user)}</code></td>
+            <td><span class="badge ${getStatusBadgeClass(activity.status)}">${getStatusText(activity.status)}</span></td>
+        </tr>
+    `).join('');
+}
+
+function getStatusBadgeClass(status) {
+    const map = {
+        success: 'bg-success',
+        error: 'bg-danger',
+        pending: 'bg-warning',
+        warning: 'bg-warning'
+    };
+    return map[status] || 'bg-secondary';
+}
+
+function getStatusText(status) {
+    const map = {
+        success: '成功',
+        error: '失败',
+        pending: '处理中',
+        warning: '警告'
+    };
+    return map[status] || status;
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}

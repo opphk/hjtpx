@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,9 @@ import (
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"golang.org/x/image/font/sfnt"
+	"golang.org/x/image/math/fixed"
+	"golang.org/x/image/vector"
 )
 
 type CaptchaMode string
@@ -60,6 +64,13 @@ var (
 	captchaSessions = make(map[string]*CaptchaSession)
 	sessionMutex    sync.RWMutex
 	behaviorService = service.NewBehaviorAnalysisService()
+)
+
+var (
+	chineseFont     *sfnt.Font
+	chineseFontData []byte
+	fontLoadOnce    sync.Once
+	fontLoadError   error
 )
 
 var clickChineseChars = []string{
@@ -103,73 +114,487 @@ func shuffleInts(arr []int) []int {
 	return result
 }
 
-func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickPoint, []int, string) {
-	session.ImageWidth = 320
-	session.ImageHeight = 200
-	session.Tolerance = 35
-
-	img := image.NewRGBA(image.Rect(0, 0, session.ImageWidth, session.ImageHeight))
-
-	bgColor := color.RGBA{
-		R: uint8(102 + rand.Intn(80)),
-		G: uint8(102 + rand.Intn(80)),
-		B: uint8(180 + rand.Intn(75)),
-		A: 255,
-	}
-	draw.Draw(img, img.Bounds(), &image.Uniform{bgColor}, image.Point{}, draw.Src)
-
-	for i := 0; i < 50; i++ {
-		x := rand.Intn(session.ImageWidth)
-		y := rand.Intn(session.ImageHeight)
-		r := rand.Intn(3) + 1
-		c := color.RGBA{
-			R: uint8(255),
-			G: uint8(255),
-			B: uint8(255),
-			A: uint8(30 + rand.Intn(50)),
+func loadChineseFont() error {
+	fontLoadOnce.Do(func() {
+		chineseFontData, fontLoadError = os.ReadFile("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc")
+		if fontLoadError != nil {
+			return
 		}
-		for dx := -r; dx <= r; dx++ {
-			for dy := -r; dy <= r; dy++ {
-				if dx*dx+dy*dy <= r*r {
+		var coll *sfnt.Collection
+		coll, fontLoadError = sfnt.ParseCollection(chineseFontData)
+		if fontLoadError != nil {
+			return
+		}
+		chineseFont, fontLoadError = coll.Font(0)
+	})
+	return fontLoadError
+}
+
+func renderCharToMask(char rune, size int) *image.Alpha {
+	if err := loadChineseFont(); err != nil {
+		return nil
+	}
+	var buf sfnt.Buffer
+	idx, err := chineseFont.GlyphIndex(&buf, char)
+	if err != nil || idx == 0 {
+		return nil
+	}
+	ppem := fixed.I(size)
+	segs, err := chineseFont.LoadGlyph(&buf, idx, ppem, nil)
+	if err != nil {
+		return nil
+	}
+	var minFX, minFY, maxFX, maxFY fixed.Int26_6
+	first := true
+	for _, seg := range segs {
+		for _, arg := range seg.Args {
+			if first {
+				minFX, maxFX = arg.X, arg.X
+				minFY, maxFY = arg.Y, arg.Y
+				first = false
+			} else {
+				if arg.X < minFX {
+					minFX = arg.X
+				}
+				if arg.X > maxFX {
+					maxFX = arg.X
+				}
+				if arg.Y < minFY {
+					minFY = arg.Y
+				}
+				if arg.Y > maxFY {
+					maxFY = arg.Y
+				}
+			}
+		}
+	}
+	padding := fixed.I(4)
+	glyphW := (maxFX - minFX + padding*2).Ceil()
+	glyphH := (maxFY - minFY + padding*2).Ceil()
+	if glyphW < 4 {
+		glyphW = 4
+	}
+	if glyphH < 4 {
+		glyphH = 4
+	}
+	r := vector.NewRasterizer(glyphW, glyphH)
+	r.DrawOp = draw.Src
+	offsetX := -minFX + padding
+	offsetY := -minFY + padding
+	for _, seg := range segs {
+		switch seg.Op {
+		case sfnt.SegmentOpMoveTo:
+			r.MoveTo(
+				float32(seg.Args[0].X+offsetX)/64,
+				float32(seg.Args[0].Y+offsetY)/64,
+			)
+		case sfnt.SegmentOpLineTo:
+			r.LineTo(
+				float32(seg.Args[0].X+offsetX)/64,
+				float32(seg.Args[0].Y+offsetY)/64,
+			)
+		case sfnt.SegmentOpQuadTo:
+			r.QuadTo(
+				float32(seg.Args[0].X+offsetX)/64,
+				float32(seg.Args[0].Y+offsetY)/64,
+				float32(seg.Args[1].X+offsetX)/64,
+				float32(seg.Args[1].Y+offsetY)/64,
+			)
+		case sfnt.SegmentOpCubeTo:
+			r.CubeTo(
+				float32(seg.Args[0].X+offsetX)/64,
+				float32(seg.Args[0].Y+offsetY)/64,
+				float32(seg.Args[1].X+offsetX)/64,
+				float32(seg.Args[1].Y+offsetY)/64,
+				float32(seg.Args[2].X+offsetX)/64,
+				float32(seg.Args[2].Y+offsetY)/64,
+			)
+		}
+	}
+	alpha := image.NewAlpha(image.Rect(0, 0, glyphW, glyphH))
+	r.Draw(alpha, alpha.Bounds(), image.Opaque, image.Point{})
+	return alpha
+}
+
+func renderCharToRGBA(char rune, size int, textColor color.RGBA) *image.RGBA {
+	alpha := renderCharToMask(char, size)
+	if alpha == nil {
+		return nil
+	}
+	b := alpha.Bounds()
+	dst := image.NewRGBA(b)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			a := alpha.AlphaAt(x, y).A
+			if a > 0 {
+				c := textColor
+				c.A = a
+				dst.Set(x, y, c)
+			}
+		}
+	}
+	return dst
+}
+
+func rotateImageRGBA(src *image.RGBA, angleDeg float64) *image.RGBA {
+	if angleDeg == 0 {
+		dst := image.NewRGBA(src.Bounds())
+		draw.Draw(dst, dst.Bounds(), src, src.Bounds().Min, draw.Over)
+		return dst
+	}
+	rad := angleDeg * math.Pi / 180
+	b := src.Bounds()
+	w := b.Dx()
+	h := b.Dy()
+	cos := math.Cos(rad)
+	sin := math.Sin(rad)
+	corners := [4][2]float64{
+		{0, 0},
+		{float64(w), 0},
+		{float64(w), float64(h)},
+		{0, float64(h)},
+	}
+	minX := math.MaxFloat64
+	minY := math.MaxFloat64
+	maxX := -math.MaxFloat64
+	maxY := -math.MaxFloat64
+	for _, c := range corners {
+		rx := c[0]*cos - c[1]*sin
+		ry := c[0]*sin + c[1]*cos
+		if rx < minX {
+			minX = rx
+		}
+		if rx > maxX {
+			maxX = rx
+		}
+		if ry < minY {
+			minY = ry
+		}
+		if ry > maxY {
+			maxY = ry
+		}
+	}
+	newW := int(math.Ceil(maxX - minX))
+	newH := int(math.Ceil(maxY - minY))
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	cx := float64(w) / 2
+	cy := float64(h) / 2
+	dcx := float64(newW) / 2
+	dcy := float64(newH) / 2
+	for dy := 0; dy < newH; dy++ {
+		for dx := 0; dx < newW; dx++ {
+			px := float64(dx) - dcx
+			py := float64(dy) - dcy
+			sx := px*cos + py*sin + cx
+			sy := -px*sin + py*cos + cy
+			sxInt := int(math.Round(sx))
+			syInt := int(math.Round(sy))
+			if sxInt >= 0 && sxInt < w && syInt >= 0 && syInt < h {
+				c := src.RGBAAt(sxInt, syInt)
+				if c.A > 0 {
+					dst.SetRGBA(dx, dy, c)
+				}
+			}
+		}
+	}
+	return dst
+}
+
+func randomVibrantColor() color.RGBA {
+	hue := rand.Intn(360)
+	saturation := 0.6 + rand.Float64()*0.35
+	value := 0.5 + rand.Float64()*0.4
+	r, g, b := hsvToRGB(hue, saturation, value)
+	return color.RGBA{
+		R: uint8(r * 255),
+		G: uint8(g * 255),
+		B: uint8(b * 255),
+		A: 200 + uint8(rand.Intn(56)),
+	}
+}
+
+func hsvToRGB(h int, s, v float64) (float64, float64, float64) {
+	hf := float64(h) / 60.0
+	i := int(hf)
+	f := hf - float64(i)
+	p := v * (1 - s)
+	q := v * (1 - s*f)
+	t := v * (1 - s*(1-f))
+	switch i % 6 {
+	case 0:
+		return v, t, p
+	case 1:
+		return q, v, p
+	case 2:
+		return p, v, t
+	case 3:
+		return p, q, v
+	case 4:
+		return t, p, v
+	default:
+		return v, p, q
+	}
+}
+
+func drawGradientBackground(img *image.RGBA) {
+	w := img.Bounds().Dx()
+	h := img.Bounds().Dy()
+	r1 := uint8(180 + rand.Intn(60))
+	g1 := uint8(180 + rand.Intn(60))
+	b1 := uint8(200 + rand.Intn(55))
+	r2 := uint8(100 + rand.Intn(80))
+	g2 := uint8(120 + rand.Intn(60))
+	b2 := uint8(160 + rand.Intn(60))
+	for y := 0; y < h; y++ {
+		t := float64(y) / float64(h)
+		r := uint8(float64(r1)*(1-t) + float64(r2)*t)
+		g := uint8(float64(g1)*(1-t) + float64(g2)*t)
+		b := uint8(float64(b1)*(1-t) + float64(b2)*t)
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
+		}
+	}
+}
+
+func addNoiseDots(img *image.RGBA, count int) {
+	w := img.Bounds().Dx()
+	h := img.Bounds().Dy()
+	for i := 0; i < count; i++ {
+		x := rand.Intn(w)
+		y := rand.Intn(h)
+		radius := rand.Intn(3) + 1
+		c := color.RGBA{
+			R: uint8(rand.Intn(256)),
+			G: uint8(rand.Intn(256)),
+			B: uint8(rand.Intn(256)),
+			A: uint8(20 + rand.Intn(60)),
+		}
+		for dx := -radius; dx <= radius; dx++ {
+			for dy := -radius; dy <= radius; dy++ {
+				if dx*dx+dy*dy <= radius*radius {
 					px, py := x+dx, y+dy
-					if px >= 0 && px < session.ImageWidth && py >= 0 && py < session.ImageHeight {
+					if px >= 0 && px < w && py >= 0 && py < h {
 						img.Set(px, py, c)
 					}
 				}
 			}
 		}
 	}
+}
 
-	margin := 40
-	availableWidth := session.ImageWidth - 2*margin
-	availableHeight := session.ImageHeight - 2*margin
-	spacingX := availableWidth / session.MaxPoints
-
-	targetPoints := make([]ClickPoint, session.MaxPoints)
-	displayChars := make([]string, session.MaxPoints)
-
-	for i := 0; i < session.MaxPoints; i++ {
-		targetPoints[i].Index = i
-		targetPoints[i].X = margin + spacingX/2 + i*spacingX + rand.Intn(spacingX/2)
-		targetPoints[i].Y = margin + availableHeight/2 + rand.Intn(availableHeight/2)
-
-		if session.ImageWidth > 200 {
-			targetPoints[i].X = clampValue(targetPoints[i].X, margin, session.ImageWidth-margin-40)
+func addInterferenceLines(img *image.RGBA, count int) {
+	w := img.Bounds().Dx()
+	h := img.Bounds().Dy()
+	for i := 0; i < count; i++ {
+		lineColor := color.RGBA{
+			R: uint8(rand.Intn(256)),
+			G: uint8(rand.Intn(256)),
+			B: uint8(rand.Intn(256)),
+			A: uint8(30 + rand.Intn(50)),
 		}
-		if session.ImageHeight > 150 {
-			targetPoints[i].Y = clampValue(targetPoints[i].Y, margin, session.ImageHeight-margin-30)
+		startY := rand.Intn(h)
+		amplitude := 10 + rand.Intn(30)
+		frequency := 0.02 + rand.Float64()*0.04
+		for x := 0; x < w; x++ {
+			y := startY + int(float64(amplitude)*math.Sin(float64(x)*frequency))
+			if y >= 0 && y < h {
+				img.Set(x, y, lineColor)
+			}
+			y2 := y + 1
+			if y2 >= 0 && y2 < h {
+				img.Set(x, y2, lineColor)
+			}
+		}
+	}
+}
+
+func addGridLines(img *image.RGBA) {
+	w := img.Bounds().Dx()
+	h := img.Bounds().Dy()
+	gridColor := color.RGBA{
+		R: uint8(200 + rand.Intn(56)),
+		G: uint8(200 + rand.Intn(56)),
+		B: uint8(220 + rand.Intn(36)),
+		A: 25,
+	}
+	stepX := 20 + rand.Intn(20)
+	stepY := 20 + rand.Intn(20)
+	for x := 0; x < w; x += stepX {
+		for yy := 0; yy < h; yy++ {
+			img.Set(x, yy, gridColor)
+		}
+	}
+	for y := 0; y < h; y += stepY {
+		for xx := 0; xx < w; xx++ {
+			img.Set(xx, y, gridColor)
+		}
+	}
+}
+
+func isOverlapping(x, y, size int, placed []image.Rectangle) bool {
+	candidate := image.Rect(x-size/2, y-size/2, x+size/2, y+size/2)
+	for _, r := range placed {
+		overlap := candidate.Intersect(r)
+		if overlap.Dx() > 10 && overlap.Dy() > 10 {
+			return true
+		}
+	}
+	return false
+}
+
+func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickPoint, []int, string) {
+	session.ImageWidth = 300
+	session.ImageHeight = 300
+	session.Tolerance = 25
+
+	img := image.NewRGBA(image.Rect(0, 0, session.ImageWidth, session.ImageHeight))
+
+	drawGradientBackground(img)
+	addNoiseDots(img, 200)
+	addInterferenceLines(img, 4)
+	addGridLines(img)
+
+	maxPoints := session.MaxPoints
+	totalChars := 6 + rand.Intn(3)
+	if maxPoints > totalChars {
+		maxPoints = totalChars
+	}
+
+	targetChars := make([]string, maxPoints)
+	for i := 0; i < maxPoints; i++ {
+		targetChars[i] = getCharForIndex(i, session.Mode)
+	}
+
+	decoyCount := totalChars - maxPoints
+	allChars := make([]string, totalChars)
+	for i := 0; i < maxPoints; i++ {
+		allChars[i] = targetChars[i]
+	}
+	for i := 0; i < decoyCount; i++ {
+		allChars[maxPoints+i] = getCharForIndex(i+maxPoints+100, session.Mode)
+	}
+
+	perm := rand.Perm(totalChars)
+	shuffledChars := make([]string, totalChars)
+	charPositions := make([]int, totalChars)
+	for i, p := range perm {
+		shuffledChars[i] = allChars[p]
+		charPositions[i] = p
+	}
+
+	placedRects := make([]image.Rectangle, 0, totalChars)
+	charCenters := make([]struct{ X, Y int }, totalChars)
+	charSizes := make([]int, totalChars)
+
+	for i := 0; i < totalChars; i++ {
+		charSize := 30 + rand.Intn(20)
+		charSizes[i] = charSize
+		halfSize := charSize
+		maxAttempts := 30
+		var cx, cy int
+		placed := false
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			margin := halfSize/2 + 10
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+			if !isOverlapping(cx, cy, halfSize, placedRects) {
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			margin := halfSize/2 + 10
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+		}
+		charCenters[i] = struct{ X, Y int }{cx, cy}
+		placedRects = append(placedRects, image.Rect(cx-halfSize/2, cy-halfSize/2, cx+halfSize/2, cy+halfSize/2))
+	}
+
+	for i := 0; i < totalChars; i++ {
+		char := []rune(shuffledChars[i])[0]
+		charSize := charSizes[i]
+		rotation := float64(rand.Intn(40) - 20)
+		textColor := randomVibrantColor()
+
+		rendered := renderCharToRGBA(char, charSize, textColor)
+		if rendered == nil {
+			rendered = image.NewRGBA(image.Rect(0, 0, 10, 10))
+			draw.Draw(rendered, rendered.Bounds(), &image.Uniform{textColor}, image.Point{}, draw.Src)
+		}
+
+		rotated := rotateImageRGBA(rendered, rotation)
+
+		draw.Draw(img, image.Rect(
+			charCenters[i].X-rotated.Bounds().Dx()/2,
+			charCenters[i].Y-rotated.Bounds().Dy()/2,
+			charCenters[i].X-rotated.Bounds().Dx()/2+rotated.Bounds().Dx(),
+			charCenters[i].Y-rotated.Bounds().Dy()/2+rotated.Bounds().Dy(),
+		), rotated, image.Point{}, draw.Over)
+	}
+
+	targetPoints := make([]ClickPoint, maxPoints)
+	usedTargets := make([]bool, maxPoints)
+	displayChars := make([]string, maxPoints)
+
+	for _, origIdx := range perm[:maxPoints] {
+		for j := 0; j < maxPoints; j++ {
+			if usedTargets[j] {
+				continue
+			}
+			ci := -1
+			for k := 0; k < totalChars; k++ {
+				if charPositions[k] == j && k == origIdx {
+					ci = k
+					break
+				}
+			}
+			if ci >= 0 {
+				targetPoints[j].Index = j
+				targetPoints[j].X = charCenters[ci].X
+				targetPoints[j].Y = charCenters[ci].Y
+				displayChars[j] = targetChars[j]
+				usedTargets[j] = true
+				break
+			}
 		}
 	}
 
-	for i, pt := range targetPoints {
-		displayChars[i] = getCharForIndex(i, session.Mode)
-		drawCharOnImage(img, pt.X, pt.Y, displayChars[i])
+	fallbackIdx := 0
+	for j := 0; j < maxPoints; j++ {
+		if !usedTargets[j] {
+			for fallbackIdx < totalChars {
+				ci := -1
+				for k := 0; k < totalChars; k++ {
+					if charPositions[k] == j && k < totalChars {
+						ci = k
+						break
+					}
+				}
+				if ci >= 0 {
+					targetPoints[j].Index = j
+					targetPoints[j].X = charCenters[ci].X
+					targetPoints[j].Y = charCenters[ci].Y
+					displayChars[j] = targetChars[j]
+					usedTargets[j] = true
+					fallbackIdx++
+					break
+				}
+				fallbackIdx++
+			}
+		}
 	}
 
 	session.TargetPoints = targetPoints
 
-	hintOrder := make([]int, session.MaxPoints)
-	for i := 0; i < session.MaxPoints; i++ {
+	hintOrder := make([]int, maxPoints)
+	for i := 0; i < maxPoints; i++ {
 		hintOrder[i] = i
 	}
 
@@ -179,13 +604,13 @@ func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickP
 
 	session.HintOrder = hintOrder
 
-	hintParts := make([]string, session.MaxPoints)
+	hintParts := make([]string, maxPoints)
 	for i, idx := range hintOrder {
 		hintParts[i] = displayChars[idx]
 	}
-	session.Hint = "点击: " + strings.Join(hintParts, " → ")
+	session.Hint = "依次点击: " + strings.Join(hintParts, " → ")
 
-	session.Points = make([][2]int, session.MaxPoints)
+	session.Points = make([][2]int, maxPoints)
 	for i, pt := range targetPoints {
 		session.Points[i] = [2]int{pt.X, pt.Y}
 	}
@@ -272,31 +697,271 @@ func imageToBase64(img image.Image) string {
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
-func generateSliderImage() (string, int, int) {
-	targetX := 150 + rand.Intn(100)
-	targetY := 50 + rand.Intn(100)
+func clampU8(v int) uint8 {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return uint8(v)
+}
 
-	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220">
-		<defs>
-			<linearGradient id="bg" x1="0%%" y1="0%%" x2="100%%" y2="100%%">
-				<stop offset="0%%" style="stop-color:#667eea"/>
-				<stop offset="100%%" style="stop-color:#764ba2"/>
-			</linearGradient>
-		</defs>
-		<rect width="100%%" height="100%%" fill="url(#bg)"/>
-		<text x="180" y="40" text-anchor="middle" fill="white" font-size="18" font-family="Arial">
-			拖动滑块完成验证
-		</text>
-		<rect x="%d" y="%d" width="50" height="50" fill="rgba(255,255,255,0.25)" stroke="white" stroke-width="2"/>
-	</svg>`, targetX, targetY)
+func drawFilledCircle(img *image.RGBA, cx, cy, radius int, c color.Color) {
+	for dy := -radius; dy <= radius; dy++ {
+		for dx := -radius; dx <= radius; dx++ {
+			if dx*dx+dy*dy <= radius*radius {
+				x, y := cx+dx, cy+dy
+				if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
+					img.Set(x, y, c)
+				}
+			}
+		}
+	}
+}
 
-	encoded := base64.StdEncoding.EncodeToString([]byte(svg))
-	return "data:image/svg+xml;base64," + encoded, targetX, targetY
+func drawFilledRect(img *image.RGBA, x, y, w, h int, c color.Color) {
+	for dy := 0; dy < h; dy++ {
+		for dx := 0; dx < w; dx++ {
+			px, py := x+dx, y+dy
+			if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+				img.Set(px, py, c)
+			}
+		}
+	}
+}
+
+func drawLine(img *image.RGBA, x1, y1, x2, y2 int, c color.Color) {
+	dx := x2 - x1
+	dy := y2 - y1
+	steps := int(math.Sqrt(float64(dx*dx + dy*dy)))
+	if steps < 1 {
+		steps = 1
+	}
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		x := x1 + int(float64(dx)*t+0.5)
+		y := y1 + int(float64(dy)*t+0.5)
+		if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
+			img.Set(x, y, c)
+		}
+	}
+}
+
+func drawBezier(img *image.RGBA, x0, y0, x1, y1, x2, y2 int, c color.Color) {
+	steps := 60
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		mt := 1.0 - t
+		x := int(mt*mt*float64(x0)+2.0*mt*t*float64(x1)+t*t*float64(x2) + 0.5)
+		y := int(mt*mt*float64(y0)+2.0*mt*t*float64(y1)+t*t*float64(y2) + 0.5)
+		if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
+			img.Set(x, y, c)
+		}
+	}
+}
+
+func isInPuzzlePiece(x, y, pieceSize, radius int) bool {
+	if y < 0 || y >= pieceSize {
+		return false
+	}
+	midY := pieceSize / 2
+
+	if y >= midY-radius && y <= midY+radius {
+		dy := y - midY
+		leftBoundary := int(math.Sqrt(float64(radius*radius - dy*dy)))
+		if x < leftBoundary {
+			return false
+		}
+	} else if x < 0 {
+		return false
+	}
+
+	if y >= midY-radius && y <= midY+radius {
+		dy := y - midY
+		rightBoundary := pieceSize + int(math.Sqrt(float64(radius*radius - dy*dy)))
+		if x > rightBoundary {
+			return false
+		}
+	} else if x > pieceSize {
+		return false
+	}
+
+	return true
+}
+
+func addPuzzleShadow(pieceImg *image.RGBA, pieceSize, radius int) {
+	bounds := pieceImg.Bounds()
+	result := image.NewRGBA(bounds)
+
+	for y := 0; y < bounds.Dy(); y++ {
+		for x := 0; x < bounds.Dx(); x++ {
+			p := pieceImg.RGBAAt(x, y)
+			if p.A > 0 {
+				sx, sy := x+2, y+2
+				if sx < bounds.Dx() && sy < bounds.Dy() {
+					result.Set(sx, sy, color.RGBA{0, 0, 0, 100})
+				}
+			}
+		}
+	}
+
+	for y := 0; y < bounds.Dy(); y++ {
+		for x := 0; x < bounds.Dx(); x++ {
+			p := pieceImg.RGBAAt(x, y)
+			if p.A > 0 {
+				result.Set(x, y, p)
+			}
+		}
+	}
+
+	copy(pieceImg.Pix, result.Pix)
+}
+
+func addCutoutBorder(img *image.RGBA, targetX, targetY, pieceSize, radius int) {
+	borderColor := color.RGBA{255, 255, 255, 200}
+
+	for y := 0; y < pieceSize; y++ {
+		for x := 0; x < pieceSize+radius; x++ {
+			if !isInPuzzlePiece(x, y, pieceSize, radius) {
+				continue
+			}
+			isBorder := false
+			for dy := -1; dy <= 1 && !isBorder; dy++ {
+				for dx := -1; dx <= 1 && !isBorder; dx++ {
+					if dx == 0 && dy == 0 {
+						continue
+					}
+					if !isInPuzzlePiece(x+dx, y+dy, pieceSize, radius) {
+						isBorder = true
+					}
+				}
+			}
+			if isBorder {
+				absX, absY := targetX+x, targetY+y
+				if absX >= 0 && absX < img.Bounds().Dx() && absY >= 0 && absY < img.Bounds().Dy() {
+					img.Set(absX, absY, borderColor)
+				}
+				for d := 1; d <= 3; d++ {
+					absX2, absY2 := targetX+x+d, targetY+y+d
+					if absX2 >= 0 && absX2 < img.Bounds().Dx() && absY2 >= 0 && absY2 < img.Bounds().Dy() {
+						orig := img.RGBAAt(absX2, absY2)
+						factor := 100 - d*12
+						if factor < 60 {
+							factor = 60
+						}
+						img.Set(absX2, absY2, color.RGBA{
+							clampU8(int(orig.R) * factor / 100),
+							clampU8(int(orig.G) * factor / 100),
+							clampU8(int(orig.B) * factor / 100),
+							255,
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
+func generateSliderCaptchaImages() (string, string, int, int) {
+	width := 360
+	height := 220
+	pieceSize := 50
+	bumpRadius := 8 + rand.Intn(5)
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	r1, g1, b1 := rand.Intn(80)+40, rand.Intn(80)+40, rand.Intn(80)+120
+	r2, g2, b2 := rand.Intn(80)+120, rand.Intn(80)+40, rand.Intn(80)+40
+	r3, g3, b3 := rand.Intn(60)+80, rand.Intn(60)+120, rand.Intn(60)+40
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			ratio1 := float64(x+y) / float64(width+height)
+			ratio2 := float64(x) / float64(width)
+			r := uint8(float64(r1)*(1-ratio1)*0.6 + float64(r2)*ratio1*0.6 + float64(r3)*ratio2*0.4)
+			g := uint8(float64(g1)*(1-ratio1)*0.6 + float64(g2)*ratio1*0.6 + float64(g3)*ratio2*0.4)
+			b := uint8(float64(b1)*(1-ratio1)*0.6 + float64(b2)*ratio1*0.6 + float64(b3)*ratio2*0.4)
+			img.Set(x, y, color.RGBA{r, g, b, 255})
+		}
+	}
+
+	for i := 0; i < 25; i++ {
+		c := color.RGBA{
+			uint8(rand.Intn(200)),
+			uint8(rand.Intn(200)),
+			uint8(rand.Intn(200)),
+			uint8(25 + rand.Intn(55)),
+		}
+		switch rand.Intn(4) {
+		case 0:
+			drawFilledCircle(img, rand.Intn(width), rand.Intn(height), 8+rand.Intn(35), c)
+		case 1:
+			drawFilledRect(img, rand.Intn(width), rand.Intn(height), 15+rand.Intn(50), 8+rand.Intn(30), c)
+		case 2:
+			drawLine(img, rand.Intn(width), rand.Intn(height), rand.Intn(width), rand.Intn(height), c)
+		case 3:
+			drawBezier(img, rand.Intn(width), rand.Intn(height), rand.Intn(width), rand.Intn(height), rand.Intn(width), rand.Intn(height), c)
+		}
+	}
+
+	for i := 0; i < 1000; i++ {
+		x := rand.Intn(width)
+		y := rand.Intn(height)
+		noise := rand.Intn(50) - 25
+		p := img.RGBAAt(x, y)
+		img.Set(x, y, color.RGBA{
+			clampU8(int(p.R) + noise),
+			clampU8(int(p.G) + noise),
+			clampU8(int(p.B) + noise),
+			255,
+		})
+	}
+
+	margin := 30
+	maxX := width - pieceSize - bumpRadius - margin
+	if maxX <= margin {
+		maxX = margin + 1
+	}
+	targetX := margin + rand.Intn(maxX-margin)
+	targetY := margin + rand.Intn(height-pieceSize-2*margin)
+
+	pieceWidth := pieceSize + bumpRadius
+	pieceImg := image.NewRGBA(image.Rect(0, 0, pieceWidth, pieceSize))
+
+	for py := 0; py < pieceSize; py++ {
+		for px := 0; px < pieceWidth; px++ {
+			absX := targetX + px
+			absY := targetY + py
+			if absX >= 0 && absX < width && absY >= 0 && absY < height {
+				if isInPuzzlePiece(px, py, pieceSize, bumpRadius) {
+					p := img.RGBAAt(absX, absY)
+					pieceImg.Set(px, py, p)
+					img.Set(absX, absY, color.RGBA{
+						uint8(int(p.R) * 35 / 100),
+						uint8(int(p.G) * 35 / 100),
+						uint8(int(p.B) * 35 / 100),
+						255,
+					})
+				} else {
+					pieceImg.Set(px, py, color.RGBA{0, 0, 0, 0})
+				}
+			}
+		}
+	}
+
+	addPuzzleShadow(pieceImg, pieceSize, bumpRadius)
+	addCutoutBorder(img, targetX, targetY, pieceSize, bumpRadius)
+
+	imageURL := "data:image/png;base64," + imageToBase64(img)
+	puzzleImage := "data:image/png;base64," + imageToBase64(pieceImg)
+
+	return imageURL, puzzleImage, targetX, targetY
 }
 
 func GetSliderCaptcha(c *gin.Context) {
 	sessionID := generateSessionID()
-	imageURL, targetX, targetY := generateSliderImage()
+	imageURL, puzzleImage, targetX, targetY := generateSliderCaptchaImages()
 
 	session := &CaptchaSession{
 		ID:        sessionID,
@@ -311,9 +976,14 @@ func GetSliderCaptcha(c *gin.Context) {
 	sessionMutex.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{
-		"session_id": sessionID,
-		"image_url":  imageURL,
-		"puzzle_y":   targetY,
+		"session_id":   sessionID,
+		"image_url":    imageURL,
+		"puzzle_image": puzzleImage,
+		"target_x":     targetX,
+		"target_y":     targetY,
+		"puzzle_y":     targetY,
+		"puzzle_style": 0,
+		"tolerance":    10,
 	})
 }
 
@@ -363,25 +1033,27 @@ func GetClickCaptcha(c *gin.Context) {
 	sessionMutex.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{
-		"session_id":   sessionID,
-		"image_url":    imageURL,
-		"hint":         hint,
-		"hint_order":   hintOrder,
-		"max_points":   maxPoints,
-		"mode":         string(mode),
+		"session_id":    sessionID,
+		"image_url":     imageURL,
+		"hint":          hint,
+		"hint_order":    hintOrder,
+		"max_points":    maxPoints,
+		"mode":          string(mode),
 		"allow_shuffle": allowShuffle,
+		"points":        session.Points,
 	})
 }
 
 type VerifyRequest struct {
-	SessionID     string                  `json:"session_id" binding:"required"`
-	Type          string                  `json:"type" binding:"required"`
-	X             int                     `json:"x"`
-	Y             int                     `json:"y"`
-	Points        [][2]int                `json:"points"`
-	ClickSequence []int                   `json:"click_sequence"`
-	BehaviorData  []BehaviorDataPoint     `json:"behavior_data"`
-	ApplicationID uint                    `json:"application_id"`
+	SessionID       string                  `json:"session_id" binding:"required"`
+	Type            string                  `json:"type" binding:"required"`
+	X               int                     `json:"x"`
+	Y               int                     `json:"y"`
+	Points          [][2]int                `json:"points"`
+	ClickSequence   []int                   `json:"click_sequence"`
+	BehaviorData    []BehaviorDataPoint     `json:"behavior_data"`
+	ApplicationID   uint                    `json:"application_id"`
+	EnvironmentData json.RawMessage         `json:"environment_data,omitempty"`
 }
 
 type BehaviorDataPoint struct {
@@ -453,6 +1125,25 @@ func VerifyCaptcha(c *gin.Context) {
 		behaviorDataList,
 	)
 
+	if len(req.EnvironmentData) > 0 {
+		var envData map[string]interface{}
+		if err := json.Unmarshal(req.EnvironmentData, &envData); err == nil {
+			envRiskScore := analyzeEnvironmentData(envData)
+			if envRiskScore > riskScore {
+				riskScore = envRiskScore
+			}
+			analysisReport += fmt.Sprintf("\n- 环境检测分析:\n")
+			analysisReport += fmt.Sprintf("  * 环境风险评分: %.2f\n", envRiskScore)
+			if envRiskScore > 50 {
+				analysisReport += fmt.Sprintf("  * 环境异常: 检测到高风险环境特征\n")
+			}
+		}
+	}
+
+	if riskScore >= 50 {
+		finalSuccess = false
+	}
+
 	status := "failed"
 	if finalSuccess {
 		status = "success"
@@ -463,11 +1154,16 @@ func VerifyCaptcha(c *gin.Context) {
 
 	duration := time.Since(startTime).Milliseconds()
 
+	var appID *uint
+	if req.ApplicationID > 0 {
+		appID = &req.ApplicationID
+	}
+
 	verification := &models.Verification{
 		SessionID:     req.SessionID,
 		CaptchaType:   req.Type,
-		ApplicationID: req.ApplicationID,
-		UserID:        1,
+		ApplicationID: appID,
+		UserID:        nil,
 		Status:        status,
 		IPAddress:     c.ClientIP(),
 		UserAgent:     c.GetHeader("User-Agent"),
@@ -675,4 +1371,114 @@ func cleanupExpiredSessions() {
 			delete(captchaSessions, id)
 		}
 	}
+}
+
+func analyzeEnvironmentData(envData map[string]interface{}) float64 {
+	score := 0.0
+	indicators := []string{}
+
+	if riskScoreRaw, ok := envData["risk_score"]; ok {
+		if rs, ok := riskScoreRaw.(float64); ok {
+			score = rs
+		}
+	}
+
+	if chainRaw, ok := envData["chain"]; ok {
+		if chain, ok := chainRaw.([]interface{}); ok {
+			if len(chain) < 3 {
+				score += 15
+				indicators = append(indicators, "检测方法链过短")
+			}
+		}
+	}
+
+	if webdriverRaw, ok := envData["webdriver"]; ok {
+		if wd, ok := webdriverRaw.(string); ok {
+			if strings.Contains(wd, "wd:true") || strings.Contains(wd, "wd:1") {
+				score += 30
+				indicators = append(indicators, "检测到WebDriver")
+			}
+		}
+	}
+
+	if webglRaw, ok := envData["webgl"]; ok {
+		if wg, ok := webglRaw.(string); ok {
+			if wg == "no_webgl" {
+				score += 20
+				indicators = append(indicators, "WebGL不可用")
+			}
+			if strings.Contains(wg, "SwiftShader") || strings.Contains(wg, "llvmpipe") || strings.Contains(wg, "Microsoft Basic Render") {
+				score += 25
+				indicators = append(indicators, "检测到软件渲染器")
+			}
+		}
+	}
+
+	if canvasRaw, ok := envData["canvas"]; ok {
+		if cv, ok := canvasRaw.(string); ok {
+			if len(cv) < 50 {
+				score += 15
+				indicators = append(indicators, "Canvas指纹异常")
+			}
+		}
+	}
+
+	if cpuRaw, ok := envData["cpu"]; ok {
+		if cpu, ok := cpuRaw.(string); ok {
+			if cpu == "unknown" || cpu == "0" || cpu == "1" {
+				score += 10
+				indicators = append(indicators, "CPU核心数异常")
+			}
+		}
+	}
+
+	if memoryRaw, ok := envData["memory"]; ok {
+		if mem, ok := memoryRaw.(string); ok {
+			if mem == "unknown" || mem == "0" {
+				score += 10
+				indicators = append(indicators, "设备内存不可用")
+			}
+		}
+	}
+
+	if touchRaw, ok := envData["touch"]; ok {
+		if tc, ok := touchRaw.(string); ok {
+			if strings.Contains(tc, "touch:") && !strings.Contains(tc, "touch:0") {
+				score += 5
+				indicators = append(indicators, "触屏设备")
+			}
+		}
+	}
+
+	if dntRaw, ok := envData["dnt"]; ok {
+		if dnt, ok := dntRaw.(string); ok {
+			if dnt == "1" || dnt == "yes" {
+				score -= 5
+			}
+		}
+	}
+
+	if adblockRaw, ok := envData["adblock"]; ok {
+		if ab, ok := adblockRaw.(string); ok {
+			if ab == "adblock" {
+				score += 10
+				indicators = append(indicators, "检测到广告拦截")
+			}
+		}
+	}
+
+	if connectionRaw, ok := envData["connection"]; ok {
+		if conn, ok := connectionRaw.(string); ok {
+			if strings.Contains(conn, "no_conn") {
+				score += 5
+				indicators = append(indicators, "网络信息API不可用")
+			}
+		}
+	}
+
+	if len(indicators) > 0 {
+		score = math.Min(score, 100)
+	}
+
+	return score
 }

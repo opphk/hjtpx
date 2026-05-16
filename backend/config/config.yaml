@@ -1,207 +1,36 @@
 server:
   port: 8080
   mode: release
-  read_timeout: 30
-  write_timeout: 30
-  idle_timeout: 120
-  max_header_bytes: 1048576
 
 postgres:
-  host: 127.0.0.1
+  host: postgres
   port: 5432
-  user: verification_user
-  password: verification_password
-  db_name: verification
+  user: postgres
+  password: postgres
+  db_name: hjtpx_db
   sslmode: disable
   max_open_conns: 25
   max_idle_conns: 10
   conn_max_lifetime: 300
-  conn_max_idle_time: 60
-  wait_for_pool: true
 
 redis:
-  host: 127.0.0.1
+  host: redis
   port: 6379
   password: ""
   db: 0
   max_retries: 3
-  pool_size: 20
-  min_idle_conns: 5
-  read_timeout: 3
-  write_timeout: 3
 
 jwt:
   secret: change-me-in-production
   expire_hours: 24
-  refresh_expire_hours: 168
-  issuer: hjtpx
-  audience: hjtpx-api
 
 security:
   enable_csrf: true
   enable_xss: true
   enable_signature: true
-  enable_sql_injection: true
-  enable_ip_risk: true
   signature_expire_secs: 300
   signature_key: ""
   whitelist_ips: []
-
-csrf:
-  enable: true
-  token_length: 32
-  token_expiration_hours: 1
-  header_name: X-CSRF-Token
-  form_field_name: csrf_token
-  cookie_name: csrf_token
-  safe_methods:
-    - GET
-    - HEAD
-    - OPTIONS
-  require_validation: true
-
-xss:
-  enable_log: true
-  block_attributes: false
-  max_length: 10000
-  enable_safe_html: true
-  allowed_tags:
-    - p
-    - br
-    - strong
-    - em
-    - u
-    - h1
-    - h2
-    - h3
-    - h4
-    - h5
-    - h6
-    - ul
-    - ol
-    - li
-    - a
-    - img
-
-sql_injection:
-  enable: true
-  block_mode: true
-  enable_log: true
-  max_query_length: 10000
-  severity_threshold: 3
-  exclude_paths:
-    - /health
-    - /api/health
-  exclude_params: []
-
-ip_risk:
-  enable: true
-  enable_proxy_detection: true
-  enable_vpn_detection: true
-  enable_tor_detection: true
-  enable_hosting_detection: true
-  enable_datacenter_check: true
-  proxy_threshold: 50
-  vpn_threshold: 30
-  check_timeout_secs: 5
-  cache_ttl_secs: 3600
-  block_high_risk: false
-  block_critical_risk: true
-  warn_medium_risk: true
-  allowed_countries: []
-  blocked_countries: []
-  allowed_asns: []
-  blocked_asns: []
-  exclude_paths:
-    - /health
-    - /api/health
-    - /metrics
-    - /api/metrics
-
-cors:
-  allowed_origins:
-    - "*"
-  allow_credentials: true
-  allow_methods:
-    - GET
-    - POST
-    - PUT
-    - DELETE
-    - PATCH
-    - OPTIONS
-    - HEAD
-  allow_headers:
-    - Origin
-    - Content-Type
-    - Content-Length
-    - Accept-Encoding
-    - X-CSRF-Token
-    - Authorization
-    - accept
-    - origin
-    - Cache-Control
-    - X-Requested-With
-    - X-App-ID
-    - X-Signature
-    - X-Timestamp
-    - X-Nonce
-    - X-Request-ID
-  expose_headers:
-    - Content-Length
-    - X-Request-ID
-    - X-RateLimit-Limit
-    - X-RateLimit-Remaining
-    - X-RateLimit-Reset
-  max_age: 86400
-  allow_private_network: false
-
-rate_limit:
-  enabled: true
-  default_limit: 100
-  window_secs: 60
-  burst_limit: 200
-  cleanup_interval_ms: 60000
-
-  ip_limits:
-    default_limit: 100
-    window_secs: 60
-    burst_limit: 200
-    strict:
-      limit: 50
-      window_secs: 60
-    relaxed:
-      limit: 200
-      window_secs: 60
-
-  user_limits:
-    default_limit: 200
-    window_secs: 60
-    burst_limit: 400
-    strict:
-      limit: 100
-      window_secs: 60
-    relaxed:
-      limit: 500
-      window_secs: 60
-
-  app_limits:
-    default_limit: 500
-    window_secs: 60
-    burst_limit: 1000
-    strict:
-      limit: 200
-      window_secs: 60
-    relaxed:
-      limit: 1000
-      window_secs: 60
-
-  risk_based:
-    critical_max_requests: 5
-    critical_window_secs: 300
-    high_max_requests: 20
-    high_window_secs: 120
-    medium_max_requests: 50
-    medium_window_secs: 60
 
 logging:
   level: info
@@ -212,135 +41,9 @@ logging:
   max_age_days: 30
   compress: true
 
-security_log:
-  enable_console: true
-  enable_file: true
-  enable_redis: true
-  log_file_path: /var/log/hjtpx/security.log
-  max_file_size_mb: 10
-  max_backup_files: 30
-  rotate_interval_hours: 24
-  min_level: low
-  retention_days: 90
-  exclude_paths:
-    - /health
-    - /api/health
-    - /metrics
-    - /api/metrics
-
-cache:
-  captcha_result_ttl_secs: 300
-  stats_data_ttl_secs: 60
-  hot_data_ttl_secs: 1800
-  user_profile_ttl_secs: 3600
-  whitelist_ttl_secs: 3600
-  blacklist_ttl_secs: 86400
-  default_ttl_secs: 300
-  enable_pipeline: true
-  enable_compression: false
-
-async_tasks:
-  enable: true
-  worker_count: 4
-  queue_size: 1000
-  max_retries: 3
-  default_timeout_secs: 300
-
-  task_types:
-    verification_log:
-      enable: true
-      timeout_secs: 30
-      priority: 5
-    stats_analysis:
-      enable: true
-      timeout_secs: 60
-      priority: 3
-    email_notification:
-      enable: true
-      timeout_secs: 45
-      priority: 7
-    cleanup:
-      enable: true
-      timeout_secs: 120
-      priority: 1
-    export:
-      enable: true
-      timeout_secs: 600
-      priority: 2
-
-  periodic_tasks:
-    cleanup_expired:
-      enable: true
-      interval_hours: 6
-    refresh_stats:
-      enable: true
-      interval_minutes: 5
-    backup_data:
-      enable: false
-      interval_hours: 24
-
-blacklist:
-  auto_ban_enabled: true
-  violation_threshold: 5
-  ban_type: ip
-  cleanup_interval_hours: 24
-  retention_days: 90
-
-  ban_durations:
-    level1_count: 2
-    level1_duration_mins: 30
-    level2_count: 3
-    level2_duration_mins: 60
-    level3_count: 5
-    level3_duration_hours: 2
-    level4_count: 7
-    level4_duration_hours: 6
-    level5_count: 10
-    level5_duration_hours: 24
-
-whitelist:
-  enable: true
-  bypass_rate_limit: true
-  bypass_ip_risk: false
-  cleanup_interval_hours: 24
-
-database:
-  enable_query_log: false
-  slow_query_threshold_ms: 1000
-
-  indexes:
-    verification_table:
-      - created_at
-      - user_id
-      - application_id
-      - status
-      - ip_address
-      - composite:
-          - user_id
-          - created_at
-    application_table:
-      - app_key
-      - user_id
-      - created_at
-    user_table:
-      - email
-      - username
-      - created_at
-    blacklist_table:
-      - ip_address
-      - type
-      - expires_at
-
-  query_optimization:
-    enable_prepared_statements: true
-    connection_pool_size: 25
-    idle_connection_pool_size: 10
-    max_connection_lifetime_mins: 5
-    enable_query_cache: true
-    query_cache_ttl_secs: 60
-
-metrics:
-  enable: true
-  path: /metrics
-  enable_pprof: true
-  pprof_path: /debug/pprof
+rate_limit:
+  enabled: true
+  default_limit: 100
+  window_secs: 60
+  burst_limit: 200
+  cleanup_interval_ms: 60000

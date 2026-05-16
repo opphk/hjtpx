@@ -61,8 +61,8 @@ type APIKeyHistory struct {
 
 type Verification struct {
 	gorm.Model
-	ApplicationID  uint            `gorm:"not null;index" json:"application_id"`
-	UserID         uint            `gorm:"not null;index" json:"user_id"`
+	ApplicationID  *uint           `gorm:"index" json:"application_id,omitempty"`
+	UserID         *uint           `gorm:"index" json:"user_id,omitempty"`
 	SessionID      string          `gorm:"size:100;index" json:"session_id"`
 	CaptchaType    string          `gorm:"size:50" json:"captcha_type"`
 	Status         string          `gorm:"size:50;not null;default:pending" json:"status"`
@@ -70,8 +70,8 @@ type Verification struct {
 	UserAgent      string          `gorm:"size:500" json:"user_agent"`
 	RiskScore      float64         `gorm:"default:0" json:"risk_score"`
 	BehaviorData   []BehaviorData  `gorm:"foreignKey:VerificationID" json:"behavior_data,omitempty"`
-	Application    Application     `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
-	User           User            `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Application    *Application    `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+	User           *User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 type BehaviorData struct {
@@ -97,20 +97,4 @@ type VerificationLog struct {
 	Duration       int64          `gorm:"comment:'验证耗时(毫秒)'" json:"duration"`
 	Verification   Verification   `gorm:"foreignKey:VerificationID" json:"verification,omitempty"`
 	Application    Application    `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
-}
-
-type Blacklist struct {
-	gorm.Model
-	Target       string    `gorm:"size:255;not null;index" json:"target"`
-	Type         string    `gorm:"size:50;not null;index" json:"type"`
-	Source       string    `gorm:"size:50;default:manual" json:"source"`
-	Reason       string    `gorm:"type:text" json:"reason"`
-	Action       string    `gorm:"size:50;default:block" json:"action"`
-	ApplicationIDs string  `gorm:"type:text" json:"application_ids"`
-	Expiration   string    `gorm:"size:50" json:"expiration"`
-	Status       string    `gorm:"size:50;default:active" json:"status"`
-	HitCount     int       `gorm:"default:0" json:"hit_count"`
-	Note         string    `gorm:"type:text" json:"note"`
-	CreatedBy    uint      `json:"created_by"`
-	Admin        Admin     `gorm:"foreignKey:CreatedBy" json:"admin,omitempty"`
 }

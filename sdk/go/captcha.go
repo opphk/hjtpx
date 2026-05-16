@@ -2,96 +2,14 @@ package captcha
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/md5"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
-	"sort"
-	"strings"
-	"sync"
 	"time"
 )
-
-var (
-	ErrNilRequest       = errors.New("request cannot be nil")
-	ErrMissingChallenge = errors.New("challenge_id is required")
-	ErrMissingAnswer    = errors.New("answer is required")
-	ErrEmptyDataURI     = errors.New("data URI is empty")
-	ErrUnsupportedFormat = errors.New("unsupported image format")
-	ErrAPIError         = errors.New("API error")
-	ErrNetworkError     = errors.New("network error")
-	ErrTimeoutError     = errors.New("timeout error")
-	ErrRetryExhausted   = errors.New("retry exhausted")
-)
-
-type SDKError struct {
-	Code    int
-	Message string
-	Err     error
-}
-
-func (e *SDKError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("SDKError(code=%d, message=%s): %v", e.Code, e.Message, e.Err)
-	}
-	return fmt.Sprintf("SDKError(code=%d, message=%s)", e.Code, e.Message)
-}
-
-func (e *SDKError) Unwrap() error {
-	return e.Err
-}
-
-type RetryConfig struct {
-	MaxRetries     int
-	InitialDelay   time.Duration
-	MaxDelay       time.Duration
-	BackoffFactor  float64
-	RetryableCodes []int
-}
-
-func DefaultRetryConfig() *RetryConfig {
-	return &RetryConfig{
-		MaxRetries:     3,
-		InitialDelay:   100 * time.Millisecond,
-		MaxDelay:       5 * time.Second,
-		BackoffFactor:  2.0,
-		RetryableCodes: []int{429, 500, 502, 503, 504},
-	}
-}
-
-func (r *RetryConfig) ShouldRetry(statusCode int) bool {
-	for _, code := range r.RetryableCodes {
-		if code == statusCode {
-			return true
-		}
-	}
-	return false
-}
-
-func (r *RetryConfig) NextDelay(attempt int) time.Duration {
-	delay := float64(r.InitialDelay) * pow(r.BackoffFactor, float64(attempt))
-	if delay > float64(r.MaxDelay) {
-		return r.MaxDelay
-	}
-	jitter := time.Duration(rand.Float64() * 0.3 * delay)
-	return time.Duration(delay) + jitter
-}
-
-func pow(base, exp float64) float64 {
-	result := 1.0
-	for i := 0; i < int(exp); i++ {
-		result *= base
-	}
-	return result
-}
 
 const (
 	DefaultAPIEndpoint = "http://localhost:8080"
@@ -235,18 +153,10 @@ type ClientOption func(*Client)
 type Client struct {
 	apiKey       string
 	apiSecret    string
-	appID        string
-	appSecret    string
-	signatureKey string
 	endpoint     string
 	httpClient   *http.Client
 	timeout      time.Duration
 	debugMode    bool
-	retryConfig  *RetryConfig
-	useSignature bool
-	signMutex    sync.Mutex
-	lastSignTime int64
-	signCache    string
 }
 
 func WithAPIKey(apiKey string) ClientOption {
@@ -279,38 +189,12 @@ func WithDebugMode(debug bool) ClientOption {
 	}
 }
 
-func WithAppID(appID string) ClientOption {
-	return func(c *Client) {
-		c.appID = appID
-	}
-}
-
-func WithAppSecret(appSecret string) ClientOption {
-	return func(c *Client) {
-		c.appSecret = appSecret
-	}
-}
-
-func WithSignatureKey(signatureKey string) ClientOption {
-	return func(c *Client) {
-		c.signatureKey = signatureKey
-		c.useSignature = true
-	}
-}
-
-func WithRetryConfig(config *RetryConfig) ClientOption {
-	return func(c *Client) {
-		c.retryConfig = config
-	}
-}
-
 func NewClient(opts ...ClientOption) *Client {
 	client := &Client{
-		endpoint:    DefaultAPIEndpoint,
-		timeout:     30 * time.Second,
+		endpoint:   DefaultAPIEndpoint,
+		timeout:    30 * time.Second,
 		debugMode:   false,
-		httpClient:  &http.Client{},
-		retryConfig: DefaultRetryConfig(),
+		httpClient: &http.Client{},
 	}
 
 	for _, opt := range opts {
@@ -334,73 +218,6 @@ func (c *Client) SetDebugMode(debug bool) {
 	c.debugMode = debug
 }
 
-func (c *Client) SetRetryConfig(config *RetryConfig) {
-	c.retryConfig = config
-}
-
-func (c *Client) EnableSignature(use bool) {
-	c.useSignature = use
-}
-
-func (c *Client) GenerateSignature(method, path string, params map[string]string, body []byte) string {
-	if c.signatureKey == "" {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString(method)
-	sb.WriteString(path)
-
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		sb.WriteString(k)
-		sb.WriteString(params[k])
-	}
-
-	if len(body) > 0 {
-		hash := md5.Sum(body)
-		sb.WriteString(hex.EncodeToString(hash[:]))
-	}
-
-	sb.WriteString(c.signatureKey)
-
-	hash := sha256.Sum256([]byte(sb.String()))
-	return hex.EncodeToString(hash[:])
-}
-
-func (c *Client) GenerateHMACSignature(data string) string {
-	if c.appSecret == "" {
-		return ""
-	}
-
-	h := hmac.New(sha256.New, []byte(c.appSecret))
-	h.Write([]byte(data))
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
-}
-
-func (c *Client) GenerateToken(nonce string, timestamp int64) string {
-	c.signMutex.Lock()
-	defer c.signMutex.Unlock()
-
-	if c.lastSignTime == 0 || time.Now().Unix()-c.lastSignTime > 300 {
-		data := fmt.Sprintf("%s:%d:%s", c.appID, timestamp, nonce)
-		c.signCache = c.GenerateHMACSignature(data)
-		c.lastSignTime = timestamp
-	}
-
-	return c.signCache
-}
-
-func (c *Client) VerifySignature(method, path string, params map[string]string, body []byte, signature string) bool {
-	expected := c.GenerateSignature(method, path, params, body)
-	return hmac.Equal([]byte(expected), []byte(signature))
-}
-
 func (c *Client) debug(format string, args ...interface{}) {
 	if c.debugMode {
 		fmt.Printf(format+"\n", args...)
@@ -412,159 +229,58 @@ func (c *Client) buildURL(path string) string {
 }
 
 func (c *Client) doRequest(method, path string, body interface{}) (*SDKResponse, error) {
-	var reqBody []byte
-	var err error
-
+	var reqBody io.Reader
 	if body != nil {
-		reqBody, err = json.Marshal(body)
+		jsonData, err := json.Marshal(body)
 		if err != nil {
-			return nil, &SDKError{
-				Code:    -1,
-				Message: "failed to marshal request body",
-				Err:     err,
-			}
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
-		c.debug("Request body: %s", string(reqBody))
+		reqBody = bytes.NewBuffer(jsonData)
+		c.debug("Request body: %s", string(jsonData))
 	}
 
-	params := make(map[string]string)
-	parsedURL, _ := url.Parse(path)
-	if parsedURL.RawQuery != "" {
-		queryParams, _ := url.ParseQuery(parsedURL.RawQuery)
-		for k, v := range queryParams {
-			if len(v) > 0 {
-				params[k] = v[0]
-			}
-		}
+	req, err := http.NewRequest(method, c.buildURL(path), reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	if c.useSignature && c.signatureKey != "" {
-		signature := c.GenerateSignature(method, path, params, reqBody)
-		c.debug("Generated signature: %s", signature)
+	req.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		req.Header.Set("X-API-Key", c.apiKey)
+	}
+	if c.apiSecret != "" {
+		req.Header.Set("X-API-Secret", c.apiSecret)
 	}
 
-	return c.doRequestWithRetry(method, path, bytes.NewReader(reqBody), "application/json")
-}
+	c.debug("Request: %s %s", method, req.URL.String())
 
-func (c *Client) doRequestWithRetry(method, path string, body io.Reader, contentType string) (*SDKResponse, error) {
-	var lastErr error
-	retryConfig := c.retryConfig
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
 
-	if retryConfig == nil {
-		retryConfig = DefaultRetryConfig()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	for attempt := 0; attempt <= retryConfig.MaxRetries; attempt++ {
-		if attempt > 0 {
-			delay := retryConfig.NextDelay(attempt - 1)
-			c.debug("Retrying request (attempt %d/%d) after %v", attempt, retryConfig.MaxRetries, delay)
-			time.Sleep(delay)
-		}
+	c.debug("Response status: %d, body: %s", resp.StatusCode, string(respBody))
 
-		req, err := http.NewRequest(method, c.buildURL(path), body)
-		if err != nil {
-			return nil, &SDKError{
-				Code:    -1,
-				Message: "failed to create request",
-				Err:     err,
-			}
-		}
-
-		req.Header.Set("Content-Type", contentType)
-		if c.apiKey != "" {
-			req.Header.Set("X-API-Key", c.apiKey)
-		}
-		if c.apiSecret != "" {
-			req.Header.Set("X-API-Secret", c.apiSecret)
-		}
-		if c.appID != "" {
-			req.Header.Set("X-App-ID", c.appID)
-		}
-		if c.useSignature && c.signatureKey != "" {
-			signature := c.GenerateSignature(method, path, nil, nil)
-			req.Header.Set("X-Signature", signature)
-		}
-
-		c.debug("Request: %s %s", method, req.URL.String())
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			lastErr = &SDKError{
-				Code:    -2,
-				Message: "failed to send request",
-				Err:     err,
-			}
-
-			if attempt < retryConfig.MaxRetries {
-				c.debug("Network error, will retry: %v", err)
-				continue
-			}
-			return nil, lastErr
-		}
-		defer resp.Body.Close()
-
-		respBody, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, &SDKError{
-				Code:    resp.StatusCode,
-				Message: "failed to read response body",
-				Err:     err,
-			}
-		}
-
-		c.debug("Response status: %d, body: %s", resp.StatusCode, string(respBody))
-
-		if resp.StatusCode == http.StatusRequestTimeout {
-			lastErr = &SDKError{
-				Code:    resp.StatusCode,
-				Message: "request timeout",
-				Err:     ErrTimeoutError,
-			}
-			if attempt < retryConfig.MaxRetries {
-				c.debug("Request timeout, will retry")
-				continue
-			}
-			return nil, lastErr
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			lastErr = &SDKError{
-				Code:    resp.StatusCode,
-				Message: fmt.Sprintf("unexpected status code: %d", resp.StatusCode),
-			}
-
-			if retryConfig.ShouldRetry(resp.StatusCode) && attempt < retryConfig.MaxRetries {
-				c.debug("Server error %d, will retry", resp.StatusCode)
-				continue
-			}
-			return nil, lastErr
-		}
-
-		var sdkResp SDKResponse
-		if err := json.Unmarshal(respBody, &sdkResp); err != nil {
-			return nil, &SDKError{
-				Code:    -3,
-				Message: "failed to unmarshal response",
-				Err:     err,
-			}
-		}
-
-		if sdkResp.Code != 0 {
-			return nil, &SDKError{
-				Code:    sdkResp.Code,
-				Message: sdkResp.Message,
-				Err:     ErrAPIError,
-			}
-		}
-
-		return &sdkResp, nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	return nil, &SDKError{
-		Code:    -4,
-		Message: "retry exhausted",
-		Err:     ErrRetryExhausted,
+	var sdkResp SDKResponse
+	if err := json.Unmarshal(respBody, &sdkResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
+
+	if sdkResp.Code != 0 {
+		return nil, fmt.Errorf("API error: code=%d, message=%s", sdkResp.Code, sdkResp.Message)
+	}
+
+	return &sdkResp, nil
 }
 
 func (c *Client) GenerateImageCaptcha(req *ImageCaptchaRequest) (*ImageCaptchaResponse, error) {
@@ -609,25 +325,13 @@ func (c *Client) GenerateImageCaptcha(req *ImageCaptchaRequest) (*ImageCaptchaRe
 
 func (c *Client) VerifyImageCaptcha(req *VerifyImageCaptchaRequest) (*VerifyImageCaptchaResponse, error) {
 	if req == nil {
-		return nil, &SDKError{
-			Code:    -5,
-			Message: "request cannot be nil",
-			Err:     ErrNilRequest,
-		}
+		return nil, fmt.Errorf("request cannot be nil")
 	}
 	if req.ChallengeID == "" {
-		return nil, &SDKError{
-			Code:    -5,
-			Message: "challenge_id is required",
-			Err:     ErrMissingChallenge,
-		}
+		return nil, fmt.Errorf("challenge_id is required")
 	}
 	if req.Answer == "" {
-		return nil, &SDKError{
-			Code:    -5,
-			Message: "answer is required",
-			Err:     ErrMissingAnswer,
-		}
+		return nil, fmt.Errorf("answer is required")
 	}
 
 	sdkResp, err := c.doRequest("POST", ImageVerifyPath, req)
@@ -637,11 +341,7 @@ func (c *Client) VerifyImageCaptcha(req *VerifyImageCaptchaRequest) (*VerifyImag
 
 	var verifyResp VerifyImageCaptchaResponse
 	if err := json.Unmarshal(sdkResp.Data, &verifyResp); err != nil {
-		return nil, &SDKError{
-			Code:    -3,
-			Message: "failed to unmarshal verify response",
-			Err:     err,
-		}
+		return nil, fmt.Errorf("failed to unmarshal verify response: %w", err)
 	}
 
 	return &verifyResp, nil
@@ -714,18 +414,10 @@ func (c *Client) GetClickCaptcha(req *ClickCaptchaRequest) (*ClickCaptchaRespons
 
 func (c *Client) VerifyCaptcha(req *VerifyCaptchaRequest) (*VerifyCaptchaResponse, error) {
 	if req == nil {
-		return nil, &SDKError{
-			Code:    -5,
-			Message: "request cannot be nil",
-			Err:     ErrNilRequest,
-		}
+		return nil, fmt.Errorf("request cannot be nil")
 	}
 	if req.ChallengeID == "" {
-		return nil, &SDKError{
-			Code:    -5,
-			Message: "challenge_id is required",
-			Err:     ErrMissingChallenge,
-		}
+		return nil, fmt.Errorf("challenge_id is required")
 	}
 
 	sdkResp, err := c.doRequest("POST", VerifyCaptchaPath, req)
@@ -735,11 +427,7 @@ func (c *Client) VerifyCaptcha(req *VerifyCaptchaRequest) (*VerifyCaptchaRespons
 
 	var verifyResp VerifyCaptchaResponse
 	if err := json.Unmarshal(sdkResp.Data, &verifyResp); err != nil {
-		return nil, &SDKError{
-			Code:    -3,
-			Message: "failed to unmarshal verify response",
-			Err:     err,
-		}
+		return nil, fmt.Errorf("failed to unmarshal verify response: %w", err)
 	}
 
 	return &verifyResp, nil
@@ -747,11 +435,7 @@ func (c *Client) VerifyCaptcha(req *VerifyCaptchaRequest) (*VerifyCaptchaRespons
 
 func (c *Client) ExtractBase64Image(dataURI string) ([]byte, error) {
 	if dataURI == "" {
-		return nil, &SDKError{
-			Code:    -5,
-			Message: "data URI is empty",
-			Err:     ErrEmptyDataURI,
-		}
+		return nil, fmt.Errorf("data URI is empty")
 	}
 
 	prefix := "data:image/png;base64,"
@@ -764,11 +448,7 @@ func (c *Client) ExtractBase64Image(dataURI string) ([]byte, error) {
 		return base64.StdEncoding.DecodeString(dataURI[len(prefixJPEG):])
 	}
 
-	return nil, &SDKError{
-		Code:    -5,
-		Message: "unsupported image format",
-		Err:     ErrUnsupportedFormat,
-	}
+	return nil, fmt.Errorf("unsupported image format")
 }
 
 func DecodeImageCaptchaResponse(data json.RawMessage) (*ImageCaptchaResponse, error) {
@@ -840,38 +520,6 @@ func (m *MockServer) Start() error {
 			Code:    0,
 			Message: "success",
 			Data:    json.RawMessage(fmt.Sprintf(`{"success":%v}`, success)),
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	})
-
-	mux.HandleFunc(SliderCaptchaPath, func(w http.ResponseWriter, r *http.Request) {
-		resp := SDKResponse{
-			Code:    0,
-			Message: "success",
-			Data: json.RawMessage(fmt.Sprintf(`{
-				"challenge_id":"%s",
-				"background_image":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-				"slider_image":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-				"slider_width":50,
-				"slider_height":50
-			}`, m.ChallengeID)),
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	})
-
-	mux.HandleFunc(ClickCaptchaPath, func(w http.ResponseWriter, r *http.Request) {
-		resp := SDKResponse{
-			Code:    0,
-			Message: "success",
-			Data: json.RawMessage(fmt.Sprintf(`{
-				"challenge_id":"%s",
-				"background_image":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-				"target_position":[100,100],
-				"target_index":3,
-				"icon_positions":[[50,50],[100,100],[150,150],[200,200],[250,250],[300,300],[350,350],[400,400],[450,450]]
-			}`, m.ChallengeID)),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)

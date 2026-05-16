@@ -1,487 +1,529 @@
+let logCurrentPage = 1;
+let logPageSize = 20;
+let currentLogs = [];
+let currentDisplay = 'list';
+let autoRefreshInterval = null;
+let currentLogForCopy = null;
 
-let currentPage = 1;
-const pageSize = 20;
-let totalLogs = 0;
-let logs = [];
-let autoScroll = true;
-let selectedLog = null;
-
-document.addEventListener('DOMContentLoaded', function() {
-    if (!Auth.requireAuth()) {
-        return;
-    }
-
-    const user = Auth.getCurrentUser();
-    if (user && user.username) {
-        Auth.updateUserDisplay(user.username);
-    }
-
-    loadApps();
-    initDefaultTimeRange();
+document.addEventListener('DOMContentLoaded', () => {
+    loadLogsSummary();
     loadLogs();
-    initEventListeners();
+    setupEventListeners();
+    initDefaultDates();
 });
 
-function initEventListeners() {
+function initDefaultDates() {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const formatDate = (date) => {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
+
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+
+    if (startDateInput) startDateInput.value = formatDate(weekAgo);
+    if (endDateInput) endDateInput.value = formatDate(now);
+}
+
+function setupEventListeners() {
     const searchBtn = document.getElementById('searchLogsBtn');
     if (searchBtn) {
-        searchBtn.addEventListener('click', function() {
-            currentPage = 1;
+        searchBtn.addEventListener('click', () => {
+            logCurrentPage = 1;
             loadLogs();
         });
     }
 
-    const resetBtn = document.getElementById('resetLogsBtn');
-    if (resetBtn) {
-        resetBtn.addEventListener('click', function() {
-            resetFilters();
-        });
-    }
-
-    const refreshBtn = document.getElementById('refreshLogsBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', function() {
-            loadLogs();
-            Auth.showToast('日志已刷新', 'success');
-        });
-    }
-
-    const autoScrollBtn = document.getElementById('autoScrollBtn');
-    if (autoScrollBtn) {
-        autoScrollBtn.addEventListener('click', function() {
-            autoScroll = !autoScroll;
-            this.classList.toggle('active', autoScroll);
-        });
-    }
-
-    const exportBtn = document.getElementById('exportLogsBtn');
+    const exportBtn = document.getElementById('exportBtn');
     if (exportBtn) {
-        exportBtn.addEventListener('click', function() {
-            exportLogs();
+        exportBtn.addEventListener('click', exportLogs);
+    }
+
+    const clearBtn = document.getElementById('clearLogsBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            const modal = new bootstrap.Modal(document.getElementById('clearLogsModal'));
+            modal.show();
         });
     }
 
-    const copyBtn = document.getElementById('copyLogBtn');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', function() {
-            copyLogContent();
+    const confirmClearBtn = document.getElementById('confirmClearBtn');
+    if (confirmClearBtn) {
+        confirmClearBtn.addEventListener('click', handleClearLogs);
+    }
+
+    const copyLogBtn = document.getElementById('copyLogBtn');
+    if (copyLogBtn) {
+        copyLogBtn.addEventListener('click', () => {
+            if (currentLogForCopy) {
+                navigator.clipboard.writeText(JSON.stringify(currentLogForCopy, null, 2))
+                    .then(() => showToast('日志已复制到剪贴板', 'success'))
+                    .catch(() => showToast('复制失败', 'danger'));
+            }
         });
     }
 
-    document.getElementById('levelFilter').addEventListener('change', function() {
-        currentPage = 1;
-        loadLogs();
-    });
+    const autoRefreshSwitch = document.getElementById('autoRefreshLogs');
+    if (autoRefreshSwitch) {
+        autoRefreshSwitch.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+    }
 
-    document.getElementById('appFilter').addEventListener('change', function() {
-        currentPage = 1;
-        loadLogs();
-    });
+    const levelButtons = document.querySelectorAll('[data-level]');
+    levelButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            levelButtons.forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
 
-    let searchTimeout;
-    document.getElementById('searchKeyword').addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            currentPage = 1;
+            const level = e.target.dataset.level;
+            const levelSelect = document.getElementById('logLevel');
+            if (level === 'all') {
+                levelSelect.value = '';
+            } else {
+                levelSelect.value = level;
+            }
+
+            logCurrentPage = 1;
             loadLogs();
-        }, 500);
+        });
     });
 
-    document.getElementById('startTime').addEventListener('change', function() {
-        currentPage = 1;
-        loadLogs();
-    });
-
-    document.getElementById('endTime').addEventListener('change', function() {
-        currentPage = 1;
-        loadLogs();
+    const displayButtons = document.querySelectorAll('[data-display]');
+    displayButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            displayButtons.forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            currentDisplay = e.target.dataset.display;
+            renderLogs(currentLogs);
+        });
     });
 }
 
-function initDefaultTimeRange() {
-    const endTime = new Date();
-    const startTime = new Date();
-    startTime.setHours(startTime.getHours() - 24);
-
-    document.getElementById('startTime').value = formatDateTimeLocal(startTime);
-    document.getElementById('endTime').value = formatDateTimeLocal(endTime);
+function startAutoRefresh() {
+    stopAutoRefresh();
+    autoRefreshInterval = setInterval(() => {
+        loadLogs(false);
+    }, 10000);
 }
 
-function formatDateTimeLocal(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-async function loadApps() {
-    try {
-        const response = await fetch('/admin/api/applications?pageSize=100');
-        if (!response.ok) throw new Error('获取应用列表失败');
-
-        const data = await response.json();
-        populateAppFilter(data.apps || []);
-    } catch (error) {
-        console.error('加载应用列表失败:', error);
-        populateAppFilter([
-            { id: 1, name: '示例应用1', appId: 'app_001' },
-            { id: 2, name: '测试应用', appId: 'app_002' }
-        ]);
+function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
     }
 }
 
-function populateAppFilter(apps) {
-    const select = document.getElementById('appFilter');
-    select.innerHTML = '<option value="">全部应用</option>';
+async function loadLogsSummary() {
+    const mockSummary = getMockLogsSummary();
 
-    apps.forEach(app => {
-        const option = document.createElement('option');
-        option.value = app.appId;
-        option.textContent = app.name;
-        select.appendChild(option);
-    });
+    try {
+        const data = await auth.request('/admin/logs/summary');
+        if (data.code === 0) {
+            updateLogsSummary(data.data);
+        } else {
+            updateLogsSummary(mockSummary);
+        }
+    } catch (error) {
+        updateLogsSummary(mockSummary);
+    }
 }
 
-async function loadLogs() {
-    try {
-        const level = document.getElementById('levelFilter').value;
-        const appId = document.getElementById('appFilter').value;
-        const keyword = document.getElementById('searchKeyword').value;
-        const startTime = document.getElementById('startTime').value;
-        const endTime = document.getElementById('endTime').value;
+function getMockLogsSummary() {
+    return {
+        total: 123456,
+        errors: 2345,
+        warnings: 5678,
+        today: 1234
+    };
+}
 
+function updateLogsSummary(summary) {
+    const totalEl = document.getElementById('totalLogCount');
+    const errorEl = document.getElementById('errorLogCount');
+    const warningEl = document.getElementById('warningLogCount');
+    const todayEl = document.getElementById('todayLogCount');
+
+    if (totalEl) totalEl.textContent = formatNumber(summary.total);
+    if (errorEl) errorEl.textContent = formatNumber(summary.errors);
+    if (warningEl) warningEl.textContent = formatNumber(summary.warnings);
+    if (todayEl) todayEl.textContent = formatNumber(summary.today);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+async function loadLogs(showLoading = true) {
+    const level = document.getElementById('logLevel')?.value || '';
+    const source = document.getElementById('logSource')?.value || '';
+    const startDate = document.getElementById('startDate')?.value || '';
+    const endDate = document.getElementById('endDate')?.value || '';
+    const keyword = document.getElementById('keyword')?.value || '';
+    const mockLogs = getMockLogs();
+
+    try {
         const params = new URLSearchParams({
-            page: currentPage,
-            pageSize: pageSize
+            page: logCurrentPage,
+            size: logPageSize,
+            level, source, startDate, endDate, keyword
         });
 
-        if (level) params.append('level', level);
-        if (appId) params.append('appId', appId);
-        if (keyword) params.append('keyword', keyword);
-        if (startTime) params.append('startTime', startTime);
-        if (endTime) params.append('endTime', endTime);
-
-        const response = await fetch(`/admin/api/logs?${params}`);
-        if (!response.ok) throw new Error('获取日志失败');
-
-        const data = await response.json();
-        logs = data.logs || [];
-        totalLogs = data.total || 0;
-
-        renderLogsTable(logs);
-        renderPagination();
-        updateLogStats();
+        const result = await auth.request(`/admin/logs?${params.toString()}`);
+        if (result.code === 0) {
+            currentLogs = result.data.list || [];
+            renderLogsPagination(result.data.total || currentLogs.length);
+            renderLogsCount(result.data.total || currentLogs.length);
+        } else {
+            currentLogs = filterLogs(mockLogs, level, source, keyword);
+            renderLogsPagination(currentLogs.length);
+            renderLogsCount(currentLogs.length);
+        }
     } catch (error) {
-        console.error('加载日志失败:', error);
-        loadMockLogs();
+        currentLogs = filterLogs(mockLogs, level, source, keyword);
+        renderLogsPagination(currentLogs.length);
+        renderLogsCount(currentLogs.length);
+    }
+
+    renderLogs(currentLogs);
+    if (showLoading) {
+        loadLogsSummary();
     }
 }
 
-function loadMockLogs() {
-    const mockLogs = [
-        {
-            id: 1,
-            level: 'info',
-            app: 'app_001',
-            module: 'UserService',
-            message: '用户登录成功',
-            time: '2024-01-15 14:30:25',
-            details: {
-                userId: 'user_123',
-                ip: '192.168.1.100',
-                userAgent: 'Mozilla/5.0...'
-            }
-        },
-        {
-            id: 2,
-            level: 'warning',
-            app: 'app_002',
-            module: 'APIController',
-            message: '请求频率过高',
-            time: '2024-01-15 14:29:10',
-            details: {
-                ip: '10.0.0.50',
-                count: 120,
-                threshold: 100
-            }
-        },
-        {
-            id: 3,
-            level: 'error',
-            app: 'app_001',
-            module: 'DatabaseService',
-            message: '数据库连接超时',
-            time: '2024-01-15 14:28:45',
-            details: {
-                error: 'Connection timeout after 30000ms',
-                host: 'db.example.com',
-                port: 5432
-            }
-        },
-        {
-            id: 4,
-            level: 'info',
-            app: 'app_003',
-            module: 'AuthService',
-            message: 'Token验证成功',
-            time: '2024-01-15 14:28:20',
-            details: {
-                tokenId: 'tok_abc123',
-                expiresIn: 3600
-            }
-        },
-        {
-            id: 5,
-            level: 'debug',
-            app: 'app_002',
-            module: 'CacheService',
-            message: '缓存命中',
-            time: '2024-01-15 14:27:55',
-            details: {
-                key: 'user_profile_123',
-                ttl: 300
-            }
-        }
-    ];
+function getMockLogs() {
+    const sources = ['auth', 'captcha', 'api', 'db', 'cache'];
+    const levels = ['debug', 'info', 'info', 'info', 'warning', 'error'];
+    const messages = {
+        'auth': ['用户登录成功', '用户登录失败', 'Token验证通过', 'Token已过期', '权限检查通过'],
+        'captcha': ['验证码生成成功', '验证码验证成功', '验证码验证失败', '验证码已过期', '验证码类型不支持'],
+        'api': ['API请求处理成功', 'API请求参数错误', 'API请求频率超限', 'API认证失败', 'API限流触发'],
+        'db': ['数据库连接成功', '数据库查询超时', '数据库事务回滚', '数据库连接池满', '数据库写入成功'],
+        'cache': ['缓存命中', '缓存未命中', '缓存写入成功', '缓存过期清理', 'Redis连接成功']
+    };
 
-    logs = mockLogs;
-    totalLogs = mockLogs.length;
+    const logs = [];
+    for (let i = 0; i < 50; i++) {
+        const source = sources[Math.floor(Math.random() * sources.length)];
+        const level = levels[Math.floor(Math.random() * levels.length)];
+        const sourceMessages = messages[source];
+        const message = sourceMessages[Math.floor(Math.random() * sourceMessages.length)];
 
-    renderLogsTable(logs);
-    renderPagination();
-    updateLogStats();
+        logs.push({
+            id: `log_${String(i + 1).padStart(6, '0')}`,
+            level: level,
+            message: message,
+            timestamp: getRandomTime(),
+            source: source,
+            details: {
+                ip: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+                userId: `user_${Math.floor(Math.random() * 10000)}`,
+                duration: `${Math.floor(Math.random() * 500)}ms`,
+                requestId: `req_${Math.random().toString(36).substring(2, 10)}`
+            }
+        });
+    }
+
+    return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-function renderLogsTable(logItems) {
-    const tbody = document.getElementById('logsTableBody');
-    if (!tbody) return;
+function getRandomTime() {
+    const now = new Date();
+    const offset = Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000);
+    const date = new Date(now.getTime() - offset);
 
-    tbody.innerHTML = '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
 
-    if (logItems.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center text-muted py-5">
-                    <i class="fas fa-clipboard-list fa-3x mb-3"></i>
-                    <p class="mb-0">暂无日志数据</p>
-                </td>
-            </tr>
+function filterLogs(logs, level, source, keyword) {
+    return logs.filter(log => {
+        if (level && log.level !== level) return false;
+        if (source && log.source !== source) return false;
+        if (keyword && !log.message.toLowerCase().includes(keyword.toLowerCase())) return false;
+        return true;
+    });
+}
+
+function renderLogs(logs) {
+    const container = document.getElementById('logsList');
+    if (!container) return;
+
+    if (logs.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <p>暂无日志记录</p>
+            </div>
         `;
         return;
     }
 
-    logItems.forEach(log => {
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-id', log.id);
-
-        const levelClass = getLevelClass(log.level);
-        const levelName = getLevelName(log.level);
-
-        tr.innerHTML = `
-            <td><small class="text-muted">${log.time}</small></td>
-            <td><span class="log-level ${levelClass}">${levelName}</span></td>
-            <td><small>${log.app}</small></td>
-            <td><small>${log.module}</small></td>
-            <td><small>${log.message}</small></td>
-            <td>
-                <button class="btn btn-outline-primary btn-sm" onclick="viewLogDetail(${log.id})">
-                    <i class="fas fa-eye"></i>
-                </button>
-            </td>
-        `;
-
-        tbody.appendChild(tr);
-    });
-
-    if (autoScroll) {
-        scrollToTop();
+    if (currentDisplay === 'list') {
+        renderLogsList(container, logs);
+    } else {
+        renderLogsCompact(container, logs);
     }
 }
 
-function getLevelClass(level) {
-    const classes = {
-        info: 'log-info',
-        warning: 'log-warning',
-        error: 'log-error',
-        debug: 'log-debug'
-    };
-    return classes[level] || 'log-info';
+function renderLogsList(container, logs) {
+    container.innerHTML = `<div class="list-group list-group-flush">${logs.map(log => `
+        <div class="list-group-item log-item" onclick="showLogDetail('${log.id}')">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="badge ${getLevelBadgeClass(log.level)}">${getLevelText(log.level)}</span>
+                    <small class="text-muted">${log.timestamp}</small>
+                    <span class="badge bg-secondary">${getSourceText(log.source)}</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <small class="text-muted">${escapeHtml(log.message)}</small>
+                    <i class="fas fa-chevron-right text-muted"></i>
+                </div>
+            </div>
+        </div>
+    `).join('')}</div>`;
 }
 
-function getLevelName(level) {
-    const names = {
-        info: 'INFO',
-        warning: 'WARN',
-        error: 'ERROR',
-        debug: 'DEBUG'
-    };
-    return names[level] || level.toUpperCase();
+function renderLogsCompact(container, logs) {
+    container.innerHTML = `<div class="p-3">${logs.map(log => `
+        <div class="d-flex align-items-start gap-3 py-2 border-bottom log-item" onclick="showLogDetail('${log.id}')" style="cursor: pointer;">
+            <span class="badge ${getLevelBadgeClass(log.level)} mt-1">${getLevelText(log.level)}</span>
+            <div class="flex-grow-1 min-w-0">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">${log.timestamp}</small>
+                    <span class="badge bg-light text-dark">${getSourceText(log.source)}</span>
+                </div>
+                <div class="text-truncate">${escapeHtml(log.message)}</div>
+            </div>
+        </div>
+    `).join('')}</div>`;
 }
 
-function renderPagination() {
+function showLogDetail(logId) {
+    const log = currentLogs.find(l => l.id === logId);
+    if (!log) return;
+
+    currentLogForCopy = log;
+
+    const modal = document.getElementById('logDetailModal');
+    const content = document.getElementById('logDetailContent');
+
+    const levelClass = log.level === 'error' ? 'text-danger' : log.level === 'warning' ? 'text-warning' : 'text-info';
+
+    content.innerHTML = `
+        <div class="mb-3">
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <span class="badge ${getLevelBadgeClass(log.level)} fs-6">${getLevelText(log.level)}</span>
+                <span class="badge bg-secondary">${getSourceText(log.source)}</span>
+                <small class="text-muted ms-auto">${log.id}</small>
+            </div>
+            <h6 class="${levelClass} mb-3">${escapeHtml(log.message)}</h6>
+            <div class="text-muted mb-3">
+                <i class="fas fa-clock me-1"></i>${log.timestamp}
+            </div>
+        </div>
+
+        <div class="card bg-light">
+            <div class="card-header py-2">
+                <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>详细信息</h6>
+            </div>
+            <div class="card-body py-2">
+                <pre class="mb-0" style="max-height: 300px; overflow: auto;"><code>${formatJson(log.details)}</code></pre>
+            </div>
+        </div>
+
+        ${log.level === 'error' || log.level === 'warning' ? `
+        <div class="alert alert-warning mt-3 mb-0">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            这是一条${log.level === 'error' ? '错误' : '警告'}日志，建议及时处理。
+        </div>
+        ` : ''}
+    `;
+
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+function formatJson(obj) {
+    try {
+        return JSON.stringify(obj, null, 2);
+    } catch (e) {
+        return String(obj);
+    }
+}
+
+function renderLogsCount(total) {
+    const countEl = document.getElementById('logsCount');
+    const pageEl = document.getElementById('currentPage');
+
+    if (countEl) countEl.textContent = formatNumber(total);
+    if (pageEl) pageEl.textContent = logCurrentPage;
+}
+
+function renderLogsPagination(total) {
     const pagination = document.getElementById('pagination');
     if (!pagination) return;
 
-    pagination.innerHTML = '';
-
-    const totalPages = Math.ceil(totalLogs / pageSize);
-    if (totalPages <= 1) return;
-
-    const prevLi = document.createElement('li');
-    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
-    prevLi.innerHTML = `<a class="page-link" href="#">&laquo;</a>`;
-    if (currentPage > 1) {
-        prevLi.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentPage--;
-            loadLogs();
-        });
-    }
-    pagination.appendChild(prevLi);
-
-    for (let i = 1; i <= totalPages && i <= 5; i++) {
-        const li = document.createElement('li');
-        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
-        li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
-        li.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentPage = i;
-            loadLogs();
-        });
-        pagination.appendChild(li);
+    const totalPages = Math.ceil(total / logPageSize);
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
     }
 
-    const nextLi = document.createElement('li');
-    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
-    nextLi.innerHTML = `<a class="page-link" href="#">&raquo;</a>`;
-    if (currentPage < totalPages) {
-        nextLi.addEventListener('click', function(e) {
-            e.preventDefault();
-            currentPage++;
-            loadLogs();
-        });
-    }
-    pagination.appendChild(nextLi);
-}
+    let html = '<div class="d-flex justify-content-between align-items-center">';
+    html += `<span class="text-muted">每页 ${logPageSize} 条</span>`;
+    html += '<div class="btn-group btn-group-sm">';
+    html += `<button class="btn btn-outline-secondary" onclick="changeLogPage(${logCurrentPage - 1})" ${logCurrentPage === 1 ? 'disabled' : ''}>上一页</button>`;
 
-function updateLogStats() {
-    const totalEl = document.getElementById('totalLogs');
-    const startEl = document.getElementById('logStart');
-    const endEl = document.getElementById('logEnd');
+    const startPage = Math.max(1, logCurrentPage - 2);
+    const endPage = Math.min(totalPages, logCurrentPage + 2);
 
-    if (totalEl) totalEl.textContent = totalLogs;
-
-    const start = (currentPage - 1) * pageSize + 1;
-    const end = Math.min(currentPage * pageSize, totalLogs);
-
-    if (startEl) startEl.textContent = totalLogs > 0 ? start : 0;
-    if (endEl) endEl.textContent = end;
-}
-
-function viewLogDetail(logId) {
-    const log = logs.find(l => l.id === logId);
-    if (!log) return;
-
-    selectedLog = log;
-    showLogDetailModal(log);
-}
-
-function showLogDetailModal(log) {
-    const modal = new bootstrap.Modal(document.getElementById('logDetailModal'));
-
-    const levelClass = getLevelClass(log.level);
-    const levelName = getLevelName(log.level);
-
-    document.getElementById('detailLevel').className = `log-level ${levelClass}`;
-    document.getElementById('detailLevel').textContent = levelName;
-    document.getElementById('detailTime').textContent = log.time;
-    document.getElementById('detailApp').textContent = log.app;
-    document.getElementById('detailModule').textContent = log.module;
-
-    const contentEl = document.getElementById('logDetailContent');
-    const pre = contentEl.querySelector('pre');
-
-    if (typeof log.details === 'object') {
-        pre.textContent = JSON.stringify(log.details, null, 2);
-    } else {
-        pre.textContent = log.details || log.message;
+    if (startPage > 1) {
+        html += `<button class="btn btn-outline-secondary" onclick="changeLogPage(1)">1</button>`;
+        if (startPage > 2) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
     }
 
-    modal.show();
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="btn ${i === logCurrentPage ? 'btn-primary' : 'btn-outline-secondary'}" onclick="changeLogPage(${i})">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
+        html += `<button class="btn btn-outline-secondary" onclick="changeLogPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    html += `<button class="btn btn-outline-secondary" onclick="changeLogPage(${logCurrentPage + 1})" ${logCurrentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+    html += '</div></div>';
+
+    pagination.innerHTML = html;
 }
 
-function copyLogContent() {
-    if (!selectedLog) return;
-
-    const content = typeof selectedLog.details === 'object'
-        ? JSON.stringify(selectedLog.details, null, 2)
-        : selectedLog.details || selectedLog.message;
-
-    navigator.clipboard.writeText(content).then(() => {
-        Auth.showToast('日志内容已复制', 'success');
-    }).catch(err => {
-        console.error('复制失败:', err);
-        Auth.showToast('复制失败', 'error');
-    });
-}
-
-function resetFilters() {
-    document.getElementById('levelFilter').value = '';
-    document.getElementById('appFilter').value = '';
-    document.getElementById('searchKeyword').value = '';
-    initDefaultTimeRange();
-    currentPage = 1;
+function changeLogPage(page) {
+    logCurrentPage = page;
     loadLogs();
 }
 
-async function exportLogs() {
+function exportLogs() {
+    const logsToExport = currentLogs.length > 0 ? currentLogs : getMockLogs();
+
+    const csvContent = [
+        ['ID', '级别', '消息', '来源', '时间', '详情'].join(','),
+        ...logsToExport.map(log => [
+            log.id,
+            log.level,
+            `"${log.message.replace(/"/g, '""')}"`,
+            log.source,
+            log.timestamp,
+            `"${JSON.stringify(log.details).replace(/"/g, '""')}"`
+        ].join(','))
+    ].join('\n');
+
+    downloadFile(csvContent, `logs_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8');
+    showToast(`成功导出 ${logsToExport.length} 条日志`, 'success');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob(['\ufeff' + content], { type: mimeType });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+async function handleClearLogs() {
+    const clearRange = document.getElementById('clearRange')?.value || '7d';
+
     try {
-        const level = document.getElementById('levelFilter').value;
-        const appId = document.getElementById('appFilter').value;
-        const keyword = document.getElementById('searchKeyword').value;
-        const startTime = document.getElementById('startTime').value;
-        const endTime = document.getElementById('endTime').value;
-
-        const params = new URLSearchParams();
-        if (level) params.append('level', level);
-        if (appId) params.append('appId', appId);
-        if (keyword) params.append('keyword', keyword);
-        if (startTime) params.append('startTime', startTime);
-        if (endTime) params.append('endTime', endTime);
-        params.append('export', 'true');
-
-        const response = await fetch(`/admin/api/logs?${params}`);
-        if (!response.ok) throw new Error('导出失败');
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `logs_${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        Auth.showToast('日志导出成功', 'success');
+        await auth.request('/admin/logs/clear', {
+            method: 'POST',
+            body: JSON.stringify({ range: clearRange })
+        });
+        showToast('日志清理成功', 'success');
+        bootstrap.Modal.getInstance(document.getElementById('clearLogsModal'))?.hide();
+        loadLogs();
+        loadLogsSummary();
     } catch (error) {
-        console.error('导出日志失败:', error);
-        Auth.showToast('导出失败，请重试', 'error');
+        showToast('清理失败', 'danger');
     }
 }
 
-function scrollToTop() {
-    const container = document.querySelector('.table-responsive');
-    if (container) {
-        container.scrollTop = 0;
-    }
+function getLevelBadgeClass(level) {
+    const map = {
+        'debug': 'bg-secondary',
+        'info': 'bg-info',
+        'warning': 'bg-warning text-dark',
+        'error': 'bg-danger'
+    };
+    return map[level] || 'bg-secondary';
 }
 
-window.Logs = {
-    loadLogs: loadLogs,
-    viewLogDetail: viewLogDetail,
-    exportLogs: exportLogs,
-    resetFilters: resetFilters
-};
+function getLevelText(level) {
+    const map = {
+        'debug': 'DEBUG',
+        'info': 'INFO',
+        'warning': 'WARNING',
+        'error': 'ERROR'
+    };
+    return map[level] || level.toUpperCase();
+}
+
+function getSourceText(source) {
+    const map = {
+        'auth': '认证服务',
+        'captcha': '验证码',
+        'api': 'API网关',
+        'db': '数据库',
+        'cache': '缓存'
+    };
+    return map[source] || source;
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer') || createToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${escapeHtml(message)}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    container.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toastContainer';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}

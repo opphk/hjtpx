@@ -10,14 +10,13 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
-	"github.com/hjtpx/hjtpx/pkg/config"
 )
 
 var (
-	ErrTaskNotFound       = errors.New("task not found")
-	ErrTaskAlreadyExists  = errors.New("task already exists")
-	ErrTaskCancelled      = errors.New("task cancelled")
-	ErrTaskTimeout        = errors.New("task timeout")
+	ErrTaskNotFound      = errors.New("task not found")
+	ErrTaskAlreadyExists = errors.New("task already exists")
+	ErrTaskCancelled     = errors.New("task cancelled")
+	ErrTaskTimeout       = errors.New("task timeout")
 )
 
 type TaskStatus string
@@ -33,14 +32,11 @@ const (
 type TaskType string
 
 const (
-	TaskTypeDefault         TaskType = "default"
-	TaskTypeImage          TaskType = "image"
-	TaskTypeEmail          TaskType = "email"
-	TaskTypeExport         TaskType = "export"
-	TaskTypeCleanup        TaskType = "cleanup"
-	TaskTypeVerificationLog TaskType = "verification_log"
-	TaskTypeStatsAnalysis  TaskType = "stats_analysis"
-	TaskTypeNotification   TaskType = "notification"
+	TaskTypeDefault TaskType = "default"
+	TaskTypeImage   TaskType = "image"
+	TaskTypeEmail   TaskType = "email"
+	TaskTypeExport  TaskType = "export"
+	TaskTypeCleanup TaskType = "cleanup"
 )
 
 type Task struct {
@@ -57,13 +53,13 @@ type Task struct {
 	StartedAt   *time.Time             `json:"started_at,omitempty"`
 	CompletedAt *time.Time             `json:"completed_at,omitempty"`
 	CancelledAt *time.Time             `json:"cancelled_at,omitempty"`
-	Timeout     time.Duration          `json:"timeout"`
+	Timeout     time.Duration           `json:"timeout"`
 }
 
 type TaskHandler func(ctx context.Context, task *Task) (interface{}, error)
 
 type AsyncTaskService struct {
-	handlers     map[TaskType]TaskHandler
+	handlers    map[TaskType]TaskHandler
 	workerCount int
 	queue       chan *Task
 	wg          sync.WaitGroup
@@ -73,7 +69,6 @@ type AsyncTaskService struct {
 	running     bool
 	taskStore   *TaskStore
 	redisClient *goredis.Client
-	cfg         *config.AsyncTasksConfig
 }
 
 type TaskStore struct {
@@ -116,30 +111,6 @@ func (ts *TaskStore) List() []*Task {
 	return tasks
 }
 
-func (ts *TaskStore) ListByStatus(status TaskStatus) []*Task {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	tasks := make([]*Task, 0)
-	for _, task := range ts.tasks {
-		if task.Status == status {
-			tasks = append(tasks, task)
-		}
-	}
-	return tasks
-}
-
-func (ts *TaskStore) ListByType(taskType TaskType) []*Task {
-	ts.mu.RLock()
-	defer ts.mu.RUnlock()
-	tasks := make([]*Task, 0)
-	for _, task := range ts.tasks {
-		if task.Type == taskType {
-			tasks = append(tasks, task)
-		}
-	}
-	return tasks
-}
-
 type TaskQueue struct {
 	client *goredis.Client
 }
@@ -160,7 +131,6 @@ func (tq *TaskQueue) Enqueue(ctx context.Context, task *Task, priority int) erro
 	pipe := tq.client.Pipeline()
 	pipe.ZAdd(ctx, key, goredis.Z{Score: score, Member: string(data)})
 	pipe.Set(ctx, fmt.Sprintf("task:%s", task.ID), string(data), 24*time.Hour)
-	pipe.Publish(ctx, "task_queue", string(data))
 	_, err = pipe.Exec(ctx)
 	return err
 }
@@ -226,20 +196,20 @@ func (tq *TaskQueue) GetQueueLength(ctx context.Context) (int64, error) {
 
 func NewAsyncTaskService(redisClient *goredis.Client, workerCount int) *AsyncTaskService {
 	ctx, cancel := context.WithCancel(context.Background())
-	cfg := config.GetConfig()
-
+	
 	s := &AsyncTaskService{
-		handlers:     make(map[TaskType]TaskHandler),
-		workerCount:  workerCount,
-		queue:        make(chan *Task, cfg.AsyncTasks.QueueSize),
-		ctx:          ctx,
-		cancel:       cancel,
-		taskStore:    NewTaskStore(),
-		redisClient:  redisClient,
-		cfg:         &cfg.AsyncTasks,
+		handlers:    make(map[TaskType]TaskHandler),
+		workerCount: workerCount,
+		queue:       make(chan *Task, 1000),
+		ctx:         ctx,
+		cancel:      cancel,
+		taskStore:   NewTaskStore(),
+		redisClient: redisClient,
 	}
 
-	s.RegisterDefaultHandlers()
+	if redisClient != nil {
+		s.queue = make(chan *Task, 1000)
+	}
 
 	return s
 }
@@ -255,33 +225,6 @@ func (s *AsyncTaskService) RegisterDefaultHandlers() {
 	s.RegisterHandler(TaskTypeEmail, s.defaultEmailHandler)
 	s.RegisterHandler(TaskTypeExport, s.defaultExportHandler)
 	s.RegisterHandler(TaskTypeCleanup, s.defaultCleanupHandler)
-	s.RegisterHandler(TaskTypeVerificationLog, s.verificationLogHandler)
-	s.RegisterHandler(TaskTypeStatsAnalysis, s.statsAnalysisHandler)
-	s.RegisterHandler(TaskTypeNotification, s.notificationHandler)
-}
-
-func (s *AsyncTaskService) verificationLogHandler(ctx context.Context, task *Task) (interface{}, error) {
-	time.Sleep(50 * time.Millisecond)
-	return map[string]interface{}{
-		"logged":  true,
-		"task_id": task.ID,
-	}, nil
-}
-
-func (s *AsyncTaskService) statsAnalysisHandler(ctx context.Context, task *Task) (interface{}, error) {
-	time.Sleep(100 * time.Millisecond)
-	return map[string]interface{}{
-		"analyzed": true,
-		"task_id":  task.ID,
-	}, nil
-}
-
-func (s *AsyncTaskService) notificationHandler(ctx context.Context, task *Task) (interface{}, error) {
-	time.Sleep(30 * time.Millisecond)
-	return map[string]interface{}{
-		"sent":    true,
-		"task_id": task.ID,
-	}, nil
 }
 
 func (s *AsyncTaskService) defaultImageHandler(ctx context.Context, task *Task) (interface{}, error) {
@@ -295,7 +238,7 @@ func (s *AsyncTaskService) defaultImageHandler(ctx context.Context, task *Task) 
 func (s *AsyncTaskService) defaultEmailHandler(ctx context.Context, task *Task) (interface{}, error) {
 	time.Sleep(50 * time.Millisecond)
 	return map[string]interface{}{
-		"sent":    true,
+		"sent":  true,
 		"task_id": task.ID,
 	}, nil
 }
@@ -325,11 +268,9 @@ func (s *AsyncTaskService) Start() {
 	s.running = true
 	s.mu.Unlock()
 
-	if s.cfg.Enable {
-		for i := 0; i < s.workerCount; i++ {
-			s.wg.Add(1)
-			go s.worker(i)
-		}
+	for i := 0; i < s.workerCount; i++ {
+		s.wg.Add(1)
+		go s.worker(i)
 	}
 
 	log.Printf("Async task service started with %d workers", s.workerCount)
@@ -402,33 +343,22 @@ func (s *AsyncTaskService) processTask(ctx context.Context, task *Task) {
 	}
 
 	s.taskStore.Set(task)
-
-	if s.redisClient != nil {
-		tq := NewTaskQueue(s.redisClient)
-		_ = tq.UpdateTask(ctx, task)
-	}
 }
 
 func (s *AsyncTaskService) defaultHandler(ctx context.Context, task *Task) (interface{}, error) {
 	return map[string]interface{}{
 		"processed": true,
-		"task_id":  task.ID,
+		"task_id":   task.ID,
 	}, nil
 }
 
 func (s *AsyncTaskService) Enqueue(ctx context.Context, task *Task) error {
-	task.ID = fmt.Sprintf("task_%d_%s", time.Now().UnixNano(), generateTaskID())
+	task.ID = fmt.Sprintf("task_%d_%s", time.Now().UnixNano(), generateID())
 	task.Status = TaskStatusPending
 	task.CreatedAt = time.Now()
 
 	if task.MaxRetries == 0 {
-		task.MaxRetries = s.cfg.MaxRetries
-	}
-	if task.MaxRetries == 0 {
 		task.MaxRetries = 3
-	}
-	if task.Timeout == 0 {
-		task.Timeout = time.Duration(s.cfg.DefaultTimeoutSecs) * time.Second
 	}
 	if task.Timeout == 0 {
 		task.Timeout = 5 * time.Minute
@@ -449,34 +379,12 @@ func (s *AsyncTaskService) Enqueue(ctx context.Context, task *Task) error {
 	}
 }
 
-func (s *AsyncTaskService) EnqueueAsync(ctx context.Context, task *Task) {
-	go func() {
-		_ = s.Enqueue(context.Background(), task)
-	}()
-}
-
 func (s *AsyncTaskService) GetTask(taskID string) (*Task, bool) {
 	return s.taskStore.Get(taskID)
 }
 
 func (s *AsyncTaskService) ListTasks() []*Task {
 	return s.taskStore.List()
-}
-
-func (s *AsyncTaskService) ListPendingTasks() []*Task {
-	return s.taskStore.ListByStatus(TaskStatusPending)
-}
-
-func (s *AsyncTaskService) ListRunningTasks() []*Task {
-	return s.taskStore.ListByStatus(TaskStatusRunning)
-}
-
-func (s *AsyncTaskService) ListCompletedTasks() []*Task {
-	return s.taskStore.ListByStatus(TaskStatusCompleted)
-}
-
-func (s *AsyncTaskService) ListFailedTasks() []*Task {
-	return s.taskStore.ListByStatus(TaskStatusFailed)
 }
 
 func (s *AsyncTaskService) CancelTask(taskID string) error {
@@ -497,32 +405,13 @@ func (s *AsyncTaskService) CancelTask(taskID string) error {
 	return nil
 }
 
-func (s *AsyncTaskService) RetryTask(taskID string) error {
-	task, ok := s.taskStore.Get(taskID)
-	if !ok {
-		return ErrTaskNotFound
-	}
-
-	if task.Status != TaskStatusFailed {
-		return fmt.Errorf("can only retry failed tasks, current status: %s", task.Status)
-	}
-
-	task.Status = TaskStatusPending
-	task.Error = ""
-	task.RetryCount = 0
-	s.taskStore.Set(task)
-
-	return s.Enqueue(context.Background(), task)
-}
-
 func (s *AsyncTaskService) GetStats() *TaskStats {
 	tasks := s.taskStore.List()
-
+	
 	stats := &TaskStats{
-		Total:       int64(len(tasks)),
-		ByType:     make(map[TaskType]int64),
-		ByStatus:   make(map[TaskStatus]int64),
-		QueueLength: 0,
+		Total:   int64(len(tasks)),
+		ByType:  make(map[TaskType]int64),
+		ByStatus: make(map[TaskStatus]int64),
 	}
 
 	for _, task := range tasks {
@@ -530,24 +419,19 @@ func (s *AsyncTaskService) GetStats() *TaskStats {
 		stats.ByStatus[task.Status]++
 	}
 
-	if s.redisClient != nil {
-		length, _ := NewTaskQueue(s.redisClient).GetQueueLength(context.Background())
-		stats.QueueLength = length
-	}
-
 	return stats
 }
 
 type TaskStats struct {
-	Total       int64              `json:"total"`
-	Pending     int64              `json:"pending"`
-	Running     int64              `json:"running"`
-	Completed   int64              `json:"completed"`
-	Failed      int64              `json:"failed"`
-	Cancelled   int64              `json:"cancelled"`
-	ByType      map[TaskType]int64 `json:"by_type"`
-	ByStatus    map[TaskStatus]int64 `json:"by_status"`
-	QueueLength int64              `json:"queue_length"`
+	Total        int64              `json:"total"`
+	Pending      int64              `json:"pending"`
+	Running      int64              `json:"running"`
+	Completed    int64              `json:"completed"`
+	Failed       int64              `json:"failed"`
+	Cancelled    int64              `json:"cancelled"`
+	ByType       map[TaskType]int64 `json:"by_type"`
+	ByStatus     map[TaskStatus]int64 `json:"by_status"`
+	QueueLength  int64              `json:"queue_length"`
 }
 
 func (s *AsyncTaskService) WaitForTask(ctx context.Context, taskID string, timeout time.Duration) (*Task, error) {
@@ -582,7 +466,7 @@ func (s *AsyncTaskService) WaitForTask(ctx context.Context, taskID string, timeo
 	}
 }
 
-func generateTaskID() string {
+func generateID() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	id := make([]byte, 8)
 	for i := range id {
@@ -593,24 +477,19 @@ func generateTaskID() string {
 }
 
 type TaskBatch struct {
-	Tasks     []*Task  `json:"tasks"`
-	GroupID   string   `json:"group_id"`
+	Tasks    []*Task `json:"tasks"`
+	GroupID  string `json:"group_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func (s *AsyncTaskService) EnqueueBatch(ctx context.Context, tasks []*Task) (*TaskBatch, error) {
 	batch := &TaskBatch{
-		Tasks:    make([]*Task, 0, len(tasks)),
-		GroupID:  fmt.Sprintf("batch_%d", time.Now().UnixNano()),
-		CreatedAt: time.Now(),
+		Tasks:      make([]*Task, 0, len(tasks)),
+		GroupID:    fmt.Sprintf("batch_%d", time.Now().UnixNano()),
+		CreatedAt:  time.Now(),
 	}
 
 	for _, task := range tasks {
-		if task.Payload == nil {
-			task.Payload = make(map[string]interface{})
-		}
-		task.Payload["batch_group"] = batch.GroupID
-
 		if err := s.Enqueue(ctx, task); err != nil {
 			return nil, fmt.Errorf("failed to enqueue task: %w", err)
 		}
@@ -666,7 +545,7 @@ func (s *AsyncTaskService) SchedulePeriodicTask(id string, taskType TaskType, in
 					Payload:  payload,
 					Priority: 0,
 				}
-				_ = s.Enqueue(context.Background(), task)
+				s.Enqueue(context.Background(), task)
 			}
 		}
 	}()
@@ -689,32 +568,6 @@ func (s *AsyncTaskService) CleanupCompletedTasks(olderThan time.Duration) int {
 				s.taskStore.Delete(task.ID)
 				cleaned++
 			}
-		}
-	}
-
-	return cleaned
-}
-
-func (s *AsyncTaskService) CleanupOldTasks(olderThan time.Duration) int {
-	tasks := s.taskStore.List()
-	cutoff := time.Now().Add(-olderThan)
-	cleaned := 0
-
-	for _, task := range tasks {
-		shouldDelete := false
-		if task.CompletedAt != nil && task.CompletedAt.Before(cutoff) {
-			shouldDelete = true
-		}
-		if task.CancelledAt != nil && task.CancelledAt.Before(cutoff) {
-			shouldDelete = true
-		}
-		if task.CreatedAt.Before(cutoff) && task.Status == TaskStatusPending {
-			shouldDelete = true
-		}
-
-		if shouldDelete {
-			s.taskStore.Delete(task.ID)
-			cleaned++
 		}
 	}
 

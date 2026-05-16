@@ -8,18 +8,18 @@ import (
 
 func TestInitJWT(t *testing.T) {
 	cfg := &config.JWTConfig{
-		Secret:      "test-secret-key",
+		Secret:     "test-secret-key",
 		ExpireHours: 24,
 	}
-	InitJWT(cfg.Secret)
+	InitJWT(cfg)
 }
 
 func TestGenerateToken(t *testing.T) {
 	cfg := &config.JWTConfig{
-		Secret:      "test-secret-key",
+		Secret:     "test-secret-key",
 		ExpireHours: 24,
 	}
-	InitJWT(cfg.Secret)
+	InitJWT(cfg)
 
 	token, err := GenerateToken(1, "testuser")
 	if err != nil {
@@ -32,10 +32,10 @@ func TestGenerateToken(t *testing.T) {
 
 func TestParseToken(t *testing.T) {
 	cfg := &config.JWTConfig{
-		Secret:      "test-secret-key",
+		Secret:     "test-secret-key",
 		ExpireHours: 24,
 	}
-	InitJWT(cfg.Secret)
+	InitJWT(cfg)
 
 	originalAdminID := uint(1)
 	originalUsername := "testuser"
@@ -60,10 +60,10 @@ func TestParseToken(t *testing.T) {
 
 func TestParseInvalidToken(t *testing.T) {
 	cfg := &config.JWTConfig{
-		Secret:      "test-secret-key",
+		Secret:     "test-secret-key",
 		ExpireHours: 24,
 	}
-	InitJWT(cfg.Secret)
+	InitJWT(cfg)
 
 	_, err := ParseToken("invalid-token")
 	if err == nil {
@@ -73,10 +73,10 @@ func TestParseInvalidToken(t *testing.T) {
 
 func TestParseTokenWithWrongSecret(t *testing.T) {
 	cfg1 := &config.JWTConfig{
-		Secret:      "secret-1",
+		Secret:     "secret-1",
 		ExpireHours: 24,
 	}
-	InitJWT(cfg1.Secret)
+	InitJWT(cfg1)
 
 	token, err := GenerateToken(1, "testuser")
 	if err != nil {
@@ -84,10 +84,10 @@ func TestParseTokenWithWrongSecret(t *testing.T) {
 	}
 
 	cfg2 := &config.JWTConfig{
-		Secret:      "secret-2",
+		Secret:     "secret-2",
 		ExpireHours: 24,
 	}
-	InitJWT(cfg2.Secret)
+	InitJWT(cfg2)
 
 	_, err = ParseToken(token)
 	if err == nil {

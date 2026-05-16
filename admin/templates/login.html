@@ -3,146 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台 - 登录</title>
+    <title>墨盾验证 · 管理后台登录</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        :root {
-            --sidebar-bg: #1e293b;
-            --sidebar-hover: #334155;
-        }
-        body {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .login-card {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-            width: 100%;
-            max-width: 420px;
-        }
-        .login-header {
-            background: var(--sidebar-bg);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        .login-header h3 {
-            margin: 0;
-            font-weight: 600;
-        }
-        .login-header p {
-            margin: 10px 0 0;
-            opacity: 0.8;
-            font-size: 14px;
-        }
-        .login-body {
-            padding: 40px;
-        }
-        .form-floating {
-            margin-bottom: 20px;
-        }
-        .form-floating .form-control {
-            border-radius: 10px;
-            border: 2px solid #e2e8f0;
-        }
-        .form-floating .form-control:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        .btn-login {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            padding: 12px;
-            font-weight: 600;
-            border-radius: 10px;
-            width: 100%;
-        }
-        .btn-login:hover {
-            opacity: 0.9;
-            color: white;
-        }
-        .btn-login:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .remember-me {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .remember-me input {
-            margin-right: 8px;
-        }
-        .error-message {
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-            font-size: 14px;
-        }
-        .error-message.show {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .password-toggle {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #94a3b8;
-            z-index: 10;
-        }
-        .password-toggle:hover {
-            color: #667eea;
-        }
-    </style>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="/admin/static/css/modun-theme.css">
 </head>
 <body>
-    <div class="login-card">
-        <div class="login-header">
-            <i class="fas fa-shield-alt fa-3x mb-3"></i>
-            <h3>管理后台</h3>
-            <p>请登录以继续</p>
-        </div>
-        <div class="login-body">
-            <div id="errorMessage" class="error-message">
-                <i class="fas fa-exclamation-circle"></i>
-                <span></span>
+    <div class="login-bg-ornament">墨</div>
+    <div class="login-bg-ornament">盾</div>
+
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="login-brand-icon">
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <div class="login-brand-name">
+                    墨盾验证
+                    <span class="login-seal">验</span>
+                </div>
+                <div class="login-brand-sub">管 理 后 台</div>
             </div>
+            <div class="login-divider"></div>
             <form id="loginForm">
-                <div class="form-floating position-relative">
-                    <input type="text" class="form-control" id="username" name="username" placeholder="用户名" required autocomplete="username">
-                    <label for="username"><i class="fas fa-user me-2"></i>用户名</label>
+                <div class="mb-4">
+                    <label for="username" class="form-label">
+                        <i class="fas fa-user me-1" style="color: #999; font-size: 12px;"></i>
+                        用户名
+                    </label>
+                    <input type="text" class="form-control" id="username" name="username" placeholder="请输入管理员用户名" required autocomplete="username">
                 </div>
-                <div class="form-floating position-relative">
-                    <input type="password" class="form-control" id="password" name="password" placeholder="密码" required autocomplete="current-password">
-                    <label for="password"><i class="fas fa-lock me-2"></i>密码</label>
-                    <span class="password-toggle" id="passwordToggle">
-                        <i class="fas fa-eye"></i>
-                    </span>
+                <div class="mb-3">
+                    <label for="password" class="form-label">
+                        <i class="fas fa-lock me-1" style="color: #999; font-size: 12px;"></i>
+                        密码
+                    </label>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password">
                 </div>
-                <div class="remember-me">
-                    <input type="checkbox" id="rememberMe" name="rememberMe">
-                    <label for="rememberMe" class="text-secondary mb-0">记住登录状态</label>
-                </div>
-                <button type="submit" class="btn btn-login" id="loginBtn">
-                    <span id="loginText">登录</span>
-                    <span id="loginSpinner" style="display: none;">
-                        <i class="fas fa-spinner fa-spin me-2"></i>登录中...
-                    </span>
+                <button type="submit" id="loginBtn" class="login-btn">
+                    <i class="fas fa-key me-2"></i>登 录
                 </button>
+                <div id="loginError" class="login-error"></div>
             </form>
+            <div class="login-footer">墨盾验证 · 安全守护</div>
         </div>
     </div>
 

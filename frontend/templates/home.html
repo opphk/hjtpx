@@ -2,258 +2,416 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <meta name="description" content="专业、高效、便捷的用户服务平台">
-    <meta name="theme-color" content="#667eea">
-    <title>用户端 - 首页</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="墨盾验证 - 开源免费的行为验证码系统，AI驱动的人机识别，超越极验、易盾的下一代验证方案">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>墨盾验证 - 免费开源的行为验证码系统</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="/static/css/modun-theme.css">
 </head>
 <body>
-    <a href="#main-content" class="visually-hidden focus-visible">跳转到主要内容</a>
-    
-    <header class="bg-white shadow-sm sticky-top" role="banner">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);">
         <div class="container">
-            <nav class="navbar navbar-expand-lg navbar-light" role="navigation" aria-label="主导航">
-                <div class="container-fluid px-0">
-                    <a class="navbar-brand fw-bold text-primary" href="/" aria-label="返回首页">
-                        <i class="fas fa-shield-alt" aria-hidden="true"></i> 用户端
-                    </a>
-                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航菜单">
-                        <span class="navbar-toggler-icon"></span>
-                    </button>
-                    <div class="collapse navbar-collapse" id="navbarNav">
-                        <ul class="navbar-nav me-auto">
-                            <li class="nav-item">
-                                <a class="nav-link active" href="/" aria-current="page">
-                                    <i class="fas fa-home" aria-hidden="true"></i> 首页
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="/products">
-                                    <i class="fas fa-box" aria-hidden="true"></i> 产品
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="/about">
-                                    <i class="fas fa-info-circle" aria-hidden="true"></i> 关于
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="/contact">
-                                    <i class="fas fa-envelope" aria-hidden="true"></i> 联系我们
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="d-flex gap-2">
-                            <a href="/login" class="btn btn-outline-primary btn-sm">
-                                <i class="fas fa-sign-in-alt" aria-hidden="true"></i> 登录
-                            </a>
-                            <a href="/register" class="btn btn-primary btn-sm">
-                                <i class="fas fa-user-plus" aria-hidden="true"></i> 注册
-                            </a>
-                        </div>
-                    </div>
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <span class="seal-stamp seal-stamp-sm">墨盾</span>
+                <span class="font-serif fw-bold fs-5" style="color: var(--gold);">墨盾验证</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="color: var(--gold);">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item"><a class="nav-link nav-link-custom active" href="/">首页</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="/captcha">在线体验</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="/about">关于</a></li>
+                    <li class="nav-item"><a class="nav-link nav-link-custom" href="https://github.com/opphk/hjtpx" target="_blank">开源</a></li>
+                </ul>
+                <div class="d-flex gap-2">
+                    <a href="/login" class="btn btn-ghost-light btn-sm px-3">登录</a>
+                    <a href="/register" class="btn btn-vermillion btn-sm px-3">注册</a>
                 </div>
-            </nav>
+            </div>
         </div>
-    </header>
-    
-    <main id="main-content" class="min-vh-100" role="main">
-        <section class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" role="banner">
-            <div class="container py-5">
-                <h1 class="display-4 fw-bold mb-3">
-                    <i class="fas fa-rocket" aria-hidden="true"></i> 欢迎来到用户端
-                </h1>
-                <p class="lead mb-4">专业、高效、便捷的服务体验</p>
-                <div class="d-flex justify-content-center gap-3 flex-wrap">
-                    <a href="/products" class="btn btn-light btn-lg px-4">
-                        <i class="fas fa-box" aria-hidden="true"></i> 浏览产品
+    </nav>
+
+    <section class="hero-section">
+        <div class="hero-particles" id="particles"></div>
+        <div class="container position-relative" style="z-index: 1;">
+            <div class="row align-items-center">
+                <div class="col-lg-7 text-center text-lg-start">
+                    <div class="d-inline-flex align-items-center gap-2 mb-4 px-3 py-2" style="background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.2); border-radius: 4px;">
+                        <i class="fas fa-code-branch" style="color: var(--gold); font-size: 0.8rem;"></i>
+                        <span style="color: var(--gold); font-size: 0.85rem; letter-spacing: 1px;">完全开源 · 永久免费</span>
+                    </div>
+                    <h1 class="display-3 fw-bold text-white mb-3" style="line-height: 1.3;">
+                        下一代<br>
+                        <span style="color: var(--gold);">行为验证</span>系统
+                    </h1>
+                    <p class="fs-5 mb-4" style="color: rgba(255,255,255,0.6); max-width: 540px; line-height: 1.8;">
+                        墨盾验证 —— 以 AI 驱动的人机识别引擎，融合多种验证方式，<br class="d-none d-md-block">
+                        为您的网站提供坚若磐石的安全防护，<span style="color: var(--gold);">永久免费，开源可鉴</span>。
+                    </p>
+                    <div class="d-flex flex-wrap gap-3 justify-content-center justify-content-lg-start">
+                        <a href="/captcha" class="btn btn-vermillion btn-lg px-4">
+                            <i class="fas fa-play me-2"></i>在线体验
+                        </a>
+                        <a href="https://github.com/opphk/hjtpx" target="_blank" class="btn btn-outline-gold btn-lg px-4">
+                            <i class="fab fa-github me-2"></i>GitHub
+                        </a>
+                    </div>
+                    <div class="d-flex flex-wrap gap-4 mt-4 justify-content-center justify-content-lg-start">
+                        <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">
+                            <i class="fas fa-check-circle" style="color: var(--gold);"></i>
+                            <span>AI 行为分析</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">
+                            <i class="fas fa-check-circle" style="color: var(--gold);"></i>
+                            <span>多种验证方式</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">
+                            <i class="fas fa-check-circle" style="color: var(--gold);"></i>
+                            <span>零成本接入</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-5 text-center mt-5 mt-lg-0">
+                    <div class="d-inline-block p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; backdrop-filter: blur(8px);">
+                        <div class="mb-3">
+                            <span class="seal-stamp mx-auto" style="width: 80px; height: 80px; font-size: 24px;">免费</span>
+                        </div>
+                        <p class="font-serif fs-4 mb-0" style="color: var(--gold);">诚信为本 · 安全为盾</p>
+                        <p style="color: rgba(255,255,255,0.4); font-size: 0.85rem; margin-top: 0.5rem;">超越极验 · 易盾 · 五秒盾</p>
+                        <div class="d-flex justify-content-center gap-3 mt-3">
+                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: var(--gold); border-color: rgba(201,169,110,0.2);">Go</span>
+                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: var(--gold); border-color: rgba(201,169,110,0.2);">PostgreSQL</span>
+                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: var(--gold); border-color: rgba(201,169,110,0.2);">Redis</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5" style="background: white;">
+        <div class="container py-4">
+            <div class="row g-4 text-center">
+                <div class="col-6 col-lg-3">
+                    <div class="stat-number">10万+</div>
+                    <div class="stat-label mt-1">请求处理</div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="stat-number">99.9%</div>
+                    <div class="stat-label mt-1">识别准确率</div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="stat-number">5种</div>
+                    <div class="stat-label mt-1">验证方式</div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="stat-number">0元</div>
+                    <div class="stat-label mt-1">永久免费</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5 paper-bg">
+        <div class="container py-5">
+            <div class="text-center mb-5">
+                <span class="font-serif fs-6" style="color: var(--gold); letter-spacing: 3px;">— 核心能力 —</span>
+                <h2 class="font-serif fw-bold fs-2 mt-2" style="color: var(--ink);">全方位的验证解决方案</h2>
+                <div class="brush-divider mt-3"></div>
+                <p class="mt-3" style="color: var(--ink-light); max-width: 600px; margin: 1rem auto 0;">
+                    从滑块到行为分析，从图形验证到AI风控，我们提供一站式的安全防护
+                </p>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card h-100">
+                        <div class="feature-icon-wrap mb-3">
+                            <i class="fas fa-arrows-alt-h"></i>
+                        </div>
+                        <h5 class="font-serif fw-bold">滑块验证</h5>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            真实图片背景，多种拼图样式。采集滑动轨迹，AI分析人机行为，精准识别自动化攻击。
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card h-100">
+                        <div class="feature-icon-wrap mb-3">
+                            <i class="fas fa-mouse-pointer"></i>
+                        </div>
+                        <h5 class="font-serif fw-bold">点选验证</h5>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            汉字、字母、数字多种模式，乱序点选、时序验证，让机器无从下手。
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card h-100">
+                        <div class="feature-icon-wrap mb-3">
+                            <i class="fas fa-image"></i>
+                        </div>
+                        <h5 class="font-serif fw-bold">图形验证码</h5>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            支持扭曲变形、复杂干扰线、多种噪点模式，自定义字符集，强力抵御OCR识别。
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card h-100">
+                        <div class="feature-icon-wrap mb-3">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h5 class="font-serif fw-bold">AI 行为分析</h5>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            轨迹平滑算法、路径相似度检测、键盘模式分析，20+维度风险评分，精准识别机器行为。
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card h-100">
+                        <div class="feature-icon-wrap mb-3">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h5 class="font-serif fw-bold">风控引擎</h5>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            IP限流、用户限流、黑白名单、异常自动封禁，多维度防护体系，让攻击无处遁形。
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-4">
+                    <div class="feature-card h-100">
+                        <div class="feature-icon-wrap mb-3">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h5 class="font-serif fw-bold">实时监控</h5>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            管理端仪表盘实时数据，趋势分析、风险分布、日志导出，全面掌控验证状态。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5" style="background: white;">
+        <div class="container py-5">
+            <div class="row align-items-center g-5">
+                <div class="col-lg-6">
+                    <span class="font-serif fs-6" style="color: var(--gold); letter-spacing: 3px;">— 接入流程 —</span>
+                    <h2 class="font-serif fw-bold fs-2 mt-2" style="color: var(--ink);">三步集成，即刻安全</h2>
+                    <div class="brush-divider mt-3" style="margin: 0;"></div>
+                    <p class="mt-3" style="color: var(--ink-light); max-width: 480px; line-height: 1.8;">
+                        开源免费，无需任何费用。简单的API调用，即可为您的网站穿上坚不可摧的铠甲。
+                    </p>
+                    <div class="mt-4 step-line">
+                        <div class="d-flex gap-3 mb-4 step-item">
+                            <div class="step-number">01</div>
+                            <div>
+                                <h6 class="fw-bold font-serif">注册账号</h6>
+                                <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem;">免费注册，创建您的应用，获取 API Key</p>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3 mb-4 step-item">
+                            <div class="step-number">02</div>
+                            <div>
+                                <h6 class="fw-bold font-serif">接入SDK</h6>
+                                <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem;">下载 Go SDK，几行代码完成集成</p>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3 step-item">
+                            <div class="step-number">03</div>
+                            <div>
+                                <h6 class="fw-bold font-serif">上线运行</h6>
+                                <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem;">一键部署，实时监控，AI 自动优化防护策略</p>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="/captcha" class="btn btn-vermillion mt-4 px-4">
+                        <i class="fas fa-rocket me-2"></i>立即体验
                     </a>
-                    <a href="/about" class="btn btn-outline-light btn-lg px-4">
-                        <i class="fas fa-info-circle" aria-hidden="true"></i> 了解更多
-                    </a>
                 </div>
-            </div>
-        </section>
+                <div class="col-lg-6">
+                    <div class="p-4" style="background: var(--paper-dark); border-radius: 8px;">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fas fa-terminal" style="color: var(--gold);"></i>
+                            <span class="font-serif fw-bold" style="font-size: 0.9rem;">快速集成示例</span>
+                        </div>
+                        <pre style="background: var(--ink); color: #e0e0e0; padding: 1.2rem; border-radius: 4px; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;"><span style="color: var(--gold);">// 引入SDK</span>
+<span style="color: #8ab4f8;">import</span> <span style="color: #e8c88a;">"github.com/opphk/hjtpx/sdk/go"</span>
 
-        <section class="py-5" aria-label="特色服务">
-            <div class="container">
-                <h2 class="text-center fw-bold mb-5">
-                    <i class="fas fa-star" aria-hidden="true"></i> 我们的特色
-                </h2>
-                <div class="row g-4">
-                    <div class="col-md-4">
-                        <div class="card h-100 shadow-sm border-0">
-                            <div class="card-body text-center p-4">
-                                <div class="mb-3">
-                                    <i class="fas fa-rocket fa-3x text-primary" aria-hidden="true"></i>
-                                </div>
-                                <h5 class="card-title">快速响应</h5>
-                                <p class="card-text text-muted">极速处理您的请求，让您的体验更加流畅</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100 shadow-sm border-0">
-                            <div class="card-body text-center p-4">
-                                <div class="mb-3">
-                                    <i class="fas fa-shield-alt fa-3x text-success" aria-hidden="true"></i>
-                                </div>
-                                <h5 class="card-title">安全可靠</h5>
-                                <p class="card-text text-muted">采用先进的安全技术，保护您的数据安全</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100 shadow-sm border-0">
-                            <div class="card-body text-center p-4">
-                                <div class="mb-3">
-                                    <i class="fas fa-comments fa-3x text-info" aria-hidden="true"></i>
-                                </div>
-                                <h5 class="card-title">优质服务</h5>
-                                <p class="card-text text-muted">专业的客服团队，随时为您提供帮助</p>
-                            </div>
-                        </div>
+<span style="color: var(--gold);">// 初始化客户端</span>
+client := captcha.<span style="color: #8ab4f8;">NewClient</span>(<span style="color: #e8c88a;">"your-api-key"</span>)
+
+<span style="color: var(--gold);">// 获取滑块验证码</span>
+resp, err := client.<span style="color: #8ab4f8;">GetSliderCaptcha</span>()
+<span style="color: #82c882;">if</span> err != <span style="color: #82c882;">nil</span> {
+    log.<span style="color: #8ab4f8;">Fatal</span>(err)
+}
+
+<span style="color: var(--gold);">// 验证用户滑动结果</span>
+result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
+    resp.SessionID,
+    <span style="color: #e8c88a;">"slider"</span>,
+    userInput,
+)</pre>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <section class="py-5 bg-light" aria-label="最新产品">
-            <div class="container">
-                <h2 class="text-center fw-bold mb-5">
-                    <i class="fas fa-fire" aria-hidden="true"></i> 最新产品
-                </h2>
-                <div class="row g-4">
-                    <div class="col-md-4">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style="height: 200px;" role="img" aria-label="产品图片占位符">
-                                <i class="fas fa-image fa-3x" aria-hidden="true"></i>
-                            </div>
-                            <div class="card-body">
-                                <h5 class="card-title">产品名称 1</h5>
-                                <p class="card-text text-muted">高质量的产品描述文本</p>
-                                <p class="card-text fw-bold text-primary fs-4">¥ 99.00</p>
-                                <a href="#" class="btn btn-outline-primary">
-                                    <i class="fas fa-eye" aria-hidden="true"></i> 查看详情
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style="height: 200px;" role="img" aria-label="产品图片占位符">
-                                <i class="fas fa-image fa-3x" aria-hidden="true"></i>
-                            </div>
-                            <div class="card-body">
-                                <h5 class="card-title">产品名称 2</h5>
-                                <p class="card-text text-muted">高质量的产品描述文本</p>
-                                <p class="card-text fw-bold text-primary fs-4">¥ 199.00</p>
-                                <a href="#" class="btn btn-outline-primary">
-                                    <i class="fas fa-eye" aria-hidden="true"></i> 查看详情
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style="height: 200px;" role="img" aria-label="产品图片占位符">
-                                <i class="fas fa-image fa-3x" aria-hidden="true"></i>
-                            </div>
-                            <div class="card-body">
-                                <h5 class="card-title">产品名称 3</h5>
-                                <p class="card-text text-muted">高质量的产品描述文本</p>
-                                <p class="card-text fw-bold text-primary fs-4">¥ 299.00</p>
-                                <a href="#" class="btn btn-outline-primary">
-                                    <i class="fas fa-eye" aria-hidden="true"></i> 查看详情
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="py-5" aria-label="服务优势">
-            <div class="container">
+    <section class="py-5 paper-bg">
+        <div class="container py-5">
+            <div class="open-source-banner p-5">
                 <div class="row align-items-center">
-                    <div class="col-md-6">
-                        <h2 class="fw-bold mb-4">
-                            <i class="fas fa-cog" aria-hidden="true"></i> 为什么选择我们
-                        </h2>
-                        <ul class="list-unstyled">
-                            <li class="mb-3">
-                                <i class="fas fa-check-circle text-success me-2" aria-hidden="true"></i>
-                                <span>7x24 小时不间断服务</span>
-                            </li>
-                            <li class="mb-3">
-                                <i class="fas fa-check-circle text-success me-2" aria-hidden="true"></i>
-                                <span>99.9% 服务可用性保证</span>
-                            </li>
-                            <li class="mb-3">
-                                <i class="fas fa-check-circle text-success me-2" aria-hidden="true"></i>
-                                <span>专业的技术支持团队</span>
-                            </li>
-                            <li class="mb-3">
-                                <i class="fas fa-check-circle text-success me-2" aria-hidden="true"></i>
-                                <span>安全可靠的数据保护</span>
-                            </li>
-                        </ul>
+                    <div class="col-lg-7">
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <i class="fab fa-github fa-2x" style="color: var(--gold);"></i>
+                            <h3 class="font-serif fw-bold text-white mb-0">完全开源 · 永久免费</h3>
+                        </div>
+                        <p style="color: rgba(255,255,255,0.6); line-height: 1.8; max-width: 560px;">
+                            墨盾验证以 MIT 许可证开源，您可以自由使用、修改和分发。<br>
+                            没有任何隐藏费用，没有任何功能限制，真正的永久免费。
+                        </p>
+                        <div class="d-flex flex-wrap gap-3 mt-3">
+                            <a href="https://github.com/opphk/hjtpx" target="_blank" class="btn btn-outline-gold px-4">
+                                <i class="fab fa-github me-2"></i>GitHub 仓库
+                            </a>
+                            <a href="https://github.com/opphk/hjtpx/stargazers" target="_blank" class="btn btn-ghost-light px-4">
+                                <i class="far fa-star me-2"></i>Star 支持
+                            </a>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card border-0 shadow-sm bg-primary text-white">
-                            <div class="card-body text-center p-5">
-                                <i class="fas fa-headset fa-4x mb-3" aria-hidden="true"></i>
-                                <h3 class="card-title">立即咨询</h3>
-                                <p class="card-text">我们的客服团队随时为您服务</p>
-                                <a href="/contact" class="btn btn-light">
-                                    <i class="fas fa-phone" aria-hidden="true"></i> 联系我们
-                                </a>
-                            </div>
+                    <div class="col-lg-5 text-center mt-4 mt-lg-0">
+                        <div style="display: inline-block;">
+                            <span class="seal-stamp" style="width: 90px; height: 90px; font-size: 28px; border-color: var(--gold); color: var(--gold);">开源</span>
+                            <div class="mt-2" style="color: rgba(255,255,255,0.4); font-size: 0.8rem;">MIT License</div>
                         </div>
                     </div>
                 </div>
             </div>
-        </section>
-    </main>
-    
-    <footer class="bg-dark text-white py-5" role="contentinfo">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-4 mb-4">
-                    <h5>
-                        <i class="fas fa-building" aria-hidden="true"></i> 关于我们
-                    </h5>
-                    <p class="text-white-50">专业的服务团队，为您提供优质的体验。</p>
+        </div>
+    </section>
+
+    <section class="py-5" style="background: white;">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="font-serif fs-6" style="color: var(--gold); letter-spacing: 3px;">— 技术优势 —</span>
+                <h2 class="font-serif fw-bold fs-2 mt-2" style="color: var(--ink);">为什么选择墨盾</h2>
+                <div class="brush-divider mt-3"></div>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="testimonial-card h-100">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fas fa-bolt" style="color: var(--gold);"></i>
+                            <span class="fw-bold font-serif">高性能</span>
+                        </div>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            Go语言开发，极致性能。Redis缓存加速，异步任务队列，支持高并发场景。
+                        </p>
+                    </div>
                 </div>
-                <div class="col-md-4 mb-4">
-                    <h5>
-                        <i class="fas fa-link" aria-hidden="true"></i> 快速链接
-                    </h5>
+                <div class="col-md-4">
+                    <div class="testimonial-card h-100">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fas fa-lock" style="color: var(--gold);"></i>
+                            <span class="fw-bold font-serif">高安全</span>
+                        </div>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            AI行为分析、CSRF防护、请求签名、敏感加密，多层级安全体系。
+                        </p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="testimonial-card h-100">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fas fa-expand-arrows-alt" style="color: var(--gold);"></i>
+                            <span class="fw-bold font-serif">易扩展</span>
+                        </div>
+                        <p class="mb-0" style="color: var(--ink-light); font-size: 0.9rem; line-height: 1.7;">
+                            模块化设计，Docker一键部署。完整的Go SDK，API文档详尽，轻松集成。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer style="background: var(--ink);">
+        <div class="container py-5">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <span class="seal-stamp seal-stamp-sm" style="border-color: var(--gold); color: var(--gold);">墨盾</span>
+                        <span class="font-serif fw-bold fs-5" style="color: var(--gold);">墨盾验证</span>
+                    </div>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 0.9rem; line-height: 1.7;">
+                        以墨为盾，以技为矛。<br>
+                        致力于为每一个网站提供免费、开源、可靠的行为验证服务。
+                    </p>
+                    <div class="d-flex gap-3">
+                        <a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); font-size: 1.2rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">
+                            <i class="fab fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="fw-bold mb-3" style="color: var(--gold); font-family: 'Noto Serif SC', serif;">产品</h6>
                     <ul class="list-unstyled">
-                        <li><a href="/" class="text-white-50 text-decoration-none"><i class="fas fa-home" aria-hidden="true"></i> 首页</a></li>
-                        <li><a href="/products" class="text-white-50 text-decoration-none"><i class="fas fa-box" aria-hidden="true"></i> 产品</a></li>
-                        <li><a href="/about" class="text-white-50 text-decoration-none"><i class="fas fa-info-circle" aria-hidden="true"></i> 关于</a></li>
-                        <li><a href="/contact" class="text-white-50 text-decoration-none"><i class="fas fa-envelope" aria-hidden="true"></i> 联系我们</a></li>
+                        <li class="mb-2"><a href="/captcha" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">在线体验</a></li>
+                        <li class="mb-2"><a href="/about" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">功能介绍</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">SDK文档</a></li>
                     </ul>
                 </div>
-                <div class="col-md-4 mb-4">
-                    <h5>
-                        <i class="fas fa-phone" aria-hidden="true"></i> 联系方式
-                    </h5>
-                    <p class="text-white-50"><i class="fas fa-envelope" aria-hidden="true"></i> 邮箱: contact@example.com</p>
-                    <p class="text-white-50"><i class="fas fa-phone" aria-hidden="true"></i> 电话: 400-888-8888</p>
+                <div class="col-6 col-lg-2">
+                    <h6 class="fw-bold mb-3" style="color: var(--gold); font-family: 'Noto Serif SC', serif;">开源</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">GitHub</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/issues" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">提交Issue</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/pulls" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">贡献代码</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4">
+                    <h6 class="fw-bold mb-3" style="color: var(--gold); font-family: 'Noto Serif SC', serif;">关于墨盾</h6>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 0.9rem; line-height: 1.7;">
+                        墨盾验证是一个开源的行为验证码系统，使用 Go 语言开发。<br>
+                        我们坚信安全不应该是奢侈品，因此我们选择永久免费开放。<br>
+                        超越极验、易盾、五秒盾，是我们的目标。
+                    </p>
                 </div>
             </div>
-            <hr class="border-white-50">
-            <p class="text-center text-white-50 mb-0">
-                <i class="fas fa-copyright" aria-hidden="true"></i> 2026 用户端. All rights reserved.
-            </p>
+            <div class="footer-border mt-4 pt-4 text-center">
+                <p style="color: rgba(255,255,255,0.3); font-size: 0.85rem; margin-bottom: 0;">
+                    <i class="fas fa-copyright me-1"></i> 2026 墨盾验证 · 以 MIT 许可证开源 · 
+                    <a href="https://github.com/opphk/hjtpx" target="_blank" style="color: var(--gold); text-decoration: none;">GitHub</a>
+                </p>
+            </div>
         </div>
     </footer>
-    
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js"></script>
+    <script>
+        (function() {
+            var container = document.getElementById('particles');
+            if (!container) return;
+            for (var i = 0; i < 30; i++) {
+                var p = document.createElement('div');
+                p.className = 'hero-particle';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                p.style.animationDelay = Math.random() * 8 + 's';
+                p.style.animationDuration = (6 + Math.random() * 6) + 's';
+                p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+                container.appendChild(p);
+            }
+        })();
+    </script>
 </body>
 </html>

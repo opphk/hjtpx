@@ -3,264 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台 - 数据统计</title>
+    <title>墨盾验证 · 管理后台 · 统计分析</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <style>
         :root {
-            --sidebar-bg: #1e293b;
-            --sidebar-hover: #334155;
+            --ink: #1a1a2e; --ink-light: #2d2d44; --ink-lighter: #3d3d5c;
+            --cinnabar: #c23a2b; --cinnabar-light: #d94a3a; --cinnabar-dark: #a32e22;
+            --gold: #c9a96e; --gold-light: #dcc48c; --gold-dark: #b8924e;
+            --paper: #faf6ef; --paper-dark: #f0e8d8; --paper-darker: #e6dcc8;
+            --text-primary: #2c2c2c; --text-secondary: #6b6b6b; --text-muted: #999;
+            --sidebar-width: 260px; --header-height: 64px;
+            --font-serif: 'Noto Serif SC', serif; --font-sans: 'Noto Sans SC', sans-serif;
+            --shadow-card: 0 2px 12px rgba(26,26,46,0.08);
+            --shadow-sidebar: 2px 0 16px rgba(0,0,0,0.3);
         }
-        .sidebar {
-            width: 250px;
-            background-color: var(--sidebar-bg);
-            min-height: 100vh;
-        }
-        .sidebar .nav-link {
-            color: rgba(255,255,255,0.7);
-            padding: 12px 20px;
-        }
-        .sidebar .nav-link:hover,
-        .sidebar .nav-link.active {
-            background-color: var(--sidebar-hover);
-            color: white;
-        }
-        .sidebar-header {
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .sidebar-footer {
-            border-top: 1px solid rgba(255,255,255,0.1);
-        }
-        .main-wrapper {
-            flex: 1;
-            min-width: 0;
-        }
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: #3b82f6;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-        }
-        .chart-card {
-            transition: transform 0.3s ease;
-        }
-        .chart-card:hover {
-            transform: translateY(-5px);
-        }
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .stat-card .icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 15px;
-            font-size: 24px;
-        }
-        .stat-card .value {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-        .stat-card .label {
-            color: #6b7280;
-            font-size: 14px;
-        }
-        .stat-card .trend {
-            font-size: 12px;
-            margin-top: 10px;
-        }
-        .stat-card .trend.up { color: #10b981; }
-        .stat-card .trend.down { color: #ef4444; }
-        .period-selector {
-            display: inline-flex;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .period-selector button {
-            border: none;
-            background: white;
-            padding: 8px 16px;
-            font-size: 14px;
-            color: #6b7280;
-        }
-        .period-selector button.active {
-            background: #3b82f6;
-            color: white;
-        }
-        .period-selector button:hover:not(.active) {
-            background: #f3f4f6;
-        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:var(--font-sans); background:var(--paper); color:var(--text-primary); overflow-x:hidden; }
+        .sidebar { position:fixed; top:0; left:0; width:var(--sidebar-width); height:100vh; background:var(--ink); display:flex; flex-direction:column; z-index:1000; box-shadow:var(--shadow-sidebar); overflow-y:auto; }
+        .sidebar-brand { padding:24px 20px 20px; border-bottom:1px solid rgba(201,169,110,0.15); display:flex; align-items:center; gap:14px; }
+        .sidebar-brand-icon { width:44px; height:44px; background:linear-gradient(135deg,var(--cinnabar),#8b2a1e); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--gold); flex-shrink:0; position:relative; box-shadow:0 2px 8px rgba(194,58,43,0.3); }
+        .sidebar-brand-icon::after { content:''; position:absolute; inset:2px; border:1px solid rgba(201,169,110,0.3); border-radius:8px; }
+        .sidebar-brand-text { font-family:var(--font-serif); font-weight:700; font-size:20px; color:var(--gold); line-height:1.3; }
+        .sidebar-brand-sub { font-family:var(--font-sans); font-size:11px; color:rgba(201,169,110,0.5); font-weight:300; letter-spacing:2px; }
+        .sidebar-nav { flex:1; padding:16px 12px; display:flex; flex-direction:column; gap:2px; }
+        .sidebar-nav .nav-link { display:flex; align-items:center; gap:12px; padding:12px 16px; color:rgba(255,255,255,0.55); text-decoration:none; border-radius:8px; font-size:14px; font-weight:400; transition:all 0.25s ease; position:relative; }
+        .sidebar-nav .nav-link i { width:20px; text-align:center; font-size:16px; color:rgba(255,255,255,0.35); transition:color 0.25s; }
+        .sidebar-nav .nav-link:hover { background:rgba(201,169,110,0.08); color:var(--gold-light); }
+        .sidebar-nav .nav-link:hover i { color:var(--gold-light); }
+        .sidebar-nav .nav-link.active { background:rgba(201,169,110,0.12); color:var(--gold); font-weight:500; }
+        .sidebar-nav .nav-link.active i { color:var(--gold); }
+        .sidebar-nav .nav-link.active::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:20px; background:var(--gold); border-radius:0 3px 3px 0; }
+        .sidebar-divider { height:1px; background:linear-gradient(to right,transparent,rgba(201,169,110,0.15),transparent); margin:8px 16px; }
+        .sidebar-footer { padding:16px 12px; border-top:1px solid rgba(201,169,110,0.1); }
+        .sidebar-footer .nav-link { display:flex; align-items:center; gap:12px; padding:10px 16px; color:rgba(255,255,255,0.5); text-decoration:none; border-radius:8px; font-size:14px; transition:all 0.25s ease; }
+        .sidebar-footer .nav-link i { width:20px; text-align:center; font-size:16px; }
+        .sidebar-footer .nav-link:hover { background:rgba(194,58,43,0.12); color:var(--cinnabar-light); }
+        .main-wrapper { margin-left:var(--sidebar-width); min-height:100vh; }
+        .top-header { height:var(--header-height); background:var(--paper); border-bottom:1px solid var(--paper-darker); display:flex; align-items:center; justify-content:space-between; padding:0 32px; position:sticky; top:0; z-index:500; }
+        .top-header-left { display:flex; align-items:center; gap:16px; }
+        .page-title { font-family:var(--font-serif); font-size:20px; font-weight:700; color:var(--ink); margin:0; position:relative; padding-left:16px; }
+        .page-title::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:22px; background:var(--cinnabar); border-radius:2px; }
+        .top-header-right { display:flex; align-items:center; gap:16px; }
+        .user-display { display:flex; align-items:center; gap:10px; }
+        .user-name { font-size:13px; color:var(--text-secondary); font-weight:400; }
+        .user-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,var(--cinnabar),var(--cinnabar-dark)); color:var(--gold); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; font-family:var(--font-serif); box-shadow:0 2px 6px rgba(194,58,43,0.2); }
+        .main-content { padding:28px 32px; min-height:calc(100vh - var(--header-height)); }
+        .brush-divider { height:4px; background:linear-gradient(to right,var(--gold),transparent); border:none; margin:0 0 24px; opacity:0.6; border-radius:2px; }
+        .seal-stamp { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border:1.5px solid var(--cinnabar); color:var(--cinnabar); font-family:var(--font-serif); font-size:9px; font-weight:900; transform:rotate(-8deg); line-height:1; margin-left:4px; flex-shrink:0; padding:1px; }
+        .card { background:var(--paper); border:1px solid var(--paper-darker); border-radius:10px; box-shadow:var(--shadow-card); transition:box-shadow 0.3s ease, transform 0.3s ease; }
+        .card:hover { box-shadow:0 4px 20px rgba(26,26,46,0.12); }
+        .card-header { background:transparent; border-bottom:1px solid var(--paper-darker); padding:16px 20px; font-family:var(--font-serif); font-weight:600; color:var(--ink); display:flex; align-items:center; justify-content:space-between; }
+        .card-header h5, .card-header h6 { font-family:var(--font-serif); font-weight:600; margin:0; color:var(--ink); }
+        .card-body { padding:20px; }
+        .card-footer { background:transparent; border-top:1px solid var(--paper-darker); padding:12px 20px; }
+        .stat-card { transition:transform 0.3s ease,box-shadow 0.3s ease; cursor:default; }
+        .stat-card:hover { transform:translateY(-4px); box-shadow:0 6px 24px rgba(26,26,46,0.12); }
+        .stat-card .stat-value { font-family:var(--font-serif); font-weight:700; font-size:28px; color:var(--ink); line-height:1.2; }
+        .stat-card .stat-label { font-size:12px; color:var(--text-muted); font-weight:400; letter-spacing:0.5px; }
+        .stat-card .stat-trend { font-size:12px; font-weight:500; }
+        .btn-ink { background:var(--ink); border:1px solid var(--ink); color:var(--gold); font-family:var(--font-sans); font-weight:500; padding:8px 20px; border-radius:6px; transition:all 0.25s ease; }
+        .btn-ink:hover { background:var(--ink-light); color:var(--gold-light); border-color:var(--ink-light); }
+        .btn-cinnabar { background:var(--cinnabar); border:1px solid var(--cinnabar); color:#fff; font-family:var(--font-sans); font-weight:500; padding:8px 20px; border-radius:6px; transition:all 0.25s ease; }
+        .btn-cinnabar:hover { background:var(--cinnabar-light); border-color:var(--cinnabar-light); color:#fff; }
+        .btn-outline-gold { background:transparent; border:1px solid var(--gold); color:var(--gold-dark); font-family:var(--font-sans); font-weight:500; padding:6px 16px; border-radius:6px; transition:all 0.25s ease; }
+        .btn-outline-gold:hover { background:var(--gold); color:var(--ink); border-color:var(--gold); }
+        .form-label { font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px; }
+        .form-control, .form-select { background:var(--paper); border:1px solid var(--paper-darker); border-radius:6px; color:var(--text-primary); font-family:var(--font-sans); font-size:14px; padding:8px 14px; transition:border-color 0.25s ease,box-shadow 0.25s ease; }
+        .form-control:focus, .form-select:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,169,110,0.15); background:var(--paper); color:var(--text-primary); }
+        .btn-group .btn-outline-secondary { border-color:var(--paper-darker); color:var(--text-secondary); background:transparent; }
+        .btn-group .btn-outline-secondary:hover { background:rgba(201,169,110,0.1); border-color:var(--gold); color:var(--gold-dark); }
+        .btn-group .btn-outline-secondary.active { background:var(--ink); border-color:var(--ink); color:var(--gold); }
+        .badge { font-weight:500; font-size:11px; padding:4px 10px; border-radius:4px; letter-spacing:0.3px; }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:var(--paper-darker); border-radius:3px; }
+        ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+        @media (max-width:768px) { .sidebar { width:100%; height:auto; position:relative; } .main-wrapper { margin-left:0; } .main-content { padding:16px; } .top-header { padding:0 16px; } }
     </style>
 </head>
 <body>
-    <div class="d-flex">
-        <div class="sidebar d-flex flex-column flex-shrink-0">
-            <div class="sidebar-header p-3">
-                <h5 class="text-white mb-0">管理后台</h5>
-            </div>
-            <nav class="nav flex-column mt-2">
-                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
-                <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
-                <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
-                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
-                <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban me-2"></i>黑名单</a>
-            </nav>
-            <div class="sidebar-footer mt-auto p-3">
-                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-icon"><i class="fas fa-shield-halved"></i></div>
+            <div>
+                <div class="sidebar-brand-text">墨盾验证</div>
+                <div class="sidebar-brand-sub">· 管理后台 ·</div>
             </div>
         </div>
+        <nav class="sidebar-nav">
+            <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
+            <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
+            <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
+            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
+            <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
+            <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <div class="sidebar-divider"></div>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
+        </div>
+    </div>
 
-        <div class="main-wrapper">
-            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">数据统计</h5>
-                <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" id="refreshStatsBtn">
-                        <i class="fas fa-sync me-1"></i>刷新
-                    </button>
-                    <span class="text-muted" id="usernameDisplay">管理员</span>
+    <div class="main-wrapper">
+        <header class="top-header">
+            <div class="top-header-left">
+                <h1 class="page-title">统计分析</h1>
+                <span class="seal-stamp">墨盾</span>
+            </div>
+            <div class="top-header-right">
+                <button id="exportStatsBtn" class="btn-outline-gold"><i class="fas fa-download me-1"></i>导出报表</button>
+                <button id="refreshBtn" class="btn-outline-gold"><i class="fas fa-sync me-1"></i>刷新</button>
+                <div class="user-display">
+                    <span class="user-name" id="usernameDisplay">管理员</span>
                     <div class="user-avatar" id="userAvatar">A</div>
                 </div>
-            </header>
-
-            <main class="p-4 bg-light min-vh-100">
-                <div class="row g-4 mb-4">
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="icon bg-primary bg-opacity-10 text-primary">
-                                <i class="fas fa-users"></i>
-                            </div>
-                            <div class="value" id="totalUsers">0</div>
-                            <div class="label">用户总数</div>
-                            <div class="trend up" id="usersTrend"><i class="fas fa-arrow-up me-1"></i>+0% 较上周</div>
+            </div>
+        </header>
+        <hr class="brush-divider">
+        <main class="main-content">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="fas fa-calendar me-1" style="color:var(--gold-dark);"></i>时间范围</label>
+                            <select class="form-select" id="dateRange">
+                                <option value="7d">最近7天</option>
+                                <option value="30d" selected>最近30天</option>
+                                <option value="90d">最近90天</option>
+                                <option value="1y">最近1年</option>
+                            </select>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="icon bg-success bg-opacity-10 text-success">
-                                <i class="fas fa-mobile-alt"></i>
-                            </div>
-                            <div class="value" id="totalApps">0</div>
-                            <div class="label">应用总数</div>
-                            <div class="trend up" id="appsTrend"><i class="fas fa-arrow-up me-1"></i>+0% 较上周</div>
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="fas fa-chart-simple me-1" style="color:var(--gold-dark);"></i>对比周期</label>
+                            <select class="form-select" id="comparePeriod">
+                                <option value="">不对比</option>
+                                <option value="prev">上一周期</option>
+                                <option value="prev_year">去年同期</option>
+                            </select>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="icon bg-info bg-opacity-10 text-info">
-                                <i class="fas fa-server"></i>
-                            </div>
-                            <div class="value" id="totalRequests">0</div>
-                            <div class="label">请求总数</div>
-                            <div class="trend up" id="requestsTrend"><i class="fas fa-arrow-up me-1"></i>+0% 较上周</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stat-card">
-                            <div class="icon bg-warning bg-opacity-10 text-warning">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div class="value" id="avgLatency">0ms</div>
-                            <div class="label">平均延迟</div>
-                            <div class="trend down" id="latencyTrend"><i class="fas fa-arrow-down me-1"></i>-0% 较上周</div>
+                        <div class="col-md-2">
+                            <button id="applyFilterBtn" class="btn-ink w-100"><i class="fas fa-filter me-1"></i>应用筛选</button>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="row g-4 mb-4">
-                    <div class="col-md-8">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">请求趋势</h5>
-                                <div class="period-selector">
-                                    <button class="active" data-period="day">日</button>
-                                    <button data-period="week">周</button>
-                                    <button data-period="month">月</button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="requestTrendChart" height="300"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card shadow-sm border-0 h-100">
-                            <div class="card-header bg-white">
-                                <h5 class="mb-0">请求分布</h5>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="requestDistributionChart"></canvas>
-                            </div>
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">总请求量</div>
+                            <div class="stat-value" id="statTotalRequests">0</div>
+                            <div class="stat-trend text-success" id="statRequestsChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
                         </div>
                     </div>
                 </div>
-
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-header bg-white">
-                                <h5 class="mb-0">应用请求量 TOP 10</h5>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="appRankingChart" height="250"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-header bg-white">
-                                <h5 class="mb-0">错误类型分布</h5>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="errorDistributionChart" height="250"></canvas>
-                            </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">平均响应时间</div>
+                            <div class="stat-value" id="statAvgResponse">0ms</div>
+                            <div class="stat-trend text-danger" id="statResponseChange"><i class="fas fa-arrow-down me-1"></i>-0%</div>
                         </div>
                     </div>
                 </div>
-
-                <div class="row g-4 mt-4">
-                    <div class="col-12">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-header bg-white">
-                                <h5 class="mb-0">详细数据表</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>时间</th>
-                                                <th>成功请求</th>
-                                                <th>失败请求</th>
-                                                <th>成功率</th>
-                                                <th>平均延迟</th>
-                                                <th>P99延迟</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="statsTableBody">
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">成功率</div>
+                            <div class="stat-value text-success" id="statSuccessRate">0%</div>
+                            <div class="stat-trend text-success" id="statSuccessChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
                         </div>
                     </div>
                 </div>
-            </main>
-        </div>
+                <div class="col-md-3">
+                    <div class="card stat-card text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">活跃用户</div>
+                            <div class="stat-value" id="statActiveUsers">0</div>
+                            <div class="stat-trend text-success" id="statUsersChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-area me-2" style="color:var(--gold-dark);"></i>请求量趋势</h5>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary active" data-chart-type="line"><i class="fas fa-line-chart"></i></button>
+                                <button type="button" class="btn btn-outline-secondary" data-chart-type="bar"><i class="fas fa-bar-chart"></i></button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="requestTrendChart" height="280"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100">
+                        <div class="card-header"><h5><i class="fas fa-chart-pie me-2" style="color:var(--cinnabar);"></i>请求类型分布</h5></div>
+                        <div class="card-body">
+                            <canvas id="requestTypeChart" height="280"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header"><h5><i class="fas fa-user-plus me-2" style="color:var(--gold-dark);"></i>用户增长趋势</h5></div>
+                        <div class="card-body">
+                            <canvas id="userGrowthChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header"><h5><i class="fas fa-th-large me-2" style="color:var(--gold-dark);"></i>应用分布</h5></div>
+                        <div class="card-body">
+                            <canvas id="appDistributionChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header"><h5><i class="fas fa-exclamation-circle me-2" style="color:var(--cinnabar);"></i>错误率分析</h5></div>
+                        <div class="card-body">
+                            <canvas id="errorRateChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header"><h5><i class="fas fa-globe me-2" style="color:var(--gold-dark);"></i>地理分布</h5></div>
+                        <div class="card-body">
+                            <canvas id="geoDistributionChart" height="260"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
