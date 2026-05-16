@@ -1,13 +1,9 @@
 package ha
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -359,7 +355,7 @@ func (m *HAProxyMiddleware) Handler() gin.HandlerFunc {
 
 		backend, err := m.lb.SelectBackend(c.ClientIP())
 		if err != nil {
-			response.ServiceUnavailable(c, "no available backend")
+			response.Error(c, http.StatusServiceUnavailable, "no available backend")
 			c.Abort()
 			return
 		}
@@ -367,6 +363,7 @@ func (m *HAProxyMiddleware) Handler() gin.HandlerFunc {
 		start := time.Now()
 
 		var lastErr error
+		_ = lastErr
 		for attempt := 0; attempt <= m.maxRetries; attempt++ {
 			if attempt > 0 && m.enableRetry {
 				time.Sleep(time.Duration(attempt*100) * time.Millisecond)
@@ -392,7 +389,7 @@ func (m *HAProxyMiddleware) Handler() gin.HandlerFunc {
 
 		m.lb.RecordRequest(backend.URL, false, time.Since(start))
 		m.lb.HAProxy.RecordFailure(backend.URL)
-		response.ServiceUnavailable(c, "failed to process request")
+		response.Error(c, http.StatusServiceUnavailable, "failed to process request")
 		c.Abort()
 	}
 }

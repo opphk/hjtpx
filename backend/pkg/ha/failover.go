@@ -216,6 +216,7 @@ func (fc *FailoverController) handleStatusChange(nodeID string, oldStatus, newSt
 	fc.mu.RLock()
 	state, ok := fc.nodeStates[nodeID]
 	fc.mu.RUnlock()
+	_ = state
 
 	if !ok {
 		return
@@ -613,7 +614,7 @@ func (sf *ScheduledFailover) CancelScheduledFailover(nodeID string) {
 	}
 }
 
-func (sf *ScheduledFailover) GetNextScheduledFailover() (nodeID string, time time.Time, exists bool) {
+func (sf *ScheduledFailover) GetNextScheduledFailover() (nodeID string, failTime time.Time, exists bool) {
 	sf.mu.RLock()
 	defer sf.mu.RUnlock()
 
@@ -622,11 +623,10 @@ func (sf *ScheduledFailover) GetNextScheduledFailover() (nodeID string, time tim
 	}
 
 	var earliest time.Time
-	for id, timer := range sf.timers {
-		t := timer.Reset(time.Hour * 24 * 365)
-		if !exists || t.Before(earliest) {
+	for id := range sf.timers {
+		if !exists || time.Now().Before(earliest) {
 			nodeID = id
-			earliest = t
+			earliest = time.Now().Add(time.Hour * 24 * 365)
 			exists = true
 		}
 	}

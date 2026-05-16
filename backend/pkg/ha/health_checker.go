@@ -246,6 +246,7 @@ func (hc *HealthChecker) checkNode(node *NodeHealth) {
 
 	var lastErr error
 	var lastStatus HealthStatus
+	_ = lastErr
 
 	for _, checkFunc := range hc.checkFuncs {
 		result, err := checkFunc(ctx, node.URL)

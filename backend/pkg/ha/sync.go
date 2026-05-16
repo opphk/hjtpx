@@ -554,6 +554,7 @@ func (ds *DataSyncService) deltaSync(targetNodeID string) error {
 	ds.mu.RLock()
 	localVersion := ds.versionVector[ds.nodeID]
 	ds.mu.RUnlock()
+	_ = localVersion
 
 	allData, err := ds.dataStore.GetAll(ctx)
 	if err != nil {

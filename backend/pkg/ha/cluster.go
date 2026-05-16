@@ -1,6 +1,7 @@
 package ha
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -741,7 +742,7 @@ func (rn *RaftNode) becomeCandidate() {
 
 	rn.currentState = RaftStateCandidate
 	atomic.AddInt64(&rn.cluster.term, 1)
-	term := atomic.LoadInt64(&rn.cluster.term)
+	_ = atomic.LoadInt64(&rn.cluster.term)
 	rn.cluster.votedFor.Store(rn.cluster.config.NodeID)
 
 	rn.resetElectionTimer()
@@ -756,7 +757,7 @@ func (rn *RaftNode) startElection() {
 		return
 	}
 
-	term := atomic.LoadInt64(&rn.cluster.term)
+	_ = atomic.LoadInt64(&rn.cluster.term)
 
 	rn.cluster.memberMu.RLock()
 	votes := 1
@@ -831,8 +832,8 @@ func (rn *RaftNode) sendHeartbeat(nodeID, address string) {
 	}
 
 	data, _ := json.Marshal(hb)
-	req, _ := http.NewRequest("POST", fmt.Sprintf("http://%s/raft/heartbeat", address), nil)
-	req.Body = nil
+	_ = data
+	req, _ := http.NewRequest("POST", fmt.Sprintf("http://%s/raft/heartbeat", address), bytes.NewReader(data))
 
 	client := &http.Client{Timeout: 1 * time.Second}
 	resp, err := client.Do(req)

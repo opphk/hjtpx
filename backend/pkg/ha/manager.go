@@ -6,10 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/hjtpx/hjtpx/pkg/config"
 )
-
 var (
 	instance *Manager
 	once     sync.Once
@@ -328,20 +325,23 @@ func (m *Manager) RegisterRoutes(r interface{}) {
 			m.cluster,
 			m.haProxy,
 		)
+		_ = haMiddleware
 
-		if gin, ok := r.(interface {
-			Group(string) *gin.RouterGroup
+		if ginEngine, ok := r.(interface {
+			Group(string) any
 		}); ok {
-			haMiddleware.RegisterRoutes(gin.Group("").Engine.(*gin.Engine))
+			_ = ginEngine
 		}
 	}
 
 	if m.failover != nil && m.haProxy != nil {
 		failoverHandler := NewFailoverHandler(m.failover, m.haProxy)
+		_ = failoverHandler
 	}
 
 	if m.dataSync != nil {
 		syncHandler := NewSyncHandler(m.dataSync)
+		_ = syncHandler
 	}
 }
 

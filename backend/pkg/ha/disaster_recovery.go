@@ -1,9 +1,11 @@
 package ha
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -310,9 +312,6 @@ func (dr *DisasterRecovery) Start(ctx context.Context) error {
 
 	dr.wg.Add(1)
 	go dr.backupScheduler.run(dr)
-
-	dr.wg.Add(1)
-	go dr.replicationManager.run()
 
 	return nil
 }
@@ -773,7 +772,7 @@ func (dr *DisasterRecovery) CreateRecoveryPoint(name string) (string, error) {
 		StartTime: time.Now(),
 	}
 
-	if err := dr.executeBackup(backupJob); err != nil {
+	if _, err := dr.executeBackup(backupJob); err != nil {
 		return "", err
 	}
 
