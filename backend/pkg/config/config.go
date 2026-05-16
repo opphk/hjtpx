@@ -6,16 +6,31 @@ import (
 )
 
 type Config struct {
-	Server     ServerConfig
-	Postgres   PostgresConfig
-	Redis      RedisConfig
-	JWT        JWTConfig
-	// 保留旧配置用于兼容性
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
+	Server   ServerConfig
+	Postgres PostgresConfig
+	Redis    RedisConfig
+	JWT      JWTConfig
+	Database DatabaseConfig
+}
+
+type DatabaseConfig struct {
+	SlowQueryThresholdMs int                    `yaml:"slow_query_threshold_ms"`
+	QueryOptimization    QueryOptimizationConfig `yaml:"query_optimization"`
+}
+
+type QueryOptimizationConfig struct {
+	EnablePreparedStatements bool `yaml:"enable_prepared_statements"`
+	EnableQueryCache        bool `yaml:"enable_query_cache"`
+	QueryCacheTTLSecs       int  `yaml:"query_cache_ttl_secs"`
+}
+
+var globalConfig *Config
+
+func GetConfig() *Config {
+	if globalConfig == nil {
+		globalConfig = LoadConfig()
+	}
+	return globalConfig
 }
 
 type JWTConfig struct {
@@ -59,7 +74,7 @@ func LoadConfig() *Config {
 			Port:            getEnv("POSTGRES_PORT", "5432"),
 			User:            getEnv("POSTGRES_USER", "postgres"),
 			Password:        getEnv("POSTGRES_PASSWORD", "postgres"),
-			DBName:          getEnv("POSTGRES_DB", "app_db"),
+			DBName:          getEnv("POSTGRES_DB", "verification"),
 			SSLMode:         getEnv("POSTGRES_SSLMODE", "disable"),
 			MaxOpenConns:    25,
 			MaxIdleConns:    10,
@@ -73,15 +88,17 @@ func LoadConfig() *Config {
 			MaxRetries: 3,
 		},
 		JWT: JWTConfig{
-			Secret:     getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+			Secret:      getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
 			ExpireHours: getEnvAsInt("JWT_EXPIRE_HOURS", 24),
 		},
-		// 旧配置兼容性
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "3306"),
-		DBUser:     getEnv("DB_USER", "root"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "hjtpx_db"),
+		Database: DatabaseConfig{
+			SlowQueryThresholdMs: getEnvAsInt("SLOW_QUERY_THRESHOLD_MS", 200),
+			QueryOptimization: QueryOptimizationConfig{
+				EnablePreparedStatements: true,
+				EnableQueryCache:        true,
+				QueryCacheTTLSecs:       300,
+			},
+		},
 	}
 }
 

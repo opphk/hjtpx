@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -338,7 +339,7 @@ func (l *SecurityLog) writeConsole(event SecurityEvent) {
 	resetCode := "\033[0m"
 	timestamp := event.Timestamp.Format("2006/01/02 15:04:05")
 
-	message := fmt.Sprintf("%s[SECURITY %s] %s | %s | %s | %s | %s | %s%s",
+	message := fmt.Sprintf("%s[SECURITY %s] %s | %s | %s | %s | %s%s",
 		colorCode,
 		levelStr,
 		timestamp,
@@ -601,12 +602,13 @@ func SecurityEventLogger() gin.HandlerFunc {
 	}
 }
 
+var secLogRandomSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func generateRandomID(length int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, length)
 	for i := range result {
-		result[i] = chars[time.Now().UnixNano()%int64(len(chars))]
-		time.Sleep(time.Nanosecond)
+		result[i] = chars[secLogRandomSrc.Intn(len(chars))]
 	}
 	return string(result)
 }

@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -50,8 +52,9 @@ var defaultCSRFConfig = CSRFConfig{
 
 func generateToken(length int) string {
 	b := make([]byte, length)
-	for i := range b {
-		b[i] = byte((time.Now().UnixNano()%256 + int64(i)*17 + time.Now().UnixNano()/1000000%256) % 256)
+	_, err := io.ReadFull(rand.Reader, b)
+	if err != nil {
+		return ""
 	}
 	hash := sha256.Sum256(b)
 	return base64.URLEncoding.EncodeToString(hash[:])
@@ -212,7 +215,7 @@ func CSRFProtection(config ...CSRFConfig) gin.HandlerFunc {
 						int(cfg.TokenExpiration.Seconds()),
 						"/",
 						"",
-						false,
+						true,
 						true,
 					)
 				}

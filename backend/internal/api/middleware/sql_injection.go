@@ -216,7 +216,7 @@ func SQLInjectionProtection(config ...SQLInjectionConfig) gin.HandlerFunc {
 		params := extractParams(c, &cfg)
 
 		for paramName, paramValue := range params {
-			cacheKey := fmt.Sprintf("%s:%s:%s", c.ClientIP(), paramName, paramValue[:min(len(paramValue), 50)])
+			cacheKey := fmt.Sprintf("%s:%s:%s", c.ClientIP(), paramName, paramValue[:clamp(len(paramValue), 50)])
 
 			var result *SQLInjectionCheckResult
 			if cached, exists := sqlInjectionCache.Get(cacheKey); exists {
@@ -272,7 +272,7 @@ func SQLSanitize(input string) string {
 	sanitized := input
 
 	dangerousPatterns := []string{
-		";", "--", "/*", "*/", "xp_", "sp_", "exec", "execute", "eval",
+		";", "--", `/\*`, `\*/`, "xp_", "sp_", "exec", "execute", "eval",
 		"union", "select", "insert", "update", "delete", "drop", "create", "alter",
 	}
 
@@ -300,7 +300,7 @@ func SQLInjectionStats() map[string]interface{} {
 	return stats
 }
 
-func min(a, b int) int {
+func clamp(a, b int) int {
 	if a < b {
 		return a
 	}

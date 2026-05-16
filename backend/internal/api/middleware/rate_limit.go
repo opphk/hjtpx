@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
 var rateLimitService = service.NewRateLimitService()
@@ -49,11 +49,7 @@ func IPRateLimitMiddleware(options *RateLimitOptions) gin.HandlerFunc {
 
 		if !result.Allowed {
 			c.Header("Retry-After", strconv.Itoa(options.WindowSecs))
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"code":    429,
-				"message": "请求过于频繁，请稍后再试",
-				"error":   "rate_limit_exceeded",
-			})
+			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}
@@ -94,11 +90,7 @@ func UserRateLimitMiddleware(options *RateLimitOptions) gin.HandlerFunc {
 
 		if !result.Allowed {
 			c.Header("Retry-After", strconv.Itoa(options.WindowSecs))
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"code":    429,
-				"message": "请求过于频繁，请稍后再试",
-				"error":   "rate_limit_exceeded",
-			})
+			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}
@@ -145,11 +137,7 @@ func AppRateLimitMiddleware(options *RateLimitOptions) gin.HandlerFunc {
 
 		if !result.Allowed {
 			c.Header("Retry-After", strconv.Itoa(options.WindowSecs))
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"code":    429,
-				"message": "应用请求过于频繁，请稍后再试",
-				"error":   "rate_limit_exceeded",
-			})
+			response.TooManyRequests(c, "应用请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}
@@ -176,11 +164,7 @@ func CombinedRateLimitMiddleware(ipOptions, userOptions, appOptions *RateLimitOp
 			result, err := rateLimitService.CheckIPRateLimit(c.Request.Context(), ip, ipConfig)
 			if err == nil && !result.Allowed {
 				c.Header("Retry-After", strconv.Itoa(ipOptions.WindowSecs))
-				c.JSON(http.StatusTooManyRequests, gin.H{
-					"code":    429,
-					"message": "请求过于频繁，请稍后再试",
-					"error":   "ip_rate_limit_exceeded",
-				})
+				response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 				c.Abort()
 				return
 			}
@@ -195,11 +179,7 @@ func CombinedRateLimitMiddleware(ipOptions, userOptions, appOptions *RateLimitOp
 			result, err := rateLimitService.CheckUserRateLimit(c.Request.Context(), userID, userConfig)
 			if err == nil && !result.Allowed {
 				c.Header("Retry-After", strconv.Itoa(userOptions.WindowSecs))
-				c.JSON(http.StatusTooManyRequests, gin.H{
-					"code":    429,
-					"message": "请求过于频繁，请稍后再试",
-					"error":   "user_rate_limit_exceeded",
-				})
+				response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 				c.Abort()
 				return
 			}
@@ -215,11 +195,7 @@ func CombinedRateLimitMiddleware(ipOptions, userOptions, appOptions *RateLimitOp
 				result, err := rateLimitService.CheckAppRateLimit(c.Request.Context(), uint(appID), appConfig)
 				if err == nil && !result.Allowed {
 					c.Header("Retry-After", strconv.Itoa(appOptions.WindowSecs))
-					c.JSON(http.StatusTooManyRequests, gin.H{
-						"code":    429,
-						"message": "应用请求过于频繁，请稍后再试",
-						"error":   "app_rate_limit_exceeded",
-					})
+					response.TooManyRequests(c, "应用请求过于频繁，请稍后再试")
 					c.Abort()
 					return
 				}

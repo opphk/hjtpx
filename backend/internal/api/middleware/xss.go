@@ -37,7 +37,7 @@ var (
 	inputPattern      = regexp.MustCompile(`(?i)<input[^>]*>`)
 	textareaPattern   = regexp.MustCompile(`(?i)<textarea[^>]*>.*?</textarea>`)
 	selectPattern     = regexp.MustCompile(`(?i)<select[^>]*>.*?</select>`)
-	eventAttrPattern  = regexp.MustCompile(`(?i)\s+on\w+\s*=\s*["'][^"']*["']`)
+	eventAttrPattern  = regexp.MustCompile(`(?i)\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)`)
 	javascriptPattern = regexp.MustCompile(`(?i)javascript\s*:`)
 	dataAttrPattern   = regexp.MustCompile(`(?i)\s+data-[\w-]+\s*=\s*["'][^"']*["']`)
 	expressionPattern = regexp.MustCompile(`(?i)expression\s*\(`)
@@ -80,8 +80,6 @@ func sanitizeHTML(input string, cfg XSSConfig) sanitizedValue {
 		result = dataAttrPattern.ReplaceAllString(result, "")
 	}
 
-	result = html.EscapeString(result)
-
 	isUnsafe := result != input
 
 	return sanitizedValue{
@@ -91,24 +89,51 @@ func sanitizeHTML(input string, cfg XSSConfig) sanitizedValue {
 }
 
 func sanitizeHTMLWithAllowList(input string, cfg XSSConfig) string {
-	sanitized := sanitizeHTML(input, cfg)
+	if len(input) > cfg.MaxLength {
+		input = input[:cfg.MaxLength]
+	}
+
+	result := input
+
+	result = scriptPattern.ReplaceAllString(result, "")
+	result = stylePattern.ReplaceAllString(result, "")
+	result = iframePattern.ReplaceAllString(result, "")
+	result = objectPattern.ReplaceAllString(result, "")
+	result = appletPattern.ReplaceAllString(result, "")
+	result = formPattern.ReplaceAllString(result, "")
+	result = inputPattern.ReplaceAllString(result, "")
+	result = textareaPattern.ReplaceAllString(result, "")
+	result = selectPattern.ReplaceAllString(result, "")
+	result = embedPattern.ReplaceAllString(result, "")
+
+	result = eventAttrPattern.ReplaceAllString(result, "")
+	result = javascriptPattern.ReplaceAllString(result, "")
+	result = urlPattern.ReplaceAllString(result, "")
+	result = expressionPattern.ReplaceAllString(result, "")
+	result = styleExprPattern.ReplaceAllString(result, "")
+	result = xmlPattern.ReplaceAllString(result, "")
+
+	if cfg.BlockAttributes {
+		result = dataAttrPattern.ReplaceAllString(result, "")
+	}
 
 	allowedTagsMap := make(map[string]bool)
 	for _, tag := range cfg.AllowedTags {
 		allowedTagsMap[strings.ToLower(tag)] = true
 	}
 
-	var result strings.Builder
+	var finalResult strings.Builder
 	var inTag bool
 	var tagBuffer strings.Builder
-	var tagName string
+	var tagNameBuffer strings.Builder
 
-	for i := 0; i < len(sanitized.Value); i++ {
-		c := sanitized.Value[i]
+	for i := 0; i < len(result); i++ {
+		c := result[i]
 
 		if c == '<' && !inTag {
 			inTag = true
 			tagBuffer.Reset()
+			tagNameBuffer.Reset()
 			continue
 		}
 
@@ -120,44 +145,55 @@ func sanitizeHTMLWithAllowList(input string, cfg XSSConfig) string {
 			rawTagLower := strings.ToLower(rawTag)
 			isClosingTag := strings.HasPrefix(rawTagLower, "/")
 
+			var cleanTagName string
 			if isClosingTag {
-				tagName = strings.TrimPrefix(rawTagLower, "/")
-				tagName = strings.Split(tagName, " ")[0]
-				tagName = strings.Split(tagName, ">")[0]
+				cleanTagName = strings.TrimPrefix(rawTagLower, "/")
+				cleanTagName = strings.Split(cleanTagName, " ")[0]
+				cleanTagName = strings.Split(cleanTagName, ">")[0]
+				cleanTagName = strings.TrimSpace(cleanTagName)
 			} else {
 				parts := strings.SplitN(rawTagLower, " ", 2)
-				tagName = parts[0]
-				tagName = strings.Split(tagName, ">")[0]
+				cleanTagName = strings.Split(parts[0], ">")[0]
+				cleanTagName = strings.TrimSpace(cleanTagName)
 			}
 
-			cleanTagName := strings.TrimSpace(tagName)
-
-			if allowedTagsMap[cleanTagName] || cleanTagName == "a" || cleanTagName == "img" {
+			if allowedTagsMap[cleanTagName] {
 				if !isClosingTag {
-					result.WriteByte('<')
-					result.WriteString(rawTag)
-					result.WriteByte('>')
+					finalResult.WriteByte('<')
+					finalResult.WriteString(rawTag)
+					finalResult.WriteByte('>')
 				} else {
-					result.WriteString("</")
-					result.WriteString(tagName)
-					result.WriteByte('>')
+					finalResult.WriteString("</")
+					finalResult.WriteString(tagNameBuffer.String())
+					finalResult.WriteByte('>')
 				}
 			} else {
-				result.WriteString("&lt;")
-				result.WriteString(html.EscapeString(rawTag))
-				result.WriteString("&gt;")
+				finalResult.WriteString("&lt;")
+				finalResult.WriteString(html.EscapeString(rawTag))
+				finalResult.WriteString("&gt;")
 			}
 			continue
 		}
 
 		if inTag {
 			tagBuffer.WriteByte(c)
+			if tagNameBuffer.Len() == 0 && c != '/' && c != ' ' {
+				tagNameBuffer.WriteByte(c)
+			} else if tagNameBuffer.Len() > 0 && c == ' ' {
+			} else if tagNameBuffer.Len() > 0 && c != '/' {
+				tagNameBuffer.WriteByte(c)
+			}
 		} else {
-			result.WriteByte(c)
+			finalResult.WriteByte(c)
 		}
 	}
 
-	return result.String()
+	if inTag {
+		finalResult.WriteString("&lt;")
+		finalResult.WriteString(html.EscapeString(tagBuffer.String()))
+	}
+
+	return finalResult.String()
 }
 
 type XSSFilteredBody struct {
@@ -172,21 +208,18 @@ func (w *XSSFilteredBody) Write(b []byte) (int, error) {
 	contentType := w.Header().Get("Content-Type")
 	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/xhtml") {
 		sanitized := sanitizeHTMLWithAllowList(string(b), w.cfg)
-		w.body.WriteString(sanitized)
-		return w.body.Write([]byte(sanitized))
+		return w.ResponseWriter.Write([]byte(sanitized))
 	}
-	w.body.Write(b)
-	return w.body.Write(b)
+	return w.ResponseWriter.Write(b)
 }
 
 func (w *XSSFilteredBody) WriteString(s string) (int, error) {
 	contentType := w.Header().Get("Content-Type")
 	if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/xhtml") {
 		sanitized := sanitizeHTMLWithAllowList(s, w.cfg)
-		w.body.WriteString(sanitized)
-		return len([]byte(sanitized)), nil
+		return w.ResponseWriter.Write([]byte(sanitized))
 	}
-	return w.body.WriteString(s)
+	return w.ResponseWriter.Write([]byte(s))
 }
 
 func sanitizeRequestBody(c *gin.Context, cfg XSSConfig) {
@@ -316,12 +349,12 @@ func XSSFilter(config ...XSSConfig) gin.HandlerFunc {
 
 func SanitizeString(input string) string {
 	result := sanitizeHTML(input, defaultXSSConfig)
-	return result.Value
+	return html.EscapeString(result.Value)
 }
 
 func SanitizeStringWithConfig(input string, cfg XSSConfig) string {
 	result := sanitizeHTML(input, cfg)
-	return result.Value
+	return html.EscapeString(result.Value)
 }
 
 func SanitizeJSONResponse(data interface{}) interface{} {
@@ -386,8 +419,11 @@ func AddSecurityHeaders() gin.HandlerFunc {
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
-		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; font-src 'self' https://cdn.bootcdn.net; img-src 'self' data: https:;")
-		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://cdn.bootcdn.net; style-src 'self' 'unsafe-inline' https://cdn.bootcdn.net; font-src 'self' https://cdn.bootcdn.net; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'")
+		c.Header("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=()")
+		c.Header("Cross-Origin-Resource-Policy", "same-origin")
+		c.Header("Cross-Origin-Opener-Policy", "same-origin")
 
 		c.Next()
 	}

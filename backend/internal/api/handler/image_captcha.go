@@ -635,3 +635,262 @@ func imageAbs(x int) int {
 	}
 	return x
 }
+
+// Rotation CAPTCHA constants
+const (
+	rotationCaptchaSize    = 200
+	rotationCaptchaTTL     = 5 * time.Minute
+	rotationAngleTolerance = 8
+)
+
+type GenerateRotationCaptchaRequest struct{}
+
+type GenerateRotationCaptchaResponse struct {
+	ChallengeID string `json:"challenge_id"`
+	Image       string `json:"image"`
+}
+
+type VerifyRotationCaptchaRequest struct {
+	ChallengeID string `json:"challenge_id" binding:"required"`
+	Angle       *int   `json:"angle" binding:"required"`
+}
+
+type VerifyRotationCaptchaResponse struct {
+	Success bool `json:"success"`
+}
+
+var (
+	rotationCaptchaStore = make(map[string]int)
+	rotationStoreMu      sync.Mutex
+)
+
+func setRotationCaptchaAnswer(challengeID string, angle int) {
+	rotationStoreMu.Lock()
+	defer rotationStoreMu.Unlock()
+	if redis.Client != nil {
+		ctx := context.Background()
+		redis.Client.Set(ctx, "rotation:"+challengeID, angle, rotationCaptchaTTL)
+	} else {
+		rotationCaptchaStore[challengeID] = angle
+	}
+}
+
+func getRotationCaptchaAnswer(challengeID string) (int, bool) {
+	rotationStoreMu.Lock()
+	defer rotationStoreMu.Unlock()
+	if redis.Client != nil {
+		ctx := context.Background()
+		val, err := redis.Client.Get(ctx, "rotation:"+challengeID).Int()
+		if err == nil {
+			return val, true
+		}
+		return 0, false
+	}
+	angle, ok := rotationCaptchaStore[challengeID]
+	return angle, ok
+}
+
+func deleteRotationCaptchaAnswer(challengeID string) {
+	rotationStoreMu.Lock()
+	defer rotationStoreMu.Unlock()
+	if redis.Client != nil {
+		ctx := context.Background()
+		redis.Client.Del(ctx, "rotation:"+challengeID)
+	} else {
+		delete(rotationCaptchaStore, challengeID)
+	}
+}
+
+func generateRandomAngle() int {
+	return randInt(0, 359)
+}
+
+func verifyRotationAngle(stored, submitted int) bool {
+	diff := submitted - stored
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 180 {
+		diff = 360 - diff
+	}
+	return diff <= rotationAngleTolerance
+}
+
+func GenerateRotationCaptcha(c *gin.Context) {
+	angle := generateRandomAngle()
+	challengeID := uuid.New().String()
+
+	img := generateRotationCaptchaImage(angle)
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		response.InternalServerError(c, "failed to generate rotation captcha image")
+		return
+	}
+
+	imageBase64 := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+
+	setRotationCaptchaAnswer(challengeID, angle)
+
+	response.Success(c, GenerateRotationCaptchaResponse{
+		ChallengeID: challengeID,
+		Image:       imageBase64,
+	})
+}
+
+func VerifyRotationCaptcha(c *gin.Context) {
+	var req VerifyRotationCaptchaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request parameters")
+		return
+	}
+
+	if req.Angle == nil {
+		response.BadRequest(c, "angle is required")
+		return
+	}
+
+	angle := *req.Angle
+	if angle < 0 || angle > 359 {
+		response.BadRequest(c, "angle must be between 0 and 359")
+		return
+	}
+
+	storedAngle, found := getRotationCaptchaAnswer(req.ChallengeID)
+	if !found {
+		response.NotFound(c, "rotation captcha expired or not found")
+		return
+	}
+
+	success := verifyRotationAngle(storedAngle, angle)
+
+	if success {
+		deleteRotationCaptchaAnswer(req.ChallengeID)
+	}
+
+	response.Success(c, VerifyRotationCaptchaResponse{
+		Success: success,
+	})
+}
+
+func generateRotationCaptchaImage(angle int) *image.RGBA {
+	size := rotationCaptchaSize
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+
+	bgColor := color.RGBA{245, 245, 250, 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: bgColor}, image.Point{}, draw.Src)
+
+	cx, cy := size/2, size/2
+	radius := size/2 - 12
+
+	drawRotationCircleOutline(img, cx, cy, radius, color.RGBA{80, 80, 90, 255})
+	drawRotationCircleOutline(img, cx, cy, radius-25, color.RGBA{180, 180, 190, 255})
+
+	drawRotationTickMark(img, cx, cy, radius, 0, color.RGBA{220, 50, 50, 255})
+	drawRotationTickMark(img, cx, cy, radius, 90, color.RGBA{50, 150, 50, 255})
+	drawRotationTickMark(img, cx, cy, radius, 180, color.RGBA{50, 50, 200, 255})
+	drawRotationTickMark(img, cx, cy, radius, 270, color.RGBA{200, 160, 30, 255})
+
+	drawRotationArrow(img, cx, cy, radius-8, color.RGBA{220, 50, 50, 255})
+
+	for i := 0; i < 12; i++ {
+		a := i * 30
+		drawRotationDot(img, cx, cy, radius-15, a, color.RGBA{120, 120, 130, 200})
+	}
+
+	drawRotationCenterCircle(img, cx, cy, 8, color.RGBA{80, 80, 90, 255})
+
+	rotated := rotateImageRGBA(img, float64(angle))
+	return rotated
+}
+
+func drawRotationCircleOutline(img *image.RGBA, cx, cy, radius int, col color.RGBA) {
+	for a := 0; a < 360; a++ {
+		rad := float64(a) * math.Pi / 180
+		x := cx + int(float64(radius)*math.Cos(rad))
+		y := cy + int(float64(radius)*math.Sin(rad))
+		if x >= 0 && x < rotationCaptchaSize && y >= 0 && y < rotationCaptchaSize {
+			img.Set(x, y, col)
+		}
+	}
+}
+
+func drawRotationTickMark(img *image.RGBA, cx, cy, radius, angleDeg int, col color.RGBA) {
+	rad := float64(angleDeg) * math.Pi / 180
+	innerRadius := radius - 12
+	for r := innerRadius; r <= radius; r++ {
+		x := cx + int(float64(r)*math.Cos(rad))
+		y := cy + int(float64(r)*math.Sin(rad))
+		if x >= 0 && x < rotationCaptchaSize && y >= 0 && y < rotationCaptchaSize {
+			for dx := -1; dx <= 1; dx++ {
+				for dy := -1; dy <= 1; dy++ {
+					px, py := x+dx, y+dy
+					if px >= 0 && px < rotationCaptchaSize && py >= 0 && py < rotationCaptchaSize {
+						img.Set(px, py, col)
+					}
+				}
+			}
+		}
+	}
+}
+
+func drawRotationArrow(img *image.RGBA, cx, cy, length int, col color.RGBA) {
+	arrowHeadSize := 10
+	shaftLength := length - arrowHeadSize
+
+	for i := 0; i < shaftLength; i++ {
+		x := cx
+		y := cy - i
+		if y >= 0 && y < rotationCaptchaSize {
+			img.Set(x, y, col)
+			img.Set(x-1, y, col)
+			img.Set(x+1, y, col)
+		}
+	}
+
+	tipY := cy - length
+	for dx := -arrowHeadSize; dx <= arrowHeadSize; dx++ {
+		for dy := -arrowHeadSize; dy <= 0; dy++ {
+			absDx := dx
+			if absDx < 0 {
+				absDx = -absDx
+			}
+			if absDx+(-dy) <= arrowHeadSize {
+				x := cx + dx
+				y := tipY + dy
+				if x >= 0 && x < rotationCaptchaSize && y >= 0 && y < rotationCaptchaSize {
+					img.Set(x, y, col)
+				}
+			}
+		}
+	}
+}
+
+func drawRotationDot(img *image.RGBA, cx, cy, radius, angleDeg int, col color.RGBA) {
+	rad := float64(angleDeg) * math.Pi / 180
+	x := cx + int(float64(radius)*math.Cos(rad))
+	y := cy + int(float64(radius)*math.Sin(rad))
+	for dx := -2; dx <= 2; dx++ {
+		for dy := -2; dy <= 2; dy++ {
+			if dx*dx+dy*dy <= 4 {
+				px, py := x+dx, y+dy
+				if px >= 0 && px < rotationCaptchaSize && py >= 0 && py < rotationCaptchaSize {
+					img.Set(px, py, col)
+				}
+			}
+		}
+	}
+}
+
+func drawRotationCenterCircle(img *image.RGBA, cx, cy, radius int, col color.RGBA) {
+	for dy := -radius; dy <= radius; dy++ {
+		for dx := -radius; dx <= radius; dx++ {
+			if dx*dx+dy*dy <= radius*radius {
+				x, y := cx+dx, cy+dy
+				if x >= 0 && x < rotationCaptchaSize && y >= 0 && y < rotationCaptchaSize {
+					img.Set(x, y, col)
+				}
+			}
+		}
+	}
+}

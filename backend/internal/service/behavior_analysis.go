@@ -29,33 +29,38 @@ type KeyboardDataPoint struct {
 }
 
 type MouseTrajectory struct {
-	Points           []BehaviorDataPoint `json:"points"`
-	TotalDistance   float64             `json:"total_distance"`
-	AverageSpeed    float64             `json:"average_speed"`
-	MaxSpeed        float64             `json:"max_speed"`
-	MinSpeed        float64             `json:"min_speed"`
-	PathEfficiency  float64             `json:"path_efficiency"`
-	DirectionChanges int                `json:"direction_changes"`
-	SmoothedDistance float64            `json:"smoothed_distance,omitempty"`
-	SpeedVariance   float64             `json:"speed_variance,omitempty"`
-	AccelerationAvg float64             `json:"acceleration_avg,omitempty"`
-	CurvatureAvg    float64             `json:"curvature_avg,omitempty"`
-	JitterScore     float64             `json:"jitter_score,omitempty"`
+	Points                  []BehaviorDataPoint `json:"points"`
+	TotalDistance           float64             `json:"total_distance"`
+	AverageSpeed            float64             `json:"average_speed"`
+	MaxSpeed                float64             `json:"max_speed"`
+	MinSpeed                float64             `json:"min_speed"`
+	PathEfficiency          float64             `json:"path_efficiency"`
+	DirectionChanges        int                 `json:"direction_changes"`
+	SmoothedDistance        float64             `json:"smoothed_distance,omitempty"`
+	SpeedVariance           float64             `json:"speed_variance,omitempty"`
+	AccelerationAvg         float64             `json:"acceleration_avg,omitempty"`
+	CurvatureAvg            float64             `json:"curvature_avg,omitempty"`
+	JitterScore             float64             `json:"jitter_score,omitempty"`
+	PauseCount              int                 `json:"pause_count,omitempty"`
+	TotalPauseDuration      float64             `json:"total_pause_duration,omitempty"`
+	MicroCorrections        int                 `json:"micro_corrections,omitempty"`
+	AccelerationMagVariance float64             `json:"acceleration_magnitude_variance,omitempty"`
 }
 
 type ClickPattern struct {
-	Clicks            []BehaviorDataPoint `json:"clicks"`
-	ClickCount        int                 `json:"click_count"`
-	AverageInterval   float64             `json:"average_interval"`
-	ClickSpeed        float64             `json:"click_speed"`
-	Regularity        float64             `json:"regularity"`
-	IntervalVariance  float64             `json:"interval_variance"`
-	IntervalStdDev    float64             `json:"interval_std_dev"`
-	XDistribution     []int               `json:"x_distribution,omitempty"`
-	YDistribution     []int               `json:"y_distribution,omitempty"`
-	PositionEntropy   float64             `json:"position_entropy,omitempty"`
-	IsDoubleClick     bool                `json:"is_double_click"`
-	ClickAreaSize     float64             `json:"click_area_size,omitempty"`
+	Clicks              []BehaviorDataPoint `json:"clicks"`
+	ClickCount          int                 `json:"click_count"`
+	AverageInterval     float64             `json:"average_interval"`
+	ClickSpeed          float64             `json:"click_speed"`
+	Regularity          float64             `json:"regularity"`
+	IntervalVariance    float64             `json:"interval_variance"`
+	IntervalStdDev      float64             `json:"interval_std_dev"`
+	XDistribution       []int               `json:"x_distribution,omitempty"`
+	YDistribution       []int               `json:"y_distribution,omitempty"`
+	PositionEntropy     float64             `json:"position_entropy,omitempty"`
+	IsDoubleClick       bool                `json:"is_double_click"`
+	ClickAreaSize       float64             `json:"click_area_size,omitempty"`
+	PreClickHesitation  float64             `json:"pre_click_hesitation,omitempty"`
 }
 
 type KeyboardPattern struct {
@@ -162,7 +167,7 @@ func (s *BehaviorAnalysisService) AnalyzeBehavior(behaviorData []models.Behavior
 	}
 
 	if len(clicks) > 0 {
-		result.ClickPattern = s.analyzeClickPatternEnhanced(clicks)
+		result.ClickPattern = s.analyzeClickPatternEnhanced(clicks, points)
 	}
 
 	if len(keyStrokes) > 0 {
@@ -652,6 +657,10 @@ func (s *BehaviorAnalysisService) analyzeMouseTrajectory(smoothedPoints []Behavi
 	prevAngle := 0.0
 	smoothedDistance := 0.0
 	curvatures := []float64{}
+	pauseCount := 0
+	totalPauseDuration := 0.0
+	microCorrections := 0
+	accelMagnitudes := []float64{}
 
 	for i := 1; i < len(originalPoints); i++ {
 		dx := float64(originalPoints[i].X - originalPoints[i-1].X)
@@ -675,6 +684,11 @@ func (s *BehaviorAnalysisService) analyzeMouseTrajectory(smoothedPoints []Behavi
 			if speed < minSpeed {
 				minSpeed = speed
 			}
+
+			if speed < 0.001 && distance < 2 {
+				pauseCount++
+				totalPauseDuration += dt
+			}
 		}
 
 		if i > 1 {
@@ -685,6 +699,10 @@ func (s *BehaviorAnalysisService) analyzeMouseTrajectory(smoothedPoints []Behavi
 			}
 			if angleDiff > 0.5 {
 				directionChanges++
+			}
+
+			if angleDiff > 2.0 && distance < 10 {
+				microCorrections++
 			}
 			prevAngle = angle
 
@@ -700,6 +718,9 @@ func (s *BehaviorAnalysisService) analyzeMouseTrajectory(smoothedPoints []Behavi
 	traj.MaxSpeed = maxSpeed
 	traj.MinSpeed = minSpeed
 	traj.DirectionChanges = directionChanges
+	traj.PauseCount = pauseCount
+	traj.TotalPauseDuration = totalPauseDuration
+	traj.MicroCorrections = microCorrections
 
 	if len(speeds) > 0 {
 		avgSpeed := 0.0
@@ -746,6 +767,7 @@ func (s *BehaviorAnalysisService) analyzeMouseTrajectory(smoothedPoints []Behavi
 		if dt > 0 {
 			accel := (speeds[i] - speeds[i-1]) / dt
 			accelerations = append(accelerations, accel)
+			accelMagnitudes = append(accelMagnitudes, math.Abs(accel))
 		}
 	}
 	if len(accelerations) > 0 {
@@ -754,6 +776,19 @@ func (s *BehaviorAnalysisService) analyzeMouseTrajectory(smoothedPoints []Behavi
 			avgAccel += a
 		}
 		traj.AccelerationAvg = avgAccel / float64(len(accelerations))
+	}
+
+	if len(accelMagnitudes) > 1 {
+		meanMag := 0.0
+		for _, m := range accelMagnitudes {
+			meanMag += m
+		}
+		meanMag /= float64(len(accelMagnitudes))
+		varMag := 0.0
+		for _, m := range accelMagnitudes {
+			varMag += math.Pow(m-meanMag, 2)
+		}
+		traj.AccelerationMagVariance = varMag / float64(len(accelMagnitudes))
 	}
 
 	return traj
@@ -791,13 +826,16 @@ func (s *BehaviorAnalysisService) computeCurvature(p1, p2, p3 BehaviorDataPoint)
 	return angle
 }
 
-func (s *BehaviorAnalysisService) analyzeClickPatternEnhanced(clicks []BehaviorDataPoint) ClickPattern {
+func (s *BehaviorAnalysisService) analyzeClickPatternEnhanced(clicks []BehaviorDataPoint, allPoints []BehaviorDataPoint) ClickPattern {
 	pattern := ClickPattern{
 		Clicks:     clicks,
 		ClickCount: len(clicks),
 	}
 
 	if len(clicks) < 2 {
+		if len(clicks) == 1 && len(allPoints) > 0 {
+			pattern.PreClickHesitation = s.computePreClickHesitation(clicks[0], allPoints)
+		}
 		return pattern
 	}
 
@@ -861,7 +899,35 @@ func (s *BehaviorAnalysisService) analyzeClickPatternEnhanced(clicks []BehaviorD
 		pattern.IsDoubleClick = lastInterval < 300
 	}
 
+	hesitationSum := 0.0
+	hesitationCount := 0
+	for _, click := range clicks {
+		hesitation := s.computePreClickHesitation(click, allPoints)
+		if hesitation > 0 {
+			hesitationSum += hesitation
+			hesitationCount++
+		}
+	}
+	if hesitationCount > 0 {
+		pattern.PreClickHesitation = hesitationSum / float64(hesitationCount)
+	}
+
 	return pattern
+}
+
+func (s *BehaviorAnalysisService) computePreClickHesitation(click BehaviorDataPoint, allPoints []BehaviorDataPoint) float64 {
+	lastMoveTime := int64(0)
+	for _, p := range allPoints {
+		if p.Timestamp < click.Timestamp && p.Event != "click" {
+			if p.Timestamp > lastMoveTime {
+				lastMoveTime = p.Timestamp
+			}
+		}
+	}
+	if lastMoveTime > 0 {
+		return float64(click.Timestamp - lastMoveTime)
+	}
+	return 0
 }
 
 func (s *BehaviorAnalysisService) computePositionDistribution(clicks []BehaviorDataPoint, isX bool, buckets int) []int {
@@ -1051,22 +1117,49 @@ func (s *BehaviorAnalysisService) calculateRiskScoreEnhanced(result *AnalysisRes
 		factors["inconsistent_speed"] = 10
 	}
 
-	if result.Trajectory.PathEfficiency > 0.95 && result.Trajectory.TotalDistance > 100 {
-		riskScore += 20
+	if result.SpeedAnalysis.SpeedStdDev > 0 && result.SpeedAnalysis.AverageSpeed > 0 {
+		speedCV := result.SpeedAnalysis.SpeedStdDev / result.SpeedAnalysis.AverageSpeed
+		if speedCV < 0.1 && len(result.SpeedAnalysis.Speeds) > 5 {
+			riskScore += 15
+			indicators = append(indicators, "速度过于恒定(机器特征)")
+			factors["constant_speed"] = 15
+		}
+	}
+
+	if result.Trajectory.PathEfficiency > 0.92 && result.Trajectory.TotalDistance > 100 {
+		riskScore += 25
 		indicators = append(indicators, "路径过于笔直")
-		factors["straight_path"] = 20
+		factors["straight_path"] = 25
 	}
 
-	if result.Trajectory.JitterScore < 0.05 {
-		riskScore += 15
+	if result.Trajectory.JitterScore < 0.03 {
+		riskScore += 20
 		indicators = append(indicators, "轨迹抖动过低(机器特征)")
-		factors["low_jitter"] = 15
+		factors["low_jitter"] = 20
 	}
 
-	if result.Trajectory.CurvatureAvg < 0.1 && len(result.Trajectory.Points) > 20 {
+	if result.Trajectory.CurvatureAvg < 0.05 && len(result.Trajectory.Points) > 20 {
+		riskScore += 20
+		indicators = append(indicators, "曲率过低(机器特征)")
+		factors["low_curvature"] = 20
+	}
+
+	if result.Trajectory.PauseCount == 0 && len(result.Trajectory.Points) >= 20 {
 		riskScore += 15
-		indicators = append(indicators, "曲率过低")
-		factors["low_curvature"] = 15
+		indicators = append(indicators, "无停顿(机器特征)")
+		factors["no_pause"] = 15
+	}
+
+	if result.Trajectory.MicroCorrections == 0 && len(result.Trajectory.Points) >= 20 {
+		riskScore += 15
+		indicators = append(indicators, "无微修正(机器特征)")
+		factors["no_micro_correction"] = 15
+	}
+
+	if result.Trajectory.AccelerationMagVariance < 0.001 && len(result.Trajectory.Points) > 10 {
+		riskScore += 10
+		indicators = append(indicators, "加速度幅度过于均匀(机器特征)")
+		factors["uniform_acceleration"] = 10
 	}
 
 	if result.PathSimilarity.IsPathRepeated {
@@ -1081,7 +1174,7 @@ func (s *BehaviorAnalysisService) calculateRiskScoreEnhanced(result *AnalysisRes
 		factors["path_hash_match"] = 25
 	}
 
-	if result.PathSimilarity.DTWDistance < 50 && result.PathSimilarity.ComparedPathLength > 10 {
+	if result.PathSimilarity.DTWDistance < 50 && result.PathSimilarity.ComparedPathLength > 10 && result.PathSimilarity.SimilarityScore > 0 {
 		riskScore += 20
 		indicators = append(indicators, "DTW距离异常小")
 		factors["low_dtw"] = 20
@@ -1109,6 +1202,12 @@ func (s *BehaviorAnalysisService) calculateRiskScoreEnhanced(result *AnalysisRes
 		riskScore += 5
 		indicators = append(indicators, "快速双击")
 		factors["double_click"] = 5
+	}
+
+	if result.ClickPattern.PreClickHesitation < 50 && result.ClickPattern.ClickCount > 0 && result.ClickPattern.PreClickHesitation > 0 {
+		riskScore += 15
+		indicators = append(indicators, "点击前犹豫过短(机器特征)")
+		factors["short_hesitation"] = 15
 	}
 
 	if len(result.KeyboardPattern.KeyStrokes) > 0 {
@@ -1178,6 +1277,9 @@ func (s *BehaviorAnalysisService) GenerateAnalysisReport(result *AnalysisResult)
 	report += fmt.Sprintf("  * 平均曲率: %.6f\n", result.Trajectory.CurvatureAvg)
 	report += fmt.Sprintf("  * 抖动分数: %.4f\n", result.Trajectory.JitterScore)
 	report += fmt.Sprintf("  * 方向变化: %d\n", result.Trajectory.DirectionChanges)
+	report += fmt.Sprintf("  * 停顿次数: %d\n", result.Trajectory.PauseCount)
+	report += fmt.Sprintf("  * 微修正次数: %d\n", result.Trajectory.MicroCorrections)
+	report += fmt.Sprintf("  * 加速度幅度方差: %.6f\n", result.Trajectory.AccelerationMagVariance)
 
 	if result.SpeedAnalysis.AverageSpeed > 0 {
 		report += fmt.Sprintf("- 速度分析:\n")
@@ -1209,6 +1311,7 @@ func (s *BehaviorAnalysisService) GenerateAnalysisReport(result *AnalysisResult)
 	report += fmt.Sprintf("  * 位置熵: %.4f\n", result.ClickPattern.PositionEntropy)
 	report += fmt.Sprintf("  * 点击区域: %.2f\n", result.ClickPattern.ClickAreaSize)
 	report += fmt.Sprintf("  * 双击: %v\n", result.ClickPattern.IsDoubleClick)
+	report += fmt.Sprintf("  * 点击前犹豫: %.2fms\n", result.ClickPattern.PreClickHesitation)
 
 	if len(result.KeyboardPattern.KeyStrokes) > 0 {
 		report += fmt.Sprintf("- 键盘模式:\n")

@@ -23,9 +23,9 @@ func Success(c *gin.Context, data interface{}) {
 }
 
 // Error 错误响应
-func Error(c *gin.Context, code int, message string) {
-	c.JSON(http.StatusOK, Response{
-		Code:    code,
+func Error(c *gin.Context, httpStatus int, message string) {
+	c.JSON(httpStatus, Response{
+		Code:    httpStatus,
 		Message: message,
 	})
 }
@@ -59,4 +59,12 @@ func InternalServerError(c *gin.Context, message string) {
 		message = "internal server error"
 	}
 	Error(c, http.StatusInternalServerError, message)
+}
+
+// TooManyRequests 429错误
+func TooManyRequests(c *gin.Context, message string) {
+	if message == "" {
+		message = "too many requests"
+	}
+	Error(c, http.StatusTooManyRequests, message)
 }

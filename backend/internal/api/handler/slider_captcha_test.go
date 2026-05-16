@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/response"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -427,4 +428,328 @@ func TestDeleteSliderSession(t *testing.T) {
 	_, exists := sliderSessionStore[sessionID]
 	sliderSessionMu.RUnlock()
 	assert.False(t, exists, "session should be deleted")
+}
+
+func generateHumanLikeTrajectory(startX, endX, startY, endY, numPoints int) []TrajectoryPoint {
+	points := make([]TrajectoryPoint, numPoints)
+	currentTime := int64(0)
+
+	for i := 0; i < numPoints; i++ {
+		progress := float64(i) / float64(numPoints-1)
+
+		easedProgress := progress * progress * (3 - 2*progress)
+
+		x := startX + int(float64(endX-startX)*easedProgress)
+		y := startY + int(float64(endY-startY)*easedProgress)
+
+		if i > 0 && i < numPoints-1 {
+			x += randIntSlider(-2, 2)
+			y += randIntSlider(-1, 1)
+		}
+
+		currentTime += int64(randIntSlider(8, 25))
+		points[i] = TrajectoryPoint{X: x, Y: y, T: currentTime}
+	}
+
+	return points
+}
+
+func generateBotLikeTrajectory(startX, endX, startY, numPoints int) []TrajectoryPoint {
+	points := make([]TrajectoryPoint, numPoints)
+	currentTime := int64(0)
+	step := (endX - startX) / numPoints
+
+	for i := 0; i < numPoints; i++ {
+		x := startX + step*i
+		if x > endX {
+			x = endX
+		}
+		currentTime += 10
+		points[i] = TrajectoryPoint{X: x, Y: startY, T: currentTime}
+	}
+
+	return points
+}
+
+func generateTeleportTrajectory(startX, endX, startY, numPoints int) []TrajectoryPoint {
+	points := make([]TrajectoryPoint, numPoints)
+	currentTime := int64(0)
+
+	for i := 0; i < numPoints; i++ {
+		if i == numPoints/2 {
+			points[i] = TrajectoryPoint{X: endX, Y: startY, T: currentTime + 10}
+		} else {
+			x := startX + (endX-startX)*i/numPoints
+			currentTime += 10
+			points[i] = TrajectoryPoint{X: x, Y: startY, T: currentTime}
+		}
+		currentTime += 10
+	}
+
+	return points
+}
+
+func TestVerifyTrajectory_HumanLike(t *testing.T) {
+	points := generateHumanLikeTrajectory(0, 150, 50, 55, 30)
+	result := verifyTrajectory(points, 150)
+
+	assert.True(t, result.Passed, "human-like trajectory should pass, got score=%d reasons=%v", result.Score, result.Reasons)
+	assert.GreaterOrEqual(t, result.Score, 30)
+}
+
+func TestVerifyTrajectory_BotLike(t *testing.T) {
+	points := generateBotLikeTrajectory(0, 150, 50, 20)
+	result := verifyTrajectory(points, 150)
+
+	assert.False(t, result.Passed, "bot-like trajectory should not pass, got score=%d reasons=%v", result.Score, result.Reasons)
+	assert.Less(t, result.Score, 30)
+}
+
+func TestVerifyTrajectory_Teleport(t *testing.T) {
+	points := generateTeleportTrajectory(0, 150, 50, 10)
+	result := verifyTrajectory(points, 150)
+
+	assert.False(t, result.Passed, "teleport trajectory should not pass, got score=%d reasons=%v", result.Score, result.Reasons)
+}
+
+func TestVerifyTrajectory_TooFewPoints(t *testing.T) {
+	points := []TrajectoryPoint{
+		{X: 0, Y: 50, T: 0},
+		{X: 100, Y: 50, T: 100},
+	}
+	result := verifyTrajectory(points, 100)
+
+	assert.False(t, result.Passed)
+	assert.Equal(t, 0, result.Score)
+	assert.Contains(t, result.Reasons[0], "轨迹点数量不足")
+}
+
+func TestVerifyTrajectory_NoTrajectory(t *testing.T) {
+	result := verifyTrajectory([]TrajectoryPoint{}, 0)
+
+	assert.False(t, result.Passed)
+	assert.Equal(t, 0, result.Score)
+}
+
+func TestVerifyTrajectory_NoYVariation(t *testing.T) {
+	points := make([]TrajectoryPoint, 10)
+	for i := 0; i < 10; i++ {
+		points[i] = TrajectoryPoint{X: i * 15, Y: 50, T: int64(i * 10)}
+	}
+	result := verifyTrajectory(points, 150)
+
+	assert.False(t, result.Passed, "no Y variation should fail")
+	hasYReason := false
+	for _, r := range result.Reasons {
+		if strings.Contains(r, "Y轴无变化") {
+			hasYReason = true
+			break
+		}
+	}
+	assert.True(t, hasYReason, "should contain Y-axis reason")
+}
+
+func TestVerifyTrajectory_StraightLine(t *testing.T) {
+	points := make([]TrajectoryPoint, 15)
+	for i := 0; i < 15; i++ {
+		points[i] = TrajectoryPoint{X: i * 10, Y: 50, T: int64(i * 10)}
+	}
+	result := verifyTrajectory(points, 150)
+
+	assert.False(t, result.Passed, "straight line trajectory should fail")
+}
+
+func TestVerifyTrajectory_SmoothNoJitter(t *testing.T) {
+	points := make([]TrajectoryPoint, 10)
+	for i := 0; i < 10; i++ {
+		x := i * 15
+		y := 50 + i%3
+		points[i] = TrajectoryPoint{X: x, Y: y, T: int64(i * 10)}
+	}
+	result := verifyTrajectory(points, 150)
+
+	hasJitterReason := false
+	for _, r := range result.Reasons {
+		if strings.Contains(r, "无自然抖动") {
+			hasJitterReason = true
+			break
+		}
+	}
+	assert.True(t, hasJitterReason, "smooth trajectory should have jitter reason")
+}
+
+func TestVerifyTrajectory_ConstantAcceleration(t *testing.T) {
+	points := make([]TrajectoryPoint, 10)
+	for i := 0; i < 10; i++ {
+		x := i * 15
+		y := 50 + i%2
+		points[i] = TrajectoryPoint{X: x, Y: y, T: int64(i * 10)}
+	}
+	result := verifyTrajectory(points, 150)
+
+	hasAccelReason := false
+	for _, r := range result.Reasons {
+		if strings.Contains(r, "加速度变化异常") {
+			hasAccelReason = true
+			break
+		}
+	}
+	assert.True(t, hasAccelReason, "constant acceleration should be detected")
+}
+
+func TestVerifyTrajectory_EdgeCases(t *testing.T) {
+	t.Run("single point", func(t *testing.T) {
+		points := []TrajectoryPoint{{X: 0, Y: 50, T: 0}}
+		result := verifyTrajectory(points, 0)
+		assert.False(t, result.Passed)
+		assert.Equal(t, 0, result.Score)
+	})
+
+	t.Run("exactly 3 points with variation", func(t *testing.T) {
+		points := []TrajectoryPoint{
+			{X: 0, Y: 50, T: 0},
+			{X: 75, Y: 52, T: 100},
+			{X: 150, Y: 51, T: 200},
+		}
+		result := verifyTrajectory(points, 150)
+		assert.NotNil(t, result)
+	})
+
+	t.Run("many points human-like", func(t *testing.T) {
+		points := generateHumanLikeTrajectory(0, 200, 50, 55, 100)
+		result := verifyTrajectory(points, 200)
+		assert.True(t, result.Passed, "human-like with many points should pass, score=%d", result.Score)
+	})
+}
+
+func TestVerifySliderCaptcha_WithTrajectory(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/slider/verify", VerifySliderCaptcha)
+
+	sliderSessionStore = make(map[string]*SliderSession)
+
+	sessionID := "test-traj-session"
+	session := &SliderSession{
+		SessionID: sessionID,
+		SecretX:   150,
+		SecretY:   60,
+		Tolerance: 8,
+		Shape:     ShapeCircle,
+		Attempts:  0,
+		Verified:  false,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+	sliderSessionStore[sessionID] = session
+
+	t.Run("correct position with human trajectory", func(t *testing.T) {
+		traj := generateHumanLikeTrajectory(0, 150, 60, 62, 30)
+		body := VerifySliderRequest{
+			SessionID:  sessionID,
+			X:          150,
+			Y:          60,
+			Trajectory: traj,
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var apiResp response.Response
+		err := json.Unmarshal(w.Body.Bytes(), &apiResp)
+		assert.NoError(t, err)
+
+		dataJSON, _ := json.Marshal(apiResp.Data)
+		var resp VerifySliderResponse
+		err = json.Unmarshal(dataJSON, &resp)
+		assert.NoError(t, err)
+		assert.True(t, resp.Success, "human trajectory with correct position should succeed, msg=%s", resp.Message)
+		assert.NotNil(t, resp.TrajectoryResult)
+		assert.True(t, resp.TrajectoryResult.Passed, "trajectory should pass, score=%d reasons=%v", resp.TrajectoryResult.Score, resp.TrajectoryResult.Reasons)
+	})
+
+	t.Run("correct position with bot trajectory", func(t *testing.T) {
+		sessionID2 := "test-traj-session-2"
+		session2 := &SliderSession{
+			SessionID: sessionID2,
+			SecretX:   150,
+			SecretY:   60,
+			Tolerance: 8,
+			Shape:     ShapeCircle,
+			Attempts:  0,
+			Verified:  false,
+			CreatedAt: time.Now(),
+			ExpiresAt: time.Now().Add(5 * time.Minute),
+		}
+		sliderSessionStore[sessionID2] = session2
+
+		traj := generateBotLikeTrajectory(0, 150, 60, 15)
+		body := VerifySliderRequest{
+			SessionID:  sessionID2,
+			X:          150,
+			Y:          60,
+			Trajectory: traj,
+		}
+		jsonBody, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var apiResp response.Response
+		err := json.Unmarshal(w.Body.Bytes(), &apiResp)
+		assert.NoError(t, err)
+
+		dataJSON, _ := json.Marshal(apiResp.Data)
+		var resp VerifySliderResponse
+		err = json.Unmarshal(dataJSON, &resp)
+		assert.NoError(t, err)
+		assert.False(t, resp.Success, "bot trajectory should be rejected even with correct position")
+		assert.NotNil(t, resp.TrajectoryResult)
+		assert.False(t, resp.TrajectoryResult.Passed)
+	})
+}
+
+func TestSliderSessionExpiry(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/slider/verify", VerifySliderCaptcha)
+
+	sliderSessionStore = make(map[string]*SliderSession)
+
+	sessionID := "test-expired-session"
+	session := &SliderSession{
+		SessionID: sessionID,
+		SecretX:   150,
+		SecretY:   60,
+		Tolerance: 8,
+		Shape:     ShapeCircle,
+		Attempts:  0,
+		Verified:  false,
+		CreatedAt: time.Now().Add(-10 * time.Minute),
+		ExpiresAt: time.Now().Add(-5 * time.Minute),
+	}
+	sliderSessionStore[sessionID] = session
+
+	body := VerifySliderRequest{
+		SessionID: sessionID,
+		X:         150,
+		Y:         60,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	sliderSessionMu.RLock()
+	_, exists := sliderSessionStore[sessionID]
+	sliderSessionMu.RUnlock()
+	assert.False(t, exists, "expired session should be deleted")
 }

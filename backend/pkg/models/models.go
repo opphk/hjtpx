@@ -31,7 +31,7 @@ type User struct {
 type Admin struct {
 	gorm.Model
 	Username       string `gorm:"size:100;uniqueIndex;not null" json:"username"`
-	PasswordHash   string `gorm:"size:255;not null" json:"password_hash"`
+	PasswordHash   string `gorm:"size:255;not null" json:"-"`
 	IsSuperAdmin   bool   `gorm:"default:false" json:"is_super_admin"`
 }
 
@@ -69,6 +69,7 @@ type Verification struct {
 	IPAddress      string          `gorm:"size:50" json:"ip_address"`
 	UserAgent      string          `gorm:"size:500" json:"user_agent"`
 	RiskScore      float64         `gorm:"default:0" json:"risk_score"`
+	Duration       int64           `gorm:"comment:'验证耗时(毫秒)'" json:"duration"`
 	BehaviorData   []BehaviorData  `gorm:"foreignKey:VerificationID" json:"behavior_data,omitempty"`
 	Application    *Application    `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
 	User           *User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
@@ -81,6 +82,21 @@ type BehaviorData struct {
 	DataType       string         `gorm:"size:100" json:"data_type"`
 	Timestamp      time.Time      `json:"timestamp"`
 	Verification   Verification   `gorm:"foreignKey:VerificationID" json:"verification,omitempty"`
+}
+
+type Blacklist struct {
+	gorm.Model
+	Target         string    `gorm:"size:255;not null;index" json:"target"`
+	Type           string    `gorm:"size:50;not null;index" json:"type"`
+	Source         string    `gorm:"size:50;default:manual" json:"source"`
+	Reason         string    `gorm:"type:text" json:"reason,omitempty"`
+	Action         string    `gorm:"size:50;default:block" json:"action"`
+	Status         string    `gorm:"size:50;default:active" json:"status"`
+	Note           string    `gorm:"type:text" json:"note,omitempty"`
+	CreatedBy      uint      `gorm:"default:0" json:"created_by"`
+	HitCount       int       `gorm:"default:0" json:"hit_count"`
+	ApplicationIDs string    `gorm:"type:text" json:"application_ids,omitempty"`
+	Expiration     string    `gorm:"size:50" json:"expiration,omitempty"`
 }
 
 type VerificationLog struct {

@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"time"
@@ -47,9 +46,19 @@ func InitDB(cfg *config.Config) error {
 	)
 
 	var err error
-	sqlDB, err := sql.Open("postgres", dsn)
+	DB, err = gorm.Open(postgres.New(postgres.Config{
+		DSN:                  dsn,
+		PreferSimpleProtocol: true,
+	}), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Info),
+	})
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return err
+	}
+
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
 
 	maxOpenConns := cfg.Postgres.MaxOpenConns
@@ -76,16 +85,6 @@ func InitDB(cfg *config.Config) error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	DB, err = gorm.Open(postgres.New(postgres.Config{
-		DSN:                  dsn,
-		PreferSimpleProtocol: true,
-	}), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
-	if err != nil {
-		return err
-	}
-
 	log.Println("Database connection pool established successfully")
 
 	if err := AutoMigrate(); err != nil {
@@ -104,8 +103,10 @@ func AutoMigrate() error {
 		&models.User{},
 		&models.Admin{},
 		&models.Application{},
+		&models.APIKeyHistory{},
 		&models.Verification{},
 		&models.BehaviorData{},
+		&models.Blacklist{},
 		&models.VerificationLog{},
 	)
 }

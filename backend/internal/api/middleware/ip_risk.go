@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
 type IPRiskLevel string
@@ -257,12 +257,7 @@ func checkOpenPorts(ip string, timeout time.Duration) (int, bool) {
 }
 
 func reverseDNSLookup(ip string, timeout time.Duration) (string, error) {
-	resolver := &net.Resolver{
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{Timeout: timeout}
-			return d.DialContext(ctx, network, "8.8.8.8:53")
-		},
-	}
+	resolver := &net.Resolver{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -451,24 +446,14 @@ func IPRiskAssessmentMiddleware(config ...IPRiskConfig) gin.HandlerFunc {
 
 		if cfg.BlockCriticalRisk && riskInfo.RiskLevel == IPRiskLevelCritical {
 			c.Header("X-IP-Risk-Level", string(riskInfo.RiskLevel))
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "访问被拒绝，检测到高风险IP地址",
-				"error":   "ip_risk_critical",
-				"risk":    riskInfo,
-			})
+			response.Forbidden(c)
 			c.Abort()
 			return
 		}
 
 		if cfg.BlockHighRisk && riskInfo.RiskLevel == IPRiskLevelHigh {
 			c.Header("X-IP-Risk-Level", string(riskInfo.RiskLevel))
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "访问被拒绝，检测到风险IP地址",
-				"error":   "ip_risk_high",
-				"risk":    riskInfo,
-			})
+			response.Forbidden(c)
 			c.Abort()
 			return
 		}
@@ -586,11 +571,7 @@ func IPRateLimitByRiskMiddleware() gin.HandlerFunc {
 
 		if !result.Allowed {
 			c.Header("Retry-After", strconv.Itoa(windowSecs))
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"code":    429,
-				"message": "请求过于频繁，请稍后再试",
-				"error":   "rate_limit_exceeded",
-			})
+			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}

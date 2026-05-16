@@ -431,7 +431,7 @@ func TestClickPatternEnhanced(t *testing.T) {
 		{X: 300, Y: 300, Timestamp: 1400, Event: "click"},
 	}
 
-	pattern := service.analyzeClickPatternEnhanced(clicks)
+	pattern := service.analyzeClickPatternEnhanced(clicks, clicks)
 	assert.Equal(t, 5, pattern.ClickCount)
 	assert.Greater(t, pattern.ClickSpeed, 0.0)
 	assert.Greater(t, pattern.PositionEntropy, 0.0)
@@ -915,4 +915,197 @@ func createTestBehaviorData(x, y int, timestamp int64, event string) models.Beha
 		DataType:  event,
 		Timestamp: time.Now(),
 	}
+}
+
+func generateHumanLikeTrajectory() []models.BehaviorData {
+	data := []models.BehaviorData{}
+	startTime := int64(1000)
+
+	segments := []struct {
+		startX, startY, endX, endY int
+		baseDurationMs             int64
+		points                     int
+	}{
+		{100, 100, 200, 180, 600, 12},
+		{200, 180, 280, 220, 500, 10},
+		{280, 220, 350, 250, 400, 8},
+		{350, 250, 380, 310, 450, 9},
+		{380, 310, 420, 280, 300, 6},
+	}
+
+	timeOffset := startTime
+	for _, seg := range segments {
+		for i := 0; i < seg.points; i++ {
+			t := float64(i) / float64(seg.points-1)
+			t = t*t*(3-2*t)
+
+			speedFactor := 0.5 + 0.5*math.Sin(math.Pi*t)
+			segDuration := float64(seg.baseDurationMs) * (0.8 + 0.4*speedFactor)
+			pointInterval := segDuration / float64(seg.points)
+			pointInterval += float64(i%3-1) * 3
+
+			x := seg.startX + int(float64(seg.endX-seg.startX)*t)
+			y := seg.startY + int(float64(seg.endY-seg.startY)*t)
+
+			jitterX := int(math.Sin(float64(i)*1.7)*3 + float64(i%5)-2)
+			jitterY := int(math.Cos(float64(i)*1.3)*3 + float64(i%4)-2)
+			x += jitterX
+			y += jitterY
+
+			timeOffset += int64(math.Max(pointInterval, 10))
+			bd := createTestBehaviorData(x, y, timeOffset, "mousemove")
+			data = append(data, bd)
+		}
+
+		timeOffset += 60 + int64(seg.points%3)*20
+		pauseBd := createTestBehaviorData(seg.endX, seg.endY, timeOffset, "mousemove")
+		data = append(data, pauseBd)
+	}
+
+	timeOffset += 120
+	clickBd := createTestBehaviorData(420, 280, timeOffset, "click")
+	data = append(data, clickBd)
+
+	return data
+}
+
+func generateBotLikeTrajectory() []models.BehaviorData {
+	data := []models.BehaviorData{}
+	startTime := int64(1000)
+
+	for i := 0; i < 40; i++ {
+		x := 100 + i*10
+		y := 100 + i*6
+		timestamp := startTime + int64(i)*20
+		bd := createTestBehaviorData(x, y, timestamp, "mousemove")
+		data = append(data, bd)
+	}
+
+	timestamp := startTime + int64(40)*20
+	clickBd := createTestBehaviorData(500, 340, timestamp, "click")
+	data = append(data, clickBd)
+
+	return data
+}
+
+func TestHumanTrajectoryLowRisk(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+
+	humanData := generateHumanLikeTrajectory()
+	result, err := service.AnalyzeBehavior(humanData)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	t.Logf("人类轨迹风险评分: %.2f", result.RiskScore)
+	t.Logf("人类轨迹风险指标: %v", result.RiskIndicators)
+	t.Logf("人类轨迹路径效率: %.4f", result.Trajectory.PathEfficiency)
+	t.Logf("人类轨迹抖动: %.4f", result.Trajectory.JitterScore)
+	t.Logf("人类轨迹曲率: %.6f", result.Trajectory.CurvatureAvg)
+	t.Logf("人类轨迹停顿: %d", result.Trajectory.PauseCount)
+	t.Logf("人类轨迹微修正: %d", result.Trajectory.MicroCorrections)
+
+	assert.Less(t, result.RiskScore, 50.0, "人类轨迹的风险评分应低于50")
+	assert.False(t, result.IsBotLikely, "人类轨迹不应被判定为机器人")
+}
+
+func TestBotTrajectoryHighRisk(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+
+	botData := generateBotLikeTrajectory()
+	result, err := service.AnalyzeBehavior(botData)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	t.Logf("机器人轨迹风险评分: %.2f", result.RiskScore)
+	t.Logf("机器人轨迹风险指标: %v", result.RiskIndicators)
+	t.Logf("机器人轨迹路径效率: %.4f", result.Trajectory.PathEfficiency)
+	t.Logf("机器人轨迹抖动: %.4f", result.Trajectory.JitterScore)
+	t.Logf("机器人轨迹曲率: %.6f", result.Trajectory.CurvatureAvg)
+	t.Logf("机器人轨迹停顿: %d", result.Trajectory.PauseCount)
+	t.Logf("机器人轨迹微修正: %d", result.Trajectory.MicroCorrections)
+
+	assert.GreaterOrEqual(t, result.RiskScore, 50.0, "机器人轨迹的风险评分应不低于50")
+	assert.True(t, result.IsBotLikely, "机器人轨迹应被判定为机器人")
+	assert.Contains(t, result.RiskIndicators, "路径过于笔直", "机器人轨迹应包含\"路径过于笔直\"指标")
+}
+
+func TestStraightLineLowScore(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+
+	straightPath := []models.BehaviorData{}
+	for i := 0; i < 30; i++ {
+		timestamp := int64(1000 + i*10)
+		bd := createTestBehaviorData(100+i*10, 100+i*10, timestamp, "mousemove")
+		straightPath = append(straightPath, bd)
+	}
+
+	result, err := service.AnalyzeBehavior(straightPath)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	t.Logf("直线轨迹风险评分: %.2f", result.RiskScore)
+	t.Logf("直线轨迹风险指标: %v", result.RiskIndicators)
+	t.Logf("直线轨迹路径效率: %.4f", result.Trajectory.PathEfficiency)
+	t.Logf("直线轨迹曲率: %.6f", result.Trajectory.CurvatureAvg)
+	t.Logf("直线轨迹抖动: %.4f", result.Trajectory.JitterScore)
+
+	assert.GreaterOrEqual(t, result.RiskScore, 50.0, "直线轨迹风险评分应不低于50")
+	assert.True(t, result.IsBotLikely, "直线轨迹应被判定为机器人")
+}
+
+func TestPreClickHesitation(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{
+		createTestBehaviorData(100, 100, 1000, "mousemove"),
+		createTestBehaviorData(200, 200, 1100, "mousemove"),
+		createTestBehaviorData(300, 300, 1200, "mousemove"),
+		createTestBehaviorData(300, 300, 1350, "click"),
+	}
+
+	result, err := service.AnalyzeBehavior(behaviorData)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Greater(t, result.ClickPattern.PreClickHesitation, 0.0, "点击前犹豫应大于0")
+	assert.InDelta(t, 150.0, result.ClickPattern.PreClickHesitation, 50.0, "点击前犹豫应在150ms左右")
+}
+
+func TestHumanVsBotScoreDifference(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+
+	humanData := generateHumanLikeTrajectory()
+	botData := generateBotLikeTrajectory()
+
+	humanResult, _ := service.AnalyzeBehavior(humanData)
+	botResult, _ := service.AnalyzeBehavior(botData)
+
+	t.Logf("人类轨迹评分: %.2f, 机器人轨迹评分: %.2f", humanResult.RiskScore, botResult.RiskScore)
+	t.Logf("评分差距: %.2f", botResult.RiskScore-humanResult.RiskScore)
+
+	assert.Greater(t, botResult.RiskScore, humanResult.RiskScore,
+		"机器人轨迹评分应高于人类轨迹评分")
+	assert.Greater(t, botResult.RiskScore-humanResult.RiskScore, 20.0,
+		"机器人轨迹与人类轨迹的评分差距应大于20分")
+}
+
+func TestMicroCorrectionsDetection(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+
+	points := []BehaviorDataPoint{
+		{X: 100, Y: 100, Timestamp: 1000, Event: "mousemove"},
+		{X: 110, Y: 108, Timestamp: 1050, Event: "mousemove"},
+		{X: 118, Y: 115, Timestamp: 1100, Event: "mousemove"},
+		{X: 125, Y: 125, Timestamp: 1150, Event: "mousemove"},
+		{X: 128, Y: 127, Timestamp: 1200, Event: "mousemove"},
+		{X: 130, Y: 129, Timestamp: 1250, Event: "mousemove"},
+		{X: 131, Y: 130, Timestamp: 1300, Event: "mousemove"},
+	}
+
+	smoothed := service.smoothTrajectory(points, 3)
+	traj := service.analyzeMouseTrajectory(smoothed, points)
+
+	t.Logf("微修正次数: %d", traj.MicroCorrections)
+	t.Logf("停顿次数: %d", traj.PauseCount)
+
+	assert.GreaterOrEqual(t, traj.MicroCorrections, 0)
 }

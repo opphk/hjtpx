@@ -101,6 +101,84 @@
     .image-captcha-input:focus {
         border-color: var(--gold);
     }
+    .rotation-captcha-wrapper {
+        text-align: center;
+    }
+    .rotation-captcha-display {
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: center;
+    }
+    .rotation-captcha-img {
+        border: 2px solid rgba(0,0,0,0.08);
+        border-radius: 8px;
+        max-width: 100%;
+        height: auto;
+        transition: transform 0.1s ease;
+    }
+    .rotation-slider-container {
+        position: relative;
+        width: 100%;
+        max-width: 280px;
+        height: 40px;
+        margin: 0.5rem auto;
+        background: #f0f0f0;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid #e0e0e0;
+    }
+    .rotation-slider-track {
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        height: 36px;
+        width: 0;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        border-radius: 18px;
+    }
+    .rotation-slider-button {
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 36px;
+        height: 36px;
+        background: white;
+        border-radius: 50%;
+        cursor: grab;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        z-index: 2;
+        color: #667eea;
+        touch-action: none;
+        transition: left 0.05s ease;
+    }
+    .rotation-slider-button:active {
+        cursor: grabbing;
+        transform: scale(1.1);
+    }
+    .rotation-slider-text {
+        position: absolute;
+        width: 100%;
+        text-align: center;
+        line-height: 40px;
+        font-size: 13px;
+        color: #999;
+        pointer-events: none;
+        z-index: 1;
+    }
+    .rotation-angle-display {
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--ink-light);
+        margin-top: 0.25rem;
+    }
+    @media (max-width: 576px) {
+        .rotation-slider-container {
+            max-width: 100%;
+        }
+    }
     </style>
 </head>
 <body>
@@ -168,6 +246,10 @@
             <div class="captcha-tab" data-type="image" onclick="switchCaptchaType('image')">
                 <i class="fas fa-image"></i>
                 <span>图形验证码</span>
+            </div>
+            <div class="captcha-tab" data-type="rotation" onclick="switchCaptchaType('rotation')">
+                <i class="fas fa-undo-alt"></i>
+                <span>旋转验证</span>
             </div>
         </div>
 
@@ -284,6 +366,55 @@
                                 <div class="result-banner" id="imageResult">
                                     <i class="fas fa-check-circle"></i>
                                     <span id="imageResultText"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="demo-card h-100 shadow-sm" id="demoRotation">
+                        <div class="demo-card-header">
+                            <div class="icon-wrap">
+                                <i class="fas fa-undo-alt"></i>
+                            </div>
+                            <div>
+                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;">旋转验证</h5>
+                                <small style="color: var(--ink-light);">拖动旋转图片到正确角度</small>
+                            </div>
+                        </div>
+                        <div class="demo-card-body">
+                            <p style="color: var(--ink-light); font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;">
+                                通过拖动滑块旋转图片，将方向校正到正确角度。系统分析旋转轨迹与操作模式，精准识别人类操作。
+                            </p>
+                            <div class="captcha-demo-area" id="rotationDemoArea">
+                                <div class="rotation-captcha-wrapper" id="rotationCaptchaContainer">
+                                    <div class="rotation-captcha-display">
+                                        <img id="rotationCaptchaImg" alt="旋转验证码" class="rotation-captcha-img" style="min-width:180px;min-height:180px;background:#f0f0f0;">
+                                    </div>
+                                    <div class="rotation-slider-container" id="rotationSliderContainer">
+                                        <div class="rotation-slider-track" id="rotationSliderTrack"></div>
+                                        <div class="rotation-slider-button" id="rotationSliderButton">
+                                            <i class="fas fa-undo-alt"></i>
+                                        </div>
+                                        <div class="rotation-slider-text" id="rotationSliderText">拖动旋转</div>
+                                    </div>
+                                    <div class="rotation-angle-display">
+                                        <span>旋转角度: </span>
+                                        <span id="rotationAngleValue">0°</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                <button class="btn btn-vermillion btn-sm" onclick="switchCaptchaType('rotation')">
+                                    <i class="fas fa-play me-1"></i>开始体验
+                                </button>
+                                <button class="btn btn-ink btn-sm" onclick="refreshRotationCaptcha()">
+                                    <i class="fas fa-sync me-1"></i>刷新
+                                </button>
+                                <div class="result-banner" id="rotationResult">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span id="rotationResultText"></span>
                                 </div>
                             </div>
                         </div>
@@ -455,6 +586,15 @@
         var currentType = 'slider';
         var langManager = null;
         var imageCaptchaChallengeId = '';
+        var rotationState = {
+            isDragging: false,
+            startX: 0,
+            currentAngle: 0,
+            totalAngle: 0,
+            challengeId: '',
+            startTime: 0,
+            trajectoryData: []
+        };
 
         try {
             langManager = new CaptchaLanguageManager();
@@ -499,10 +639,31 @@
         }
 
         function switchCaptchaType(type) {
+            currentType = type;
+            document.querySelectorAll('.captcha-tab').forEach(function(t) {
+                t.classList.remove('active');
+            });
+            document.querySelector('.captcha-tab[data-type="' + type + '"]').classList.add('active');
+            if (currentCaptcha) {
+                currentCaptcha.destroy();
+                currentCaptcha = null;
+            }
+            if (type === 'rotation') {
+                refreshRotationCaptcha();
+                return;
+            }
             initCaptcha(type);
         }
 
         function refreshCaptcha() {
+            hideResult('slider');
+            hideResult('click');
+            hideResult('image');
+            hideResult('rotation');
+            if (currentType === 'rotation') {
+                refreshRotationCaptcha();
+                return;
+            }
             if (currentCaptcha && typeof currentCaptcha.refresh === 'function') {
                 currentCaptcha.refresh();
             } else {
@@ -596,8 +757,158 @@
             xhr.send(JSON.stringify({ challenge_id: imageCaptchaChallengeId, answer: value }));
         }
 
+        function refreshRotationCaptcha() {
+            var img = document.getElementById('rotationCaptchaImg');
+            if (img) {
+                img.style.opacity = '0.5';
+            }
+            rotationState.currentAngle = 0;
+            rotationState.totalAngle = 0;
+            rotationState.trajectoryData = [];
+            updateRotationAngleDisplay(0);
+            resetRotationSlider();
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/v1/captcha/rotation?t=' + Date.now(), true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    try {
+                        var resp = JSON.parse(xhr.responseText);
+                        var respData = resp.data || resp;
+                        if (respData && respData.image) {
+                            img.src = respData.image;
+                            rotationState.challengeId = respData.challenge_id;
+                        }
+                        img.style.opacity = '1';
+                    } catch(e) {
+                        img.style.opacity = '1';
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        function initRotationSlider() {
+            var button = document.getElementById('rotationSliderButton');
+            var container = document.getElementById('rotationSliderContainer');
+            if (!button || !container) return;
+
+            var startDrag = function(e) {
+                if (rotationState.isDragging) return;
+                rotationState.isDragging = true;
+                rotationState.startX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+                rotationState.startTime = Date.now();
+                rotationState.trajectoryData = [];
+                button.style.cursor = 'grabbing';
+            };
+
+            var drag = function(e) {
+                if (!rotationState.isDragging) return;
+                e.preventDefault();
+                var clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+                var deltaX = clientX - rotationState.startX;
+                var maxWidth = container.offsetWidth - button.offsetWidth - 4;
+                var progress = Math.max(0, Math.min(deltaX / maxWidth, 1));
+                var angleDelta = progress * 360;
+                rotationState.currentAngle = angleDelta;
+                rotationState.totalAngle = (rotationState.totalAngle + angleDelta) % 360;
+                if (rotationState.totalAngle < 0) rotationState.totalAngle += 360;
+
+                var track = document.getElementById('rotationSliderTrack');
+                var text = document.getElementById('rotationSliderText');
+                if (track) track.style.width = (progress * maxWidth) + 'px';
+                button.style.left = (deltaX + 2) + 'px';
+                if (text) text.textContent = '旋转中...';
+
+                var img = document.getElementById('rotationCaptchaImg');
+                if (img) {
+                    img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
+                }
+
+                updateRotationAngleDisplay(rotationState.totalAngle);
+                rotationState.trajectoryData.push({
+                    angle: rotationState.totalAngle,
+                    timestamp: Date.now()
+                });
+            };
+
+            var endDrag = function(e) {
+                if (!rotationState.isDragging) return;
+                rotationState.isDragging = false;
+                button.style.cursor = 'grab';
+
+                var text = document.getElementById('rotationSliderText');
+                if (text) text.textContent = '拖动旋转';
+
+                if (rotationState.totalAngle > 5) {
+                    submitRotationCaptcha();
+                }
+                resetRotationSlider();
+            };
+
+            button.addEventListener('mousedown', startDrag);
+            button.addEventListener('touchstart', startDrag, { passive: false });
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('mouseup', endDrag);
+            document.addEventListener('touchend', endDrag);
+        }
+
+        function resetRotationSlider() {
+            var button = document.getElementById('rotationSliderButton');
+            var track = document.getElementById('rotationSliderTrack');
+            var text = document.getElementById('rotationSliderText');
+            if (button) button.style.left = '2px';
+            if (track) track.style.width = '0px';
+            if (text) text.textContent = '拖动旋转';
+        }
+
+        function updateRotationAngleDisplay(angle) {
+            var el = document.getElementById('rotationAngleValue');
+            if (el) el.textContent = Math.round(angle) + '°';
+        }
+
+        function submitRotationCaptcha() {
+            if (!rotationState.challengeId) {
+                showResult('rotation', false, '验证码未加载，请刷新');
+                return;
+            }
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/v1/captcha/rotation/verify', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            var respData = resp.data || resp;
+                            if (respData.success) {
+                                showResult('rotation', true, '验证成功！');
+                            } else {
+                                showResult('rotation', false, '验证失败，请重试');
+                                refreshRotationCaptcha();
+                            }
+                        } catch(e) {
+                            showResult('rotation', false, '验证失败，请重试');
+                            refreshRotationCaptcha();
+                        }
+                    } else {
+                        showResult('rotation', false, '验证失败，请重试');
+                        refreshRotationCaptcha();
+                    }
+                }
+            };
+            xhr.send(JSON.stringify({
+                challenge_id: rotationState.challengeId,
+                angle: Math.round(rotationState.totalAngle % 360)
+            }));
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             initCaptcha('slider');
+            initRotationSlider();
+            refreshImageCaptcha();
         });
     </script>
 </body>

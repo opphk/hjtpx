@@ -33,6 +33,7 @@ const (
 	ModeLetter   CaptchaMode = "letter"
 	ModeChinese  CaptchaMode = "chinese"
 	ModeMixed    CaptchaMode = "mixed"
+	ModeIcon     CaptchaMode = "icon"
 )
 
 type ClickPoint struct {
@@ -88,6 +89,39 @@ var clickLetterChars = []string{
 
 var clickNumberChars = []string{
 	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+}
+
+type IconType string
+
+const (
+	IconCircle   IconType = "circle"
+	IconSquare   IconType = "square"
+	IconTriangle IconType = "triangle"
+	IconStar     IconType = "star"
+	IconDiamond  IconType = "diamond"
+	IconHeart    IconType = "heart"
+	IconArrow    IconType = "arrow"
+	IconCross    IconType = "cross"
+	IconMoon     IconType = "moon"
+	IconRing     IconType = "ring"
+)
+
+var clickIcons = []IconType{
+	IconCircle, IconSquare, IconTriangle, IconStar, IconDiamond,
+	IconHeart, IconArrow, IconCross, IconMoon, IconRing,
+}
+
+var iconNames = map[IconType]string{
+	IconCircle:   "圆形",
+	IconSquare:   "方形",
+	IconTriangle: "三角形",
+	IconStar:     "星形",
+	IconDiamond:  "菱形",
+	IconHeart:    "心形",
+	IconArrow:    "箭头",
+	IconCross:    "十字",
+	IconMoon:     "月牙",
+	IconRing:     "圆环",
 }
 
 func init() {
@@ -523,20 +557,30 @@ func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickP
 		rotation := float64(rand.Intn(40) - 20)
 		textColor := randomVibrantColor()
 
-		rendered := renderCharToRGBA(char, charSize, textColor)
-		if rendered == nil {
-			rendered = image.NewRGBA(image.Rect(0, 0, 10, 10))
-			draw.Draw(rendered, rendered.Bounds(), &image.Uniform{textColor}, image.Point{}, draw.Src)
+		if session.Mode == ModeIcon {
+			iconType := IconType(shuffledChars[i])
+			rendered := renderIcon(iconType, charSize, textColor)
+			rotated := rotateImageRGBA(rendered, rotation)
+			draw.Draw(img, image.Rect(
+				charCenters[i].X-rotated.Bounds().Dx()/2,
+				charCenters[i].Y-rotated.Bounds().Dy()/2,
+				charCenters[i].X-rotated.Bounds().Dx()/2+rotated.Bounds().Dx(),
+				charCenters[i].Y-rotated.Bounds().Dy()/2+rotated.Bounds().Dy(),
+			), rotated, image.Point{}, draw.Over)
+		} else {
+			rendered := renderCharToRGBA(char, charSize, textColor)
+			if rendered == nil {
+				rendered = image.NewRGBA(image.Rect(0, 0, 10, 10))
+				draw.Draw(rendered, rendered.Bounds(), &image.Uniform{textColor}, image.Point{}, draw.Src)
+			}
+			rotated := rotateImageRGBA(rendered, rotation)
+			draw.Draw(img, image.Rect(
+				charCenters[i].X-rotated.Bounds().Dx()/2,
+				charCenters[i].Y-rotated.Bounds().Dy()/2,
+				charCenters[i].X-rotated.Bounds().Dx()/2+rotated.Bounds().Dx(),
+				charCenters[i].Y-rotated.Bounds().Dy()/2+rotated.Bounds().Dy(),
+			), rotated, image.Point{}, draw.Over)
 		}
-
-		rotated := rotateImageRGBA(rendered, rotation)
-
-		draw.Draw(img, image.Rect(
-			charCenters[i].X-rotated.Bounds().Dx()/2,
-			charCenters[i].Y-rotated.Bounds().Dy()/2,
-			charCenters[i].X-rotated.Bounds().Dx()/2+rotated.Bounds().Dx(),
-			charCenters[i].Y-rotated.Bounds().Dy()/2+rotated.Bounds().Dy(),
-		), rotated, image.Point{}, draw.Over)
 	}
 
 	targetPoints := make([]ClickPoint, maxPoints)
@@ -606,7 +650,11 @@ func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickP
 
 	hintParts := make([]string, maxPoints)
 	for i, idx := range hintOrder {
-		hintParts[i] = displayChars[idx]
+		if session.Mode == ModeIcon {
+			hintParts[i] = getIconName(displayChars[idx])
+		} else {
+			hintParts[i] = displayChars[idx]
+		}
 	}
 	session.Hint = "依次点击: " + strings.Join(hintParts, " → ")
 
@@ -627,6 +675,8 @@ func getCharForIndex(index int, mode CaptchaMode) string {
 		return clickLetterChars[rand.Intn(len(clickLetterChars))]
 	case ModeChinese:
 		return clickChineseChars[rand.Intn(len(clickChineseChars))]
+	case ModeIcon:
+		return string(clickIcons[rand.Intn(len(clickIcons))])
 	case ModeMixed:
 		switch rand.Intn(3) {
 		case 0:
@@ -639,6 +689,180 @@ func getCharForIndex(index int, mode CaptchaMode) string {
 	default:
 		return clickNumberChars[rand.Intn(len(clickNumberChars))]
 	}
+}
+
+func renderIcon(iconType IconType, size int, iconColor color.RGBA) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	centerX, centerY := size/2, size/2
+	halfSize := size / 3
+
+	switch iconType {
+	case IconCircle:
+		drawFilledCircle(img, centerX, centerY, halfSize, iconColor)
+	case IconSquare:
+		drawFilledRect(img, centerX-halfSize, centerY-halfSize, halfSize*2, halfSize*2, iconColor)
+	case IconTriangle:
+		for y := 0; y < size; y++ {
+			for x := 0; x < size; x++ {
+				relY := float64(y-centerY) / float64(halfSize)
+				relX := float64(x-centerX) / float64(halfSize)
+				if relY >= -1 && relY <= 0 && math.Abs(relX) <= -relY {
+					img.Set(x, y, iconColor)
+				}
+			}
+		}
+	case IconStar:
+		drawStar(img, centerX, centerY, halfSize, iconColor)
+	case IconDiamond:
+		for y := 0; y < size; y++ {
+			for x := 0; x < size; x++ {
+				relX := math.Abs(float64(x - centerX))
+				relY := math.Abs(float64(y - centerY))
+				if relX+relY <= float64(halfSize) {
+					img.Set(x, y, iconColor)
+				}
+			}
+		}
+	case IconHeart:
+		drawHeart(img, centerX, centerY, halfSize, iconColor)
+	case IconArrow:
+		drawArrow(img, centerX, centerY, halfSize, iconColor)
+	case IconCross:
+		thickness := halfSize / 2
+		if thickness < 2 {
+			thickness = 2
+		}
+		drawFilledRect(img, centerX-thickness, centerY-halfSize, thickness*2, halfSize*2, iconColor)
+		drawFilledRect(img, centerX-halfSize, centerY-thickness, halfSize*2, thickness*2, iconColor)
+	case IconMoon:
+		drawFilledCircle(img, centerX, centerY, halfSize, iconColor)
+		coverColor := color.RGBA{
+			R: 220, G: 220, B: 225, A: 255,
+		}
+		drawFilledCircle(img, centerX+halfSize/3, centerY-halfSize/4, halfSize*3/4, coverColor)
+	case IconRing:
+		outerR := halfSize
+		innerR := halfSize * 2 / 3
+		for y := 0; y < size; y++ {
+			for x := 0; x < size; x++ {
+				dx := float64(x - centerX)
+				dy := float64(y - centerY)
+				dist := math.Sqrt(dx*dx + dy*dy)
+				if dist <= float64(outerR) && dist >= float64(innerR) {
+					img.Set(x, y, iconColor)
+				}
+			}
+		}
+	}
+
+	return img
+}
+
+func drawStar(img *image.RGBA, cx, cy, radius int, c color.RGBA) {
+	points := make([][2]float64, 10)
+	for i := 0; i < 10; i++ {
+		angle := float64(i)*math.Pi/5 - math.Pi/2
+		r := float64(radius)
+		if i%2 == 1 {
+			r = float64(radius) * 0.4
+		}
+		points[i] = [2]float64{
+			float64(cx) + r*math.Cos(angle),
+			float64(cy) + r*math.Sin(angle),
+		}
+	}
+	fillPolygon(img, points, c)
+}
+
+func drawHeart(img *image.RGBA, cx, cy, radius int, c color.RGBA) {
+	for y := -radius; y <= radius; y++ {
+		for x := -radius; x <= radius; x++ {
+			dx := float64(x) / float64(radius)
+			dy := float64(y) / float64(radius)
+			heart := dx*dx + (dy-math.Sqrt(math.Abs(dx)))*(dy-math.Sqrt(math.Abs(dx))) - 1
+			if heart <= 0 {
+				px, py := cx+x, cy+y
+				if px >= 0 && px < 300 && py >= 0 && py < 300 {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func drawArrow(img *image.RGBA, cx, cy, radius int, c color.RGBA) {
+	shaftLen := radius * 3 / 4
+	shaftThick := radius / 4
+	if shaftThick < 2 {
+		shaftThick = 2
+	}
+	headSize := radius / 2
+
+	drawFilledRect(img, cx-shaftLen, cy-shaftThick/2, shaftLen, shaftThick, c)
+
+	for y := 0; y < headSize*2; y++ {
+		for x := 0; x < headSize; x++ {
+			relY := float64(y-headSize) / float64(headSize)
+			relX := float64(x) / float64(headSize)
+			if math.Abs(relY) <= relX {
+				px, py := cx+x, cy+y-headSize
+				if px >= 0 && px < 300 && py >= 0 && py < 300 {
+					img.Set(px, py, c)
+				}
+			}
+		}
+	}
+}
+
+func fillPolygon(img *image.RGBA, points [][2]float64, c color.RGBA) {
+	if len(points) < 3 {
+		return
+	}
+	minY, maxY := points[0][1], points[0][1]
+	for _, p := range points {
+		if p[1] < minY {
+			minY = p[1]
+		}
+		if p[1] > maxY {
+			maxY = p[1]
+		}
+	}
+	for y := int(minY); y <= int(maxY); y++ {
+		intersections := make([]float64, 0)
+		for i := 0; i < len(points); i++ {
+			j := (i + 1) % len(points)
+			y1, y2 := points[i][1], points[j][1]
+			if (y1 <= float64(y) && y2 > float64(y)) || (y2 <= float64(y) && y1 > float64(y)) {
+				t := (float64(y) - y1) / (y2 - y1)
+				x := points[i][0] + t*(points[j][0]-points[i][0])
+				intersections = append(intersections, x)
+			}
+		}
+		for i := 0; i < len(intersections)-1; i++ {
+			for j := i + 1; j < len(intersections); j++ {
+				if intersections[i] > intersections[j] {
+					intersections[i], intersections[j] = intersections[j], intersections[i]
+				}
+			}
+		}
+		for i := 0; i < len(intersections)-1; i += 2 {
+			x1 := int(intersections[i])
+			x2 := int(intersections[i+1])
+			for x := x1; x <= x2; x++ {
+				if x >= 0 && x < 300 && y >= 0 && y < 300 {
+					img.Set(x, y, c)
+				}
+			}
+		}
+	}
+}
+
+func getIconName(iconStr string) string {
+	iconType := IconType(iconStr)
+	if name, ok := iconNames[iconType]; ok {
+		return name
+	}
+	return iconStr
 }
 
 func drawCharOnImage(img *image.RGBA, x, y int, char string) {
@@ -1001,6 +1225,8 @@ func GetClickCaptcha(c *gin.Context) {
 		mode = ModeChinese
 	case "mixed":
 		mode = ModeMixed
+	case "icon":
+		mode = ModeIcon
 	default:
 		mode = ModeNumber
 	}
@@ -1052,6 +1278,7 @@ type VerifyRequest struct {
 	Points          [][2]int                `json:"points"`
 	ClickSequence   []int                   `json:"click_sequence"`
 	BehaviorData    []BehaviorDataPoint     `json:"behavior_data"`
+	SpeedData       json.RawMessage         `json:"speed_data,omitempty"`
 	ApplicationID   uint                    `json:"application_id"`
 	EnvironmentData json.RawMessage         `json:"environment_data,omitempty"`
 }
@@ -1239,13 +1466,14 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 
 	matchedIndices := make([]int, clickCount)
 	usedTargets := make([]bool, session.MaxPoints)
-	_ = usedTargets
 
 	for clickIdx := 0; clickIdx < clickCount; clickIdx++ {
 		clickX := req.Points[clickIdx][0]
 		clickY := req.Points[clickIdx][1]
 
-		found := false
+		bestMatch := -1
+		bestDistance := float64(tolerance) + 1
+
 		for targetIdx := 0; targetIdx < session.MaxPoints; targetIdx++ {
 			if usedTargets[targetIdx] {
 				continue
@@ -1258,86 +1486,47 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 			dy := float64(clickY - targetY)
 			distance := math.Sqrt(dx*dx + dy*dy)
 
-			if distance <= float64(tolerance) {
-				matchedIndices[clickIdx] = targetIdx
-				usedTargets[targetIdx] = true
-				found = true
-				break
+			if distance <= float64(tolerance) && distance < bestDistance {
+				bestMatch = targetIdx
+				bestDistance = distance
 			}
 		}
 
-		if !found {
+		if bestMatch < 0 {
 			return false, fmt.Sprintf("点击位置(%d,%d)无法匹配任何目标点，容差范围%d",
 				clickX, clickY, tolerance)
 		}
+
+		matchedIndices[clickIdx] = bestMatch
+		usedTargets[bestMatch] = true
 	}
 
+	clickOrder := make([]int, clickCount)
 	if len(req.ClickSequence) > 0 {
 		if len(req.ClickSequence) != clickCount {
 			return false, fmt.Sprintf("点击时序长度不匹配: 提供%d个时序, 实际%d个点击",
 				len(req.ClickSequence), clickCount)
 		}
-
-		for i := 0; i < clickCount-1; i++ {
-			firstIdx := req.ClickSequence[i]
-			secondIdx := req.ClickSequence[i+1]
-
-			if firstIdx < 0 || firstIdx >= clickCount || secondIdx < 0 || secondIdx >= clickCount {
-				return false, "点击时序索引无效"
-			}
-
-			if usedTargets[firstIdx] && usedTargets[secondIdx] {
-				firstTarget := matchedIndices[firstIdx]
-				secondTarget := matchedIndices[secondIdx]
-
-				firstExpectedPos := -1
-				secondExpectedPos := -1
-				for j, expectedIdx := range expectedOrder {
-					if expectedIdx == firstTarget {
-						firstExpectedPos = j
-					}
-					if expectedIdx == secondTarget {
-						secondExpectedPos = j
-					}
-				}
-
-				if firstExpectedPos > secondExpectedPos {
-					return false, fmt.Sprintf("点击顺序错误: 期望按%s顺序点击",
-						formatHintOrder(expectedOrder))
-				}
-			}
-		}
+		copy(clickOrder, req.ClickSequence)
 	} else {
-		clickToTarget := make([]int, clickCount)
 		for i := 0; i < clickCount; i++ {
-			clickToTarget[i] = matchedIndices[i]
+			clickOrder[i] = i
 		}
+	}
 
-		for i := 0; i < clickCount-1; i++ {
-			for j := i + 1; j < clickCount; j++ {
-				if clickToTarget[i] > clickToTarget[j] {
-					clickToTarget[i], clickToTarget[j] = clickToTarget[j], clickToTarget[i]
-				}
-			}
+	clickedTargetsInOrder := make([]int, clickCount)
+	for seqIdx, clickIdx := range clickOrder {
+		if clickIdx < 0 || clickIdx >= clickCount {
+			return false, "点击时序索引无效"
 		}
+		clickedTargetsInOrder[seqIdx] = matchedIndices[clickIdx]
+	}
 
-		sortedByExpected := make([]int, session.MaxPoints)
-		for i, expectedIdx := range expectedOrder {
-			sortedByExpected[i] = expectedIdx
-		}
-		for i := 0; i < session.MaxPoints-1; i++ {
-			for j := i + 1; j < session.MaxPoints; j++ {
-				if sortedByExpected[i] > sortedByExpected[j] {
-					sortedByExpected[i], sortedByExpected[j] = sortedByExpected[j], sortedByExpected[i]
-				}
-			}
-		}
-
-		for i := 0; i < session.MaxPoints; i++ {
-			if clickToTarget[i] != sortedByExpected[i] {
-				return false, fmt.Sprintf("点击顺序不符合要求，期望按%s顺序点击",
-					formatHintOrder(expectedOrder))
-			}
+	for i := 0; i < clickCount; i++ {
+		if clickedTargetsInOrder[i] != expectedOrder[i] {
+			return false, fmt.Sprintf("点击顺序错误: 第%d个点击应匹配目标%d, 实际匹配目标%d，期望按%s顺序点击",
+				i+1, expectedOrder[i]+1, clickedTargetsInOrder[i]+1,
+				formatHintOrder(expectedOrder))
 		}
 	}
 
@@ -1384,7 +1573,13 @@ func analyzeEnvironmentData(envData map[string]interface{}) float64 {
 	}
 
 	if chainRaw, ok := envData["chain"]; ok {
-		if chain, ok := chainRaw.([]interface{}); ok {
+		switch chain := chainRaw.(type) {
+		case []interface{}:
+			if len(chain) < 3 {
+				score += 15
+				indicators = append(indicators, "检测方法链过短")
+			}
+		case map[string]interface{}:
 			if len(chain) < 3 {
 				score += 15
 				indicators = append(indicators, "检测方法链过短")

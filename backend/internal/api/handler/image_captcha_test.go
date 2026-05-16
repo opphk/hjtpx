@@ -196,7 +196,7 @@ func TestVerifyImageCaptcha(t *testing.T) {
 				ChallengeID: "non-existent-id",
 				Answer:     "abcd",
 			},
-			expectedCode:   http.StatusOK,
+			expectedCode:   http.StatusNotFound,
 			expectSuccess:  false,
 			expectedReason: "验证码不存在",
 		},
@@ -235,7 +235,7 @@ func TestVerifyImageCaptcha(t *testing.T) {
 				ChallengeID: "test-challenge-6",
 				Answer:     "",
 			},
-			expectedCode:   http.StatusOK,
+			expectedCode:   http.StatusBadRequest,
 			expectSuccess:  false,
 			expectedReason: "答案错误",
 		},
@@ -304,27 +304,27 @@ func TestVerifyImageCaptchaInvalidRequest(t *testing.T) {
 		{
 			name:         "空请求体",
 			requestBody:  map[string]string{},
-			expectedCode: http.StatusOK,
+			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "缺少challenge_id",
 			requestBody:  map[string]string{"answer": "test"},
-			expectedCode: http.StatusOK,
+			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "缺少answer",
 			requestBody:  map[string]string{"challenge_id": "test-id"},
-			expectedCode: http.StatusOK,
+			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "空challenge_id",
 			requestBody:  map[string]string{"challenge_id": "", "answer": "test"},
-			expectedCode: http.StatusOK,
+			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "空answer",
 			requestBody:  map[string]string{"challenge_id": "test-id", "answer": ""},
-			expectedCode: http.StatusOK,
+			expectedCode: http.StatusBadRequest,
 		},
 	}
 
@@ -948,4 +948,499 @@ func TestImageContentValidation(t *testing.T) {
 }
 
 func TestPointStruct(t *testing.T) {
+}
+
+func TestGenerateRotationCaptcha(t *testing.T) {
+	r := gin.New()
+	r.GET("/api/v1/captcha/rotation", GenerateRotationCaptcha)
+
+	tests := []struct {
+		name         string
+		expectedCode int
+	}{
+		{
+			name:         "生成旋转验证码",
+			expectedCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rotationCaptchaStore = make(map[string]int)
+
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest("GET", "/api/v1/captcha/rotation", nil)
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+
+			var resp response.Response
+			err := json.Unmarshal(w.Body.Bytes(), &resp)
+			assert.NoError(t, err)
+			assert.Equal(t, 0, resp.Code)
+
+			dataMap, ok := resp.Data.(map[string]interface{})
+			assert.True(t, ok, "响应数据应该是map类型")
+			assert.NotEmpty(t, dataMap["challenge_id"], "challenge_id不应为空")
+			assert.NotEmpty(t, dataMap["image"], "image不应为空")
+
+			imageStr, ok := dataMap["image"].(string)
+			assert.True(t, ok, "image应该是字符串类型")
+			assert.True(t, strings.HasPrefix(imageStr, "data:image/png;base64,"), "image应该是base64编码的PNG图片")
+
+			base64Data := strings.TrimPrefix(imageStr, "data:image/png;base64,")
+			_, err = base64.StdEncoding.DecodeString(base64Data)
+			assert.NoError(t, err, "base64解码应该成功")
+
+			decoded, _ := base64.StdEncoding.DecodeString(base64Data)
+			img, err := png.Decode(bytes.NewReader(decoded))
+			assert.NoError(t, err, "PNG解码应该成功")
+			assert.NotNil(t, img, "图片不应为空")
+
+			challengeID := dataMap["challenge_id"].(string)
+			assert.NotEmpty(t, challengeID)
+			_, exists := rotationCaptchaStore[challengeID]
+			assert.True(t, exists, "旋转验证码角度应该被存储")
+		})
+	}
+}
+
+func TestVerifyRotationCaptcha(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/rotation/verify", VerifyRotationCaptcha)
+
+	tests := []struct {
+		name           string
+		setupStore     func() (string, int)
+		requestAngle   int
+		expectedCode   int
+		expectSuccess  bool
+		expectedReason string
+	}{
+		{
+			name: "正确角度验证通过",
+			setupStore: func() (string, int) {
+				return "rotation-test-1", 45
+			},
+			requestAngle:   45,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "正确角度应验证通过",
+		},
+		{
+			name: "容差范围内验证通过（+5度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-2", 90
+			},
+			requestAngle:   95,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "容差范围内应验证通过",
+		},
+		{
+			name: "容差范围内验证通过（-5度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-3", 90
+			},
+			requestAngle:   85,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "容差范围内应验证通过",
+		},
+		{
+			name: "边界容差验证通过（+8度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-4", 100
+			},
+			requestAngle:   108,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "边界容差应验证通过",
+		},
+		{
+			name: "边界容差验证通过（-8度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-5", 100
+			},
+			requestAngle:   92,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "边界容差应验证通过",
+		},
+		{
+			name: "错误角度验证失败",
+			setupStore: func() (string, int) {
+				return "rotation-test-6", 45
+			},
+			requestAngle:   180,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  false,
+			expectedReason: "错误角度应验证失败",
+		},
+		{
+			name: "超出容差验证失败（+9度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-7", 100
+			},
+			requestAngle:   109,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  false,
+			expectedReason: "超出容差应验证失败",
+		},
+		{
+			name: "超出容差验证失败（-9度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-8", 100
+			},
+			requestAngle:   91,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  false,
+			expectedReason: "超出容差应验证失败",
+		},
+		{
+			name: "验证码不存在",
+			setupStore: func() (string, int) {
+				return "non-existent-rotation", 0
+			},
+			requestAngle:   45,
+			expectedCode:   http.StatusNotFound,
+			expectSuccess:  false,
+			expectedReason: "验证码不存在",
+		},
+		{
+			name: "角度0度验证",
+			setupStore: func() (string, int) {
+				return "rotation-test-9", 0
+			},
+			requestAngle:   0,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "0度应验证通过",
+		},
+		{
+			name: "角度359度验证（边界）",
+			setupStore: func() (string, int) {
+				return "rotation-test-10", 359
+			},
+			requestAngle:   359,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "359度应验证通过",
+		},
+		{
+			name: "角度环绕验证（存储355，提交3，差8度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-11", 355
+			},
+			requestAngle:   3,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  true,
+			expectedReason: "环绕角度在容差内应验证通过",
+		},
+		{
+			name: "角度环绕验证失败（存储355，提交4，差9度）",
+			setupStore: func() (string, int) {
+				return "rotation-test-12", 355
+			},
+			requestAngle:   4,
+			expectedCode:   http.StatusOK,
+			expectSuccess:  false,
+			expectedReason: "环绕角度超出容差应验证失败",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rotationCaptchaStore = make(map[string]int)
+			challengeID, storedAngle := tt.setupStore()
+
+			if challengeID != "non-existent-rotation" {
+				setRotationCaptchaAnswer(challengeID, storedAngle)
+			}
+
+			angle := tt.requestAngle
+			body, _ := json.Marshal(VerifyRotationCaptchaRequest{
+				ChallengeID: challengeID,
+				Angle:       &angle,
+			})
+			req, _ := http.NewRequest("POST", "/api/v1/captcha/rotation/verify", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+
+			var resp response.Response
+			err := json.Unmarshal(w.Body.Bytes(), &resp)
+			assert.NoError(t, err)
+
+			if tt.expectSuccess {
+				assert.Equal(t, 0, resp.Code)
+				dataMap, ok := resp.Data.(map[string]interface{})
+				assert.True(t, ok)
+				success, ok := dataMap["success"].(bool)
+				assert.True(t, ok)
+				assert.True(t, success, tt.expectedReason)
+			} else {
+				dataMap, ok := resp.Data.(map[string]interface{})
+				if ok {
+					success, ok := dataMap["success"].(bool)
+					if ok {
+						assert.False(t, success, tt.expectedReason)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestVerifyRotationCaptchaInvalidRequest(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/rotation/verify", VerifyRotationCaptcha)
+
+	tests := []struct {
+		name         string
+		requestBody  interface{}
+		expectedCode int
+	}{
+		{
+			name:         "空请求体",
+			requestBody:  map[string]string{},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "缺少challenge_id",
+			requestBody:  map[string]interface{}{"angle": 45},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "缺少angle",
+			requestBody:  map[string]string{"challenge_id": "test-id"},
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "空challenge_id",
+			requestBody:  map[string]interface{}{"challenge_id": "", "angle": 45},
+			expectedCode: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, _ := json.Marshal(tt.requestBody)
+			req, _ := http.NewRequest("POST", "/api/v1/captcha/rotation/verify", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			r.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedCode, w.Code)
+		})
+	}
+}
+
+func TestVerifyRotationCaptchaDeletion(t *testing.T) {
+	r := gin.New()
+	r.POST("/api/v1/captcha/rotation/verify", VerifyRotationCaptcha)
+
+	rotationCaptchaStore = make(map[string]int)
+	testID := "rotation-deletion-test-id"
+	setRotationCaptchaAnswer(testID, 45)
+
+	angle45 := 45
+	body, _ := json.Marshal(VerifyRotationCaptchaRequest{
+		ChallengeID: testID,
+		Angle:       &angle45,
+	})
+	req, _ := http.NewRequest("POST", "/api/v1/captcha/rotation/verify", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	_, exists := rotationCaptchaStore[testID]
+	assert.False(t, exists, "验证成功后旋转验证码应该被删除")
+
+	body2, _ := json.Marshal(VerifyRotationCaptchaRequest{
+		ChallengeID: testID,
+		Angle:       &angle45,
+	})
+	req2, _ := http.NewRequest("POST", "/api/v1/captcha/rotation/verify", bytes.NewBuffer(body2))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+
+	var resp2 response.Response
+	json.Unmarshal(w2.Body.Bytes(), &resp2)
+	dataMap, _ := resp2.Data.(map[string]interface{})
+	if dataMap != nil {
+		success, ok := dataMap["success"].(bool)
+		if ok {
+			assert.False(t, success, "重复使用已删除的旋转验证码应该失败")
+		}
+	}
+}
+
+func TestGenerateRandomAngle(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		angle := generateRandomAngle()
+		assert.GreaterOrEqual(t, angle, 0, "角度应 >= 0")
+		assert.LessOrEqual(t, angle, 359, "角度应 <= 359")
+	}
+
+	angles := make(map[int]bool)
+	for i := 0; i < 1000; i++ {
+		angle := generateRandomAngle()
+		angles[angle] = true
+	}
+	assert.Greater(t, len(angles), 100, "随机角度应有足够的随机性")
+}
+
+func TestVerifyRotationAngle(t *testing.T) {
+	tests := []struct {
+		name      string
+		stored    int
+		submitted int
+		expected  bool
+	}{
+		{name: "完全匹配", stored: 45, submitted: 45, expected: true},
+		{name: "容差内+5", stored: 45, submitted: 50, expected: true},
+		{name: "容差内-5", stored: 45, submitted: 40, expected: true},
+		{name: "边界+8", stored: 45, submitted: 53, expected: true},
+		{name: "边界-8", stored: 45, submitted: 37, expected: true},
+		{name: "超出+9", stored: 45, submitted: 54, expected: false},
+		{name: "超出-9", stored: 45, submitted: 36, expected: false},
+		{name: "大幅偏差", stored: 45, submitted: 180, expected: false},
+		{name: "0度匹配", stored: 0, submitted: 0, expected: true},
+		{name: "0度容差内", stored: 0, submitted: 8, expected: true},
+		{name: "0度超出", stored: 0, submitted: 9, expected: false},
+		{name: "359度匹配", stored: 359, submitted: 359, expected: true},
+		{name: "环绕容差内（359->3，差4度）", stored: 359, submitted: 3, expected: true},
+		{name: "环绕容差内（3->359，差4度）", stored: 3, submitted: 359, expected: true},
+		{name: "环绕边界（359->7，差8度）", stored: 359, submitted: 7, expected: true},
+		{name: "环绕超出（359->8，差9度）", stored: 359, submitted: 8, expected: false},
+		{name: "环绕边界（0->352，差8度）", stored: 0, submitted: 352, expected: true},
+		{name: "环绕超出（0->351，差9度）", stored: 0, submitted: 351, expected: false},
+		{name: "180度偏差", stored: 0, submitted: 180, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := verifyRotationAngle(tt.stored, tt.submitted)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGenerateRotationCaptchaImage(t *testing.T) {
+	tests := []struct {
+		name  string
+		angle int
+	}{
+		{name: "0度", angle: 0},
+		{name: "45度", angle: 45},
+		{name: "90度", angle: 90},
+		{name: "180度", angle: 180},
+		{name: "270度", angle: 270},
+		{name: "359度", angle: 359},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			img := generateRotationCaptchaImage(tt.angle)
+
+			assert.NotNil(t, img)
+
+			var buf bytes.Buffer
+			err := png.Encode(&buf, img)
+			assert.NoError(t, err)
+			assert.Greater(t, buf.Len(), 0)
+
+			decoded, err := png.Decode(&buf)
+			assert.NoError(t, err)
+			assert.NotNil(t, decoded)
+
+			var pixelCount int
+			for x := 0; x < decoded.Bounds().Dx(); x++ {
+				for y := 0; y < decoded.Bounds().Dy(); y++ {
+					_, _, _, a := decoded.At(x, y).RGBA()
+					if a > 0 {
+						pixelCount++
+					}
+				}
+			}
+			assert.Greater(t, pixelCount, 0, "图片应该有像素内容")
+		})
+	}
+}
+
+func TestRotationCaptchaStore(t *testing.T) {
+	rotationCaptchaStore = make(map[string]int)
+
+	testID := "rotation-store-test"
+	testAngle := 123
+
+	setRotationCaptchaAnswer(testID, testAngle)
+
+	retrieved, found := getRotationCaptchaAnswer(testID)
+	assert.True(t, found)
+	assert.Equal(t, testAngle, retrieved)
+
+	deleteRotationCaptchaAnswer(testID)
+
+	_, found = getRotationCaptchaAnswer(testID)
+	assert.False(t, found)
+}
+
+func TestMultipleRotationCaptchaLifecycle(t *testing.T) {
+	rotationCaptchaStore = make(map[string]int)
+
+	captchas := make(map[string]int)
+	for i := 0; i < 10; i++ {
+		id := fmt.Sprintf("rotation-captcha-%d", i)
+		angle := generateRandomAngle()
+		captchas[id] = angle
+		setRotationCaptchaAnswer(id, angle)
+	}
+
+	for id, angle := range captchas {
+		retrieved, found := getRotationCaptchaAnswer(id)
+		assert.True(t, found)
+		assert.Equal(t, angle, retrieved)
+	}
+
+	for id := range captchas {
+		deleteRotationCaptchaAnswer(id)
+	}
+
+	assert.Equal(t, 0, len(rotationCaptchaStore))
+}
+
+func TestRotationCaptchaImageOutput(t *testing.T) {
+	angle := 45
+	img := generateRotationCaptchaImage(angle)
+
+	var buf bytes.Buffer
+	err := png.Encode(&buf, img)
+	assert.NoError(t, err)
+	assert.Greater(t, buf.Len(), 0)
+
+	decodedImg, err := png.Decode(&buf)
+	assert.NoError(t, err)
+	assert.NotNil(t, decodedImg)
+}
+
+func TestRotationCaptchaImageDifferentAngles(t *testing.T) {
+	img0 := generateRotationCaptchaImage(0)
+	img90 := generateRotationCaptchaImage(90)
+	img180 := generateRotationCaptchaImage(180)
+
+	var buf0, buf90, buf180 bytes.Buffer
+	png.Encode(&buf0, img0)
+	png.Encode(&buf90, img90)
+	png.Encode(&buf180, img180)
+
+	assert.NotEqual(t, buf0.Bytes(), buf90.Bytes(), "不同角度的图片应该不同")
+	assert.NotEqual(t, buf0.Bytes(), buf180.Bytes(), "不同角度的图片应该不同")
+	assert.NotEqual(t, buf90.Bytes(), buf180.Bytes(), "不同角度的图片应该不同")
 }

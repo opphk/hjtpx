@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
 type LoadBalancerStrategy string
@@ -302,9 +303,7 @@ func (pm *ProxyMiddleware) Handler() gin.HandlerFunc {
 
 		backend, err := pm.loadBalancer.GetBackend(clientIP)
 		if err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error": "no backend available",
-			})
+			response.InternalServerError(c, "no backend available")
 			c.Abort()
 			return
 		}
@@ -319,9 +318,7 @@ func (pm *ProxyMiddleware) Handler() gin.HandlerFunc {
 		req, err := http.NewRequest(c.Request.Method, proxyURL, c.Request.Body)
 		if err != nil {
 			pm.loadBalancer.RecordFailure(backend)
-			c.JSON(http.StatusBadGateway, gin.H{
-				"error": "failed to create proxy request",
-			})
+			response.InternalServerError(c, "failed to create proxy request")
 			c.Abort()
 			return
 		}
@@ -345,9 +342,7 @@ func (pm *ProxyMiddleware) Handler() gin.HandlerFunc {
 
 		if err != nil {
 			pm.loadBalancer.RecordFailure(backend)
-			c.JSON(http.StatusBadGateway, gin.H{
-				"error": "failed to proxy request",
-			})
+			response.InternalServerError(c, "failed to proxy request")
 			c.Abort()
 			return
 		}
