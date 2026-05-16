@@ -59,7 +59,7 @@ func SetupRouter() *gin.Engine {
 
 	// 加载HTML模板（合并前端、管理端和开发者工具模板，避免多次LoadHTMLGlob覆盖）
 	templates := template.Must(template.New("").Parse(""))
-	for _, glob := range []string{"../frontend/templates/*", "../admin/templates/*", "../devtools/templates/*"} {
+	for _, glob := range []string{"../frontend/templates/*"} {
 		matches, err := filepath.Glob(glob)
 		if err != nil {
 			continue
