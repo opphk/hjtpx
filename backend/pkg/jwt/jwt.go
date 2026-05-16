@@ -13,8 +13,8 @@ var (
 )
 
 type Claims struct {
-	AdminID   uint   `json:"admin_id"`
-	Username  string `json:"username"`
+	AdminID  uint   `json:"admin_id"`
+	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 

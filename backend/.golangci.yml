@@ -1,0 +1,59 @@
+run:
+  timeout: 5m
+  go: "1.25"
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gocritic
+    - misspell
+    - revive
+    - gosec
+    - nakedret
+    - nilerr
+    - prealloc
+    - unconvert
+    - whitespace
+    - gofmt
+    - goimports
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/hjtpx/hjtpx
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+      - name: blank-imports
+        severity: warning
+      - name: package-comments
+        disabled: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - hugeParam
+      - rangeValCopy
+  gosec:
+    excludes:
+      - G104  # Audit log of errors not needed
+      - G404  # Use of weak random number generator acceptable here
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+  exclude-use-default: false

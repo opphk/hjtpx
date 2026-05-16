@@ -11,20 +11,20 @@ import (
 )
 
 type ConfigReloader struct {
-	config        *Config
-	configPath    string
-	watchPath     string
-	mu            sync.RWMutex
-	lastModified  time.Time
+	config          *Config
+	configPath      string
+	watchPath       string
+	mu              sync.RWMutex
+	lastModified    time.Time
 	reloadCallbacks []func() error
-	watcher       *ConfigWatcher
+	watcher         *ConfigWatcher
 }
 
 type ConfigWatcher struct {
-	configPath string
+	configPath   string
 	pollInterval time.Duration
-	stopCh      chan struct{}
-	callback    func() error
+	stopCh       chan struct{}
+	callback     func() error
 }
 
 var globalReloader *ConfigReloader
@@ -33,9 +33,9 @@ func NewConfigReloader(configPath string) (*ConfigReloader, error) {
 	cfg := LoadConfig()
 
 	reloader := &ConfigReloader{
-		config:        cfg,
-		configPath:    configPath,
-		watchPath:    filepath.Dir(configPath),
+		config:          cfg,
+		configPath:      configPath,
+		watchPath:       filepath.Dir(configPath),
 		reloadCallbacks: make([]func() error, 0),
 	}
 
@@ -127,7 +127,7 @@ func (r *ConfigReloader) loadFromEnv() *Config {
 			MaxRetries: 3,
 		},
 		JWT: JWTConfig{
-			Secret:     getEnv("JWT_SECRET", ""),
+			Secret:      getEnv("JWT_SECRET", ""),
 			ExpireHours: getEnvAsInt("JWT_EXPIRE_HOURS", 24),
 		},
 	}
@@ -244,13 +244,13 @@ func GetCurrentConfig() *Config {
 }
 
 type ConfigFile struct {
-	Server     ServerConfig     `json:"server"`
-	Postgres   PostgresConfig   `json:"postgres"`
-	Redis      RedisConfig      `json:"redis"`
-	JWT        JWTConfig        `json:"jwt"`
-	Security   SecurityConfigV2 `json:"security"`
-	Logging    LoggingConfig    `json:"logging"`
-	RateLimit  RateLimitConfigV2 `json:"rate_limit"`
+	Server    ServerConfig      `json:"server"`
+	Postgres  PostgresConfig    `json:"postgres"`
+	Redis     RedisConfig       `json:"redis"`
+	JWT       JWTConfig         `json:"jwt"`
+	Security  SecurityConfigV2  `json:"security"`
+	Logging   LoggingConfig     `json:"logging"`
+	RateLimit RateLimitConfigV2 `json:"rate_limit"`
 }
 
 type SecurityConfigV2 struct {

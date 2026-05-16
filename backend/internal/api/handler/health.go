@@ -31,10 +31,10 @@ func HealthCheck(c *gin.Context) {
 		Uptime:    time.Since(startTime).String(),
 		Services:  make(map[string]interface{}),
 		Metrics: map[string]interface{}{
-			"total_requests":  metrics.GetRequestCount(),
-			"success_count":   metrics.GetSuccessCount(),
-			"failure_count":   metrics.GetFailureCount(),
-			"success_rate":    metrics.GetSuccessRate(),
+			"total_requests": metrics.GetRequestCount(),
+			"success_count":  metrics.GetSuccessCount(),
+			"failure_count":  metrics.GetFailureCount(),
+			"success_rate":   metrics.GetSuccessRate(),
 		},
 		System: getSystemMetrics(),
 	}
@@ -104,13 +104,13 @@ func getSystemMetrics() map[string]interface{} {
 	runtime.ReadMemStats(&m)
 
 	return map[string]interface{}{
-		"go_version":    runtime.Version(),
-		"go_routines":   runtime.NumGoroutine(),
-		"memory_alloc":  m.Alloc,
-		"memory_total":  m.TotalAlloc,
-		"memory_sys":    m.Sys,
-		"gc_runs":       m.NumGC,
-		"cpu_num":       runtime.NumCPU(),
+		"go_version":   runtime.Version(),
+		"go_routines":  runtime.NumGoroutine(),
+		"memory_alloc": m.Alloc,
+		"memory_total": m.TotalAlloc,
+		"memory_sys":   m.Sys,
+		"gc_runs":      m.NumGC,
+		"cpu_num":      runtime.NumCPU(),
 	}
 }
 

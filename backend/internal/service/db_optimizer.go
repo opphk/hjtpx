@@ -14,9 +14,9 @@ import (
 
 type QueryOptimizer struct {
 	enablePreparedStatements bool
-	slowQueryThreshold      time.Duration
-	enableQueryCache        bool
-	queryCacheTTL           time.Duration
+	slowQueryThreshold       time.Duration
+	enableQueryCache         bool
+	queryCacheTTL            time.Duration
 }
 
 type QueryOption func(*QueryOptimizer)
@@ -42,12 +42,12 @@ func WithQueryCache(enable bool, ttl time.Duration) QueryOption {
 
 func NewQueryOptimizer(opts ...QueryOption) *QueryOptimizer {
 	cfg := config.GetConfig()
-	
+
 	qo := &QueryOptimizer{
 		enablePreparedStatements: cfg.Database.QueryOptimization.EnablePreparedStatements,
 		slowQueryThreshold:       time.Duration(cfg.Database.SlowQueryThresholdMs) * time.Millisecond,
-		enableQueryCache:        cfg.Database.QueryOptimization.EnableQueryCache,
-		queryCacheTTL:           time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second,
+		enableQueryCache:         cfg.Database.QueryOptimization.EnableQueryCache,
+		queryCacheTTL:            time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second,
 	}
 
 	for _, opt := range opts {
@@ -73,9 +73,9 @@ type QueryMetricsCollector struct {
 	totalQueries  int64
 	slowQueries   int64
 	failedQueries int64
-	cacheHits    int64
-	cacheMisses  int64
-	durations    []time.Duration
+	cacheHits     int64
+	cacheMisses   int64
+	durations     []time.Duration
 }
 
 var queryMetrics = &QueryMetricsCollector{

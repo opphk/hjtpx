@@ -53,9 +53,9 @@ func IPBlacklistMiddleware() gin.HandlerFunc {
 		if err == nil && isBanned {
 			c.Header("Retry-After", remaining.String())
 			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "IP已被临时封禁",
-				"error":   "ip_banned",
+				"code":        403,
+				"message":     "IP已被临时封禁",
+				"error":       "ip_banned",
 				"retry_after": remaining.String(),
 			})
 			c.Abort()
@@ -91,9 +91,9 @@ func UserBlacklistMiddleware() gin.HandlerFunc {
 		if err == nil && isBanned {
 			c.Header("Retry-After", remaining.String())
 			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "用户已被临时封禁",
-				"error":   "user_banned",
+				"code":        403,
+				"message":     "用户已被临时封禁",
+				"error":       "user_banned",
 				"retry_after": remaining.String(),
 			})
 			c.Abort()
@@ -126,9 +126,9 @@ func CombinedBlacklistMiddleware() gin.HandlerFunc {
 			if isBanned {
 				c.Header("Retry-After", remaining.String())
 				c.JSON(http.StatusForbidden, gin.H{
-					"code":    403,
-					"message": "IP已被临时封禁",
-					"error":   "ip_banned",
+					"code":        403,
+					"message":     "IP已被临时封禁",
+					"error":       "ip_banned",
 					"retry_after": remaining.String(),
 				})
 				c.Abort()
@@ -150,9 +150,9 @@ func CombinedBlacklistMiddleware() gin.HandlerFunc {
 			if isBanned {
 				c.Header("Retry-After", remaining.String())
 				c.JSON(http.StatusForbidden, gin.H{
-					"code":    403,
-					"message": "用户已被临时封禁",
-					"error":   "user_banned",
+					"code":        403,
+					"message":     "用户已被临时封禁",
+					"error":       "user_banned",
 					"retry_after": remaining.String(),
 				})
 				c.Abort()

@@ -16,12 +16,12 @@ import (
 type LoadBalancerStrategy string
 
 const (
-	StrategyRoundRobin   LoadBalancerStrategy = "round_robin"
-	StrategyWeighted    LoadBalancerStrategy = "weighted"
-	StrategyLeastConn   LoadBalancerStrategy = "least_conn"
-	StrategyIPHash      LoadBalancerStrategy = "ip_hash"
-	StrategyRandom      LoadBalancerStrategy = "random"
-	StrategyWeightedRR  LoadBalancerStrategy = "weighted_round_robin"
+	StrategyRoundRobin LoadBalancerStrategy = "round_robin"
+	StrategyWeighted   LoadBalancerStrategy = "weighted"
+	StrategyLeastConn  LoadBalancerStrategy = "least_conn"
+	StrategyIPHash     LoadBalancerStrategy = "ip_hash"
+	StrategyRandom     LoadBalancerStrategy = "random"
+	StrategyWeightedRR LoadBalancerStrategy = "weighted_round_robin"
 )
 
 type LoadBalancer struct {
@@ -47,22 +47,22 @@ type Backend struct {
 }
 
 type BackendStats struct {
-	URL         string                 `json:"url"`
-	Weight      int                    `json:"weight"`
-	Healthy     bool                   `json:"healthy"`
-	ActiveConn  int64                  `json:"active_connections"`
-	TotalConn   uint64                 `json:"total_connections"`
-	Failures    int                    `json:"failures"`
-	Latency     string                 `json:"latency"`
-	LastCheck   time.Time              `json:"last_check"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	URL        string                 `json:"url"`
+	Weight     int                    `json:"weight"`
+	Healthy    bool                   `json:"healthy"`
+	ActiveConn int64                  `json:"active_connections"`
+	TotalConn  uint64                 `json:"total_connections"`
+	Failures   int                    `json:"failures"`
+	Latency    string                 `json:"latency"`
+	LastCheck  time.Time              `json:"last_check"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func NewLoadBalancer(strategy LoadBalancerStrategy) *LoadBalancer {
 	return &LoadBalancer{
-		backends:   make([]*Backend, 0),
-		strategy:   strategy,
-		ipMap:      make(map[string]int),
+		backends:    make([]*Backend, 0),
+		strategy:    strategy,
+		ipMap:       make(map[string]int),
 		healthCheck: NewHealthChecker(10*time.Second, 5*time.Second),
 	}
 }
@@ -175,7 +175,7 @@ func (lb *LoadBalancer) weightedRoundRobin(backends []*Backend) (*Backend, error
 
 func (lb *LoadBalancer) leastConn(backends []*Backend) (*Backend, error) {
 	var minConn *Backend
-	minActive := int64(1 << 63 - 1)
+	minActive := int64(1<<63 - 1)
 
 	for _, b := range backends {
 		active := atomic.LoadInt64(&b.ActiveConn)
@@ -357,18 +357,18 @@ func (pm *ProxyMiddleware) Handler() gin.HandlerFunc {
 		}
 
 		c.Header("X-Proxy-Backend", backend.URL)
-	c.Header("X-Proxy-Latency", latency.String())
+		c.Header("X-Proxy-Latency", latency.String())
 
-	c.DataFromReader(resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Type"), resp.Body, nil)
+		c.DataFromReader(resp.StatusCode, resp.ContentLength, resp.Header.Get("Content-Type"), resp.Body, nil)
 
-	pm.loadBalancer.ReleaseBackend(backend)
+		pm.loadBalancer.ReleaseBackend(backend)
 	}
 }
 
 type ServerPool struct {
-	lb    *LoadBalancer
-	srvs  []*HTTPServer
-	mu    sync.RWMutex
+	lb   *LoadBalancer
+	srvs []*HTTPServer
+	mu   sync.RWMutex
 }
 
 type HTTPServer struct {
@@ -444,11 +444,11 @@ func (sp *ServerPool) GetTotalCount() int {
 }
 
 type CircuitBreakerLB struct {
-	mu            sync.RWMutex
-	backends      map[string]*CircuitState
-	threshold     int
-	resetTimeout  time.Duration
-	currentState  string
+	mu           sync.RWMutex
+	backends     map[string]*CircuitState
+	threshold    int
+	resetTimeout time.Duration
+	currentState string
 }
 
 type CircuitState struct {
@@ -555,18 +555,18 @@ func (cb *CircuitBreakerLB) GetAllStates() map[string]string {
 }
 
 type ConsistentHashLB struct {
-	mu         sync.RWMutex
-	ring       []uint32
-	nodes      map[uint32]*Backend
+	mu           sync.RWMutex
+	ring         []uint32
+	nodes        map[uint32]*Backend
 	virtualNodes int
-	sorted      bool
+	sorted       bool
 }
 
 func NewConsistentHashLB(virtualNodes int) *ConsistentHashLB {
 	return &ConsistentHashLB{
 		nodes:        make(map[uint32]*Backend),
 		virtualNodes: virtualNodes,
-		sorted:      true,
+		sorted:       true,
 	}
 }
 

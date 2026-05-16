@@ -53,7 +53,7 @@ type Task struct {
 	StartedAt   *time.Time             `json:"started_at,omitempty"`
 	CompletedAt *time.Time             `json:"completed_at,omitempty"`
 	CancelledAt *time.Time             `json:"cancelled_at,omitempty"`
-	Timeout     time.Duration           `json:"timeout"`
+	Timeout     time.Duration          `json:"timeout"`
 }
 
 type TaskHandler func(ctx context.Context, task *Task) (interface{}, error)
@@ -196,7 +196,7 @@ func (tq *TaskQueue) GetQueueLength(ctx context.Context) (int64, error) {
 
 func NewAsyncTaskService(redisClient *goredis.Client, workerCount int) *AsyncTaskService {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	s := &AsyncTaskService{
 		handlers:    make(map[TaskType]TaskHandler),
 		workerCount: workerCount,
@@ -238,7 +238,7 @@ func (s *AsyncTaskService) defaultImageHandler(ctx context.Context, task *Task) 
 func (s *AsyncTaskService) defaultEmailHandler(ctx context.Context, task *Task) (interface{}, error) {
 	time.Sleep(50 * time.Millisecond)
 	return map[string]interface{}{
-		"sent":  true,
+		"sent":    true,
 		"task_id": task.ID,
 	}, nil
 }
@@ -407,10 +407,10 @@ func (s *AsyncTaskService) CancelTask(taskID string) error {
 
 func (s *AsyncTaskService) GetStats() *TaskStats {
 	tasks := s.taskStore.List()
-	
+
 	stats := &TaskStats{
-		Total:   int64(len(tasks)),
-		ByType:  make(map[TaskType]int64),
+		Total:    int64(len(tasks)),
+		ByType:   make(map[TaskType]int64),
 		ByStatus: make(map[TaskStatus]int64),
 	}
 
@@ -423,15 +423,15 @@ func (s *AsyncTaskService) GetStats() *TaskStats {
 }
 
 type TaskStats struct {
-	Total        int64              `json:"total"`
-	Pending      int64              `json:"pending"`
-	Running      int64              `json:"running"`
-	Completed    int64              `json:"completed"`
-	Failed       int64              `json:"failed"`
-	Cancelled    int64              `json:"cancelled"`
-	ByType       map[TaskType]int64 `json:"by_type"`
-	ByStatus     map[TaskStatus]int64 `json:"by_status"`
-	QueueLength  int64              `json:"queue_length"`
+	Total       int64                `json:"total"`
+	Pending     int64                `json:"pending"`
+	Running     int64                `json:"running"`
+	Completed   int64                `json:"completed"`
+	Failed      int64                `json:"failed"`
+	Cancelled   int64                `json:"cancelled"`
+	ByType      map[TaskType]int64   `json:"by_type"`
+	ByStatus    map[TaskStatus]int64 `json:"by_status"`
+	QueueLength int64                `json:"queue_length"`
 }
 
 func (s *AsyncTaskService) WaitForTask(ctx context.Context, taskID string, timeout time.Duration) (*Task, error) {
@@ -477,16 +477,16 @@ func generateID() string {
 }
 
 type TaskBatch struct {
-	Tasks    []*Task `json:"tasks"`
-	GroupID  string `json:"group_id"`
+	Tasks     []*Task   `json:"tasks"`
+	GroupID   string    `json:"group_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 func (s *AsyncTaskService) EnqueueBatch(ctx context.Context, tasks []*Task) (*TaskBatch, error) {
 	batch := &TaskBatch{
-		Tasks:      make([]*Task, 0, len(tasks)),
-		GroupID:    fmt.Sprintf("batch_%d", time.Now().UnixNano()),
-		CreatedAt:  time.Now(),
+		Tasks:     make([]*Task, 0, len(tasks)),
+		GroupID:   fmt.Sprintf("batch_%d", time.Now().UnixNano()),
+		CreatedAt: time.Now(),
 	}
 
 	for _, task := range tasks {

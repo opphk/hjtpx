@@ -114,9 +114,9 @@ func TestSubmitDetectionDataInvalidRiskScore(t *testing.T) {
 	r.POST("/api/v1/detect/submit", SubmitDetectionData)
 
 	testCases := []struct {
-		name  string
-		body  string
-		code  int
+		name string
+		body string
+		code int
 	}{
 		{
 			name: "negative score",
@@ -505,17 +505,17 @@ func TestEnvironmentCheckAPI_MissingFields(t *testing.T) {
 
 func TestAnalyzeEnvironment(t *testing.T) {
 	testCases := []struct {
-		name           string
-		req            *EnvironmentCheckRequest
-		minScore       float64
-		expectedFlag   string
-		expectedBot    bool
-		expectedLevel  string
+		name          string
+		req           *EnvironmentCheckRequest
+		minScore      float64
+		expectedFlag  string
+		expectedBot   bool
+		expectedLevel string
 	}{
 		{
 			name: "normal browser",
 			req: &EnvironmentCheckRequest{
-				Fingerprint:  "normal-fp",
+				Fingerprint: "normal-fp",
 				CanvasHash:  "abc123def456",
 				WebGLVendor: "Google Inc.",
 				Fonts:       []string{"Arial", "Helvetica", "Roboto"},
@@ -592,9 +592,9 @@ func TestDetectWebGLFingerprint(t *testing.T) {
 
 func TestDetectProxyVPN(t *testing.T) {
 	testCases := []struct {
-		name          string
-		req           *EnvironmentCheckRequest
-		expectedVPN   bool
+		name        string
+		req         *EnvironmentCheckRequest
+		expectedVPN bool
 	}{
 		{
 			name: "no proxy",
@@ -648,9 +648,9 @@ func TestDetectProxyVPN(t *testing.T) {
 
 func TestCalculateEnvironmentRisk(t *testing.T) {
 	testCases := []struct {
-		name     string
-		req      *EnvironmentCheckRequest
-		minRisk  float64
+		name    string
+		req     *EnvironmentCheckRequest
+		minRisk float64
 	}{
 		{
 			name: "normal environment",

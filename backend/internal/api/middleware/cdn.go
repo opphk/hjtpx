@@ -167,23 +167,23 @@ func (cm *CDNMiddleware) GetStats() *CDNStats {
 }
 
 type CDNStats struct {
-	CachedURLs int         `json:"cached_urls"`
+	CachedURLs int        `json:"cached_urls"`
 	Config     *CDNConfig `json:"config"`
 }
 
 type StaticFileHandler struct {
-	basePath     string
+	basePath      string
 	cdnMiddleware *CDNMiddleware
-	enableETag   bool
-	enableGzip   bool
+	enableETag    bool
+	enableGzip    bool
 }
 
 func NewStaticFileHandler(basePath string, cdn *CDNMiddleware) *StaticFileHandler {
 	return &StaticFileHandler{
-		basePath:     basePath,
+		basePath:      basePath,
 		cdnMiddleware: cdn,
-		enableETag:   true,
-		enableGzip:   true,
+		enableETag:    true,
+		enableGzip:    true,
 	}
 }
 
@@ -320,10 +320,10 @@ type ResourcePreloader struct {
 }
 
 type Resource struct {
-	URL      string `json:"url"`
-	Type     string `json:"type"`
+	URL         string `json:"url"`
+	Type        string `json:"type"`
 	CrossOrigin string `json:"crossorigin,omitempty"`
-	As       string `json:"as,omitempty"`
+	As          string `json:"as,omitempty"`
 }
 
 func NewResourcePreloader() *ResourcePreloader {
@@ -347,8 +347,8 @@ func (rp *ResourcePreloader) AddScript(url string, crossOrigin string) {
 	defer rp.mu.Unlock()
 
 	rp.resources = append(rp.resources, Resource{
-		URL:          url,
-		Type:         "script",
+		URL:         url,
+		Type:        "script",
 		CrossOrigin: crossOrigin,
 	})
 }
@@ -368,9 +368,9 @@ func (rp *ResourcePreloader) AddImage(url, as string) {
 	defer rp.mu.Unlock()
 
 	rp.resources = append(rp.resources, Resource{
-		URL: url,
+		URL:  url,
 		Type: "image",
-		As:  as,
+		As:   as,
 	})
 }
 
@@ -456,10 +456,10 @@ type BackendHealth struct {
 
 func NewHealthChecker(checkPeriod, timeout time.Duration) *HealthChecker {
 	return &HealthChecker{
-		backends:  make(map[string]*BackendHealth),
+		backends:    make(map[string]*BackendHealth),
 		checkPeriod: checkPeriod,
-		timeout:   timeout,
-		stopCh:    make(chan struct{}),
+		timeout:     timeout,
+		stopCh:      make(chan struct{}),
 	}
 }
 

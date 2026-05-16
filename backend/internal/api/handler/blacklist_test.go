@@ -20,10 +20,10 @@ func TestCreateBlacklistRequest_Validation(t *testing.T) {
 		{
 			name: "valid request with all fields",
 			request: CreateBlacklistRequest{
-				Type:     "ip",
-				Target:   "192.168.1.100",
-				Reason:   "malicious activity",
-				Action:   "block",
+				Type:       "ip",
+				Target:     "192.168.1.100",
+				Reason:     "malicious activity",
+				Action:     "block",
 				Expiration: "2025-12-31",
 			},
 			wantErr: false,
@@ -153,11 +153,11 @@ func TestListBlacklistQuery_Defaults(t *testing.T) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"page":      query.Page,
-			"size":      query.Size,
-			"type":      query.Type,
-			"status":    query.Status,
-			"keyword":   query.Keyword,
+			"page":    query.Page,
+			"size":    query.Size,
+			"type":    query.Type,
+			"status":  query.Status,
+			"keyword": query.Keyword,
 		})
 	})
 
@@ -183,13 +183,13 @@ func TestListBlacklistQuery_WithParams(t *testing.T) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"page":      query.Page,
-			"size":      query.Size,
-			"type":      query.Type,
-			"status":    query.Status,
-			"keyword":   query.Keyword,
+			"page":       query.Page,
+			"size":       query.Size,
+			"type":       query.Type,
+			"status":     query.Status,
+			"keyword":    query.Keyword,
 			"start_date": query.StartDate,
-			"end_date":  query.EndDate,
+			"end_date":   query.EndDate,
 		})
 	})
 

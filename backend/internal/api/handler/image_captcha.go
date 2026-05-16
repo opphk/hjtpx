@@ -68,11 +68,11 @@ var (
 )
 
 type GenerateImageCaptchaRequest struct {
-	Type       CaptchaType `form:"type" json:"type"`
-	Count      int         `form:"count" json:"count"`
-	CustomSet  string      `form:"custom_set" json:"custom_set"`
-	NoiseMode  int         `form:"noise_mode" json:"noise_mode"`
-	LineMode   int         `form:"line_mode" json:"line_mode"`
+	Type      CaptchaType `form:"type" json:"type"`
+	Count     int         `form:"count" json:"count"`
+	CustomSet string      `form:"custom_set" json:"custom_set"`
+	NoiseMode int         `form:"noise_mode" json:"noise_mode"`
+	LineMode  int         `form:"line_mode" json:"line_mode"`
 }
 
 type GenerateImageCaptchaResponse struct {
@@ -96,11 +96,11 @@ const (
 )
 
 var (
-	digitCharSet    = "0123456789"
-	letterCharSet   = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
-	allCharSet      = digitCharSet + letterCharSet
-	r               *rand.Rand
-	rMu             sync.Mutex
+	digitCharSet  = "0123456789"
+	letterCharSet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ"
+	allCharSet    = digitCharSet + letterCharSet
+	r             *rand.Rand
+	rMu           sync.Mutex
 )
 
 func init() {

@@ -49,14 +49,14 @@ func TestGetVerificationLogsRequest_WithParams(t *testing.T) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"page":          query.Page,
-			"page_size":     query.PageSize,
+			"page":           query.Page,
+			"page_size":      query.PageSize,
 			"application_id": query.ApplicationID,
-			"status":        query.Status,
-			"captcha_type":  query.CaptchaType,
-			"session_id":    query.SessionID,
-			"start_date":    query.StartDate,
-			"end_date":      query.EndDate,
+			"status":         query.Status,
+			"captcha_type":   query.CaptchaType,
+			"session_id":     query.SessionID,
+			"start_date":     query.StartDate,
+			"end_date":       query.EndDate,
 			"ip_address":     query.IPAddress,
 		})
 	})
@@ -107,8 +107,8 @@ func TestExportLogsRequest_Validation(t *testing.T) {
 				}
 				c.JSON(http.StatusOK, gin.H{
 					"application_id": query.ApplicationID,
-					"status":        query.Status,
-					"format":        query.Format,
+					"status":         query.Status,
+					"format":         query.Format,
 				})
 			})
 
@@ -236,13 +236,13 @@ func TestDeleteOldLogs_InvalidDays(t *testing.T) {
 				} else {
 					days = -1
 				}
-				
+
 				if daysStr == "invalid" || daysStr == "0" || daysStr == "-1" || daysStr == "" {
 					days = -1
 				} else {
 					days = 30
 				}
-				
+
 				if days < 1 {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid days"})
 					return
@@ -328,14 +328,14 @@ func TestLogDetail_InvalidID(t *testing.T) {
 					c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 					return
 				}
-				
+
 				var id uint64
 				_, err := json.Marshal(idStr)
 				if err != nil || idStr == "abc" {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 					return
 				}
-				
+
 				c.JSON(http.StatusOK, gin.H{"id": id})
 			})
 

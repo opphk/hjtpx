@@ -16,8 +16,8 @@ import (
 )
 
 type UserHandler struct {
-	userService         *service.UserService
-	behaviorService     *service.BehaviorAnalysisService
+	userService     *service.UserService
+	behaviorService *service.BehaviorAnalysisService
 }
 
 func NewUserHandler() *UserHandler {
@@ -110,10 +110,10 @@ type UserLoginRequest struct {
 }
 
 type UserLoginResponse struct {
-	AccessToken  string                   `json:"access_token"`
-	RefreshToken string                   `json:"refresh_token"`
-	ExpiresIn    int64                    `json:"expires_in"`
-	User         *service.UserResponse    `json:"user"`
+	AccessToken  string                `json:"access_token"`
+	RefreshToken string                `json:"refresh_token"`
+	ExpiresIn    int64                 `json:"expires_in"`
+	User         *service.UserResponse `json:"user"`
 }
 
 func (h *UserHandler) Login(c *gin.Context) {

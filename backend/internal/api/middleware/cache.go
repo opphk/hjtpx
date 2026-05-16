@@ -86,7 +86,7 @@ func CacheMiddleware(options *CacheOptions) gin.HandlerFunc {
 
 		writer := &cacheResponseWriter{
 			ResponseWriter: c.Writer,
-			body:          &bytes.Buffer{},
+			body:           &bytes.Buffer{},
 		}
 		c.Writer = writer
 
@@ -147,7 +147,7 @@ func generateCacheKey(c *gin.Context, options *CacheOptions) string {
 
 type cacheResponseWriter struct {
 	gin.ResponseWriter
-	body        *bytes.Buffer
+	body       *bytes.Buffer
 	statusCode int
 }
 

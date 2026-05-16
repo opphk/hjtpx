@@ -24,12 +24,12 @@ func GetBlacklistHandler() *BlacklistHandler {
 }
 
 type ListBlacklistQuery struct {
-	Page     int    `form:"page,default=1"`
-	Size     int    `form:"size,default=20"`
-	Type     string `form:"type"`
-	Source   string `form:"source"`
-	Status   string `form:"status"`
-	Keyword  string `form:"keyword"`
+	Page      int    `form:"page,default=1"`
+	Size      int    `form:"size,default=20"`
+	Type      string `form:"type"`
+	Source    string `form:"source"`
+	Status    string `form:"status"`
+	Keyword   string `form:"keyword"`
 	StartDate string `form:"start_date"`
 	EndDate   string `form:"end_date"`
 }
@@ -58,7 +58,7 @@ type ImportBlacklistRequest struct {
 	Targets   []string `json:"targets" binding:"required,min=1"`
 	Reason    string   `json:"reason"`
 	Action    string   `json:"action"`
-	ExpiresAt string  `json:"expiration"`
+	ExpiresAt string   `json:"expiration"`
 }
 
 func ListBlacklist(c *gin.Context) {
@@ -152,13 +152,13 @@ func CreateBlacklist(c *gin.Context) {
 	input := &service.CreateBlacklistInput{
 		Target:         req.Target,
 		Type:           req.Type,
-		Source:        "manual",
-		Reason:        req.Reason,
-		Action:        req.Action,
+		Source:         "manual",
+		Reason:         req.Reason,
+		Action:         req.Action,
 		ApplicationIDs: req.ApplicationIDs,
-		Expiration:    req.Expiration,
-		Note:          req.Note,
-		CreatedBy:     createdBy,
+		Expiration:     req.Expiration,
+		Note:           req.Note,
+		CreatedBy:      createdBy,
 	}
 
 	item, err := handler.blacklistService.CreateBlacklist(input)
@@ -272,13 +272,13 @@ func ImportBlacklist(c *gin.Context) {
 	var inputs []service.CreateBlacklistInput
 	for _, target := range req.Targets {
 		inputs = append(inputs, service.CreateBlacklistInput{
-			Target:       target,
-			Type:         req.Type,
-			Source:      "import",
-			Reason:       req.Reason,
-			Action:       req.Action,
-			Expiration:   req.ExpiresAt,
-			CreatedBy:    createdBy,
+			Target:     target,
+			Type:       req.Type,
+			Source:     "import",
+			Reason:     req.Reason,
+			Action:     req.Action,
+			Expiration: req.ExpiresAt,
+			CreatedBy:  createdBy,
 		})
 	}
 

@@ -36,7 +36,7 @@ const (
 type BlacklistSource string
 
 const (
-	BlacklistSourceManual  BlacklistSource = "manual"
+	BlacklistSourceManual BlacklistSource = "manual"
 	BlacklistSourceAuto   BlacklistSource = "auto"
 	BlacklistSourceImport BlacklistSource = "import"
 )
@@ -53,19 +53,19 @@ type BlacklistStatus string
 
 const (
 	BlacklistStatusActive    BlacklistStatus = "active"
-	BlacklistStatusExpired  BlacklistStatus = "expired"
+	BlacklistStatusExpired   BlacklistStatus = "expired"
 	BlacklistStatusUnblocked BlacklistStatus = "unblocked"
 )
 
 type ListBlacklistFilter struct {
-	Page         int
-	PageSize     int
-	Type         string
-	Source       string
-	Status       string
-	Keyword      string
-	StartDate    time.Time
-	EndDate      time.Time
+	Page          int
+	PageSize      int
+	Type          string
+	Source        string
+	Status        string
+	Keyword       string
+	StartDate     time.Time
+	EndDate       time.Time
 	ApplicationID uint
 }
 
@@ -158,16 +158,16 @@ func (s *BlacklistService) CreateBlacklist(input *CreateBlacklistInput) (*models
 	}
 
 	item := &models.Blacklist{
-		Target:       input.Target,
-		Type:         input.Type,
-		Source:       input.Source,
-		Reason:       input.Reason,
-		Action:       input.Action,
-		Expiration:   input.Expiration,
-		Status:       string(BlacklistStatusActive),
-		Note:         input.Note,
-		CreatedBy:    input.CreatedBy,
-		HitCount:     0,
+		Target:     input.Target,
+		Type:       input.Type,
+		Source:     input.Source,
+		Reason:     input.Reason,
+		Action:     input.Action,
+		Expiration: input.Expiration,
+		Status:     string(BlacklistStatusActive),
+		Note:       input.Note,
+		CreatedBy:  input.CreatedBy,
+		HitCount:   0,
 	}
 
 	if item.Source == "" {

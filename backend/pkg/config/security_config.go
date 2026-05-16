@@ -10,58 +10,58 @@ import (
 )
 
 type SecurityConfig struct {
-	CSRF                     CSRFConfig
-	XSS                      XSSConfig
-	Signature                SignatureConfig
-	Crypto                   CryptoConfig
-	RateLimit                RateLimitConfig
-	Session                  SessionConfig
-	Password                 PasswordConfig
-	AllowedOrigins           []string
-	AllowedMethods           []string
-	AllowedHeaders           []string
-	MaxRequestBodySize       int64
-	EnableHSTS               bool
-	HSTSMaxAge               int
-	EnableCSP                bool
-	ContentSecurityPolicy    string
+	CSRF                  CSRFConfig
+	XSS                   XSSConfig
+	Signature             SignatureConfig
+	Crypto                CryptoConfig
+	RateLimit             RateLimitConfig
+	Session               SessionConfig
+	Password              PasswordConfig
+	AllowedOrigins        []string
+	AllowedMethods        []string
+	AllowedHeaders        []string
+	MaxRequestBodySize    int64
+	EnableHSTS            bool
+	HSTSMaxAge            int
+	EnableCSP             bool
+	ContentSecurityPolicy string
 }
 
 type CSRFConfig struct {
-	Enable             bool
-	TokenLength        int
-	TokenExpiration    time.Duration
-	HeaderName         string
-	FormFieldName      string
-	CookieName         string
-	SafeMethods        []string
-	RequireValidation  bool
+	Enable            bool
+	TokenLength       int
+	TokenExpiration   time.Duration
+	HeaderName        string
+	FormFieldName     string
+	CookieName        string
+	SafeMethods       []string
+	RequireValidation bool
 }
 
 type XSSConfig struct {
-	EnableLog        bool
-	AllowedTags      []string
-	BlockAttributes   bool
-	MaxLength        int
-	EnableSafeHTML   bool
+	EnableLog       bool
+	AllowedTags     []string
+	BlockAttributes bool
+	MaxLength       int
+	EnableSafeHTML  bool
 }
 
 type SignatureConfig struct {
-	Enable              bool
-	SecretKey           string
-	Algorithm           string
-	TimestampTolerance  time.Duration
-	RequireTimestamp    bool
-	RequireNonce        bool
-	NonceCacheTTL       time.Duration
-	SignatureHeader     string
-	TimestampHeader     string
+	Enable             bool
+	SecretKey          string
+	Algorithm          string
+	TimestampTolerance time.Duration
+	RequireTimestamp   bool
+	RequireNonce       bool
+	NonceCacheTTL      time.Duration
+	SignatureHeader    string
+	TimestampHeader    string
 	NonceHeader        string
 }
 
 type CryptoConfig struct {
-	AESKeySize         int
-	HashAlgorithm      string
+	AESKeySize        int
+	HashAlgorithm     string
 	PBKDF2Iterations  int
 	SaltLength        int
 	EnableKeyRotation bool
@@ -78,8 +78,8 @@ type RateLimitConfig struct {
 }
 
 type SessionConfig struct {
-	Timeout         time.Duration
-	RefreshTimeout  time.Duration
+	Timeout        time.Duration
+	RefreshTimeout time.Duration
 	SecureCookie   bool
 	HTTPOnly       bool
 	SameSite       string
@@ -87,20 +87,20 @@ type SessionConfig struct {
 }
 
 type PasswordConfig struct {
-	MinLength       int
+	MinLength        int
 	RequireUppercase bool
 	RequireLowercase bool
 	RequireNumber    bool
 	RequireSpecial   bool
-	MaxAttempts     int
-	LockoutDuration time.Duration
-	BcryptCost     int
+	MaxAttempts      int
+	LockoutDuration  time.Duration
+	BcryptCost       int
 }
 
 var (
 	securityConfigInstance *SecurityConfig
 	securityConfigOnce     sync.Once
-	securityConfigMutex   sync.RWMutex
+	securityConfigMutex    sync.RWMutex
 )
 
 func LoadSecurityConfig() *SecurityConfig {
@@ -133,14 +133,14 @@ func LoadSecurityConfig() *SecurityConfig {
 				NonceCacheTTL:      getEnvAsDurationSecurity("SIGNATURE_NONCE_CACHE_TTL", 24*time.Hour),
 				SignatureHeader:    getEnvSecurity("SIGNATURE_HEADER", "X-Signature"),
 				TimestampHeader:    getEnvSecurity("SIGNATURE_TIMESTAMP_HEADER", "X-Timestamp"),
-				NonceHeader:       getEnvSecurity("SIGNATURE_NONCE_HEADER", "X-Nonce"),
+				NonceHeader:        getEnvSecurity("SIGNATURE_NONCE_HEADER", "X-Nonce"),
 			},
 			Crypto: CryptoConfig{
-				AESKeySize:         getEnvAsIntSecurity("CRYPTO_AES_KEY_SIZE", 32),
-				HashAlgorithm:      getEnvSecurity("CRYPTO_HASH_ALGORITHM", "sha256"),
+				AESKeySize:        getEnvAsIntSecurity("CRYPTO_AES_KEY_SIZE", 32),
+				HashAlgorithm:     getEnvSecurity("CRYPTO_HASH_ALGORITHM", "sha256"),
 				PBKDF2Iterations:  getEnvAsIntSecurity("CRYPTO_PBKDF2_ITERATIONS", 100000),
-				SaltLength:         getEnvAsIntSecurity("CRYPTO_SALT_LENGTH", 32),
-				EnableKeyRotation:  getEnvAsBoolSecurity("CRYPTO_ENABLE_KEY_ROTATION", false),
+				SaltLength:        getEnvAsIntSecurity("CRYPTO_SALT_LENGTH", 32),
+				EnableKeyRotation: getEnvAsBoolSecurity("CRYPTO_ENABLE_KEY_ROTATION", false),
 				KeyRotationPeriod: getEnvAsDurationSecurity("CRYPTO_KEY_ROTATION_PERIOD", 90*24*time.Hour),
 			},
 			RateLimit: RateLimitConfig{
@@ -160,14 +160,14 @@ func LoadSecurityConfig() *SecurityConfig {
 				SessionName:    getEnvSecurity("SESSION_NAME", "session_id"),
 			},
 			Password: PasswordConfig{
-				MinLength:         getEnvAsIntSecurity("PASSWORD_MIN_LENGTH", 8),
-				RequireUppercase:  getEnvAsBoolSecurity("PASSWORD_REQUIRE_UPPERCASE", true),
-				RequireLowercase:  getEnvAsBoolSecurity("PASSWORD_REQUIRE_LOWERCASE", true),
-				RequireNumber:     getEnvAsBoolSecurity("PASSWORD_REQUIRE_NUMBER", true),
-				RequireSpecial:    getEnvAsBoolSecurity("PASSWORD_REQUIRE_SPECIAL", true),
-				MaxAttempts:       getEnvAsIntSecurity("PASSWORD_MAX_ATTEMPTS", 5),
-				LockoutDuration:   getEnvAsDurationSecurity("PASSWORD_LOCKOUT_DURATION", 30*time.Minute),
-				BcryptCost:        getEnvAsIntSecurity("PASSWORD_BCRYPT_COST", 12),
+				MinLength:        getEnvAsIntSecurity("PASSWORD_MIN_LENGTH", 8),
+				RequireUppercase: getEnvAsBoolSecurity("PASSWORD_REQUIRE_UPPERCASE", true),
+				RequireLowercase: getEnvAsBoolSecurity("PASSWORD_REQUIRE_LOWERCASE", true),
+				RequireNumber:    getEnvAsBoolSecurity("PASSWORD_REQUIRE_NUMBER", true),
+				RequireSpecial:   getEnvAsBoolSecurity("PASSWORD_REQUIRE_SPECIAL", true),
+				MaxAttempts:      getEnvAsIntSecurity("PASSWORD_MAX_ATTEMPTS", 5),
+				LockoutDuration:  getEnvAsDurationSecurity("PASSWORD_LOCKOUT_DURATION", 30*time.Minute),
+				BcryptCost:       getEnvAsIntSecurity("PASSWORD_BCRYPT_COST", 12),
 			},
 			AllowedOrigins:        getEnvAsSliceSecurity("CORS_ALLOWED_ORIGINS", "*", ","),
 			AllowedMethods:        getEnvAsSliceSecurity("CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,PATCH,OPTIONS", ","),
@@ -335,21 +335,21 @@ func (c *SecurityConfig) IsProductionReady() bool {
 
 func (c *SecurityConfig) ToMap() map[string]interface{} {
 	return map[string]interface{}{
-		"csrf":                    c.CSRF,
-		"xss":                     c.XSS,
-		"signature":               c.Signature,
-		"crypto":                  c.Crypto,
-		"rate_limit":              c.RateLimit,
-		"session":                 c.Session,
-		"password":                c.Password,
-		"allowed_origins":         c.AllowedOrigins,
-		"allowed_methods":         c.AllowedMethods,
-		"allowed_headers":         c.AllowedHeaders,
-		"max_request_body_size":   c.MaxRequestBodySize,
-		"enable_hsts":             c.EnableHSTS,
-		"hsts_max_age":            c.HSTSMaxAge,
-		"enable_csp":              c.EnableCSP,
-		"production_ready":        c.IsProductionReady(),
+		"csrf":                  c.CSRF,
+		"xss":                   c.XSS,
+		"signature":             c.Signature,
+		"crypto":                c.Crypto,
+		"rate_limit":            c.RateLimit,
+		"session":               c.Session,
+		"password":              c.Password,
+		"allowed_origins":       c.AllowedOrigins,
+		"allowed_methods":       c.AllowedMethods,
+		"allowed_headers":       c.AllowedHeaders,
+		"max_request_body_size": c.MaxRequestBodySize,
+		"enable_hsts":           c.EnableHSTS,
+		"hsts_max_age":          c.HSTSMaxAge,
+		"enable_csp":            c.EnableCSP,
+		"production_ready":      c.IsProductionReady(),
 	}
 }
 

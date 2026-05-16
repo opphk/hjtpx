@@ -189,15 +189,15 @@ func NewBotDetectionRuleEngine() *RuleEngine {
 
 type MLClassifier struct {
 	ruleEngine    *RuleEngine
-	scoreCard      *ScoreCard
-	weights        map[string]float64
-	decisionBound  float64
+	scoreCard     *ScoreCard
+	weights       map[string]float64
+	decisionBound float64
 }
 
 func NewMLClassifier() *MLClassifier {
 	return &MLClassifier{
-		ruleEngine:   NewBotDetectionRuleEngine(),
-		scoreCard:    NewScoreCard(),
+		ruleEngine: NewBotDetectionRuleEngine(),
+		scoreCard:  NewScoreCard(),
 		weights: map[string]float64{
 			"rule_engine": 0.4,
 			"score_card":  0.4,
@@ -268,18 +268,18 @@ func (ml *MLClassifier) GetDetailedAnalysis(features *BehaviorFeatures) map[stri
 
 type EnsembleClassifier struct {
 	classifiers []struct {
-		name      string
-		classify  func(*BehaviorFeatures) (bool, float64)
-		weight    float64
+		name     string
+		classify func(*BehaviorFeatures) (bool, float64)
+		weight   float64
 	}
 }
 
 func NewEnsembleClassifier() *EnsembleClassifier {
 	ec := &EnsembleClassifier{
 		classifiers: make([]struct {
-			name      string
-			classify  func(*BehaviorFeatures) (bool, float64)
-			weight    float64
+			name     string
+			classify func(*BehaviorFeatures) (bool, float64)
+			weight   float64
 		}, 0),
 	}
 
@@ -305,13 +305,13 @@ func NewEnsembleClassifier() *EnsembleClassifier {
 
 func (ec *EnsembleClassifier) AddClassifier(name string, classify func(*BehaviorFeatures) (bool, float64), weight float64) {
 	ec.classifiers = append(ec.classifiers, struct {
-		name      string
-		classify  func(*BehaviorFeatures) (bool, float64)
-		weight    float64
+		name     string
+		classify func(*BehaviorFeatures) (bool, float64)
+		weight   float64
 	}{
-		name:   name,
+		name:     name,
 		classify: classify,
-		weight: weight,
+		weight:   weight,
 	})
 }
 
@@ -342,7 +342,7 @@ func (ec *EnsembleClassifier) Classify(features *BehaviorFeatures) (bool, float6
 
 	finalScore := weightedScore / totalWeight
 
-	majorityVote := float64(botVotes) / float64(totalVotes) >= 0.5
+	majorityVote := float64(botVotes)/float64(totalVotes) >= 0.5
 
 	finalBot := finalScore >= 50 || majorityVote
 
@@ -362,9 +362,9 @@ func (ec *EnsembleClassifier) GetDetailedAnalysis(features *BehaviorFeatures) ma
 	for _, clf := range ec.classifiers {
 		isBot, score := clf.classify(features)
 		result := map[string]interface{}{
-			"name":  clf.name,
-			"score": score,
-			"isBot": isBot,
+			"name":   clf.name,
+			"score":  score,
+			"isBot":  isBot,
 			"weight": clf.weight,
 		}
 		classifierResults = append(classifierResults, result)

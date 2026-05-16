@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrUserNotFound       = errors.New("user not found")
+	ErrUserNotFound      = errors.New("user not found")
 	ErrUserAlreadyExists = errors.New("user already exists")
 	ErrInvalidToken      = errors.New("invalid token")
 	ErrTokenExpired      = errors.New("token expired")
@@ -30,34 +30,34 @@ func NewUserService() *UserService {
 }
 
 type RegisterInput struct {
-	Username    string `json:"username" binding:"required,min=3,max=50"`
-	Email       string `json:"email" binding:"required,email"`
-	Password    string `json:"password" binding:"required,min=6,max=128"`
+	Username     string                `json:"username" binding:"required,min=3,max=50"`
+	Email        string                `json:"email" binding:"required,email"`
+	Password     string                `json:"password" binding:"required,min=6,max=128"`
 	BehaviorData []models.BehaviorData `json:"behavior_data,omitempty"`
 }
 
 type LoginInput struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	CaptchaToken string `json:"captcha_token,omitempty"`
-	BehaviorData  []models.BehaviorData `json:"behavior_data,omitempty"`
+	Username     string                `json:"username" binding:"required"`
+	Password     string                `json:"password" binding:"required"`
+	CaptchaToken string                `json:"captcha_token,omitempty"`
+	BehaviorData []models.BehaviorData `json:"behavior_data,omitempty"`
 }
 
 type UserResponse struct {
-	ID           uint       `json:"id"`
-	Username     string     `json:"username"`
-	Email        string     `json:"email"`
-	Nickname     string     `json:"nickname"`
-	Avatar       string     `json:"avatar"`
-	Phone        string     `json:"phone"`
-	Bio          string     `json:"bio"`
-	IsVerified   bool       `json:"is_verified"`
-	VerifiedAt   *time.Time `json:"verified_at,omitempty"`
-	LoginCount   int        `json:"login_count"`
-	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
-	LastLoginIP  string     `json:"last_login_ip"`
-	Status       string     `json:"status"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID          uint       `json:"id"`
+	Username    string     `json:"username"`
+	Email       string     `json:"email"`
+	Nickname    string     `json:"nickname"`
+	Avatar      string     `json:"avatar"`
+	Phone       string     `json:"phone"`
+	Bio         string     `json:"bio"`
+	IsVerified  bool       `json:"is_verified"`
+	VerifiedAt  *time.Time `json:"verified_at,omitempty"`
+	LoginCount  int        `json:"login_count"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	LastLoginIP string     `json:"last_login_ip"`
+	Status      string     `json:"status"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type UpdateProfileInput struct {
@@ -95,11 +95,11 @@ func (s *UserService) Register(input *RegisterInput, riskScore float64) (*models
 	verificationToken := generateToken(32)
 
 	user := &models.User{
-		Username:           input.Username,
-		Email:              input.Email,
-		PasswordHash:       string(hashedPassword),
-		VerificationToken:  verificationToken,
-		Status:             "active",
+		Username:          input.Username,
+		Email:             input.Email,
+		PasswordHash:      string(hashedPassword),
+		VerificationToken: verificationToken,
+		Status:            "active",
 	}
 
 	if err := database.DB.Create(user).Error; err != nil {
@@ -236,7 +236,7 @@ func (s *UserService) RequestPasswordReset(email string) (string, error) {
 
 	if err := database.DB.Model(&user).Updates(map[string]interface{}{
 		"password_reset_token": resetToken,
-		"password_reset_at":   resetAt,
+		"password_reset_at":    resetAt,
 	}).Error; err != nil {
 		return "", fmt.Errorf("failed to set reset token: %w", err)
 	}
@@ -284,9 +284,9 @@ func (s *UserService) VerifyEmail(token string) error {
 
 	now := time.Now()
 	if err := database.DB.Model(&user).Updates(map[string]interface{}{
-		"is_verified":         true,
-		"verified_at":         now,
-		"verification_token":  "",
+		"is_verified":        true,
+		"verified_at":        now,
+		"verification_token": "",
 	}).Error; err != nil {
 		return fmt.Errorf("failed to verify email: %w", err)
 	}
@@ -321,9 +321,9 @@ func (s *UserService) ChangeEmail(userID uint, newEmail string) error {
 
 	verificationToken := generateToken(32)
 	if err := database.DB.Model(&user).Updates(map[string]interface{}{
-		"email":               newEmail,
-		"is_verified":         false,
-		"verification_token":  verificationToken,
+		"email":              newEmail,
+		"is_verified":        false,
+		"verification_token": verificationToken,
 	}).Error; err != nil {
 		return fmt.Errorf("failed to change email: %w", err)
 	}

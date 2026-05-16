@@ -29,36 +29,36 @@ import (
 type CaptchaMode string
 
 const (
-	ModeNumber   CaptchaMode = "number"
-	ModeLetter   CaptchaMode = "letter"
-	ModeChinese  CaptchaMode = "chinese"
-	ModeMixed    CaptchaMode = "mixed"
-	ModeIcon     CaptchaMode = "icon"
+	ModeNumber  CaptchaMode = "number"
+	ModeLetter  CaptchaMode = "letter"
+	ModeChinese CaptchaMode = "chinese"
+	ModeMixed   CaptchaMode = "mixed"
+	ModeIcon    CaptchaMode = "icon"
 )
 
 type ClickPoint struct {
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Index  int `json:"index"`
+	X     int `json:"x"`
+	Y     int `json:"y"`
+	Index int `json:"index"`
 }
 
 type CaptchaSession struct {
-	ID            string
-	Type          string
-	Mode          CaptchaMode
-	TargetPoints  []ClickPoint
-	HintOrder     []int
-	AllowShuffle  bool
-	Points        [][2]int
-	Hint          string
-	MaxPoints     int
-	CreatedAt     time.Time
-	Tolerance     int
-	ImageWidth    int
-	ImageHeight   int
-	ImageSeed     int64
-	TargetX       int
-	TargetY       int
+	ID           string
+	Type         string
+	Mode         CaptchaMode
+	TargetPoints []ClickPoint
+	HintOrder    []int
+	AllowShuffle bool
+	Points       [][2]int
+	Hint         string
+	MaxPoints    int
+	CreatedAt    time.Time
+	Tolerance    int
+	ImageWidth   int
+	ImageHeight  int
+	ImageSeed    int64
+	TargetX      int
+	TargetY      int
 }
 
 var (
@@ -125,7 +125,6 @@ var iconNames = map[IconType]string{
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -977,8 +976,8 @@ func drawBezier(img *image.RGBA, x0, y0, x1, y1, x2, y2 int, c color.Color) {
 	for i := 0; i <= steps; i++ {
 		t := float64(i) / float64(steps)
 		mt := 1.0 - t
-		x := int(mt*mt*float64(x0)+2.0*mt*t*float64(x1)+t*t*float64(x2) + 0.5)
-		y := int(mt*mt*float64(y0)+2.0*mt*t*float64(y1)+t*t*float64(y2) + 0.5)
+		x := int(mt*mt*float64(x0) + 2.0*mt*t*float64(x1) + t*t*float64(x2) + 0.5)
+		y := int(mt*mt*float64(y0) + 2.0*mt*t*float64(y1) + t*t*float64(y2) + 0.5)
 		if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
 			img.Set(x, y, c)
 		}
@@ -1003,7 +1002,7 @@ func isInPuzzlePiece(x, y, pieceSize, radius int) bool {
 
 	if y >= midY-radius && y <= midY+radius {
 		dy := y - midY
-		rightBoundary := pieceSize + int(math.Sqrt(float64(radius*radius - dy*dy)))
+		rightBoundary := pieceSize + int(math.Sqrt(float64(radius*radius-dy*dy)))
 		if x > rightBoundary {
 			return false
 		}
@@ -1271,23 +1270,23 @@ func GetClickCaptcha(c *gin.Context) {
 }
 
 type VerifyRequest struct {
-	SessionID       string                  `json:"session_id" binding:"required"`
-	Type            string                  `json:"type" binding:"required"`
-	X               int                     `json:"x"`
-	Y               int                     `json:"y"`
-	Points          [][2]int                `json:"points"`
-	ClickSequence   []int                   `json:"click_sequence"`
-	BehaviorData    []BehaviorDataPoint     `json:"behavior_data"`
-	SpeedData       json.RawMessage         `json:"speed_data,omitempty"`
-	ApplicationID   uint                    `json:"application_id"`
-	EnvironmentData json.RawMessage         `json:"environment_data,omitempty"`
+	SessionID       string              `json:"session_id" binding:"required"`
+	Type            string              `json:"type" binding:"required"`
+	X               int                 `json:"x"`
+	Y               int                 `json:"y"`
+	Points          [][2]int            `json:"points"`
+	ClickSequence   []int               `json:"click_sequence"`
+	BehaviorData    []BehaviorDataPoint `json:"behavior_data"`
+	SpeedData       json.RawMessage     `json:"speed_data,omitempty"`
+	ApplicationID   uint                `json:"application_id"`
+	EnvironmentData json.RawMessage     `json:"environment_data,omitempty"`
 }
 
 type BehaviorDataPoint struct {
-	X         int     `json:"x"`
-	Y         int     `json:"y"`
-	Timestamp int64   `json:"timestamp"`
-	Event     string  `json:"event"`
+	X         int    `json:"x"`
+	Y         int    `json:"y"`
+	Timestamp int64  `json:"timestamp"`
+	Event     string `json:"event"`
 }
 
 func VerifyCaptcha(c *gin.Context) {
@@ -1408,9 +1407,9 @@ func VerifyCaptcha(c *gin.Context) {
 		ApplicationID:  req.ApplicationID,
 		CaptchaType:    req.Type,
 		Status:         status,
-		IPAddress:     c.ClientIP(),
-		UserAgent:     c.GetHeader("User-Agent"),
-		RiskScore:     riskScore,
+		IPAddress:      c.ClientIP(),
+		UserAgent:      c.GetHeader("User-Agent"),
+		RiskScore:      riskScore,
 		AnalysisResult: analysisReport,
 		Duration:       duration,
 	}

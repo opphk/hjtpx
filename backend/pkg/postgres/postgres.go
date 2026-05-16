@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/hjtpx/hjtpx/pkg/config"
+	_ "github.com/lib/pq"
 )
 
 var DB *sql.DB

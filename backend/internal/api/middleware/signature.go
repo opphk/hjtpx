@@ -23,16 +23,16 @@ import (
 )
 
 type SignatureConfig struct {
-	SecretKey        string
-	Algorithm        string
+	SecretKey          string
+	Algorithm          string
 	TimestampTolerance time.Duration
-	RequireTimestamp bool
-	RequireNonce     bool
-	NonceCacheTTL    time.Duration
-	SignatureHeader  string
-	TimestampHeader  string
-	NonceHeader      string
-	ExcludePaths     []string
+	RequireTimestamp   bool
+	RequireNonce       bool
+	NonceCacheTTL      time.Duration
+	SignatureHeader    string
+	TimestampHeader    string
+	NonceHeader        string
+	ExcludePaths       []string
 }
 
 type SignatureResult struct {
@@ -52,9 +52,9 @@ var defaultSignatureConfig = SignatureConfig{
 	RequireNonce:       true,
 	NonceCacheTTL:      24 * time.Hour,
 	SignatureHeader:    "X-Signature",
-	TimestampHeader:   "X-Timestamp",
-	NonceHeader:       "X-Nonce",
-	ExcludePaths:      []string{"/health", "/api/health", "/metrics", "/api/metrics"},
+	TimestampHeader:    "X-Timestamp",
+	NonceHeader:        "X-Nonce",
+	ExcludePaths:       []string{"/health", "/api/health", "/metrics", "/api/metrics"},
 }
 
 type nonceCache struct {
@@ -458,7 +458,7 @@ func RequireSignature() gin.HandlerFunc {
 }
 
 type SignatureInfo struct {
-	Algorithm      string `json:"algorithm"`
+	Algorithm     string `json:"algorithm"`
 	Timestamp     int64  `json:"timestamp"`
 	NonceRequired bool   `json:"nonce_required"`
 	Tolerance     string `json:"tolerance"`
@@ -466,10 +466,10 @@ type SignatureInfo struct {
 
 func GetSignatureInfo() SignatureInfo {
 	return SignatureInfo{
-		Algorithm:      defaultSignatureConfig.Algorithm,
-		Timestamp:      time.Now().Unix(),
-		NonceRequired:  defaultSignatureConfig.RequireNonce,
-		Tolerance:      defaultSignatureConfig.TimestampTolerance.String(),
+		Algorithm:     defaultSignatureConfig.Algorithm,
+		Timestamp:     time.Now().Unix(),
+		NonceRequired: defaultSignatureConfig.RequireNonce,
+		Tolerance:     defaultSignatureConfig.TimestampTolerance.String(),
 	}
 }
 
@@ -482,9 +482,9 @@ func NewSignatureConfig(secretKey string) SignatureConfig {
 		RequireNonce:       true,
 		NonceCacheTTL:      24 * time.Hour,
 		SignatureHeader:    "X-Signature",
-		TimestampHeader:   "X-Timestamp",
-		NonceHeader:       "X-Nonce",
-		ExcludePaths:      []string{},
+		TimestampHeader:    "X-Timestamp",
+		NonceHeader:        "X-Nonce",
+		ExcludePaths:       []string{},
 	}
 }
 

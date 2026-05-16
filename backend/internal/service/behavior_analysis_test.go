@@ -218,7 +218,7 @@ func TestGenerateAnalysisReport(t *testing.T) {
 			},
 		},
 		RiskScore:      35.0,
-		IsBotLikely:   false,
+		IsBotLikely:    false,
 		Confidence:     0.65,
 		RiskIndicators: []string{"test indicator"},
 		SpeedAnalysis: SpeedAnalysis{
@@ -226,7 +226,7 @@ func TestGenerateAnalysisReport(t *testing.T) {
 			MaxSpeed:     3.0,
 		},
 		PathSimilarity: PathSimilarity{
-			SimilarityScore: 0.5,
+			SimilarityScore:    0.5,
 			ComparedPathLength: 10,
 		},
 	}
@@ -937,7 +937,7 @@ func generateHumanLikeTrajectory() []models.BehaviorData {
 	for _, seg := range segments {
 		for i := 0; i < seg.points; i++ {
 			t := float64(i) / float64(seg.points-1)
-			t = t*t*(3-2*t)
+			t = t * t * (3 - 2*t)
 
 			speedFactor := 0.5 + 0.5*math.Sin(math.Pi*t)
 			segDuration := float64(seg.baseDurationMs) * (0.8 + 0.4*speedFactor)
@@ -947,8 +947,8 @@ func generateHumanLikeTrajectory() []models.BehaviorData {
 			x := seg.startX + int(float64(seg.endX-seg.startX)*t)
 			y := seg.startY + int(float64(seg.endY-seg.startY)*t)
 
-			jitterX := int(math.Sin(float64(i)*1.7)*3 + float64(i%5)-2)
-			jitterY := int(math.Cos(float64(i)*1.3)*3 + float64(i%4)-2)
+			jitterX := int(math.Sin(float64(i)*1.7)*3 + float64(i%5) - 2)
+			jitterY := int(math.Cos(float64(i)*1.3)*3 + float64(i%4) - 2)
 			x += jitterX
 			y += jitterY
 
@@ -1441,10 +1441,10 @@ func TestDTWDistance(t *testing.T) {
 
 func TestCompareWithHumanTrajectory(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		trajectory []TrajectoryPoint
-		minSim    float64
-		maxSim    float64
+		minSim     float64
+		maxSim     float64
 	}{
 		{
 			name: "人类类似轨迹",
@@ -1497,11 +1497,11 @@ func TestCalculateRiskScore(t *testing.T) {
 			features: &BehaviorFeatures{
 				AvgSpeed:             500.0,
 				TrajectorySmoothness: 0.5,
-				Acceleration:        0.5,
-				PathComplexity:      0.7,
-				PathSimilarity:      0.8,
-				SpeedVariation:      0.5,
-				ClickInterval:      200.0,
+				Acceleration:         0.5,
+				PathComplexity:       0.7,
+				PathSimilarity:       0.8,
+				SpeedVariation:       0.5,
+				ClickInterval:        200.0,
 			},
 			minScore: 0.0,
 			maxScore: 30.0,
@@ -1509,13 +1509,13 @@ func TestCalculateRiskScore(t *testing.T) {
 		{
 			name: "机器人特征",
 			features: &BehaviorFeatures{
-				AvgSpeed:            2000.0,
+				AvgSpeed:             2000.0,
 				TrajectorySmoothness: 0.98,
-				Acceleration:       0.05,
-				PathComplexity:     0.1,
-				PathSimilarity:     0.3,
-				SpeedVariation:     0.05,
-				ClickInterval:     30.0,
+				Acceleration:         0.05,
+				PathComplexity:       0.1,
+				PathSimilarity:       0.3,
+				SpeedVariation:       0.05,
+				ClickInterval:        30.0,
 			},
 			minScore: 70.0,
 			maxScore: 100.0,
@@ -1579,13 +1579,13 @@ func TestScoreCard(t *testing.T) {
 	assert.Equal(t, 7, len(sc.Thresholds))
 
 	normalFeatures := &BehaviorFeatures{
-		AvgSpeed:            500.0,
+		AvgSpeed:             500.0,
 		TrajectorySmoothness: 0.5,
-		Acceleration:       0.5,
-		PathComplexity:     0.7,
-		PathSimilarity:     0.8,
-		SpeedVariation:     0.5,
-		ClickInterval:     200.0,
+		Acceleration:         0.5,
+		PathComplexity:       0.7,
+		PathSimilarity:       0.8,
+		SpeedVariation:       0.5,
+		ClickInterval:        200.0,
 	}
 
 	score := sc.Evaluate(normalFeatures)
@@ -1594,13 +1594,13 @@ func TestScoreCard(t *testing.T) {
 	t.Logf("正常特征评分: %.2f", score)
 
 	botFeatures := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	botScore := sc.Evaluate(botFeatures)
@@ -1663,13 +1663,13 @@ func TestBotDetectionRules(t *testing.T) {
 	assert.Greater(t, len(engine.rules), 0)
 
 	botFeatures := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	score := engine.Evaluate(botFeatures)
@@ -1677,13 +1677,13 @@ func TestBotDetectionRules(t *testing.T) {
 	t.Logf("机器人特征规则评分: %.2f", score)
 
 	humanFeatures := &BehaviorFeatures{
-		AvgSpeed:            500.0,
+		AvgSpeed:             500.0,
 		TrajectorySmoothness: 0.5,
-		Acceleration:        0.5,
-		PathComplexity:      0.7,
-		PathSimilarity:      0.8,
-		SpeedVariation:      0.5,
-		ClickInterval:      200.0,
+		Acceleration:         0.5,
+		PathComplexity:       0.7,
+		PathSimilarity:       0.8,
+		SpeedVariation:       0.5,
+		ClickInterval:        200.0,
 	}
 
 	humanScore := engine.Evaluate(humanFeatures)
@@ -1703,13 +1703,13 @@ func TestMLClassifier(t *testing.T) {
 	assert.NotNil(t, classifier.scoreCard)
 
 	botFeatures := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	isBot, score := classifier.Classify(botFeatures)
@@ -1718,13 +1718,13 @@ func TestMLClassifier(t *testing.T) {
 	t.Logf("机器人分类评分: %.2f", score)
 
 	humanFeatures := &BehaviorFeatures{
-		AvgSpeed:            500.0,
+		AvgSpeed:             500.0,
 		TrajectorySmoothness: 0.5,
-		Acceleration:        0.5,
-		PathComplexity:      0.7,
-		PathSimilarity:      0.8,
-		SpeedVariation:      0.5,
-		ClickInterval:      200.0,
+		Acceleration:         0.5,
+		PathComplexity:       0.7,
+		PathSimilarity:       0.8,
+		SpeedVariation:       0.5,
+		ClickInterval:        200.0,
 	}
 
 	isBotHuman, scoreHuman := classifier.Classify(humanFeatures)
@@ -1753,13 +1753,13 @@ func TestMLClassifierDetailedAnalysis(t *testing.T) {
 	classifier := NewMLClassifier()
 
 	features := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	analysis := classifier.GetDetailedAnalysis(features)
@@ -1788,13 +1788,13 @@ func TestEnsembleClassifier(t *testing.T) {
 	assert.Greater(t, len(ensemble.classifiers), 0)
 
 	botFeatures := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	isBot, score := ensemble.Classify(botFeatures)
@@ -1803,13 +1803,13 @@ func TestEnsembleClassifier(t *testing.T) {
 	t.Logf("集成分类器机器人评分: %.2f", score)
 
 	humanFeatures := &BehaviorFeatures{
-		AvgSpeed:            500.0,
+		AvgSpeed:             500.0,
 		TrajectorySmoothness: 0.5,
-		Acceleration:        0.5,
-		PathComplexity:      0.7,
-		PathSimilarity:      0.8,
-		SpeedVariation:      0.5,
-		ClickInterval:      200.0,
+		Acceleration:         0.5,
+		PathComplexity:       0.7,
+		PathSimilarity:       0.8,
+		SpeedVariation:       0.5,
+		ClickInterval:        200.0,
 	}
 
 	isBotHuman, scoreHuman := ensemble.Classify(humanFeatures)
@@ -1822,13 +1822,13 @@ func TestEnsembleClassifierDetailedAnalysis(t *testing.T) {
 	ensemble := NewEnsembleClassifier()
 
 	features := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	analysis := ensemble.GetDetailedAnalysis(features)
@@ -1852,9 +1852,9 @@ func TestEnsembleClassifierDetailedAnalysis(t *testing.T) {
 
 func TestValidateTrajectory(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		trajectory []TrajectoryPoint
-		expected  bool
+		expected   bool
 	}{
 		{
 			name: "有效轨迹",
@@ -1894,10 +1894,10 @@ func TestValidateTrajectory(t *testing.T) {
 
 func TestPreprocessTrajectory(t *testing.T) {
 	tests := []struct {
-		name          string
-		input         []TrajectoryPoint
-		targetLength  int
-		expectedLen   int
+		name         string
+		input        []TrajectoryPoint
+		targetLength int
+		expectedLen  int
 	}{
 		{
 			name: "下采样",
@@ -1930,7 +1930,7 @@ func TestPreprocessTrajectory(t *testing.T) {
 			name:         "空轨迹",
 			input:        []TrajectoryPoint{},
 			targetLength: 5,
-			expectedLen:   0,
+			expectedLen:  0,
 		},
 	}
 
@@ -2077,13 +2077,13 @@ func TestGetTriggeredRules(t *testing.T) {
 	engine := NewBotDetectionRuleEngine()
 
 	features := &BehaviorFeatures{
-		AvgSpeed:            2000.0,
+		AvgSpeed:             2000.0,
 		TrajectorySmoothness: 0.98,
-		Acceleration:       0.05,
-		PathComplexity:     0.1,
-		PathSimilarity:     0.3,
-		SpeedVariation:     0.05,
-		ClickInterval:     30.0,
+		Acceleration:         0.05,
+		PathComplexity:       0.1,
+		PathSimilarity:       0.3,
+		SpeedVariation:       0.05,
+		ClickInterval:        30.0,
 	}
 
 	triggered := engine.GetTriggeredRules(features)

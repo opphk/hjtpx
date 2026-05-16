@@ -16,8 +16,8 @@ import (
 var (
 	ErrApplicationNotFound = errors.New("application not found")
 	ErrUserNotFoundApp     = errors.New("user not found")
-	ErrInvalidInput       = errors.New("invalid input")
-	ErrKeyGeneration      = errors.New("failed to generate API key")
+	ErrInvalidInput        = errors.New("invalid input")
+	ErrKeyGeneration       = errors.New("failed to generate API key")
 )
 
 type ApplicationService struct{}
@@ -80,8 +80,8 @@ type ApplicationResponse struct {
 	IsActive    bool               `json:"is_active"`
 	Config      *ApplicationConfig `json:"config,omitempty"`
 	User        *UserResponse      `json:"user,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
 }
 
 func generateAPIKey() (string, error) {
@@ -412,24 +412,24 @@ func (s *ApplicationService) GetApplicationStatistics(id uint) (*ApplicationStat
 	}
 
 	return &ApplicationStatistics{
-		TotalVerifications:   totalVerifications,
-		PassedVerifications:   passedVerifications,
-		FailedVerifications:  failedVerifications,
-		PassRate:             passRate,
-		TodayVerifications:   todayVerifications,
-		Application:          application,
-		RecentVerifications:  recentVerifications,
+		TotalVerifications:  totalVerifications,
+		PassedVerifications: passedVerifications,
+		FailedVerifications: failedVerifications,
+		PassRate:            passRate,
+		TodayVerifications:  todayVerifications,
+		Application:         application,
+		RecentVerifications: recentVerifications,
 	}, nil
 }
 
 type ApplicationStatistics struct {
-	TotalVerifications   int64                `json:"total_verifications"`
-	PassedVerifications   int64                `json:"passed_verifications"`
-	FailedVerifications  int64                `json:"failed_verifications"`
-	PassRate             float64              `json:"pass_rate"`
-	TodayVerifications   int64                `json:"today_verifications"`
-	Application          *models.Application  `json:"application"`
-	RecentVerifications  []models.Verification `json:"recent_verifications"`
+	TotalVerifications  int64                 `json:"total_verifications"`
+	PassedVerifications int64                 `json:"passed_verifications"`
+	FailedVerifications int64                 `json:"failed_verifications"`
+	PassRate            float64               `json:"pass_rate"`
+	TodayVerifications  int64                 `json:"today_verifications"`
+	Application         *models.Application   `json:"application"`
+	RecentVerifications []models.Verification `json:"recent_verifications"`
 }
 
 func ToApplicationResponse(app *models.Application) *ApplicationResponse {

@@ -20,18 +20,17 @@ var DB *gorm.DB
 type DBPoolConfig struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
-	ConnMaxLifetime  time.Duration
+	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
 	WaitForPool     bool
 	PoolStats       func() interface{}
 }
 
 var poolConfig = &DBPoolConfig{
-	MaxOpenConns:    25,
-	MaxIdleConns:    10,
-	ConnMaxLifetime:  5 * time.Minute,
-	ConnMaxIdleTime:  1 * time.Minute,
-	WaitForPool:      true,
+	MaxOpenConns:    100,
+	MaxIdleConns:    20,
+	ConnMaxLifetime: 30 * time.Minute,
+	ConnMaxIdleTime: 10 * time.Minute,
 }
 
 func InitDB(cfg *config.Config) error {
@@ -50,15 +49,20 @@ func InitDB(cfg *config.Config) error {
 		DSN:                  dsn,
 		PreferSimpleProtocol: true,
 	}), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		return err
+		log.Printf("Warning: Failed to initialize database connection: %v", err)
+		log.Println("Server will start without database - some features may not work")
+		DB = nil
+		return nil // Don't fail startup
 	}
 
 	sqlDB, err := DB.DB()
 	if err != nil {
-		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
+		log.Printf("Warning: Failed to get underlying sql.DB: %v", err)
+		DB = nil
+		return nil
 	}
 
 	maxOpenConns := cfg.Postgres.MaxOpenConns
@@ -82,19 +86,39 @@ func InitDB(cfg *config.Config) error {
 	sqlDB.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
 
 	if err := sqlDB.Ping(); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+		log.Printf("Warning: Failed to ping database: %v", err)
+		log.Println("Server will start without database - some features may not work")
+		DB = nil
+		return nil // Don't fail startup
 	}
 
-	log.Println("Database connection pool established successfully")
+	log.Println("Database connection established successfully")
 
 	if err := AutoMigrate(); err != nil {
-		return err
+		log.Printf("Warning: Failed to run auto migration: %v", err)
 	}
 
 	if err := CreateDefaultAdmin(); err != nil {
 		log.Printf("Failed to create default admin: %v", err)
 	}
 
+	if err := InitializeDatabaseFeatures(cfg); err != nil {
+		log.Printf("Warning: Failed to initialize database features: %v", err)
+	}
+
+	return nil
+}
+
+func InitializeDatabaseFeatures(cfg *config.Config) error {
+	InitQueryCache(cfg)
+	InitPerformanceMonitor(cfg)
+	InitConnectionPool(cfg)
+	InitDataArchiving(cfg)
+	InitReadWriteSeparation(cfg)
+
+	GormQueryCallback(DB)
+
+	log.Println("Database performance optimization features initialized")
 	return nil
 }
 
@@ -108,6 +132,7 @@ func AutoMigrate() error {
 		&models.BehaviorData{},
 		&models.Blacklist{},
 		&models.VerificationLog{},
+		&models.DeviceFingerprint{},
 	)
 }
 
@@ -143,14 +168,14 @@ func GetDB() *gorm.DB {
 }
 
 type PoolStats struct {
-	MaxOpenConnections int `json:"max_open_connections"`
-	OpenConnections   int `json:"open_connections"`
-	InUse             int `json:"in_use"`
-	Idle              int `json:"idle"`
-	WaitCount         int64 `json:"wait_count"`
-	WaitDuration      time.Duration `json:"wait_duration"`
-	MaxIdleClosed     int64 `json:"max_idle_closed"`
-	MaxLifetimeClosed int64 `json:"max_lifetime_closed"`
+	MaxOpenConnections int           `json:"max_open_connections"`
+	OpenConnections    int           `json:"open_connections"`
+	InUse              int           `json:"in_use"`
+	Idle               int           `json:"idle"`
+	WaitCount          int64         `json:"wait_count"`
+	WaitDuration       time.Duration `json:"wait_duration"`
+	MaxIdleClosed      int64         `json:"max_idle_closed"`
+	MaxLifetimeClosed  int64         `json:"max_lifetime_closed"`
 }
 
 func GetPoolStats() (*PoolStats, error) {
@@ -162,17 +187,21 @@ func GetPoolStats() (*PoolStats, error) {
 	stats := sqlDB.Stats()
 	return &PoolStats{
 		MaxOpenConnections: stats.MaxOpenConnections,
-		OpenConnections:   stats.OpenConnections,
-		InUse:             stats.InUse,
-		Idle:              stats.Idle,
-		WaitCount:         stats.WaitCount,
-		WaitDuration:      stats.WaitDuration,
-		MaxIdleClosed:     stats.MaxIdleClosed,
-		MaxLifetimeClosed: stats.MaxLifetimeClosed,
+		OpenConnections:    stats.OpenConnections,
+		InUse:              stats.InUse,
+		Idle:               stats.Idle,
+		WaitCount:          stats.WaitCount,
+		WaitDuration:       stats.WaitDuration,
+		MaxIdleClosed:      stats.MaxIdleClosed,
+		MaxLifetimeClosed:  stats.MaxLifetimeClosed,
 	}, nil
 }
 
 func Close() error {
+	if router != nil {
+		router.Close()
+	}
+
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return err

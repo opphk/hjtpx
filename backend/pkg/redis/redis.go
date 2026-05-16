@@ -6,16 +6,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/hjtpx/hjtpx/pkg/config"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
-	Client     *redis.Client
-	Cluster    *redis.ClusterClient
-	ctx        = context.Background()
-	clientMu   sync.RWMutex
-	clusterMu  sync.RWMutex
+	Client    *redis.Client
+	Cluster   *redis.ClusterClient
+	ctx       = context.Background()
+	clientMu  sync.RWMutex
+	clusterMu sync.RWMutex
 )
 
 type RedisClient struct {
@@ -23,41 +23,41 @@ type RedisClient struct {
 }
 
 type PoolStats struct {
-	TotalConns    uint32
-	IdleConns     uint32
-	StaleConns    uint32
-	MetricsTotal  uint32
-	MetricsHits   uint32
-	MetricsMisses uint32
+	TotalConns      uint32
+	IdleConns       uint32
+	StaleConns      uint32
+	MetricsTotal    uint32
+	MetricsHits     uint32
+	MetricsMisses   uint32
 	MetricsTimeouts uint32
 }
 
 type Config struct {
-	PoolSize        int
-	MinIdleConns    int
-	MaxIdleConns    int
-	MaxRetries      int
-	DialTimeout     time.Duration
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	PoolTimeout     time.Duration
-	PoolMaxIdle     int
-	PoolMinIdle     int
-	PoolMaxActive   int
+	PoolSize      int
+	MinIdleConns  int
+	MaxIdleConns  int
+	MaxRetries    int
+	DialTimeout   time.Duration
+	ReadTimeout   time.Duration
+	WriteTimeout  time.Duration
+	PoolTimeout   time.Duration
+	PoolMaxIdle   int
+	PoolMinIdle   int
+	PoolMaxActive int
 }
 
 var defaultConfig = &Config{
-	PoolSize:        100,
-	MinIdleConns:    10,
-	MaxIdleConns:    50,
-	MaxRetries:      3,
-	DialTimeout:     5 * time.Second,
-	ReadTimeout:     3 * time.Second,
-	WriteTimeout:    3 * time.Second,
-	PoolTimeout:     4 * time.Second,
-	PoolMaxIdle:     50,
-	PoolMinIdle:     10,
-	PoolMaxActive:   100,
+	PoolSize:      100,
+	MinIdleConns:  10,
+	MaxIdleConns:  50,
+	MaxRetries:    3,
+	DialTimeout:   5 * time.Second,
+	ReadTimeout:   3 * time.Second,
+	WriteTimeout:  3 * time.Second,
+	PoolTimeout:   4 * time.Second,
+	PoolMaxIdle:   50,
+	PoolMinIdle:   10,
+	PoolMaxActive: 100,
 }
 
 func GetContext() context.Context {
@@ -168,12 +168,12 @@ func (rc *RedisClient) GetPoolStats() *PoolStats {
 	stats := rc.client.PoolStats()
 
 	return &PoolStats{
-		TotalConns:    stats.TotalConns,
-		IdleConns:     stats.IdleConns,
-		StaleConns:    stats.StaleConns,
-		MetricsTotal:  stats.Hits + stats.Misses,
-		MetricsHits:   stats.Hits,
-		MetricsMisses: stats.Misses,
+		TotalConns:      stats.TotalConns,
+		IdleConns:       stats.IdleConns,
+		StaleConns:      stats.StaleConns,
+		MetricsTotal:    stats.Hits + stats.Misses,
+		MetricsHits:     stats.Hits,
+		MetricsMisses:   stats.Misses,
 		MetricsTimeouts: stats.Timeouts,
 	}
 }

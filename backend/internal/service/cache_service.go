@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	goredis "github.com/redis/go-redis/v9"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 var (
-	ErrCacheMiss    = errors.New("cache miss")
+	ErrCacheMiss       = errors.New("cache miss")
 	ErrLockNotAcquired = errors.New("lock not acquired")
 )
 
@@ -172,11 +172,11 @@ func (cs *CacheService) IncrementBy(ctx context.Context, key string, value int64
 }
 
 type DistributedLock struct {
-	key        string
-	value      string
-	ttl        time.Duration
-	acquired   bool
-	client     *goredis.Client
+	key      string
+	value    string
+	ttl      time.Duration
+	acquired bool
+	client   *goredis.Client
 }
 
 type LockOptions struct {
@@ -283,7 +283,7 @@ type CacheStats struct {
 	Hits       int64
 	Misses     int64
 	Keys       int64
-	MemoryUsed  int64
+	MemoryUsed int64
 }
 
 func (cs *CacheService) GetStats(ctx context.Context) (*CacheStats, error) {
@@ -880,13 +880,13 @@ func (cs *CacheService) CleanupExpiredKeys(ctx context.Context, pattern string) 
 }
 
 type CacheMetrics struct {
-	Hits      int64
-	Misses    int64
-	Sets      int64
-	Deletes   int64
-	Expired   int64
-	Evicted   int64
-	mu        sync.RWMutex
+	Hits    int64
+	Misses  int64
+	Sets    int64
+	Deletes int64
+	Expired int64
+	Evicted int64
+	mu      sync.RWMutex
 }
 
 var globalMetrics = &CacheMetrics{}

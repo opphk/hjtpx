@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	mrand "math/rand"
 	"math/big"
 	"strings"
 	"sync"
@@ -37,10 +36,10 @@ var (
 	ErrPublicKeyInvalid   = errors.New("invalid public key")
 	ErrPrivateKeyInvalid  = errors.New("invalid private key")
 	ErrEncryptionFailed   = errors.New("encryption failed")
-	ErrDecryptionFailed  = errors.New("decryption failed")
+	ErrDecryptionFailed   = errors.New("decryption failed")
 	ErrSignatureFailed    = errors.New("signature generation failed")
 	ErrVerificationFailed = errors.New("signature verification failed")
-	ErrInvalidPassword   = errors.New("invalid password")
+	ErrInvalidPassword    = errors.New("invalid password")
 )
 
 type AESKeySize int
@@ -67,21 +66,15 @@ type CryptoConfig struct {
 }
 
 var defaultCryptoConfig = CryptoConfig{
-	AESKeySize:        KeySize256,
-	HashAlgorithm:     AlgoSHA256,
+	AESKeySize:       KeySize256,
+	HashAlgorithm:    AlgoSHA256,
 	PBKDF2Iterations: 100000,
-	SaltLength:        32,
+	SaltLength:       32,
 }
 
 var (
-	randMutex  sync.Mutex
-	randSource mrand.Source
+	randMutex sync.Mutex
 )
-
-func init() {
-	seed := time.Now().UnixNano()
-	randSource = mrand.NewSource(seed)
-}
 
 func secureRandomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)
@@ -92,6 +85,10 @@ func secureRandomBytes(n int) ([]byte, error) {
 		return nil, fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 	return b, nil
+}
+
+func GenerateRandomBytes(length int) ([]byte, error) {
+	return secureRandomBytes(length)
 }
 
 func GenerateRandomKey(keySize AESKeySize) ([]byte, error) {
@@ -752,13 +749,13 @@ func ValidateAPIKey(apiKey, prefix string) bool {
 }
 
 type EncryptedData struct {
-	Ciphertext string `json:"c"`
-	IV         string `json:"i"`
-	AuthTag    string `json:"t"`
-	Version    int    `json:"v"`
-	Algorithm  string `json:"a"`
-	CreatedAt  int64  `json:"ct"`
-	EncryptedAt int64 `json:"et"`
+	Ciphertext  string `json:"c"`
+	IV          string `json:"i"`
+	AuthTag     string `json:"t"`
+	Version     int    `json:"v"`
+	Algorithm   string `json:"a"`
+	CreatedAt   int64  `json:"ct"`
+	EncryptedAt int64  `json:"et"`
 }
 
 func NewEncryptedData(ciphertext, iv, authTag string) *EncryptedData {
@@ -790,10 +787,10 @@ type SaltManager struct {
 
 func NewSaltManager(saltLength int) *SaltManager {
 	sm := &SaltManager{
-		saltLength:     saltLength,
-		rotationPeriod: 5 * time.Minute,
+		saltLength:      saltLength,
+		rotationPeriod:  5 * time.Minute,
 		historicalSalts: make([]string, 0, 10),
-		lastRotation:   time.Now(),
+		lastRotation:    time.Now(),
 	}
 
 	initialSalt, _ := GenerateRandomString(saltLength)

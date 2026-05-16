@@ -18,8 +18,8 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
 	r.Use(middleware.ErrorHandler())
-	r.Use(middleware.AddSecurityHeaders())
-	r.Use(middleware.SQLInjectionProtection())
+	// 增强的安全中间件 - OWASP Top 10
+	r.Use(middleware.OWASPTop10SecurityMiddleware())
 
 	// 健康检查
 	r.GET("/health", handler.HealthCheck)
@@ -76,6 +76,9 @@ func SetupRouter() *gin.Engine {
 	r.GET("/admin/stats", func(c *gin.Context) {
 		c.HTML(200, "stats.html", nil)
 	})
+	r.GET("/admin/advanced-analytics", func(c *gin.Context) {
+		c.HTML(200, "advanced-analytics.html", nil)
+	})
 	r.GET("/admin/applications", func(c *gin.Context) {
 		c.HTML(200, "applications.html", nil)
 	})
@@ -88,6 +91,9 @@ func SetupRouter() *gin.Engine {
 	r.GET("/admin/blacklist", func(c *gin.Context) {
 		c.HTML(200, "blacklist.html", nil)
 	})
+	r.GET("/admin/monitoring", func(c *gin.Context) {
+		c.HTML(200, "monitoring.html", nil)
+	})
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -97,11 +103,9 @@ func SetupRouter() *gin.Engine {
 		{
 			captcha.GET("/slider", handler.GetSliderCaptcha)
 			captcha.GET("/click", handler.GetClickCaptcha)
-			captcha.GET("/rotation", handler.GenerateRotationCaptcha)
-			captcha.POST("/rotation/verify", handler.VerifyRotationCaptcha)
 			captcha.POST("/verify", handler.VerifyCaptcha)
-			captcha.GET("/shuffle/click", handler.GetShuffleClickCaptcha)
-			captcha.POST("/shuffle/verify", handler.VerifyShuffleClickCaptcha)
+			captcha.GET("/gesture", handler.GenerateGestureCaptcha)
+			captcha.POST("/gesture/verify", handler.VerifyGestureCaptcha)
 		}
 
 		// 环境检测路由
@@ -140,6 +144,7 @@ func SetupRouter() *gin.Engine {
 		{
 			admin.POST("/login", handler.Login)
 			admin.POST("/logout", handler.Logout)
+			admin.GET("/monitoring/ws", handler.WebSocketHandler)
 
 			// 需要JWT认证的路由
 			adminAuth := admin.Group("")
@@ -225,6 +230,31 @@ func SetupRouter() *gin.Engine {
 				// CSS来源切换
 				adminAuth.GET("/css-source", handler.GetCSSSource)
 				adminAuth.POST("/css-source", handler.SetCSSSource)
+
+				// 高级分析
+				analytics := adminAuth.Group("/analytics")
+				{
+					analytics.GET("/user-behavior", handler.GetUserBehaviorAnalysis)
+					analytics.GET("/attack-trend", handler.GetAttackTrendAnalysis)
+					analytics.POST("/generate-report", handler.GenerateRiskReport)
+					analytics.GET("/visualization", handler.GetVisualizationData)
+					analytics.GET("/report-configs", handler.ListReportConfigs)
+					analytics.POST("/report-configs", handler.CreateReportConfig)
+					analytics.GET("/report-configs/:id", handler.GetReportConfig)
+					analytics.PUT("/report-configs/:id", handler.UpdateReportConfig)
+					analytics.DELETE("/report-configs/:id", handler.DeleteReportConfig)
+				}
+
+				// 实时监控
+				monitoring := adminAuth.Group("/monitoring")
+				{
+					monitoring.GET("/data", handler.GetMonitoringData)
+					monitoring.GET("/alerts", handler.GetAlerts)
+					monitoring.POST("/alerts/:id/acknowledge", handler.AcknowledgeAlert)
+					monitoring.GET("/system-metrics", handler.GetSystemMetrics)
+					monitoring.GET("/request-metrics", handler.GetRequestMetrics)
+					monitoring.GET("/api-stats", handler.GetApiStats)
+				}
 			}
 		}
 

@@ -23,7 +23,8 @@ func main() {
 	cfg := config.LoadConfig()
 
 	if err := database.InitDB(cfg); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		log.Printf("Warning: Failed to initialize database: %v", err)
+		log.Println("Continuing startup without database...")
 	}
 
 	jwt.InitJWT(cfg.JWT.Secret)
@@ -32,13 +33,13 @@ func main() {
 	seedAdmin()
 
 	if err := postgres.Connect(&cfg.Postgres); err != nil {
-		log.Printf("Failed to connect to PostgreSQL: %v", err)
+		log.Printf("Warning: Failed to connect to PostgreSQL: %v", err)
 	} else {
 		log.Println("PostgreSQL connected successfully")
 	}
 
 	if err := redis.ConnectRedis(&cfg.Redis); err != nil {
-		log.Printf("Failed to connect to Redis: %v", err)
+		log.Printf("Warning: Failed to connect to Redis: %v", err)
 	} else {
 		log.Println("Redis connected successfully")
 	}
@@ -81,6 +82,11 @@ func main() {
 }
 
 func seedAdmin() {
+	if database.DB == nil {
+		log.Println("Database not available, skipping admin user creation")
+		return
+	}
+
 	var count int64
 	database.DB.Model(&models.Admin{}).Count(&count)
 	if count > 0 {

@@ -33,15 +33,15 @@ func TestBlacklistConstants(t *testing.T) {
 
 func TestCreateBlacklistInput(t *testing.T) {
 	input := &CreateBlacklistInput{
-		Target:       "192.168.1.100",
-		Type:         "ip",
-		Source:       "manual",
-		Reason:       "malicious activity",
-		Action:       "block",
+		Target:         "192.168.1.100",
+		Type:           "ip",
+		Source:         "manual",
+		Reason:         "malicious activity",
+		Action:         "block",
 		ApplicationIDs: []string{"1", "2"},
-		Expiration:   "2025-12-31",
-		Note:         "test note",
-		CreatedBy:    1,
+		Expiration:     "2025-12-31",
+		Note:           "test note",
+		CreatedBy:      1,
 	}
 
 	assert.Equal(t, "192.168.1.100", input.Target)
@@ -77,12 +77,12 @@ func TestUpdateBlacklistInput(t *testing.T) {
 
 func TestListBlacklistFilter(t *testing.T) {
 	filter := &ListBlacklistFilter{
-		Page:         1,
-		PageSize:     20,
-		Type:         "ip",
-		Source:       "manual",
-		Status:       "active",
-		Keyword:      "test",
+		Page:          1,
+		PageSize:      20,
+		Type:          "ip",
+		Source:        "manual",
+		Status:        "active",
+		Keyword:       "test",
 		ApplicationID: 1,
 	}
 

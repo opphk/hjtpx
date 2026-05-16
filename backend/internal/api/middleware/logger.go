@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	logBuffer  = make([]LogEntry, 0, 1000)
+	logBuffer   = make([]LogEntry, 0, 1000)
 	logBufferMu sync.Mutex
-	logFile    *os.File
+	logFile     *os.File
 )
 
 type LogLevel string
@@ -27,25 +27,25 @@ const (
 )
 
 type LogEntry struct {
-	Timestamp     string                 `json:"timestamp"`
-	Level         LogLevel               `json:"level"`
-	RequestID     string                 `json:"request_id"`
-	Method        string                 `json:"method"`
-	Path          string                 `json:"path"`
-	StatusCode    int                    `json:"status_code"`
-	Latency       string                 `json:"latency"`
-	LatencyMs     float64                `json:"latency_ms"`
-	ClientIP      string                 `json:"client_ip"`
-	UserAgent     string                 `json:"user_agent"`
-	BodySize      int                    `json:"body_size"`
-	Query         string                 `json:"query,omitempty"`
-	Error         string                 `json:"error,omitempty"`
-	ErrorType     string                 `json:"error_type,omitempty"`
-	TraceID       string                 `json:"trace_id,omitempty"`
-	SpanID        string                 `json:"span_id,omitempty"`
-	Service       string                 `json:"service"`
-	Environment   string                 `json:"environment"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp   string                 `json:"timestamp"`
+	Level       LogLevel               `json:"level"`
+	RequestID   string                 `json:"request_id"`
+	Method      string                 `json:"method"`
+	Path        string                 `json:"path"`
+	StatusCode  int                    `json:"status_code"`
+	Latency     string                 `json:"latency"`
+	LatencyMs   float64                `json:"latency_ms"`
+	ClientIP    string                 `json:"client_ip"`
+	UserAgent   string                 `json:"user_agent"`
+	BodySize    int                    `json:"body_size"`
+	Query       string                 `json:"query,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	ErrorType   string                 `json:"error_type,omitempty"`
+	TraceID     string                 `json:"trace_id,omitempty"`
+	SpanID      string                 `json:"span_id,omitempty"`
+	Service     string                 `json:"service"`
+	Environment string                 `json:"environment"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 func InitLogger(logPath string) error {
@@ -99,8 +99,8 @@ func Logger() gin.HandlerFunc {
 			Method:      method,
 			Path:        path,
 			StatusCode:  statusCode,
-			Latency:    latency.String(),
-			LatencyMs:  latency.Seconds() * 1000,
+			Latency:     latency.String(),
+			LatencyMs:   latency.Seconds() * 1000,
 			ClientIP:    clientIP,
 			UserAgent:   c.Request.UserAgent(),
 			BodySize:    bodySize,
@@ -169,19 +169,19 @@ func getEnv(key, defaultValue string) string {
 }
 
 type AuditLog struct {
-	UserID      string    `json:"user_id"`
-	Username    string    `json:"username"`
-	Action      string    `json:"action"`
-	Resource    string    `json:"resource"`
-	ResourceID  string    `json:"resource_id"`
-	ClientIP    string    `json:"client_ip"`
-	UserAgent   string    `json:"user_agent"`
-	RequestID   string    `json:"request_id"`
-	Success     bool      `json:"success"`
-	ErrorMsg    string    `json:"error_msg,omitempty"`
-	OldValue    string    `json:"old_value,omitempty"`
-	NewValue    string    `json:"new_value,omitempty"`
-	Timestamp   time.Time `json:"timestamp"`
+	UserID     string    `json:"user_id"`
+	Username   string    `json:"username"`
+	Action     string    `json:"action"`
+	Resource   string    `json:"resource"`
+	ResourceID string    `json:"resource_id"`
+	ClientIP   string    `json:"client_ip"`
+	UserAgent  string    `json:"user_agent"`
+	RequestID  string    `json:"request_id"`
+	Success    bool      `json:"success"`
+	ErrorMsg   string    `json:"error_msg,omitempty"`
+	OldValue   string    `json:"old_value,omitempty"`
+	NewValue   string    `json:"new_value,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 func WriteAuditLog(log AuditLog) {

@@ -219,6 +219,16 @@ class Captcha {
             trajectoryData: []
         };
 
+        this.gestureState = {
+            isDrawing: false,
+            pattern: '',
+            canvasWidth: 300,
+            canvasHeight: 300,
+            trajectoryData: [],
+            lastX: 0,
+            lastY: 0
+        };
+
         this.trajectoryData = [];
         this.speedData = {
             points: [],
@@ -309,6 +319,10 @@ class Captcha {
                         <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="rotation-captcha" data-type="rotation" tabindex="0" id="tab-rotation">
                             <span class="tab-icon"><i class="fas fa-undo-alt" aria-hidden="true"></i></span>
                             <span class="tab-text">${this.i18n.t('rotationVerify')}</span>
+                        </button>
+                        <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="gesture-captcha" data-type="gesture" tabindex="0" id="tab-gesture">
+                            <span class="tab-icon"><i class="fas fa-hand-paper" aria-hidden="true"></i></span>
+                            <span class="tab-text">${this.i18n.t('gestureVerify')}</span>
                         </button>
                         <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="passive-captcha" data-type="passive" tabindex="0" id="tab-passive">
                             <span class="tab-icon"><i class="fas fa-shield-alt" aria-hidden="true"></i></span>
@@ -442,6 +456,41 @@ class Captcha {
                         </div>
                     </div>
 
+                    <div class="captcha-content" id="gesture-captcha" role="tabpanel" aria-labelledby="tab-gesture" hidden>
+                        <div class="captcha-loading-overlay" id="gesture-loading-overlay" hidden>
+                            <div class="captcha-loading-container">
+                                <div class="loading-animation-${this.options.animationStyle}">
+                                    <div class="loading-dots">
+                                        <span></span><span></span><span></span><span></span><span></span>
+                                    </div>
+                                </div>
+                                <div class="loading-progress-bar">
+                                    <div class="loading-progress-fill" id="gesture-progress-fill"></div>
+                                </div>
+                                <div class="loading-message" id="gesture-loading-message">${this.i18n.t('loading')}</div>
+                            </div>
+                        </div>
+                        <div class="gesture-captcha-hint" id="gesture-hint" style="text-align:center;margin-bottom:10px;">
+                            <span class="hint-icon"><i class="fas fa-lightbulb" aria-hidden="true"></i></span>
+                            <span class="hint-text" id="gesture-hint-text">请绘制图案</span>
+                        </div>
+                        <div class="gesture-canvas-container" id="gesture-canvas-container" style="position:relative;width:300px;height:300px;margin:0 auto;border:2px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+                            <canvas class="gesture-background-canvas" id="gesture-background-canvas" width="300" height="300" style="position:absolute;top:0;left:0;"></canvas>
+                            <canvas class="gesture-drawing-canvas" id="gesture-drawing-canvas" width="300" height="300" style="position:absolute;top:0;left:0;cursor:crosshair;"></canvas>
+                            <button class="captcha-refresh" id="gesture-refresh" aria-label="${this.i18n.t('refresh')}" title="${this.i18n.t('refresh')}" style="position:absolute;top:8px;right:8px;">
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="captcha-actions" style="margin-top:15px;text-align:center;">
+                            <button class="captcha-btn captcha-btn-secondary" id="gesture-clear" aria-label="${this.i18n.t('clear')}">
+                                <i class="fas fa-eraser" aria-hidden="true"></i> ${this.i18n.t('clear')}
+                            </button>
+                            <button class="captcha-btn captcha-btn-primary" id="gesture-submit" aria-label="${this.i18n.t('submitVerification')}">
+                                <i class="fas fa-check" aria-hidden="true"></i> ${this.i18n.t('confirm')}
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="captcha-content" id="passive-captcha" role="tabpanel" aria-labelledby="tab-passive" hidden>
                         <div class="captcha-loading-overlay" id="passive-loading-overlay" hidden>
                             <div class="captcha-loading-container">
@@ -534,6 +583,16 @@ class Captcha {
             rotationSliderButton: this.container.querySelector('#rotation-slider-button'),
             rotationSliderText: this.container.querySelector('#rotation-slider-text'),
             rotationAngleValue: this.container.querySelector('#rotation-angle-value'),
+            gestureHint: this.container.querySelector('#gesture-hint'),
+            gestureHintText: this.container.querySelector('#gesture-hint-text'),
+            gestureBackgroundCanvas: this.container.querySelector('#gesture-background-canvas'),
+            gestureDrawingCanvas: this.container.querySelector('#gesture-drawing-canvas'),
+            gestureRefresh: this.container.querySelector('#gesture-refresh'),
+            gestureLoadingOverlay: this.container.querySelector('#gesture-loading-overlay'),
+            gestureProgressFill: this.container.querySelector('#gesture-progress-fill'),
+            gestureLoadingMessage: this.container.querySelector('#gesture-loading-message'),
+            gestureClear: this.container.querySelector('#gesture-clear'),
+            gestureSubmit: this.container.querySelector('#gesture-submit'),
             passiveLoadingOverlay: this.container.querySelector('#passive-loading-overlay'),
             passiveProgressFill: this.container.querySelector('#passive-progress-fill'),
             passiveLoadingMessage: this.container.querySelector('#passive-loading-message'),
@@ -562,10 +621,15 @@ class Captcha {
             this.refresh();
             this.announceToScreenReader(this.i18n.t('refreshing'));
         });
+        this.elements.gestureRefresh.addEventListener('click', () => {
+            this.refresh();
+            this.announceToScreenReader(this.i18n.t('refreshing'));
+        });
 
         this.bindSliderEvents();
         this.bindClickEvents();
         this.bindRotationEvents();
+        this.bindGestureEvents();
         this.bindKeyboardShortcuts();
     }
 
@@ -900,6 +964,7 @@ class Captcha {
             this.rotationState.isDragging = true;
             const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
             this.rotationState.startX = clientX;
+            this.rotationState.dragStartAngle = this.rotationState.totalAngle;
             this.rotationState.startTime = Date.now();
             this.rotationState.trajectoryData = [];
             this.rotationState.currentAngle = 0;
@@ -917,11 +982,18 @@ class Captcha {
             const deltaX = clientX - this.rotationState.startX;
             const maxWidth = container.offsetWidth - button.offsetWidth - 4;
             const progress = Math.max(0, Math.min(deltaX / maxWidth, 1));
+            // 从初始位置开始旋转，而不是累加
+            // 用户拖动滑块时，旋转角度从初始位置开始变化
             const angleDelta = progress * 360;
 
+            // 计算当前总角度 = 初始角度 + 拖动产生的角度变化
+            let newAngle = (this.rotationState.initialAngle || 0) - angleDelta;
+            
+            // 归一化到 0-360 度范围
+            newAngle = ((newAngle % 360) + 360) % 360;
+            
             this.rotationState.currentAngle = angleDelta;
-            this.rotationState.totalAngle = (this.rotationState.totalAngle + angleDelta) % 360;
-            if (this.rotationState.totalAngle < 0) this.rotationState.totalAngle += 360;
+            this.rotationState.totalAngle = newAngle;
 
             this.elements.rotationSliderTrack.style.width = (progress * maxWidth) + 'px';
             button.style.left = (deltaX + 2) + 'px';
@@ -944,10 +1016,25 @@ class Captcha {
             button.classList.remove('dragging');
             this.elements.rotationSliderText.textContent = this.i18n.t('dragToRotate');
 
-            if (this.rotationState.totalAngle > 5) {
+            // 计算用户实际旋转的角度（相对于初始位置）
+            const initialAngle = this.rotationState.initialAngle || 0;
+            const currentAngle = this.rotationState.totalAngle;
+            
+            // 计算用户将图片旋转了多少度来尝试到达 0 度
+            let rotationApplied = 0;
+            if (currentAngle !== undefined) {
+                // 计算用户通过拖动滑块所应用的旋转量
+                // 滑块从左到右对应 0-360 度的旋转
+                const buttonLeft = parseInt(button.style.left) || 2;
+                const progress = Math.max(0, Math.min((buttonLeft - 2) / (container.offsetWidth - button.offsetWidth - 4), 1));
+                rotationApplied = progress * 360;
+            }
+
+            if (Math.abs(rotationApplied) > 5) {
                 this.verifyRotation();
             }
-            this.resetRotationSlider();
+            // 不立即重置滑块，让用户看到当前旋转状态
+            // this.resetRotationSlider();
         };
 
         button.addEventListener('mousedown', startDrag);
@@ -1045,6 +1132,7 @@ class Captcha {
             const isActive = (type === 'slider' && content.id === 'slider-captcha') ||
                            (type === 'click' && content.id === 'click-captcha') ||
                            (type === 'rotation' && content.id === 'rotation-captcha') ||
+                           (type === 'gesture' && content.id === 'gesture-captcha') ||
                            (type === 'passive' && content.id === 'passive-captcha');
             content.classList.toggle('active', isActive);
             content.hidden = !isActive;
@@ -1054,12 +1142,14 @@ class Captcha {
         this.resetSlider();
         this.clearClickPoints();
         this.resetRotationSlider();
+        this.clearGestureCanvas();
         this.refresh();
 
         const tabNames = {
             slider: this.i18n.t('sliderVerify'),
             click: this.i18n.t('clickVerify'),
             rotation: this.i18n.t('rotationVerify'),
+            gesture: this.i18n.t('gestureVerify'),
             passive: this.i18n.t('passiveVerify')
         };
         this.announceToScreenReader(`${this.i18n.t('switchedTo')} ${tabNames[type] || type}`);
@@ -1086,6 +1176,8 @@ class Captcha {
                 await this.refreshClick();
             } else if (this.options.type === 'rotation') {
                 await this.refreshRotation();
+            } else if (this.options.type === 'gesture') {
+                await this.refreshGesture();
             } else if (this.options.type === 'passive') {
                 await this.refreshPassive();
             }
@@ -1333,14 +1425,17 @@ class Captcha {
 
             if (response.ok) {
                 const data = await response.json();
-                const respData = data.data || data;
-                this.sessionId = respData.challenge_id;
-                this.rotationState.challengeId = respData.challenge_id;
-                this.rotationState.imageUrl = respData.image;
+                this.sessionId = data.session_id;
+                this.rotationState.challengeId = data.session_id;
+                this.rotationState.imageUrl = data.image_url;
+                this.rotationState.initialAngle = data.initial_angle || 0;
 
                 if (this.elements.rotationImage) {
-                    this.elements.rotationImage.src = respData.image;
-                    this.elements.rotationImage.style.transform = 'rotate(0deg)';
+                    this.elements.rotationImage.src = data.image_url;
+                    // 设置初始旋转角度
+                    this.rotationState.totalAngle = data.initial_angle || 0;
+                    this.elements.rotationImage.style.transform = 'rotate(' + this.rotationState.totalAngle + 'deg)';
+                    this.updateRotationAngleDisplay(this.rotationState.totalAngle);
                 }
 
                 this.animateRotationSkeletonOut();
@@ -1482,9 +1577,22 @@ class Captcha {
     async verifyRotation() {
         this.showLoading('rotation');
 
+        // 用户需要将图片旋转到 0 度
+        // 我们计算用户当前旋转了多少度来试图达到 0 度
+        const button = this.elements.rotationSliderButton;
+        const container = this.elements.rotationSliderContainer;
+        
+        const buttonLeft = parseInt(button.style.left) || 2;
+        const maxWidth = container.offsetWidth - button.offsetWidth - 4;
+        const progress = Math.max(0, Math.min((buttonLeft - 2) / maxWidth, 1));
+        const userRotation = progress * 360;
+        
+        const initialAngle = this.rotationState.initialAngle || 0;
+        const finalAngle = ((initialAngle - userRotation) % 360 + 360) % 360;
+        
         const payload = {
-            challenge_id: this.rotationState.challengeId,
-            angle: Math.round(this.rotationState.totalAngle % 360)
+            session_id: this.sessionId,
+            angle: finalAngle
         };
 
         try {
@@ -1495,10 +1603,11 @@ class Captcha {
             });
 
             let success = false;
+            let message = '';
             if (response.ok) {
                 const data = await response.json();
-                const respData = data.data || data;
-                success = respData.success;
+                success = data.success;
+                message = data.message || '';
             }
 
             if (success) {
@@ -1508,19 +1617,21 @@ class Captcha {
                     this.options.onSuccess({ type: 'rotation', session_id: this.sessionId });
                 }
             } else {
-                this.showResult(this.i18n.t('verifyFailed'), 'error');
-                this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
+                const errorMessage = message || this.i18n.t('verifyFailed');
+                this.showResult(errorMessage, 'error');
+                this.announceToScreenReader(errorMessage, 'assertive');
                 setTimeout(() => this.refresh(), 1500);
                 if (this.options.onError) {
-                    this.options.onError({ type: 'rotation', error: this.i18n.t('verifyFailed') });
+                    this.options.onError({ type: 'rotation', error: errorMessage });
                 }
             }
         } catch (error) {
-            this.showResult(this.i18n.t('verifyFailed'), 'error');
-            this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
+            const errorMessage = error.message || this.i18n.t('verifyFailed');
+            this.showResult(errorMessage, 'error');
+            this.announceToScreenReader(errorMessage, 'assertive');
             setTimeout(() => this.refresh(), 1500);
             if (this.options.onError) {
-                this.options.onError({ type: 'rotation', error: error.message || this.i18n.t('verifyFailed') });
+                this.options.onError({ type: 'rotation', error: errorMessage });
             }
         } finally {
             setTimeout(() => {
@@ -1922,6 +2033,8 @@ class Captcha {
             this.elements.clickLoadingOverlay :
             type === 'rotation' ?
             this.elements.rotationLoadingOverlay :
+            type === 'gesture' ?
+            this.elements.gestureLoadingOverlay :
             this.elements.passiveLoadingOverlay;
 
         if (overlay) {
@@ -1947,6 +2060,8 @@ class Captcha {
             this.elements.clickProgressFill :
             type === 'rotation' ?
             this.elements.rotationProgressFill :
+            type === 'gesture' ?
+            this.elements.gestureProgressFill :
             this.elements.passiveProgressFill;
         const loadingMessage = type === 'slider' ?
             this.elements.sliderLoadingMessage :
@@ -1954,6 +2069,8 @@ class Captcha {
             this.elements.clickLoadingMessage :
             type === 'rotation' ?
             this.elements.rotationLoadingMessage :
+            type === 'gesture' ?
+            this.elements.gestureLoadingMessage :
             this.elements.passiveLoadingMessage;
 
         const messages = [
@@ -1994,6 +2111,8 @@ class Captcha {
             this.elements.clickLoadingMessage :
             type === 'rotation' ?
             this.elements.rotationLoadingMessage :
+            type === 'gesture' ?
+            this.elements.gestureLoadingMessage :
             this.elements.passiveLoadingMessage;
         if (loadingMessage) {
             loadingMessage.textContent = message;
@@ -2010,6 +2129,8 @@ class Captcha {
             this.elements.clickLoadingOverlay :
             type === 'rotation' ?
             this.elements.rotationLoadingOverlay :
+            type === 'gesture' ?
+            this.elements.gestureLoadingOverlay :
             this.elements.passiveLoadingOverlay;
 
         if (overlay) {
@@ -2064,6 +2185,7 @@ class Captcha {
                     slider: this.i18n.t('sliderVerify'),
                     click: this.i18n.t('clickVerify'),
                     rotation: this.i18n.t('rotationVerify'),
+                    gesture: this.i18n.t('gestureVerify'),
                     passive: this.i18n.t('passiveVerify')
                 };
                 textSpan.textContent = tabNames[tab.dataset.type] || tab.dataset.type;
@@ -2088,6 +2210,232 @@ class Captcha {
         this.container = null;
         this.elements = null;
     }
+
+    // ==================== Gesture Captcha Methods ====================
+    
+    bindGestureEvents() {
+        const canvas = this.elements.gestureDrawingCanvas;
+        if (!canvas) return;
+
+        canvas.addEventListener('mousedown', (e) => this.startGestureDrawing(e));
+        canvas.addEventListener('mousemove', (e) => this.gestureDraw(e));
+        canvas.addEventListener('mouseup', (e) => this.endGestureDrawing(e));
+        canvas.addEventListener('mouseleave', (e) => this.endGestureDrawing(e));
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.startGestureDrawing(e.touches[0]);
+        }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            this.gestureDraw(e.touches[0]);
+        }, { passive: false });
+        canvas.addEventListener('touchend', (e) => this.endGestureDrawing(e));
+
+        this.elements.gestureClear.addEventListener('click', () => this.clearGestureCanvas());
+        this.elements.gestureSubmit.addEventListener('click', () => this.verifyGesture());
+    }
+
+    getPatternName(pattern) {
+        const names = {
+            'checkmark': '对勾',
+            'cross': '叉号',
+            'triangle': '三角形',
+            'circle': '圆形',
+            'star': '星形',
+            'square': '正方形'
+        };
+        return names[pattern] || pattern;
+    }
+
+    async refreshGesture() {
+        this.clearGestureCanvas();
+
+        try {
+            const response = await fetch(`${this.options.apiBase}/captcha/gesture`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.sessionId = data.session_id;
+                this.gestureState.pattern = data.pattern;
+                
+                const bgCanvas = this.elements.gestureBackgroundCanvas;
+                const ctx = bgCanvas.getContext('2d');
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    bgCanvas.width = 300;
+                    bgCanvas.height = 300;
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = data.image_url;
+
+                const patternName = this.getPatternName(data.pattern);
+                this.elements.gestureHintText.textContent = `请绘制${patternName}图案`;
+            } else {
+                this.showResult(this.i18n.t('loadFailed'), 'error');
+            }
+        } catch (error) {
+            console.error('Gesture refresh failed:', error);
+            this.showResult(this.i18n.t('loadFailed'), 'error');
+        }
+    }
+
+    startGestureDrawing(e) {
+        if (this.isLoading) return;
+        
+        const canvas = this.elements.gestureDrawingCanvas;
+        const rect = canvas.getBoundingClientRect();
+        
+        this.gestureState.isDrawing = true;
+        this.gestureState.lastX = e.clientX - rect.left;
+        this.gestureState.lastY = e.clientY - rect.top;
+        this.gestureState.trajectoryData = [];
+        
+        this.addGestureTrajectoryPoint(this.gestureState.lastX, this.gestureState.lastY);
+    }
+
+    gestureDraw(e) {
+        if (!this.gestureState.isDrawing || this.isLoading) return;
+        
+        const canvas = this.elements.gestureDrawingCanvas;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(this.gestureState.lastX, this.gestureState.lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        
+        this.gestureState.lastX = x;
+        this.gestureState.lastY = y;
+        
+        this.addGestureTrajectoryPoint(x, y);
+    }
+
+    endGestureDrawing(e) {
+        if (!this.gestureState.isDrawing) return;
+        this.gestureState.isDrawing = false;
+    }
+
+    addGestureTrajectoryPoint(x, y) {
+        this.gestureState.trajectoryData.push({
+            x: x,
+            y: y,
+            t: Date.now()
+        });
+    }
+
+    clearGestureCanvas() {
+        const canvas = this.elements.gestureDrawingCanvas;
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        this.gestureState.trajectoryData = [];
+        this.gestureState.isDrawing = false;
+    }
+
+    async verifyGesture() {
+        if (this.gestureState.trajectoryData.length < 5) {
+            this.showResult('请先绘制手势图案', 'error');
+            return;
+        }
+
+        this.showLoading('gesture');
+
+        try {
+            let payload = {
+                session_id: this.sessionId
+            };
+
+            if (this.options.enableEncryption) {
+                const encrypted = await this.trajectoryEncryptor.encryptTrajectory(
+                    this.gestureState.trajectoryData
+                );
+                payload.encrypted_trajectory = encrypted;
+            } else {
+                payload.trajectory = this.gestureState.trajectoryData;
+            }
+
+            const response = await fetch(`${this.options.apiBase}/captcha/gesture/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            let success = false;
+            let message = this.i18n.t('verifyFailed');
+            
+            if (response.ok) {
+                const data = await response.json();
+                success = data.success;
+                message = data.message || message;
+            }
+
+            if (success) {
+                this.showResult(this.i18n.t('verifySuccess'), 'success');
+                this.playGestureSuccessAnimation();
+                this.announceToScreenReader(this.i18n.t('verifySuccess'), 'assertive');
+                if (this.options.onSuccess) {
+                    this.options.onSuccess({ type: 'gesture', session_id: this.sessionId });
+                }
+            } else {
+                this.showResult(message, 'error');
+                this.playGestureErrorAnimation();
+                this.announceToScreenReader(message, 'assertive');
+                setTimeout(() => this.refresh(), 1500);
+                if (this.options.onError) {
+                    this.options.onError({ type: 'gesture', error: message });
+                }
+            }
+        } catch (error) {
+            console.error('Gesture verify failed:', error);
+            this.showResult(this.i18n.t('verifyFailed'), 'error');
+            this.playGestureErrorAnimation();
+            setTimeout(() => this.refresh(), 1500);
+            if (this.options.onError) {
+                this.options.onError({ type: 'gesture', error: error.message || this.i18n.t('verifyFailed') });
+            }
+        } finally {
+            setTimeout(() => {
+                this.hideLoading('gesture');
+            }, 500);
+        }
+    }
+
+    playGestureSuccessAnimation() {
+        if (this.accessibilityState.reducedMotion) return;
+        
+        const canvas = this.elements.gestureDrawingCanvas;
+        canvas.classList.add('success-flash');
+        setTimeout(() => {
+            canvas.classList.remove('success-flash');
+        }, 500);
+    }
+
+    playGestureErrorAnimation() {
+        if (this.accessibilityState.reducedMotion) {
+            this.clearGestureCanvas();
+            return;
+        }
+        
+        const canvas = this.elements.gestureDrawingCanvas;
+        canvas.classList.add('error-shake');
+        setTimeout(() => {
+            canvas.classList.remove('error-shake');
+            this.clearGestureCanvas();
+        }, 500);
+    }
 }
 
 class CaptchaI18n {
@@ -2102,6 +2450,7 @@ class CaptchaI18n {
                 sliderVerify: '滑块验证',
                 clickVerify: '点选验证',
                 rotationVerify: '旋转验证',
+                gestureVerify: '手势验证',
                 passiveVerify: '无感验证',
                 sliderImageAlt: '滑块验证码图片',
                 puzzlePiece: '拼图块',
@@ -2167,6 +2516,7 @@ class CaptchaI18n {
                 sliderVerify: 'Slider Verification',
                 clickVerify: 'Click Verification',
                 rotationVerify: 'Rotation Verification',
+                gestureVerify: 'Gesture Verification',
                 passiveVerify: 'Passive Verification',
                 sliderImageAlt: 'Slider captcha image',
                 puzzlePiece: 'Puzzle piece',
@@ -2232,6 +2582,7 @@ class CaptchaI18n {
                 sliderVerify: 'スライダー確認',
                 clickVerify: 'クリック確認',
                 rotationVerify: '回転確認',
+                gestureVerify: 'ジェスチャー確認',
                 passiveVerify: 'パッシブ確認',
                 sliderImageAlt: 'スライダーキャプチャ画像',
                 puzzlePiece: 'パズルピース',

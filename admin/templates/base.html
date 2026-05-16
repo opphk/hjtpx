@@ -26,6 +26,9 @@
             <a class="nav-link {% if request.path == '/admin/stats' %}active{% endif %}" href="/admin/stats">
                 <i class="fas fa-chart-line"></i><span>统计分析</span>
             </a>
+            <a class="nav-link {% if request.path == '/admin/advanced-analytics' %}active{% endif %}" href="/admin/advanced-analytics">
+                <i class="fas fa-chart-pie"></i><span>高级分析</span>
+            </a>
             <a class="nav-link {% if request.path == '/admin/applications' %}active{% endif %}" href="/admin/applications">
                 <i class="fas fa-mobile-alt"></i><span>应用管理</span>
             </a>
@@ -37,6 +40,9 @@
             </a>
             <a class="nav-link {% if request.path == '/admin/blacklist' %}active{% endif %}" href="/admin/blacklist">
                 <i class="fas fa-ban"></i><span>黑名单</span>
+            </a>
+            <a class="nav-link {% if request.path == '/admin/monitoring' %}active{% endif %}" href="/admin/monitoring">
+                <i class="fas fa-tachometer-alt"></i><span>实时监控</span>
             </a>
             <div class="sidebar-divider"></div>
         </nav>

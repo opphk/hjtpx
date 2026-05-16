@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>行为验证系统 API 文档</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 50px rgba(0,0,0,0.2);
+        }
+        
+        header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .nav {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            border-bottom: 1px solid #e9ecef;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .nav button {
+            padding: 10px 20px;
+            border: none;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: 1px solid #e9ecef;
+        }
+        
+        .nav button:hover,
+        .nav button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .section {
+            display: none;
+        }
+        
+        .section.active {
+            display: block;
+        }
+        
+        .section h2 {
+            font-size: 2rem;
+            color: #1a1a2e;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .section h3 {
+            font-size: 1.5rem;
+            color: #495057;
+            margin: 30px 0 15px;
+        }
+        
+        .api-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+        
+        .api-card:hover {
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .api-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .api-method {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .method-get { background: #28a745; }
+        .method-post { background: #007bff; }
+        .method-put { background: #ffc107; color: #333; }
+        .method-delete { background: #dc3545; }
+        
+        .api-path {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            color: #495057;
+            background: white;
+            padding: 8px 15px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .api-desc {
+            color: #6c757d;
+            margin-bottom: 15px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            background: white;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        th {
+            background: #e9ecef;
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .code-block {
+            background: #1a1a2e;
+            color: #e9ecef;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            margin-top: 15px;
+            position: relative;
+        }
+        
+        .code-block .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .code-block .copy-btn:hover {
+            background: #764ba2;
+        }
+        
+        .sdk-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .sdk-tab {
+            padding: 8px 16px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .sdk-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .sdk-content {
+            display: none;
+        }
+        
+        .sdk-content.active {
+            display: block;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-right: 5px;
+        }
+        
+        .badge-required { background: #dc3545; color: white; }
+        .badge-optional { background: #6c757d; color: white; }
+        
+        footer {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .endpoint-group {
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 行为验证系统 API 文档</h1>
+            <p>版本 2.0.0 | 支持多种验证码类型和用户认证</p>
+        </header>
+        
+        <nav class="nav">
+            <div class="nav-grid">
+                <button class="active" onclick="showSection('overview')">概览</button>
+                <button onclick="showSection('captcha')">验证码API</button>
+                <button onclick="showSection('auth')">用户认证</button>
+                <button onclick="showSection('detect')">环境检测</button>
+                <button onclick="showSection('admin')">管理后台</button>
+                <button onclick="showSection('sdk')">SDK示例</button>
+            </div>
+        </nav>
+        
+        <div class="content">
+            <!-- 概览 -->
+            <section id="overview" class="section active">
+                <h2>📋 概览</h2>
+                
+                <div class="alert alert-info">
+                    <strong>基础URL：</strong>
+                    <code>https://api.example.com/api/v1</code> (生产环境)<br>
+                    <code>http://localhost:8080/api/v1</code> (开发环境)
+                </div>
+                
+                <h3>统一响应格式</h3>
+                <div class="api-card">
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>{
+    "code": 0,
+    "message": "success",
+    "data": { ... }
+}</pre>
+                    </div>
+                </div>
+                
+                <h3>错误码说明</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>错误码</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>0</td><td>成功</td></tr>
+                        <tr><td>400</td><td>请求参数错误</td></tr>
+                        <tr><td>401</td><td>未授权</td></tr>
+                        <tr><td>403</td><td>权限不足</td></tr>
+                        <tr><td>404</td><td>资源不存在</td></tr>
+                        <tr><td>429</td><td>请求过于频繁</td></tr>
+                        <tr><td>500</td><td>服务器内部错误</td></tr>
+                    </tbody>
+                </table>
+            </section>
+            
+            <!-- 验证码API -->
+            <section id="captcha" class="section">
+                <h2>🔢 验证码API</h2>
+                
+                <div class="endpoint-group">
+                    <h3>滑块验证码</h3>
+                    
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/captcha/slider</span>
+                        </div>
+                        <p class="api-desc">获取滑块验证码</p>
+                        
+                        <table>
+                            <thead>
+                                <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>width</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>图片宽度，默认320</td></tr>
+                                <tr><td>height</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>图片高度，默认160</td></tr>
+                                <tr><td>tolerance</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>容差值，默认8</td></tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                            <pre>{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "session_id": "slider_abc123def456",
+        "image_url": "data:image/png;base64,...",
+        "puzzle_url": "data:image/png;base64,...",
+        "hint_url": "data:image/png;base64,...",
+        "shape": 1,
+        "secret_y": 100,
+        "image_width": 320,
+        "image_height": 160
+    }
+}</pre>
+                        </div>
+                    </div>
+                    
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/captcha/verify</span>
+                        </div>
+                        <p class="api-desc">验证滑块验证码</p>
+                        
+                        <table>
+                            <thead>
+                                <tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>session_id</td><td>string</td><td><span class="badge badge-required">是</span></td><td>验证码会话ID</td></tr>
+                                <tr><td>x</td><td>int</td><td><span class="badge badge-required">是</span></td><td>X坐标</td></tr>
+                                <tr><td>y</td><td>int</td><td><span class="badge badge-optional">否</span></td><td>Y坐标</td></tr>
+                                <tr><td>trajectory</td><td>array</td><td><span class="badge badge-optional">否</span></td><td>滑动轨迹</td></tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                            <pre>{
+    "session_id": "slider_abc123def456",
+    "x": 185,
+    "y": 100,
+    "trajectory": [
+        {"x": 0, "y": 100, "t": 0},
+        {"x": 185, "y": 100, "t": 800}
+    ]
+}</pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>点击验证码</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/captcha/click</span>
+                        </div>
+                        <p class="api-desc">获取点击验证码</p>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>手势验证码</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/captcha/gesture</span>
+                        </div>
+                        <p class="api-desc">获取手势验证码</p>
+                    </div>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/captcha/gesture/verify</span>
+                        </div>
+                        <p class="api-desc">验证手势验证码</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 用户认证 -->
+            <section id="auth" class="section">
+                <h2>👤 用户认证API</h2>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-post">POST</span>
+                        <span class="api-path">/api/v1/auth/register</span>
+                    </div>
+                    <p class="api-desc">用户注册</p>
+                    
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>{
+    "username": "testuser",
+    "email": "test@example.com",
+    "password": "password123"
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-post">POST</span>
+                        <span class="api-path">/api/v1/auth/login</span>
+                    </div>
+                    <p class="api-desc">用户登录</p>
+                    
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>{
+    "username": "testuser",
+    "password": "password123"
+}
+
+// 响应
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "expires_in": 900,
+        "user": {
+            "id": 1,
+            "username": "testuser",
+            "email": "test@example.com"
+        }
+    }
+}</pre>
+                    </div>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-post">POST</span>
+                        <span class="api-path">/api/v1/auth/refresh</span>
+                    </div>
+                    <p class="api-desc">刷新访问令牌</p>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-post">POST</span>
+                        <span class="api-path">/api/v1/auth/logout</span>
+                    </div>
+                    <p class="api-desc">用户登出</p>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-get">GET</span>
+                        <span class="api-path">/api/v1/auth/verify-email</span>
+                    </div>
+                    <p class="api-desc">验证邮箱</p>
+                </div>
+            </section>
+            
+            <!-- 环境检测 -->
+            <section id="detect" class="section">
+                <h2>🔍 环境检测API</h2>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-get">GET</span>
+                        <span class="api-path">/api/v1/detect/script</span>
+                    </div>
+                    <p class="api-desc">获取检测脚本（可用于浏览器端指纹识别）</p>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-post">POST</span>
+                        <span class="api-path">/api/v1/detect/submit</span>
+                    </div>
+                    <p class="api-desc">提交检测数据</p>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-header">
+                        <span class="api-method method-post">POST</span>
+                        <span class="api-path">/api/v1/detect/check</span>
+                    </div>
+                    <p class="api-desc">环境检测</p>
+                    
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "is_bot": false,
+        "risk_level": "low",
+        "risk_score": 10.5,
+        "detected_flags": []
+    }
+}</pre>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 管理后台 -->
+            <section id="admin" class="section">
+                <h2>⚙️ 管理后台API</h2>
+                
+                <div class="alert alert-warning">
+                    <strong>注意：</strong>所有管理后台API都需要管理员权限和Bearer Token认证
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>管理认证</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/admin/login</span>
+                        </div>
+                        <p class="api-desc">管理员登录</p>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>统计接口</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/admin/stats/verification</span>
+                        </div>
+                        <p class="api-desc">获取验证统计</p>
+                    </div>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/admin/stats/realtime</span>
+                        </div>
+                        <p class="api-desc">获取实时统计</p>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>应用管理</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/admin/applications</span>
+                        </div>
+                        <p class="api-desc">获取应用列表</p>
+                    </div>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/admin/applications</span>
+                        </div>
+                        <p class="api-desc">创建应用</p>
+                    </div>
+                </div>
+                
+                <div class="endpoint-group">
+                    <h3>日志与黑名单</h3>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/admin/logs</span>
+                        </div>
+                        <p class="api-desc">获取验证日志</p>
+                    </div>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-get">GET</span>
+                            <span class="api-path">/api/v1/admin/blacklist</span>
+                        </div>
+                        <p class="api-desc">获取黑名单列表</p>
+                    </div>
+                    <div class="api-card">
+                        <div class="api-header">
+                            <span class="api-method method-post">POST</span>
+                            <span class="api-path">/api/v1/admin/blacklist</span>
+                        </div>
+                        <p class="api-desc">添加黑名单</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- SDK示例 -->
+            <section id="sdk" class="section">
+                <h2>📦 SDK示例</h2>
+                
+                <div class="sdk-tabs">
+                    <button class="sdk-tab active" onclick="showSdk('go')">Go</button>
+                    <button class="sdk-tab" onclick="showSdk('js')">JavaScript</button>
+                    <button class="sdk-tab" onclick="showSdk('python')">Python</button>
+                </div>
+                
+                <div id="sdk-go" class="sdk-content active">
+                    <div class="api-card">
+                        <h3>Go SDK 使用示例</h3>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                            <pre>package main
+
+import (
+    "fmt"
+    "time"
+    "your-project/sdk/go/captcha"
+)
+
+func main() {
+    // 创建客户端
+    client := captcha.NewClient("http://localhost:8080")
+    
+    // 获取滑块验证码
+    captcha, err := client.GetSliderCaptcha(320, 160, 8)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Printf("Session ID: %s\n", captcha.SessionID)
+    
+    // 验证验证码
+    result, err := client.VerifyCaptcha(&captcha.VerifyCaptchaRequest{
+        SessionID: captcha.SessionID,
+        X:         185,
+        Y:         captcha.SecretY,
+    })
+    fmt.Printf("Success: %v\n", result.Success)
+}</pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="sdk-js" class="sdk-content">
+                    <div class="api-card">
+                        <h3>JavaScript SDK 使用示例</h3>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                            <pre>// 创建客户端
+const client = new CaptchaClient('http://localhost:8080');
+
+// 获取滑块验证码
+const captcha = await client.getSliderCaptcha({
+    width: 320,
+    height: 160
+});
+
+// 记录轨迹
+const recorder = client.recordTrajectory();
+
+// 验证
+const result = await client.verifyCaptcha({
+    session_id: captcha.session_id,
+    x: 185,
+    y: captcha.secret_y,
+    trajectory: recorder.stop()
+});
+
+console.log('验证结果:', result);</pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="sdk-python" class="sdk-content">
+                    <div class="api-card">
+                        <h3>Python SDK 使用示例</h3>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                            <pre>from captcha import CaptchaClient, TrajectoryPoint
+
+# 创建客户端
+client = CaptchaClient('http://localhost:8080')
+
+# 获取滑块验证码
+captcha = client.get_slider_captcha(width=320, height=160, tolerance=8)
+print(f"Session ID: {captcha.session_id}")
+
+# 生成轨迹
+trajectory = [
+    TrajectoryPoint(x=0, y=captcha.secret_y, t=0),
+    TrajectoryPoint(x=185, y=captcha.secret_y, t=800),
+]
+
+# 验证
+result = client.verify_captcha(
+    session_id=captcha.session_id,
+    x=185,
+    y=captcha.secret_y,
+    trajectory=trajectory
+)
+
+print(f"Success: {result.success}")</pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <footer>
+            <p>© 2024 行为验证系统 | API文档版本 2.0.0</p>
+            <p>如有问题，请联系技术支持：support@example.com</p>
+        </footer>
+    </div>
+    
+    <script>
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(sectionId).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function showSdk(lang) {
+            document.querySelectorAll('.sdk-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.sdk-tab').forEach(t => t.classList.remove('active'));
+            
+            document.getElementById(`sdk-${lang}`).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function copyCode(btn) {
+            const codeBlock = btn.parentElement;
+            const code = codeBlock.querySelector('pre').textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = '已复制!';
+                setTimeout(() => {
+                    btn.textContent = '复制';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -43,23 +43,23 @@ type TrajectoryPoint struct {
 }
 
 type EncryptedTrajectoryPayload struct {
-	Timestamp    int64  `json:"timestamp"`
-	Salt         string `json:"salt"`
+	Timestamp     int64  `json:"timestamp"`
+	Salt          string `json:"salt"`
 	EncryptedData string `json:"encrypted_data"`
-	Signature    string `json:"signature"`
+	Signature     string `json:"signature"`
 }
 
 type TrajectoryEncryption struct {
-	secretKey       []byte
-	saltManager     *crypto.SaltManager
-	maxTimeDrift    time.Duration
-	maxPayloadAge   time.Duration
+	secretKey          []byte
+	saltManager        *crypto.SaltManager
+	maxTimeDrift       time.Duration
+	maxPayloadAge      time.Duration
 	compressionEnabled bool
 }
 
 var (
 	trajectoryEncryptor *TrajectoryEncryption
-	encryptorOnce        sync.Once
+	encryptorOnce       sync.Once
 )
 
 func init() {
@@ -109,9 +109,9 @@ func (te *TrajectoryEncryption) EncryptTrajectory(trajectory []TrajectoryPoint) 
 
 	return &EncryptedTrajectoryPayload{
 		Timestamp:     timestamp,
-		Salt:         salt,
+		Salt:          salt,
 		EncryptedData: encryptedData,
-		Signature:    signature,
+		Signature:     signature,
 	}, nil
 }
 
@@ -228,44 +228,44 @@ func (te *TrajectoryEncryption) ShouldRotate() bool {
 }
 
 type TrajectoryResult struct {
-	Score        int      `json:"score"`
-	Passed       bool     `json:"passed"`
-	Reasons      []string `json:"reasons,omitempty"`
+	Score   int      `json:"score"`
+	Passed  bool     `json:"passed"`
+	Reasons []string `json:"reasons,omitempty"`
 }
 
 type SliderCaptchaConfig struct {
-	Width           int
-	Height          int
-	PuzzleSize      int
-	MaxAttempts     int
-	SessionTTL      time.Duration
+	Width            int
+	Height           int
+	PuzzleSize       int
+	MaxAttempts      int
+	SessionTTL       time.Duration
 	DefaultTolerance int
 }
 
 var defaultSliderConfig = SliderCaptchaConfig{
-	Width:           320,
-	Height:          160,
-	PuzzleSize:      40,
-	MaxAttempts:     5,
-	SessionTTL:      5 * time.Minute,
+	Width:            320,
+	Height:           160,
+	PuzzleSize:       40,
+	MaxAttempts:      5,
+	SessionTTL:       5 * time.Minute,
 	DefaultTolerance: 8,
 }
 
 type SliderSession struct {
-	SessionID       string            `json:"session_id"`
-	SecretX         int               `json:"secret_x"`
-	SecretY         int               `json:"secret_y"`
-	Tolerance       int               `json:"tolerance"`
-	Shape           PuzzleShape       `json:"shape"`
-	BackgroundImage *imageData        `json:"background_image"`
-	PuzzleImage     *imageData        `json:"puzzle_image"`
-	HintImage       *imageData        `json:"hint_image"`
-	Attempts        int               `json:"attempts"`
-	Verified        bool              `json:"verified"`
-	CreatedAt       time.Time         `json:"created_at"`
-	ExpiresAt       time.Time         `json:"expires_at"`
-	ClientIP        string            `json:"client_ip"`
-	UserAgent       string            `json:"user_agent"`
+	SessionID       string      `json:"session_id"`
+	SecretX         int         `json:"secret_x"`
+	SecretY         int         `json:"secret_y"`
+	Tolerance       int         `json:"tolerance"`
+	Shape           PuzzleShape `json:"shape"`
+	BackgroundImage *imageData  `json:"background_image"`
+	PuzzleImage     *imageData  `json:"puzzle_image"`
+	HintImage       *imageData  `json:"hint_image"`
+	Attempts        int         `json:"attempts"`
+	Verified        bool        `json:"verified"`
+	CreatedAt       time.Time   `json:"created_at"`
+	ExpiresAt       time.Time   `json:"expires_at"`
+	ClientIP        string      `json:"client_ip"`
+	UserAgent       string      `json:"user_agent"`
 }
 
 type imageData struct {
@@ -275,9 +275,9 @@ type imageData struct {
 }
 
 type GenerateSliderRequest struct {
-	Width      int `form:"width" json:"width"`
-	Height     int `form:"height" json:"height"`
-	Tolerance  int `form:"tolerance" json:"tolerance"`
+	Width     int `form:"width" json:"width"`
+	Height    int `form:"height" json:"height"`
+	Tolerance int `form:"tolerance" json:"tolerance"`
 }
 
 type GenerateSliderResponse struct {
@@ -292,18 +292,18 @@ type GenerateSliderResponse struct {
 }
 
 type VerifySliderRequest struct {
-	SessionID        string                   `json:"session_id" binding:"required"`
-	X                int                      `json:"x" binding:"required"`
-	Y                int                      `json:"y"`
-	Trajectory       []TrajectoryPoint        `json:"trajectory,omitempty"`
+	SessionID           string                      `json:"session_id" binding:"required"`
+	X                   int                         `json:"x" binding:"required"`
+	Y                   int                         `json:"y"`
+	Trajectory          []TrajectoryPoint           `json:"trajectory,omitempty"`
 	EncryptedTrajectory *EncryptedTrajectoryPayload `json:"encrypted_trajectory,omitempty"`
 }
 
 type VerifySliderResponse struct {
-	Success           bool              `json:"success"`
-	Message           string            `json:"message"`
-	Remaining         int               `json:"remaining_attempts"`
-	TrajectoryResult  *TrajectoryResult `json:"trajectory_result,omitempty"`
+	Success          bool              `json:"success"`
+	Message          string            `json:"message"`
+	Remaining        int               `json:"remaining_attempts"`
+	TrajectoryResult *TrajectoryResult `json:"trajectory_result,omitempty"`
 }
 
 var (
@@ -679,7 +679,7 @@ func generatePuzzleMask(shape PuzzleShape, size int) [][]bool {
 			for x := 0; x < size; x++ {
 				dx := math.Abs(float64(x - center))
 				dy := math.Abs(float64(y - center))
-				hexCondition := dx*0.866 + dy*0.5 <= float64(radius)*0.866
+				hexCondition := dx*0.866+dy*0.5 <= float64(radius)*0.866
 				if hexCondition && dx <= float64(radius)*0.8 && dy <= float64(radius)*0.8 {
 					mask[y][x] = true
 				}
@@ -803,7 +803,7 @@ func createSlidingGapImage(bgImg image.Image, puzzleX, puzzleY, puzzleSize int, 
 	for y := puzzleY - gapPadding; y < puzzleY+puzzleSize+gapPadding; y++ {
 		for x := puzzleX - gapPadding; x < puzzleX+puzzleSize+gapPadding; x++ {
 			isInsidePuzzle := false
-			mx, my := x - puzzleX, y - puzzleY
+			mx, my := x-puzzleX, y-puzzleY
 			if mx >= 0 && mx < puzzleSize && my >= 0 && my < puzzleSize {
 				isInsidePuzzle = mask[my][mx]
 			}
@@ -1299,7 +1299,7 @@ func VerifySliderCaptcha(c *gin.Context) {
 		return
 	}
 
-	accuracy := 100 - (distance*100/(defaultSliderConfig.Width/2))
+	accuracy := 100 - (distance * 100 / (defaultSliderConfig.Width / 2))
 	response.Success(c, VerifySliderResponse{
 		Success:          false,
 		Message:          fmt.Sprintf("位置偏差较大，准确度约%d%%", accuracy),
@@ -1383,12 +1383,12 @@ func GetSliderCaptchaV2(c *gin.Context) {
 	saveSliderSessionToRedis(session)
 
 	c.JSON(http.StatusOK, gin.H{
-		"session_id":  sessionID,
-		"image_url":   imageToDataURL(gapImg),
-		"puzzle_url":  imageToDataURL(puzzleImg),
-		"hint_url":    imageToDataURL(hintImg),
-		"shape":       int(shape),
-		"secret_y":    secretY,
+		"session_id":   sessionID,
+		"image_url":    imageToDataURL(gapImg),
+		"puzzle_url":   imageToDataURL(puzzleImg),
+		"hint_url":     imageToDataURL(hintImg),
+		"shape":        int(shape),
+		"secret_y":     secretY,
 		"image_width":  config.Width,
 		"image_height": config.Height,
 	})
@@ -1456,13 +1456,13 @@ func GetSliderStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"session_id":     session.SessionID,
-		"attempts":       session.Attempts,
-		"max_attempts":   defaultSliderConfig.MaxAttempts,
-		"verified":       session.Verified,
-		"remaining":      defaultSliderConfig.MaxAttempts - session.Attempts,
-		"expires_at":     session.ExpiresAt.Unix(),
-		"created_at":     session.CreatedAt.Unix(),
+		"session_id":   session.SessionID,
+		"attempts":     session.Attempts,
+		"max_attempts": defaultSliderConfig.MaxAttempts,
+		"verified":     session.Verified,
+		"remaining":    defaultSliderConfig.MaxAttempts - session.Attempts,
+		"expires_at":   session.ExpiresAt.Unix(),
+		"created_at":   session.CreatedAt.Unix(),
 	})
 }
 

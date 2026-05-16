@@ -256,11 +256,11 @@ func TestStatsHandler_Integration(t *testing.T) {
 				return
 			}
 			c.JSON(http.StatusOK, gin.H{
-				"report_type": reportType,
+				"report_type":  reportType,
 				"generated_at": time.Now().Format(time.RFC3339),
 				"data": gin.H{
 					"total_requests": 1000,
-					"success_rate": 95.5,
+					"success_rate":   95.5,
 				},
 			})
 		})

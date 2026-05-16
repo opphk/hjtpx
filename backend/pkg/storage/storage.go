@@ -26,10 +26,10 @@ import (
 type StorageType string
 
 const (
-	StorageTypeLocal    StorageType = "local"
-	StorageTypeS3       StorageType = "s3"
-	StorageTypeOSS      StorageType = "oss"
-	StorageTypeCDN      StorageType = "cdn"
+	StorageTypeLocal StorageType = "local"
+	StorageTypeS3    StorageType = "s3"
+	StorageTypeOSS   StorageType = "oss"
+	StorageTypeCDN   StorageType = "cdn"
 )
 
 type ImageFormat string
@@ -87,14 +87,14 @@ type Storage struct {
 }
 
 type UploadResult struct {
-	Path      string `json:"path"`
-	URL       string `json:"url"`
-	Size      int64  `json:"size"`
-	Width     int    `json:"width,omitempty"`
-	Height    int    `json:"height,omitempty"`
-	Hash      string `json:"hash"`
-	Format    string `json:"format"`
-	Compressed bool  `json:"compressed"`
+	Path       string `json:"path"`
+	URL        string `json:"url"`
+	Size       int64  `json:"size"`
+	Width      int    `json:"width,omitempty"`
+	Height     int    `json:"height,omitempty"`
+	Hash       string `json:"hash"`
+	Format     string `json:"format"`
+	Compressed bool   `json:"compressed"`
 }
 
 type ImageInfo struct {
@@ -191,13 +191,13 @@ func (s *Storage) Upload(ctx context.Context, file *multipart.FileHeader, opts *
 	s.mu.Unlock()
 
 	return &UploadResult{
-		Path:      relPath,
-		URL:       s.getURL(relPath),
-		Size:      int64(len(processedData)),
-		Width:     imgInfo.Width,
-		Height:    imgInfo.Height,
-		Hash:      hashStr,
-		Format:    ext,
+		Path:       relPath,
+		URL:        s.getURL(relPath),
+		Size:       int64(len(processedData)),
+		Width:      imgInfo.Width,
+		Height:     imgInfo.Height,
+		Hash:       hashStr,
+		Format:     ext,
 		Compressed: len(processedData) < len(data),
 	}, nil
 }
@@ -261,13 +261,13 @@ func (s *Storage) UploadFromBytes(ctx context.Context, data []byte, filename str
 	s.mu.Unlock()
 
 	return &UploadResult{
-		Path:      relPath,
-		URL:       s.getURL(relPath),
-		Size:      int64(len(processedData)),
-		Width:     imgInfo.Width,
-		Height:    imgInfo.Height,
-		Hash:      hashStr,
-		Format:    ext,
+		Path:       relPath,
+		URL:        s.getURL(relPath),
+		Size:       int64(len(processedData)),
+		Width:      imgInfo.Width,
+		Height:     imgInfo.Height,
+		Hash:       hashStr,
+		Format:     ext,
 		Compressed: len(processedData) < len(data),
 	}, nil
 }
@@ -361,7 +361,7 @@ func resizeImage(img image.Image, maxWidth, maxHeight int) image.Image {
 	}
 
 	newImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
-	
+
 	scaleX := float64(width) / float64(newWidth)
 	scaleY := float64(height) / float64(newHeight)
 

@@ -1103,10 +1103,10 @@ func TestVerifySliderCaptcha_WithEncryptedTrajectory(t *testing.T) {
 	assert.NoError(t, err)
 
 	body := VerifySliderRequest{
-		SessionID:            sessionID,
-		X:                    150,
-		Y:                    60,
-		EncryptedTrajectory:  encryptedTraj,
+		SessionID:           sessionID,
+		X:                   150,
+		Y:                   60,
+		EncryptedTrajectory: encryptedTraj,
 	}
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))
@@ -1155,10 +1155,10 @@ func TestVerifySliderCaptcha_EncryptedTrajectoryInvalidSignature(t *testing.T) {
 	}
 
 	body := VerifySliderRequest{
-		SessionID:            sessionID,
-		X:                    150,
-		Y:                    60,
-		EncryptedTrajectory:  &invalidPayload,
+		SessionID:           sessionID,
+		X:                   150,
+		Y:                   60,
+		EncryptedTrajectory: &invalidPayload,
 	}
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", "/api/v1/captcha/slider/verify", bytes.NewReader(jsonBody))

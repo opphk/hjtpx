@@ -218,11 +218,11 @@ type RiskRule struct {
 }
 
 type RiskRulesSummaryResponse struct {
-	TotalRules    int     `json:"totalRules"`
-	ActiveRules   int     `json:"activeRules"`
-	BlockedToday  int     `json:"blockedToday"`
-	RiskAlerts    int     `json:"riskAlerts"`
-	BlockRate     float64 `json:"blockRate"`
+	TotalRules   int     `json:"totalRules"`
+	ActiveRules  int     `json:"activeRules"`
+	BlockedToday int     `json:"blockedToday"`
+	RiskAlerts   int     `json:"riskAlerts"`
+	BlockRate    float64 `json:"blockRate"`
 }
 
 var mockRiskRules = []RiskRule{

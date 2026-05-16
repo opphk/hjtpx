@@ -29,7 +29,10 @@ clean:
 	rm -f coverage.out coverage.html
 
 lint:
-	go vet ./...
+	golangci-lint run
+
+lint-fast:
+	golangci-lint run --fast
 
 fmt:
 	go fmt ./...

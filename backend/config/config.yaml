@@ -9,8 +9,8 @@ postgres:
   password: postgres123
   db_name: verification
   sslmode: disable
-  max_open_conns: 25
-  max_idle_conns: 10
+  max_open_conns: 100
+  max_idle_conns: 20
   conn_max_lifetime: 300
 
 redis:
@@ -47,3 +47,43 @@ rate_limit:
   window_secs: 60
   burst_limit: 200
   cleanup_interval_ms: 60000
+
+database:
+  slow_query_threshold_ms: 50
+  query_optimization:
+    enable_prepared_statements: true
+    enable_query_cache: true
+    query_cache_ttl_secs: 300
+    max_query_cache_size: 10000
+  read_write_separation:
+    enabled: false
+    load_balance_strategy: round_robin
+    auto_failover: true
+    master:
+      host: localhost
+      port: 5432
+      user: postgres
+      password: postgres123
+      db_name: verification
+      sslmode: disable
+      weight: 100
+    slaves: []
+  connection_pool:
+    max_open_conns: 100
+    max_idle_conns: 20
+    conn_max_lifetime_secs: 1800
+    conn_max_idle_time_secs: 600
+    health_check_interval_secs: 30
+  data_archiving:
+    enabled: true
+    archive_threshold_days: 30
+    archive_table_prefix: archive_
+    auto_cleanup_enabled: true
+    cleanup_threshold_days: 365
+  index_optimization:
+    auto_analyze_enabled: true
+    auto_analyze_interval_hours: 24
+  monitoring:
+    enable_query_metrics: true
+    enable_connection_metrics: true
+    metrics_interval_secs: 60

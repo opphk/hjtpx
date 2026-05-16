@@ -1,0 +1,1450 @@
+{
+  "info": {
+    "_postman_id": "hjtpx-behavior-captcha-api",
+    "name": "行为验证系统 API",
+    "description": "行为验证系统完整API集合，包含用户端、管理端、监控等所有接口",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. 环境配置",
+      "description": "API基础配置和环境变量",
+      "item": [
+        {
+          "name": "设置环境变量",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"baseUrl\", \"http://localhost:8080\");",
+                  "pm.collectionVariables.set(\"apiKey\", \"your-api-key\");",
+                  "pm.collectionVariables.set(\"authToken\", \"\");"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. 用户端 - 验证码API",
+      "item": [
+        {
+          "name": "1.1 获取滑块验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"width\": 320,\n  \"height\": 160,\n  \"tolerance\": 8,\n  \"difficulty\": \"medium\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/slider",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "slider"]
+            },
+            "description": "获取滑块验证码图片和验证信息"
+          },
+          "response": [
+            {
+              "name": "成功响应",
+              "originalRequest": {},
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"session_id\": \"sess_abc123xyz\",\n    \"background_image\": \"data:image/png;base64,iVBORw0KGgo...\",\n    \"puzzle_image\": \"data:image/png;base64,iVBORw0KGgo...\",\n    \"puzzle_x\": 150,\n    \"puzzle_y\": 80\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "1.2 验证滑块验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"sess_abc123xyz\",\n  \"x\": 152,\n  \"y\": 80,\n  \"trajectory\": [\n    {\"x\": 0, \"y\": 0, \"t\": 0},\n    {\"x\": 50, \"y\": 2, \"t\": 100},\n    {\"x\": 100, \"y\": -1, \"t\": 200},\n    {\"x\": 152, \"y\": 0, \"t\": 350}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/slider/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "slider", "verify"]
+            },
+            "description": "验证用户滑动结果"
+          },
+          "response": [
+            {
+              "name": "验证成功",
+              "originalRequest": {},
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"code\": 0,\n  \"message\": \"success\",\n  \"data\": {\n    \"valid\": true,\n    \"token\": \"captcha_token_xyz123\",\n    \"risk_score\": 0.12,\n    \"duration\": 350\n  }\n}"
+            },
+            {
+              "name": "验证失败",
+              "originalRequest": {},
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"code\": 10001,\n  \"message\": \"验证失败，请重试\",\n  \"data\": {\n    \"valid\": false,\n    \"risk_score\": 0.89,\n    \"reason\": \"trajectory_abnormal\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "1.3 获取图形验证码",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/image?width=160&height=60&length=4",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "image"],
+              "query": [
+                {
+                  "key": "width",
+                  "value": "160"
+                },
+                {
+                  "key": "height",
+                  "value": "60"
+                },
+                {
+                  "key": "length",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "获取图形验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.4 验证图形验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"sess_img123\",\n  \"code\": \"ABCD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/image/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "image", "verify"]
+            },
+            "description": "验证图形验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.5 获取点选验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"chinese\",\n  \"count\": 4,\n  \"difficulty\": \"medium\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/click",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "click"]
+            },
+            "description": "获取点选验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.6 验证点选验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"sess_click123\",\n  \"points\": [\n    {\"x\": 50, \"y\": 80},\n    {\"x\": 150, \"y\": 60},\n    {\"x\": 200, \"y\": 100},\n    {\"x\": 280, \"y\": 70}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/click/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "click", "verify"]
+            },
+            "description": "验证点选验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.7 获取旋转验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"difficulty\": \"medium\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/rotate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "rotate"]
+            },
+            "description": "获取旋转验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.8 验证旋转验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"sess_rotate123\",\n  \"angle\": 157,\n  \"trajectory\": [\n    {\"angle\": 0, \"t\": 0},\n    {\"angle\": 90, \"t\": 500},\n    {\"angle\": 157, \"t\": 1200}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/rotate/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "rotate", "verify"]
+            },
+            "description": "验证旋转验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.9 获取手势验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"difficulty\": \"medium\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/gesture",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "gesture"]
+            },
+            "description": "获取手势验证码"
+          },
+          "response": []
+        },
+        {
+          "name": "1.10 验证手势验证码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"sess_gesture123\",\n  \"trajectory\": [\n    {\"x\": 50, \"y\": 50, \"t\": 0},\n    {\"x\": 150, \"y\": 150, \"t\": 300},\n    {\"x\": 250, \"y\": 50, \"t\": 600}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/captcha/gesture/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "captcha", "gesture", "verify"]
+            },
+            "description": "验证手势验证码"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. 用户端 - 认证API",
+      "item": [
+        {
+          "name": "2.1 用户注册",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"username\": \"testuser\",\n  \"captcha_token\": \"captcha_token_xyz123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "用户注册新账号"
+          },
+          "response": [
+            {
+              "name": "注册成功",
+              "originalRequest": {},
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"code\": 0,\n  \"message\": \"注册成功\",\n  \"data\": {\n    \"user_id\": \"usr_123456\",\n    \"username\": \"testuser\",\n    \"email\": \"user@example.com\",\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"expires_in\": 86400\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "2.2 用户登录",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.code === 0 && jsonData.data.access_token) {",
+                  "    pm.collectionVariables.set(\"authToken\", jsonData.data.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"captcha_token\": \"captcha_token_xyz123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "用户登录获取Token"
+          },
+          "response": [
+            {
+              "name": "登录成功",
+              "originalRequest": {},
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"code\": 0,\n  \"message\": \"登录成功\",\n  \"data\": {\n    \"user_id\": \"usr_123456\",\n    \"username\": \"testuser\",\n    \"email\": \"user@example.com\",\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"expires_in\": 86400\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "2.3 刷新Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            },
+            "description": "刷新访问Token"
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 用户登出",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            },
+            "description": "用户登出"
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 请求重置密码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password/request",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-password", "request"]
+            },
+            "description": "请求重置密码邮件"
+          },
+          "response": []
+        },
+        {
+          "name": "2.6 确认重置密码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset_token_123\",\n  \"new_password\": \"NewSecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-password", "confirm"]
+            },
+            "description": "确认重置密码"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. 用户端 - 用户资料API",
+      "item": [
+        {
+          "name": "3.1 获取用户信息",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "profile"]
+            },
+            "description": "获取当前登录用户信息"
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 更新用户信息",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"newusername\",\n  \"avatar\": \"https://example.com/avatar.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "profile"]
+            },
+            "description": "更新用户信息"
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 修改密码",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"OldPass123!\",\n  \"new_password\": \"NewPass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "change-password"]
+            },
+            "description": "修改用户密码"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. 用户端 - 环境检测API",
+      "item": [
+        {
+          "name": "4.1 浏览器/设备指纹",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64)...\",\n  \"screen_width\": 1920,\n  \"screen_height\": 1080,\n  \"timezone\": \"Asia/Shanghai\",\n  \"language\": \"zh-CN\",\n  \"platform\": \"Win32\",\n  \"canvas_fingerprint\": \"abc123...\",\n  \"webgl_fingerprint\": \"xyz789...\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/detection/fingerprint",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "detection", "fingerprint"]
+            },
+            "description": "提交设备指纹信息"
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 环境风险检测",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fingerprint_id\": \"fp_123456\",\n  \"session_id\": \"sess_abc123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/detection/risk",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "detection", "risk"]
+            },
+            "description": "检测环境风险"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. 管理端 - 认证API",
+      "item": [
+        {
+          "name": "5.1 管理员登录",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.code === 0 && jsonData.data.access_token) {",
+                  "    pm.collectionVariables.set(\"adminToken\", jsonData.data.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"AdminPass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "login"]
+            },
+            "description": "管理员登录"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. 管理端 - 统计API",
+      "item": [
+        {
+          "name": "6.1 获取仪表盘统计",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/stats/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "stats", "dashboard"]
+            },
+            "description": "获取仪表盘统计数据"
+          },
+          "response": []
+        },
+        {
+          "name": "6.2 获取验证趋势",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/stats/trends?start_date=2024-01-01&end_date=2024-01-31&interval=day",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "stats", "trends"],
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2024-01-31"
+                },
+                {
+                  "key": "interval",
+                  "value": "day"
+                }
+              ]
+            },
+            "description": "获取验证趋势数据"
+          },
+          "response": []
+        },
+        {
+          "name": "6.3 获取风险分布",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/stats/risk-distribution",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "stats", "risk-distribution"]
+            },
+            "description": "获取风险评分分布"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. 管理端 - 应用管理API",
+      "item": [
+        {
+          "name": "7.1 创建应用",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"我的应用\",\n  \"description\": \"应用描述\",\n  \"website\": \"https://example.com\",\n  \"rate_limit\": 1000,\n  \"captcha_types\": [\"slider\", \"click\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/apps",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "apps"]
+            },
+            "description": "创建新应用"
+          },
+          "response": []
+        },
+        {
+          "name": "7.2 获取应用列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/apps?page=1&page_size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "apps"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "获取应用列表"
+          },
+          "response": []
+        },
+        {
+          "name": "7.3 更新应用",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"更新后的应用名\",\n  \"description\": \"更新后的描述\",\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/apps/:appId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "apps", ":appId"],
+              "variable": [
+                {
+                  "key": "appId",
+                  "value": "app_123456"
+                }
+              ]
+            },
+            "description": "更新应用信息"
+          },
+          "response": []
+        },
+        {
+          "name": "7.4 删除应用",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/apps/:appId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "apps", ":appId"],
+              "variable": [
+                {
+                  "key": "appId",
+                  "value": "app_123456"
+                }
+              ]
+            },
+            "description": "删除应用"
+          },
+          "response": []
+        },
+        {
+          "name": "7.5 重新生成API密钥",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/apps/:appId/regenerate-key",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "apps", ":appId", "regenerate-key"],
+              "variable": [
+                {
+                  "key": "appId",
+                  "value": "app_123456"
+                }
+              ]
+            },
+            "description": "重新生成应用API密钥"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. 管理端 - 日志API",
+      "item": [
+        {
+          "name": "8.1 获取验证日志",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/logs?page=1&page_size=50&start_date=2024-01-01&end_date=2024-01-31&status=all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "logs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "50"
+                },
+                {
+                  "key": "start_date",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2024-01-31"
+                },
+                {
+                  "key": "status",
+                  "value": "all"
+                }
+              ]
+            },
+            "description": "获取验证日志列表"
+          },
+          "response": []
+        },
+        {
+          "name": "8.2 获取日志详情",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/logs/:logId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "logs", ":logId"],
+              "variable": [
+                {
+                  "key": "logId",
+                  "value": "log_123456"
+                }
+              ]
+            },
+            "description": "获取单条日志详情"
+          },
+          "response": []
+        },
+        {
+          "name": "8.3 导出日志",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/logs/export?format=csv&start_date=2024-01-01&end_date=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "logs", "export"],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv"
+                },
+                {
+                  "key": "start_date",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2024-01-31"
+                }
+              ]
+            },
+            "description": "导出日志文件"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. 管理端 - 黑名单API",
+      "item": [
+        {
+          "name": "9.1 获取黑名单列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/blacklist?page=1&page_size=20&type=ip",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "blacklist"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "20"
+                },
+                {
+                  "key": "type",
+                  "value": "ip"
+                }
+              ]
+            },
+            "description": "获取黑名单列表"
+          },
+          "response": []
+        },
+        {
+          "name": "9.2 添加到黑名单",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ip\",\n  \"value\": \"192.168.1.100\",\n  \"reason\": \"恶意请求\",\n  \"expires_at\": \"2024-12-31T23:59:59Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/blacklist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "blacklist"]
+            },
+            "description": "添加IP/设备到黑名单"
+          },
+          "response": []
+        },
+        {
+          "name": "9.3 从黑名单移除",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/blacklist/:itemId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "blacklist", ":itemId"],
+              "variable": [
+                {
+                  "key": "itemId",
+                  "value": "blk_123456"
+                }
+              ]
+            },
+            "description": "从黑名单移除"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. 管理端 - 风控规则API",
+      "item": [
+        {
+          "name": "10.1 获取规则列表",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/risk-rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "risk-rules"]
+            },
+            "description": "获取风控规则列表"
+          },
+          "response": []
+        },
+        {
+          "name": "10.2 创建规则",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"IP请求频率限制\",\n  \"description\": \"同一IP每分钟请求超过100次触发\",\n  \"condition\": {\n    \"type\": \"rate_limit\",\n    \"max_requests\": 100,\n    \"window_seconds\": 60\n  },\n  \"action\": \"block\",\n  \"score\": 0.8,\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/risk-rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "risk-rules"]
+            },
+            "description": "创建风控规则"
+          },
+          "response": []
+        },
+        {
+          "name": "10.3 更新规则",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"更新后的规则名\",\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/risk-rules/:ruleId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "risk-rules", ":ruleId"],
+              "variable": [
+                {
+                  "key": "ruleId",
+                  "value": "rule_123456"
+                }
+              ]
+            },
+            "description": "更新风控规则"
+          },
+          "response": []
+        },
+        {
+          "name": "10.4 删除规则",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/risk-rules/:ruleId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "risk-rules", ":ruleId"],
+              "variable": [
+                {
+                  "key": "ruleId",
+                  "value": "rule_123456"
+                }
+              ]
+            },
+            "description": "删除风控规则"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. 管理端 - 高级分析API",
+      "item": [
+        {
+          "name": "11.1 行为分析报告",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/analytics/behavior?start_date=2024-01-01&end_date=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "analytics", "behavior"],
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2024-01-31"
+                }
+              ]
+            },
+            "description": "获取行为分析报告"
+          },
+          "response": []
+        },
+        {
+          "name": "11.2 攻击趋势分析",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/analytics/attacks?start_date=2024-01-01&end_date=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "analytics", "attacks"],
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2024-01-31"
+                }
+              ]
+            },
+            "description": "获取攻击趋势分析"
+          },
+          "response": []
+        },
+        {
+          "name": "11.3 热力图数据",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/analytics/heatmap?date=2024-01-15",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "analytics", "heatmap"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2024-01-15"
+                }
+              ]
+            },
+            "description": "获取请求热力图数据"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. 管理端 - 实时监控API",
+      "item": [
+        {
+          "name": "12.1 实时指标",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/monitoring/realtime",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "monitoring", "realtime"]
+            },
+            "description": "获取实时监控指标"
+          },
+          "response": []
+        },
+        {
+          "name": "12.2 WebSocket连接",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "ws://localhost:8080/api/v1/admin/monitoring/ws",
+              "protocol": "ws",
+              "host": ["localhost:8080"],
+              "path": ["api", "v1", "admin", "monitoring", "ws"]
+            },
+            "description": "WebSocket实时监控连接"
+          },
+          "response": []
+        },
+        {
+          "name": "12.3 系统资源监控",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/monitoring/system",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "monitoring", "system"]
+            },
+            "description": "获取系统资源使用情况"
+          },
+          "response": []
+        },
+        {
+          "name": "12.4 API性能监控",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/monitoring/api-performance",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "monitoring", "api-performance"]
+            },
+            "description": "获取API性能监控数据"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. 健康检查",
+      "item": [
+        {
+          "name": "13.1 服务健康检查",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "检查服务健康状态"
+          },
+          "response": [
+            {
+              "name": "健康",
+              "originalRequest": {},
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"healthy\",\n  \"version\": \"2.0.0\",\n  \"timestamp\": \"2024-01-15T10:30:00Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "13.2 详细健康检查",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/detailed",
+              "host": ["{{baseUrl}}"],
+              "path": ["health", "detailed"]
+            },
+            "description": "获取详细健康状态（包括数据库、Redis等）"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "apiKey",
+      "value": "your-api-key-here"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    }
+  ]
+}

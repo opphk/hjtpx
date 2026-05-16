@@ -11,10 +11,10 @@ import (
 )
 
 type BehaviorDataPoint struct {
-	X         int     `json:"x"`
-	Y         int     `json:"y"`
-	Timestamp int64   `json:"timestamp"`
-	Event     string  `json:"event"`
+	X         int    `json:"x"`
+	Y         int    `json:"y"`
+	Timestamp int64  `json:"timestamp"`
+	Event     string `json:"event"`
 }
 
 type KeyboardDataPoint struct {
@@ -48,36 +48,36 @@ type MouseTrajectory struct {
 }
 
 type ClickPattern struct {
-	Clicks              []BehaviorDataPoint `json:"clicks"`
-	ClickCount          int                 `json:"click_count"`
-	AverageInterval     float64             `json:"average_interval"`
-	ClickSpeed          float64             `json:"click_speed"`
-	Regularity          float64             `json:"regularity"`
-	IntervalVariance    float64             `json:"interval_variance"`
-	IntervalStdDev      float64             `json:"interval_std_dev"`
-	XDistribution       []int               `json:"x_distribution,omitempty"`
-	YDistribution       []int               `json:"y_distribution,omitempty"`
-	PositionEntropy     float64             `json:"position_entropy,omitempty"`
-	IsDoubleClick       bool                `json:"is_double_click"`
-	ClickAreaSize       float64             `json:"click_area_size,omitempty"`
-	PreClickHesitation  float64             `json:"pre_click_hesitation,omitempty"`
+	Clicks             []BehaviorDataPoint `json:"clicks"`
+	ClickCount         int                 `json:"click_count"`
+	AverageInterval    float64             `json:"average_interval"`
+	ClickSpeed         float64             `json:"click_speed"`
+	Regularity         float64             `json:"regularity"`
+	IntervalVariance   float64             `json:"interval_variance"`
+	IntervalStdDev     float64             `json:"interval_std_dev"`
+	XDistribution      []int               `json:"x_distribution,omitempty"`
+	YDistribution      []int               `json:"y_distribution,omitempty"`
+	PositionEntropy    float64             `json:"position_entropy,omitempty"`
+	IsDoubleClick      bool                `json:"is_double_click"`
+	ClickAreaSize      float64             `json:"click_area_size,omitempty"`
+	PreClickHesitation float64             `json:"pre_click_hesitation,omitempty"`
 }
 
 type KeyboardPattern struct {
-	KeyStrokes        []KeyboardDataPoint   `json:"key_strokes"`
-	KeystrokeCount    int                  `json:"keystroke_count"`
-	AverageInterval   float64              `json:"average_interval"`
-	IntervalVariance  float64             `json:"interval_variance"`
-	IntervalStdDev    float64             `json:"interval_std_dev"`
-	AverageHoldTime   float64             `json:"average_hold_time"`
-	HoldTimeVariance  float64             `json:"hold_time_variance"`
-	TypingSpeed       float64             `json:"typing_speed"`
-	Regularity        float64             `json:"regularity"`
-	CommonPairs       map[string]int      `json:"common_pairs,omitempty"`
-	MostFrequentKey   string              `json:"most_frequent_key,omitempty"`
-	ErrorRate         float64             `json:"error_rate,omitempty"`
-	ComboDetected     bool                `json:"combo_detected"`
-	ComboPatterns     []string             `json:"combo_patterns,omitempty"`
+	KeyStrokes       []KeyboardDataPoint `json:"key_strokes"`
+	KeystrokeCount   int                 `json:"keystroke_count"`
+	AverageInterval  float64             `json:"average_interval"`
+	IntervalVariance float64             `json:"interval_variance"`
+	IntervalStdDev   float64             `json:"interval_std_dev"`
+	AverageHoldTime  float64             `json:"average_hold_time"`
+	HoldTimeVariance float64             `json:"hold_time_variance"`
+	TypingSpeed      float64             `json:"typing_speed"`
+	Regularity       float64             `json:"regularity"`
+	CommonPairs      map[string]int      `json:"common_pairs,omitempty"`
+	MostFrequentKey  string              `json:"most_frequent_key,omitempty"`
+	ErrorRate        float64             `json:"error_rate,omitempty"`
+	ComboDetected    bool                `json:"combo_detected"`
+	ComboPatterns    []string            `json:"combo_patterns,omitempty"`
 }
 
 type SpeedAnalysis struct {
@@ -110,15 +110,15 @@ type PathSimilarity struct {
 
 type AnalysisResult struct {
 	Trajectory      MouseTrajectory    `json:"trajectory"`
-	ClickPattern   ClickPattern       `json:"click_pattern"`
-	KeyboardPattern KeyboardPattern   `json:"keyboard_pattern,omitempty"`
-	SpeedAnalysis  SpeedAnalysis     `json:"speed_analysis,omitempty"`
-	PathSimilarity PathSimilarity   `json:"path_similarity,omitempty"`
-	RiskScore      float64           `json:"risk_score"`
-	RiskIndicators []string          `json:"risk_indicators"`
-	IsBotLikely    bool              `json:"is_bot_likely"`
-	Confidence     float64           `json:"confidence"`
-	RiskFactors    map[string]float64 `json:"risk_factors"`
+	ClickPattern    ClickPattern       `json:"click_pattern"`
+	KeyboardPattern KeyboardPattern    `json:"keyboard_pattern,omitempty"`
+	SpeedAnalysis   SpeedAnalysis      `json:"speed_analysis,omitempty"`
+	PathSimilarity  PathSimilarity     `json:"path_similarity,omitempty"`
+	RiskScore       float64            `json:"risk_score"`
+	RiskIndicators  []string           `json:"risk_indicators"`
+	IsBotLikely     bool               `json:"is_bot_likely"`
+	Confidence      float64            `json:"confidence"`
+	RiskFactors     map[string]float64 `json:"risk_factors"`
 }
 
 type BehaviorAnalysisService struct {
@@ -2008,22 +2008,22 @@ type ScoreCard struct {
 func NewScoreCard() *ScoreCard {
 	return &ScoreCard{
 		Weights: map[string]float64{
-			"speed":               0.20,
-			"trajectory_smooth":   0.15,
-			"acceleration":       0.15,
-			"path_complexity":    0.15,
-			"human_similarity":    0.20,
-			"speed_variation":    0.10,
-			"click_pattern":      0.05,
+			"speed":             0.20,
+			"trajectory_smooth": 0.15,
+			"acceleration":      0.15,
+			"path_complexity":   0.15,
+			"human_similarity":  0.20,
+			"speed_variation":   0.10,
+			"click_pattern":     0.05,
 		},
 		Thresholds: map[string]float64{
-			"speed":               1500,
-			"trajectory_smooth":   0.95,
-			"acceleration":       0.1,
-			"path_complexity":    0.3,
-			"human_similarity":    0.5,
-			"speed_variation":    0.1,
-			"click_interval":     50,
+			"speed":             1500,
+			"trajectory_smooth": 0.95,
+			"acceleration":      0.1,
+			"path_complexity":   0.3,
+			"human_similarity":  0.5,
+			"speed_variation":   0.1,
+			"click_interval":    50,
 		},
 	}
 }
