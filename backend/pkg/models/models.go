@@ -140,3 +140,107 @@ type DeviceFingerprint struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+type ABTest struct {
+	gorm.Model
+	Name          string     `gorm:"size:255;not null;index:idx_abtest_name" json:"name"`
+	Description   string     `gorm:"type:text" json:"description"`
+	ApplicationID uint       `gorm:"not null;index:idx_abtest_app" json:"application_id"`
+	Status        string     `gorm:"size:50;default:draft;index:idx_abtest_status" json:"status"`
+	StartDate     *time.Time `json:"start_date"`
+	EndDate       *time.Time `json:"end_date"`
+	TrafficSplit  string     `gorm:"type:text" json:"traffic_split"`
+	Config        string     `gorm:"type:text" json:"config"`
+	CreatedBy     uint       `json:"created_by"`
+	Application   Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+	Variants      []ABTestVariant `gorm:"foreignKey:ABTestID" json:"variants,omitempty"`
+}
+
+type ABTestVariant struct {
+	gorm.Model
+	ABTestID       uint   `gorm:"not null;index:idx_variant_abtest" json:"ab_test_id"`
+	Name           string `gorm:"size:255;not null" json:"name"`
+	IsControl      bool   `gorm:"default:false" json:"is_control"`
+	TrafficPercent int    `gorm:"default:0" json:"traffic_percent"`
+	Config         string `gorm:"type:text" json:"config"`
+	Description    string `gorm:"type:text" json:"description"`
+	ABTest         ABTest `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
+}
+
+type ABTestEvent struct {
+	gorm.Model
+	ABTestID       uint      `gorm:"not null;index:idx_event_abtest" json:"ab_test_id"`
+	VariantID      uint      `gorm:"not null;index:idx_event_variant" json:"variant_id"`
+	SessionID      string    `gorm:"size:100;index:idx_event_session" json:"session_id"`
+	EventName      string    `gorm:"size:100;index:idx_event_name" json:"event_name"`
+	EventType      string    `gorm:"size:50;index:idx_event_type" json:"event_type"`
+	IsConversion   bool      `gorm:"default:false;index:idx_event_conversion" json:"is_conversion"`
+	Value          float64   `json:"value"`
+	Metadata       string    `gorm:"type:text" json:"metadata"`
+	Timestamp      time.Time `gorm:"index:idx_event_timestamp" json:"timestamp"`
+	ABTest         ABTest    `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
+	Variant        ABTestVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
+}
+
+type ABTestAssignment struct {
+	gorm.Model
+	ABTestID       uint      `gorm:"not null;index:idx_assign_abtest" json:"ab_test_id"`
+	VariantID      uint      `gorm:"not null;index:idx_assign_variant" json:"variant_id"`
+	SessionID      string    `gorm:"size:100;index:idx_assign_session;uniqueIndex:idx_assign_abtest_session" json:"session_id"`
+	UserID         *uint     `gorm:"index:idx_assign_user" json:"user_id"`
+	DeviceID       string    `gorm:"size:64;index:idx_assign_device" json:"device_id"`
+	IPAddress      string    `gorm:"size:45" json:"ip_address"`
+	AssignedAt     time.Time `gorm:"index:idx_assign_time" json:"assigned_at"`
+	ABTest         ABTest    `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
+	Variant        ABTestVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
+}
+
+type AlertChannel struct {
+	gorm.Model
+	Name        string `gorm:"size:255;not null;index:idx_alert_channel_name" json:"name"`
+	Type        string `gorm:"size:50;not null;index:idx_alert_channel_type" json:"type"`
+	Config      string `gorm:"type:text" json:"config"`
+	IsEnabled   bool   `gorm:"default:true;index:idx_alert_channel_enabled" json:"is_enabled"`
+	Description string `gorm:"type:text" json:"description,omitempty"`
+}
+
+type AlertRule struct {
+	gorm.Model
+	Name            string `gorm:"size:255;not null;index:idx_alert_rule_name" json:"name"`
+	EventType       string `gorm:"size:100;not null;index:idx_alert_rule_event" json:"event_type"`
+	Condition       string `gorm:"type:text" json:"condition"`
+	Severity        string `gorm:"size:20;not null;index:idx_alert_rule_severity" json:"severity"`
+	ChannelIDs      string `gorm:"type:text" json:"channel_ids"`
+	IsEnabled       bool   `gorm:"default:true;index:idx_alert_rule_enabled" json:"is_enabled"`
+	AggregationWindow int `gorm:"default:300" json:"aggregation_window"`
+	Threshold       int    `gorm:"default:1" json:"threshold"`
+	Description     string `gorm:"type:text" json:"description,omitempty"`
+}
+
+type AlertRecord struct {
+	gorm.Model
+	RuleID        uint       `gorm:"not null;index:idx_alert_record_rule;index:idx_alert_record_rule_time" json:"rule_id"`
+	RuleName      string     `gorm:"size:255" json:"rule_name"`
+	EventType     string     `gorm:"size:100;index:idx_alert_record_event;index:idx_alert_record_event_time" json:"event_type"`
+	Severity      string     `gorm:"size:20;index:idx_alert_record_severity" json:"severity"`
+	Message       string     `gorm:"type:text" json:"message"`
+	Context       string     `gorm:"type:text" json:"context"`
+	Status        string     `gorm:"size:50;default:triggered;index:idx_alert_record_status" json:"status"`
+	AggregationKey string    `gorm:"size:255;index:idx_alert_record_agg_key" json:"aggregation_key"`
+	Count         int        `gorm:"default:1" json:"count"`
+	FirstTriggeredAt *time.Time `gorm:"index:idx_alert_record_first_triggered" json:"first_triggered_at"`
+	LastTriggeredAt *time.Time `gorm:"index:idx_alert_record_last_triggered" json:"last_triggered_at"`
+	ResolvedAt    *time.Time `json:"resolved_at,omitempty"`
+	Rule          *AlertRule `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+}
+
+type AlertHistory struct {
+	gorm.Model
+	AlertID     uint       `gorm:"not null;index:idx_alert_history_alert" json:"alert_id"`
+	Action      string     `gorm:"size:50;not null" json:"action"`
+	OldStatus   string     `gorm:"size:50" json:"old_status"`
+	NewStatus   string     `gorm:"size:50" json:"new_status"`
+	Note        string     `gorm:"type:text" json:"note"`
+	PerformedBy uint       `json:"performed_by"`
+	Alert       *AlertRecord `gorm:"foreignKey:AlertID" json:"alert,omitempty"`
+}

@@ -11,6 +11,7 @@ type Config struct {
 	Redis    RedisConfig
 	JWT      JWTConfig
 	Database DatabaseConfig
+	Alert    AlertConfig
 }
 
 type DatabaseConfig struct {
@@ -73,6 +74,14 @@ type MonitoringConfig struct {
 	EnableQueryMetrics      bool `yaml:"enable_query_metrics"`
 	EnableConnectionMetrics bool `yaml:"enable_connection_metrics"`
 	MetricsIntervalSecs     int  `yaml:"metrics_interval_secs"`
+}
+
+type AlertConfig struct {
+	Enabled          bool `yaml:"enabled"`
+	DefaultTimeout   int  `yaml:"default_timeout_secs"`
+	MaxAlertCount    int  `yaml:"max_alert_count"`
+	SlackEnabled     bool `yaml:"slack_enabled"`
+	WebhookEnabled   bool `yaml:"webhook_enabled"`
 }
 
 var globalConfig *Config
@@ -187,6 +196,13 @@ func LoadConfig() *Config {
 				EnableConnectionMetrics: getEnvAsBool("DB_MONITOR_CONNECTIONS", true),
 				MetricsIntervalSecs:     getEnvAsInt("DB_METRICS_INTERVAL", 60),
 			},
+		},
+		Alert: AlertConfig{
+			Enabled:        getEnvAsBool("ALERT_ENABLED", true),
+			DefaultTimeout: getEnvAsInt("ALERT_DEFAULT_TIMEOUT", 300),
+			MaxAlertCount:  getEnvAsInt("ALERT_MAX_COUNT", 1000),
+			SlackEnabled:   getEnvAsBool("ALERT_SLACK_ENABLED", true),
+			WebhookEnabled: getEnvAsBool("ALERT_WEBHOOK_ENABLED", true),
 		},
 	}
 }

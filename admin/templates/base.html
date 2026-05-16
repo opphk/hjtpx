@@ -44,6 +44,12 @@
             <a class="nav-link {% if request.path == '/admin/monitoring' %}active{% endif %}" href="/admin/monitoring">
                 <i class="fas fa-tachometer-alt"></i><span>实时监控</span>
             </a>
+            <a class="nav-link {% if request.path == '/admin/ab-testing' %}active{% endif %}" href="/admin/ab-testing">
+                <i class="fas fa-flask"></i><span>A/B测试</span>
+            </a>
+            <a class="nav-link {% if request.path == '/admin/real-time-screen' %}active{% endif %}" href="/admin/real-time-screen">
+                <i class="fas fa-desktop"></i><span>实时大屏</span>
+            </a>
             <div class="sidebar-divider"></div>
         </nav>
         <div class="sidebar-footer border-top border-secondary p-3 mt-auto">

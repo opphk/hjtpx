@@ -144,6 +144,10 @@ func AutoMigrate() error {
 		&models.Blacklist{},
 		&models.VerificationLog{},
 		&models.DeviceFingerprint{},
+		&models.AlertChannel{},
+		&models.AlertRule{},
+		&models.AlertRecord{},
+		&models.AlertHistory{},
 	)
 }
 

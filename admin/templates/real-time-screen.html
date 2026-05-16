@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 实时大屏</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; width: 100%; overflow: hidden; }
+        body { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: #fff; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .screen-container { height: 100vh; display: flex; flex-direction: column; padding: 12px; }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: rgba(0, 0, 0, 0.3); border-radius: 8px; margin-bottom: 12px; }
+        .header-title { display: flex; align-items: center; gap: 12px; }
+        .header-title h1 { font-size: 28px; margin: 0; font-weight: 700; background: linear-gradient(90deg, #00d4ff, #c9a96e); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .header-title .logo { width: 48px; height: 48px; background: linear-gradient(135deg, #c23a2b, #8b2a1e); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .header-info { display: flex; align-items: center; gap: 20px; }
+        .current-time { font-size: 18px; font-weight: 600; color: #00d4ff; }
+        .connection-status { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: rgba(0, 0, 0, 0.3); border-radius: 20px; }
+        .connection-status.connected .status-dot { background: #28a745; box-shadow: 0 0 10px #28a745; }
+        .connection-status.disconnected .status-dot { background: #dc3545; box-shadow: 0 0 10px #dc3545; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .content { flex: 1; display: grid; grid-template-columns: 280px 1fr 280px; gap: 12px; overflow: hidden; }
+        .panel { background: rgba(0, 0, 0, 0.35); border-radius: 8px; border: 1px solid rgba(201, 169, 110, 0.2); padding: 16px; display: flex; flex-direction: column; overflow: hidden; }
+        .panel-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(201, 169, 110, 0.3); display: flex; align-items: center; gap: 8px; color: #c9a96e; }
+        .panel-title i { font-size: 14px; }
+        .left-panel { display: flex; flex-direction: column; gap: 12px; }
+        .center-panel { display: flex; flex-direction: column; gap: 12px; }
+        .right-panel { display: flex; flex-direction: column; gap: 12px; }
+        .stat-card { background: rgba(0, 0, 0, 0.3); border-radius: 6px; padding: 14px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .stat-label { font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 6px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #00d4ff; }
+        .stat-trend { font-size: 12px; margin-top: 4px; }
+        .stat-trend.up { color: #28a745; }
+        .stat-trend.down { color: #dc3545; }
+        .chart-container { flex: 1; position: relative; min-height: 0; }
+        .chart-wrapper { height: 100%; width: 100%; }
+        .alerts-container { flex: 1; overflow-y: auto; }
+        .alert-item { padding: 10px 12px; margin-bottom: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.3); border-left: 4px solid; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .alert-item.critical { border-color: #dc3545; background: rgba(220, 53, 69, 0.15); }
+        .alert-item.warning { border-color: #ffc107; background: rgba(255, 193, 7, 0.15); }
+        .alert-item.info { border-color: #00d4ff; background: rgba(0, 212, 255, 0.15); }
+        .alert-time { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-bottom: 4px; }
+        .alert-message { font-size: 13px; }
+        .device-list { flex: 1; overflow-y: auto; }
+        .device-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-bottom: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.3); }
+        .device-info { display: flex; align-items: center; gap: 10px; }
+        .device-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .device-icon.online { background: rgba(40, 167, 69, 0.2); color: #28a745; }
+        .device-icon.offline { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+        .device-icon.warning { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .device-name { font-size: 13px; font-weight: 500; }
+        .device-status { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+        .device-status.online { background: rgba(40, 167, 69, 0.2); color: #28a745; }
+        .device-status.offline { background: rgba(220, 53, 69, 0.2); color: #dc3545; }
+        .device-status.warning { background: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 2px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(201, 169, 110, 0.5); border-radius: 2px; }
+        .exit-btn { padding: 8px 20px; background: rgba(194, 58, 43, 0.8); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+        .exit-btn:hover { background: #c23a2b; transform: scale(1.02); }
+        .progress-ring { transform: rotate(-90deg); }
+        .progress-ring-circle { transition: stroke-dashoffset 0.5s ease; }
+        .gauge-container { display: flex; justify-content: center; align-items: center; padding: 10px 0; }
+        .gauge-label { text-align: center; margin-top: -20px; font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+        .gauge-value { font-size: 24px; font-weight: 700; color: #00d4ff; }
+    </style>
+</head>
+<body>
+    <div class="screen-container">
+        <div class="header">
+            <div class="header-title">
+                <div class="logo"><i class="fas fa-shield-halved"></i></div>
+                <h1>墨盾验证 · 实时监控大屏</h1>
+            </div>
+            <div class="header-info">
+                <div class="connection-status connected" id="connectionStatus">
+                    <div class="status-dot"></div>
+                    <span id="connectionText">已连接</span>
+                </div>
+                <div class="current-time" id="currentTime"></div>
+                <button class="exit-btn" onclick="exitScreen()"><i class="fas fa-sign-out-alt me-2"></i>退出</button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="left-panel">
+                <div class="panel">
+                    <div class="panel-title"><i class="fas fa-chart-bar"></i>核心指标</div>
+                    <div class="row g-2">
+                        <div class="col-12">
+                            <div class="stat-card">
+                                <div class="stat-label">今日请求总量</div>
+                                <div class="stat-value" id="totalRequests">0</div>
+                                <div class="stat-trend up" id="requestsTrend"><i class="fas fa-arrow-up"></i> +0%</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-card">
+                                <div class="stat-label">验证成功</div>
+                                <div class="stat-value" id="successCount">0</div>
+                                <div class="stat-trend up"><i class="fas fa-check"></i> <span id="successRate">0%</span></div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-card">
+                                <div class="stat-label">验证失败</div>
+                                <div class="stat-value" id="failCount">0</div>
+                                <div class="stat-trend down"><i class="fas fa-times"></i> <span id="failRate">0%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-tachometer-alt"></i>系统负载</div>
+                    <div class="chart-container">
+                        <div class="row h-100">
+                            <div class="col-4 d-flex flex-column align-items-center justify-content-center">
+                                <div class="gauge-container">
+                                    <svg class="progress-ring" width="100" height="100">
+                                        <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none"></circle>
+                                        <circle class="progress-ring-circle" id="cpuCircle" cx="50" cy="50" r="40" stroke="#00d4ff" stroke-width="8" fill="none" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round"></circle>
+                                    </svg>
+                                </div>
+                                <div class="gauge-value" id="cpuValue">0%</div>
+                                <div class="gauge-label">CPU</div>
+                            </div>
+                            <div class="col-4 d-flex flex-column align-items-center justify-content-center">
+                                <div class="gauge-container">
+                                    <svg class="progress-ring" width="100" height="100">
+                                        <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none"></circle>
+                                        <circle class="progress-ring-circle" id="memoryCircle" cx="50" cy="50" r="40" stroke="#28a745" stroke-width="8" fill="none" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round"></circle>
+                                    </svg>
+                                </div>
+                                <div class="gauge-value" id="memoryValue">0%</div>
+                                <div class="gauge-label">内存</div>
+                            </div>
+                            <div class="col-4 d-flex flex-column align-items-center justify-content-center">
+                                <div class="gauge-container">
+                                    <svg class="progress-ring" width="100" height="100">
+                                        <circle cx="50" cy="50" r="40" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none"></circle>
+                                        <circle class="progress-ring-circle" id="diskCircle" cx="50" cy="50" r="40" stroke="#ffc107" stroke-width="8" fill="none" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round"></circle>
+                                    </svg>
+                                </div>
+                                <div class="gauge-value" id="diskValue">0%</div>
+                                <div class="gauge-label">磁盘</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-server"></i>设备状态</div>
+                    <div class="device-list scrollbar-thin" id="deviceList"></div>
+                </div>
+            </div>
+
+            <div class="center-panel">
+                <div class="panel" style="flex: 1.5;">
+                    <div class="panel-title"><i class="fas fa-chart-area"></i>实时请求趋势</div>
+                    <div class="chart-container">
+                        <canvas id="realtimeChart"></canvas>
+                    </div>
+                </div>
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-chart-pie"></i>验证类型分布</div>
+                    <div class="chart-container">
+                        <div class="row h-100">
+                            <div class="col-6">
+                                <canvas id="captchaTypeChart"></canvas>
+                            </div>
+                            <div class="col-6">
+                                <canvas id="riskDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="panel">
+                    <div class="panel-title"><i class="fas fa-bolt"></i>实时速率</div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="stat-card">
+                                <div class="stat-label">QPS</div>
+                                <div class="stat-value" id="qpsValue">0</div>
+                                <div class="stat-trend up" id="qpsTrend"><i class="fas fa-bolt"></i> 请求/秒</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-card">
+                                <div class="stat-label">平均响应</div>
+                                <div class="stat-value" id="avgResponse">0ms</div>
+                                <div class="stat-trend up"><i class="fas fa-clock"></i> 延迟</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-bell"></i>告警通知</div>
+                    <div class="alerts-container scrollbar-thin" id="alertsContainer"></div>
+                </div>
+
+                <div class="panel" style="flex: 1;">
+                    <div class="panel-title"><i class="fas fa-chart-line"></i>TOP 应用</div>
+                    <div class="chart-container">
+                        <canvas id="topAppsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/real-time-screen.js"></script>
+</body>
+</html>

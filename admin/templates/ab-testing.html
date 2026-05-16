@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · A/B测试</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        .abtest-nav {
+            border-bottom: 2px solid #e9ecef;
+        }
+        .abtest-nav .nav-link {
+            border: none;
+            color: #6c757d;
+            font-weight: 500;
+            padding: 1rem 1.5rem;
+            position: relative;
+        }
+        .abtest-nav .nav-link:hover {
+            color: #c23a2b;
+        }
+        .abtest-nav .nav-link.active {
+            color: #c23a2b;
+            background: transparent;
+        }
+        .abtest-nav .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #c23a2b;
+        }
+        .metric-card {
+            border-left: 4px solid;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .metric-card.primary { border-left-color: #3b82f6; }
+        .metric-card.success { border-left-color: #10b981; }
+        .metric-card.warning { border-left-color: #f59e0b; }
+        .metric-card.danger { border-left-color: #ef4444; }
+        
+        .test-card {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .test-card:hover {
+            border-color: #c23a2b;
+            background: #fff5f5;
+        }
+        .test-status-draft { background: #6b7280; }
+        .test-status-running { background: #10b981; }
+        .test-status-stopped { background: #ef4444; }
+        
+        .variant-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: #e9ecef;
+        }
+        .variant-progress {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .winner-badge {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .tab-content {
+            min-height: 600px;
+        }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="bg-dark d-flex flex-column" style="width: 260px; min-height: 100vh;">
+            <div class="d-flex align-items-center gap-3 p-3 border-bottom border-secondary">
+                <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;flex-shrink:0;">
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <div>
+                    <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
+                    <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
+                </div>
+            </div>
+            <nav class="d-flex flex-column p-3 gap-1 flex-grow-1">
+                <a class="nav-link" href="/admin/">
+                    <i class="fas fa-chart-bar"></i><span>仪表盘</span>
+                </a>
+                <a class="nav-link" href="/admin/stats">
+                    <i class="fas fa-chart-line"></i><span>统计分析</span>
+                </a>
+                <a class="nav-link" href="/admin/advanced-analytics">
+                    <i class="fas fa-chart-pie"></i><span>高级分析</span>
+                </a>
+                <a class="nav-link" href="/admin/applications">
+                    <i class="fas fa-mobile-alt"></i><span>应用管理</span>
+                </a>
+                <a class="nav-link" href="/admin/logs">
+                    <i class="fas fa-clipboard-list"></i><span>日志查询</span>
+                </a>
+                <a class="nav-link" href="/admin/risk-rules">
+                    <i class="fas fa-shield-alt"></i><span>风控规则</span>
+                </a>
+                <a class="nav-link" href="/admin/blacklist">
+                    <i class="fas fa-ban"></i><span>黑名单</span>
+                </a>
+                <a class="nav-link" href="/admin/monitoring">
+                    <i class="fas fa-tachometer-alt"></i><span>实时监控</span>
+                </a>
+                <a class="nav-link active" href="/admin/ab-testing">
+                    <i class="fas fa-flask"></i><span>A/B测试</span>
+                </a>
+            </nav>
+            <div class="border-top border-secondary p-3 mt-auto">
+                <a href="#" id="logoutBtn" class="nav-link">
+                    <i class="fas fa-sign-out-alt"></i><span>退出登录</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-grow-1">
+            <!-- Header -->
+            <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
+                <div class="d-flex align-items-center gap-3">
+                    <h1 style="font-size:20px;font-weight:700;margin:0;padding-left:16px;position:relative;">A/B测试</h1>
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid #c23a2b;color:#c23a2b;font-size:9px;font-weight:900;transform:rotate(-8deg);flex-shrink:0;">墨盾</span>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <button id="refreshBtn" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-sync me-1"></i>刷新
+                    </button>
+                    <button id="createTestBtn" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createTestModal">
+                        <i class="fas fa-plus me-1"></i>新建测试
+                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-secondary" id="usernameDisplay">管理员</span>
+                        <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
+                    </div>
+                </div>
+            </header>
+            <hr style="height:4px;background:linear-gradient(to right,#c9a96e,transparent);border:none;margin:0 0 24px;opacity:0.6;border-radius:2px;">
+
+            <!-- A/B测试 Navigation -->
+            <div class="px-4">
+                <ul class="nav abtest-nav mb-4" id="abtestTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="tests-tab" data-bs-toggle="tab" data-bs-target="#tests" type="button" role="tab">
+                            <i class="fas fa-list me-2"></i>测试列表
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button" role="tab">
+                            <i class="fas fa-chart-bar me-2"></i>数据分析
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="abtestTabContent">
+                    <!-- 测试列表 -->
+                    <div class="tab-pane fade show active" id="tests" role="tabpanel">
+                        <!-- 摘要指标 -->
+                        <div class="row g-4 mb-4" id="summaryMetrics">
+                        </div>
+
+                        <!-- 过滤和搜索 -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <select class="form-select" id="statusFilter">
+                                    <option value="">全部状态</option>
+                                    <option value="draft">草稿</option>
+                                    <option value="running">运行中</option>
+                                    <option value="stopped">已停止</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="applicationFilter">
+                                    <option value="">全部应用</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="searchInput" placeholder="搜索测试名称...">
+                                    <button class="btn btn-outline-secondary" type="button" id="searchBtn">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 测试列表 -->
+                        <div id="testsList">
+                        </div>
+
+                        <!-- 分页 -->
+                        <nav id="testsPagination" class="mt-4">
+                        </nav>
+                    </div>
+
+                    <!-- 数据分析 -->
+                    <div class="tab-pane fade" id="analytics" role="tabpanel">
+                        <!-- 测试选择器 -->
+                        <div class="mb-4">
+                            <label class="form-label">选择测试</label>
+                            <select class="form-select" id="analyticsTestSelect" style="max-width: 400px;">
+                                <option value="">选择一个测试查看分析</option>
+                            </select>
+                        </div>
+
+                        <div id="analyticsContent" class="d-none">
+                            <!-- 测试概览 -->
+                            <div class="card shadow-sm mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0"><i class="fas fa-info-circle me-2" style="color:#b8924e;"></i>测试概览</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3" id="testOverview">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 变体对比 -->
+                            <div class="card shadow-sm mb-4">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2" style="color:#b8924e;"></i>变体对比</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="variantsComparison">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 转化率图表 -->
+                            <div class="row g-4 mb-4">
+                                <div class="col-md-8">
+                                    <div class="card shadow-sm">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="fas fa-chart-line me-2" style="color:#b8924e;"></i>转化率趋势</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="conversionRateChart" height="300"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card shadow-sm">
+                                        <div class="card-header">
+                                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2" style="color:#b8924e;"></i>流量分布</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="trafficDistributionChart" height="300"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 智能推荐 -->
+                            <div class="card shadow-sm" id="recommendationsCard">
+                                <div class="card-header">
+                                    <h5 class="mb-0"><i class="fas fa-lightbulb me-2" style="color:#f59e0b;"></i>智能推荐</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="recommendationsList">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建测试模态框 -->
+    <div class="modal fade" id="createTestModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">新建A/B测试</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createTestForm">
+                        <div class="mb-3">
+                            <label class="form-label">测试名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="testName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" id="testDescription" rows="2"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">关联应用 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="testApplication" required>
+                                <option value="">选择应用</option>
+                            </select>
+                        </div>
+                        <hr>
+                        <h6 class="mb-3">变体配置</h6>
+                        <div id="variantsContainer">
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="addVariantBtn">
+                            <i class="fas fa-plus me-1"></i>添加变体
+                        </button>
+                        <hr>
+                        <div class="mb-3">
+                            <label class="form-label">测试配置</label>
+                            <textarea class="form-control font-monospace" id="testConfig" rows="4" placeholder='{"eventName": "submit_form", ...}'></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveTestBtn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看测试详情模态框 -->
+    <div class="modal fade" id="viewTestModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewTestTitle">测试详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="viewTestContent">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-success d-none" id="startTestBtn">
+                        <i class="fas fa-play me-1"></i>启动测试
+                    </button>
+                    <button type="button" class="btn btn-danger d-none" id="stopTestBtn">
+                        <i class="fas fa-stop me-1"></i>停止测试
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/ab-testing.js"></script>
+</body>
+</html>

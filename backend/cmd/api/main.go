@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/router"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/database"
@@ -36,6 +37,12 @@ func main() {
 		log.Printf("Warning: Failed to connect to PostgreSQL: %v", err)
 	} else {
 		log.Println("PostgreSQL connected successfully")
+	}
+
+	// 初始化告警服务
+	if database.DB != nil {
+		handler.InitAlertService(database.DB)
+		log.Println("Alert service initialized successfully")
 	}
 
 	if err := redis.ConnectRedis(&cfg.Redis); err != nil {

@@ -104,6 +104,12 @@ func SetupRouter() *gin.Engine {
 	r.GET("/admin/monitoring", func(c *gin.Context) {
 		c.HTML(200, "monitoring.html", nil)
 	})
+	r.GET("/admin/ab-testing", func(c *gin.Context) {
+		c.HTML(200, "ab-testing.html", nil)
+	})
+	r.GET("/admin/real-time-screen", func(c *gin.Context) {
+		c.HTML(200, "real-time-screen.html", nil)
+	})
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -267,7 +273,56 @@ func SetupRouter() *gin.Engine {
 					monitoring.GET("/request-metrics", handler.GetRequestMetrics)
 					monitoring.GET("/api-stats", handler.GetApiStats)
 				}
+
+				// 告警系统
+				alerts := adminAuth.Group("/alerts")
+				{
+					// 告警渠道管理
+					alerts.GET("/channels", handler.ListAlertChannels)
+					alerts.POST("/channels", handler.CreateAlertChannel)
+					alerts.GET("/channels/:id", handler.GetAlertChannel)
+					alerts.PUT("/channels/:id", handler.UpdateAlertChannel)
+					alerts.DELETE("/channels/:id", handler.DeleteAlertChannel)
+
+					// 告警规则管理
+					alerts.GET("/rules", handler.ListAlertRules)
+					alerts.POST("/rules", handler.CreateAlertRule)
+					alerts.GET("/rules/:id", handler.GetAlertRule)
+					alerts.PUT("/rules/:id", handler.UpdateAlertRule)
+					alerts.DELETE("/rules/:id", handler.DeleteAlertRule)
+
+					// 告警记录管理
+					alerts.GET("", handler.ListAlerts)
+					alerts.GET("/:id", handler.GetAlert)
+					alerts.POST("/:id/resolve", handler.ResolveAlert)
+					alerts.GET("/:id/history", handler.GetAlertHistory)
+
+					// 测试告警
+					alerts.POST("/test", handler.SendTestAlert)
+				}
+
+				// A/B测试管理
+				abTesting := adminAuth.Group("/ab-testing")
+				{
+					abTesting.GET("/summary", handler.GetABTestSummary)
+					abTesting.GET("/active", handler.GetActiveTests)
+					abTesting.GET("", handler.ListABTests)
+					abTesting.POST("", handler.CreateABTest)
+					abTesting.GET("/:id", handler.GetABTest)
+					abTesting.PUT("/:id", handler.UpdateABTest)
+					abTesting.DELETE("/:id", handler.DeleteABTest)
+					abTesting.POST("/:id/start", handler.StartABTest)
+					abTesting.POST("/:id/stop", handler.StopABTest)
+					abTesting.GET("/:id/report", handler.GetTestReport)
+				}
 			}
+		}
+
+		// A/B测试客户端API（无需认证，用于前端获取变体和追踪事件）
+		abTestClient := api.Group("/ab-testing")
+		{
+			abTestClient.POST("/assign", handler.AssignVariant)
+			abTestClient.POST("/event", handler.TrackEvent)
 		}
 
 		// 示例路由
