@@ -107,7 +107,7 @@ func TestAnalyzeBehaviorWithClickPattern(t *testing.T) {
 	assert.NotNil(t, result.ClickPattern.YDistribution)
 }
 
-func TestCalculateRiskScore(t *testing.T) {
+func TestCalculateRiskScoreFromFeatures(t *testing.T) {
 	service := NewBehaviorAnalysisService()
 
 	tests := []struct {
@@ -1108,4 +1108,1093 @@ func TestMicroCorrectionsDetection(t *testing.T) {
 	t.Logf("停顿次数: %d", traj.PauseCount)
 
 	assert.GreaterOrEqual(t, traj.MicroCorrections, 0)
+}
+
+func TestExtractFeatures(t *testing.T) {
+	trajectory := []TrajectoryPoint{
+		{X: 100, Y: 100, Timestamp: 1000},
+		{X: 120, Y: 110, Timestamp: 1050},
+		{X: 150, Y: 130, Timestamp: 1110},
+		{X: 190, Y: 160, Timestamp: 1180},
+		{X: 240, Y: 200, Timestamp: 1260},
+		{X: 300, Y: 250, Timestamp: 1350},
+		{X: 370, Y: 300, Timestamp: 1450},
+		{X: 450, Y: 340, Timestamp: 1560},
+	}
+
+	features := ExtractFeatures(trajectory)
+
+	assert.NotNil(t, features)
+	assert.Greater(t, features.AvgSpeed, 0.0, "平均速度应大于0")
+	assert.Greater(t, features.MaxSpeed, 0.0, "最大速度应大于0")
+	assert.GreaterOrEqual(t, features.TrajectorySmoothness, 0.0, "轨迹平滑度应大于等于0")
+	assert.LessOrEqual(t, features.TrajectorySmoothness, 1.0, "轨迹平滑度应小于等于1")
+	assert.GreaterOrEqual(t, features.PathComplexity, 0.0, "路径复杂度应大于等于0")
+	assert.LessOrEqual(t, features.PathComplexity, 1.0, "路径复杂度应小于等于1")
+	assert.GreaterOrEqual(t, features.RiskScore, 0.0, "风险评分应大于等于0")
+	assert.LessOrEqual(t, features.RiskScore, 100.0, "风险评分应小于等于100")
+}
+
+func TestExtractFeaturesEmptyTrajectory(t *testing.T) {
+	emptyTrajectory := []TrajectoryPoint{}
+
+	features := ExtractFeatures(emptyTrajectory)
+
+	assert.NotNil(t, features)
+	assert.Equal(t, 0.0, features.AvgSpeed, "空轨迹的平均速度应为0")
+	assert.Equal(t, 0.0, features.MaxSpeed, "空轨迹的最大速度应为0")
+}
+
+func TestCalculateAverageSpeed(t *testing.T) {
+	tests := []struct {
+		name     string
+		points   []TrajectoryPoint
+		expected float64
+	}{
+		{
+			name: "正常轨迹",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 100, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+			},
+			expected: 141.42,
+		},
+		{
+			name: "空轨迹",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+			},
+			expected: 0.0,
+		},
+		{
+			name: "单点轨迹",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 0},
+			},
+			expected: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			speed := CalculateAverageSpeed(tt.points)
+			if tt.expected == 0.0 {
+				assert.Equal(t, tt.expected, speed)
+			} else {
+				assert.Greater(t, speed, 0.0, "平均速度应大于0")
+			}
+		})
+	}
+}
+
+func TestCalculateMaxSpeed(t *testing.T) {
+	points := []TrajectoryPoint{
+		{X: 0, Y: 0, Timestamp: 1000},
+		{X: 100, Y: 0, Timestamp: 1100},
+		{X: 200, Y: 0, Timestamp: 1150},
+		{X: 250, Y: 0, Timestamp: 1200},
+	}
+
+	maxSpeed := CalculateMaxSpeed(points)
+
+	assert.Greater(t, maxSpeed, 0.0, "最大速度应大于0")
+	t.Logf("最大速度: %.2f", maxSpeed)
+}
+
+func TestCalculateMinSpeed(t *testing.T) {
+	points := []TrajectoryPoint{
+		{X: 0, Y: 0, Timestamp: 1000},
+		{X: 100, Y: 0, Timestamp: 1100},
+		{X: 200, Y: 0, Timestamp: 1500},
+		{X: 250, Y: 0, Timestamp: 1600},
+	}
+
+	minSpeed := CalculateMinSpeed(points)
+
+	assert.Greater(t, minSpeed, 0.0, "最小速度应大于0")
+	t.Logf("最小速度: %.2f", minSpeed)
+}
+
+func TestCalculateSpeedVariation(t *testing.T) {
+	points := []TrajectoryPoint{
+		{X: 0, Y: 0, Timestamp: 1000},
+		{X: 100, Y: 100, Timestamp: 1100},
+		{X: 200, Y: 200, Timestamp: 1200},
+		{X: 300, Y: 300, Timestamp: 1300},
+		{X: 400, Y: 400, Timestamp: 1400},
+	}
+
+	variation := CalculateSpeedVariation(points)
+	assert.GreaterOrEqual(t, variation, 0.0, "速度变化率应大于等于0")
+	t.Logf("速度变化率: %.4f", variation)
+}
+
+func TestCalculateAcceleration(t *testing.T) {
+	points := []TrajectoryPoint{
+		{X: 0, Y: 0, Timestamp: 1000},
+		{X: 100, Y: 0, Timestamp: 1100},
+		{X: 250, Y: 0, Timestamp: 1250},
+		{X: 450, Y: 0, Timestamp: 1450},
+		{X: 700, Y: 0, Timestamp: 1700},
+	}
+
+	acceleration := CalculateAcceleration(points)
+
+	t.Logf("加速度: %.6f", acceleration)
+	assert.GreaterOrEqual(t, acceleration, 0.0, "加速度应大于等于0")
+}
+
+func TestCalculateTrajectorySmoothness(t *testing.T) {
+	tests := []struct {
+		name        string
+		points      []TrajectoryPoint
+		minExpected float64
+		maxExpected float64
+	}{
+		{
+			name: "完全直线",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 100, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+				{X: 300, Y: 300, Timestamp: 1300},
+			},
+			minExpected: 0.9,
+			maxExpected: 1.0,
+		},
+		{
+			name: "曲线轨迹",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 50, Y: 100, Timestamp: 1100},
+				{X: 150, Y: 150, Timestamp: 1200},
+				{X: 100, Y: 250, Timestamp: 1300},
+				{X: 200, Y: 300, Timestamp: 1400},
+			},
+			minExpected: 0.0,
+			maxExpected: 1.0,
+		},
+		{
+			name:        "点数不足",
+			points:      []TrajectoryPoint{},
+			minExpected: 1.0,
+			maxExpected: 1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			smoothness := CalculateTrajectorySmoothness(tt.points)
+			assert.GreaterOrEqual(t, smoothness, tt.minExpected)
+			assert.LessOrEqual(t, smoothness, tt.maxExpected)
+		})
+	}
+}
+
+func TestCalculateClickInterval(t *testing.T) {
+	clicks := []ClickData{
+		{X: 100, Y: 100, Timestamp: 1000},
+		{X: 200, Y: 200, Timestamp: 1150},
+		{X: 300, Y: 300, Timestamp: 1350},
+		{X: 400, Y: 400, Timestamp: 1600},
+	}
+
+	interval := CalculateClickInterval(clicks)
+
+	expectedInterval := 200.0
+	assert.InDelta(t, expectedInterval, interval, 10.0, "平均点击间隔应为200ms")
+}
+
+func TestCalculateClickPositionVariance(t *testing.T) {
+	tests := []struct {
+		name     string
+		clicks   []ClickData
+		expected float64
+	}{
+		{
+			name: "聚集点击",
+			clicks: []ClickData{
+				{X: 100, Y: 100, Timestamp: 1000},
+				{X: 105, Y: 105, Timestamp: 1100},
+				{X: 102, Y: 98, Timestamp: 1200},
+			},
+			expected: 100.0,
+		},
+		{
+			name: "分散点击",
+			clicks: []ClickData{
+				{X: 100, Y: 100, Timestamp: 1000},
+				{X: 500, Y: 500, Timestamp: 1100},
+				{X: 100, Y: 500, Timestamp: 1200},
+				{X: 500, Y: 100, Timestamp: 1300},
+			},
+			expected: 40000.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			variance := CalculateClickPositionVariance(tt.clicks)
+			assert.GreaterOrEqual(t, variance, 0.0, "点击位置方差应大于等于0")
+		})
+	}
+}
+
+func TestCalculatePathComplexity(t *testing.T) {
+	tests := []struct {
+		name        string
+		points      []TrajectoryPoint
+		minExpected float64
+		maxExpected float64
+	}{
+		{
+			name: "完全直线",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 100, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+				{X: 300, Y: 300, Timestamp: 1300},
+			},
+			minExpected: 0.0,
+			maxExpected: 0.1,
+		},
+		{
+			name: "复杂路径",
+			points: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 50, Timestamp: 1100},
+				{X: 50, Y: 100, Timestamp: 1200},
+				{X: 150, Y: 80, Timestamp: 1300},
+				{X: 200, Y: 200, Timestamp: 1400},
+				{X: 150, Y: 250, Timestamp: 1500},
+				{X: 250, Y: 200, Timestamp: 1600},
+			},
+			minExpected: 0.3,
+			maxExpected: 1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			complexity := CalculatePathComplexity(tt.points)
+			assert.GreaterOrEqual(t, complexity, tt.minExpected)
+			assert.LessOrEqual(t, complexity, tt.maxExpected)
+		})
+	}
+}
+
+func TestDTWDistance(t *testing.T) {
+	tests := []struct {
+		name     string
+		seq1     []TrajectoryPoint
+		seq2     []TrajectoryPoint
+		expected float64
+	}{
+		{
+			name: "完全相同序列",
+			seq1: []TrajectoryPoint{
+				{X: 100, Y: 100, Timestamp: 1000},
+				{X: 150, Y: 150, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+			},
+			seq2: []TrajectoryPoint{
+				{X: 100, Y: 100, Timestamp: 1000},
+				{X: 150, Y: 150, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+			},
+			expected: 0.0,
+		},
+		{
+			name: "相似序列",
+			seq1: []TrajectoryPoint{
+				{X: 100, Y: 100, Timestamp: 1000},
+				{X: 150, Y: 150, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+			},
+			seq2: []TrajectoryPoint{
+				{X: 105, Y: 105, Timestamp: 1000},
+				{X: 155, Y: 155, Timestamp: 1100},
+				{X: 205, Y: 205, Timestamp: 1200},
+			},
+			expected: 15.0,
+		},
+		{
+			name:     "空序列",
+			seq1:     []TrajectoryPoint{},
+			seq2:     []TrajectoryPoint{{X: 0, Y: 0, Timestamp: 0}},
+			expected: math.MaxFloat64,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			distance := DTWDistance(tt.seq1, tt.seq2)
+			if tt.expected == math.MaxFloat64 {
+				assert.Equal(t, tt.expected, distance)
+			} else {
+				assert.InDelta(t, tt.expected, distance, tt.expected*0.5+5.0)
+			}
+		})
+	}
+}
+
+func TestCompareWithHumanTrajectory(t *testing.T) {
+	tests := []struct {
+		name      string
+		trajectory []TrajectoryPoint
+		minSim    float64
+		maxSim    float64
+	}{
+		{
+			name: "人类类似轨迹",
+			trajectory: []TrajectoryPoint{
+				{X: 100, Y: 100, Timestamp: 0},
+				{X: 120, Y: 115, Timestamp: 50},
+				{X: 145, Y: 135, Timestamp: 100},
+				{X: 175, Y: 160, Timestamp: 160},
+				{X: 210, Y: 190, Timestamp: 230},
+				{X: 250, Y: 220, Timestamp: 310},
+				{X: 290, Y: 255, Timestamp: 400},
+				{X: 330, Y: 285, Timestamp: 500},
+			},
+			minSim: 0.0,
+			maxSim: 1.0,
+		},
+		{
+			name: "机器人轨迹",
+			trajectory: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 0},
+				{X: 100, Y: 100, Timestamp: 10},
+				{X: 200, Y: 200, Timestamp: 20},
+				{X: 300, Y: 300, Timestamp: 30},
+				{X: 400, Y: 400, Timestamp: 40},
+			},
+			minSim: 0.0,
+			maxSim: 1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			similarity := CompareWithHumanTrajectory(tt.trajectory)
+			assert.GreaterOrEqual(t, similarity, tt.minSim)
+			assert.LessOrEqual(t, similarity, tt.maxSim)
+			t.Logf("轨迹相似度: %.4f", similarity)
+		})
+	}
+}
+
+func TestCalculateRiskScore(t *testing.T) {
+	tests := []struct {
+		name     string
+		features *BehaviorFeatures
+		minScore float64
+		maxScore float64
+	}{
+		{
+			name: "正常特征",
+			features: &BehaviorFeatures{
+				AvgSpeed:             500.0,
+				TrajectorySmoothness: 0.5,
+				Acceleration:        0.5,
+				PathComplexity:      0.7,
+				PathSimilarity:      0.8,
+				SpeedVariation:      0.5,
+				ClickInterval:      200.0,
+			},
+			minScore: 0.0,
+			maxScore: 30.0,
+		},
+		{
+			name: "机器人特征",
+			features: &BehaviorFeatures{
+				AvgSpeed:            2000.0,
+				TrajectorySmoothness: 0.98,
+				Acceleration:       0.05,
+				PathComplexity:     0.1,
+				PathSimilarity:     0.3,
+				SpeedVariation:     0.05,
+				ClickInterval:     30.0,
+			},
+			minScore: 70.0,
+			maxScore: 100.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := CalculateRiskScore(tt.features)
+			assert.GreaterOrEqual(t, score, tt.minScore)
+			assert.LessOrEqual(t, score, tt.maxScore)
+			t.Logf("风险评分: %.2f", score)
+		})
+	}
+}
+
+func TestIsRobot(t *testing.T) {
+	tests := []struct {
+		name     string
+		features *BehaviorFeatures
+		expected bool
+	}{
+		{
+			name: "低风险特征",
+			features: &BehaviorFeatures{
+				RiskScore: 30.0,
+			},
+			expected: false,
+		},
+		{
+			name: "中风险特征",
+			features: &BehaviorFeatures{
+				RiskScore: 50.0,
+			},
+			expected: true,
+		},
+		{
+			name: "高风险特征",
+			features: &BehaviorFeatures{
+				RiskScore: 85.0,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isBot := IsRobot(tt.features)
+			assert.Equal(t, tt.expected, isBot)
+		})
+	}
+}
+
+func TestScoreCard(t *testing.T) {
+	sc := NewScoreCard()
+
+	assert.NotNil(t, sc)
+	assert.NotNil(t, sc.Weights)
+	assert.NotNil(t, sc.Thresholds)
+	assert.Equal(t, 7, len(sc.Weights))
+	assert.Equal(t, 7, len(sc.Thresholds))
+
+	normalFeatures := &BehaviorFeatures{
+		AvgSpeed:            500.0,
+		TrajectorySmoothness: 0.5,
+		Acceleration:       0.5,
+		PathComplexity:     0.7,
+		PathSimilarity:     0.8,
+		SpeedVariation:     0.5,
+		ClickInterval:     200.0,
+	}
+
+	score := sc.Evaluate(normalFeatures)
+	assert.GreaterOrEqual(t, score, 0.0)
+	assert.LessOrEqual(t, score, 100.0)
+	t.Logf("正常特征评分: %.2f", score)
+
+	botFeatures := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	botScore := sc.Evaluate(botFeatures)
+	assert.GreaterOrEqual(t, botScore, 0.0)
+	assert.LessOrEqual(t, botScore, 100.0)
+	t.Logf("机器人特征评分: %.2f", botScore)
+
+	assert.Greater(t, botScore, score, "机器人特征评分应高于正常特征评分")
+}
+
+func TestScoreCardNilFeatures(t *testing.T) {
+	sc := NewScoreCard()
+	score := sc.Evaluate(nil)
+	assert.Equal(t, 0.0, score)
+}
+
+func TestRuleEngine(t *testing.T) {
+	engine := NewRuleEngine()
+
+	assert.NotNil(t, engine)
+	assert.Equal(t, 0, len(engine.rules))
+
+	rule := Rule{
+		Name: "test_rule",
+		Condition: func(f *BehaviorFeatures) bool {
+			return f.AvgSpeed > 1000
+		},
+		Weight: 25.0,
+	}
+
+	engine.AddRule(rule)
+	assert.Equal(t, 1, len(engine.rules))
+
+	lowSpeed := &BehaviorFeatures{AvgSpeed: 500}
+	highSpeed := &BehaviorFeatures{AvgSpeed: 1500}
+
+	lowScore := engine.Evaluate(lowSpeed)
+	assert.Equal(t, 0.0, lowScore)
+
+	highScore := engine.Evaluate(highSpeed)
+	assert.Equal(t, 100.0, highScore)
+}
+
+func TestRuleEngineNilFeatures(t *testing.T) {
+	engine := NewRuleEngine()
+	engine.AddRule(Rule{
+		Name:      "test",
+		Condition: func(f *BehaviorFeatures) bool { return true },
+		Weight:    10,
+	})
+
+	score := engine.Evaluate(nil)
+	assert.Equal(t, 0.0, score)
+}
+
+func TestBotDetectionRules(t *testing.T) {
+	engine := NewBotDetectionRuleEngine()
+
+	assert.NotNil(t, engine)
+	assert.Greater(t, len(engine.rules), 0)
+
+	botFeatures := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	score := engine.Evaluate(botFeatures)
+	assert.Greater(t, score, 0.0, "机器人特征应触发规则")
+	t.Logf("机器人特征规则评分: %.2f", score)
+
+	humanFeatures := &BehaviorFeatures{
+		AvgSpeed:            500.0,
+		TrajectorySmoothness: 0.5,
+		Acceleration:        0.5,
+		PathComplexity:      0.7,
+		PathSimilarity:      0.8,
+		SpeedVariation:      0.5,
+		ClickInterval:      200.0,
+	}
+
+	humanScore := engine.Evaluate(humanFeatures)
+	assert.Less(t, humanScore, score, "人类特征评分应低于机器人特征评分")
+	t.Logf("人类特征规则评分: %.2f", humanScore)
+
+	triggered := engine.GetTriggeredRules(botFeatures)
+	assert.Greater(t, len(triggered), 0)
+	t.Logf("触发的规则: %v", triggered)
+}
+
+func TestMLClassifier(t *testing.T) {
+	classifier := NewMLClassifier()
+
+	assert.NotNil(t, classifier)
+	assert.NotNil(t, classifier.ruleEngine)
+	assert.NotNil(t, classifier.scoreCard)
+
+	botFeatures := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	isBot, score := classifier.Classify(botFeatures)
+	assert.True(t, isBot, "应识别为机器人")
+	assert.Greater(t, score, 50.0)
+	t.Logf("机器人分类评分: %.2f", score)
+
+	humanFeatures := &BehaviorFeatures{
+		AvgSpeed:            500.0,
+		TrajectorySmoothness: 0.5,
+		Acceleration:        0.5,
+		PathComplexity:      0.7,
+		PathSimilarity:      0.8,
+		SpeedVariation:      0.5,
+		ClickInterval:      200.0,
+	}
+
+	isBotHuman, scoreHuman := classifier.Classify(humanFeatures)
+	assert.False(t, isBotHuman, "不应识别为机器人")
+	assert.Less(t, scoreHuman, 50.0)
+	t.Logf("人类分类评分: %.2f", scoreHuman)
+
+	confidence := classifier.GetConfidence(botFeatures)
+	assert.GreaterOrEqual(t, confidence, 0.0)
+	assert.LessOrEqual(t, confidence, 1.0)
+	t.Logf("置信度: %.4f", confidence)
+}
+
+func TestMLClassifierNilFeatures(t *testing.T) {
+	classifier := NewMLClassifier()
+
+	isBot, score := classifier.Classify(nil)
+	assert.False(t, isBot)
+	assert.Equal(t, 0.0, score)
+
+	confidence := classifier.GetConfidence(nil)
+	assert.Equal(t, 0.0, confidence)
+}
+
+func TestMLClassifierDetailedAnalysis(t *testing.T) {
+	classifier := NewMLClassifier()
+
+	features := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	analysis := classifier.GetDetailedAnalysis(features)
+
+	assert.NotNil(t, analysis)
+	assert.Contains(t, analysis, "triggered_rules")
+	assert.Contains(t, analysis, "rule_count")
+	assert.Contains(t, analysis, "rule_score")
+	assert.Contains(t, analysis, "score_card_score")
+	assert.Contains(t, analysis, "risk_score")
+	assert.Contains(t, analysis, "confidence")
+	assert.Contains(t, analysis, "is_bot")
+	assert.Contains(t, analysis, "final_score")
+
+	triggered := analysis["triggered_rules"].([]string)
+	assert.Greater(t, len(triggered), 0)
+
+	ruleCount := analysis["rule_count"].(int)
+	assert.Greater(t, ruleCount, 0)
+}
+
+func TestEnsembleClassifier(t *testing.T) {
+	ensemble := NewEnsembleClassifier()
+
+	assert.NotNil(t, ensemble)
+	assert.Greater(t, len(ensemble.classifiers), 0)
+
+	botFeatures := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	isBot, score := ensemble.Classify(botFeatures)
+	assert.True(t, isBot)
+	assert.Greater(t, score, 50.0)
+	t.Logf("集成分类器机器人评分: %.2f", score)
+
+	humanFeatures := &BehaviorFeatures{
+		AvgSpeed:            500.0,
+		TrajectorySmoothness: 0.5,
+		Acceleration:        0.5,
+		PathComplexity:      0.7,
+		PathSimilarity:      0.8,
+		SpeedVariation:      0.5,
+		ClickInterval:      200.0,
+	}
+
+	isBotHuman, scoreHuman := ensemble.Classify(humanFeatures)
+	assert.False(t, isBotHuman)
+	assert.Less(t, scoreHuman, 50.0)
+	t.Logf("集成分类器人类评分: %.2f", scoreHuman)
+}
+
+func TestEnsembleClassifierDetailedAnalysis(t *testing.T) {
+	ensemble := NewEnsembleClassifier()
+
+	features := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	analysis := ensemble.GetDetailedAnalysis(features)
+
+	assert.NotNil(t, analysis)
+	assert.Contains(t, analysis, "classifier_results")
+	assert.Contains(t, analysis, "bot_votes")
+	assert.Contains(t, analysis, "total_votes")
+	assert.Contains(t, analysis, "vote_ratio")
+	assert.Contains(t, analysis, "is_bot")
+	assert.Contains(t, analysis, "final_score")
+
+	classifierResults := analysis["classifier_results"].([]map[string]interface{})
+	assert.Equal(t, len(ensemble.classifiers), len(classifierResults))
+
+	botVotes := analysis["bot_votes"].(int)
+	totalVotes := analysis["total_votes"].(int)
+	assert.Greater(t, botVotes, 0)
+	assert.Equal(t, len(ensemble.classifiers), totalVotes)
+}
+
+func TestValidateTrajectory(t *testing.T) {
+	tests := []struct {
+		name      string
+		trajectory []TrajectoryPoint
+		expected  bool
+	}{
+		{
+			name: "有效轨迹",
+			trajectory: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 100, Timestamp: 1100},
+				{X: 200, Y: 200, Timestamp: 1200},
+			},
+			expected: true,
+		},
+		{
+			name: "点数不足",
+			trajectory: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 100, Timestamp: 1100},
+			},
+			expected: false,
+		},
+		{
+			name: "时间戳不递增",
+			trajectory: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 1000},
+				{X: 100, Y: 100, Timestamp: 900},
+				{X: 200, Y: 200, Timestamp: 1200},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ValidateTrajectory(tt.trajectory)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPreprocessTrajectory(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         []TrajectoryPoint
+		targetLength  int
+		expectedLen   int
+	}{
+		{
+			name: "下采样",
+			input: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 0},
+				{X: 10, Y: 10, Timestamp: 10},
+				{X: 20, Y: 20, Timestamp: 20},
+				{X: 30, Y: 30, Timestamp: 30},
+				{X: 40, Y: 40, Timestamp: 40},
+				{X: 50, Y: 50, Timestamp: 50},
+				{X: 60, Y: 60, Timestamp: 60},
+				{X: 70, Y: 70, Timestamp: 70},
+				{X: 80, Y: 80, Timestamp: 80},
+				{X: 90, Y: 90, Timestamp: 90},
+			},
+			targetLength: 5,
+			expectedLen:  5,
+		},
+		{
+			name: "上采样",
+			input: []TrajectoryPoint{
+				{X: 0, Y: 0, Timestamp: 0},
+				{X: 50, Y: 50, Timestamp: 50},
+				{X: 100, Y: 100, Timestamp: 100},
+			},
+			targetLength: 7,
+			expectedLen:  7,
+		},
+		{
+			name:         "空轨迹",
+			input:        []TrajectoryPoint{},
+			targetLength: 5,
+			expectedLen:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := PreprocessTrajectory(tt.input, tt.targetLength)
+			assert.Equal(t, tt.expectedLen, len(result))
+		})
+	}
+}
+
+func TestExtractFeaturesFromBehaviorData(t *testing.T) {
+	behaviorData := []models.BehaviorData{
+		{
+			Data:      `{"x": 100, "y": 100, "timestamp": 1000, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 120, "y": 110, "timestamp": 1050, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 150, "y": 130, "timestamp": 1110, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 190, "y": 160, "timestamp": 1180, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 240, "y": 200, "timestamp": 1260, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 300, "y": 250, "timestamp": 1350, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 370, "y": 300, "timestamp": 1450, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+		{
+			Data:      `{"x": 450, "y": 340, "timestamp": 1560, "event": "mousemove"}`,
+			DataType:  "mousemove",
+			Timestamp: time.Now(),
+		},
+	}
+
+	features := ExtractFeaturesFromBehaviorData(behaviorData)
+
+	assert.NotNil(t, features)
+	assert.Greater(t, features.AvgSpeed, 0.0)
+	assert.Greater(t, features.MaxSpeed, 0.0)
+	assert.GreaterOrEqual(t, features.TrajectorySmoothness, 0.0)
+	assert.LessOrEqual(t, features.TrajectorySmoothness, 1.0)
+}
+
+func TestFullMLPipeline(t *testing.T) {
+	service := NewBehaviorAnalysisService()
+	mlClassifier := NewMLClassifier()
+	ensemble := NewEnsembleClassifier()
+
+	botTrajectory := []models.BehaviorData{}
+	startTime := int64(1000)
+
+	for i := 0; i < 50; i++ {
+		x := 100 + i*5
+		y := 100 + i*5
+		timestamp := startTime + int64(i)*10
+
+		bd := createTestBehaviorData(x, y, timestamp, "mousemove")
+		botTrajectory = append(botTrajectory, bd)
+	}
+
+	humanTrajectory := generateHumanLikeTrajectory()
+
+	botResult, _ := service.AnalyzeBehavior(botTrajectory)
+	humanResult, _ := service.AnalyzeBehavior(humanTrajectory)
+
+	t.Logf("传统分析 - 机器人轨迹评分: %.2f", botResult.RiskScore)
+	t.Logf("传统分析 - 人类轨迹评分: %.2f", humanResult.RiskScore)
+
+	botFeatures := ExtractFeaturesFromBehaviorData(botTrajectory)
+	humanFeatures := ExtractFeaturesFromBehaviorData(humanTrajectory)
+
+	isBotML, mlScore := mlClassifier.Classify(botFeatures)
+	isHumanML, mlScoreHuman := mlClassifier.Classify(humanFeatures)
+
+	t.Logf("ML分类器 - 机器人评分: %.2f, 识别为机器人: %v", mlScore, isBotML)
+	t.Logf("ML分类器 - 人类评分: %.2f, 识别为机器人: %v", mlScoreHuman, isHumanML)
+
+	isBotEnsemble, ensembleScore := ensemble.Classify(botFeatures)
+	isHumanEnsemble, ensembleScoreHuman := ensemble.Classify(humanFeatures)
+
+	t.Logf("集成分类器 - 机器人评分: %.2f, 识别为机器人: %v", ensembleScore, isBotEnsemble)
+	t.Logf("集成分类器 - 人类评分: %.2f, 识别为机器人: %v", ensembleScoreHuman, isHumanEnsemble)
+
+	assert.True(t, isBotML, "ML分类器应识别机器人轨迹")
+	assert.False(t, isHumanML, "ML分类器不应识别人类轨迹")
+
+	assert.True(t, isBotEnsemble, "集成分类器应识别机器人轨迹")
+	assert.False(t, isHumanEnsemble, "集成分类器不应识别人类轨迹")
+
+	assert.Greater(t, mlScore, mlScoreHuman, "机器人评分应高于人类评分")
+	assert.Greater(t, ensembleScore, ensembleScoreHuman, "机器人评分应高于人类评分")
+}
+
+func TestTrajectoryPointConversion(t *testing.T) {
+	behaviorData := []BehaviorDataPoint{
+		{X: 100, Y: 200, Timestamp: 1000, Event: "mousemove"},
+		{X: 110, Y: 210, Timestamp: 1050, Event: "mousemove"},
+		{X: 120, Y: 220, Timestamp: 1100, Event: "mousemove"},
+	}
+
+	features := ExtractFeaturesFromDataPoints(behaviorData)
+
+	assert.NotNil(t, features)
+	assert.Greater(t, features.AvgSpeed, 0.0)
+}
+
+func TestNewBotDetectionRuleEngine(t *testing.T) {
+	engine := NewBotDetectionRuleEngine()
+
+	assert.NotNil(t, engine)
+	assert.Equal(t, len(BotDetectionRules), len(engine.rules))
+
+	for i, rule := range engine.rules {
+		assert.NotEmpty(t, rule.Name)
+		assert.NotNil(t, rule.Condition)
+		assert.Greater(t, rule.Weight, 0.0)
+		assert.Equal(t, BotDetectionRules[i].Name, rule.Name)
+		assert.Equal(t, BotDetectionRules[i].Weight, rule.Weight)
+	}
+}
+
+func TestGetTriggeredRules(t *testing.T) {
+	engine := NewBotDetectionRuleEngine()
+
+	features := &BehaviorFeatures{
+		AvgSpeed:            2000.0,
+		TrajectorySmoothness: 0.98,
+		Acceleration:       0.05,
+		PathComplexity:     0.1,
+		PathSimilarity:     0.3,
+		SpeedVariation:     0.05,
+		ClickInterval:     30.0,
+	}
+
+	triggered := engine.GetTriggeredRules(features)
+
+	assert.Greater(t, len(triggered), 0)
+
+	counts := engine.CountTriggeredRules(features)
+	assert.Equal(t, len(triggered), counts)
+
+	for _, ruleName := range triggered {
+		found := false
+		for _, rule := range BotDetectionRules {
+			if rule.Name == ruleName {
+				found = true
+				assert.True(t, rule.Condition(features))
+				break
+			}
+		}
+		assert.True(t, found, "触发规则 %s 应存在于预定义规则中", ruleName)
+	}
+}
+
+func TestHumanTrajectoryComparisonWithTemplates(t *testing.T) {
+	human1 := []TrajectoryPoint{
+		{X: 100, Y: 100, Timestamp: 0},
+		{X: 120, Y: 115, Timestamp: 50},
+		{X: 145, Y: 135, Timestamp: 100},
+		{X: 175, Y: 160, Timestamp: 160},
+		{X: 210, Y: 190, Timestamp: 230},
+		{X: 250, Y: 220, Timestamp: 310},
+		{X: 290, Y: 255, Timestamp: 400},
+		{X: 330, Y: 285, Timestamp: 500},
+	}
+
+	similarity1 := CompareWithHumanTrajectory(human1)
+	t.Logf("模板类似轨迹相似度: %.4f", similarity1)
+
+	bot := []TrajectoryPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 100, Y: 100, Timestamp: 10},
+		{X: 200, Y: 200, Timestamp: 20},
+		{X: 300, Y: 300, Timestamp: 30},
+		{X: 400, Y: 400, Timestamp: 40},
+	}
+
+	similarity2 := CompareWithHumanTrajectory(bot)
+	t.Logf("机器人轨迹相似度: %.4f", similarity2)
+
+	assert.GreaterOrEqual(t, similarity1, 0.0)
+	assert.LessOrEqual(t, similarity1, 1.0)
+	assert.GreaterOrEqual(t, similarity2, 0.0)
+	assert.LessOrEqual(t, similarity2, 1.0)
+}
+
+func TestNormalizeTrajectory(t *testing.T) {
+	trajectory := []TrajectoryPoint{
+		{X: 500, Y: 500, Timestamp: 0},
+		{X: 600, Y: 600, Timestamp: 100},
+		{X: 700, Y: 700, Timestamp: 200},
+	}
+
+	normalized := normalizeTrajectory(trajectory)
+
+	assert.Equal(t, len(trajectory), len(normalized))
+
+	minX := normalized[0].X
+	minY := normalized[0].Y
+
+	for _, p := range normalized {
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.Y < minY {
+			minY = p.Y
+		}
+	}
+
+	assert.Equal(t, 0, minX)
+	assert.Equal(t, 0, minY)
+}
+
+func TestPointDist(t *testing.T) {
+	p1 := TrajectoryPoint{X: 0, Y: 0, Timestamp: 0}
+	p2 := TrajectoryPoint{X: 3, Y: 4, Timestamp: 0}
+
+	distance := pointDist(p1, p2)
+
+	assert.InDelta(t, 5.0, distance, 0.001)
+
+	p3 := TrajectoryPoint{X: 0, Y: 0, Timestamp: 0}
+	p4 := TrajectoryPoint{X: 0, Y: 0, Timestamp: 0}
+
+	distance2 := pointDist(p3, p4)
+	assert.Equal(t, 0.0, distance2)
+}
+
+func TestConvertToClickData(t *testing.T) {
+	trajectory := []TrajectoryPoint{
+		{X: 100, Y: 100, Timestamp: 1000},
+		{X: 110, Y: 110, Timestamp: 1050},
+		{X: 120, Y: 120, Timestamp: 1100},
+		{X: 130, Y: 130, Timestamp: 1150},
+	}
+
+	clicks := convertToClickData(trajectory)
+
+	assert.Equal(t, len(trajectory), len(clicks))
+
+	for i, click := range clicks {
+		assert.Equal(t, trajectory[i].X, click.X)
+		assert.Equal(t, trajectory[i].Y, click.Y)
+		assert.Equal(t, trajectory[i].Timestamp, click.Timestamp)
+	}
 }
