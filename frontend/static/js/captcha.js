@@ -32,6 +32,18 @@ class Captcha {
             tolerance: 10
         };
 
+        this.rotationState = {
+            isDragging: false,
+            startX: 0,
+            currentAngle: 0,
+            totalAngle: 0,
+            maxAngle: 360,
+            challengeId: '',
+            imageUrl: '',
+            startTime: 0,
+            trajectoryData: []
+        };
+
         this.trajectoryData = [];
         this.speedData = {
             points: [],
@@ -118,6 +130,10 @@ class Captcha {
                         <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="click-captcha" data-type="click" tabindex="0" id="tab-click">
                             <span class="tab-icon"><i class="fas fa-hand-pointer" aria-hidden="true"></i></span>
                             <span class="tab-text">${this.i18n.t('clickVerify')}</span>
+                        </button>
+                        <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="rotation-captcha" data-type="rotation" tabindex="0" id="tab-rotation">
+                            <span class="tab-icon"><i class="fas fa-undo-alt" aria-hidden="true"></i></span>
+                            <span class="tab-text">${this.i18n.t('rotationVerify')}</span>
                         </button>
                     </div>
 
@@ -209,6 +225,44 @@ class Captcha {
                         </div>
                     </div>
 
+                    <div class="captcha-content" id="rotation-captcha" role="tabpanel" aria-labelledby="tab-rotation" hidden>
+                        <div class="captcha-loading-overlay" id="rotation-loading-overlay" hidden>
+                            <div class="captcha-loading-container">
+                                <div class="loading-animation-${this.options.animationStyle}">
+                                    <div class="loading-dots">
+                                        <span></span><span></span><span></span><span></span><span></span>
+                                    </div>
+                                </div>
+                                <div class="loading-progress-bar">
+                                    <div class="loading-progress-fill" id="rotation-progress-fill"></div>
+                                </div>
+                                <div class="loading-message" id="rotation-loading-message">${this.i18n.t('loading')}</div>
+                            </div>
+                        </div>
+                        <div class="rotation-captcha-display" id="rotation-image-wrapper">
+                            <img class="rotation-captcha-image" id="rotation-image" alt="${this.i18n.t('rotationImageAlt')}">
+                            <button class="captcha-refresh" id="rotation-refresh" aria-label="${this.i18n.t('refresh')}" title="${this.i18n.t('refresh')}">
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                            </button>
+                            <div class="captcha-click-skeleton" id="rotation-skeleton">
+                                <div class="skeleton-shimmer"></div>
+                            </div>
+                        </div>
+                        <div class="rotation-slider-container" id="rotation-slider-container">
+                            <div class="rotation-slider-track" id="rotation-slider-track"></div>
+                            <div class="rotation-slider-button" id="rotation-slider-button" role="button"
+                                 aria-label="${this.i18n.t('rotationSliderAria')}"
+                                 tabindex="-1">
+                                <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                            </div>
+                            <div class="rotation-slider-text" id="rotation-slider-text" aria-hidden="true">${this.i18n.t('dragToRotate')}</div>
+                        </div>
+                        <div class="rotation-angle-display">
+                            <span>${this.i18n.t('rotationAngle')}: </span>
+                            <span id="rotation-angle-value">0°</span>
+                        </div>
+                    </div>
+
                     <div class="captcha-result" id="captcha-result" role="alert" aria-live="assertive" hidden></div>
                 </div>
                 <div class="captcha-footer">
@@ -248,6 +302,17 @@ class Captcha {
             clickSubmit: this.container.querySelector('#click-submit'),
             clickSelectedCount: this.container.querySelector('#click-selected-count'),
             clickTotalCount: this.container.querySelector('#click-total-count'),
+            rotationImage: this.container.querySelector('#rotation-image'),
+            rotationRefresh: this.container.querySelector('#rotation-refresh'),
+            rotationLoadingOverlay: this.container.querySelector('#rotation-loading-overlay'),
+            rotationProgressFill: this.container.querySelector('#rotation-progress-fill'),
+            rotationLoadingMessage: this.container.querySelector('#rotation-loading-message'),
+            rotationSkeleton: this.container.querySelector('#rotation-skeleton'),
+            rotationSliderContainer: this.container.querySelector('#rotation-slider-container'),
+            rotationSliderTrack: this.container.querySelector('#rotation-slider-track'),
+            rotationSliderButton: this.container.querySelector('#rotation-slider-button'),
+            rotationSliderText: this.container.querySelector('#rotation-slider-text'),
+            rotationAngleValue: this.container.querySelector('#rotation-angle-value'),
             result: this.container.querySelector('#captcha-result')
         };
 
@@ -269,9 +334,14 @@ class Captcha {
             this.refresh();
             this.announceToScreenReader(this.i18n.t('refreshing'));
         });
+        this.elements.rotationRefresh.addEventListener('click', () => {
+            this.refresh();
+            this.announceToScreenReader(this.i18n.t('refreshing'));
+        });
 
         this.bindSliderEvents();
         this.bindClickEvents();
+        this.bindRotationEvents();
         this.bindKeyboardShortcuts();
     }
 
@@ -595,6 +665,77 @@ class Captcha {
         });
     }
 
+    bindRotationEvents() {
+        const button = this.elements.rotationSliderButton;
+        const container = this.elements.rotationSliderContainer;
+        if (!button || !container) return;
+
+        const startDrag = (e) => {
+            if (this.rotationState.isDragging || this.isLoading) return;
+
+            this.rotationState.isDragging = true;
+            const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            this.rotationState.startX = clientX;
+            this.rotationState.startTime = Date.now();
+            this.rotationState.trajectoryData = [];
+            this.rotationState.currentAngle = 0;
+
+            button.classList.add('dragging');
+            this.elements.rotationSliderText.textContent = this.i18n.t('rotating');
+            this.announceToScreenReader(this.i18n.t('rotationDragStarted'), 'assertive');
+        };
+
+        const drag = (e) => {
+            if (!this.rotationState.isDragging) return;
+
+            e.preventDefault();
+            const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+            const deltaX = clientX - this.rotationState.startX;
+            const maxWidth = container.offsetWidth - button.offsetWidth - 4;
+            const progress = Math.max(0, Math.min(deltaX / maxWidth, 1));
+            const angleDelta = progress * 360;
+
+            this.rotationState.currentAngle = angleDelta;
+            this.rotationState.totalAngle = (this.rotationState.totalAngle + angleDelta) % 360;
+            if (this.rotationState.totalAngle < 0) this.rotationState.totalAngle += 360;
+
+            this.elements.rotationSliderTrack.style.width = (progress * maxWidth) + 'px';
+            button.style.left = (deltaX + 2) + 'px';
+
+            if (this.elements.rotationImage) {
+                this.elements.rotationImage.style.transform = 'rotate(' + this.rotationState.totalAngle + 'deg)';
+            }
+
+            this.updateRotationAngleDisplay(this.rotationState.totalAngle);
+            this.rotationState.trajectoryData.push({
+                angle: this.rotationState.totalAngle,
+                timestamp: Date.now()
+            });
+        };
+
+        const endDrag = (e) => {
+            if (!this.rotationState.isDragging) return;
+
+            this.rotationState.isDragging = false;
+            button.classList.remove('dragging');
+            this.elements.rotationSliderText.textContent = this.i18n.t('dragToRotate');
+
+            if (this.rotationState.totalAngle > 5) {
+                this.verifyRotation();
+            }
+            this.resetRotationSlider();
+        };
+
+        button.addEventListener('mousedown', startDrag);
+        button.addEventListener('touchstart', startDrag, { passive: false });
+
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('touchmove', drag, { passive: false });
+
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+    }
+
     addClickMarker(point, index) {
         const marker = document.createElement('div');
         marker.className = 'captcha-click-marker';
@@ -678,7 +819,8 @@ class Captcha {
 
         this.elements.contents.forEach(content => {
             const isActive = (type === 'slider' && content.id === 'slider-captcha') ||
-                           (type === 'click' && content.id === 'click-captcha');
+                           (type === 'click' && content.id === 'click-captcha') ||
+                           (type === 'rotation' && content.id === 'rotation-captcha');
             content.classList.toggle('active', isActive);
             content.hidden = !isActive;
         });
@@ -686,10 +828,15 @@ class Captcha {
         this.clearResult();
         this.resetSlider();
         this.clearClickPoints();
+        this.resetRotationSlider();
         this.refresh();
-        
-        const tabName = type === 'slider' ? this.i18n.t('sliderVerify') : this.i18n.t('clickVerify');
-        this.announceToScreenReader(`${this.i18n.t('switchedTo')} ${tabName}`);
+
+        const tabNames = {
+            slider: this.i18n.t('sliderVerify'),
+            click: this.i18n.t('clickVerify'),
+            rotation: this.i18n.t('rotationVerify')
+        };
+        this.announceToScreenReader(`${this.i18n.t('switchedTo')} ${tabNames[type] || type}`);
     }
 
     async refresh() {
@@ -709,8 +856,10 @@ class Captcha {
             }
             if (this.options.type === 'slider') {
                 await this.refreshSlider();
-            } else {
+            } else if (this.options.type === 'click') {
                 await this.refreshClick();
+            } else if (this.options.type === 'rotation') {
+                await this.refreshRotation();
             }
             this.announceToScreenReader(this.i18n.t('loadedSuccess'));
         } catch (error) {
@@ -942,6 +1091,155 @@ class Captcha {
             </svg>
         `);
         this.animateClickSkeletonOut();
+    }
+
+    async refreshRotation() {
+        this.resetRotationSlider();
+        this.animateRotationSkeletonIn();
+
+        try {
+            const response = await fetch(`${this.options.apiBase}/captcha/rotation`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const respData = data.data || data;
+                this.sessionId = respData.challenge_id;
+                this.rotationState.challengeId = respData.challenge_id;
+                this.rotationState.imageUrl = respData.image;
+
+                if (this.elements.rotationImage) {
+                    this.elements.rotationImage.src = respData.image;
+                    this.elements.rotationImage.style.transform = 'rotate(0deg)';
+                }
+
+                this.animateRotationSkeletonOut();
+            } else {
+                this.showResult(this.i18n.t('loadFailed'), 'error');
+                this.animateRotationSkeletonOut();
+            }
+        } catch (error) {
+            console.error('Rotation refresh failed:', error);
+            this.showResult(this.i18n.t('loadFailed'), 'error');
+            this.animateRotationSkeletonOut();
+        }
+    }
+
+    animateRotationSkeletonIn() {
+        const skeleton = this.elements.rotationSkeleton;
+        if (skeleton) {
+            skeleton.classList.add('active');
+            skeleton.style.display = 'block';
+        }
+    }
+
+    animateRotationSkeletonOut() {
+        const skeleton = this.elements.rotationSkeleton;
+        if (skeleton) {
+            skeleton.classList.remove('active');
+            setTimeout(() => {
+                skeleton.style.display = 'none';
+            }, 300);
+        }
+    }
+
+    loadDemoRotation() {
+        this.sessionId = 'demo_' + Date.now();
+        this.rotationState.challengeId = 'demo_' + Date.now();
+        this.rotationState.totalAngle = 0;
+
+        if (this.elements.rotationImage) {
+            this.elements.rotationImage.src = 'data:image/svg+xml,' + encodeURIComponent(`
+                <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+                    <defs>
+                        <linearGradient id="bg3" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea"/>
+                            <stop offset="100%" style="stop-color:#764ba2"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#bg3)"/>
+                    <text x="100" y="110" text-anchor="middle" fill="white" font-size="24" font-family="Arial">旋转验证</text>
+                </svg>
+            `);
+            this.elements.rotationImage.style.transform = 'rotate(0deg)';
+        }
+        this.animateRotationSkeletonOut();
+    }
+
+    resetRotationSlider() {
+        this.rotationState.isDragging = false;
+        this.rotationState.currentAngle = 0;
+        this.rotationState.trajectoryData = [];
+
+        if (this.elements.rotationSliderButton) {
+            this.elements.rotationSliderButton.style.left = '2px';
+            this.elements.rotationSliderButton.classList.remove('dragging');
+        }
+        if (this.elements.rotationSliderTrack) {
+            this.elements.rotationSliderTrack.style.width = '0px';
+        }
+        if (this.elements.rotationSliderText) {
+            this.elements.rotationSliderText.textContent = this.i18n.t('dragToRotate');
+        }
+        this.updateRotationAngleDisplay(0);
+    }
+
+    updateRotationAngleDisplay(angle) {
+        if (this.elements.rotationAngleValue) {
+            this.elements.rotationAngleValue.textContent = Math.round(angle) + '°';
+        }
+    }
+
+    async verifyRotation() {
+        this.showLoading('rotation');
+
+        const payload = {
+            challenge_id: this.rotationState.challengeId,
+            angle: Math.round(this.rotationState.totalAngle % 360)
+        };
+
+        try {
+            const response = await fetch(`${this.options.apiBase}/captcha/rotation/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            let success = false;
+            if (response.ok) {
+                const data = await response.json();
+                const respData = data.data || data;
+                success = respData.success;
+            }
+
+            if (success) {
+                this.showResult(this.i18n.t('verifySuccess'), 'success');
+                this.announceToScreenReader(this.i18n.t('verifySuccess'), 'assertive');
+                if (this.options.onSuccess) {
+                    this.options.onSuccess({ type: 'rotation', session_id: this.sessionId });
+                }
+            } else {
+                this.showResult(this.i18n.t('verifyFailed'), 'error');
+                this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
+                setTimeout(() => this.refresh(), 1500);
+                if (this.options.onError) {
+                    this.options.onError({ type: 'rotation', error: this.i18n.t('verifyFailed') });
+                }
+            }
+        } catch (error) {
+            this.showResult(this.i18n.t('verifyFailed'), 'error');
+            this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
+            setTimeout(() => this.refresh(), 1500);
+            if (this.options.onError) {
+                this.options.onError({ type: 'rotation', error: error.message || this.i18n.t('verifyFailed') });
+            }
+        } finally {
+            setTimeout(() => {
+                this.hideLoading('rotation');
+            }, 500);
+        }
     }
 
     calculateSpeedData() {
@@ -1321,10 +1619,12 @@ class Captcha {
         this.loadingState.isLoading = true;
         this.loadingState.loadingType = type;
 
-        const overlay = type === 'slider' ? 
-            this.elements.sliderLoadingOverlay : 
-            this.elements.clickLoadingOverlay;
-        
+        const overlay = type === 'slider' ?
+            this.elements.sliderLoadingOverlay :
+            type === 'click' ?
+            this.elements.clickLoadingOverlay :
+            this.elements.rotationLoadingOverlay;
+
         if (overlay) {
             overlay.hidden = false;
             this.animateLoadingProgress(type);
@@ -1342,12 +1642,16 @@ class Captcha {
         }
 
         let progress = 0;
-        const progressFill = type === 'slider' ? 
-            this.elements.sliderProgressFill : 
-            this.elements.clickProgressFill;
-        const loadingMessage = type === 'slider' ? 
-            this.elements.sliderLoadingMessage : 
-            this.elements.clickLoadingMessage;
+        const progressFill = type === 'slider' ?
+            this.elements.sliderProgressFill :
+            type === 'click' ?
+            this.elements.clickProgressFill :
+            this.elements.rotationProgressFill;
+        const loadingMessage = type === 'slider' ?
+            this.elements.sliderLoadingMessage :
+            type === 'click' ?
+            this.elements.clickLoadingMessage :
+            this.elements.rotationLoadingMessage;
 
         const messages = [
             this.i18n.t('loading'),
@@ -1381,9 +1685,11 @@ class Captcha {
     }
 
     setLoadingMessage(type, message) {
-        const loadingMessage = type === 'slider' ? 
-            this.elements.sliderLoadingMessage : 
-            this.elements.clickLoadingMessage;
+        const loadingMessage = type === 'slider' ?
+            this.elements.sliderLoadingMessage :
+            type === 'click' ?
+            this.elements.clickLoadingMessage :
+            this.elements.rotationLoadingMessage;
         if (loadingMessage) {
             loadingMessage.textContent = message;
         }
@@ -1393,10 +1699,12 @@ class Captcha {
         this.isLoading = false;
         this.loadingState.isLoading = false;
 
-        const overlay = type === 'slider' ? 
-            this.elements.sliderLoadingOverlay : 
-            this.elements.clickLoadingOverlay;
-        
+        const overlay = type === 'slider' ?
+            this.elements.sliderLoadingOverlay :
+            type === 'click' ?
+            this.elements.clickLoadingOverlay :
+            this.elements.rotationLoadingOverlay;
+
         if (overlay) {
             this.animateLoadingOut(overlay);
         }
@@ -1445,14 +1753,18 @@ class Captcha {
         tabs.forEach(tab => {
             const textSpan = tab.querySelector('.tab-text');
             if (textSpan) {
-                textSpan.textContent = tab.dataset.type === 'slider' ? 
-                    this.i18n.t('sliderVerify') : 
-                    this.i18n.t('clickVerify');
+                const tabNames = {
+                    slider: this.i18n.t('sliderVerify'),
+                    click: this.i18n.t('clickVerify'),
+                    rotation: this.i18n.t('rotationVerify')
+                };
+                textSpan.textContent = tabNames[tab.dataset.type] || tab.dataset.type;
             }
         });
 
         this.resetSlider();
         this.clearClickPoints();
+        this.resetRotationSlider();
     }
 
     destroy() {
@@ -1481,6 +1793,7 @@ class CaptchaI18n {
                 verifyType: '验证方式',
                 sliderVerify: '滑块验证',
                 clickVerify: '点选验证',
+                rotationVerify: '旋转验证',
                 sliderImageAlt: '滑块验证码图片',
                 puzzlePiece: '拼图块',
                 refresh: '刷新验证码',
@@ -1519,7 +1832,13 @@ class CaptchaI18n {
                 verifying: '验证中...',
                 secureConnection: '安全连接',
                 securityBadge: '安全验证保护',
-                demoClickHint: '请依次点击: 1, 2, 3'
+                demoClickHint: '请依次点击: 1, 2, 3',
+                rotationImageAlt: '旋转验证码图片',
+                rotationSliderAria: '拖动滑块旋转图片',
+                dragToRotate: '拖动旋转图片',
+                rotating: '旋转中...',
+                rotationDragStarted: '开始拖动旋转',
+                rotationAngle: '旋转角度'
             },
             'en-US': {
                 captchaLabel: 'Security captcha component',
@@ -1528,6 +1847,7 @@ class CaptchaI18n {
                 verifyType: 'Verification type',
                 sliderVerify: 'Slider Verification',
                 clickVerify: 'Click Verification',
+                rotationVerify: 'Rotation Verification',
                 sliderImageAlt: 'Slider captcha image',
                 puzzlePiece: 'Puzzle piece',
                 refresh: 'Refresh captcha',
@@ -1566,7 +1886,13 @@ class CaptchaI18n {
                 verifying: 'Verifying...',
                 secureConnection: 'Secure connection',
                 securityBadge: 'Security protection',
-                demoClickHint: 'Click: 1, 2, 3 in order'
+                demoClickHint: 'Click: 1, 2, 3 in order',
+                rotationImageAlt: 'Rotation captcha image',
+                rotationSliderAria: 'Drag slider to rotate image',
+                dragToRotate: 'Drag to rotate',
+                rotating: 'Rotating...',
+                rotationDragStarted: 'Started rotating',
+                rotationAngle: 'Rotation angle'
             },
             'ja-JP': {
                 captchaLabel: 'セキュリティキャプチャコンポーネント',
@@ -1575,6 +1901,7 @@ class CaptchaI18n {
                 verifyType: '確認方法',
                 sliderVerify: 'スライダー確認',
                 clickVerify: 'クリック確認',
+                rotationVerify: '回転確認',
                 sliderImageAlt: 'スライダーキャプチャ画像',
                 puzzlePiece: 'パズルピース',
                 refresh: 'キャプチャを更新',
@@ -1613,7 +1940,13 @@ class CaptchaI18n {
                 verifying: '確認中...',
                 secureConnection: '安全な接続',
                 securityBadge: 'セキュリティ保護',
-                demoClickHint: '順番にクリック: 1, 2, 3'
+                demoClickHint: '順番にクリック: 1, 2, 3',
+                rotationImageAlt: '回転キャプチャ画像',
+                rotationSliderAria: 'スライダーをドラッグして画像を回転',
+                dragToRotate: 'ドラッグして回転',
+                rotating: '回転中...',
+                rotationDragStarted: '回転を開始しました',
+                rotationAngle: '回転角度'
             }
         };
     }

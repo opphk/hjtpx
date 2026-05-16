@@ -3,10 +3,13 @@ package middleware
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
 	"net/url"
 	"sort"
@@ -342,7 +345,7 @@ type readCloser struct {
 
 func (rc *readCloser) Read(p []byte) (n int, err error) {
 	if rc.position >= len(rc.data) {
-		return 0, fmt.Errorf("EOF")
+		return 0, io.EOF
 	}
 	n = copy(p, rc.data[rc.position:])
 	rc.position += n
@@ -483,4 +486,37 @@ func NewSignatureConfig(secretKey string) SignatureConfig {
 		NonceHeader:       "X-Nonce",
 		ExcludePaths:      []string{},
 	}
+}
+
+const SignatureVersion = "1"
+
+func GenerateNonce(length int) (string, error) {
+	if length < 8 {
+		length = 16
+	}
+	if length > 64 {
+		length = 64
+	}
+	bytes := make([]byte, length)
+	_, err := io.ReadFull(rand.Reader, bytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func GenerateTimestamp() int64 {
+	return time.Now().Unix()
+}
+
+func BuildSignatureInput(secretKey, method, path, query string, timestamp int64, nonce string, body []byte) (string, error) {
+	if nonce == "" {
+		var err error
+		nonce, err = GenerateNonce(16)
+		if err != nil {
+			return "", err
+		}
+	}
+	bodyHash := hashBody(body)
+	return calculateSignature(secretKey, method, path, query, timestamp, nonce, bodyHash), nil
 }

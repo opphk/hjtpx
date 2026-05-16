@@ -100,11 +100,12 @@ func GenerateRandomKey(keySize AESKeySize) ([]byte, error) {
 
 func GenerateRandomString(length int) (string, error) {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-	bytes := make([]byte, length)
-	randMutex.Lock()
-	defer randMutex.Unlock()
+	bytes, err := secureRandomBytes(length)
+	if err != nil {
+		return "", err
+	}
 	for i := range bytes {
-		bytes[i] = chars[mrand.Intn(len(chars))]
+		bytes[i] = chars[int(bytes[i])%len(chars)]
 	}
 	return string(bytes), nil
 }
@@ -138,6 +139,63 @@ func AESEncrypt(plaintext []byte, key []byte) ([]byte, error) {
 
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
 	return ciphertext, nil
+}
+
+func AESEncryptWithAAD(plaintext, key, additionalData []byte) ([]byte, error) {
+	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+		return nil, ErrInvalidKeyLength
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonce, err := secureRandomBytes(gcm.NonceSize())
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, additionalData)
+	return ciphertext, nil
+}
+
+func AESDecryptWithAAD(ciphertext, key, additionalData []byte) ([]byte, error) {
+	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+		return nil, ErrInvalidKeyLength
+	}
+
+	if len(ciphertext) == 0 {
+		return nil, ErrCiphertextTooShort
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, ErrCiphertextTooShort
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, additionalData)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrDecryptionFailed, err)
+	}
+
+	return plaintext, nil
 }
 
 func AESDecrypt(ciphertext []byte, key []byte) ([]byte, error) {
@@ -308,17 +366,17 @@ func HashString(data string, algorithm HashAlgorithmType) string {
 }
 
 func ComputeHMAC(key, data []byte, algorithm HashAlgorithmType) ([]byte, error) {
-	var h hash.Hash
+	var h func() hash.Hash
 	switch algorithm {
 	case AlgoSHA256:
-		h = sha256.New()
+		h = sha256.New
 	case AlgoSHA512:
-		h = sha512.New()
+		h = sha512.New
 	default:
-		h = sha256.New()
+		h = sha256.New
 	}
 
-	mac := hmac.New(func() hash.Hash { return h }, key)
+	mac := hmac.New(h, key)
 	mac.Write(data)
 	return mac.Sum(nil), nil
 }

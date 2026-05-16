@@ -18,6 +18,8 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
 	r.Use(middleware.ErrorHandler())
+	r.Use(middleware.AddSecurityHeaders())
+	r.Use(middleware.SQLInjectionProtection())
 
 	// 健康检查
 	r.GET("/health", handler.HealthCheck)
@@ -80,6 +82,12 @@ func SetupRouter() *gin.Engine {
 	r.GET("/admin/logs", func(c *gin.Context) {
 		c.HTML(200, "logs.html", nil)
 	})
+	r.GET("/admin/risk-rules", func(c *gin.Context) {
+		c.HTML(200, "risk-rules.html", nil)
+	})
+	r.GET("/admin/blacklist", func(c *gin.Context) {
+		c.HTML(200, "blacklist.html", nil)
+	})
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -91,6 +99,8 @@ func SetupRouter() *gin.Engine {
 			captcha.GET("/click", handler.GetClickCaptcha)
 			captcha.GET("/image", handler.GenerateImageCaptcha)
 			captcha.POST("/image/verify", handler.VerifyImageCaptcha)
+			captcha.GET("/rotation", handler.GenerateRotationCaptcha)
+			captcha.POST("/rotation/verify", handler.VerifyRotationCaptcha)
 			captcha.POST("/verify", handler.VerifyCaptcha)
 		}
 
@@ -137,6 +147,8 @@ func SetupRouter() *gin.Engine {
 				{
 					dashboard.GET("/stats", handler.GetDashboardStats)
 					dashboard.GET("/activity", handler.GetRecentActivity)
+					dashboard.GET("/system-status", handler.GetSystemStatus)
+					dashboard.GET("/request-trend", handler.GetRequestTrend)
 				}
 
 				// 统计数据
@@ -157,6 +169,7 @@ func SetupRouter() *gin.Engine {
 				// 应用管理
 				applications := adminAuth.Group("/applications")
 				{
+					applications.GET("/summary", handler.GetApplicationsSummary)
 					applications.GET("", handler.ListApplications)
 					applications.POST("", handler.CreateApplication)
 					applications.GET("/:id", handler.GetApplication)
@@ -171,12 +184,39 @@ func SetupRouter() *gin.Engine {
 				// 验证日志查询
 				logs := adminAuth.Group("/logs")
 				{
+					logs.GET("/summary", handler.GetLogsSummary)
 					logs.GET("", handler.GetVerificationLogs)
 					logs.GET("/statistics", handler.GetLogStatistics)
 					logs.GET("/export", handler.ExportLogs)
 					logs.GET("/session/:session_id", handler.GetLogsBySession)
 					logs.DELETE("/cleanup", handler.DeleteOldLogs)
+					logs.POST("/clear", handler.ClearLogs)
 					logs.GET("/:id", handler.GetLogDetail)
+				}
+
+				// 黑名单管理
+				blacklist := adminAuth.Group("/blacklist")
+				{
+					blacklist.GET("/summary", handler.GetBlacklistSummary)
+					blacklist.GET("", handler.ListBlacklist)
+					blacklist.POST("", handler.CreateBlacklist)
+					blacklist.POST("/import", handler.ImportBlacklist)
+					blacklist.GET("/:id", handler.GetBlacklistByID)
+					blacklist.PUT("/:id", handler.UpdateBlacklist)
+					blacklist.DELETE("/:id", handler.DeleteBlacklist)
+					blacklist.POST("/:id/unblock", handler.UnblockBlacklist)
+				}
+
+				// 风控规则管理
+				riskRules := adminAuth.Group("/risk-rules")
+				{
+					riskRules.GET("/summary", handler.GetRiskRulesSummary)
+					riskRules.GET("", handler.ListRiskRules)
+					riskRules.POST("", handler.CreateRiskRule)
+					riskRules.GET("/:id", handler.GetRiskRule)
+					riskRules.PUT("/:id", handler.UpdateRiskRule)
+					riskRules.DELETE("/:id", handler.DeleteRiskRule)
+					riskRules.POST("/:id/toggle", handler.ToggleRiskRule)
 				}
 
 				// CSS来源切换

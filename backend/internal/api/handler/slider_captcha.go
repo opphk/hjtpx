@@ -31,6 +31,18 @@ const (
 	ShapeHexagon
 )
 
+type TrajectoryPoint struct {
+	X int   `json:"x"`
+	Y int   `json:"y"`
+	T int64 `json:"t"`
+}
+
+type TrajectoryResult struct {
+	Score        int      `json:"score"`
+	Passed       bool     `json:"passed"`
+	Reasons      []string `json:"reasons,omitempty"`
+}
+
 type SliderCaptchaConfig struct {
 	Width           int
 	Height          int
@@ -90,15 +102,17 @@ type GenerateSliderResponse struct {
 }
 
 type VerifySliderRequest struct {
-	SessionID string `json:"session_id" binding:"required"`
-	X         int    `json:"x" binding:"required"`
-	Y         int    `json:"y"`
+	SessionID string            `json:"session_id" binding:"required"`
+	X         int               `json:"x" binding:"required"`
+	Y         int               `json:"y"`
+	Trajectory []TrajectoryPoint `json:"trajectory,omitempty"`
 }
 
 type VerifySliderResponse struct {
-	Success   bool   `json:"success"`
-	Message   string `json:"message"`
-	Remaining int    `json:"remaining_attempts"`
+	Success           bool              `json:"success"`
+	Message           string            `json:"message"`
+	Remaining         int               `json:"remaining_attempts"`
+	TrajectoryResult  *TrajectoryResult `json:"trajectory_result,omitempty"`
 }
 
 var (
@@ -139,7 +153,7 @@ func generateSliderBackground(width, height int) image.Image {
 	bgStyle := randIntSlider(0, 4)
 	switch bgStyle {
 	case 0:
-		drawGradientBackground(img, width, height)
+		drawGradientBackground(img)
 	case 1:
 		drawPatternBackground(img, width, height)
 	case 2:
@@ -149,27 +163,12 @@ func generateSliderBackground(width, height int) image.Image {
 	case 4:
 		drawTexturedBackground(img, width, height)
 	default:
-		drawGradientBackground(img, width, height)
+		drawGradientBackground(img)
 	}
 
 	addImageNoise(img, width, height)
 
 	return img
-}
-
-func drawGradientBackground(img *image.RGBA, width, height int) {
-	colors := generateGradientColors()
-
-	for y := 0; y < height; y++ {
-		ratio := float64(y) / float64(height)
-		r := uint8(float64(colors.start.R) + ratio*float64(colors.end.R-colors.start.R))
-		g := uint8(float64(colors.start.G) + ratio*float64(colors.end.G-colors.start.G))
-		b := uint8(float64(colors.start.B) + ratio*float64(colors.end.B-colors.start.B))
-
-		for x := 0; x < width; x++ {
-			img.Set(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
-		}
-	}
 }
 
 type gradientColorSet struct {
@@ -754,6 +753,206 @@ func generateSliderSessionID() string {
 	return fmt.Sprintf("slider_%x", bytes)
 }
 
+const (
+	minTrajectoryPoints     = 3
+	maxSingleStepDistance   = 50
+	minAccelerationVariance = 0.5
+	minYVariation           = 1
+	maxStraightLineRatio    = 0.85
+	maxTeleportRatio        = 0.6
+)
+
+func verifyTrajectory(points []TrajectoryPoint, totalDistance int) *TrajectoryResult {
+	result := &TrajectoryResult{
+		Score:   100,
+		Passed:  true,
+		Reasons: []string{},
+	}
+
+	if len(points) < minTrajectoryPoints {
+		result.Score = 0
+		result.Passed = false
+		result.Reasons = append(result.Reasons, "轨迹点数量不足")
+		return result
+	}
+
+	reasons := []string{}
+	score := 100
+
+	score, reasons = checkPointCount(points, score, reasons)
+	score, reasons = checkTeleportation(points, score, reasons, totalDistance)
+	score, reasons = checkYVariation(points, score, reasons)
+	score, reasons = checkAccelerationConsistency(points, score, reasons)
+	score, reasons = checkJitter(points, score, reasons)
+	score, reasons = checkStraightLine(points, score, reasons)
+
+	if score < 0 {
+		score = 0
+	}
+
+	result.Score = score
+	result.Passed = score >= 30
+	result.Reasons = reasons
+	return result
+}
+
+func checkPointCount(points []TrajectoryPoint, score int, reasons []string) (int, []string) {
+	if len(points) < 5 {
+		score -= 20
+		reasons = append(reasons, "轨迹点较少")
+	}
+	if len(points) > 200 {
+		score -= 10
+		reasons = append(reasons, "轨迹点过多")
+	}
+	return score, reasons
+}
+
+func checkTeleportation(points []TrajectoryPoint, score int, reasons []string, totalDistance int) (int, []string) {
+	maxStep := 0
+	for i := 1; i < len(points); i++ {
+		step := intAbs(points[i].X - points[i-1].X)
+		if step > maxStep {
+			maxStep = step
+		}
+	}
+
+	if maxStep > maxSingleStepDistance {
+		score -= 30
+		reasons = append(reasons, "存在异常瞬移轨迹")
+	}
+
+	if totalDistance > 0 {
+		teleportThreshold := int(float64(totalDistance) * maxTeleportRatio)
+		if maxStep > teleportThreshold {
+			score -= 20
+			if len(reasons) == 0 || reasons[len(reasons)-1] != "存在异常瞬移轨迹" {
+				reasons = append(reasons, "单步距离占比过大")
+			}
+		}
+	}
+
+	return score, reasons
+}
+
+func checkYVariation(points []TrajectoryPoint, score int, reasons []string) (int, []string) {
+	if len(points) < 2 {
+		return score, reasons
+	}
+
+	minY, maxY := points[0].Y, points[0].Y
+	for _, p := range points {
+		if p.Y < minY {
+			minY = p.Y
+		}
+		if p.Y > maxY {
+			maxY = p.Y
+		}
+	}
+
+	yRange := maxY - minY
+	if yRange < minYVariation {
+		score -= 25
+		reasons = append(reasons, "Y轴无变化，疑似机器操作")
+	}
+
+	return score, reasons
+}
+
+func checkAccelerationConsistency(points []TrajectoryPoint, score int, reasons []string) (int, []string) {
+	if len(points) < 4 {
+		return score, reasons
+	}
+
+	velocities := make([]float64, 0, len(points)-1)
+	for i := 1; i < len(points); i++ {
+		dt := float64(points[i].T - points[i-1].T)
+		if dt <= 0 {
+			dt = 1
+		}
+		dx := float64(points[i].X - points[i-1].X)
+		velocities = append(velocities, dx/dt)
+	}
+
+	if len(velocities) < 2 {
+		return score, reasons
+	}
+
+	accelerations := make([]float64, 0, len(velocities)-1)
+	for i := 1; i < len(velocities); i++ {
+		accelerations = append(accelerations, velocities[i]-velocities[i-1])
+	}
+
+	if len(accelerations) == 0 {
+		return score, reasons
+	}
+
+	mean := 0.0
+	for _, a := range accelerations {
+		mean += a
+	}
+	mean /= float64(len(accelerations))
+
+	variance := 0.0
+	for _, a := range accelerations {
+		diff := a - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(accelerations))
+
+	if variance < minAccelerationVariance {
+		score -= 20
+		reasons = append(reasons, "加速度变化异常，疑似机器操作")
+	}
+
+	return score, reasons
+}
+
+func checkJitter(points []TrajectoryPoint, score int, reasons []string) (int, []string) {
+	if len(points) < 6 {
+		return score, reasons
+	}
+
+	jitterCount := 0
+	for i := 2; i < len(points); i++ {
+		prevDir := points[i-1].X - points[i-2].X
+		currDir := points[i].X - points[i-1].X
+		if prevDir > 0 && currDir < 0 || prevDir < 0 && currDir > 0 {
+			jitterCount++
+		}
+	}
+
+	if jitterCount == 0 {
+		score -= 15
+		reasons = append(reasons, "轨迹过于平滑，无自然抖动")
+	}
+
+	return score, reasons
+}
+
+func checkStraightLine(points []TrajectoryPoint, score int, reasons []string) (int, []string) {
+	if len(points) < 3 {
+		return score, reasons
+	}
+
+	straightSegments := 0
+	totalSegments := len(points) - 1
+
+	for i := 1; i < len(points); i++ {
+		if points[i].Y == points[i-1].Y {
+			straightSegments++
+		}
+	}
+
+	straightRatio := float64(straightSegments) / float64(totalSegments)
+	if straightRatio > maxStraightLineRatio {
+		score -= 20
+		reasons = append(reasons, "轨迹近似直线，疑似机器操作")
+	}
+
+	return score, reasons
+}
+
 func saveSliderSessionToRedis(session *SliderSession) {
 	if redis.Client == nil {
 		return
@@ -818,6 +1017,12 @@ func VerifySliderCaptcha(c *gin.Context) {
 		return
 	}
 
+	if time.Now().After(session.ExpiresAt) {
+		deleteSliderSessionFromRedis(req.SessionID)
+		response.NotFound(c, "验证码已过期，请重新获取")
+		return
+	}
+
 	if session.Verified {
 		response.BadRequest(c, "验证码已验证通过")
 		return
@@ -842,14 +1047,31 @@ func VerifySliderCaptcha(c *gin.Context) {
 	distance := intAbs(req.X - session.SecretX)
 	yDistance := intAbs(req.Y - session.SecretY)
 
+	var trajResult *TrajectoryResult
+	if len(req.Trajectory) > 0 {
+		trajResult = verifyTrajectory(req.Trajectory, distance)
+	}
+
 	if distance <= tolerance && yDistance <= tolerance {
+		if trajResult != nil && !trajResult.Passed {
+			remaining := defaultSliderConfig.MaxAttempts - session.Attempts
+			response.Success(c, VerifySliderResponse{
+				Success:          false,
+				Message:          "位置正确但轨迹异常，请使用自然手势滑动",
+				Remaining:        remaining,
+				TrajectoryResult: trajResult,
+			})
+			return
+		}
+
 		session.Verified = true
 		deleteSliderSessionFromRedis(req.SessionID)
 
 		response.Success(c, VerifySliderResponse{
-			Success:   true,
-			Message:   "验证成功",
-			Remaining: defaultSliderConfig.MaxAttempts - session.Attempts,
+			Success:          true,
+			Message:          "验证成功",
+			Remaining:        defaultSliderConfig.MaxAttempts - session.Attempts,
+			TrajectoryResult: trajResult,
 		})
 		return
 	}
@@ -863,9 +1085,10 @@ func VerifySliderCaptcha(c *gin.Context) {
 
 	accuracy := 100 - (distance*100/(defaultSliderConfig.Width/2))
 	response.Success(c, VerifySliderResponse{
-		Success:   false,
-		Message:   fmt.Sprintf("位置偏差较大，准确度约%d%%", accuracy),
-		Remaining: remaining,
+		Success:          false,
+		Message:          fmt.Sprintf("位置偏差较大，准确度约%d%%", accuracy),
+		Remaining:        remaining,
+		TrajectoryResult: trajResult,
 	})
 }
 

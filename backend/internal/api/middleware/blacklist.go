@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
 var blacklistService = service.NewRateLimitService()
@@ -43,11 +44,7 @@ func IPBlacklistMiddleware() gin.HandlerFunc {
 		}
 
 		if isBlacklisted {
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "IP已被禁止访问",
-				"error":   "ip_blacklisted",
-			})
+			response.Forbidden(c)
 			c.Abort()
 			return
 		}
@@ -77,23 +74,20 @@ func UserBlacklistMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		isBlacklisted, err := blacklistService.IsBlacklisted(c.Request.Context(), string(rune(userID)), BlacklistTypeUser)
+		userIDStr := formatUserID(userID)
+		isBlacklisted, err := blacklistService.IsBlacklisted(c.Request.Context(), userIDStr, BlacklistTypeUser)
 		if err != nil {
 			c.Next()
 			return
 		}
 
 		if isBlacklisted {
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "用户已被禁止访问",
-				"error":   "user_blacklisted",
-			})
+			response.Forbidden(c)
 			c.Abort()
 			return
 		}
 
-		isBanned, remaining, err := blacklistService.IsBanned(c.Request.Context(), string(rune(userID)), BlacklistTypeUser)
+		isBanned, remaining, err := blacklistService.IsBanned(c.Request.Context(), userIDStr, BlacklistTypeUser)
 		if err == nil && isBanned {
 			c.Header("Retry-After", remaining.String())
 			c.JSON(http.StatusForbidden, gin.H{
@@ -123,11 +117,7 @@ func CombinedBlacklistMiddleware() gin.HandlerFunc {
 		if ip != "" {
 			isBlacklisted, _ := blacklistService.IsBlacklisted(c.Request.Context(), ip, BlacklistTypeIP)
 			if isBlacklisted {
-				c.JSON(http.StatusForbidden, gin.H{
-					"code":    403,
-					"message": "IP已被禁止访问",
-					"error":   "ip_blacklisted",
-				})
+				response.Forbidden(c)
 				c.Abort()
 				return
 			}
@@ -151,11 +141,7 @@ func CombinedBlacklistMiddleware() gin.HandlerFunc {
 			userIDStr := formatUserID(userID)
 			isBlacklisted, _ := blacklistService.IsBlacklisted(c.Request.Context(), userIDStr, BlacklistTypeUser)
 			if isBlacklisted {
-				c.JSON(http.StatusForbidden, gin.H{
-					"code":    403,
-					"message": "用户已被禁止访问",
-					"error":   "user_blacklisted",
-				})
+				response.Forbidden(c)
 				c.Abort()
 				return
 			}
@@ -202,11 +188,7 @@ func AutoBanMiddleware(violationThreshold int, banType string) gin.HandlerFunc {
 		if shouldBan {
 			err := blacklistService.AutoBan(c.Request.Context(), identifier, banType)
 			if err == nil {
-				c.JSON(http.StatusForbidden, gin.H{
-					"code":    403,
-					"message": "检测到异常行为，IP已被临时封禁",
-					"error":   "auto_banned",
-				})
+				response.Forbidden(c)
 				c.Abort()
 				return
 			}
@@ -236,11 +218,7 @@ func RecordViolationAndAutoBanMiddleware(violationType string, threshold int, ba
 		shouldBan, _ := blacklistService.ShouldAutoBan(c.Request.Context(), identifier, banType, threshold)
 		if shouldBan {
 			_ = blacklistService.AutoBan(c.Request.Context(), identifier, banType)
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":    403,
-				"message": "检测到异常行为，IP已被临时封禁",
-				"error":   "auto_banned",
-			})
+			response.Forbidden(c)
 			c.Abort()
 			return
 		}

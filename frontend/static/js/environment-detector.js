@@ -3,7 +3,7 @@ class EnvironmentDetector {
         this.options = Object.assign({
             apiBase: '/api/v1',
             sampleRate: 0.3,
-            chainCount: 8,
+            chainCount: 12,
             enableAll: true,
             sessionId: null
         }, options);
@@ -11,6 +11,39 @@ class EnvironmentDetector {
         this.riskScore = 0;
         this.detectionChain = [];
         this.detectionId = 'det_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        this.weights = {
+            canvas: 8,
+            webgl: 10,
+            webgl2: 8,
+            audio: 9,
+            fonts: 7,
+            webrtc_ip: 10,
+            webdriver: 15,
+            selenium: 18,
+            puppeteer: 18,
+            playwright: 18,
+            chrome_runtime: 10,
+            headless: 12,
+            permissions: 6,
+            plugins: 5,
+            languages: 4,
+            timezone: 5,
+            screen: 3,
+            hardware: 4,
+            memory: 3,
+            storage: 5,
+            navigator: 4,
+            window_props: 4,
+            iframe: 6,
+            notification: 3,
+            battery: 3,
+            media_devices: 4,
+            connection: 5,
+            adblock: 4,
+            math: 3,
+            gpu: 6,
+            speech: 3
+        };
     }
 
     getDetectionMethods() {
@@ -31,6 +64,7 @@ class EnvironmentDetector {
             'detectStorage',
             'detectCanvas',
             'detectWebGL',
+            'detectWebGL2',
             'detectAudio',
             'detectFonts',
             'detectNavigatorProps',
@@ -38,7 +72,13 @@ class EnvironmentDetector {
             'detectIframe',
             'detectNotification',
             'detectBattery',
-            'detectMediaDevices'
+            'detectMediaDevices',
+            'detectWebRTCIP',
+            'detectConnection',
+            'detectAdBlock',
+            'detectMathFingerprint',
+            'detectGPUFingerprint',
+            'detectSpeech'
         ];
     }
 
@@ -87,24 +127,54 @@ class EnvironmentDetector {
     }
 
     calculateRiskScore() {
-        let totalScore = 0;
-        let count = 0;
+        let weightedScore = 0;
+        let totalWeight = 0;
+
         for (const key in this.results) {
             const result = this.results[key];
             if (result && typeof result.score === 'number') {
-                totalScore += result.score;
-                count++;
+                const weight = this.weights[key] || 5;
+                weightedScore += result.score * weight;
+                totalWeight += weight;
             }
         }
-        return count > 0 ? Math.round(totalScore / count) : 0;
+
+        if (totalWeight === 0) return 0;
+
+        let baseScore = weightedScore / totalWeight;
+
+        const autoTools = ['detectWebDriver', 'detectPuppeteer', 'detectPlaywright', 'detectSelenium'];
+        const autoDetected = autoTools.filter(m => {
+            const r = this.results[m];
+            return r && r.detected === true;
+        }).length;
+
+        if (autoDetected >= 2) {
+            baseScore = Math.min(baseScore * 1.5 + 20, 100);
+        } else if (autoDetected >= 1) {
+            baseScore = Math.min(baseScore * 1.3 + 10, 100);
+        }
+
+        const proxyIndicators = ['detectWebRTCIP', 'detectConnection'];
+        const proxyAnomalies = proxyIndicators.filter(m => {
+            const r = this.results[m];
+            return r && r.score > 30;
+        }).length;
+
+        if (proxyAnomalies >= 2) {
+            baseScore = Math.min(baseScore * 1.3 + 15, 100);
+        }
+
+        return Math.round(Math.min(Math.max(baseScore, 0), 100));
     }
 
     async detectHeadless() {
         let score = 0;
         const detections = [];
-        if (!navigator.webdriver === false) {
+        if (navigator.webdriver === true || navigator.webdriver === false) {
+        } else {
             score += 30;
-            detections.push('webdriver_false_missing');
+            detections.push('webdriver_undefined');
         }
         if (navigator.plugins && navigator.plugins.length === 0) {
             score += 15;
@@ -123,6 +193,19 @@ class EnvironmentDetector {
             score += 20;
             detections.push('no_mimetypes');
         }
+        try {
+            const ua = navigator.userAgent || '';
+            if (/headless|phantom/i.test(ua)) {
+                score += 35;
+                detections.push('headless_ua');
+            }
+        } catch (e) {}
+        try {
+            if (window.outerHeight === 0 && window.outerWidth === 0) {
+                score += 25;
+                detections.push('zero_window_size');
+            }
+        } catch (e) {}
         return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
@@ -132,7 +215,8 @@ class EnvironmentDetector {
         const wdProps = [
             'webdriver', '__webdriver_evaluate', '__selenium_evaluate',
             '__webdriver_script_fn', '__driver_evaluate', '__fxdriver_evaluate',
-            '__webdriver_unwrapped', '__lastWatirAlert', '__$webdriverAsyncExecutor'
+            '__webdriver_unwrapped', '__lastWatirAlert', '__$webdriverAsyncExecutor',
+            'callSelenium', '__selenium', 'Selenium'
         ];
         for (const prop of wdProps) {
             if (window[prop] !== undefined) {
@@ -146,12 +230,22 @@ class EnvironmentDetector {
                 detections.push('navigator.webdriver');
             }
         } catch (e) {}
-        const el = document.createElement('div');
-        el.setAttribute('onclick', 'return __webdriver_script_fn()');
-        if (el.onclick !== null) {
-            score += 10;
-            detections.push('webdriver_script_fn');
-        }
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onclick', 'return __webdriver_script_fn()');
+            if (el.onclick !== null) {
+                score += 10;
+                detections.push('webdriver_script_fn');
+            }
+        } catch (e) {}
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onmousemove', 'return __driver_evaluate()');
+            if (el.onmousemove !== null) {
+                score += 10;
+                detections.push('driver_evaluate');
+            }
+        } catch (e) {}
         return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
@@ -159,7 +253,7 @@ class EnvironmentDetector {
         let score = 0;
         const detections = [];
         try {
-            if (window.navigator.webdriver === true) {
+            if (navigator.webdriver === true) {
                 score += 25;
                 detections.push('webdriver_true');
             }
@@ -168,6 +262,12 @@ class EnvironmentDetector {
             if (document.$cdc_asdjflasutopfhvcZLmcfl_) {
                 score += 35;
                 detections.push('cdc_marker');
+            }
+        } catch (e) {}
+        try {
+            if (document.$chrome_asyncScriptInfo) {
+                score += 25;
+                detections.push('chrome_async_script');
             }
         } catch (e) {}
         try {
@@ -189,6 +289,12 @@ class EnvironmentDetector {
                 detections.push('puppeteer_ua');
             }
         } catch (e) {}
+        try {
+            if (window._puppeteer_globals !== undefined) {
+                score += 30;
+                detections.push('puppeteer_globals');
+            }
+        } catch (e) {}
         return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
@@ -197,7 +303,8 @@ class EnvironmentDetector {
         const detections = [];
         try {
             if (window.__playwright__ !== undefined ||
-                window.__pw_tags !== undefined) {
+                window.__pw_tags !== undefined ||
+                window.__pw_resume__ !== undefined) {
                 score += 45;
                 detections.push('playwright_global');
             }
@@ -208,6 +315,14 @@ class EnvironmentDetector {
             if (el.onfocus !== null) {
                 score += 35;
                 detections.push('playwright_onfocus');
+            }
+        } catch (e) {}
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onmouseenter', 'return __pw_resume__()');
+            if (el.onmouseenter !== null) {
+                score += 25;
+                detections.push('playwright_mouseenter');
             }
         } catch (e) {}
         try {
@@ -225,7 +340,8 @@ class EnvironmentDetector {
         const detections = [];
         const selProps = [
             'selenium', '_selenium', 'callSelenium', '__selenium',
-            'document__selenium', 'Selenium'
+            'document__selenium', 'Selenium', '__webdriver_script_fn',
+            'Selenium.prototype'
         ];
         for (const prop of selProps) {
             if (window[prop] !== undefined || document[prop] !== undefined) {
@@ -248,10 +364,24 @@ class EnvironmentDetector {
             }
         } catch (e) {}
         try {
+            const el = document.createElement('div');
+            el.setAttribute('onkeydown', 'return selenium_executor.onkeydown');
+            if (el.onkeydown !== null) {
+                score += 15;
+                detections.push('selenium_executor');
+            }
+        } catch (e) {}
+        try {
             const ua = navigator.userAgent || '';
             if (/selenium/i.test(ua)) {
                 score += 40;
                 detections.push('selenium_ua');
+            }
+        } catch (e) {}
+        try {
+            if (window.__$webdriverAsyncExecutor !== undefined) {
+                score += 20;
+                detections.push('webdriver_async_executor');
             }
         } catch (e) {}
         return { detected: score > 20, score: Math.min(score, 100), detections };
@@ -265,6 +395,9 @@ class EnvironmentDetector {
                 if (window.chrome.runtime === undefined) {
                     score += 20;
                     detections.push('chrome_runtime_missing');
+                } else if (window.chrome.runtime && window.chrome.runtime.id === undefined) {
+                    score += 10;
+                    detections.push('chrome_runtime_no_id');
                 }
                 if (window.chrome.loadTimes === undefined) {
                     score += 10;
@@ -296,23 +429,22 @@ class EnvironmentDetector {
         const detections = [];
         try {
             if (navigator.permissions && navigator.permissions.query) {
-                const permChecks = await Promise.all([
-                    navigator.permissions.query({ name: 'notifications' }).catch(() => ({ state: 'error' })),
-                    navigator.permissions.query({ name: 'geolocation' }).catch(() => ({ state: 'error' })),
-                    navigator.permissions.query({ name: 'camera' }).catch(() => ({ state: 'error' }))
-                ]);
+                const permNames = ['notifications', 'geolocation', 'camera', 'microphone', 'midi'];
+                const permChecks = await Promise.all(
+                    permNames.map(name =>
+                        navigator.permissions.query({ name }).catch(() => ({ state: 'error' }))
+                    )
+                );
                 const allDenied = permChecks.every(p => p.state === 'denied' || p.state === 'error');
                 if (allDenied) {
-                    score += 15;
+                    score += 20;
                     detections.push('all_permissions_denied');
                 }
-                try {
-                    const midiResult = await navigator.permissions.query({ name: 'midi', sysex: true });
-                    if (midiResult.state === 'denied') {
-                        score += 5;
-                        detections.push('midi_denied');
-                    }
-                } catch (e) {}
+                const deniedCount = permChecks.filter(p => p.state === 'denied').length;
+                if (deniedCount >= 4) {
+                    score += 10;
+                    detections.push('most_permissions_denied');
+                }
             } else {
                 score += 20;
                 detections.push('permissions_api_missing');
@@ -345,6 +477,10 @@ class EnvironmentDetector {
                 if (plugins.length < 3) {
                     score += 10;
                     detections.push('too_few_plugins');
+                }
+                if (plugins.length > 10) {
+                    score += 5;
+                    detections.push('too_many_plugins');
                 }
             }
         } catch (e) {
@@ -400,6 +536,16 @@ class EnvironmentDetector {
                 score += 25;
                 detections.push('unrealistic_date');
             }
+            try {
+                const matchOffset = /GMT([+-]\d{2}):?(\d{2})/.exec(new Date().toString());
+                if (matchOffset) {
+                    const strOffset = parseInt(matchOffset[1]) * 60 + parseInt(matchOffset[2]) * (matchOffset[1] > 0 ? 1 : -1);
+                    if (Math.abs(strOffset + offset) > 30) {
+                        score += 20;
+                        detections.push('timezone_offset_mismatch');
+                    }
+                }
+            } catch (e) {}
         } catch (e) {
             score += 35;
             detections.push('timezone_error');
@@ -411,7 +557,7 @@ class EnvironmentDetector {
         let score = 0;
         const detections = [];
         try {
-            const { width, height, colorDepth, pixelDepth } = screen;
+            const { width, height, colorDepth, pixelDepth, availWidth, availHeight } = screen;
             if (!width || !height) {
                 score += 30;
                 detections.push('no_screen_size');
@@ -427,6 +573,10 @@ class EnvironmentDetector {
             if ('isExtended' in screen && screen.isExtended === undefined) {
                 score += 10;
                 detections.push('screen_extended_missing');
+            }
+            if (availWidth === 0 || availHeight === 0) {
+                score += 15;
+                detections.push('zero_avail_size');
             }
         } catch (e) {
             score += 30;
@@ -468,6 +618,9 @@ class EnvironmentDetector {
             } else if (mem <= 0.25) {
                 score += 25;
                 detections.push('low_memory');
+            } else if (mem > 64) {
+                score += 15;
+                detections.push('unrealistic_memory');
             }
         } catch (e) {
             score += 20;
@@ -522,14 +675,15 @@ class EnvironmentDetector {
         const detections = [];
         try {
             const canvas = document.createElement('canvas');
-            canvas.width = 200;
-            canvas.height = 100;
+            canvas.width = 280;
+            canvas.height = 80;
             const ctx = canvas.getContext('2d');
             if (!ctx) {
                 score += 40;
                 detections.push('no_canvas_context');
                 return { detected: true, score: Math.min(score, 100), detections };
             }
+
             ctx.textBaseline = 'alphabetic';
             ctx.fillStyle = '#f60';
             ctx.fillRect(125, 1, 62, 20);
@@ -539,6 +693,7 @@ class EnvironmentDetector {
             ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
             ctx.font = '18pt Arial';
             ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 4, 45);
+
             ctx.globalCompositeOperation = 'multiply';
             ctx.fillStyle = 'rgb(255,0,255)';
             ctx.beginPath();
@@ -555,13 +710,23 @@ class EnvironmentDetector {
             ctx.arc(75, 50, 50, 0, Math.PI * 2 / 3, false);
             ctx.closePath();
             ctx.fill();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16pt Arial';
+            ctx.fillText('abcdefghijklmnopqrstuvwxyz', 4, 70);
+
             const dataURL = canvas.toDataURL();
-            if (dataURL === canvas.toDataURL()) {
-                const stable = dataURL === canvas.toDataURL();
-                if (!stable) {
-                    score += 20;
-                    detections.push('canvas_unstable');
-                }
+            const dataURL2 = canvas.toDataURL();
+            if (dataURL !== dataURL2) {
+                score += 25;
+                detections.push('canvas_unstable');
+            }
+
+            const imageData = ctx.getImageData(0, 0, 10, 10);
+            const pixelSum = Array.from(imageData.data.slice(0, 40)).reduce((a, b) => a + b, 0);
+            if (pixelSum === 0) {
+                score += 20;
+                detections.push('canvas_empty_readback');
             }
         } catch (e) {
             score += 35;
@@ -607,6 +772,26 @@ class EnvironmentDetector {
                 score += 10;
                 detections.push('few_vertex_attribs');
             }
+            const aliasedRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
+            if (aliasedRange && aliasedRange[1] <= 1) {
+                score += 10;
+                detections.push('aliased_line_only');
+            }
+            const shaderPrecision = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+            if (shaderPrecision && shaderPrecision.precision < 16) {
+                score += 15;
+                detections.push('low_shader_precision');
+            }
+            const ext = gl.getExtension('EXT_texture_filter_anisotropic');
+            if (!ext) {
+                score += 5;
+                detections.push('no_anisotropic');
+            }
+            const supportedExts = gl.getSupportedExtensions();
+            if (supportedExts && supportedExts.length < 10) {
+                score += 10;
+                detections.push('few_webgl_extensions');
+            }
         } catch (e) {
             score += 35;
             detections.push('webgl_error');
@@ -614,39 +799,85 @@ class EnvironmentDetector {
         return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
+    async detectWebGL2() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            const gl2 = canvas.getContext('webgl2');
+            if (!gl2) {
+                return { detected: false, score: 0, detections: ['no_webgl2'] };
+            }
+            const debugInfo = gl2.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                const renderer = gl2.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                if (/swiftshader|llvmpipe|mesa|virtual/i.test(renderer || '')) {
+                    score += 25;
+                    detections.push('webgl2_software_renderer');
+                }
+            }
+            const maxTexSize = gl2.getParameter(gl2.MAX_TEXTURE_SIZE);
+            if (maxTexSize <= 1024) {
+                score += 10;
+                detections.push('webgl2_small_tex');
+            }
+            const supportedExts = gl2.getSupportedExtensions();
+            if (supportedExts && supportedExts.length < 5) {
+                score += 10;
+                detections.push('few_webgl2_extensions');
+            }
+        } catch (e) {
+            score += 20;
+            detections.push('webgl2_error');
+        }
+        return { detected: score > 20, score: Math.min(score, 100), detections };
+    }
+
     async detectAudio() {
         let score = 0;
         const detections = [];
         try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
             if (!AudioContext) {
                 score += 30;
                 detections.push('no_audiocontext');
                 return { detected: true, score: Math.min(score, 100), detections };
             }
-            const ctx = new AudioContext();
-            if (ctx.state === 'suspended') {
-                score += 10;
-                detections.push('audio_suspended');
-            }
+            const ctx = new AudioContext(1, 44100, 44100);
             const osc = ctx.createOscillator();
-            const analyser = ctx.createAnalyser();
-            const gain = ctx.createGain();
             osc.type = 'triangle';
-            osc.frequency.value = 440;
-            osc.connect(analyser);
-            analyser.connect(gain);
-            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(10000, ctx.currentTime);
+            const compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-50, ctx.currentTime);
+            compressor.knee.setValueAtTime(40, ctx.currentTime);
+            compressor.ratio.setValueAtTime(12, ctx.currentTime);
+            compressor.attack.setValueAtTime(0, ctx.currentTime);
+            compressor.release.setValueAtTime(0.25, ctx.currentTime);
+            osc.connect(compressor);
+            compressor.connect(ctx.destination);
             osc.start(0);
-            const data = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(data);
-            const hasData = data.some(v => v > 0);
-            if (!hasData) {
-                score += 15;
-                detections.push('audio_no_data');
+
+            const startTime = performance.now();
+            const buffer = await ctx.startRendering();
+            const renderTime = performance.now() - startTime;
+
+            if (renderTime < 5) {
+                score += 20;
+                detections.push('audio_render_too_fast');
             }
-            osc.stop(0);
-            ctx.close();
+            const channelData = buffer.getChannelData(0);
+            let sumAbs = 0;
+            let sumSq = 0;
+            for (let i = 4500; i < 5000; i++) {
+                sumAbs += Math.abs(channelData[i]);
+            }
+            for (let i = 0; i < channelData.length; i++) {
+                sumSq += channelData[i] * channelData[i];
+            }
+            if (sumAbs === 0 && sumSq === 0) {
+                score += 25;
+                detections.push('audio_silent');
+            }
         } catch (e) {
             score += 30;
             detections.push('audio_error');
@@ -661,7 +892,15 @@ class EnvironmentDetector {
         const testFonts = [
             'Arial', 'Helvetica', 'Times New Roman', 'Courier New',
             'Verdana', 'Georgia', 'Palatino', 'Garamond',
-            'Impact', 'Comic Sans MS', 'Trebuchet MS', 'Lucida Console'
+            'Impact', 'Comic Sans MS', 'Trebuchet MS', 'Lucida Console',
+            'Tahoma', 'Segoe UI', 'Roboto', 'Open Sans',
+            'Lato', 'Montserrat', 'Source Sans Pro', 'Raleway',
+            'Ubuntu', 'Noto Sans', 'Droid Sans', 'Fira Sans',
+            'Merriweather', 'Playfair Display', 'PT Sans', 'Nunito',
+            'Quicksand', 'Work Sans', 'Oswald', 'Roboto Condensed',
+            'Noto Serif', 'Lora', 'IBM Plex Sans', 'JetBrains Mono',
+            'SF Pro Display', 'SF Pro Text', 'Calibri', 'Candara',
+            'Corbel', 'Cambria', 'Bookman', 'Futura', 'Optima'
         ];
         try {
             const el = document.createElement('div');
@@ -688,11 +927,75 @@ class EnvironmentDetector {
                 score += 25;
                 detections.push('too_few_fonts');
             }
+            if (fontCount < 8) {
+                score += 10;
+                detections.push('limited_fonts');
+            }
         } catch (e) {
             score += 25;
             detections.push('font_detection_error');
         }
         return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebRTCIP() {
+        let score = 0;
+        const detections = [];
+        try {
+            const RTCPeerConnection = window.RTCPeerConnection ||
+                window.webkitRTCPeerConnection ||
+                window.mozRTCPeerConnection;
+            if (!RTCPeerConnection) {
+                score += 15;
+                detections.push('no_webrtc');
+                return { detected: true, score: Math.min(score, 100), detections };
+            }
+            const ips = new Set();
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
+                ]
+            });
+            pc.createDataChannel('');
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            const sdp = pc.localDescription.sdp;
+            const lines = sdp.split('\n');
+            for (const line of lines) {
+                if (line.indexOf('candidate') > -1) {
+                    const parts = line.split(' ');
+                    if (parts[4] && parts[4] !== '0.0.0.0') {
+                        ips.add(parts[4]);
+                        if (parts[7] !== 'host') {
+                            detections.push('relay_ip:' + parts[4]);
+                        }
+                    }
+                }
+            }
+            pc.close();
+            if (ips.size > 1) {
+                const ipsArr = Array.from(ips);
+                const privateIPs = ipsArr.filter(ip =>
+                    ip.startsWith('10.') ||
+                    ip.startsWith('172.16.') ||
+                    ip.startsWith('192.168.')
+                );
+                const publicIPs = ipsArr.filter(ip => !privateIPs.includes(ip));
+                if (publicIPs.length > 0) {
+                    detections.push('public_ip_detected');
+                    if (privateIPs.length > 0) {
+                        score += 20;
+                        detections.push('vpn_possible');
+                    }
+                }
+            }
+        } catch (e) {
+            score += 15;
+            detections.push('webrtc_error');
+        }
+        return { detected: score > 15, score: Math.min(score, 100), detections };
     }
 
     async detectNavigatorProps() {
@@ -723,8 +1026,7 @@ class EnvironmentDetector {
             detections.push('media_devices_error');
         }
         try {
-            if (navigator.credentials && navigator.credentials.preventSilentAccess) {
-            } else {
+            if (!navigator.credentials || !navigator.credentials.preventSilentAccess) {
                 score += 5;
                 detections.push('no_credentials_api');
             }
@@ -748,6 +1050,13 @@ class EnvironmentDetector {
             if (navigator.product === 'Gecko' && !/Firefox/i.test(navigator.userAgent || '')) {
                 score += 20;
                 detections.push('gecko_no_firefox');
+            }
+        } catch (e) {}
+        try {
+            if (navigator.vendor === '' && navigator.product === 'Gecko') {
+            } else if (navigator.vendor === '') {
+                score += 10;
+                detections.push('empty_vendor');
             }
         } catch (e) {}
         return { detected: score > 25, score: Math.min(score, 100), detections };
@@ -797,6 +1106,12 @@ class EnvironmentDetector {
                 detections.push('no_postmessage');
             }
         } catch (e) {}
+        try {
+            if (window.screenTop === undefined || window.screenLeft === undefined) {
+                score += 5;
+                detections.push('no_screen_edge');
+            }
+        } catch (e) {}
         return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
@@ -819,9 +1134,6 @@ class EnvironmentDetector {
             document.body.appendChild(frameEl);
             const frameWin = frameEl.contentWindow;
             if (frameWin && frameWin.document) {
-                const frameDoc = frameWin.document;
-                if (frameDoc.cookie !== undefined) {
-                }
             }
             document.body.removeChild(frameEl);
         } catch (e) {
@@ -906,6 +1218,134 @@ class EnvironmentDetector {
         return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
+    async detectConnection() {
+        let score = 0;
+        const detections = [];
+        try {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (!conn) {
+                score += 10;
+                detections.push('no_connection_api');
+            } else {
+                if (conn.type === 'vpn') {
+                    score += 40;
+                    detections.push('vpn_detected');
+                }
+                if (conn.type === 'proxy') {
+                    score += 40;
+                    detections.push('proxy_detected');
+                }
+                if (conn.saveData === true) {
+                    score += 10;
+                    detections.push('save_data_enabled');
+                }
+                if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') {
+                    score += 10;
+                    detections.push('slow_connection');
+                }
+            }
+        } catch (e) {
+            score += 10;
+            detections.push('connection_error');
+        }
+        return { detected: score > 20, score: Math.min(score, 100), detections };
+    }
+
+    async detectAdBlock() {
+        let score = 0;
+        const detections = [];
+        try {
+            const el = document.createElement('div');
+            el.innerHTML = '&nbsp;';
+            el.className = 'adsbox';
+            el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px';
+            document.body.appendChild(el);
+            if (el.offsetHeight === 0) {
+                score += 15;
+                detections.push('adblock_detected');
+            }
+            document.body.removeChild(el);
+        } catch (e) {
+            score += 10;
+            detections.push('adblock_check_error');
+        }
+        return { detected: score > 10, score: Math.min(score, 100), detections };
+    }
+
+    async detectMathFingerprint() {
+        let score = 0;
+        const detections = [];
+        try {
+            const mathResults = {
+                sin: Math.sin(Math.PI / 3),
+                tan: Math.tan(1e7),
+                log10: Math.log10(100),
+                asin: Math.asin(0.5),
+                atan2: Math.atan2(1, 2),
+                cos: Math.cos(Math.PI / 4),
+                exp: Math.exp(1),
+                sqrt: Math.sqrt(2)
+            };
+            for (const key in mathResults) {
+                if (!isFinite(mathResults[key]) || isNaN(mathResults[key])) {
+                    score += 15;
+                    detections.push('math_' + key + '_invalid');
+                }
+            }
+        } catch (e) {
+            score += 20;
+            detections.push('math_error');
+        }
+        return { detected: score > 15, score: Math.min(score, 100), detections };
+    }
+
+    async detectGPUFingerprint() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                const maxRenderSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+                const maxViewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+                const maxCombinedTexUnits = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+                if (maxRenderSize <= 1024) {
+                    score += 15;
+                    detections.push('small_renderbuffer');
+                }
+                if (maxCombinedTexUnits <= 8) {
+                    score += 10;
+                    detections.push('few_texture_units');
+                }
+            }
+        } catch (e) {
+            score += 10;
+            detections.push('gpu_error');
+        }
+        return { detected: score > 15, score: Math.min(score, 100), detections };
+    }
+
+    async detectSpeech() {
+        let score = 0;
+        const detections = [];
+        try {
+            if ('speechSynthesis' in window) {
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length === 0) {
+                    score += 10;
+                    detections.push('no_speech_voices');
+                }
+            } else {
+                score += 15;
+                detections.push('no_speech_api');
+            }
+        } catch (e) {
+            score += 10;
+            detections.push('speech_error');
+        }
+        return { detected: score > 10, score: Math.min(score, 100), detections };
+    }
+
     async runAll() {
         const chainResult = await this.runChain();
         const fingerprint = this.generateFingerprint();
@@ -913,21 +1353,30 @@ class EnvironmentDetector {
     }
 
     generateFingerprint() {
-        const fp = [];
+        const components = [];
         try {
-            fp.push(screen.width + 'x' + screen.height);
+            components.push('scrn:' + screen.width + 'x' + screen.height + 'x' + screen.colorDepth);
         } catch (e) {}
         try {
-            fp.push(navigator.language || '');
+            components.push('lang:' + (navigator.language || ''));
         } catch (e) {}
         try {
-            fp.push(Intl.DateTimeFormat().resolvedOptions().timeZone || '');
+            components.push('tz:' + (Intl.DateTimeFormat().resolvedOptions().timeZone || ''));
         } catch (e) {}
         try {
-            fp.push(navigator.hardwareConcurrency || '');
+            components.push('cpu:' + (navigator.hardwareConcurrency || ''));
         } catch (e) {}
         try {
-            fp.push(navigator.platform || '');
+            components.push('mem:' + (navigator.deviceMemory || ''));
+        } catch (e) {}
+        try {
+            components.push('plat:' + (navigator.platform || ''));
+        } catch (e) {}
+        try {
+            components.push('prod:' + (navigator.product || ''));
+        } catch (e) {}
+        try {
+            components.push('vendor:' + (navigator.vendor || ''));
         } catch (e) {}
         try {
             const canvas = document.createElement('canvas');
@@ -935,11 +1384,40 @@ class EnvironmentDetector {
             canvas.height = 50;
             const ctx = canvas.getContext('2d');
             if (ctx) {
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#f60';
+                ctx.fillRect(0, 0, 50, 50);
+                ctx.fillStyle = '#069';
                 ctx.fillText('fp', 10, 20);
-                fp.push(canvas.toDataURL().substring(0, 50));
+                const dataUrl = canvas.toDataURL();
+                const hash = dataUrl.split(',')[1] || dataUrl;
+                components.push('cnv:' + hash.substring(0, 32));
             }
         } catch (e) {}
-        return fp.join('|');
+        try {
+            const gl = document.createElement('canvas').getContext('webgl');
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    components.push('wgl:' + (renderer || '').substring(0, 48));
+                }
+            }
+        } catch (e) {}
+        try {
+            const offset = new Date().getTimezoneOffset();
+            components.push('tzoff:' + offset);
+        } catch (e) {}
+        try {
+            components.push('cookie:' + (navigator.cookieEnabled ? '1' : '0'));
+        } catch (e) {}
+        try {
+            if (navigator.languages && navigator.languages.length > 0) {
+                components.push('langs:' + navigator.languages.join(','));
+            }
+        } catch (e) {}
+        return components.join('|');
     }
 
     toJSON() {
