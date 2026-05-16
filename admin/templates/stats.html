@@ -3,21 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台 - 统计分析</title>
+    <title>管理后台 - 数据统计</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --sidebar-bg: #1e293b;
+            --sidebar-hover: #334155;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            min-height: 100vh;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.7);
+            padding: 12px 20px;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: var(--sidebar-hover);
+            color: white;
+        }
+        .sidebar-header {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-footer {
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .main-wrapper {
+            flex: 1;
+            min-width: 0;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #3b82f6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+        .chart-card {
+            transition: transform 0.3s ease;
+        }
+        .chart-card:hover {
+            transform: translateY(-5px);
+        }
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .stat-card .icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 24px;
+        }
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .stat-card .label {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .stat-card .trend {
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .stat-card .trend.up { color: #10b981; }
+        .stat-card .trend.down { color: #ef4444; }
+        .period-selector {
+            display: inline-flex;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .period-selector button {
+            border: none;
+            background: white;
+            padding: 8px 16px;
+            font-size: 14px;
+            color: #6b7280;
+        }
+        .period-selector button.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .period-selector button:hover:not(.active) {
+            background: #f3f4f6;
+        }
+    </style>
 </head>
 <body>
     <div class="d-flex">
         <div class="sidebar d-flex flex-column flex-shrink-0">
-            <div class="sidebar-header p-3"><h5 class="text-white mb-0">管理后台</h5></div>
+            <div class="sidebar-header p-3">
+                <h5 class="text-white mb-0">管理后台</h5>
+            </div>
             <nav class="nav flex-column mt-2">
                 <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
                 <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
                 <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
                 <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
-                <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt me-2"></i>风控规则</a>
                 <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban me-2"></i>黑名单</a>
             </nav>
             <div class="sidebar-footer mt-auto p-3">
@@ -27,80 +127,56 @@
 
         <div class="main-wrapper">
             <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">统计分析</h5>
-                <div class="d-flex align-items-center gap-3">
-                    <button id="exportStatsBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出报表</button>
-                    <button id="refreshBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="text-muted" id="usernameDisplay">管理员</span>
-                        <div class="user-avatar" id="userAvatar">A</div>
-                    </div>
+                <h5 class="mb-0">数据统计</h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-secondary btn-sm" id="refreshStatsBtn">
+                        <i class="fas fa-sync me-1"></i>刷新
+                    </button>
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
                 </div>
             </header>
 
             <main class="p-4 bg-light min-vh-100">
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-body">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-3">
-                                <label class="form-label">时间范围</label>
-                                <select class="form-select" id="dateRange">
-                                    <option value="7d">最近7天</option>
-                                    <option value="30d" selected>最近30天</option>
-                                    <option value="90d">最近90天</option>
-                                    <option value="1y">最近1年</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">对比周期</label>
-                                <select class="form-select" id="comparePeriod">
-                                    <option value="">不对比</option>
-                                    <option value="prev">上一周期</option>
-                                    <option value="prev_year">去年同期</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button id="applyFilterBtn" class="btn btn-primary w-100"><i class="fas fa-filter me-1"></i>应用筛选</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="row g-4 mb-4">
                     <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">总请求量</h6>
-                                <h3 class="mb-1" id="statTotalRequests">0</h3>
-                                <small class="text-success" id="statRequestsChange"><i class="fas fa-arrow-up me-1"></i>+0%</small>
+                        <div class="stat-card">
+                            <div class="icon bg-primary bg-opacity-10 text-primary">
+                                <i class="fas fa-users"></i>
                             </div>
+                            <div class="value" id="totalUsers">0</div>
+                            <div class="label">用户总数</div>
+                            <div class="trend up" id="usersTrend"><i class="fas fa-arrow-up me-1"></i>+0% 较上周</div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">平均响应时间</h6>
-                                <h3 class="mb-1" id="statAvgResponse">0ms</h3>
-                                <small class="text-danger" id="statResponseChange"><i class="fas fa-arrow-down me-1"></i>-0%</small>
+                        <div class="stat-card">
+                            <div class="icon bg-success bg-opacity-10 text-success">
+                                <i class="fas fa-mobile-alt"></i>
                             </div>
+                            <div class="value" id="totalApps">0</div>
+                            <div class="label">应用总数</div>
+                            <div class="trend up" id="appsTrend"><i class="fas fa-arrow-up me-1"></i>+0% 较上周</div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">成功率</h6>
-                                <h3 class="mb-1" id="statSuccessRate">0%</h3>
-                                <small class="text-success" id="statSuccessChange"><i class="fas fa-arrow-up me-1"></i>+0%</small>
+                        <div class="stat-card">
+                            <div class="icon bg-info bg-opacity-10 text-info">
+                                <i class="fas fa-server"></i>
                             </div>
+                            <div class="value" id="totalRequests">0</div>
+                            <div class="label">请求总数</div>
+                            <div class="trend up" id="requestsTrend"><i class="fas fa-arrow-up me-1"></i>+0% 较上周</div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">活跃用户</h6>
-                                <h3 class="mb-1" id="statActiveUsers">0</h3>
-                                <small class="text-success" id="statUsersChange"><i class="fas fa-arrow-up me-1"></i>+0%</small>
+                        <div class="stat-card">
+                            <div class="icon bg-warning bg-opacity-10 text-warning">
+                                <i class="fas fa-clock"></i>
                             </div>
+                            <div class="value" id="avgLatency">0ms</div>
+                            <div class="label">平均延迟</div>
+                            <div class="trend down" id="latencyTrend"><i class="fas fa-arrow-down me-1"></i>-0% 较上周</div>
                         </div>
                     </div>
                 </div>
@@ -109,47 +185,25 @@
                     <div class="col-md-8">
                         <div class="card shadow-sm border-0">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">请求量趋势</h5>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <button type="button" class="btn btn-outline-secondary active" data-chart-type="line"><i class="fas fa-line-chart"></i></button>
-                                    <button type="button" class="btn btn-outline-secondary" data-chart-type="bar"><i class="fas fa-bar-chart"></i></button>
+                                <h5 class="mb-0">请求趋势</h5>
+                                <div class="period-selector">
+                                    <button class="active" data-period="day">日</button>
+                                    <button data-period="week">周</button>
+                                    <button data-period="month">月</button>
                                 </div>
                             </div>
                             <div class="card-body">
-                                <canvas id="requestTrendChart" height="280"></canvas>
+                                <canvas id="requestTrendChart" height="300"></canvas>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-header bg-white">
-                                <h5 class="mb-0">请求类型分布</h5>
+                                <h5 class="mb-0">请求分布</h5>
                             </div>
                             <div class="card-body">
-                                <canvas id="requestTypeChart" height="280"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-header bg-white">
-                                <h5 class="mb-0">用户增长趋势</h5>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="userGrowthChart" height="260"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-header bg-white">
-                                <h5 class="mb-0">应用分布</h5>
-                            </div>
-                            <div class="card-body">
-                                <canvas id="appDistributionChart" height="260"></canvas>
+                                <canvas id="requestDistributionChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -159,20 +213,48 @@
                     <div class="col-md-6">
                         <div class="card shadow-sm border-0">
                             <div class="card-header bg-white">
-                                <h5 class="mb-0">错误率分析</h5>
+                                <h5 class="mb-0">应用请求量 TOP 10</h5>
                             </div>
                             <div class="card-body">
-                                <canvas id="errorRateChart" height="260"></canvas>
+                                <canvas id="appRankingChart" height="250"></canvas>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="card shadow-sm border-0">
                             <div class="card-header bg-white">
-                                <h5 class="mb-0">地理分布</h5>
+                                <h5 class="mb-0">错误类型分布</h5>
                             </div>
                             <div class="card-body">
-                                <canvas id="geoDistributionChart" height="260"></canvas>
+                                <canvas id="errorDistributionChart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mt-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0">详细数据表</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>时间</th>
+                                                <th>成功请求</th>
+                                                <th>失败请求</th>
+                                                <th>成功率</th>
+                                                <th>平均延迟</th>
+                                                <th>P99延迟</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="statsTableBody">
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>

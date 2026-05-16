@@ -586,6 +586,52 @@ function injectCaptchaStyles() {
             25% { transform: translateX(-5px); }
             75% { transform: translateX(5px); }
         }
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        @keyframes fadeOutScale {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+        }
+        @keyframes shakeOverlay {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .success-overlay-content,
+        .error-overlay-content {
+            text-align: center;
+            color: white;
+        }
+        .success-icon,
+        .error-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: icon-pop 0.5s ease;
+        }
+        @keyframes icon-pop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .success-text,
+        .error-text {
+            font-size: 24px;
+            font-weight: bold;
+        }
         @media (max-width: 576px) {
             .captcha-container {
                 border-radius: 8px;

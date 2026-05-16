@@ -87,9 +87,13 @@ func SetupRouter() *gin.Engine {
 		// 验证码相关路由
 		captcha := api.Group("/captcha")
 		{
-			captcha.GET("/slider", handler.GetSliderCaptcha)
+			captcha.GET("/slider", handler.GetSliderCaptchaV2)
+			captcha.GET("/slider/status", handler.GetSliderStatus)
+			captcha.DELETE("/slider", handler.DeleteSliderSession)
 			captcha.GET("/click", handler.GetClickCaptcha)
-			captcha.POST("/verify", handler.VerifyCaptcha)
+			captcha.POST("/verify", handler.VerifySliderCaptcha)
+			captcha.GET("/image", handler.GenerateImageCaptcha)
+			captcha.POST("/image/verify", handler.VerifyImageCaptcha)
 		}
 
 		// 认证路由（供前端调用）
@@ -171,6 +175,20 @@ func SetupRouter() *gin.Engine {
 					logs.GET("/session/:session_id", handler.GetLogsBySession)
 					logs.DELETE("/cleanup", handler.DeleteOldLogs)
 					logs.GET("/:id", handler.GetLogDetail)
+				}
+
+				// 黑白名单管理
+				blacklist := adminAuth.Group("/blacklist")
+				{
+					blacklist.GET("", handler.ListBlacklist)
+					blacklist.GET("/summary", handler.GetBlacklistSummary)
+					blacklist.POST("", handler.CreateBlacklist)
+					blacklist.POST("/import", handler.ImportBlacklist)
+					blacklist.GET("/check", handler.CheckBlacklist)
+					blacklist.GET("/:id", handler.GetBlacklistByID)
+					blacklist.PUT("/:id", handler.UpdateBlacklist)
+					blacklist.DELETE("/:id", handler.DeleteBlacklist)
+					blacklist.POST("/:id/unblock", handler.UnblockBlacklist)
 				}
 
 				// CSS来源切换

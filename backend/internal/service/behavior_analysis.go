@@ -6,6 +6,9 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/models"
 )
@@ -103,12 +106,36 @@ type PathSimilarity struct {
 	DTWDistance        float64 `json:"dtw_distance"`
 }
 
+type DwellPoint struct {
+	StartTime    int64   `json:"start_time"`
+	EndTime      int64   `json:"end_time"`
+	Duration     int64   `json:"duration"`
+	CenterX      int     `json:"center_x"`
+	CenterY      int     `json:"center_y"`
+	PointCount   int     `json:"point_count"`
+	AvgSpeed     float64 `json:"avg_speed"`
+	IsSuspicious bool    `json:"is_suspicious"`
+}
+
+type BehaviorFeatures struct {
+	TrajectoryFeatures    []float64 `json:"trajectory_features"`
+	SpeedFeatures        []float64 `json:"speed_features"`
+	ClickFeatures        []float64 `json:"click_features"`
+	KeyboardFeatures     []float64 `json:"keyboard_features,omitempty"`
+	FeatureVector        []float64 `json:"feature_vector"`
+	AnomalyScore         float64   `json:"anomaly_score"`
+	IsAnomalous          bool      `json:"is_anomalous"`
+	AnomalyIndicators    []string  `json:"anomaly_indicators"`
+}
+
 type AnalysisResult struct {
 	Trajectory      MouseTrajectory    `json:"trajectory"`
 	ClickPattern   ClickPattern       `json:"click_pattern"`
 	KeyboardPattern KeyboardPattern   `json:"keyboard_pattern,omitempty"`
 	SpeedAnalysis  SpeedAnalysis     `json:"speed_analysis,omitempty"`
 	PathSimilarity PathSimilarity   `json:"path_similarity,omitempty"`
+	DwellPoints    []DwellPoint      `json:"dwell_points,omitempty"`
+	BehaviorFeatures BehaviorFeatures `json:"behavior_features,omitempty"`
 	RiskScore      float64           `json:"risk_score"`
 	RiskIndicators []string          `json:"risk_indicators"`
 	IsBotLikely    bool              `json:"is_bot_likely"`
@@ -117,12 +144,24 @@ type AnalysisResult struct {
 }
 
 type BehaviorAnalysisService struct {
-	storedPaths [][]BehaviorDataPoint
+	storedPaths   [][]BehaviorDataPoint
+	cache         map[string]*AnalysisResult
+	cacheMutex    sync.RWMutex
+	analysisCount int64
+	maxCacheSize  int
+}
+
+type AnalysisCache struct {
+	Result      *AnalysisResult
+	CreatedAt   time.Time
+	AccessCount int
 }
 
 func NewBehaviorAnalysisService() *BehaviorAnalysisService {
 	return &BehaviorAnalysisService{
-		storedPaths: make([][]BehaviorDataPoint, 0),
+		storedPaths:   make([][]BehaviorDataPoint, 0),
+		cache:         make(map[string]*AnalysisResult),
+		maxCacheSize:  1000,
 	}
 }
 
@@ -131,6 +170,15 @@ func (s *BehaviorAnalysisService) AnalyzeBehavior(behaviorData []models.Behavior
 		RiskIndicators: []string{},
 		RiskFactors:    make(map[string]float64),
 	}
+
+	cacheKey := s.generateCacheKey(behaviorData)
+	s.cacheMutex.RLock()
+	if cached, exists := s.cache[cacheKey]; exists {
+		s.cacheMutex.RUnlock()
+		atomic.AddInt64(&s.analysisCount, 1)
+		return cached, nil
+	}
+	s.cacheMutex.RUnlock()
 
 	var points []BehaviorDataPoint
 	var clicks []BehaviorDataPoint
@@ -159,6 +207,7 @@ func (s *BehaviorAnalysisService) AnalyzeBehavior(behaviorData []models.Behavior
 		result.Trajectory = s.analyzeMouseTrajectory(smoothedPoints, points)
 		result.SpeedAnalysis = s.analyzeSpeed(points)
 		result.PathSimilarity = s.checkPathSimilarity(smoothedPoints)
+		result.DwellPoints = s.detectDwellPoints(points)
 	}
 
 	if len(clicks) > 0 {
@@ -170,6 +219,16 @@ func (s *BehaviorAnalysisService) AnalyzeBehavior(behaviorData []models.Behavior
 	}
 
 	s.calculateRiskScoreEnhanced(result)
+	result.BehaviorFeatures = s.extractBehaviorFeatures(result)
+
+	s.cacheMutex.Lock()
+	if len(s.cache) >= s.maxCacheSize {
+		s.evictOldestCache()
+	}
+	s.cache[cacheKey] = result
+	s.cacheMutex.Unlock()
+
+	atomic.AddInt64(&s.analysisCount, 1)
 
 	return result, nil
 }
@@ -1143,6 +1202,26 @@ func (s *BehaviorAnalysisService) calculateRiskScoreEnhanced(result *AnalysisRes
 		factors["excessive_data"] = 5
 	}
 
+	if len(result.DwellPoints) > 0 {
+		suspiciousDwellCount := 0
+		for _, dwell := range result.DwellPoints {
+			if dwell.IsSuspicious {
+				suspiciousDwellCount++
+			}
+		}
+		if suspiciousDwellCount > len(result.DwellPoints)/2 {
+			riskScore += 15
+			indicators = append(indicators, "停留点异常")
+			factors["abnormal_dwell"] = 15
+		}
+	}
+
+	if result.BehaviorFeatures.IsAnomalous {
+		riskScore += 20
+		indicators = append(indicators, "行为特征异常")
+		factors["behavior_anomaly"] = 20
+	}
+
 	result.RiskScore = math.Min(riskScore, 100)
 	result.RiskIndicators = indicators
 	result.RiskFactors = factors
@@ -1178,6 +1257,18 @@ func (s *BehaviorAnalysisService) GenerateAnalysisReport(result *AnalysisResult)
 	report += fmt.Sprintf("  * 平均曲率: %.6f\n", result.Trajectory.CurvatureAvg)
 	report += fmt.Sprintf("  * 抖动分数: %.4f\n", result.Trajectory.JitterScore)
 	report += fmt.Sprintf("  * 方向变化: %d\n", result.Trajectory.DirectionChanges)
+
+	if len(result.DwellPoints) > 0 {
+		report += fmt.Sprintf("- 停留点分析:\n")
+		report += fmt.Sprintf("  * 停留点数量: %d\n", len(result.DwellPoints))
+		suspiciousCount := 0
+		for _, dwell := range result.DwellPoints {
+			if dwell.IsSuspicious {
+				suspiciousCount++
+			}
+		}
+		report += fmt.Sprintf("  * 可疑停留点: %d\n", suspiciousCount)
+	}
 
 	if result.SpeedAnalysis.AverageSpeed > 0 {
 		report += fmt.Sprintf("- 速度分析:\n")
@@ -1221,6 +1312,16 @@ func (s *BehaviorAnalysisService) GenerateAnalysisReport(result *AnalysisResult)
 		report += fmt.Sprintf("  * 快捷键检测: %v\n", result.KeyboardPattern.ComboDetected)
 		if len(result.KeyboardPattern.ComboPatterns) > 0 {
 			report += fmt.Sprintf("  * 检测到的组合: %v\n", result.KeyboardPattern.ComboPatterns)
+		}
+	}
+
+	if len(result.BehaviorFeatures.FeatureVector) > 0 {
+		report += fmt.Sprintf("- 行为特征:\n")
+		report += fmt.Sprintf("  * 特征向量长度: %d\n", len(result.BehaviorFeatures.FeatureVector))
+		report += fmt.Sprintf("  * 异常评分: %.4f\n", result.BehaviorFeatures.AnomalyScore)
+		report += fmt.Sprintf("  * 是否异常: %v\n", result.BehaviorFeatures.IsAnomalous)
+		if len(result.BehaviorFeatures.AnomalyIndicators) > 0 {
+			report += fmt.Sprintf("  * 异常指标: %v\n", result.BehaviorFeatures.AnomalyIndicators)
 		}
 	}
 
@@ -1276,6 +1377,208 @@ func (s *BehaviorAnalysisService) AnalyzePathSimilarity(path1, path2 []BehaviorD
 	similarity.IsPathRepeated = similarity.SimilarityScore > 0.85
 
 	return &similarity
+}
+
+func (s *BehaviorAnalysisService) detectDwellPoints(points []BehaviorDataPoint) []DwellPoint {
+	dwellPoints := []DwellPoint{}
+	if len(points) < 3 {
+		return dwellPoints
+	}
+
+	speedThreshold := 0.5
+	minDwellDuration := int64(200)
+
+	var currentDwell *DwellPoint
+	for i := 0; i < len(points)-1; i++ {
+		dx := float64(points[i+1].X - points[i].X)
+		dy := float64(points[i+1].Y - points[i].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(points[i+1].Timestamp - points[i].Timestamp)
+
+		var speed float64
+		if dt > 0 {
+			speed = distance / dt
+		}
+
+		if speed < speedThreshold {
+			if currentDwell == nil {
+				currentDwell = &DwellPoint{
+					StartTime:  points[i].Timestamp,
+					EndTime:    points[i].Timestamp,
+					CenterX:    points[i].X,
+					CenterY:    points[i].Y,
+					PointCount: 1,
+					AvgSpeed:   speed,
+				}
+			} else {
+				currentDwell.EndTime = points[i].Timestamp
+				currentDwell.PointCount++
+				totalX, totalY := 0, 0
+				for j := 0; j <= i; j++ {
+					totalX += points[j].X
+					totalY += points[j].Y
+				}
+				currentDwell.CenterX = totalX / (i + 1)
+				currentDwell.CenterY = totalY / (i + 1)
+				currentDwell.AvgSpeed = (currentDwell.AvgSpeed*float64(currentDwell.PointCount-1) + speed) / float64(currentDwell.PointCount)
+			}
+		} else {
+			if currentDwell != nil {
+				currentDwell.Duration = currentDwell.EndTime - currentDwell.StartTime
+				currentDwell.IsSuspicious = currentDwell.Duration < minDwellDuration
+				dwellPoints = append(dwellPoints, *currentDwell)
+				currentDwell = nil
+			}
+		}
+	}
+
+	if currentDwell != nil {
+		currentDwell.Duration = currentDwell.EndTime - currentDwell.StartTime
+		currentDwell.IsSuspicious = currentDwell.Duration < minDwellDuration
+		dwellPoints = append(dwellPoints, *currentDwell)
+	}
+
+	return dwellPoints
+}
+
+func (s *BehaviorAnalysisService) extractBehaviorFeatures(result *AnalysisResult) BehaviorFeatures {
+	features := BehaviorFeatures{
+		TrajectoryFeatures: make([]float64, 0),
+		SpeedFeatures:     make([]float64, 0),
+		ClickFeatures:     make([]float64, 0),
+		KeyboardFeatures:  make([]float64, 0),
+		AnomalyIndicators: []string{},
+	}
+
+	features.TrajectoryFeatures = append(features.TrajectoryFeatures,
+		result.Trajectory.TotalDistance,
+		result.Trajectory.AverageSpeed,
+		result.Trajectory.MaxSpeed,
+		result.Trajectory.PathEfficiency,
+		result.Trajectory.JitterScore,
+		result.Trajectory.CurvatureAvg,
+		float64(len(result.Trajectory.Points)),
+	)
+
+	if len(result.SpeedAnalysis.Speeds) > 0 {
+		features.SpeedFeatures = append(features.SpeedFeatures,
+			result.SpeedAnalysis.AverageSpeed,
+			result.SpeedAnalysis.MaxSpeed,
+			result.SpeedAnalysis.MedianSpeed,
+			result.SpeedAnalysis.SpeedStdDev,
+			result.SpeedAnalysis.AverageAcceleration,
+			result.SpeedAnalysis.JerkAvg,
+		)
+	}
+
+	features.ClickFeatures = append(features.ClickFeatures,
+		float64(result.ClickPattern.ClickCount),
+		result.ClickPattern.AverageInterval,
+		result.ClickPattern.ClickSpeed,
+		result.ClickPattern.Regularity,
+		result.ClickPattern.PositionEntropy,
+	)
+
+	if len(result.KeyboardPattern.KeyStrokes) > 0 {
+		features.KeyboardFeatures = append(features.KeyboardFeatures,
+			float64(result.KeyboardPattern.KeystrokeCount),
+			result.KeyboardPattern.AverageInterval,
+			result.KeyboardPattern.AverageHoldTime,
+			result.KeyboardPattern.TypingSpeed,
+		)
+	}
+
+	allFeatures := append(features.TrajectoryFeatures, features.SpeedFeatures...)
+	allFeatures = append(allFeatures, features.ClickFeatures...)
+	allFeatures = append(allFeatures, features.KeyboardFeatures...)
+	features.FeatureVector = allFeatures
+
+	features.AnomalyScore = s.calculateAnomalyScore(result)
+	features.IsAnomalous = features.AnomalyScore > 0.7
+
+	if features.IsAnomalous {
+		if result.Trajectory.JitterScore < 0.05 {
+			features.AnomalyIndicators = append(features.AnomalyIndicators, "low_jitter")
+		}
+		if result.Trajectory.PathEfficiency > 0.95 {
+			features.AnomalyIndicators = append(features.AnomalyIndicators, "straight_path")
+		}
+		if result.SpeedAnalysis.MaxSpeed > 10 {
+			features.AnomalyIndicators = append(features.AnomalyIndicators, "extreme_speed")
+		}
+	}
+
+	return features
+}
+
+func (s *BehaviorAnalysisService) calculateAnomalyScore(result *AnalysisResult) float64 {
+	score := 0.0
+
+	if result.Trajectory.JitterScore < 0.05 {
+		score += 0.2
+	}
+	if result.Trajectory.PathEfficiency > 0.95 {
+		score += 0.2
+	}
+	if result.SpeedAnalysis.MaxSpeed > 10 {
+		score += 0.15
+	}
+	if result.PathSimilarity.SimilarityScore > 0.85 {
+		score += 0.25
+	}
+	if result.ClickPattern.Regularity > 0.9 {
+		score += 0.1
+	}
+	if result.RiskScore > 50 {
+		score += 0.1
+	}
+
+	return math.Min(score, 1.0)
+}
+
+func (s *BehaviorAnalysisService) generateCacheKey(behaviorData []models.BehaviorData) string {
+	if len(behaviorData) == 0 {
+		return "empty"
+	}
+
+	var hashParts []string
+	for _, bd := range behaviorData {
+		hashParts = append(hashParts, fmt.Sprintf("%s:%s", bd.DataType, bd.Data))
+	}
+	return strings.Join(hashParts, "|")
+}
+
+func (s *BehaviorAnalysisService) evictOldestCache() {
+	if len(s.cache) == 0 {
+		return
+	}
+
+	oldestKey := ""
+
+	for key := range s.cache {
+		oldestKey = key
+		break
+	}
+
+	if oldestKey != "" {
+		delete(s.cache, oldestKey)
+	}
+}
+
+func (s *BehaviorAnalysisService) ClearCache() {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+	s.cache = make(map[string]*AnalysisResult)
+}
+
+func (s *BehaviorAnalysisService) GetCacheSize() int {
+	s.cacheMutex.RLock()
+	defer s.cacheMutex.RUnlock()
+	return len(s.cache)
+}
+
+func (s *BehaviorAnalysisService) GetAnalysisCount() int64 {
+	return atomic.LoadInt64(&s.analysisCount)
 }
 
 func (s *BehaviorAnalysisService) mean(values []float64) float64 {

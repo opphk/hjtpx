@@ -1,593 +1,477 @@
-let blacklistPage = 1;
-let blacklistPageSize = 10;
-let currentBlacklist = [];
-let currentView = 'table';
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadBlacklistSummary();
-    loadBlacklist();
-    setupEventListeners();
-});
+let currentPage = 1;
+const pageSize = 10;
+let totalItems = 0;
+let blacklist = [];
+let selectedItems = new Set();
 
-function setupEventListeners() {
-    const addBtn = document.getElementById('addBlacklistBtn');
-    if (addBtn) {
-        addBtn.addEventListener('click', () => openBlacklistModal());
+document.addEventListener('DOMContentLoaded', function() {
+    if (!Auth.requireAuth()) {
+        return;
     }
 
-    const importBtn = document.getElementById('importBlacklistBtn');
-    if (importBtn) {
-        importBtn.addEventListener('click', () => {
-            const modal = new bootstrap.Modal(document.getElementById('importModal'));
-            modal.show();
+    const user = Auth.getCurrentUser();
+    if (user && user.username) {
+        Auth.updateUserDisplay(user.username);
+    }
+
+    loadBlacklist();
+    initEventListeners();
+});
+
+function initEventListeners() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentPage = 1;
+                loadBlacklist();
+            }, 500);
         });
     }
 
-    const confirmImportBtn = document.getElementById('confirmImportBtn');
-    if (confirmImportBtn) {
-        confirmImportBtn.addEventListener('click', handleImport);
-    }
-
-    const searchBtn = document.getElementById('searchBlacklistBtn');
-    if (searchBtn) {
-        searchBtn.addEventListener('click', () => {
-            blacklistPage = 1;
+    const typeFilter = document.getElementById('typeFilter');
+    if (typeFilter) {
+        typeFilter.addEventListener('change', function() {
+            currentPage = 1;
             loadBlacklist();
         });
     }
 
-    const selectAllCheckbox = document.getElementById('selectAllBlacklist');
+    const statusFilter = document.getElementById('statusFilter');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', function() {
+            currentPage = 1;
+            loadBlacklist();
+        });
+    }
+
+    const resetBtn = document.getElementById('resetFilterBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('typeFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            currentPage = 1;
+            loadBlacklist();
+        });
+    }
+
+    const addBtn = document.getElementById('addBlacklistBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            openBlacklistModal();
+        });
+    }
+
+    const saveBtn = document.getElementById('saveBlacklistBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            saveBlacklist();
+        });
+    }
+
+    const selectAllCheckbox = document.getElementById('selectAll');
     if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', (e) => {
-            const checkboxes = document.querySelectorAll('.bl-checkbox');
-            checkboxes.forEach(cb => cb.checked = e.target.checked);
+        selectAllCheckbox.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.blacklist-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+                const id = checkbox.getAttribute('data-id');
+                if (this.checked) {
+                    selectedItems.add(id);
+                } else {
+                    selectedItems.delete(id);
+                }
+            });
         });
     }
-
-    const viewButtons = document.querySelectorAll('[data-view]');
-    viewButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            viewButtons.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            switchView(e.target.dataset.view);
-        });
-    });
-
-    const expirationSelect = document.getElementById('blExpiration');
-    if (expirationSelect) {
-        expirationSelect.addEventListener('change', (e) => {
-            const customGroup = document.getElementById('customExpirationGroup');
-            if (e.target.value === 'custom') {
-                customGroup.classList.remove('d-none');
-            } else {
-                customGroup.classList.add('d-none');
-            }
-        });
-    }
-
-    const form = document.getElementById('blacklistForm');
-    if (form) {
-        form.addEventListener('submit', handleBlacklistSubmit);
-    }
-}
-
-async function loadBlacklistSummary() {
-    const mockSummary = getMockBlacklistSummary();
-
-    try {
-        const data = await auth.request('/admin/blacklist/summary');
-        if (data.code === 0) {
-            updateBlacklistSummary(data.data);
-        } else {
-            updateBlacklistSummary(mockSummary);
-        }
-    } catch (error) {
-        updateBlacklistSummary(mockSummary);
-    }
-}
-
-function getMockBlacklistSummary() {
-    return {
-        total: 1234,
-        todayAdded: 56,
-        autoUnblocked: 23,
-        totalBlocked: 5678
-    };
-}
-
-function updateBlacklistSummary(summary) {
-    const totalEl = document.getElementById('totalBlacklist');
-    const todayEl = document.getElementById('todayAdded');
-    const autoEl = document.getElementById('autoUnblocked');
-    const blockedEl = document.getElementById('totalBlocked');
-
-    if (totalEl) totalEl.textContent = formatNumber(summary.total);
-    if (todayEl) todayEl.textContent = formatNumber(summary.todayAdded);
-    if (autoEl) autoEl.textContent = formatNumber(summary.autoUnblocked);
-    if (blockedEl) blockedEl.textContent = formatNumber(summary.totalBlocked);
-}
-
-function formatNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
 }
 
 async function loadBlacklist() {
-    const type = document.getElementById('blacklistType')?.value || '';
-    const source = document.getElementById('blacklistSource')?.value || '';
-    const status = document.getElementById('blacklistStatus')?.value || '';
-    const keyword = document.getElementById('blacklistKeyword')?.value || '';
-    const mockData = getMockBlacklist();
-
     try {
+        const searchQuery = document.getElementById('searchInput')?.value || '';
+        const typeFilter = document.getElementById('typeFilter')?.value || '';
+        const statusFilter = document.getElementById('statusFilter')?.value || '';
+
         const params = new URLSearchParams({
-            page: blacklistPage,
-            size: blacklistPageSize,
-            type, source, status, keyword
+            page: currentPage,
+            pageSize: pageSize,
+            search: searchQuery,
+            type: typeFilter,
+            status: statusFilter
         });
 
-        const result = await auth.request(`/admin/blacklist?${params.toString()}`);
-        if (result.code === 0) {
-            currentBlacklist = result.data.list || [];
-            renderBlacklistPagination(result.data.total || currentBlacklist.length);
-            renderBlacklistCount(result.data.total || currentBlacklist.length);
-        } else {
-            currentBlacklist = filterBlacklist(mockData, type, source, status, keyword);
-            renderBlacklistPagination(currentBlacklist.length);
-            renderBlacklistCount(currentBlacklist.length);
-        }
-    } catch (error) {
-        currentBlacklist = filterBlacklist(mockData, type, source, status, keyword);
-        renderBlacklistPagination(currentBlacklist.length);
-        renderBlacklistCount(currentBlacklist.length);
-    }
+        const response = await fetch(`/admin/api/blacklist?${params}`);
+        if (!response.ok) throw new Error('获取黑名单失败');
 
-    renderBlacklist();
+        const data = await response.json();
+        blacklist = data.items || [];
+        totalItems = data.total || 0;
+
+        renderBlacklistTable(blacklist);
+        renderPagination();
+        updateTotalCount();
+    } catch (error) {
+        console.error('加载黑名单失败:', error);
+        loadMockBlacklist();
+    }
 }
 
-function getMockBlacklist() {
-    return [
+function loadMockBlacklist() {
+    const mockData = [
         {
-            id: 1, target: '192.168.1.100', type: 'ip', source: 'auto',
-            reason: '检测到恶意扫描行为', expiration: '2025-06-01', status: 'active',
-            action: 'block', hitCount: 234, apps: ['all'], createdBy: 'system',
-            createdAt: '2025-05-01 10:00:00'
+            id: 1,
+            type: 'ip',
+            value: '192.168.1.100',
+            reason: '异常请求行为',
+            createdAt: '2024-01-15 10:30:00',
+            expireAt: '2024-02-15 10:30:00',
+            status: 'active',
+            operator: 'admin'
         },
         {
-            id: 2, target: 'user_malicious_001', type: 'user_id', source: 'manual',
-            reason: '多次违规操作', expiration: 'permanent', status: 'active',
-            action: 'block', hitCount: 567, apps: ['1', '2'], createdBy: 'admin',
-            createdAt: '2025-04-15 14:30:00'
+            id: 2,
+            type: 'device',
+            value: 'device_abc123',
+            reason: '设备指纹异常',
+            createdAt: '2024-01-14 15:20:00',
+            expireAt: null,
+            status: 'active',
+            operator: 'admin'
         },
         {
-            id: 3, target: 'device_fp_abc123', type: 'device_id', source: 'auto',
-            reason: '设备指纹异常', expiration: '2025-05-20', status: 'active',
-            action: 'captcha', hitCount: 89, apps: ['all'], createdBy: 'system',
-            createdAt: '2025-05-10 09:15:00'
+            id: 3,
+            type: 'user',
+            value: 'user_456',
+            reason: '违规操作',
+            createdAt: '2024-01-13 09:15:00',
+            expireAt: '2024-03-13 09:15:00',
+            status: 'active',
+            operator: 'admin'
         },
         {
-            id: 4, target: '138****8888', type: 'phone', source: 'import',
-            reason: '批量注册账号', expiration: '2025-07-01', status: 'active',
-            action: 'block', hitCount: 1234, apps: ['1'], createdBy: 'admin',
-            createdAt: '2025-05-05 11:20:00'
+            id: 4,
+            type: 'app',
+            value: 'app_test',
+            reason: '应用违规',
+            createdAt: '2024-01-12 14:45:00',
+            expireAt: '2024-01-12 14:45:00',
+            status: 'expired',
+            operator: 'admin'
         },
         {
-            id: 5, target: 'spam@example.com', type: 'email', source: 'manual',
-            reason: '垃圾邮件发送源', expiration: '2025-08-01', status: 'active',
-            action: 'review', hitCount: 45, apps: ['all'], createdBy: 'admin',
-            createdAt: '2025-04-20 16:45:00'
-        },
-        {
-            id: 6, target: '10.0.0.0/24', type: 'ip', source: 'auto',
-            reason: 'IP段异常流量', expiration: '2025-05-18', status: 'expired',
-            action: 'block', hitCount: 789, apps: ['all'], createdBy: 'system',
-            createdAt: '2025-05-10 08:00:00'
-        },
-        {
-            id: 7, target: 'bad_user_007', type: 'user_id', source: 'manual',
-            reason: '违反使用协议', expiration: '2025-06-15', status: 'active',
-            action: 'block', hitCount: 321, apps: ['2', '3'], createdBy: 'admin',
-            createdAt: '2025-05-12 13:00:00'
-        },
-        {
-            id: 8, target: '138****9999', type: 'phone', source: 'import',
-            reason: '批量营销电话', expiration: 'permanent', status: 'unblocked',
-            action: 'captcha', hitCount: 56, apps: ['1'], createdBy: 'admin',
-            createdAt: '2025-03-01 10:00:00'
+            id: 5,
+            type: 'ip',
+            value: '10.0.0.50',
+            reason: 'DDoS攻击',
+            createdAt: '2024-01-11 11:30:00',
+            expireAt: null,
+            status: 'active',
+            operator: 'admin'
         }
     ];
+
+    blacklist = mockData;
+    totalItems = mockData.length;
+
+    renderBlacklistTable(blacklist);
+    renderPagination();
+    updateTotalCount();
 }
 
-function filterBlacklist(list, type, source, status, keyword) {
-    return list.filter(item => {
-        if (type && item.type !== type) return false;
-        if (source && item.source !== source) return false;
-        if (status && item.status !== status) return false;
-        if (keyword && !item.target.toLowerCase().includes(keyword.toLowerCase())) return false;
-        return true;
-    });
-}
-
-function renderBlacklist() {
-    if (currentView === 'table') {
-        renderBlacklistTable();
-    } else {
-        renderBlacklistCards();
-    }
-}
-
-function renderBlacklistTable() {
+function renderBlacklistTable(items) {
     const tbody = document.getElementById('blacklistTableBody');
     if (!tbody) return;
 
-    document.getElementById('blacklistTableView')?.classList.remove('d-none');
-    document.getElementById('blacklistCardView')?.classList.add('d-none');
+    tbody.innerHTML = '';
 
-    tbody.innerHTML = currentBlacklist.map(item => `
-        <tr class="${item.status !== 'active' ? 'text-muted' : ''}">
-            <td><input type="checkbox" class="bl-checkbox" data-id="${item.id}"></td>
-            <td>
-                <strong>${escapeHtml(item.target)}</strong>
-                <br><small class="text-muted">ID: ${item.id}</small>
-            </td>
-            <td><span class="badge ${getTypeBadgeClass(item.type)}">${getTypeText(item.type)}</span></td>
-            <td><span class="badge bg-secondary">${getSourceText(item.source)}</span></td>
-            <td><small>${escapeHtml(item.reason)}</small></td>
-            <td><small>${item.expiration === 'permanent' ? '永久' : item.expiration}</small></td>
-            <td><span class="badge ${getStatusBadgeClass(item.status)}">${getStatusText(item.status)}</span></td>
-            <td>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" onclick="viewBlacklistDetail(${item.id})" title="查看"><i class="fas fa-eye"></i></button>
-                    ${item.status === 'active' ? `
-                        <button class="btn btn-outline-success" onclick="unblockItem(${item.id})" title="解封"><i class="fas fa-unlock"></i></button>
-                    ` : ''}
-                    <button class="btn btn-outline-danger" onclick="deleteBlacklistItem(${item.id})" title="删除"><i class="fas fa-trash"></i></button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-function renderBlacklistCards() {
-    const container = document.getElementById('blacklistCardView');
-    if (!container) return;
-
-    container.classList.remove('d-none');
-    document.getElementById('blacklistTableView')?.classList.add('d-none');
-
-    container.innerHTML = `<div class="row g-3 p-3">${currentBlacklist.map(item => `
-        <div class="col-md-6 col-lg-4">
-            <div class="card border ${item.status !== 'active' ? 'border-secondary' : 'border-danger'}">
-                <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-2">
-                    <span class="badge ${getTypeBadgeClass(item.type)}">${getTypeText(item.type)}</span>
-                    <span class="badge ${getStatusBadgeClass(item.status)}">${getStatusText(item.status)}</span>
-                </div>
-                <div class="card-body py-2">
-                    <h6 class="card-title mb-1 text-truncate" title="${escapeHtml(item.target)}">${escapeHtml(item.target)}</h6>
-                    <p class="card-text small text-muted mb-2 text-truncate">${escapeHtml(item.reason)}</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted">命中 ${item.hitCount} 次</small>
-                        ${item.expiration !== 'permanent' ? `<small class="text-muted">${item.expiration}</small>` : '<small class="text-danger">永久</small>'}
-                    </div>
-                </div>
-                <div class="card-footer bg-transparent py-2">
-                    <div class="btn-group btn-group-sm w-100">
-                        <button class="btn btn-outline-secondary" onclick="viewBlacklistDetail(${item.id})"><i class="fas fa-eye me-1"></i>详情</button>
-                        ${item.status === 'active' ? `
-                            <button class="btn btn-outline-success" onclick="unblockItem(${item.id})"><i class="fas fa-unlock me-1"></i>解封</button>
-                        ` : ''}
-                        <button class="btn btn-outline-danger" onclick="deleteBlacklistItem(${item.id})"><i class="fas fa-trash me-1"></i>删除</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `).join('')}</div>`;
-}
-
-function switchView(view) {
-    currentView = view;
-    renderBlacklist();
-}
-
-function renderBlacklistCount(total) {
-    const countEl = document.getElementById('blacklistCount');
-    if (countEl) countEl.textContent = total;
-}
-
-function renderBlacklistPagination(total) {
-    const pagination = document.getElementById('blacklistPagination');
-    if (!pagination) return;
-
-    const totalPages = Math.ceil(total / blacklistPageSize);
-    if (totalPages <= 1) {
-        pagination.innerHTML = '';
+    if (items.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-muted py-5">
+                    <i class="fas fa-ban fa-3x mb-3"></i>
+                    <p class="mb-0">暂无黑名单数据</p>
+                </td>
+            </tr>
+        `;
         return;
     }
 
-    let html = '<div class="d-flex justify-content-between align-items-center">';
-    html += `<span class="text-muted">第 ${blacklistPage} / ${totalPages} 页，共 ${total} 条</span>`;
-    html += '<div class="btn-group btn-group-sm">';
-    html += `<button class="btn btn-outline-secondary" onclick="changeBlacklistPage(${blacklistPage - 1})" ${blacklistPage === 1 ? 'disabled' : ''}>上一页</button>`;
+    items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-id', item.id);
 
-    const startPage = Math.max(1, blacklistPage - 2);
-    const endPage = Math.min(totalPages, blacklistPage + 2);
+        const typeIcon = getTypeIcon(item.type);
+        const typeClass = getTypeClass(item.type);
+        const statusBadge = getStatusBadge(item.status);
 
-    if (startPage > 1) {
-        html += `<button class="btn btn-outline-secondary" onclick="changeBlacklistPage(1)">1</button>`;
-        if (startPage > 2) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
+        tr.innerHTML = `
+            <td><input type="checkbox" class="blacklist-checkbox" data-id="${item.id}"></td>
+            <td>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="type-icon ${typeClass}">${typeIcon}</div>
+                    <span>${getTypeName(item.type)}</span>
+                </div>
+            </td>
+            <td><code>${item.value}</code></td>
+            <td><small>${item.reason}</small></td>
+            <td><small class="text-muted">${item.createdAt}</small></td>
+            <td><small class="text-muted">${item.expireAt || '永久'}</small></td>
+            <td>${statusBadge}</td>
+            <td><small>${item.operator}</small></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="viewBlacklistDetail(${item.id})" title="查看详情">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="removeBlacklist(${item.id})" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+
+        const checkbox = tr.querySelector('.blacklist-checkbox');
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                selectedItems.add(item.id.toString());
+            } else {
+                selectedItems.delete(item.id.toString());
+            }
+        });
+    });
+}
+
+function getTypeIcon(type) {
+    const icons = {
+        ip: '<i class="fas fa-network-wired"></i>',
+        device: '<i class="fas fa-mobile-alt"></i>',
+        user: '<i class="fas fa-user"></i>',
+        app: '<i class="fas fa-rocket"></i>'
+    };
+    return icons[type] || '<i class="fas fa-question"></i>';
+}
+
+function getTypeClass(type) {
+    return `type-${type}`;
+}
+
+function getTypeName(type) {
+    const names = {
+        ip: 'IP地址',
+        device: '设备ID',
+        user: '用户ID',
+        app: '应用ID'
+    };
+    return names[type] || type;
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        active: '<span class="badge bg-danger">生效中</span>',
+        expired: '<span class="badge bg-secondary">已过期</span>'
+    };
+    return badges[status] || '<span class="badge bg-secondary">未知</span>';
+}
+
+function renderPagination() {
+    const pagination = document.getElementById('pagination');
+    if (!pagination) return;
+
+    pagination.innerHTML = '';
+
+    const totalPages = Math.ceil(totalItems / pageSize);
+    if (totalPages <= 1) return;
+
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" aria-label="上一页">&laquo;</a>`;
+    if (currentPage > 1) {
+        prevLi.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentPage--;
+            loadBlacklist();
+        });
+    }
+    pagination.appendChild(prevLi);
+
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+    if (endPage - startPage + 1 < maxVisible) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
     }
 
     for (let i = startPage; i <= endPage; i++) {
-        html += `<button class="btn ${i === blacklistPage ? 'btn-primary' : 'btn-outline-secondary'}" onclick="changeBlacklistPage(${i})">${i}</button>`;
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+        li.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentPage = i;
+            loadBlacklist();
+        });
+        pagination.appendChild(li);
     }
 
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
-        html += `<button class="btn btn-outline-secondary" onclick="changeBlacklistPage(${totalPages})">${totalPages}</button>`;
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" aria-label="下一页">&raquo;</a>`;
+    if (currentPage < totalPages) {
+        nextLi.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentPage++;
+            loadBlacklist();
+        });
     }
-
-    html += `<button class="btn btn-outline-secondary" onclick="changeBlacklistPage(${blacklistPage + 1})" ${blacklistPage === totalPages ? 'disabled' : ''}>下一页</button>`;
-    html += '</div></div>';
-
-    pagination.innerHTML = html;
+    pagination.appendChild(nextLi);
 }
 
-function changeBlacklistPage(page) {
-    blacklistPage = page;
-    loadBlacklist();
+function updateTotalCount() {
+    const totalCountEl = document.getElementById('totalCount');
+    if (totalCountEl) {
+        totalCountEl.textContent = totalItems;
+    }
 }
 
-function openBlacklistModal(item = null) {
-    const modal = document.getElementById('blacklistModal');
-    const title = document.getElementById('blacklistModalTitle');
+function openBlacklistModal() {
+    const modal = new bootstrap.Modal(document.getElementById('blacklistModal'));
     const form = document.getElementById('blacklistForm');
 
-    if (item) {
-        title.textContent = '编辑黑名单';
-        document.getElementById('blacklistId').value = item.id;
-        document.getElementById('blType').value = item.type;
-        document.getElementById('blValue').value = item.target;
-        document.getElementById('blReason').value = item.reason;
-        document.getElementById('blAction').value = item.action;
-        document.getElementById('blNote').value = item.note || '';
-    } else {
-        title.textContent = '添加黑名单';
-        form.reset();
-        document.getElementById('blacklistId').value = '';
-    }
+    form.reset();
+    document.getElementById('blacklistType').value = '';
+    document.getElementById('blacklistValue').value = '';
+    document.getElementById('blacklistReason').value = '';
+    document.getElementById('blacklistExpire').value = '';
 
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
+    modal.show();
 }
 
-async function handleBlacklistSubmit(e) {
-    e.preventDefault();
-
-    const id = document.getElementById('blacklistId').value;
-    const expirationSelect = document.getElementById('blExpiration').value;
-    let expiration = expirationSelect;
-
-    if (expiration === 'custom') {
-        expiration = document.getElementById('blCustomExpiration').value;
-    }
-
-    const data = {
-        type: document.getElementById('blType').value,
-        target: document.getElementById('blValue').value,
-        reason: document.getElementById('blReason').value,
-        action: document.getElementById('blAction').value,
-        expiration: expiration,
-        apps: Array.from(document.getElementById('blApps').selectedOptions).map(o => o.value),
-        note: document.getElementById('blNote').value
-    };
-
-    try {
-        if (id) {
-            await auth.request(`/admin/blacklist/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-            showToast('黑名单更新成功', 'success');
-        } else {
-            await auth.request('/admin/blacklist', { method: 'POST', body: JSON.stringify(data) });
-            showToast('黑名单添加成功', 'success');
-        }
-
-        bootstrap.Modal.getInstance(document.getElementById('blacklistModal'))?.hide();
-        loadBlacklist();
-        loadBlacklistSummary();
-    } catch (error) {
-        showToast('保存失败', 'danger');
-    }
-}
-
-async function handleImport() {
-    const fileInput = document.getElementById('importFile');
-    const importType = document.getElementById('importType').value;
-    const importReason = document.getElementById('importReason').value;
-
-    if (!fileInput.files.length) {
-        showToast('请选择要导入的文件', 'warning');
+async function saveBlacklist() {
+    const form = document.getElementById('blacklistForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
         return;
     }
 
-    const file = fileInput.files[0];
-    const reader = new FileReader();
-
-    reader.onload = async (e) => {
-        const content = e.target.result;
-        const targets = content.split(/\r?\n/).filter(line => line.trim());
-
-        const data = {
-            type: importType,
-            targets: targets,
-            reason: importReason
-        };
-
-        try {
-            await auth.request('/admin/blacklist/import', { method: 'POST', body: JSON.stringify(data) });
-            showToast(`成功导入 ${targets.length} 条记录`, 'success');
-            bootstrap.Modal.getInstance(document.getElementById('importModal'))?.hide();
-            loadBlacklist();
-            loadBlacklistSummary();
-        } catch (error) {
-            showToast('导入失败', 'danger');
-        }
+    const blacklistData = {
+        type: document.getElementById('blacklistType').value,
+        value: document.getElementById('blacklistValue').value,
+        reason: document.getElementById('blacklistReason').value,
+        expireAt: document.getElementById('blacklistExpire').value || null
     };
 
-    reader.readAsText(file);
-}
-
-async function unblockItem(id) {
-    if (!confirm('确定要解封这条记录吗？')) return;
-
     try {
-        await auth.request(`/admin/blacklist/${id}/unblock`, { method: 'POST' });
-        showToast('解封成功', 'success');
+        const response = await fetch('/admin/api/blacklist', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(blacklistData)
+        });
+
+        if (!response.ok) throw new Error('添加黑名单失败');
+
+        bootstrap.Modal.getInstance(document.getElementById('blacklistModal')).hide();
+
+        Auth.showToast('黑名单添加成功', 'success');
         loadBlacklist();
-        loadBlacklistSummary();
     } catch (error) {
-        showToast('解封失败', 'danger');
+        console.error('添加黑名单失败:', error);
+        Auth.showToast('添加失败，请重试', 'error');
     }
 }
 
-async function deleteBlacklistItem(id) {
-    if (!confirm('确定要删除这条黑名单记录吗？')) return;
-
+async function viewBlacklistDetail(id) {
     try {
-        await auth.request(`/admin/blacklist/${id}`, { method: 'DELETE' });
-        showToast('删除成功', 'success');
-        loadBlacklist();
-        loadBlacklistSummary();
+        const response = await fetch(`/admin/api/blacklist/${id}`);
+        if (!response.ok) throw new Error('获取黑名单详情失败');
+
+        const item = await response.json();
+        showDetailModal(item);
     } catch (error) {
-        showToast('删除失败', 'danger');
+        console.error('获取黑名单详情失败:', error);
+        const item = blacklist.find(b => b.id === id);
+        if (item) {
+            showDetailModal(item);
+        }
     }
 }
 
-function viewBlacklistDetail(id) {
-    const item = currentBlacklist.find(i => i.id === id);
-    if (!item) return;
+function showDetailModal(item) {
+    const modal = new bootstrap.Modal(document.getElementById('blacklistDetailModal'));
+    const content = document.getElementById('blacklistDetailContent');
 
-    const modal = document.getElementById('detailModal');
-    const content = document.getElementById('detailContent');
+    const statusClass = item.status === 'active' ? 'danger' : 'secondary';
+    const statusText = item.status === 'active' ? '生效中' : '已过期';
 
     content.innerHTML = `
-        <table class="table table-borderless">
-            <tr><td class="text-muted" style="width: 100px;">ID</td><td>${item.id}</td></tr>
-            <tr><td class="text-muted">目标</td><td><code>${escapeHtml(item.target)}</code></td></tr>
-            <tr><td class="text-muted">类型</td><td><span class="badge ${getTypeBadgeClass(item.type)}">${getTypeText(item.type)}</span></td></tr>
-            <tr><td class="text-muted">来源</td><td><span class="badge bg-secondary">${getSourceText(item.source)}</span></td></tr>
-            <tr><td class="text-muted">原因</td><td>${escapeHtml(item.reason)}</td></tr>
-            <tr><td class="text-muted">处置方式</td><td><span class="badge ${getActionBadgeClass(item.action)}">${getActionText(item.action)}</span></td></tr>
-            <tr><td class="text-muted">过期时间</td><td>${item.expiration === 'permanent' ? '永久' : item.expiration}</td></tr>
-            <tr><td class="text-muted">状态</td><td><span class="badge ${getStatusBadgeClass(item.status)}">${getStatusText(item.status)}</span></td></tr>
-            <tr><td class="text-muted">命中次数</td><td class="text-danger fw-bold">${item.hitCount}</td></tr>
-            <tr><td class="text-muted">添加人</td><td>${item.createdBy}</td></tr>
-            <tr><td class="text-muted">添加时间</td><td>${item.createdAt}</td></tr>
-        </table>
-    `;
-
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
-}
-
-function getTypeBadgeClass(type) {
-    const map = {
-        'ip': 'bg-danger',
-        'user_id': 'bg-primary',
-        'device_id': 'bg-info',
-        'phone': 'bg-warning',
-        'email': 'bg-secondary'
-    };
-    return map[type] || 'bg-secondary';
-}
-
-function getTypeText(type) {
-    const map = {
-        'ip': 'IP地址',
-        'user_id': '用户ID',
-        'device_id': '设备ID',
-        'phone': '手机号',
-        'email': '邮箱'
-    };
-    return map[type] || type;
-}
-
-function getSourceText(source) {
-    const map = {
-        'manual': '手动',
-        'auto': '自动',
-        'import': '导入'
-    };
-    return map[source] || source;
-}
-
-function getActionBadgeClass(action) {
-    const map = {
-        'block': 'bg-danger',
-        'captcha': 'bg-warning',
-        'review': 'bg-info'
-    };
-    return map[action] || 'bg-secondary';
-}
-
-function getActionText(action) {
-    const map = {
-        'block': '拦截',
-        'captcha': '验证码',
-        'review': '审核'
-    };
-    return map[action] || action;
-}
-
-function getStatusBadgeClass(status) {
-    const map = {
-        'active': 'bg-success',
-        'expired': 'bg-secondary',
-        'unblocked': 'bg-warning'
-    };
-    return map[status] || 'bg-secondary';
-}
-
-function getStatusText(status) {
-    const map = {
-        'active': '生效中',
-        'expired': '已过期',
-        'unblocked': '已解封'
-    };
-    return map[status] || status;
-}
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer') || createToastContainer();
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-white bg-${type} border-0`;
-    toast.setAttribute('role', 'alert');
-    toast.innerHTML = `
-        <div class="d-flex">
-            <div class="toast-body">${escapeHtml(message)}</div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        <div class="mb-3">
+            <label class="text-muted small">类型</label>
+            <div class="d-flex align-items-center gap-2">
+                <div class="type-icon ${getTypeClass(item.type)}">${getTypeIcon(item.type)}</div>
+                <span>${getTypeName(item.type)}</span>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="text-muted small">目标值</label>
+            <div><code>${item.value}</code></div>
+        </div>
+        <div class="mb-3">
+            <label class="text-muted small">原因</label>
+            <div>${item.reason}</div>
+        </div>
+        <div class="mb-3">
+            <label class="text-muted small">添加时间</label>
+            <div>${item.createdAt}</div>
+        </div>
+        <div class="mb-3">
+            <label class="text-muted small">过期时间</label>
+            <div>${item.expireAt || '永久'}</div>
+        </div>
+        <div class="mb-3">
+            <label class="text-muted small">状态</label>
+            <div><span class="badge bg-${statusClass}">${statusText}</span></div>
+        </div>
+        <div class="mb-3">
+            <label class="text-muted small">操作人</label>
+            <div>${item.operator}</div>
         </div>
     `;
-    container.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+
+    modal.show();
 }
 
-function createToastContainer() {
-    const container = document.createElement('div');
-    container.id = 'toastContainer';
-    container.className = 'toast-container position-fixed top-0 end-0 p-3';
-    container.style.zIndex = '9999';
-    document.body.appendChild(container);
-    return container;
+function removeBlacklist(id) {
+    Auth.showConfirmDialog(
+        '删除黑名单',
+        '确定要删除该黑名单记录吗？',
+        async function() {
+            try {
+                const response = await fetch(`/admin/api/blacklist/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error('删除黑名单失败');
+
+                Auth.showToast('黑名单已删除', 'success');
+                loadBlacklist();
+            } catch (error) {
+                console.error('删除黑名单失败:', error);
+                Auth.showToast('删除失败，请重试', 'error');
+            }
+        }
+    );
 }
 
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
+window.Blacklist = {
+    loadBlacklist: loadBlacklist,
+    viewBlacklistDetail: viewBlacklistDetail,
+    removeBlacklist: removeBlacklist
+};

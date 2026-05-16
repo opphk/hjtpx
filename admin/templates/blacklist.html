@@ -6,17 +6,95 @@
     <title>管理后台 - 黑名单管理</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --sidebar-bg: #1e293b;
+            --sidebar-hover: #334155;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: var(--sidebar-bg);
+            min-height: 100vh;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.7);
+            padding: 12px 20px;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: var(--sidebar-hover);
+            color: white;
+        }
+        .sidebar-header {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-footer {
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .main-wrapper {
+            flex: 1;
+            min-width: 0;
+        }
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #3b82f6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+        .table-hover tbody tr:hover {
+            cursor: pointer;
+        }
+        .filter-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .search-box {
+            position: relative;
+        }
+        .search-box .form-control {
+            padding-left: 40px;
+            border-radius: 20px;
+        }
+        .search-box .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        .type-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .type-ip { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+        .type-device { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .type-user { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+        .type-app { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
+    </style>
 </head>
 <body>
     <div class="d-flex">
         <div class="sidebar d-flex flex-column flex-shrink-0">
-            <div class="sidebar-header p-3"><h5 class="text-white mb-0">管理后台</h5></div>
+            <div class="sidebar-header p-3">
+                <h5 class="text-white mb-0">管理后台</h5>
+            </div>
             <nav class="nav flex-column mt-2">
                 <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
                 <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
                 <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
                 <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
-                <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt me-2"></i>风控规则</a>
                 <a class="nav-link active" href="/admin/blacklist"><i class="fas fa-ban me-2"></i>黑名单</a>
             </nav>
             <div class="sidebar-footer mt-auto p-3">
@@ -27,263 +105,137 @@
         <div class="main-wrapper">
             <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">黑名单管理</h5>
-                <div class="d-flex align-items-center gap-3">
-                    <button id="addBlacklistBtn" class="btn btn-primary btn-sm"><i class="fas fa-plus me-1"></i>添加黑名单</button>
-                    <button id="importBlacklistBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-upload me-1"></i>批量导入</button>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="text-muted" id="usernameDisplay">管理员</span>
-                        <div class="user-avatar" id="userAvatar">A</div>
-                    </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
                 </div>
             </header>
 
             <main class="p-4 bg-light min-vh-100">
-                <div class="row g-4 mb-4">
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">黑名单总数</h6>
-                                <h3 class="mb-1 text-danger" id="totalBlacklist">0</h3>
-                                <small class="text-muted">IP / 用户 / 设备</small>
+                <div class="filter-section">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="search-box">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" class="form-control" id="searchInput" placeholder="搜索目标值或原因...">
                             </div>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">今日新增</h6>
-                                <h3 class="mb-1" id="todayAdded">0</h3>
-                                <small class="text-success"><i class="fas fa-arrow-up me-1"></i>较昨日</small>
-                            </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="typeFilter">
+                                <option value="">全部类型</option>
+                                <option value="ip">IP地址</option>
+                                <option value="device">设备ID</option>
+                                <option value="user">用户ID</option>
+                                <option value="app">应用ID</option>
+                            </select>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">已自动解封</h6>
-                                <h3 class="mb-1 text-success" id="autoUnblocked">0</h3>
-                                <small class="text-muted">定时任务</small>
-                            </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="statusFilter">
+                                <option value="">全部状态</option>
+                                <option value="active">生效中</option>
+                                <option value="expired">已过期</option>
+                            </select>
                         </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted mb-2">拦截次数</h6>
-                                <h3 class="mb-1 text-warning" id="totalBlocked">0</h3>
-                                <small class="text-muted">本周累计</small>
-                            </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary w-100" id="resetFilterBtn">
+                                <i class="fas fa-redo me-2"></i>重置
+                            </button>
                         </div>
-                    </div>
-                </div>
-
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-body">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-2">
-                                <label class="form-label">类型</label>
-                                <select class="form-select" id="blacklistType">
-                                    <option value="">全部类型</option>
-                                    <option value="ip">IP地址</option>
-                                    <option value="user_id">用户ID</option>
-                                    <option value="device_id">设备ID</option>
-                                    <option value="phone">手机号</option>
-                                    <option value="email">邮箱</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">来源</label>
-                                <select class="form-select" id="blacklistSource">
-                                    <option value="">全部来源</option>
-                                    <option value="manual">手动添加</option>
-                                    <option value="auto">自动识别</option>
-                                    <option value="import">批量导入</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">状态</label>
-                                <select class="form-select" id="blacklistStatus">
-                                    <option value="">全部状态</option>
-                                    <option value="active">生效中</option>
-                                    <option value="expired">已过期</option>
-                                    <option value="unblocked">已解封</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">关键词</label>
-                                <input type="text" class="form-control" id="blacklistKeyword" placeholder="输入IP地址/用户ID/设备ID">
-                            </div>
-                            <div class="col-md-3">
-                                <button id="searchBlacklistBtn" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i>搜索</button>
-                            </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-danger w-100" id="addBlacklistBtn">
+                                <i class="fas fa-plus me-2"></i>添加黑名单
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                        <span class="text-muted">共 <span id="blacklistCount">0</span> 条记录</span>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-secondary active" data-view="table"><i class="fas fa-list"></i></button>
-                            <button class="btn btn-outline-secondary" data-view="card"><i class="fas fa-th"></i></button>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive" id="blacklistTableView">
+                    <div class="card-body">
+                        <div class="table-responsive">
                             <table class="table table-hover mb-0">
                                 <thead class="table-light">
                                     <tr>
-                                        <th style="width: 40px;"><input type="checkbox" id="selectAllBlacklist"></th>
-                                        <th>目标</th>
+                                        <th><input type="checkbox" id="selectAll"></th>
                                         <th>类型</th>
-                                        <th>来源</th>
+                                        <th>目标值</th>
                                         <th>原因</th>
+                                        <th>添加时间</th>
                                         <th>过期时间</th>
                                         <th>状态</th>
+                                        <th>操作人</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
-                                <tbody id="blacklistTableBody"></tbody>
+                                <tbody id="blacklistTableBody">
+                                </tbody>
                             </table>
                         </div>
-                        <div class="d-none" id="blacklistCardView"></div>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="text-muted">
+                                共 <span id="totalCount">0</span> 条记录
+                            </div>
+                            <nav>
+                                <ul class="pagination mb-0" id="pagination">
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
-                    <div class="card-footer bg-white" id="blacklistPagination"></div>
                 </div>
             </main>
         </div>
     </div>
 
-    <div class="modal fade" id="blacklistModal" tabindex="-1">
+    <div class="modal fade" id="blacklistModal" tabindex="-1" aria-labelledby="blacklistModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="blacklistModalTitle">添加黑名单</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="blacklistForm">
-                    <div class="modal-body">
-                        <input type="hidden" id="blacklistId">
-
-                        <div class="mb-3">
-                            <label class="form-label">类型 *</label>
-                            <select class="form-select" id="blType" required>
-                                <option value="">请选择类型</option>
-                                <option value="ip">IP地址</option>
-                                <option value="user_id">用户ID</option>
-                                <option value="device_id">设备ID</option>
-                                <option value="phone">手机号</option>
-                                <option value="email">邮箱</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">目标值 *</label>
-                            <input type="text" class="form-control" id="blValue" required placeholder="输入具体的IP地址、用户ID等">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">封禁原因 *</label>
-                            <textarea class="form-control" id="blReason" rows="3" required placeholder="详细描述封禁原因"></textarea>
-                        </div>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">过期时间</label>
-                                <select class="form-select" id="blExpiration">
-                                    <option value="permanent">永久封禁</option>
-                                    <option value="7d">7天</option>
-                                    <option value="30d">30天</option>
-                                    <option value="90d">90天</option>
-                                    <option value="custom">自定义</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">处置方式</label>
-                                <select class="form-select" id="blAction">
-                                    <option value="block">直接拦截</option>
-                                    <option value="captcha">验证码</option>
-                                    <option value="review">人工审核</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mb-3 d-none" id="customExpirationGroup">
-                            <label class="form-label">自定义过期时间</label>
-                            <input type="datetime-local" class="form-control" id="blCustomExpiration">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">关联应用</label>
-                            <select class="form-select" id="blApps" multiple>
-                                <option value="all" selected>全部应用</option>
-                                <option value="1">用户中心</option>
-                                <option value="2">支付系统</option>
-                                <option value="3">消息推送</option>
-                            </select>
-                            <small class="text-muted">按住 Ctrl 多选</small>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">备注</label>
-                            <textarea class="form-control" id="blNote" rows="2" placeholder="其他备注信息"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                        <button type="submit" class="btn btn-primary">保存</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="importModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">批量导入黑名单</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="blacklistModalLabel">添加黑名单</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">导入类型</label>
-                        <select class="form-select" id="importType">
-                            <option value="ip">IP地址</option>
-                            <option value="user_id">用户ID</option>
-                            <option value="device_id">设备ID</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">上传文件</label>
-                        <input type="file" class="form-control" id="importFile" accept=".txt,.csv">
-                        <small class="text-muted">支持 TXT/CSV 格式，每行一个值</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">封禁原因</label>
-                        <input type="text" class="form-control" id="importReason" placeholder="统一封禁原因">
-                    </div>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-1"></i>
-                        文件格式示例：每行一个目标值，如 IP 地址或用户ID
-                    </div>
+                    <form id="blacklistForm">
+                        <div class="mb-3">
+                            <label for="blacklistType" class="form-label">类型 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="blacklistType" required>
+                                <option value="">请选择类型</option>
+                                <option value="ip">IP地址</option>
+                                <option value="device">设备ID</option>
+                                <option value="user">用户ID</option>
+                                <option value="app">应用ID</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="blacklistValue" class="form-label">目标值 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="blacklistValue" required placeholder="请输入要屏蔽的目标值">
+                        </div>
+                        <div class="mb-3">
+                            <label for="blacklistReason" class="form-label">原因 <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="blacklistReason" rows="3" required placeholder="请输入添加黑名单的原因"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="blacklistExpire" class="form-label">过期时间</label>
+                            <input type="datetime-local" class="form-control" id="blacklistExpire">
+                            <small class="text-muted">留空则永久生效</small>
+                        </div>
+                    </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" id="confirmImportBtn">确认导入</button>
+                    <button type="button" class="btn btn-danger" id="saveBlacklistBtn">添加</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal fade" id="blacklistDetailModal" tabindex="-1" aria-labelledby="blacklistDetailModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">黑名单详情</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="blacklistDetailModalLabel">黑名单详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" id="detailContent"></div>
+                <div class="modal-body" id="blacklistDetailContent">
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                 </div>
