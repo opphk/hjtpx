@@ -124,10 +124,8 @@ func Translate(lang, key string, args ...interface{}) string {
 
 	value, ok := trans[key]
 	if !ok {
-		if defaultTrans, ok := translations[defaultLang]
-		if ok {
-			if defaultValue, ok := defaultTrans[key]
-			if ok {
+		if defaultTrans, ok := translations[defaultLang]; ok {
+			if defaultValue, ok := defaultTrans[key]; ok {
 				value = defaultValue
 			} else {
 				value = key

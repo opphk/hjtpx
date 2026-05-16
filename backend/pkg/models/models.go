@@ -303,3 +303,47 @@ type VisualizationChart struct {
 	ReportTemplateID  uint      `gorm:"index:idx_chart_template" json:"report_template_id"`
 	ReportTemplate    *ReportTemplate `gorm:"foreignKey:ReportTemplateID" json:"report_template,omitempty"`
 }
+
+// SeamlessVerification 无感验证记录
+type SeamlessVerification struct {
+	gorm.Model
+	SessionID         string    `gorm:"size:100;index:idx_seamless_session" json:"session_id"`
+	ApplicationID     *uint     `gorm:"index:idx_seamless_app" json:"application_id,omitempty"`
+	UserID            *uint     `gorm:"index:idx_seamless_user" json:"user_id,omitempty"`
+	DeviceFingerprint string    `gorm:"size:64;index:idx_seamless_fingerprint" json:"device_fingerprint"`
+	Decision          string    `gorm:"size:50;not null;index:idx_seamless_decision" json:"decision"` // allow, challenge, block
+	RiskScore         float64   `gorm:"default:0" json:"risk_score"`
+	Reason            string    `gorm:"type:text" json:"reason,omitempty"`
+	IPAddress         string    `gorm:"size:50" json:"ip_address"`
+	UserAgent         string    `gorm:"size:500" json:"user_agent"`
+	Duration          int64     `gorm:"comment:'验证耗时(毫秒)'" json:"duration"`
+	Application       *Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+	User              *User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// TrustedDevice 信任设备记录
+type TrustedDevice struct {
+	gorm.Model
+	UserID            uint      `gorm:"not null;index:idx_trusted_user" json:"user_id"`
+	DeviceFingerprint string    `gorm:"size:64;index:idx_trusted_fingerprint" json:"device_fingerprint"`
+	DeviceName        string    `gorm:"size:255" json:"device_name,omitempty"`
+	IsTrusted         bool      `gorm:"default:true;index:idx_trusted_is_trusted" json:"is_trusted"`
+	TrustedAt         *time.Time `json:"trusted_at,omitempty"`
+	LastUsedAt        time.Time `gorm:"index:idx_trusted_last_used" json:"last_used_at"`
+	UseCount          int       `gorm:"default:1" json:"use_count"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	User              User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+// SeamlessConfig 无感验证配置
+type SeamlessConfig struct {
+	gorm.Model
+	ApplicationID     uint      `gorm:"not null;uniqueIndex:idx_seamless_config_app" json:"application_id"`
+	Enabled           bool      `gorm:"default:true" json:"enabled"`
+	AutoTrustAfter    int       `gorm:"default:3" json:"auto_trust_after"` // 连续验证成功次数后自动信任
+	TrustDurationDays int       `gorm:"default:30" json:"trust_duration_days"` // 信任设备有效期(天)
+	ChallengeThreshold float64  `gorm:"default:30" json:"challenge_threshold"` // 风险分高于此值需要挑战
+	BlockThreshold    float64   `gorm:"default:70" json:"block_threshold"` // 风险分高于此值直接阻止
+	WhitelistEnabled  bool      `gorm:"default:false" json:"whitelist_enabled"`
+	Application       Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+}

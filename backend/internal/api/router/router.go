@@ -186,6 +186,12 @@ func SetupRouter() *gin.Engine {
 			auth.POST("/reset-password", userHandler.ResetPassword)
 		}
 
+		// 无感验证路由
+		seamless := api.Group("/seamless")
+		{
+			seamless.POST("/verify", handler.SeamlessVerify)
+		}
+
 		// 用户路由
 		user := api.Group("/user")
 		user.Use(middleware.UserAuthMiddleware())
@@ -194,6 +200,9 @@ func SetupRouter() *gin.Engine {
 			user.GET("/profile", userHandler.GetProfile)
 			user.PUT("/profile", userHandler.UpdateProfile)
 			user.POST("/change-password", userHandler.ChangePassword)
+			user.GET("/trusted-devices", handler.GetTrustedDevices)
+			user.POST("/trusted-devices", handler.TrustDevice)
+			user.DELETE("/trusted-devices/:id", handler.RevokeTrustedDevice)
 		}
 
 		// 管理员路由

@@ -1,14 +1,12 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"image"
 	"image/color"
 	"image/draw"
-	"image/png"
 	"math"
 	"math/rand"
 	"net/http"
@@ -352,6 +350,7 @@ func GenerateJigsawCaptcha(c *gin.Context) {
 	
 	pieceImages := make([]*imageData, 0, len(shuffledPieces))
 	for i, piece := range shuffledPieces {
+		_ = i
 		rotatedImg := rotatePiece(pieceImgs[piece.Index], piece.Rotation)
 		borderedImg := addPieceBorder(rotatedImg)
 		pieceImages = append(pieceImages, &imageData{
@@ -409,6 +408,7 @@ func verifyJigsawPieces(sessionPieces, submittedPieces []*JigsawPiece, gridSize 
 	}
 	
 	gridSizeInt := int(gridSize)
+	_ = gridSizeInt
 	expectedPositions := make(map[string]bool)
 	
 	for _, piece := range sessionPieces {

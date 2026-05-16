@@ -11,6 +11,7 @@ import (
 
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/router"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/i18n"

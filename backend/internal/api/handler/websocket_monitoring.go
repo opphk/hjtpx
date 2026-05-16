@@ -136,7 +136,7 @@ func generateMockData() {
 func WebSocketHandler(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		response.Error(c, "Failed to upgrade WebSocket connection")
+		response.Error(c, http.StatusInternalServerError, "Failed to upgrade WebSocket connection")
 		return
 	}
 

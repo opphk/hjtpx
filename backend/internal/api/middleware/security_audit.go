@@ -68,7 +68,7 @@ func SecurityAuditMiddleware(config ...SecurityAuditConfig) gin.HandlerFunc {
 			}
 		}
 
-		blw := &bodyLogWriter{body: bytes.NewBufferString(), ResponseWriter: c.Writer}
+		blw := &bodyLogWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
 		c.Writer = blw
 
 		c.Next()
