@@ -561,3 +561,392 @@ func (cs *CacheService) GetJSONOrSet(ctx context.Context, key string, ttl time.D
 	cs.SetWithTTL(ctx, key, data, ttl)
 	return data, nil
 }
+
+type CaptchaCache struct {
+	CaptchaID  string    `json:"captcha_id"`
+	Answer     string    `json:"answer"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Difficulty int       `json:"difficulty"`
+}
+
+func (cs *CacheService) SetCaptchaCache(ctx context.Context, captchaID string, data *CaptchaCache) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("captcha:%s", captchaID)
+	return cs.SetWithTTL(ctx, key, data, 5*time.Minute)
+}
+
+func (cs *CacheService) GetCaptchaCache(ctx context.Context, captchaID string) (*CaptchaCache, error) {
+	if redis.Client == nil {
+		return nil, ErrCacheMiss
+	}
+
+	key := fmt.Sprintf("captcha:%s", captchaID)
+	var cache CaptchaCache
+	if err := cs.GetJSON(ctx, key, &cache); err != nil {
+		return nil, err
+	}
+
+	if time.Now().After(cache.ExpiresAt) {
+		cs.Delete(ctx, key)
+		return nil, ErrCacheMiss
+	}
+
+	return &cache, nil
+}
+
+func (cs *CacheService) DeleteCaptchaCache(ctx context.Context, captchaID string) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("captcha:%s", captchaID)
+	return cs.Delete(ctx, key)
+}
+
+type BehaviorCache struct {
+	UserID     string    `json:"user_id"`
+	SessionID  string    `json:"session_id"`
+	Trajectory string    `json:"trajectory"`
+	Timestamp  time.Time `json:"timestamp"`
+}
+
+func (cs *CacheService) SetBehaviorCache(ctx context.Context, sessionID string, data *BehaviorCache) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("behavior:%s", sessionID)
+	return cs.SetWithTTL(ctx, key, data, 30*time.Minute)
+}
+
+func (cs *CacheService) GetBehaviorCache(ctx context.Context, sessionID string) (*BehaviorCache, error) {
+	if redis.Client == nil {
+		return nil, ErrCacheMiss
+	}
+
+	key := fmt.Sprintf("behavior:%s", sessionID)
+	var cache BehaviorCache
+	if err := cs.GetJSON(ctx, key, &cache); err != nil {
+		return nil, err
+	}
+
+	return &cache, nil
+}
+
+func (cs *CacheService) DeleteBehaviorCache(ctx context.Context, sessionID string) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("behavior:%s", sessionID)
+	return cs.Delete(ctx, key)
+}
+
+type SessionCache struct {
+	UserID    string    `json:"user_id"`
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	IPAddress string    `json:"ip_address"`
+	UserAgent string    `json:"user_agent"`
+}
+
+func (cs *CacheService) SetSessionCache(ctx context.Context, token string, data *SessionCache) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("session:%s", token)
+	return cs.SetWithTTL(ctx, key, data, 24*time.Hour)
+}
+
+func (cs *CacheService) GetSessionCache(ctx context.Context, token string) (*SessionCache, error) {
+	if redis.Client == nil {
+		return nil, ErrCacheMiss
+	}
+
+	key := fmt.Sprintf("session:%s", token)
+	var cache SessionCache
+	if err := cs.GetJSON(ctx, key, &cache); err != nil {
+		return nil, err
+	}
+
+	if time.Now().After(cache.ExpiresAt) {
+		cs.Delete(ctx, key)
+		return nil, ErrCacheMiss
+	}
+
+	return &cache, nil
+}
+
+func (cs *CacheService) DeleteSessionCache(ctx context.Context, token string) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("session:%s", token)
+	return cs.Delete(ctx, key)
+}
+
+func (cs *CacheService) RefreshSession(ctx context.Context, token string) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	cache, err := cs.GetSessionCache(ctx, token)
+	if err != nil {
+		return err
+	}
+
+	cache.ExpiresAt = time.Now().Add(24 * time.Hour)
+	return cs.SetSessionCache(ctx, token, cache)
+}
+
+type RateLimitCache struct {
+	Identifier   string    `json:"identifier"`
+	RequestCount int       `json:"request_count"`
+	WindowStart  time.Time `json:"window_start"`
+}
+
+func (cs *CacheService) IncrementRateLimit(ctx context.Context, identifier string, window time.Duration) (int, error) {
+	if redis.Client == nil {
+		return 0, nil
+	}
+
+	key := fmt.Sprintf("ratelimit:%s", identifier)
+
+	pipe := redis.Client.Pipeline()
+	incrCmd := pipe.Incr(ctx, key)
+	ttlCmd := pipe.TTL(ctx, key)
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, err
+	}
+
+	count, err := incrCmd.Result()
+	if err != nil {
+		return 0, err
+	}
+
+	ttl, err := ttlCmd.Result()
+	if err != nil || ttl == -1 {
+		redis.Client.Expire(ctx, key, window)
+	}
+
+	return int(count), nil
+}
+
+func (cs *CacheService) GetRateLimitCount(ctx context.Context, identifier string, window time.Duration) (int, error) {
+	if redis.Client == nil {
+		return 0, nil
+	}
+
+	key := fmt.Sprintf("ratelimit:%s", identifier)
+	val, err := redis.Client.Get(ctx, key).Int()
+	if err == goredis.Nil {
+		return 0, nil
+	}
+	return val, err
+}
+
+func (cs *CacheService) ResetRateLimit(ctx context.Context, identifier string) error {
+	if redis.Client == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("ratelimit:%s", identifier)
+	return cs.Delete(ctx, key)
+}
+
+type CacheWarmer struct {
+	cacheService *CacheService
+	warmupTasks  []WarmupTask
+	stopCh       chan struct{}
+	running      bool
+	mu           sync.Mutex
+}
+
+type WarmupTask struct {
+	Name     string
+	Handler  func() error
+	Interval time.Duration
+}
+
+func NewCacheWarmer() *CacheWarmer {
+	return &CacheWarmer{
+		cacheService: NewCacheService(),
+		warmupTasks:  make([]WarmupTask, 0),
+		stopCh:       make(chan struct{}),
+		running:      false,
+	}
+}
+
+func (cw *CacheWarmer) AddTask(task WarmupTask) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+	cw.warmupTasks = append(cw.warmupTasks, task)
+}
+
+func (cw *CacheWarmer) Start(ctx context.Context) {
+	cw.mu.Lock()
+	if cw.running {
+		cw.mu.Unlock()
+		return
+	}
+	cw.running = true
+	cw.mu.Unlock()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-cw.stopCh:
+				return
+			default:
+				for _, task := range cw.warmupTasks {
+					if err := task.Handler(); err != nil {
+						continue
+					}
+				}
+
+				if len(cw.warmupTasks) > 0 {
+					interval := cw.warmupTasks[0].Interval
+					if interval > 0 {
+						time.Sleep(interval)
+					}
+				}
+			}
+		}
+	}()
+}
+
+func (cw *CacheWarmer) Stop() {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+
+	if cw.running {
+		close(cw.stopCh)
+		cw.running = false
+		cw.stopCh = make(chan struct{})
+	}
+}
+
+func (cs *CacheService) StartCleanupTask(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				patterns := []string{
+					"captcha:*",
+					"behavior:*",
+					"session:*",
+					"ratelimit:*",
+				}
+
+				for _, pattern := range patterns {
+					cs.CleanupExpiredKeys(ctx, pattern)
+				}
+			}
+		}
+	}()
+}
+
+func (cs *CacheService) CleanupExpiredKeys(ctx context.Context, pattern string) (int, error) {
+	if redis.Client == nil {
+		return 0, nil
+	}
+
+	var cleaned int64
+	iter := redis.Client.Scan(ctx, 0, pattern, 100).Iterator()
+	for iter.Next(ctx) {
+		ttl, err := redis.Client.TTL(ctx, iter.Val()).Result()
+		if err == nil && ttl <= 0 {
+			n, err := redis.Client.Del(ctx, iter.Val()).Result()
+			if err == nil {
+				cleaned += n
+			}
+		}
+	}
+
+	return int(cleaned), iter.Err()
+}
+
+type CacheMetrics struct {
+	Hits      int64
+	Misses    int64
+	Sets      int64
+	Deletes   int64
+	Expired   int64
+	Evicted   int64
+	mu        sync.RWMutex
+}
+
+var globalMetrics = &CacheMetrics{}
+
+func (cs *CacheService) GetMetrics() *CacheMetrics {
+	globalMetrics.mu.RLock()
+	defer globalMetrics.mu.RUnlock()
+	return &CacheMetrics{
+		Hits:    globalMetrics.Hits,
+		Misses:  globalMetrics.Misses,
+		Sets:    globalMetrics.Sets,
+		Deletes: globalMetrics.Deletes,
+		Expired: globalMetrics.Expired,
+		Evicted: globalMetrics.Evicted,
+	}
+}
+
+func (cs *CacheService) RecordHit() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Hits++
+}
+
+func (cs *CacheService) RecordMiss() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Misses++
+}
+
+func (cs *CacheService) RecordSet() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Sets++
+}
+
+func (cs *CacheService) RecordDelete() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Deletes++
+}
+
+func (cs *CacheService) RecordExpired() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Expired++
+}
+
+func (cs *CacheService) RecordEvicted() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Evicted++
+}
+
+func ResetMetrics() {
+	globalMetrics.mu.Lock()
+	defer globalMetrics.mu.Unlock()
+	globalMetrics.Hits = 0
+	globalMetrics.Misses = 0
+	globalMetrics.Sets = 0
+	globalMetrics.Deletes = 0
+	globalMetrics.Expired = 0
+	globalMetrics.Evicted = 0
+}
