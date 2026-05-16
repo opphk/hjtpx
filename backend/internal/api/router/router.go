@@ -111,6 +111,19 @@ func SetupRouter() *gin.Engine {
 		api.GET("/detect/fingerprint", handler.GetFingerprintInfo)
 		api.GET("/detect/stats", handler.GetFingerprintStats)
 
+		// 高级环境检测路由
+		api.GET("/detect/advanced/script", handler.GetAdvancedDetectionScript)
+		api.POST("/detect/advanced/submit", handler.SubmitAdvancedDetection)
+		api.GET("/detect/advanced/result", handler.GetAdvancedDetectionResult)
+		api.POST("/detect/advanced/browser-engine", handler.AnalyzeBrowserEngine)
+		api.POST("/detect/advanced/vm", handler.DetectVMEnvironment)
+		api.POST("/detect/advanced/cloud", handler.DetectCloudEnvironment)
+		api.POST("/detect/advanced/container", handler.DetectContainerEnvironment)
+		api.POST("/detect/advanced/headless", handler.DetectHeadlessBrowser)
+		api.POST("/detect/advanced/canvas", handler.EnhancedCanvasFingerprint)
+		api.POST("/detect/advanced/webgl", handler.EnhancedWebGLFingerprint)
+		api.POST("/detect/advanced/batch", handler.BatchDetection)
+
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
 		{
@@ -234,6 +247,15 @@ func SetupRouter() *gin.Engine {
 				"message": "pong",
 			})
 		})
+
+		// 性能监控路由
+		metrics := api.Group("/metrics")
+		{
+			metrics.GET("/performance", handler.GetPerformanceMetrics)
+			metrics.GET("/endpoints", handler.GetEndpointStats)
+			metrics.GET("/health", handler.GetHealthCheckMetrics)
+			metrics.POST("/reset", handler.ResetMetrics)
+		}
 	}
 
 	return r

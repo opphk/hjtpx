@@ -138,3 +138,12 @@ type DeviceFingerprint struct {
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
+
+type RuleConfig struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	AppID     string    `gorm:"size:100;index;not null" json:"app_id"`
+	Config    string    `gorm:"type:text;not null" json:"config"`
+	Version   int       `gorm:"default:1" json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
