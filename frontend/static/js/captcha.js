@@ -244,6 +244,19 @@ class Captcha {
             hintText: '请依次点击图中的文字'
         };
 
+        this.jigsawState = {
+            pieces: [],
+            pieceImages: [],
+            gridSize: 3,
+            pieceWidth: 100,
+            pieceHeight: 100,
+            selectedPiece: null,
+            isDragging: false,
+            offsetX: 0,
+            offsetY: 0,
+            sessionId: null
+        };
+
         this.loadingState = {
             isLoading: false,
             loadingType: 'spinner',
@@ -315,6 +328,10 @@ class Captcha {
                         <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="click-captcha" data-type="click" tabindex="0" id="tab-click">
                             <span class="tab-icon"><i class="fas fa-hand-pointer" aria-hidden="true"></i></span>
                             <span class="tab-text">${this.i18n.t('clickVerify')}</span>
+                        </button>
+                        <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="jigsaw-captcha" data-type="jigsaw" tabindex="0" id="tab-jigsaw">
+                            <span class="tab-icon"><i class="fas fa-th" aria-hidden="true"></i></span>
+                            <span class="tab-text">拼图验证</span>
                         </button>
                         <button class="captcha-tab" role="tab" aria-selected="false" aria-controls="rotation-captcha" data-type="rotation" tabindex="0" id="tab-rotation">
                             <span class="tab-icon"><i class="fas fa-undo-alt" aria-hidden="true"></i></span>
@@ -414,6 +431,40 @@ class Captcha {
                             </button>
                             <button class="captcha-btn captcha-btn-primary" id="click-submit" aria-label="${this.i18n.t('submitVerification')}">
                                 <i class="fas fa-check" aria-hidden="true"></i> ${this.i18n.t('confirm')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="captcha-content" id="jigsaw-captcha" role="tabpanel" aria-labelledby="tab-jigsaw" hidden>
+                        <div class="captcha-loading-overlay" id="jigsaw-loading-overlay" hidden>
+                            <div class="captcha-loading-container">
+                                <div class="loading-animation-${this.options.animationStyle}">
+                                    <div class="loading-dots">
+                                        <span></span><span></span><span></span><span></span><span></span>
+                                    </div>
+                                </div>
+                                <div class="loading-progress-bar">
+                                    <div class="loading-progress-fill" id="jigsaw-progress-fill"></div>
+                                </div>
+                                <div class="loading-message" id="jigsaw-loading-message">${this.i18n.t('loading')}</div>
+                            </div>
+                        </div>
+                        <div class="jigsaw-container" id="jigsaw-container" style="position: relative; margin: 0 auto;">
+                            <div class="jigsaw-target-grid" id="jigsaw-target-grid" style="display: grid; gap: 2px; margin-bottom: 10px;"></div>
+                            <button class="captcha-refresh" id="jigsaw-refresh" aria-label="${this.i18n.t('refresh')}" title="${this.i18n.t('refresh')}" style="position: absolute; top: 5px; right: 5px;">
+                                <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                            </button>
+                            <div class="captcha-image-skeleton" id="jigsaw-skeleton" style="width: 300px; height: 300px;">
+                                <div class="skeleton-shimmer"></div>
+                            </div>
+                        </div>
+                        <div class="jigsaw-pieces-container" id="jigsaw-pieces-container" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; min-height: 100px;"></div>
+                        <div class="captcha-actions" style="margin-top: 10px;">
+                            <button class="captcha-btn captcha-btn-secondary" id="jigsaw-reset" aria-label="重置拼图">
+                                <i class="fas fa-rotate" aria-hidden="true"></i> 重置
+                            </button>
+                            <button class="captcha-btn captcha-btn-primary" id="jigsaw-verify" aria-label="验证拼图">
+                                <i class="fas fa-check" aria-hidden="true"></i> 验证
                             </button>
                         </div>
                     </div>
@@ -596,6 +647,16 @@ class Captcha {
             passiveLoadingOverlay: this.container.querySelector('#passive-loading-overlay'),
             passiveProgressFill: this.container.querySelector('#passive-progress-fill'),
             passiveLoadingMessage: this.container.querySelector('#passive-loading-message'),
+            jigsawContainer: this.container.querySelector('#jigsaw-container'),
+            jigsawTargetGrid: this.container.querySelector('#jigsaw-target-grid'),
+            jigsawPiecesContainer: this.container.querySelector('#jigsaw-pieces-container'),
+            jigsawRefresh: this.container.querySelector('#jigsaw-refresh'),
+            jigsawReset: this.container.querySelector('#jigsaw-reset'),
+            jigsawVerify: this.container.querySelector('#jigsaw-verify'),
+            jigsawLoadingOverlay: this.container.querySelector('#jigsaw-loading-overlay'),
+            jigsawProgressFill: this.container.querySelector('#jigsaw-progress-fill'),
+            jigsawLoadingMessage: this.container.querySelector('#jigsaw-loading-message'),
+            jigsawSkeleton: this.container.querySelector('#jigsaw-skeleton'),
             result: this.container.querySelector('#captcha-result')
         };
 
@@ -625,11 +686,16 @@ class Captcha {
             this.refresh();
             this.announceToScreenReader(this.i18n.t('refreshing'));
         });
+        this.elements.jigsawRefresh.addEventListener('click', () => {
+            this.refresh();
+            this.announceToScreenReader(this.i18n.t('refreshing'));
+        });
 
         this.bindSliderEvents();
         this.bindClickEvents();
         this.bindRotationEvents();
         this.bindGestureEvents();
+        this.bindJigsawEvents();
         this.bindKeyboardShortcuts();
     }
 
@@ -1130,10 +1196,11 @@ class Captcha {
 
         this.elements.contents.forEach(content => {
             const isActive = (type === 'slider' && content.id === 'slider-captcha') ||
-                           (type === 'click' && content.id === 'click-captcha') ||
-                           (type === 'rotation' && content.id === 'rotation-captcha') ||
-                           (type === 'gesture' && content.id === 'gesture-captcha') ||
-                           (type === 'passive' && content.id === 'passive-captcha');
+                          (type === 'click' && content.id === 'click-captcha') ||
+                          (type === 'jigsaw' && content.id === 'jigsaw-captcha') ||
+                          (type === 'rotation' && content.id === 'rotation-captcha') ||
+                          (type === 'gesture' && content.id === 'gesture-captcha') ||
+                          (type === 'passive' && content.id === 'passive-captcha');
             content.classList.toggle('active', isActive);
             content.hidden = !isActive;
         });
@@ -1143,11 +1210,13 @@ class Captcha {
         this.clearClickPoints();
         this.resetRotationSlider();
         this.clearGestureCanvas();
+        this.resetJigsaw();
         this.refresh();
 
         const tabNames = {
             slider: this.i18n.t('sliderVerify'),
             click: this.i18n.t('clickVerify'),
+            jigsaw: '拼图验证',
             rotation: this.i18n.t('rotationVerify'),
             gesture: this.i18n.t('gestureVerify'),
             passive: this.i18n.t('passiveVerify')
@@ -1174,6 +1243,8 @@ class Captcha {
                 await this.refreshSlider();
             } else if (this.options.type === 'click') {
                 await this.refreshClick();
+            } else if (this.options.type === 'jigsaw') {
+                await this.refreshJigsaw();
             } else if (this.options.type === 'rotation') {
                 await this.refreshRotation();
             } else if (this.options.type === 'gesture') {

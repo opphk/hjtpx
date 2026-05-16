@@ -42,6 +42,16 @@ func main() {
 		log.Printf("Warning: Failed to connect to Redis: %v", err)
 	} else {
 		log.Println("Redis connected successfully")
+		redis.InitEnhancedCache(nil)
+	}
+
+	ctx := context.Background()
+	if cacheOptimizer := service.GetCacheOptimizer(); cacheOptimizer != nil {
+		if err := cacheOptimizer.Initialize(ctx); err != nil {
+			log.Printf("Warning: Cache initialization failed: %v", err)
+		} else {
+			log.Println("Cache optimizer initialized successfully")
+		}
 	}
 
 	r := router.SetupRouter()
@@ -65,9 +75,14 @@ func main() {
 	<-quit
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctxShutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	
+	if cacheOptimizer := service.GetCacheOptimizer(); cacheOptimizer != nil {
+		cacheOptimizer.Shutdown(ctxShutdown)
+	}
+
+	if err := srv.Shutdown(ctxShutdown); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 

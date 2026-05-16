@@ -3,6 +3,7 @@ package router
 import (
 	"html/template"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
@@ -20,15 +21,24 @@ func SetupRouter() *gin.Engine {
 	r.Use(middleware.ErrorHandler())
 	// 增强的安全中间件 - OWASP Top 10
 	r.Use(middleware.OWASPTop10SecurityMiddleware())
+	// 性能优化中间件
+	r.Use(middleware.GzipCompression())
+	r.Use(middleware.PerformanceMonitoring())
+	r.Use(middleware.RequestID())
 
 	// 健康检查
 	r.GET("/health", handler.HealthCheck)
 	r.GET("/healthz", handler.Liveness)
 	r.GET("/readyz", handler.Readiness)
 
-	// 静态文件服务
-	r.Static("/static", "../frontend/static")
-	r.Static("/admin/static", "../admin/static")
+	// 静态文件服务 - 带缓存优化
+	staticGroup := r.Group("/static")
+	staticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
+	staticGroup.Static("", "../frontend/static")
+	
+	adminStaticGroup := r.Group("/admin/static")
+	adminStaticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
+	adminStaticGroup.Static("", "../admin/static")
 
 	// 加载HTML模板（合并前端和管理端模板，避免多次LoadHTMLGlob覆盖）
 	templates := template.Must(template.New("").Parse(""))
@@ -106,6 +116,8 @@ func SetupRouter() *gin.Engine {
 			captcha.POST("/verify", handler.VerifyCaptcha)
 			captcha.GET("/gesture", handler.GenerateGestureCaptcha)
 			captcha.POST("/gesture/verify", handler.VerifyGestureCaptcha)
+			captcha.GET("/jigsaw", handler.GenerateJigsawCaptcha)
+			captcha.POST("/jigsaw/verify", handler.VerifyJigsawCaptcha)
 		}
 
 		// 环境检测路由

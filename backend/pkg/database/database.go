@@ -118,6 +118,17 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 
 	GormQueryCallback(DB)
 
+	if DB != nil {
+		InitPerformanceOptimizer(DB, cfg)
+		if optimizer := GetPerformanceOptimizer(); optimizer != nil {
+			if err := optimizer.OptimizeAll(); err != nil {
+				log.Printf("Warning: Database optimization failed: %v", err)
+			} else {
+				log.Println("Database optimization completed successfully")
+			}
+		}
+	}
+
 	log.Println("Database performance optimization features initialized")
 	return nil
 }
