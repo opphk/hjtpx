@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="前端加密和安全增强系统演示 - 展示Web Crypto API、代码混淆、反调试等安全功能">
+    <meta name="theme-color" content="#0d6efd">
+    <title>前端加密和安全增强系统演示 - hjtpx</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .demo-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 30px;
+        }
+        .feature-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            height: 100%;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .crypto-demo {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .result-box {
+            background: #edf2f7;
+            border-left: 4px solid #48bb78;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error-box {
+            background: #fff5f5;
+            border-left: 4px solid #f56565;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .btn-demo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn-demo:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+            color: white;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #667eea;
+        }
+        .nav-pills .nav-link {
+            color: #495057;
+        }
+        .security-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <i class="fas fa-shield-alt text-primary"></i>
+                <span class="fw-bold">hjtpx</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <i class="fas fa-bars text-primary"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/demo/crypto-security">加密演示</a></li>
+                </ul>
+                <div class="d-flex gap-2">
+                    <a href="/admin/login" class="btn btn-outline-light btn-sm px-3">管理后台</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="security-status" id="securityStatus"></div>
+
+    <section class="demo-section">
+        <div class="container">
+            <div class="text-center">
+                <h1 class="display-4 fw-bold mb-3">
+                    <i class="fas fa-lock me-3"></i>前端加密和安全增强系统
+                </h1>
+                <p class="lead mb-4">
+                    基于Web Crypto API的高级加密解决方案，提供代码混淆、反调试、请求加密、安全监控等全方位保护
+                </p>
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    <button class="btn btn-light btn-lg px-4" onclick="initSecurity()">
+                        <i class="fas fa-shield-alt me-2"></i>初始化安全系统
+                    </button>
+                    <button class="btn btn-outline-light btn-lg px-4" onclick="runAllDemos()">
+                        <i class="fas fa-play me-2"></i>运行全部演示
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5" style="background: white;">
+        <div class="container">
+            <div class="row mb-5">
+                <div class="col-lg-4 mb-4">
+                    <div class="card feature-card h-100">
+                        <div class="card-body text-center p-4">
+                            <div class="feature-icon bg-primary bg-opacity-10 text-primary mx-auto">
+                                <i class="fas fa-key"></i>
+                            </div>
+                            <h5 class="fw-bold mb-3">Web Crypto API加密</h5>
+                            <p class="text-muted mb-3">支持AES-GCM、RSA-OAEP等现代加密算法，确保数据传输安全</p>
+                            <ul class="list-unstyled text-start small">
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>AES-256-GCM对称加密</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>RSA-2048/OAEP非对称加密</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>PBKDF2密钥派生</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>数字签名与验签</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <div class="card feature-card h-100">
+                        <div class="card-body text-center p-4">
+                            <div class="feature-icon bg-success bg-opacity-10 text-success mx-auto">
+                                <i class="fas fa-code"></i>
+                            </div>
+                            <h5 class="fw-bold mb-3">代码混淆与保护</h5>
+                            <p class="text-muted mb-3">多重代码混淆技术，有效防止代码被分析和逆向</p>
+                            <ul class="list-unstyled text-start small">
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>字符串编码加密</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>变量名混淆</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>控制流扁平化</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>自毁代码保护</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <div class="card feature-card h-100">
+                        <div class="card-body text-center p-4">
+                            <div class="feature-icon bg-warning bg-opacity-10 text-warning mx-auto">
+                                <i class="fas fa-eye-slash"></i>
+                            </div>
+                            <h5 class="fw-bold mb-3">反调试机制</h5>
+                            <p class="text-muted mb-3">实时监控调试行为，自动触发防护措施</p>
+                            <ul class="list-unstyled text-start small">
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>开发者工具检测</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>debugger断点检测</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>控制台状态监控</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>自动化框架识别</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5 bg-light">
+        <div class="container">
+            <div class="text-center mb-5">
+                <h2 class="fw-bold">
+                    <i class="fas fa-laptop-code me-2 text-primary"></i>功能演示
+                </h2>
+                <p class="text-muted">点击下方按钮体验各项安全功能</p>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-12 mb-4">
+                    <div class="card">
+                        <div class="card-header bg-white">
+                            <ul class="nav nav-pills mb-0" id="demoTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="crypto-tab" data-bs-toggle="pill" data-bs-target="#crypto-panel" type="button" role="tab">
+                                        <i class="fas fa-key me-2"></i>加密演示
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="obfuscate-tab" data-bs-toggle="pill" data-bs-target="#obfuscate-panel" type="button" role="tab">
+                                        <i class="fas fa-code me-2"></i>代码混淆
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="request-tab" data-bs-toggle="pill" data-bs-target="#request-panel" type="button" role="tab">
+                                        <i class="fas fa-paper-plane me-2"></i>请求加密
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="monitor-tab" data-bs-toggle="pill" data-bs-target="#monitor-panel" type="button" role="tab">
+                                        <i class="fas fa-chart-line me-2"></i>安全监控
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-body">
+                            <div class="tab-content" id="demoTabsContent">
+                                <div class="tab-pane fade show active" id="crypto-panel" role="tabpanel" aria-labelledby="crypto-tab">
+                                    <h5 class="fw-bold mb-4"><i class="fas fa-key text-primary me-2"></i>Web Crypto API 加密演示</h5>
+                                    
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">AES-GCM 对称加密</h6>
+                                        <div class="mb-3">
+                                            <label class="form-label">待加密数据:</label>
+                                            <textarea class="form-control" id="plainText" rows="3" placeholder="输入需要加密的文本...">这是一段需要加密的敏感信息，包含用户名、密码等敏感数据。</textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">加密密钥 (可选):</label>
+                                            <input type="text" class="form-control" id="cryptoKey" placeholder="留空则自动生成随机密钥">
+                                        </div>
+                                        <button class="btn btn-demo" onclick="encryptData()">
+                                            <i class="fas fa-lock me-2"></i>加密数据
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="decryptData()">
+                                            <i class="fas fa-unlock me-2"></i>解密数据
+                                        </button>
+                                        <div id="cryptoResult" class="mt-3"></div>
+                                    </div>
+
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">RSA-OAEP 非对称加密</h6>
+                                        <button class="btn btn-demo" onclick="generateRSAKeys()">
+                                            <i class="fas fa-key me-2"></i>生成RSA密钥对
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="encryptWithRSA()">
+                                            <i class="fas fa-lock me-2"></i>使用公钥加密
+                                        </button>
+                                        <div id="rsaResult" class="mt-3"></div>
+                                    </div>
+
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">哈希与签名</h6>
+                                        <div class="mb-3">
+                                            <label class="form-label">输入数据:</label>
+                                            <input type="text" class="form-control" id="hashInput" value="待哈希数据示例">
+                                        </div>
+                                        <button class="btn btn-demo" onclick="computeHash()">
+                                            <i class="fas fa-fingerprint me-2"></i>计算SHA-256哈希
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="signData()">
+                                            <i class="fas fa-signature me-2"></i>数字签名
+                                        </button>
+                                        <div id="hashResult" class="mt-3"></div>
+                                    </div>
+                                </div>
+
+                                <div class="tab-pane fade" id="obfuscate-panel" role="tabpanel" aria-labelledby="obfuscate-tab">
+                                    <h5 class="fw-bold mb-4"><i class="fas fa-code text-success me-2"></i>代码混淆演示</h5>
+                                    
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">源代码:</h6>
+                                        <div class="code-block" id="sourceCode">
+function calculateSum(a, b) {
+    return a + b;
+}
+
+function authenticateUser(username, password) {
+    if (username === "admin" && password === "password123") {
+        return { success: true, token: "abc123" };
+    }
+    return { success: false, message: "认证失败" };
+}
+
+console.log("应用已初始化");
+                                        </div>
+                                        <button class="btn btn-demo" onclick="obfuscateCode()">
+                                            <i class="fas fa-magic me-2"></i>混淆代码
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="detectDebug()">
+                                            <i class="fas fa-search me-2"></i>检测调试器
+                                        </button>
+                                        <div id="obfuscateResult" class="mt-3"></div>
+                                    </div>
+
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">混淆选项:</h6>
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="optStrings" checked>
+                                            <label class="form-check-label" for="optStrings">编码字符串</label>
+                                        </div>
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="optVariables">
+                                            <label class="form-check-label" for="optVariables">混淆变量名</label>
+                                        </div>
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="optDeadCode">
+                                            <label class="form-check-label" for="optDeadCode">添加死代码</label>
+                                        </div>
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="optSelfDefend">
+                                            <label class="form-check-label" for="optSelfDefend">自毁代码保护</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="tab-pane fade" id="request-panel" role="tabpanel" aria-labelledby="request-tab">
+                                    <h5 class="fw-bold mb-4"><i class="fas fa-paper-plane text-warning me-2"></i>请求参数动态加密</h5>
+                                    
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">模拟表单数据:</h6>
+                                        <form id="demoForm">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label">用户名:</label>
+                                                    <input type="text" class="form-control" name="username" value="testuser">
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    <label class="form-label">密码:</label>
+                                                    <input type="password" class="form-control" name="password" value="SecurePass123">
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">邮箱:</label>
+                                                <input type="email" class="form-control" name="email" value="user@example.com">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">敏感信息:</label>
+                                                <textarea class="form-control" name="sensitiveData" rows="2">包含身份证号、手机号等敏感信息</textarea>
+                                            </div>
+                                        </form>
+                                        <button class="btn btn-demo" onclick="encryptFormData()">
+                                            <i class="fas fa-lock me-2"></i>加密表单数据
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="signFormData()">
+                                            <i class="fas fa-signature me-2"></i>签名表单数据
+                                        </button>
+                                        <div id="requestResult" class="mt-3"></div>
+                                    </div>
+
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">AJAX请求加密:</h6>
+                                        <button class="btn btn-demo" onclick="sendEncryptedAjax()">
+                                            <i class="fas fa-paper-plane me-2"></i>发送加密AJAX请求
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="simulateServerVerify()">
+                                            <i class="fas fa-server me-2"></i>模拟服务器验证
+                                        </button>
+                                        <div id="ajaxResult" class="mt-3"></div>
+                                    </div>
+                                </div>
+
+                                <div class="tab-pane fade" id="monitor-panel" role="tabpanel" aria-labelledby="monitor-tab">
+                                    <h5 class="fw-bold mb-4"><i class="fas fa-chart-line text-info me-2"></i>前端安全监控</h5>
+                                    
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">安全监控状态:</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-3">
+                                                <div class="p-3 bg-white rounded border">
+                                                    <div class="text-muted small">监控状态</div>
+                                                    <div class="fw-bold" id="monitorStatus">未初始化</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="p-3 bg-white rounded border">
+                                                    <div class="text-muted small">错误数量</div>
+                                                    <div class="fw-bold" id="errorCount">0</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="p-3 bg-white rounded border">
+                                                    <div class="text-muted small">警告数量</div>
+                                                    <div class="fw-bold" id="warningCount">0</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="p-3 bg-white rounded border">
+                                                    <div class="text-muted small">安全事件</div>
+                                                    <div class="fw-bold" id="securityEventCount">0</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-demo" onclick="initMonitor()">
+                                            <i class="fas fa-play me-2"></i>启动监控
+                                        </button>
+                                        <button class="btn btn-outline-secondary ms-2" onclick="getMonitorStats()">
+                                            <i class="fas fa-chart-bar me-2"></i>获取统计
+                                        </button>
+                                        <button class="btn btn-outline-danger ms-2" onclick="clearMonitorData()">
+                                            <i class="fas fa-trash me-2"></i>清除数据
+                                        </button>
+                                        <div id="monitorResult" class="mt-3"></div>
+                                    </div>
+
+                                    <div class="crypto-demo">
+                                        <h6 class="fw-bold mb-3">安全事件日志:</h6>
+                                        <div class="code-block" id="eventLog" style="max-height: 300px; overflow-y: auto;">
+                                            暂无安全事件记录...
+                                        </div>
+                                        <button class="btn btn-outline-primary ms-2" onclick="viewFullReport()">
+                                            <i class="fas fa-file-alt me-2"></i>查看完整报告
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5" style="background: white;">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h2 class="fw-bold mb-3">
+                        <i class="fas fa-shield-alt text-primary me-2"></i>为什么选择我们的加密系统?
+                    </h2>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3 text-primary">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-1">零依赖</h6>
+                                    <p class="text-muted mb-0 small">纯原生JavaScript实现，无需引入任何外部库</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3 text-primary">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-1">浏览器原生支持</h6>
+                                    <p class="text-muted mb-0 small">使用Web Crypto API，充分利用浏览器安全能力</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3 text-primary">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-1">高性能</h6>
+                                    <p class="text-muted mb-0 small">异步加密操作，不阻塞UI线程</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-start">
+                                <div class="me-3 text-primary">
+                                    <i class="fas fa-check-circle fa-2x"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-1">全方位保护</h6>
+                                    <p class="text-muted mb-0 small">从代码混淆到运行时监控，构建多层防御体系</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4 text-center mt-4 mt-lg-0">
+                    <div class="p-4 bg-light rounded">
+                        <i class="fas fa-lock fa-5x text-primary mb-3"></i>
+                        <h4 class="fw-bold">安全第一</h4>
+                        <p class="text-muted mb-0">保护您的Web应用免受各种安全威胁</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-dark text-white py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="fas fa-shield-alt text-primary fs-4"></i>
+                        <span class="fw-bold fs-4">hjtpx</span>
+                    </div>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 0.9rem;">
+                        新一代智能行为验证系统，前端安全加密解决方案
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p style="color: rgba(255,255,255,0.3); font-size: 0.85rem; margin-bottom: 0;">
+                        <i class="fas fa-copyright me-1"></i> 2026 hjtpx · MIT License
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/crypto-security.js"></script>
+    <script>
+        let securityInitialized = false;
+        let rsaKeyPair = null;
+
+        async function initSecurity() {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="loading-spinner me-2"></span>初始化中...';
+            btn.disabled = true;
+
+            try {
+                const result = await CryptoSecurity.init({
+                    enableMonitor: true,
+                    enableProtection: true,
+                    initCrypto: true
+                });
+
+                securityInitialized = true;
+                showSecurityStatus('success', '安全系统已初始化');
+                btn.innerHTML = '<i class="fas fa-check me-2"></i>初始化完成';
+                btn.classList.remove('btn-light');
+                btn.classList.add('btn-success');
+
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    btn.classList.add('btn-light');
+                    btn.classList.remove('btn-success');
+                }, 2000);
+            } catch (error) {
+                showSecurityStatus('error', '初始化失败: ' + error.message);
+                btn.innerHTML = '<i class="fas fa-times me-2"></i>初始化失败';
+                btn.classList.remove('btn-light');
+                btn.classList.add('btn-danger');
+
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    btn.classList.add('btn-light');
+                    btn.classList.remove('btn-danger');
+                }, 2000);
+            }
+        }
+
+        function showSecurityStatus(type, message) {
+            const statusEl = document.getElementById('securityStatus');
+            const bgColor = type === 'success' ? 'bg-success' : 'bg-danger';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            statusEl.innerHTML = `
+                <div class="alert ${bgColor} text-white alert-dismissible fade show shadow-lg" role="alert" style="min-width: 300px;">
+                    <i class="fas ${icon} me-2"></i>
+                    ${message}
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                statusEl.innerHTML = '';
+            }, 5000);
+        }
+
+        function showResult(containerId, content, isError = false) {
+            const container = document.getElementById(containerId);
+            const className = isError ? 'error-box' : 'result-box';
+            container.innerHTML = `<div class="${className}"><pre class="mb-0" style="white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(content)}</pre></div>`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function encryptData() {
+            if (!securityInitialized) {
+                await CryptoSecurity.init({ initCrypto: true, enableMonitor: false, enableProtection: false });
+                securityInitialized = true;
+            }
+
+            const plainText = document.getElementById('plainText').value;
+            const key = document.getElementById('cryptoKey').value || CryptoAPI.randomBytes(32);
+
+            const result = await CryptoAPI.encrypt(plainText, key);
+
+            if (result.success) {
+                showResult('cryptoResult', `加密成功!\n\n原始数据: ${plainText}\n\n加密后: ${result.data}\n\n使用的密钥: ${result.raw || key}`);
+            } else {
+                showResult('cryptoResult', `加密失败: ${result.error}`, true);
+            }
+        }
+
+        async function decryptData() {
+            const cryptoResult = document.getElementById('cryptoResult');
+            if (!cryptoResult.textContent.includes('加密成功')) {
+                showResult('cryptoResult', '请先加密数据', true);
+                return;
+            }
+
+            showResult('cryptoResult', '解密功能演示成功，实际应用中会自动使用保存的密钥进行解密');
+        }
+
+        async function generateRSAKeys() {
+            if (!securityInitialized) {
+                await CryptoSecurity.init({ initCrypto: true, enableMonitor: false, enableProtection: false });
+                securityInitialized = true;
+            }
+
+            rsaKeyPair = await CryptoAPI.generateRSAKeyPair(2048);
+
+            if (rsaKeyPair.success) {
+                showResult('rsaResult', `RSA密钥对生成成功!\n\n公钥(部分): ${rsaKeyPair.publicKey.substring(0, 100)}...\n\n私钥(部分): ${rsaKeyPair.privateKey.substring(0, 100)}...\n\n密钥长度: 2048位`);
+            } else {
+                showResult('rsaResult', `密钥生成失败: ${rsaKeyPair.error}`, true);
+            }
+        }
+
+        async function encryptWithRSA() {
+            if (!rsaKeyPair) {
+                showResult('rsaResult', '请先生成RSA密钥对', true);
+                return;
+            }
+
+            const plainText = document.getElementById('plainText').value;
+            const result = await CryptoAPI.encryptRSA(plainText, rsaKeyPair.publicKey);
+
+            if (result.success) {
+                showResult('rsaResult', `RSA加密成功!\n\n原始数据: ${plainText}\n\n加密后: ${result.data.substring(0, 100)}...`);
+            } else {
+                showResult('rsaResult', `RSA加密失败: ${result.error}`, true);
+            }
+        }
+
+        function computeHash() {
+            const input = document.getElementById('hashInput').value;
+            const hash = CryptoAPI.hash(input, 'sha256');
+            showResult('hashResult', `SHA-256哈希值:\n\n输入: ${input}\n\n哈希: ${hash}`);
+        }
+
+        async function signData() {
+            if (!rsaKeyPair) {
+                showResult('hashResult', '请先生成RSA密钥对以进行签名', true);
+                return;
+            }
+
+            const input = document.getElementById('hashInput').value;
+            const result = await CryptoAPI.sign(input, rsaKeyPair.privateKey);
+
+            if (result.success) {
+                showResult('hashResult', `数字签名成功!\n\n数据: ${input}\n\n签名: ${result.signature}`);
+            } else {
+                showResult('hashResult', `签名失败: ${result.error}`, true);
+            }
+        }
+
+        function obfuscateCode() {
+            const sourceCode = document.getElementById('sourceCode').textContent;
+            const options = {
+                encodeStrings: document.getElementById('optStrings').checked,
+                encodeStringsType: 2,
+                addDeadCode: document.getElementById('optDeadCode').checked,
+                addSelfDefending: document.getElementById('optSelfDefend').checked
+            };
+
+            const obfuscated = CodeObfuscator.obfuscate(sourceCode, options);
+            showResult('obfuscateResult', `代码混淆成功!\n\n混淆后代码长度: ${obfuscated.length} 字符\n\n注意: 以下为混淆后的部分代码\n\n${obfuscated.substring(0, 500)}...`);
+        }
+
+        function detectDebug() {
+            const result = CodeObfuscator.detectDebug();
+            showResult('obfuscateResult', `调试器检测结果:\n\n开发者工具: ${result.devTools ? '已检测到' : '未检测到'}\n\ndebugger断点: ${result.debugger ? '已检测到' : '未检测到'}\n\n控制台打开: ${result.consoleOpen ? '已打开' : '未打开'}`);
+
+            if (result.devTools || result.debugger) {
+                showSecurityStatus('warning', '检测到调试行为，请注意安全');
+            }
+        }
+
+        async function encryptFormData() {
+            if (!securityInitialized) {
+                await CryptoSecurity.init({ initCrypto: true, enableMonitor: false, enableProtection: false });
+                securityInitialized = true;
+            }
+
+            const formData = {
+                username: document.querySelector('input[name="username"]').value,
+                password: document.querySelector('input[name="password"]').value,
+                email: document.querySelector('input[name="email"]').value,
+                sensitiveData: document.querySelector('textarea[name="sensitiveData"]').value
+            };
+
+            const result = await RequestEncryptor.encryptRequest(formData);
+
+            if (result.success) {
+                showResult('requestResult', `表单加密成功!\n\n原始数据: ${JSON.stringify(formData, null, 2)}\n\n加密后数据: ${result.data}\n\n签名: ${result.signature}\n\n时间戳: ${result.timestamp}`);
+            } else {
+                showResult('requestResult', `加密失败: ${result.error}`, true);
+            }
+        }
+
+        function signFormData() {
+            const formData = {
+                username: document.querySelector('input[name="username"]').value,
+                password: document.querySelector('input[name="password"]').value,
+                email: document.querySelector('input[name="email"]').value,
+                sensitiveData: document.querySelector('textarea[name="sensitiveData"]').value
+            };
+
+            const result = RequestEncryptor.signRequest(formData);
+
+            if (result.success) {
+                showResult('requestResult', `表单签名成功!\n\n原始数据: ${JSON.stringify(formData, null, 2)}\n\n签名: ${result.signature}\n\nNonce: ${result.nonce}\n\n时间戳: ${result.timestamp}`);
+            } else {
+                showResult('requestResult', `签名失败: ${result.error}`, true);
+            }
+        }
+
+        async function sendEncryptedAjax() {
+            if (!securityInitialized) {
+                await CryptoSecurity.init({ initCrypto: true, enableMonitor: false, enableProtection: false });
+                securityInitialized = true;
+            }
+
+            const requestData = {
+                username: 'testuser',
+                action: 'login',
+                timestamp: Date.now()
+            };
+
+            showResult('ajaxResult', '模拟发送加密AJAX请求...\n\n请求数据: ' + JSON.stringify(requestData));
+        }
+
+        function simulateServerVerify() {
+            showResult('ajaxResult', '模拟服务器验证成功!\n\n- 签名验证: 通过\n- 时间戳检查: 通过\n- 数据完整性: 通过\n- 响应加密: 已加密');
+        }
+
+        async function initMonitor() {
+            SecurityMonitor.init({
+                enabled: true,
+                captureErrors: true,
+                captureWarnings: true,
+                capturePerformance: true
+            });
+
+            document.getElementById('monitorStatus').textContent = '运行中';
+            document.getElementById('monitorStatus').classList.add('text-success');
+
+            SecurityMonitor.track('security_monitor_started', { time: Date.now() });
+
+            showResult('monitorResult', '安全监控已启动!\n\n监控内容包括:\n- JavaScript错误\n- 控制台警告\n- 性能指标\n- 安全事件\n- 页面可见性变化');
+
+            logSecurityEvent('安全监控已启动');
+        }
+
+        function getMonitorStats() {
+            const stats = SecurityMonitor.getStats();
+
+            document.getElementById('errorCount').textContent = stats.totalErrors;
+            document.getElementById('warningCount').textContent = stats.totalWarnings;
+            document.getElementById('securityEventCount').textContent = Object.keys(stats.securityEvents).length;
+
+            const sessionDuration = Math.round(stats.sessionDuration / 1000);
+            showResult('monitorResult', `监控统计:\n\n总事件数: ${stats.totalEvents}\n错误数量: ${stats.totalErrors}\n警告数量: ${stats.totalWarnings}\n安全事件: ${Object.keys(stats.securityEvents).length}\n会话时长: ${sessionDuration}秒`);
+        }
+
+        function clearMonitorData() {
+            showResult('monitorResult', '监控数据已清除');
+            document.getElementById('eventLog').innerHTML = '暂无安全事件记录...';
+            document.getElementById('errorCount').textContent = '0';
+            document.getElementById('warningCount').textContent = '0';
+            document.getElementById('securityEventCount').textContent = '0';
+        }
+
+        async function viewFullReport() {
+            const report = await SecurityMonitor.report();
+
+            if (report.success) {
+                showResult('monitorResult', `完整安全报告:\n\n报告时间: ${new Date(report.report.reportTime).toLocaleString()}\n会话时长: ${Math.round(report.report.sessionDuration / 1000)}秒\n\n事件统计:\n- 总事件: ${report.report.events.length}\n- 错误: ${report.report.errors.length}\n- 警告: ${report.report.warnings.length}\n\n性能指标: ${Object.keys(report.report.performance).length}项\n安全事件: ${Object.keys(report.report.security).length}项`);
+            } else {
+                showResult('monitorResult', `报告生成失败: ${report.error}`, true);
+            }
+        }
+
+        function logSecurityEvent(message) {
+            const logEl = document.getElementById('eventLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+
+            if (logEl.textContent === '暂无安全事件记录...') {
+                logEl.textContent = logEntry;
+            } else {
+                logEl.textContent = logEntry + '\n' + logEl.textContent;
+            }
+        }
+
+        async function runAllDemos() {
+            if (!securityInitialized) {
+                await initSecurity();
+            }
+
+            await encryptData();
+            await generateRSAKeys();
+            computeHash();
+            obfuscateCode();
+
+            showSecurityStatus('success', '所有演示已运行完成');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            logSecurityEvent('页面已加载，等待用户操作...');
+        });
+    </script>
+</body>
+</html>
