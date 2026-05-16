@@ -1,0 +1,27 @@
+{
+  "name": "hjtpx-javascript-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "hjtpx JavaScript/TypeScript SDK monorepo",
+  "scripts": {
+    "build": "npm run build --workspace=packages/hjtpx-sdk",
+    "test": "npm run test --workspace=packages/hjtpx-sdk",
+    "lint": "npm run lint --workspace=packages/hjtpx-sdk",
+    "typecheck": "npm run typecheck --workspace=packages/hjtpx-sdk"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "keywords": [
+    "captcha",
+    "verification",
+    "security",
+    "hjtpx"
+  ],
+  "author": "hjtpx Team <team@hjtpx.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hjtpx/hjtpx.git"
+  }
+}
