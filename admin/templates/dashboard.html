@@ -17,108 +17,415 @@
         .stat-card { transition: transform 0.3s ease; }
         .stat-card:hover { transform: translateY(-5px); }
         .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .chart-container { position: relative; height: 300px; }
+        .chart-container-sm { position: relative; height: 200px; }
+        .realtime-indicator { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .quick-action { transition: all 0.3s ease; cursor: pointer; }
+        .quick-action:hover { transform: scale(1.05); background-color: var(--sidebar-hover); color: white; }
+        .trend-up { color: #10b981; }
+        .trend-down { color: #ef4444; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .status-dot.online { background-color: #10b981; }
+        .status-dot.offline { background-color: #ef4444; }
+        .status-dot.warning { background-color: #f59e0b; }
     </style>
 </head>
 <body>
     <div class="d-flex">
         <div class="sidebar d-flex flex-column flex-shrink-0">
             <div class="sidebar-header p-3">
-                <h5 class="text-white mb-0">管理后台</h5>
+                <h5 class="text-white mb-0"><i class="fas fa-shield-alt me-2"></i>管理后台</h5>
             </div>
             <nav class="nav flex-column mt-2">
                 <a class="nav-link active" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
                 <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
                 <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
                 <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link" href="/admin/users"><i class="fas fa-users me-2"></i>用户管理</a>
+                <a class="nav-link" href="/admin/settings"><i class="fas fa-cog me-2"></i>系统设置</a>
             </nav>
             <div class="sidebar-footer mt-auto p-3">
                 <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
             </div>
         </div>
-        
+
         <div class="main-wrapper">
             <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">仪表盘</h5>
+                <div class="d-flex align-items-center gap-3">
+                    <h5 class="mb-0">仪表盘</h5>
+                    <span class="realtime-indicator"><span class="status-dot online"></span></span>
+                    <small class="text-muted">实时更新中</small>
+                </div>
                 <div class="d-flex align-items-center gap-2">
-                    <button id="cssSwitchBtn" class="btn btn-outline-info btn-sm"><i class="fas fa-globe me-1"></i> CDN CSS</button>
+                    <button id="autoRefreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-play me-1"></i>自动刷新</button>
+                    <button id="refreshBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-sync-alt me-1"></i>刷新</button>
+                    <button id="cssSwitchBtn" class="btn btn-outline-info btn-sm"><i class="fas fa-globe me-1"></i>CDN CSS</button>
                     <span class="text-muted" id="usernameDisplay">管理员</span>
                     <div class="user-avatar" id="userAvatar">A</div>
                 </div>
             </header>
-            
+
             <main class="p-4 bg-light min-vh-100">
                 <div class="row g-4 mb-4">
                     <div class="col-md-3">
-                        <div class="card stat-card shadow-sm border-0">
+                        <div class="card stat-card shadow-sm border-0 h-100">
                             <div class="card-body d-flex align-items-center gap-3">
                                 <div class="bg-primary bg-opacity-10 p-3 rounded"><i class="fas fa-users fa-2x text-primary"></i></div>
                                 <div>
                                     <small class="text-muted">用户总数</small>
                                     <h3 class="mb-0" id="totalUsers">0</h3>
-                                    <small class="text-success">+12.5%</small>
+                                    <small class="text-success" id="userGrowth">+12.5%</small>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card stat-card shadow-sm border-0">
+                        <div class="card stat-card shadow-sm border-0 h-100">
                             <div class="card-body d-flex align-items-center gap-3">
                                 <div class="bg-success bg-opacity-10 p-3 rounded"><i class="fas fa-mobile-alt fa-2x text-success"></i></div>
                                 <div>
                                     <small class="text-muted">应用总数</small>
                                     <h3 class="mb-0" id="totalApps">0</h3>
-                                    <small class="text-success">+8.2%</small>
+                                    <small class="text-success" id="appGrowth">+8.2%</small>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card stat-card shadow-sm border-0">
+                        <div class="card stat-card shadow-sm border-0 h-100">
                             <div class="card-body d-flex align-items-center gap-3">
                                 <div class="bg-warning bg-opacity-10 p-3 rounded"><i class="fas fa-rocket fa-2x text-warning"></i></div>
                                 <div>
                                     <small class="text-muted">请求总数</small>
                                     <h3 class="mb-0" id="totalRequests">0</h3>
-                                    <small class="text-success">+23.1%</small>
+                                    <small class="text-success" id="requestGrowth">+23.1%</small>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card stat-card shadow-sm border-0">
+                        <div class="card stat-card shadow-sm border-0 h-100">
                             <div class="card-body d-flex align-items-center gap-3">
                                 <div class="bg-danger bg-opacity-10 p-3 rounded"><i class="fas fa-exclamation-triangle fa-2x text-danger"></i></div>
                                 <div>
                                     <small class="text-muted">错误总数</small>
                                     <h3 class="mb-0" id="totalErrors">0</h3>
-                                    <small class="text-danger">-5.7%</small>
+                                    <small class="text-danger" id="errorChange">-5.7%</small>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="row g-4">
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="card stat-card shadow-sm border-0 h-100">
+                            <div class="card-body d-flex align-items-center gap-3">
+                                <div class="bg-info bg-opacity-10 p-3 rounded"><i class="fas fa-check-circle fa-2x text-info"></i></div>
+                                <div>
+                                    <small class="text-muted">成功率</small>
+                                    <h3 class="mb-0" id="successRate">99.2%</h3>
+                                    <small class="text-success trend-up"><i class="fas fa-arrow-up"></i> +0.3%</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card shadow-sm border-0 h-100">
+                            <div class="card-body d-flex align-items-center gap-3">
+                                <div class="bg-secondary bg-opacity-10 p-3 rounded"><i class="fas fa-clock fa-2x text-secondary"></i></div>
+                                <div>
+                                    <small class="text-muted">平均响应</small>
+                                    <h3 class="mb-0" id="avgResponseTime">45ms</h3>
+                                    <small class="text-success trend-up"><i class="fas fa-arrow-down"></i> -5ms</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card shadow-sm border-0 h-100">
+                            <div class="card-body d-flex align-items-center gap-3">
+                                <div class="bg-primary bg-opacity-10 p-3 rounded"><i class="fas fa-user-check fa-2x text-primary"></i></div>
+                                <div>
+                                    <small class="text-muted">活跃用户</small>
+                                    <h3 class="mb-0" id="activeUsers">892</h3>
+                                    <small class="text-muted">今日</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card stat-card shadow-sm border-0 h-100">
+                            <div class="card-body d-flex align-items-center gap-3">
+                                <div class="bg-success bg-opacity-10 p-3 rounded"><i class="fas fa-tachometer-alt fa-2x text-success"></i></div>
+                                <div>
+                                    <small class="text-muted">实时QPS</small>
+                                    <h3 class="mb-0" id="qps">1,250</h3>
+                                    <small class="text-muted">每秒请求</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
                     <div class="col-md-8">
                         <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>24小时验证趋势</h6>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary active" data-range="24h">24小时</button>
+                                    <button class="btn btn-outline-primary" data-range="7d">7天</button>
+                                    <button class="btn btn-outline-primary" data-range="30d">30天</button>
+                                </div>
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title mb-3">最近活动</h5>
-                                <table class="table">
-                                    <thead><tr><th>时间</th><th>事件</th><th>用户</th><th>状态</th></tr></thead>
-                                    <tbody id="recentActivity"></tbody>
-                                </table>
+                                <div class="chart-container">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>验证类型分布</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container-sm">
+                                    <canvas id="typeDistributionChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>风险等级分布</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="riskDistributionChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>7天趋势对比</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="comparisonChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>快捷操作</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <a href="/admin/applications?action=create" class="btn btn-outline-primary w-100 quick-action p-3 rounded">
+                                            <i class="fas fa-plus-circle mb-2 d-block fa-lg"></i>
+                                            <small>快速添加应用</small>
+                                        </a>
+                                    </div>
+                                    <div class="col-6">
+                                        <a href="/admin/logs" class="btn btn-outline-success w-100 quick-action p-3 rounded">
+                                            <i class="fas fa-search mb-2 d-block fa-lg"></i>
+                                            <small>快速查看日志</small>
+                                        </a>
+                                    </div>
+                                    <div class="col-6">
+                                        <a href="/admin/stats?action=export" class="btn btn-outline-warning w-100 quick-action p-3 rounded">
+                                            <i class="fas fa-file-export mb-2 d-block fa-lg"></i>
+                                            <small>导出报表</small>
+                                        </a>
+                                    </div>
+                                    <div class="col-6">
+                                        <a href="/admin/users?action=create" class="btn btn-outline-info w-100 quick-action p-3 rounded">
+                                            <i class="fas fa-user-plus mb-2 d-block fa-lg"></i>
+                                            <small>添加用户</small>
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-trophy me-2"></i>热门应用</h6>
+                                <a href="/admin/applications" class="btn btn-link btn-sm text-decoration-none">查看全部</a>
+                            </div>
+                            <div class="card-body" id="topApps">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-primary">1</span>
+                                    <span class="flex-grow-1 mx-2">测试应用A</span>
+                                    <small class="text-muted">125.6K 请求</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-success">2</span>
+                                    <span class="flex-grow-1 mx-2">测试应用B</span>
+                                    <small class="text-muted">98.3K 请求</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-info">3</span>
+                                    <span class="flex-grow-1 mx-2">测试应用C</span>
+                                    <small class="text-muted">76.1K 请求</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-warning">4</span>
+                                    <span class="flex-grow-1 mx-2">测试应用D</span>
+                                    <small class="text-muted">54.8K 请求</small>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-secondary">5</span>
+                                    <span class="flex-grow-1 mx-2">测试应用E</span>
+                                    <small class="text-muted">32.5K 请求</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-server me-2"></i>系统状态</h6>
+                                <span class="badge bg-success">正常运行</span>
+                            </div>
                             <div class="card-body">
-                                <h5 class="card-title mb-3">系统状态</h5>
-                                <div class="d-flex flex-column gap-3">
-                                    <div class="d-flex align-items-center gap-2"><span class="badge bg-success rounded-pill">&nbsp;</span><span>数据库服务</span></div>
-                                    <div class="d-flex align-items-center gap-2"><span class="badge bg-success rounded-pill">&nbsp;</span><span>Redis 缓存</span></div>
-                                    <div class="d-flex align-items-center gap-2"><span class="badge bg-success rounded-pill">&nbsp;</span><span>API 服务</span></div>
-                                    <div class="d-flex align-items-center gap-2"><span class="badge bg-warning rounded-pill">&nbsp;</span><span>存储服务</span></div>
+                                <div class="d-flex align-items-center gap-2 mb-3" id="dbStatus">
+                                    <span class="badge bg-success rounded-pill">&nbsp;</span>
+                                    <span class="flex-grow-1">数据库服务</span>
+                                    <small class="text-muted">响应 2ms</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mb-3" id="redisStatus">
+                                    <span class="badge bg-success rounded-pill">&nbsp;</span>
+                                    <span class="flex-grow-1">Redis 缓存</span>
+                                    <small class="text-muted">响应 1ms</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mb-3" id="apiStatus">
+                                    <span class="badge bg-success rounded-pill">&nbsp;</span>
+                                    <span class="flex-grow-1">API 服务</span>
+                                    <small class="text-muted">响应 45ms</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mb-3" id="storageStatus">
+                                    <span class="badge bg-warning rounded-pill">&nbsp;</span>
+                                    <span class="flex-grow-1">存储服务</span>
+                                    <small class="text-muted">响应 120ms</small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2" id="queueStatus">
+                                    <span class="badge bg-success rounded-pill">&nbsp;</span>
+                                    <span class="flex-grow-1">消息队列</span>
+                                    <small class="text-muted">队列 0</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-md-8">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-history me-2"></i>最近活动</h6>
+                                <a href="/admin/logs" class="btn btn-link btn-sm text-decoration-none">查看全部</a>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0">时间</th>
+                                                <th class="border-0">事件</th>
+                                                <th class="border-0">用户</th>
+                                                <th class="border-0">IP</th>
+                                                <th class="border-0">状态</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="recentActivity">
+                                            <tr>
+                                                <td><small>2024-01-15 14:32:18</small></td>
+                                                <td>用户登录</td>
+                                                <td><span class="badge bg-secondary">admin</span></td>
+                                                <td><small class="text-muted">192.168.1.100</small></td>
+                                                <td><span class="badge bg-success">成功</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><small>2024-01-15 14:28:45</small></td>
+                                                <td>创建应用</td>
+                                                <td><span class="badge bg-secondary">developer1</span></td>
+                                                <td><small class="text-muted">192.168.1.101</small></td>
+                                                <td><span class="badge bg-success">成功</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><small>2024-01-15 14:25:12</small></td>
+                                                <td>API请求失败</td>
+                                                <td><span class="badge bg-secondary">app_001</span></td>
+                                                <td><small class="text-muted">10.0.0.50</small></td>
+                                                <td><span class="badge bg-danger">失败</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><small>2024-01-15 14:20:33</small></td>
+                                                <td>更新配置</td>
+                                                <td><span class="badge bg-secondary">admin</span></td>
+                                                <td><small class="text-muted">192.168.1.100</small></td>
+                                                <td><span class="badge bg-success">成功</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td><small>2024-01-15 14:15:09</small></td>
+                                                <td>用户注册</td>
+                                                <td><span class="badge bg-secondary">new_user</span></td>
+                                                <td><small class="text-muted">203.0.113.42</small></td>
+                                                <td><span class="badge bg-success">成功</span></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-bell me-2"></i>通知中心</h6>
+                                <span class="badge bg-danger rounded-pill" id="notificationBadge" style="display: none;">0</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="list-group list-group-flush" id="notificationList">
+                                    <div class="list-group-item d-flex justify-content-between align-items-start">
+                                        <div class="ms-2 me-auto">
+                                            <div class="fw-bold">系统更新通知</div>
+                                            <small class="text-muted">系统将于今晚23:00进行维护</small>
+                                        </div>
+                                        <span class="badge bg-primary rounded-pill">新</span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-start">
+                                        <div class="ms-2 me-auto">
+                                            <div class="fw-bold">安全告警</div>
+                                            <small class="text-muted">检测到异常登录尝试</small>
+                                        </div>
+                                        <span class="badge bg-warning rounded-pill">!</span>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-start">
+                                        <div class="ms-2 me-auto">
+                                            <div class="fw-bold">性能报告</div>
+                                            <small class="text-muted">本周系统性能良好，响应时间下降5%</small>
+                                        </div>
+                                        <small class="text-muted">2小时前</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -127,10 +434,45 @@
             </main>
         </div>
     </div>
-    
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/charts.js"></script>
+    <script src="/admin/static/js/export.js"></script>
     <script src="/admin/static/js/dashboard.js"></script>
     <script src="/admin/static/js/css-switch.js"></script>
+    <script>
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            dashboardManager.refresh();
+        });
+
+        document.getElementById('autoRefreshBtn').addEventListener('click', () => {
+            dashboardManager.toggleAutoRefresh();
+        });
+
+        document.querySelectorAll('[data-range]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-range]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                const range = e.target.dataset.range;
+                loadChartData(range);
+            });
+        });
+
+        async function loadChartData(range) {
+            try {
+                const data = await auth.request(`/admin/dashboard/charts?range=${range}`);
+                if (data.code === 0 && data.data) {
+                    dashboardManager.renderCharts(data.data);
+                }
+            } catch (error) {
+                console.warn('Failed to load chart data for range:', range);
+            }
+        }
+    </script>
 </body>
 </html>

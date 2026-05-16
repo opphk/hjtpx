@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>技术文档 - 行为验证系统</title>
+    <meta name="description" content="行为验证系统完整技术文档，包含API参考、集成指南、代码示例和常见问题解答">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <header class="bg-white shadow-sm sticky-top">
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-light" role="navigation" aria-label="主导航">
+                <div class="container-fluid px-0">
+                    <a class="navbar-brand fw-bold text-primary d-flex align-items-center gap-2" href="/" aria-label="返回首页">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <span>验证系统</span>
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/demo">功能演示</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/pricing">定价</a></li>
+                            <li class="nav-item"><a class="nav-link active" href="/docs" aria-current="page">文档</a></li>
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
+                            <a href="/register" class="btn btn-primary btn-sm">免费试用</a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="min-vh-100" id="main-content" role="main">
+        <section class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" role="banner">
+            <div class="container">
+                <h1 class="fw-bold mb-3">技术文档</h1>
+                <p class="lead text-white-50">完整的API参考、集成指南和最佳实践</p>
+            </div>
+        </section>
+
+        <section class="py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-lg-3">
+                        <div class="card border-0 shadow-sm sticky-top" style="top: 80px;">
+                            <div class="card-body p-0">
+                                <nav class="nav flex-column">
+                                    <a class="nav-link p-3 border-bottom" href="#quickstart">
+                                        <i class="fas fa-rocket me-2 text-primary"></i>快速开始
+                                    </a>
+                                    <a class="nav-link p-3 border-bottom" href="#api-reference">
+                                        <i class="fas fa-code me-2 text-primary"></i>API参考
+                                    </a>
+                                    <a class="nav-link p-3 border-bottom" href="#captcha-types">
+                                        <i class="fas fa-th-large me-2 text-primary"></i>验证码类型
+                                    </a>
+                                    <a class="nav-link p-3 border-bottom" href="#integration">
+                                        <i class="fas fa-plug me-2 text-primary"></i>集成指南
+                                    </a>
+                                    <a class="nav-link p-3 border-bottom" href="#sdk">
+                                        <i class="fas fa-box me-2 text-primary"></i>SDK下载
+                                    </a>
+                                    <a class="nav-link p-3 border-bottom" href="#faq">
+                                        <i class="fas fa-question-circle me-2 text-primary"></i>常见问题
+                                    </a>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-9">
+                        <div class="card border-0 shadow-sm mb-4" id="quickstart">
+                            <div class="card-body p-4">
+                                <h2 class="h4 fw-bold mb-4">
+                                    <i class="fas fa-rocket text-primary me-2" aria-hidden="true"></i>快速开始
+                                </h2>
+
+                                <h3 class="h5 fw-bold mb-3">5分钟快速集成</h3>
+                                <p class="text-muted mb-4">按照以下步骤，您可以在5分钟内将验证码集成到您的网站。</p>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">步骤1：注册账号</h4>
+                                    <p class="text-muted">访问我们的官网完成注册，创建您的应用，获取AppID和AppSecret。</p>
+                                </div>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">步骤2：引入验证码脚本</h4>
+                                    <p class="text-muted">在HTML页面中引入验证码SDK脚本。</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>&lt;script src="https://cdn.example.com/captcha.js"&gt;&lt;/script&gt;</code></pre>
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">步骤3：创建验证码容器</h4>
+                                    <p class="text-muted">在需要验证的位置添加验证码容器。</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>&lt;div id="captcha-container"&gt;&lt;/div&gt;</code></pre>
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">步骤4：初始化验证码</h4>
+                                    <p class="text-muted">在页面加载完成后初始化验证码组件。</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>&lt;script&gt;
+const captcha = new Captcha('captcha-container', {
+  appId: 'YOUR_APP_ID',
+  apiBase: '/api/v1',
+  type: 'slider',
+  onSuccess: function(result) {
+    console.log('验证成功:', result);
+    // 处理验证成功
+  },
+  onError: function(error) {
+    console.error('验证失败:', error);
+    // 处理验证失败
+  }
+});
+&lt;/script&gt;</code></pre>
+                                    </div>
+                                </div>
+
+                                <div class="alert alert-success mb-0">
+                                    <i class="fas fa-check-circle me-2"></i>
+                                    完成！验证码已成功集成到您的网站。
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-4" id="api-reference">
+                            <div class="card-body p-4">
+                                <h2 class="h4 fw-bold mb-4">
+                                    <i class="fas fa-code text-primary me-2" aria-hidden="true"></i>API参考
+                                </h2>
+
+                                <h3 class="h5 fw-bold mb-3">滑块验证API</h3>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">生成滑块验证码</h4>
+                                    <p class="text-muted small mb-2">POST /api/v1/captcha/slider/generate</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>// 请求示例
+fetch('/api/v1/captcha/slider/generate', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_TOKEN'
+  },
+  body: JSON.stringify({
+    app_id: 'your_app_id'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// 响应示例
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "abc123xyz",
+    "image_url": "/captcha/slider/abc123xyz.png",
+    "puzzle_y": 50,
+    "expires_at": 1704067200
+  }
+}</code></pre>
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">验证滑块</h4>
+                                    <p class="text-muted small mb-2">POST /api/v1/captcha/slider/verify</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>// 请求示例
+fetch('/api/v1/captcha/slider/verify', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    session_id: 'abc123xyz',
+    x: 200,
+    y: 50,
+    behavior_data: {
+      // 可选：行为数据
+    }
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// 响应示例
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "score": 95
+  }
+}</code></pre>
+                                    </div>
+                                </div>
+
+                                <h3 class="h5 fw-bold mb-3 mt-5">点选验证API</h3>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">生成点选验证码</h4>
+                                    <p class="text-muted small mb-2">POST /api/v1/captcha/click/generate</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>// 请求示例
+fetch('/api/v1/captcha/click/generate', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    app_id: 'your_app_id'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// 响应示例
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "def456uvw",
+    "images": [
+      "/captcha/click/def456uvw/1.png",
+      "/captcha/click/def456uvw/2.png"
+    ],
+    "hint": "请依次点击: 太阳, 房子",
+    "max_points": 2,
+    "expires_at": 1704067200
+  }
+}</code></pre>
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">验证点选</h4>
+                                    <p class="text-muted small mb-2">POST /api/v1/captcha/click/verify</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>// 请求示例
+fetch('/api/v1/captcha/click/verify', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    session_id: 'def456uvw',
+    points: [
+      { x: 150, y: 80, image_index: 0, click_order: 1 },
+      { x: 280, y: 120, image_index: 1, click_order: 2 }
+    ]
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// 响应示例
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "score": 88
+  }
+}</code></pre>
+                                    </div>
+                                </div>
+
+                                <h3 class="h5 fw-bold mb-3 mt-5">图形验证API</h3>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">获取图形验证码</h4>
+                                    <p class="text-muted small mb-2">GET /api/v1/captcha/image</p>
+                                    <p class="text-muted">直接访问该URL获取验证码图片，返回PNG格式图片。</p>
+                                </div>
+
+                                <div class="mb-4">
+                                    <h4 class="h6 fw-bold mb-3">验证图形验证码</h4>
+                                    <p class="text-muted small mb-2">POST /api/v1/captcha/image/verify</p>
+                                    <div class="bg-light rounded p-3">
+                                        <pre class="mb-0"><code>// 请求示例
+fetch('/api/v1/captcha/image/verify', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    answer: 'AB12'
+  })
+})
+.then(res => res.json())
+.then(data => console.log(data));
+
+// 响应示例
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true
+  }
+}</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-4" id="captcha-types">
+                            <div class="card-body p-4">
+                                <h2 class="h4 fw-bold mb-4">
+                                    <i class="fas fa-th-large text-primary me-2" aria-hidden="true"></i>验证码类型
+                                </h2>
+
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fas fa-puzzle-piece text-primary me-2"></i>滑块验证
+                                                </h3>
+                                                <p class="text-muted small mb-3">
+                                                    用户通过拖动滑块使拼图块对齐到正确位置。这种方式操作简单，用户体验好，适合大多数场景。
+                                                </p>
+                                                <div class="bg-light rounded p-2 small">
+                                                    <strong>适用场景：</strong>
+                                                    <ul class="mb-0 small">
+                                                        <li>用户登录/注册</li>
+                                                        <li>表单提交</li>
+                                                        <li>评论发布</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fas fa-hand-pointer text-success me-2"></i>点选验证
+                                                </h3>
+                                                <p class="text-muted small mb-3">
+                                                    用户按照提示依次点击图片中的指定目标。这种方式验证语义理解能力，安全性较高。
+                                                </p>
+                                                <div class="bg-light rounded p-2 small">
+                                                    <strong>适用场景：</strong>
+                                                    <ul class="mb-0 small">
+                                                        <li>高安全性操作</li>
+                                                        <li>敏感信息修改</li>
+                                                        <li>支付确认</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fas fa-image text-warning me-2"></i>图形验证
+                                                </h3>
+                                                <p class="text-muted small mb-3">
+                                                    传统的字符或图片识别验证方式。这种方式实现简单，兼容性好，但用户体验相对一般。
+                                                </p>
+                                                <div class="bg-light rounded p-2 small">
+                                                    <strong>适用场景：</strong>
+                                                    <ul class="mb-0 small">
+                                                        <li>兼容性要求高的场景</li>
+                                                        <li>简单防护需求</li>
+                                                        <li>无障碍访问</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fas fa-brain text-info me-2"></i>智能验证
+                                                </h3>
+                                                <p class="text-muted small mb-3">
+                                                    后台自动选择最适合的验证方式，无需用户手动切换。根据用户行为和风险评估自动适配。
+                                                </p>
+                                                <div class="bg-light rounded p-2 small">
+                                                    <strong>适用场景：</strong>
+                                                    <ul class="mb-0 small">
+                                                        <li>通用场景</li>
+                                                        <li>追求最佳用户体验</li>
+                                                        <li>高并发系统</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-4" id="integration">
+                            <div class="card-body p-4">
+                                <h2 class="h4 fw-bold mb-4">
+                                    <i class="fas fa-plug text-primary me-2" aria-hidden="true"></i>集成指南
+                                </h2>
+
+                                <h3 class="h5 fw-bold mb-3">JavaScript集成</h3>
+                                <div class="bg-light rounded p-3 mb-4">
+                                    <pre class="mb-0"><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;验证码集成示例&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;form id="login-form"&gt;
+    &lt;input type="text" name="username" placeholder="用户名" required&gt;
+    &lt;input type="password" name="password" placeholder="密码" required&gt;
+    &lt;div id="captcha-container"&gt;&lt;/div&gt;
+    &lt;button type="submit"&gt;登录&lt;/button&gt;
+  &lt;/form&gt;
+
+  &lt;script src="captcha.js"&gt;&lt;/script&gt;
+  &lt;script&gt;
+    let captchaVerified = false;
+
+    const captcha = new Captcha('captcha-container', {
+      appId: 'YOUR_APP_ID',
+      apiBase: '/api/v1',
+      type: 'slider',
+      onSuccess: function(result) {
+        captchaVerified = true;
+        console.log('验证成功:', result);
+      },
+      onError: function(error) {
+        captchaVerified = false;
+        console.error('验证失败:', error);
+      }
+    });
+
+    document.getElementById('login-form').addEventListener('submit', function(e) {
+      if (!captchaVerified) {
+        e.preventDefault();
+        alert('请先完成验证码验证');
+        return false;
+      }
+    });
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+                                </div>
+
+                                <h3 class="h5 fw-bold mb-3">React集成</h3>
+                                <div class="bg-light rounded p-3 mb-4">
+                                    <pre class="mb-0"><code>import { useEffect, useRef, useState } from 'react';
+
+function CaptchaComponent({ onVerify }) {
+  const containerRef = useRef(null);
+  const [verified, setVerified] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const captcha = new Captcha(containerRef.current, {
+      appId: 'YOUR_APP_ID',
+      apiBase: '/api/v1',
+      type: 'slider',
+      onSuccess: function(result) {
+        setVerified(true);
+        onVerify?.(result);
+      }
+    });
+
+    return () => {
+      captcha.destroy();
+    };
+  }, [onVerify]);
+
+  return (
+    &lt;div&gt;
+      &lt;div ref={containerRef}&gt;&lt;/div&gt;
+      {verified && &lt;span&gt;已验证&lt;/span&gt;}
+    &lt;/div&gt;
+  );
+}
+
+function LoginForm() {
+  const handleVerify = (result) => {
+    console.log('验证成功:', result);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    // 处理登录逻辑
+  };
+
+  return (
+    &lt;form onSubmit={handleSubmit}&gt;
+      &lt;input type="text" placeholder="用户名" /&gt;
+      &lt;input type="password" placeholder="密码" /&gt;
+      &lt;CaptchaComponent onVerify={handleVerify} /&gt;
+      &lt;button type="submit"&gt;登录&lt;/button&gt;
+    &lt;/form&gt;
+  );
+}</code></pre>
+                                </div>
+
+                                <h3 class="h5 fw-bold mb-3">Vue集成</h3>
+                                <div class="bg-light rounded p-3">
+                                    <pre class="mb-0"><code>&lt;template&gt;
+  &lt;div&gt;
+    &lt;form @submit.prevent="handleSubmit"&gt;
+      &lt;input v-model="form.username" type="text" placeholder="用户名" /&gt;
+      &lt;input v-model="form.password" type="password" placeholder="密码" /&gt;
+      &lt;div ref="captchaRef"&gt;&lt;/div&gt;
+      &lt;button type="submit" :disabled="!verified"&gt;登录&lt;/button&gt;
+    &lt;/form&gt;
+  &lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script&gt;
+import { ref, onMounted, onUnmounted } from 'vue';
+
+export default {
+  name: 'LoginForm',
+  setup() {
+    const captchaRef = ref(null);
+    const verified = ref(false);
+    const form = ref({ username: '', password: '' });
+    let captchaInstance = null;
+
+    onMounted(() => {
+      captchaInstance = new Captcha(captchaRef.value, {
+        appId: 'YOUR_APP_ID',
+        apiBase: '/api/v1',
+        type: 'slider',
+        onSuccess: (result) => {
+          verified.value = true;
+          console.log('验证成功:', result);
+        }
+      });
+    });
+
+    onUnmounted(() => {
+      captchaInstance?.destroy();
+    });
+
+    const handleSubmit = () => {
+      if (!verified.value) {
+        alert('请先完成验证码验证');
+        return;
+      }
+      // 处理登录逻辑
+    };
+
+    return {
+      captchaRef,
+      verified,
+      form,
+      handleSubmit
+    };
+  }
+};
+&lt;/script&gt;</code></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm mb-4" id="sdk">
+                            <div class="card-body p-4">
+                                <h2 class="h4 fw-bold mb-4">
+                                    <i class="fas fa-box text-primary me-2" aria-hidden="true"></i>SDK下载
+                                </h2>
+
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fab fa-js text-warning me-2"></i>JavaScript SDK
+                                                </h3>
+                                                <p class="text-muted small mb-3">适用于所有前端框架，原生JavaScript、React、Vue等</p>
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary me-2">v2.1.0</span>
+                                                    <span class="badge bg-success">最新</span>
+                                                </div>
+                                                <a href="#" class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-download me-1"></i>下载SDK
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fab fa-node-js text-success me-2"></i>Node.js SDK
+                                                </h3>
+                                                <p class="text-muted small mb-3">适用于后端服务，提供完整的服务器端验证</p>
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary me-2">v2.0.5</span>
+                                                    <span class="badge bg-success">最新</span>
+                                                </div>
+                                                <a href="#" class="btn btn-outline-success btn-sm">
+                                                    <i class="fas fa-download me-1"></i>下载SDK
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fab fa-python text-primary me-2"></i>Python SDK
+                                                </h3>
+                                                <p class="text-muted small mb-3">适用于Python后端服务</p>
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary me-2">v1.9.2</span>
+                                                    <span class="badge bg-success">最新</span>
+                                                </div>
+                                                <a href="#" class="btn btn-outline-primary btn-sm">
+                                                    <i class="fas fa-download me-1"></i>下载SDK
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border">
+                                            <div class="card-body">
+                                                <h3 class="h6 fw-bold mb-3">
+                                                    <i class="fab fa-java text-danger me-2"></i>Java SDK
+                                                </h3>
+                                                <p class="text-muted small mb-3">适用于Java后端服务，Spring Boot集成</p>
+                                                <div class="mb-3">
+                                                    <span class="badge bg-secondary me-2">v2.0.1</span>
+                                                    <span class="badge bg-success">最新</span>
+                                                </div>
+                                                <a href="#" class="btn btn-outline-danger btn-sm">
+                                                    <i class="fas fa-download me-1"></i>下载SDK
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card border-0 shadow-sm" id="faq">
+                            <div class="card-body p-4">
+                                <h2 class="h4 fw-bold mb-4">
+                                    <i class="fas fa-question-circle text-primary me-2" aria-hidden="true"></i>常见问题
+                                </h2>
+
+                                <div class="accordion" id="faqAccordion">
+                                    <div class="accordion-item border-0 mb-3">
+                                        <h4 class="accordion-header">
+                                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faqDoc1" aria-expanded="true">
+                                                如何获取AppID和AppSecret？
+                                            </button>
+                                        </h4>
+                                        <div id="faqDoc1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                                            <div class="accordion-body text-muted">
+                                                注册并登录后，进入控制台，点击“我的应用”，然后点击“创建应用”。系统会自动为您生成AppID和AppSecret。请妥善保管这些信息，不要泄露给他人。
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="accordion-item border-0 mb-3">
+                                        <h4 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqDoc2">
+                                                验证码超时时间是多长？
+                                            </button>
+                                        </h4>
+                                        <div id="faqDoc2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                            <div class="accordion-body text-muted">
+                                                默认情况下，验证码有效期为5分钟（300秒）。您可以在控制台的应用设置中自定义超时时间，最短30秒，最长30分钟。
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="accordion-item border-0 mb-3">
+                                        <h4 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqDoc3">
+                                                验证失败后可以重试几次？
+                                            </button>
+                                        </h4>
+                                        <div id="faqDoc3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                            <div class="accordion-body text-muted">
+                                                默认情况下，用户可以无限次重试。但我们建议在连续失败3-5次后要求用户等待一段时间再试，以防止暴力破解。
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="accordion-item border-0 mb-3">
+                                        <h4 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqDoc4">
+                                                如何处理验证后的业务逻辑？
+                                            </button>
+                                        </h4>
+                                        <div id="faqDoc4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                            <div class="accordion-body text-muted">
+                                                在初始化Captcha时，通过onSuccess回调处理验证成功的逻辑，通过onError回调处理验证失败的逻辑。验证成功后，您会收到包含session_id的响应，用于后续业务操作的身份验证。
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="accordion-item border-0">
+                                        <h4 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqDoc5">
+                                                支持私有化部署吗？
+                                            </button>
+                                        </h4>
+                                        <div id="faqDoc5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                            <div class="accordion-body text-muted">
+                                                是的，我们提供完整的企业版私有化部署方案。您可以将整个验证系统部署到自己的服务器和基础设施中，完全掌控数据和密钥。请联系我们的销售团队获取更多信息。
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-dark text-white py-5" role="contentinfo">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>验证系统
+                    </h5>
+                    <p class="text-white-50 small mb-3">
+                        新一代智能行为验证系统，为您的业务安全保驾护航
+                    </p>
+                </div>
+                <div class="col-6 col-lg-2 mb-4">
+                    <h6 class="fw-bold mb-3">快速链接</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
+                        <li class="mb-2"><a href="/demo" class="text-white-50 text-decoration-none">功能演示</a></li>
+                        <li class="mb-2"><a href="/pricing" class="text-white-50 text-decoration-none">定价</a></li>
+                        <li><a href="/docs" class="text-white-50 text-decoration-none">文档</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <h6 class="fw-bold mb-3">联系我们</h6>
+                    <ul class="list-unstyled small text-white-50">
+                        <li class="mb-2"><i class="fas fa-envelope me-2" aria-hidden="true"></i>contact@example.com</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2" aria-hidden="true"></i>400-888-8888</li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-white-50">
+            <p class="text-center text-white-50 small mb-0">&copy; 2026 验证系统. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/notification.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

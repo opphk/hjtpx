@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>定价方案 - 行为验证系统</title>
+    <meta name="description" content="选择最适合您的验证方案，从免费版到企业版，满足不同规模业务需求">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <header class="bg-white shadow-sm sticky-top">
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-light" role="navigation" aria-label="主导航">
+                <div class="container-fluid px-0">
+                    <a class="navbar-brand fw-bold text-primary d-flex align-items-center gap-2" href="/" aria-label="返回首页">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <span>验证系统</span>
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/demo">功能演示</a></li>
+                            <li class="nav-item"><a class="nav-link active" href="/pricing" aria-current="page">定价</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/docs">文档</a></li>
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
+                            <a href="/register" class="btn btn-primary btn-sm">免费试用</a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="min-vh-100" id="main-content" role="main">
+        <section class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" role="banner">
+            <div class="container py-5">
+                <h1 class="fw-bold mb-3">简单透明的定价</h1>
+                <p class="lead text-white-50 mb-4">选择最适合您业务规模的方案，所有方案均包含核心功能</p>
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    <span class="badge bg-light text-dark px-3 py-2">
+                        <i class="fas fa-check-circle me-1"></i>无隐藏费用
+                    </span>
+                    <span class="badge bg-light text-dark px-3 py-2">
+                        <i class="fas fa-check-circle me-1"></i>随时升级
+                    </span>
+                    <span class="badge bg-light text-dark px-3 py-2">
+                        <i class="fas fa-check-circle me-1"></i>7x24支持
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5" aria-labelledby="pricing-title">
+            <div class="container">
+                <h2 id="pricing-title" class="sr-only">定价方案</h2>
+
+                <div class="row g-4 mb-5">
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body p-4">
+                                <div class="text-center mb-4">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 mb-3">免费版</span>
+                                    <div class="display-4 fw-bold text-primary">¥0</div>
+                                    <p class="text-muted small">永久免费</p>
+                                </div>
+                                <ul class="list-unstyled mb-4">
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>每月1,000次验证</strong>
+                                            <p class="text-muted small mb-0">适合个人项目和学习</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>滑块验证</strong>
+                                            <p class="text-muted small mb-0">基础拼图验证功能</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>点选验证</strong>
+                                            <p class="text-muted small mb-0">语义理解验证</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>基础API</strong>
+                                            <p class="text-muted small mb-0">完整的RESTful API</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>社区支持</strong>
+                                            <p class="text-muted small mb-0">社区论坛和文档</p>
+                                        </div>
+                                    </li>
+                                </ul>
+                                <div class="d-grid">
+                                    <a href="/register" class="btn btn-outline-primary">免费开始</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-0 shadow-lg position-relative">
+                            <div class="position-absolute top-0 start-50 translate-middle">
+                                <span class="badge bg-primary px-3 py-2">最受欢迎</span>
+                            </div>
+                            <div class="card-body p-4">
+                                <div class="text-center mb-4">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 mb-3">专业版</span>
+                                    <div class="display-4 fw-bold text-primary">¥299</div>
+                                    <p class="text-muted small">每月 / 起订一年</p>
+                                </div>
+                                <ul class="list-unstyled mb-4">
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>每月50,000次验证</strong>
+                                            <p class="text-muted small mb-0">适合中小企业</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>全部验证类型</strong>
+                                            <p class="text-muted small mb-0">滑块、点选、图形验证</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>高级API</strong>
+                                            <p class="text-muted small mb-0">完整API + SDK支持</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>数据分析</strong>
+                                            <p class="text-muted small mb-0">验证统计和报表</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>优先支持</strong>
+                                            <p class="text-muted small mb-0">邮件和工单支持</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-success me-3 mt-1"></i>
+                                        <div>
+                                            <strong>99.9%可用性</strong>
+                                            <p class="text-muted small mb-0">SLA服务保障</p>
+                                        </div>
+                                    </li>
+                                </ul>
+                                <div class="d-grid">
+                                    <a href="/register?plan=professional" class="btn btn-primary">立即购买</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body p-4">
+                                <div class="text-center mb-4">
+                                    <span class="badge bg-warning bg-opacity-10 text-warning px-3 py-2 mb-3">企业版</span>
+                                    <div class="display-4 fw-bold text-warning">定制</div>
+                                    <p class="text-muted small">按需定价</p>
+                                </div>
+                                <ul class="list-unstyled mb-4">
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-warning me-3 mt-1"></i>
+                                        <div>
+                                            <strong>无限验证次数</strong>
+                                            <p class="text-muted small mb-0">根据实际使用量计费</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-warning me-3 mt-1"></i>
+                                        <div>
+                                            <strong>私有化部署</strong>
+                                            <p class="text-muted small mb-0">部署在您的基础设施</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-warning me-3 mt-1"></i>
+                                        <div>
+                                            <strong>定制化开发</strong>
+                                            <p class="text-muted small mb-0">自定义验证逻辑</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-warning me-3 mt-1"></i>
+                                        <div>
+                                            <strong>专属技术支持</strong>
+                                            <p class="text-muted small mb-0">7x24专属客服</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-warning me-3 mt-1"></i>
+                                        <div>
+                                            <strong>专属客户成功经理</strong>
+                                            <p class="text-muted small mb-0">全程协助业务对接</p>
+                                        </div>
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-start">
+                                        <i class="fas fa-check text-warning me-3 mt-1"></i>
+                                        <div>
+                                            <strong>99.99%可用性</strong>
+                                            <p class="text-muted small mb-0">企业级SLA保障</p>
+                                        </div>
+                                    </li>
+                                </ul>
+                                <div class="d-grid">
+                                    <a href="/contact" class="btn btn-warning text-white">联系我们</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-5">
+                    <div class="card-body p-4">
+                        <h3 class="h5 fw-bold mb-4 text-center">功能对比</h3>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="border-0">功能</th>
+                                        <th scope="col" class="border-0 text-center">免费版</th>
+                                        <th scope="col" class="border-0 text-center">专业版</th>
+                                        <th scope="col" class="border-0 text-center">企业版</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>每月验证次数</td>
+                                        <td class="text-center">1,000</td>
+                                        <td class="text-center">50,000</td>
+                                        <td class="text-center">无限</td>
+                                    </tr>
+                                    <tr>
+                                        <td>滑块验证</td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td>点选验证</td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td>图形验证</td>
+                                        <td class="text-center"><i class="fas fa-times text-muted"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td>行为分析</td>
+                                        <td class="text-center"><i class="fas fa-times text-muted"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td>SDK支持</td>
+                                        <td class="text-center">基础</td>
+                                        <td class="text-center">完整</td>
+                                        <td class="text-center">完整 + 定制</td>
+                                    </tr>
+                                    <tr>
+                                        <td>数据分析报表</td>
+                                        <td class="text-center"><i class="fas fa-times text-muted"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td>API调用限制</td>
+                                        <td class="text-center">有限</td>
+                                        <td class="text-center">标准</td>
+                                        <td class="text-center">无限制</td>
+                                    </tr>
+                                    <tr>
+                                        <td>支持响应时间</td>
+                                        <td class="text-center">社区支持</td>
+                                        <td class="text-center">24小时内</td>
+                                        <td class="text-center">7x24实时</td>
+                                    </tr>
+                                    <tr>
+                                        <td>服务可用性</td>
+                                        <td class="text-center">95%</td>
+                                        <td class="text-center">99.9%</td>
+                                        <td class="text-center">99.99%</td>
+                                    </tr>
+                                    <tr>
+                                        <td>私有化部署</td>
+                                        <td class="text-center"><i class="fas fa-times text-muted"></i></td>
+                                        <td class="text-center"><i class="fas fa-times text-muted"></i></td>
+                                        <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-5">
+                    <div class="card-body p-4">
+                        <h3 class="h5 fw-bold mb-4 text-center">
+                            <i class="fas fa-question-circle text-primary me-2" aria-hidden="true"></i>常见问题
+                        </h3>
+                        <div class="accordion" id="faqAccordion">
+                            <div class="accordion-item border-0 mb-3">
+                                <h4 class="accordion-header">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1" aria-expanded="true" aria-controls="faq1">
+                                        验证次数用完了怎么办？
+                                    </button>
+                                </h4>
+                                <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body text-muted">
+                                        当月验证次数用完后，验证码将暂时无法使用。您可以等到下个月刷新配额，或者升级到更高级别的方案。我们也提供按量付费的选项，超出部分按实际使用量计费。
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item border-0 mb-3">
+                                <h4 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2" aria-expanded="false" aria-controls="faq2">
+                                        可以先试用再购买吗？
+                                    </button>
+                                </h4>
+                                <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body text-muted">
+                                        当然可以！我们提供14天的专业版全功能试用。注册后即可自动获得试用资格，无需绑定信用卡。试用期间可以体验全部专业版功能。
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item border-0 mb-3">
+                                <h4 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3" aria-expanded="false" aria-controls="faq3">
+                                        如何切换不同的方案？
+                                    </button>
+                                </h4>
+                                <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body text-muted">
+                                        您可以随时在控制台中升级或降级方案。升级立即生效，降级将在当前计费周期结束后生效。我们不会收取任何额外费用或罚款。
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item border-0 mb-3">
+                                <h4 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4" aria-expanded="false" aria-controls="faq4">
+                                        企业版有哪些定制选项？
+                                    </button>
+                                </h4>
+                                <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body text-muted">
+                                        企业版支持完全定制化，包括：私有化部署到您的基础设施、定制验证逻辑和算法、品牌定制、完全控制数据和密钥、专属客户成功经理、7x24实时技术支持等。
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item border-0">
+                                <h4 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5" aria-expanded="false" aria-controls="faq5">
+                                        支付方式有哪些？
+                                    </button>
+                                </h4>
+                                <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body text-muted">
+                                        我们支持多种支付方式，包括：支付宝、微信支付、银行转账、对公转账、信用卡支付等。企业客户还可以选择月付或年付，年付可享受9折优惠。
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm bg-gradient text-white text-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="card-body p-5">
+                        <h3 class="h4 fw-bold mb-3">还在犹豫？</h3>
+                        <p class="mb-4 opacity-90">立即注册，体验14天专业版全功能</p>
+                        <div class="d-flex justify-content-center gap-3 flex-wrap">
+                            <a href="/register" class="btn btn-light btn-lg px-4">
+                                <i class="fas fa-rocket me-2"></i>免费试用
+                            </a>
+                            <a href="/contact" class="btn btn-outline-light btn-lg px-4">
+                                <i class="fas fa-comments me-2"></i>咨询客服
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-dark text-white py-5" role="contentinfo">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>验证系统
+                    </h5>
+                    <p class="text-white-50 small mb-3">
+                        新一代智能行为验证系统，为您的业务安全保驾护航
+                    </p>
+                </div>
+                <div class="col-6 col-lg-2 mb-4">
+                    <h6 class="fw-bold mb-3">快速链接</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
+                        <li class="mb-2"><a href="/demo" class="text-white-50 text-decoration-none">功能演示</a></li>
+                        <li class="mb-2"><a href="/pricing" class="text-white-50 text-decoration-none">定价</a></li>
+                        <li><a href="/docs" class="text-white-50 text-decoration-none">文档</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <h6 class="fw-bold mb-3">联系我们</h6>
+                    <ul class="list-unstyled small text-white-50">
+                        <li class="mb-2"><i class="fas fa-envelope me-2" aria-hidden="true"></i>contact@example.com</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2" aria-hidden="true"></i>400-888-8888</li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-white-50">
+            <p class="text-center text-white-50 small mb-0">&copy; 2026 验证系统. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/notification.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

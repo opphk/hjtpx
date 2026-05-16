@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 用户管理</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
+        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
+        .main-wrapper { flex: 1; min-width: 0; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .user-avatar-lg { width: 80px; height: 80px; font-size: 2rem; }
+        .user-card { transition: all 0.3s ease; }
+        .user-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .stat-number { font-size: 1.5rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar d-flex flex-column flex-shrink-0">
+            <div class="sidebar-header p-3">
+                <h5 class="text-white mb-0"><i class="fas fa-shield-alt me-2"></i>管理后台</h5>
+            </div>
+            <nav class="nav flex-column mt-2">
+                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link active" href="/admin/users"><i class="fas fa-users me-2"></i>用户管理</a>
+                <a class="nav-link" href="/admin/settings"><i class="fas fa-cog me-2"></i>系统设置</a>
+            </nav>
+            <div class="sidebar-footer mt-auto p-3">
+                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
+            </div>
+        </div>
+
+        <div class="main-wrapper">
+            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">用户管理</h5>
+                    <small class="text-muted">管理系统用户与权限</small>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button id="addUserBtn" class="btn btn-primary btn-sm"><i class="fas fa-user-plus me-1"></i>添加用户</button>
+                    <button id="refreshBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </header>
+
+            <main class="p-4 bg-light min-vh-100">
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body text-center">
+                                <div class="bg-primary bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
+                                    <i class="fas fa-users fa-2x text-primary"></i>
+                                </div>
+                                <h3 class="stat-number" id="totalUsers">0</h3>
+                                <small class="text-muted">总用户数</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body text-center">
+                                <div class="bg-success bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
+                                    <i class="fas fa-user-check fa-2x text-success"></i>
+                                </div>
+                                <h3 class="stat-number" id="activeUsers">0</h3>
+                                <small class="text-muted">活跃用户</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body text-center">
+                                <div class="bg-warning bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
+                                    <i class="fas fa-user-clock fa-2x text-warning"></i>
+                                </div>
+                                <h3 class="stat-number" id="newUsersToday">0</h3>
+                                <small class="text-muted">今日新增</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body text-center">
+                                <div class="bg-danger bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
+                                    <i class="fas fa-user-shield fa-2x text-danger"></i>
+                                </div>
+                                <h3 class="stat-number" id="adminCount">0</h3>
+                                <small class="text-muted">管理员</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">搜索用户</label>
+                                <input type="text" class="form-control" id="searchUser" placeholder="用户名、邮箱、手机">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">用户状态</label>
+                                <select class="form-select" id="userStatus">
+                                    <option value="">全部</option>
+                                    <option value="active">活跃</option>
+                                    <option value="inactive">停用</option>
+                                    <option value="banned">封禁</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">用户角色</label>
+                                <select class="form-select" id="userRole">
+                                    <option value="">全部</option>
+                                    <option value="admin">管理员</option>
+                                    <option value="user">普通用户</option>
+                                    <option value="vip">VIP用户</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">注册时间</label>
+                                <input type="date" class="form-control" id="registerDate">
+                            </div>
+                            <div class="col-md-3">
+                                <button id="searchBtn" class="btn btn-primary me-2"><i class="fas fa-search me-1"></i>搜索</button>
+                                <button id="resetBtn" class="btn btn-outline-secondary"><i class="fas fa-redo me-1"></i>重置</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <span class="text-muted" id="usersCount">共 0 个用户</span>
+                        <div class="d-flex gap-2">
+                            <button id="exportUsersBtn" class="btn btn-outline-success btn-sm"><i class="fas fa-download me-1"></i>导出</button>
+                            <button id="batchActionBtn" class="btn btn-outline-warning btn-sm"><i class="fas fa-tasks me-1"></i>批量操作</button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="border-0"><input type="checkbox" id="selectAll"></th>
+                                        <th class="border-0">用户</th>
+                                        <th class="border-0">邮箱</th>
+                                        <th class="border-0">手机</th>
+                                        <th class="border-0">角色</th>
+                                        <th class="border-0">状态</th>
+                                        <th class="border-0">注册时间</th>
+                                        <th class="border-0">最后登录</th>
+                                        <th class="border-0">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <tr>
+                                        <td><input type="checkbox" class="user-checkbox"></td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="user-avatar">A</div>
+                                                <div>
+                                                    <div class="fw-bold">admin</div>
+                                                    <small class="text-muted">ID: 1</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>admin@example.com</td>
+                                        <td>138****8888</td>
+                                        <td><span class="badge bg-danger">管理员</span></td>
+                                        <td><span class="badge bg-success">活跃</span></td>
+                                        <td><small>2024-01-01</small></td>
+                                        <td><small>2024-01-15 14:30</small></td>
+                                        <td>
+                                            <button class="btn btn-link btn-sm text-decoration-none" onclick="viewUser(1)"><i class="fas fa-eye"></i></button>
+                                            <button class="btn btn-link btn-sm text-decoration-none" onclick="editUser(1)"><i class="fas fa-edit"></i></button>
+                                            <button class="btn btn-link btn-sm text-danger text-decoration-none" onclick="deleteUser(1)"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><input type="checkbox" class="user-checkbox"></td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="user-avatar bg-success">U</div>
+                                                <div>
+                                                    <div class="fw-bold">user001</div>
+                                                    <small class="text-muted">ID: 2</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>user001@example.com</td>
+                                        <td>139****1234</td>
+                                        <td><span class="badge bg-primary">普通用户</span></td>
+                                        <td><span class="badge bg-success">活跃</span></td>
+                                        <td><small>2024-01-05</small></td>
+                                        <td><small>2024-01-15 12:20</small></td>
+                                        <td>
+                                            <button class="btn btn-link btn-sm text-decoration-none" onclick="viewUser(2)"><i class="fas fa-eye"></i></button>
+                                            <button class="btn btn-link btn-sm text-decoration-none" onclick="editUser(2)"><i class="fas fa-edit"></i></button>
+                                            <button class="btn btn-link btn-sm text-danger text-decoration-none" onclick="deleteUser(2)"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><input type="checkbox" class="user-checkbox"></td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="user-avatar bg-warning">V</div>
+                                                <div>
+                                                    <div class="fw-bold">vip_user</div>
+                                                    <small class="text-muted">ID: 3</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>vip@example.com</td>
+                                        <td>186****5678</td>
+                                        <td><span class="badge bg-warning text-dark">VIP用户</span></td>
+                                        <td><span class="badge bg-success">活跃</span></td>
+                                        <td><small>2024-01-08</small></td>
+                                        <td><small>2024-01-15 10:15</small></td>
+                                        <td>
+                                            <button class="btn btn-link btn-sm text-decoration-none" onclick="viewUser(3)"><i class="fas fa-eye"></i></button>
+                                            <button class="btn btn-link btn-sm text-decoration-none" onclick="editUser(3)"><i class="fas fa-edit"></i></button>
+                                            <button class="btn btn-link btn-sm text-danger text-decoration-none" onclick="deleteUser(3)"><i class="fas fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-white">
+                        <nav>
+                            <ul class="pagination justify-content-end mb-0">
+                                <li class="page-item"><a class="page-link" href="#">上一页</a></li>
+                                <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                                <li class="page-item"><a class="page-link" href="#">2</a></li>
+                                <li class="page-item"><a class="page-link" href="#">3</a></li>
+                                <li class="page-item"><a class="page-link" href="#">下一页</a></li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="userModalTitle">添加用户</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="userForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="userId">
+                        <div class="mb-3">
+                            <label class="form-label">用户名 *</label>
+                            <input type="text" class="form-control" id="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">邮箱 *</label>
+                            <input type="email" class="form-control" id="email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">手机号</label>
+                            <input type="tel" class="form-control" id="phone">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">角色</label>
+                            <select class="form-select" id="role">
+                                <option value="user">普通用户</option>
+                                <option value="vip">VIP用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="status">
+                                <option value="active">活跃</option>
+                                <option value="inactive">停用</option>
+                                <option value="banned">封禁</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="passwordContainer">
+                            <label class="form-label">密码 <span id="passwordHint"></span></label>
+                            <input type="password" class="form-control" id="password">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="userDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="userDetailContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUserStats();
+            initializeEventListeners();
+        });
+
+        function loadUserStats() {
+            animateNumber('totalUsers', 1256);
+            animateNumber('activeUsers', 1089);
+            animateNumber('newUsersToday', 23);
+            animateNumber('adminCount', 5);
+            document.getElementById('usersCount').textContent = '共 1256 个用户';
+        }
+
+        function animateNumber(elementId, target) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const duration = 1500;
+            const startTime = performance.now();
+
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 4);
+                const current = Math.floor(target * eased);
+
+                element.textContent = current.toLocaleString();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+
+            requestAnimationFrame(animate);
+        }
+
+        function initializeEventListeners() {
+            document.getElementById('addUserBtn').addEventListener('click', () => showUserModal());
+            document.getElementById('searchBtn').addEventListener('click', searchUsers);
+            document.getElementById('resetBtn').addEventListener('click', resetFilters);
+            document.getElementById('selectAll').addEventListener('change', toggleSelectAll);
+            document.getElementById('refreshBtn').addEventListener('click', () => {
+                loadUserStats();
+                showNotification('数据已刷新', 'success');
+            });
+            document.getElementById('userForm').addEventListener('submit', saveUser);
+        }
+
+        function showUserModal(userId = null) {
+            const modal = new bootstrap.Modal(document.getElementById('userModal'));
+            const title = document.getElementById('userModalTitle');
+            const passwordContainer = document.getElementById('passwordContainer');
+            const passwordHint = document.getElementById('passwordHint');
+
+            if (userId) {
+                title.textContent = '编辑用户';
+                passwordHint.textContent = '(留空则不修改)';
+                loadUserData(userId);
+            } else {
+                title.textContent = '添加用户';
+                passwordHint.textContent = '(必填)';
+                document.getElementById('userForm').reset();
+                document.getElementById('userId').value = '';
+            }
+
+            modal.show();
+        }
+
+        async function loadUserData(userId) {
+            document.getElementById('userId').value = userId;
+            document.getElementById('username').value = 'user001';
+            document.getElementById('email').value = 'user001@example.com';
+            document.getElementById('phone').value = '139****1234';
+            document.getElementById('role').value = 'user';
+            document.getElementById('status').value = 'active';
+            document.getElementById('password').value = '';
+        }
+
+        async function saveUser(e) {
+            e.preventDefault();
+
+            const userId = document.getElementById('userId').value;
+            const userData = {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value,
+                role: document.getElementById('role').value,
+                status: document.getElementById('status').value
+            };
+
+            if (!userId && !document.getElementById('password').value) {
+                showNotification('请输入密码', 'danger');
+                return;
+            }
+
+            if (document.getElementById('password').value) {
+                userData.password = document.getElementById('password').value;
+            }
+
+            showNotification(userId ? '用户已更新' : '用户已添加', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+            loadUserStats();
+        }
+
+        function searchUsers() {
+            showNotification('搜索完成', 'success');
+        }
+
+        function resetFilters() {
+            document.getElementById('searchUser').value = '';
+            document.getElementById('userStatus').value = '';
+            document.getElementById('userRole').value = '';
+            document.getElementById('registerDate').value = '';
+            showNotification('筛选条件已重置', 'info');
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = selectAll);
+        }
+
+        function viewUser(userId) {
+            const content = `
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="user-avatar user-avatar-lg bg-primary mb-3">U</div>
+                        <h5>user001</h5>
+                        <span class="badge bg-primary">普通用户</span>
+                        <span class="badge bg-success">活跃</span>
+                    </div>
+                    <div class="col-md-8">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th width="120">用户ID:</th>
+                                <td>${userId}</td>
+                            </tr>
+                            <tr>
+                                <th>邮箱:</th>
+                                <td>user001@example.com</td>
+                            </tr>
+                            <tr>
+                                <th>手机:</th>
+                                <td>139****1234</td>
+                            </tr>
+                            <tr>
+                                <th>注册时间:</th>
+                                <td>2024-01-05 10:30:00</td>
+                            </tr>
+                            <tr>
+                                <th>最后登录:</th>
+                                <td>2024-01-15 12:20:00</td>
+                            </tr>
+                            <tr>
+                                <th>登录次数:</th>
+                                <td>256 次</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <hr>
+                <h6>验证统计</h6>
+                <div class="row text-center">
+                    <div class="col-3">
+                        <h4 class="text-primary">1,234</h4>
+                        <small class="text-muted">总验证</small>
+                    </div>
+                    <div class="col-3">
+                        <h4 class="text-success">99.2%</h4>
+                        <small class="text-muted">成功率</small>
+                    </div>
+                    <div class="col-3">
+                        <h4 class="text-warning">45ms</h4>
+                        <small class="text-muted">平均响应</small>
+                    </div>
+                    <div class="col-3">
+                        <h4 class="text-danger">3</h4>
+                        <small class="text-muted">被拦截</small>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('userDetailContent').innerHTML = content;
+            new bootstrap.Modal(document.getElementById('userDetailModal')).show();
+        }
+
+        function editUser(userId) {
+            showUserModal(userId);
+        }
+
+        function deleteUser(userId) {
+            if (confirm('确定要删除此用户吗？此操作不可撤销。')) {
+                showNotification('用户已删除', 'success');
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const container = document.createElement('div');
+            container.className = `alert alert-${type} position-fixed`;
+            container.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+            container.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>${message}`;
+            document.body.appendChild(container);
+
+            setTimeout(() => {
+                container.classList.add('show');
+                setTimeout(() => {
+                    container.classList.remove('show');
+                    setTimeout(() => container.remove(), 150);
+                }, 3000);
+            }, 10);
+        }
+    </script>
+</body>
+</html>

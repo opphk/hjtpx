@@ -1,0 +1,7 @@
+{
+    "coverage_threshold": 80,
+    "coverage_reporters": ["html", "text", "lcov"],
+    "coverage_paths": ["backend/**"],
+    "exclude_paths": ["**/*_test.go", "**/test_*.go", "**/vendor/**", "**/cmd/**"],
+    "include_paths": ["backend/internal/", "backend/pkg/"]
+}

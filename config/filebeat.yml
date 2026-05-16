@@ -1,0 +1,63 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /app/logs/*.log
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: message
+    fields:
+      service: hjtpx
+      environment: ${ENVIRONMENT:production}
+    fields_under_root: false
+
+  - type: docker
+    enabled: true
+    containers.ids:
+      - '*'
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+  - add_kubernetes_metadata: ~
+
+output.elasticsearch:
+  hosts: ["${ELASTICSEARCH_HOSTS:elasticsearch:9200}"]
+  index: "hjtpx-%{+yyyy.MM.dd}"
+  username: "${ELASTICSEARCH_USERNAME:}"
+  password: "${ELASTICSEARCH_PASSWORD:}"
+
+  ssl.enabled: ${ELASTICSEARCH_SSL_ENABLED:false}
+  ssl.certificate_authorities: ["${ELASTICSEARCH_CA_PATH:}"]
+  ssl.verification_mode: certificate
+
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 1
+  index.refresh_interval: "5s"
+
+setup.template.name: "hjtpx"
+setup.template.pattern: "hjtpx-*"
+setup.template.enabled: true
+
+setup.ilm.enabled: true
+setup.ilm.rollover_alias: "hjtpx"
+setup.ilm.pattern: "{now/d}-000001"
+setup.ilm.policy_name: "hjtpx-policy"
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["${ELASTICSEARCH_HOSTS:elasticsearch:9200}"]

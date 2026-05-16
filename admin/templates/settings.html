@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 系统设置</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
+        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
+        .main-wrapper { flex: 1; min-width: 0; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .settings-nav .nav-link { border-radius: 0.5rem; margin-bottom: 0.5rem; }
+        .settings-nav .nav-link.active { background-color: var(--sidebar-hover); color: white; }
+        .form-switch .form-check-input { width: 3em; height: 1.5em; }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar d-flex flex-column flex-shrink-0">
+            <div class="sidebar-header p-3">
+                <h5 class="text-white mb-0"><i class="fas fa-shield-alt me-2"></i>管理后台</h5>
+            </div>
+            <nav class="nav flex-column mt-2">
+                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link" href="/admin/users"><i class="fas fa-users me-2"></i>用户管理</a>
+                <a class="nav-link active" href="/admin/settings"><i class="fas fa-cog me-2"></i>系统设置</a>
+            </nav>
+            <div class="sidebar-footer mt-auto p-3">
+                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
+            </div>
+        </div>
+
+        <div class="main-wrapper">
+            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">系统设置</h5>
+                    <small class="text-muted">配置系统参数与安全设置</small>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button id="saveAllBtn" class="btn btn-primary btn-sm"><i class="fas fa-save me-1"></i>保存设置</button>
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </header>
+
+            <main class="p-4 bg-light min-vh-100">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm border-0 settings-nav">
+                            <div class="card-body">
+                                <div class="nav flex-column">
+                                    <a class="nav-link active" href="#general" data-bs-toggle="tab">
+                                        <i class="fas fa-cog me-2"></i>通用设置
+                                    </a>
+                                    <a class="nav-link" href="#security" data-bs-toggle="tab">
+                                        <i class="fas fa-shield-alt me-2"></i>安全设置
+                                    </a>
+                                    <a class="nav-link" href="#email" data-bs-toggle="tab">
+                                        <i class="fas fa-envelope me-2"></i>邮件设置
+                                    </a>
+                                    <a class="nav-link" href="#notification" data-bs-toggle="tab">
+                                        <i class="fas fa-bell me-2"></i>通知设置
+                                    </a>
+                                    <a class="nav-link" href="#cache" data-bs-toggle="tab">
+                                        <i class="fas fa-database me-2"></i>缓存管理
+                                    </a>
+                                    <a class="nav-link" href="#backup" data-bs-toggle="tab">
+                                        <i class="fas fa-hdd me-2"></i>备份管理
+                                    </a>
+                                    <a class="nav-link" href="#api" data-bs-toggle="tab">
+                                        <i class="fas fa-key me-2"></i>API密钥
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-9">
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="general">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-cog me-2"></i>通用设置</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">站点信息</h7>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">站点名称</label>
+                                                        <input type="text" class="form-control" id="siteName" value="行为验证系统">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">站点URL</label>
+                                                        <input type="url" class="form-control" id="siteUrl" value="https://captcha.example.com">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">站点描述</label>
+                                                <textarea class="form-control" id="siteDescription" rows="2">专业的行为验证系统，提供滑块、点选、图形等多种验证方式</textarea>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">验证配置</h7>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">默认验证超时时间（秒）</label>
+                                                        <input type="number" class="form-control" id="captchaTimeout" value="120">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">验证重试次数限制</label>
+                                                        <input type="number" class="form-control" id="retryLimit" value="5">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">默认风险阈值</label>
+                                                <input type="range" class="form-range" id="riskThreshold" min="0" max="100" value="70">
+                                                <div class="d-flex justify-content-between">
+                                                    <small class="text-muted">低</small>
+                                                    <small class="text-muted" id="riskThresholdValue">70</small>
+                                                    <small class="text-muted">高</small>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <h7 class="text-muted mb-3 d-block">功能开关</h7>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enableRegister" checked>
+                                                <label class="form-check-label" for="enableRegister">允许新用户注册</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enableEmailVerify" checked>
+                                                <label class="form-check-label" for="enableEmailVerify">注册时邮箱验证</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enableApiLog" checked>
+                                                <label class="form-check-label" for="enableApiLog">记录API调用日志</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enableDebug" checked>
+                                                <label class="form-check-label" for="enableDebug">调试模式</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="security">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>安全设置</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">密码策略</h7>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">最小密码长度</label>
+                                                        <input type="number" class="form-control" id="minPasswordLength" value="8">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">密码过期天数（0=永不过期）</label>
+                                                        <input type="number" class="form-control" id="passwordExpiry" value="90">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="requireSpecialChar" checked>
+                                                <label class="form-check-label" for="requireSpecialChar">要求包含特殊字符</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="requireNumber" checked>
+                                                <label class="form-check-label" for="requireNumber">要求包含数字</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="requireUppercase" checked>
+                                                <label class="form-check-label" for="requireUppercase">要求包含大写字母</label>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">会话管理</h7>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">会话超时时间（分钟）</label>
+                                                        <input type="number" class="form-control" id="sessionTimeout" value="30">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">同一账号最大登录数</label>
+                                                        <input type="number" class="form-control" id="maxLoginDevices" value="3">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="allowRememberMe" checked>
+                                                <label class="form-check-label" for="allowRememberMe">允许"记住我"功能</label>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">IP白名单</h7>
+                                            <div class="mb-3">
+                                                <label class="form-label">允许访问的IP地址（每行一个，留空表示允许所有）</label>
+                                                <textarea class="form-control" id="ipWhitelist" rows="4" placeholder="192.168.1.1
+10.0.0.0/8
+172.16.0.0/12"></textarea>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <h7 class="text-muted mb-3 d-block">安全监控</h7>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enableLoginAlert" checked>
+                                                <label class="form-check-label" for="enableLoginAlert">异常登录告警</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="enableBruteForce" checked>
+                                                <label class="form-check-label" for="enableBruteForce">暴力破解检测</label>
+                                            </div>
+                                            <div class="row mt-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">连续失败锁定次数</label>
+                                                    <input type="number" class="form-control" id="maxFailedAttempts" value="5">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">锁定时长（分钟）</label>
+                                                    <input type="number" class="form-control" id="lockoutDuration" value="30">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="email">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-envelope me-2"></i>邮件设置</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">SMTP配置</h7>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">SMTP服务器</label>
+                                                        <input type="text" class="form-control" id="smtpHost" placeholder="smtp.example.com">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">SMTP端口</label>
+                                                        <input type="number" class="form-control" id="smtpPort" value="587">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">用户名</label>
+                                                        <input type="text" class="form-control" id="smtpUsername" placeholder="noreply@example.com">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">密码</label>
+                                                        <input type="password" class="form-control" id="smtpPassword" placeholder="••••••••">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">发件人名称</label>
+                                                <input type="text" class="form-control" id="fromName" value="行为验证系统">
+                                            </div>
+                                            <div class="form-check form-switch mb-3">
+                                                <input class="form-check-input" type="checkbox" id="smtpTLS" checked>
+                                                <label class="form-check-label" for="smtpTLS">启用TLS加密</label>
+                                            </div>
+                                            <button class="btn btn-outline-primary btn-sm" id="testEmailBtn">
+                                                <i class="fas fa-paper-plane me-1"></i>发送测试邮件
+                                            </button>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <h7 class="text-muted mb-3 d-block">邮件模板</h7>
+                                            <div class="mb-3">
+                                                <label class="form-label">注册验证邮件模板</label>
+                                                <textarea class="form-control" rows="4">您好 {username}，
+
+感谢您注册 {site_name}！
+
+您的验证码是：{verify_code}
+
+验证码将在 {expire_time} 后过期。
+
+如非本人操作，请忽略此邮件。</textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="notification">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-bell me-2"></i>通知设置</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">通知渠道</h7>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifyEmail" checked>
+                                                <label class="form-check-label" for="notifyEmail">邮件通知</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifySMS">
+                                                <label class="form-check-label" for="notifySMS">短信通知</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifyWebhook" checked>
+                                                <label class="form-check-label" for="notifyWebhook">Webhook通知</label>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">通知事件</h7>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifyNewUser" checked>
+                                                <label class="form-check-label" for="notifyNewUser">新用户注册</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifyNewApp" checked>
+                                                <label class="form-check-label" for="notifyNewApp">新应用创建</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifyAnomaly" checked>
+                                                <label class="form-check-label" for="notifyAnomaly">异常行为检测</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifyAttack" checked>
+                                                <label class="form-check-label" for="notifyAttack">攻击告警</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="notifySystem" checked>
+                                                <label class="form-check-label" for="notifySystem">系统错误</label>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <label class="form-label">Webhook地址</label>
+                                            <input type="url" class="form-control" id="webhookUrl" placeholder="https://your-webhook-endpoint.com/notify">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="cache">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-database me-2"></i>缓存管理</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">缓存统计</h7>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="card bg-primary bg-opacity-10 border-0 mb-0">
+                                                        <div class="card-body text-center">
+                                                            <h4>256 MB</h4>
+                                                            <small class="text-muted">已使用</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="card bg-success bg-opacity-10 border-0 mb-0">
+                                                        <div class="card-body text-center">
+                                                            <h4>1 GB</h4>
+                                                            <small class="text-muted">总容量</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="card bg-info bg-opacity-10 border-0 mb-0">
+                                                        <div class="card-body text-center">
+                                                            <h4>15,234</h4>
+                                                            <small class="text-muted">键数量</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">缓存配置</h7>
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">默认缓存过期时间（秒）</label>
+                                                        <input type="number" class="form-control" id="cacheTTL" value="3600">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label class="form-label">最大内存使用（MB）</label>
+                                                        <input type="number" class="form-control" id="maxMemory" value="1024">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <h7 class="text-muted mb-3 d-block">缓存操作</h7>
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-outline-primary btn-sm" id="flushCacheBtn">
+                                                    <i class="fas fa-broom me-1"></i>清理全部缓存
+                                                </button>
+                                                <button class="btn btn-outline-warning btn-sm" id="warmCacheBtn">
+                                                    <i class="fas fa-fire me-1"></i>预热缓存
+                                                </button>
+                                                <button class="btn btn-outline-info btn-sm" id="refreshStatsBtn">
+                                                    <i class="fas fa-sync me-1"></i>刷新统计
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="backup">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-hdd me-2"></i>备份管理</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">自动备份</h7>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="autoBackup" checked>
+                                                <label class="form-check-label" for="autoBackup">启用自动备份</label>
+                                            </div>
+                                            <div class="row mt-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label">备份频率</label>
+                                                    <select class="form-select" id="backupFrequency">
+                                                        <option value="hourly">每小时</option>
+                                                        <option value="daily" selected>每天</option>
+                                                        <option value="weekly">每周</option>
+                                                        <option value="monthly">每月</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">保留备份数量</label>
+                                                    <input type="number" class="form-control" id="backupRetention" value="30">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <h7 class="text-muted mb-3 d-block">备份历史</h7>
+                                            <div class="table-responsive">
+                                                <table class="table table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>备份时间</th>
+                                                            <th>类型</th>
+                                                            <th>大小</th>
+                                                            <th>状态</th>
+                                                            <th>操作</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td>2024-01-15 00:00:00</td>
+                                                            <td><span class="badge bg-info">自动</span></td>
+                                                            <td>256 MB</td>
+                                                            <td><span class="badge bg-success">成功</span></td>
+                                                            <td>
+                                                                <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-download"></i></button>
+                                                                <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-redo"></i></button>
+                                                                <button class="btn btn-link btn-sm text-danger text-decoration-none"><i class="fas fa-trash"></i></button>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>2024-01-14 00:00:00</td>
+                                                            <td><span class="badge bg-info">自动</span></td>
+                                                            <td>245 MB</td>
+                                                            <td><span class="badge bg-success">成功</span></td>
+                                                            <td>
+                                                                <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-download"></i></button>
+                                                                <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-redo"></i></button>
+                                                                <button class="btn btn-link btn-sm text-danger text-decoration-none"><i class="fas fa-trash"></i></button>
+                                                            </td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td>2024-01-13 15:30:00</td>
+                                                            <td><span class="badge bg-warning">手动</span></td>
+                                                            <td>240 MB</td>
+                                                            <td><span class="badge bg-success">成功</span></td>
+                                                            <td>
+                                                                <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-download"></i></button>
+                                                                <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-redo"></i></button>
+                                                                <button class="btn btn-link btn-sm text-danger text-decoration-none"><i class="fas fa-trash"></i></button>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <h7 class="text-muted mb-3 d-block">立即备份</h7>
+                                            <button class="btn btn-primary" id="createBackupBtn">
+                                                <i class="fas fa-save me-1"></i>创建新备份
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="api">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0"><i class="fas fa-key me-2"></i>API密钥管理</h6>
+                                        <button class="btn btn-primary btn-sm" id="createApiKeyBtn">
+                                            <i class="fas fa-plus me-1"></i>创建新密钥
+                                        </button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            <strong>安全提示：</strong>请妥善保管您的API密钥，不要泄露给他人。密钥仅在创建时显示一次。
+                                        </div>
+
+                                        <div class="table-responsive">
+                                            <table class="table table-hover">
+                                                <thead>
+                                                    <tr>
+                                                        <th>密钥名称</th>
+                                                        <th>密钥ID</th>
+                                                        <th>密钥</th>
+                                                        <th>权限</th>
+                                                        <th>创建时间</th>
+                                                        <th>最后使用</th>
+                                                        <th>状态</th>
+                                                        <th>操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td>主密钥</td>
+                                                        <td><code>key_a1b2c3d4</code></td>
+                                                        <td><code>sk_xxxxxxxxxx...</code></td>
+                                                        <td><span class="badge bg-danger">完全访问</span></td>
+                                                        <td><small>2024-01-01</small></td>
+                                                        <td><small>2024-01-15 14:30</small></td>
+                                                        <td><span class="badge bg-success">激活</span></td>
+                                                        <td>
+                                                            <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-edit"></i></button>
+                                                            <button class="btn btn-link btn-sm text-danger text-decoration-none"><i class="fas fa-trash"></i></button>
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>只读密钥</td>
+                                                        <td><code>key_e5f6g7h8</code></td>
+                                                        <td><code>sk_xxxxxxxxxx...</code></td>
+                                                        <td><span class="badge bg-info">只读</span></td>
+                                                        <td><small>2024-01-10</small></td>
+                                                        <td><small>2024-01-15 12:00</small></td>
+                                                        <td><span class="badge bg-success">激活</span></td>
+                                                        <td>
+                                                            <button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-edit"></i></button>
+                                                            <button class="btn btn-link btn-sm text-danger text-decoration-none"><i class="fas fa-trash"></i></button>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-3">
+                                            <h7 class="text-muted mb-3 d-block">API使用统计</h7>
+                                            <div class="row">
+                                                <div class="col-md-3">
+                                                    <div class="card bg-primary bg-opacity-10 border-0 mb-0">
+                                                        <div class="card-body text-center">
+                                                            <h4>1,234</h4>
+                                                            <small class="text-muted">今日请求</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="card bg-success bg-opacity-10 border-0 mb-0">
+                                                        <div class="card-body text-center">
+                                                            <h4>35,678</h4>
+                                                            <small class="text-muted">本月请求</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="card bg-warning bg-opacity-10 border-0 mb-0">
+                                                        <div class="card-body text-center">
+                                                            <h4>45ms</h4>
+                                                            <small class="text-muted">平均响应</small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <div class="card bg-danger bg-opacity-10 border-0 mb-0">
+                                <div class="card-body text-center">
+                                    <h4>0.1%</h4>
+                                    <small class="text-muted">错误率</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</div>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+<script src="/admin/static/js/auth.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeSettings();
+    });
+
+    function initializeSettings() {
+        document.getElementById('riskThreshold').addEventListener('input', (e) => {
+            document.getElementById('riskThresholdValue').textContent = e.target.value;
+        });
+
+        document.getElementById('saveAllBtn').addEventListener('click', saveSettings);
+        document.getElementById('testEmailBtn').addEventListener('click', testEmail);
+        document.getElementById('flushCacheBtn').addEventListener('click', flushCache);
+        document.getElementById('warmCacheBtn').addEventListener('click', warmCache);
+        document.getElementById('refreshStatsBtn').addEventListener('click', refreshCacheStats);
+        document.getElementById('createBackupBtn').addEventListener('click', createBackup);
+        document.getElementById('createApiKeyBtn').addEventListener('click', createApiKey);
+    }
+
+    function saveSettings() {
+        showNotification('设置已保存', 'success');
+    }
+
+    function testEmail() {
+        showNotification('测试邮件已发送', 'info');
+    }
+
+    function flushCache() {
+        if (confirm('确定要清理全部缓存吗？')) {
+            showNotification('缓存已清理', 'success');
+        }
+    }
+
+    function warmCache() {
+        showNotification('缓存预热已开始', 'info');
+    }
+
+    function refreshCacheStats() {
+        showNotification('统计已刷新', 'success');
+    }
+
+    function createBackup() {
+        showNotification('备份创建中...', 'info');
+        setTimeout(() => {
+            showNotification('备份创建成功', 'success');
+        }, 2000);
+    }
+
+    function createApiKey() {
+        showNotification('API密钥已创建', 'success');
+    }
+
+    function showNotification(message, type = 'info') {
+        const container = document.createElement('div');
+        container.className = `alert alert-${type} position-fixed`;
+        container.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+        container.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>${message}`;
+        document.body.appendChild(container);
+
+        setTimeout(() => {
+            container.classList.add('show');
+            setTimeout(() => {
+                container.classList.remove('show');
+                setTimeout(() => container.remove(), 150);
+            }, 3000);
+        }, 10);
+    }
+</script>
+</body>
+</html>

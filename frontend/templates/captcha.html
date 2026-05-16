@@ -4,64 +4,641 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>行为验证码 - 安全验证</title>
+    <meta name="description" content="智能行为验证码系统，安全可靠的用户验证体验">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .captcha-container {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        .captcha-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .captcha-header h3 {
+            margin: 0 0 5px 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .captcha-header p {
+            margin: 0;
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+
+        .captcha-body {
+            padding: 20px;
+        }
+
+        .captcha-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .captcha-tab {
+            flex: 1;
+            padding: 10px 15px;
+            border: none;
+            background: transparent;
+            color: #666;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .captcha-tab:hover {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .captcha-tab:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        .captcha-tab.active {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .captcha-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .captcha-content {
+            display: none;
+        }
+
+        .captcha-content.active {
+            display: block;
+        }
+
+        .captcha-image-wrapper {
+            position: relative;
+            width: 360px;
+            height: 220px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #e0e0e0;
+            margin: 0 auto;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .captcha-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .captcha-bg-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .captcha-gap {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        .captcha-gap-mask {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.2);
+            width: 56px;
+            height: 56px;
+        }
+
+        .captcha-slider-piece {
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            cursor: grab;
+            z-index: 10;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .captcha-slider-piece:hover {
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .captcha-slider-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .captcha-refresh {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+        }
+
+        .captcha-refresh:hover {
+            background: white;
+            transform: rotate(180deg);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .captcha-refresh:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        .captcha-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 30;
+        }
+
+        .captcha-loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f0f0f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: captcha-spin 0.8s linear infinite;
+        }
+
+        @keyframes captcha-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .captcha-slider-container {
+            position: relative;
+            width: 360px;
+            height: 44px;
+            background: #f5f5f5;
+            border-radius: 22px;
+            margin: 20px auto 0;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .captcha-slider-track {
+            position: absolute;
+            left: 2px;
+            top: 2px;
+            height: 40px;
+            width: 0;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            transition: width 0.1s ease;
+        }
+
+        .captcha-slider-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.875rem;
+            color: #888;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .captcha-slider-button {
+            position: absolute;
+            left: 2px;
+            top: 2px;
+            width: 40px;
+            height: 40px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+            z-index: 5;
+            color: #667eea;
+        }
+
+        .captcha-slider-button:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transform: scale(1.05);
+        }
+
+        .captcha-slider-button:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        .captcha-slider-button.dragging {
+            cursor: grabbing;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .captcha-slider-button.success {
+            background: #10b981;
+            color: white;
+            cursor: default;
+        }
+
+        .captcha-slider-button.error {
+            background: #ef4444;
+            color: white;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .captcha-click-hint {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .captcha-click-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .captcha-countdown {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .captcha-countdown.warning {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .captcha-click-progress {
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .progress-text {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .progress-fill.complete {
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+        }
+
+        .captcha-click-grid {
+            display: grid;
+            gap: 10px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .captcha-image-cell {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .captcha-image-cell:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .captcha-image-cell:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        .captcha-click-image {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 360 / 220;
+            object-fit: cover;
+            display: block;
+        }
+
+        .captcha-image-number {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .captcha-click-marker {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            border: 2px solid white;
+            border-radius: 50%;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .captcha-click-marker:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .captcha-marker-remove {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 18px;
+            height: 18px;
+            background: #ef4444;
+            border: 2px solid white;
+            border-radius: 50%;
+            color: white;
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .captcha-click-marker:hover .captcha-marker-remove {
+            display: flex;
+        }
+
+        @keyframes clickMarkerPop {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .captcha-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        .captcha-btn {
+            padding: 8px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .captcha-btn:focus {
+            outline: 2px solid #667eea;
+            outline-offset: 2px;
+        }
+
+        .captcha-btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .captcha-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .captcha-btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .captcha-btn-secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .captcha-btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .captcha-result {
+            text-align: center;
+            padding: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: 6px;
+            margin-top: 15px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .captcha-result.show {
+            opacity: 1;
+        }
+
+        .captcha-result.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .captcha-result.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        @media (max-width: 480px) {
+            .captcha-container {
+                margin: 10px;
+            }
+
+            .captcha-image-wrapper,
+            .captcha-slider-container,
+            .captcha-click-grid {
+                width: 100%;
+                max-width: 360px;
+            }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
 </head>
 <body>
     <header class="bg-white shadow-sm sticky-top">
         <div class="container">
-            <nav class="navbar navbar-expand-lg navbar-light">
+            <nav class="navbar navbar-expand-lg navbar-light" role="navigation" aria-label="主导航">
                 <div class="container-fluid px-0">
-                    <a class="navbar-brand fw-bold text-primary" href="/">用户端</a>
-                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <a class="navbar-brand fw-bold text-primary d-flex align-items-center gap-2" href="/" aria-label="返回首页">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <span>验证系统</span>
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航">
                         <span class="navbar-toggler-icon"></span>
                     </button>
                     <div class="collapse navbar-collapse" id="navbarNav">
                         <ul class="navbar-nav me-auto">
                             <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/products">产品</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
-                            <li class="nav-item"><a class="nav-link" href="/contact">联系我们</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/demo">功能演示</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/pricing">定价</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/docs">文档</a></li>
                         </ul>
                         <div class="d-flex gap-2">
                             <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
-                            <a href="/register" class="btn btn-primary btn-sm">注册</a>
+                            <a href="/register" class="btn btn-primary btn-sm">免费试用</a>
                         </div>
                     </div>
                 </div>
             </nav>
         </div>
     </header>
-    
-    <main class="min-vh-100">
-        <div class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+
+    <main class="min-vh-100" id="main-content" role="main">
+        <div class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" role="banner">
             <div class="container">
                 <h1 class="fw-bold mb-3">安全验证系统</h1>
                 <p class="lead text-white-50">请完成下方验证以继续</p>
             </div>
         </div>
 
-        <section class="py-5">
+        <section class="py-5" aria-labelledby="captcha-section-title">
             <div class="container">
                 <div class="row justify-content-center">
                     <div class="col-md-6">
-                        <div id="captcha-container"></div>
+                        <h2 id="captcha-section-title" class="sr-only">验证码验证区域</h2>
+                        <div id="captcha-container" role="region" aria-label="验证码验证组件" aria-describedby="captcha-instructions"></div>
+                        <p id="captcha-instructions" class="sr-only">使用Tab键切换验证方式，使用Enter键确认操作</p>
                     </div>
                 </div>
-                
+
                 <div class="row justify-content-center mt-5">
                     <div class="col-md-8">
                         <div class="card shadow-sm">
                             <div class="card-body">
-                                <h5 class="card-title text-primary mb-4">使用说明</h5>
-                                
-                                <h6 class="fw-bold text-primary">滑块验证</h6>
+                                <h5 class="card-title text-primary mb-4">
+                                    <i class="fas fa-book me-2" aria-hidden="true"></i>使用说明
+                                </h5>
+
+                                <h6 class="fw-bold text-primary d-flex align-items-center gap-2">
+                                    <i class="fas fa-puzzle-piece" aria-hidden="true"></i>滑块验证
+                                </h6>
                                 <p class="text-muted mb-3">将滑块从左侧拖动到右侧，使拼图块对齐到正确位置即可完成验证。</p>
-                                
-                                <h6 class="fw-bold text-primary">点选验证</h6>
+
+                                <h6 class="fw-bold text-primary d-flex align-items-center gap-2">
+                                    <i class="fas fa-hand-pointer" aria-hidden="true"></i>点选验证
+                                </h6>
                                 <p class="text-muted mb-3">按照提示文字，依次点击图片中的对应位置，完成后点击确认按钮。</p>
-                                
-                                <h6 class="fw-bold text-primary">刷新验证码</h6>
+
+                                <h6 class="fw-bold text-primary d-flex align-items-center gap-2">
+                                    <i class="fas fa-sync" aria-hidden="true"></i>刷新验证码
+                                </h6>
                                 <p class="text-muted mb-0">点击右上角的刷新按钮可以更换新的验证码图片。</p>
                             </div>
                         </div>
@@ -69,54 +646,126 @@
                 </div>
             </div>
         </section>
+
+        <section class="py-5 bg-light" aria-labelledby="features-title">
+            <div class="container">
+                <h2 id="features-title" class="sr-only">功能特性</h2>
+                <div class="row g-4 text-center">
+                    <div class="col-md-4">
+                        <div class="d-flex flex-column align-items-center">
+                            <div class="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;" aria-hidden="true">
+                                <i class="fas fa-shield-alt text-primary fa-2x"></i>
+                            </div>
+                            <h3 class="h5 fw-bold">安全可靠</h3>
+                            <p class="text-muted small mb-0">采用先进的行为分析技术，有效防止机器攻击</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex flex-column align-items-center">
+                            <div class="bg-success bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;" aria-hidden="true">
+                                <i class="fas fa-bolt text-success fa-2x"></i>
+                            </div>
+                            <h3 class="h5 fw-bold">快速验证</h3>
+                            <p class="text-muted small mb-0">平均验证时间仅需3秒，用户体验流畅</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex flex-column align-items-center">
+                            <div class="bg-warning bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;" aria-hidden="true">
+                                <i class="fas fa-mobile-alt text-warning fa-2x"></i>
+                            </div>
+                            <h3 class="h5 fw-bold">完美适配</h3>
+                            <p class="text-muted small mb-0">响应式设计，支持PC和移动端设备</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
-    
-    <footer class="bg-dark text-white py-5">
+
+    <footer class="bg-dark text-white py-5" role="contentinfo">
         <div class="container">
             <div class="row">
-                <div class="col-md-4 mb-4">
-                    <h5>关于我们</h5>
-                    <p class="text-white-50">专业的服务团队，为您提供优质的体验。</p>
+                <div class="col-lg-4 mb-4">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>验证系统
+                    </h5>
+                    <p class="text-white-50 small mb-3">
+                        新一代智能行为验证系统，为您的业务安全保驾护航
+                    </p>
                 </div>
-                <div class="col-md-4 mb-4">
-                    <h5>快速链接</h5>
-                    <ul class="list-unstyled">
-                        <li><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
-                        <li><a href="/products" class="text-white-50 text-decoration-none">产品</a></li>
-                        <li><a href="/about" class="text-white-50 text-decoration-none">关于</a></li>
-                        <li><a href="/contact" class="text-white-50 text-decoration-none">联系我们</a></li>
+                <div class="col-6 col-lg-2 mb-4">
+                    <h6 class="fw-bold mb-3">快速链接</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
+                        <li class="mb-2"><a href="/demo" class="text-white-50 text-decoration-none">功能演示</a></li>
+                        <li class="mb-2"><a href="/pricing" class="text-white-50 text-decoration-none">定价</a></li>
+                        <li><a href="/docs" class="text-white-50 text-decoration-none">文档</a></li>
                     </ul>
                 </div>
-                <div class="col-md-4 mb-4">
-                    <h5>联系方式</h5>
-                    <p class="text-white-50">邮箱: contact@example.com</p>
-                    <p class="text-white-50">电话: 400-888-8888</p>
+                <div class="col-lg-4 mb-4">
+                    <h6 class="fw-bold mb-3">联系我们</h6>
+                    <ul class="list-unstyled small text-white-50">
+                        <li class="mb-2"><i class="fas fa-envelope me-2" aria-hidden="true"></i>contact@example.com</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2" aria-hidden="true"></i>400-888-8888</li>
+                    </ul>
                 </div>
             </div>
             <hr class="border-white-50">
-            <p class="text-center text-white-50 mb-0">&copy; 2026 用户端. All rights reserved.</p>
+            <p class="text-center text-white-50 small mb-0">&copy; 2026 验证系统. All rights reserved.</p>
         </div>
     </footer>
-    
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/notification.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/captcha.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const captchaRegion = document.getElementById('captcha-container');
+
+            const announceToScreenReader = function(message) {
+                const announcer = document.createElement('div');
+                announcer.setAttribute('role', 'status');
+                announcer.setAttribute('aria-live', 'polite');
+                announcer.className = 'sr-only';
+                announcer.textContent = message;
+                document.body.appendChild(announcer);
+                setTimeout(() => {
+                    document.body.removeChild(announcer);
+                }, 1000);
+            };
+
             const captcha = new Captcha('captcha-container', {
                 apiBase: '/api/v1',
                 type: 'slider',
                 onSuccess: function(result) {
                     console.log('验证成功:', result);
-                    setTimeout(function() {
+                    announceToScreenReader('验证成功');
+                    if (typeof notify !== 'undefined') {
+                        notify.success('验证成功！会话ID: ' + result.session_id);
+                    } else {
                         alert('验证成功！会话ID: ' + result.session_id);
-                    }, 500);
+                    }
                 },
                 onError: function(error) {
                     console.log('验证失败:', error);
+                    announceToScreenReader('验证失败，请重试');
+                    if (typeof notify !== 'undefined') {
+                        notify.error('验证失败，请重试');
+                    }
                 },
                 onRefresh: function() {
                     console.log('验证码已刷新');
+                    announceToScreenReader('验证码已刷新');
+                }
+            });
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    announceToScreenReader('验证码刷新');
+                    captcha.refresh();
                 }
             });
         });

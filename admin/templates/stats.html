@@ -15,83 +15,390 @@
         .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
         .main-wrapper { flex: 1; min-width: 0; }
         .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
-        .chart-card canvas { width: 100% !important; height: 300px !important; }
+        .chart-container { position: relative; height: 300px; }
+        .metric-card { transition: transform 0.3s ease; cursor: pointer; }
+        .metric-card:hover { transform: translateY(-5px); }
+        .export-btn-group .btn { padding: 0.5rem 1rem; }
     </style>
 </head>
 <body>
     <div class="d-flex">
         <div class="sidebar d-flex flex-column flex-shrink-0">
-            <div class="sidebar-header p-3"><h5 class="text-white mb-0">管理后台</h5></div>
+            <div class="sidebar-header p-3">
+                <h5 class="text-white mb-0"><i class="fas fa-shield-alt me-2"></i>管理后台</h5>
+            </div>
             <nav class="nav flex-column mt-2">
                 <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
                 <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
                 <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
                 <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link" href="/admin/users"><i class="fas fa-users me-2"></i>用户管理</a>
+                <a class="nav-link" href="/admin/settings"><i class="fas fa-cog me-2"></i>系统设置</a>
             </nav>
             <div class="sidebar-footer mt-auto p-3">
                 <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
             </div>
         </div>
-        
+
         <div class="main-wrapper">
             <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">统计分析</h5>
+                <div>
+                    <h5 class="mb-0">统计分析</h5>
+                    <small class="text-muted">多维度数据统计与报表</small>
+                </div>
                 <div class="d-flex align-items-center gap-2">
+                    <div class="btn-group export-btn-group" role="group">
+                        <button id="exportCSV" class="btn btn-outline-success btn-sm"><i class="fas fa-file-csv me-1"></i>CSV</button>
+                        <button id="exportExcel" class="btn btn-outline-success btn-sm"><i class="fas fa-file-excel me-1"></i>Excel</button>
+                        <button id="exportPDF" class="btn btn-outline-danger btn-sm"><i class="fas fa-file-pdf me-1"></i>PDF</button>
+                    </div>
+                    <button id="refreshBtn" class="btn btn-outline-primary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
                     <span class="text-muted" id="usernameDisplay">管理员</span>
                     <div class="user-avatar" id="userAvatar">A</div>
                 </div>
             </header>
-            
+
             <main class="p-4 bg-light min-vh-100">
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-body">
                         <div class="row g-3 align-items-end">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label class="form-label">时间范围</label>
                                 <select class="form-select" id="dateRange">
+                                    <option value="24h">最近24小时</option>
                                     <option value="7d">最近7天</option>
                                     <option value="30d" selected>最近30天</option>
                                     <option value="90d">最近90天</option>
                                     <option value="1y">最近1年</option>
+                                    <option value="custom">自定义</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2" id="customStartContainer" style="display: none;">
+                                <label class="form-label">开始日期</label>
+                                <input type="date" class="form-control" id="customStart">
+                            </div>
+                            <div class="col-md-2" id="customEndContainer" style="display: none;">
+                                <label class="form-label">结束日期</label>
+                                <input type="date" class="form-control" id="customEnd">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">统计维度</label>
+                                <select class="form-select" id="dimension">
+                                    <option value="daily">按天</option>
+                                    <option value="hourly">按小时</option>
+                                    <option value="weekly">按周</option>
+                                    <option value="monthly">按月</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <button id="refreshBtn" class="btn btn-secondary w-100"><i class="fas fa-sync me-1"></i>刷新数据</button>
+                                <label class="form-label">应用筛选</label>
+                                <select class="form-select" id="appFilter">
+                                    <option value="">全部应用</option>
+                                    <option value="1">测试应用A</option>
+                                    <option value="2">测试应用B</option>
+                                    <option value="3">测试应用C</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">验证类型</label>
+                                <select class="form-select" id="captchaType">
+                                    <option value="">全部类型</option>
+                                    <option value="slider">滑块验证</option>
+                                    <option value="click">点选验证</option>
+                                    <option value="image">图形验证</option>
+                                    <option value="behavior">行为验证</option>
+                                </select>
                             </div>
                         </div>
                     </div>
                 </div>
-                
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="card metric-card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="bg-primary bg-opacity-10 p-2 rounded">
+                                        <i class="fas fa-check-circle text-primary"></i>
+                                    </div>
+                                    <span class="badge bg-success">+15.2%</span>
+                                </div>
+                                <h3 class="mb-1" id="totalVerifications">0</h3>
+                                <small class="text-muted">总验证次数</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card metric-card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="bg-success bg-opacity-10 p-2 rounded">
+                                        <i class="fas fa-thumbs-up text-success"></i>
+                                    </div>
+                                    <span class="badge bg-success">+2.1%</span>
+                                </div>
+                                <h3 class="mb-1" id="successRateStat">0%</h3>
+                                <small class="text-muted">成功率</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card metric-card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="bg-warning bg-opacity-10 p-2 rounded">
+                                        <i class="fas fa-clock text-warning"></i>
+                                    </div>
+                                    <span class="badge bg-danger">+8.5%</span>
+                                </div>
+                                <h3 class="mb-1" id="avgTime">0ms</h3>
+                                <small class="text-muted">平均响应时间</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card metric-card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div class="bg-danger bg-opacity-10 p-2 rounded">
+                                        <i class="fas fa-shield-alt text-danger"></i>
+                                    </div>
+                                    <span class="badge bg-success">-12.3%</span>
+                                </div>
+                                <h3 class="mb-1" id="blockedCount">0</h3>
+                                <small class="text-muted">拦截攻击次数</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-8">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>验证趋势分析</h6>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary active" data-chart-type="line">趋势图</button>
+                                    <button class="btn btn-outline-primary" data-chart-type="bar">柱状图</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="trendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>验证类型分布</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="typeDistributionChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-globe me-2"></i>地区分布TOP10</h6>
+                                <select class="form-select form-select-sm" style="width: auto;">
+                                    <option value="requests">请求量</option>
+                                    <option value="users">用户数</option>
+                                    <option value="attacks">攻击数</option>
+                                </select>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0">排名</th>
+                                                <th class="border-0">地区</th>
+                                                <th class="border-0">请求量</th>
+                                                <th class="border-0">占比</th>
+                                                <th class="border-0">趋势</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="regionTable">
+                                            <tr>
+                                                <td><span class="badge bg-primary">1</span></td>
+                                                <td>北京</td>
+                                                <td>125,680</td>
+                                                <td>15.2%</td>
+                                                <td><i class="fas fa-arrow-up text-success"></i></td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-success">2</span></td>
+                                                <td>上海</td>
+                                                <td>98,450</td>
+                                                <td>11.9%</td>
+                                                <td><i class="fas fa-arrow-up text-success"></i></td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-info">3</span></td>
+                                                <td>广东</td>
+                                                <td>86,320</td>
+                                                <td>10.4%</td>
+                                                <td><i class="fas fa-arrow-down text-danger"></i></td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-warning">4</span></td>
+                                                <td>浙江</td>
+                                                <td>72,150</td>
+                                                <td>8.7%</td>
+                                                <td><i class="fas fa-arrow-up text-success"></i></td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-secondary">5</span></td>
+                                                <td>江苏</td>
+                                                <td>65,890</td>
+                                                <td>8.0%</td>
+                                                <td><i class="fas fa-minus text-muted"></i></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>风险等级分布</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="riskChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0"><i class="fas fa-clock me-2"></i>响应时间分布</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="responseTimeChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-fire me-2"></i>热门应用TOP5</h6>
+                                <a href="/admin/applications" class="btn btn-link btn-sm text-decoration-none">查看全部</a>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0">应用</th>
+                                                <th class="border-0">请求量</th>
+                                                <th class="border-0">成功率</th>
+                                                <th class="border-0">趋势</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="topAppsTable">
+                                            <tr>
+                                                <td><i class="fas fa-mobile-alt text-primary me-2"></i>测试应用A</td>
+                                                <td>256,890</td>
+                                                <td><span class="text-success">99.2%</span></td>
+                                                <td><i class="fas fa-arrow-up text-success"></i></td>
+                                            </tr>
+                                            <tr>
+                                                <td><i class="fas fa-mobile-alt text-success me-2"></i>测试应用B</td>
+                                                <td>198,340</td>
+                                                <td><span class="text-success">98.8%</span></td>
+                                                <td><i class="fas fa-arrow-up text-success"></i></td>
+                                            </tr>
+                                            <tr>
+                                                <td><i class="fas fa-mobile-alt text-info me-2"></i>测试应用C</td>
+                                                <td>156,720</td>
+                                                <td><span class="text-success">99.5%</span></td>
+                                                <td><i class="fas fa-arrow-down text-danger"></i></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row g-4">
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <div class="card shadow-sm border-0">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3">用户增长趋势</h5>
-                                <canvas id="userGrowthChart" height="300"></canvas>
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="fas fa-table me-2"></i>详细数据报表</h6>
+                                <div class="d-flex gap-2">
+                                    <input type="text" class="form-control form-control-sm" placeholder="搜索..." style="width: 200px;">
+                                    <button class="btn btn-outline-secondary btn-sm"><i class="fas fa-filter me-1"></i>筛选</button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3">请求量统计</h5>
-                                <canvas id="requestChart" height="300"></canvas>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0" id="detailTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0">日期</th>
+                                                <th class="border-0">验证次数</th>
+                                                <th class="border-0">成功次数</th>
+                                                <th class="border-0">失败次数</th>
+                                                <th class="border-0">成功率</th>
+                                                <th class="border-0">平均响应</th>
+                                                <th class="border-0">拦截数</th>
+                                                <th class="border-0">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="detailTableBody">
+                                            <tr>
+                                                <td>2024-01-15</td>
+                                                <td>125,680</td>
+                                                <td>124,523</td>
+                                                <td>1,157</td>
+                                                <td><span class="badge bg-success">99.08%</span></td>
+                                                <td>45ms</td>
+                                                <td>234</td>
+                                                <td><button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-eye"></i></button></td>
+                                            </tr>
+                                            <tr>
+                                                <td>2024-01-14</td>
+                                                <td>118,450</td>
+                                                <td>117,456</td>
+                                                <td>994</td>
+                                                <td><span class="badge bg-success">99.16%</span></td>
+                                                <td>42ms</td>
+                                                <td>198</td>
+                                                <td><button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-eye"></i></button></td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3">应用分布</h5>
-                                <canvas id="appDistributionChart" height="300"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card shadow-sm border-0">
-                            <div class="card-body">
-                                <h5 class="card-title mb-3">错误率分析</h5>
-                                <canvas id="errorRateChart" height="300"></canvas>
+                            <div class="card-footer bg-white">
+                                <nav>
+                                    <ul class="pagination justify-content-end mb-0">
+                                        <li class="page-item"><a class="page-link" href="#">上一页</a></li>
+                                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                                        <li class="page-item"><a class="page-link" href="#">2</a></li>
+                                        <li class="page-item"><a class="page-link" href="#">3</a></li>
+                                        <li class="page-item"><a class="page-link" href="#">下一页</a></li>
+                                    </ul>
+                                </nav>
                             </div>
                         </div>
                     </div>
@@ -99,10 +406,262 @@
             </main>
         </div>
     </div>
-    
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/charts.js"></script>
+    <script src="/admin/static/js/export.js"></script>
     <script src="/admin/static/js/stats.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeStats();
+        });
+
+        function initializeStats() {
+            loadStatsSummary();
+            loadTrendChart();
+            loadTypeDistribution();
+            loadRiskChart();
+            loadResponseTimeChart();
+            loadDetailedData();
+        }
+
+        function loadStatsSummary() {
+            const mockData = {
+                totalVerifications: 828456,
+                successRate: 99.2,
+                avgTime: 45,
+                blockedCount: 1234
+            };
+
+            animateNumber('totalVerifications', mockData.totalVerifications);
+            animateNumber('successRateStat', mockData.successRate, { suffix: '%', decimals: 1 });
+            animateNumber('avgTime', mockData.avgTime, { suffix: 'ms' });
+            animateNumber('blockedCount', mockData.blockedCount);
+        }
+
+        function animateNumber(elementId, target, options = {}) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const duration = 1500;
+            const startTime = performance.now();
+            const decimals = options.decimals || 0;
+            const suffix = options.suffix || '';
+
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 4);
+                const current = target * eased;
+
+                let formatted;
+                if (target >= 1000000) {
+                    formatted = (current / 1000000).toFixed(1) + 'M';
+                } else if (target >= 1000) {
+                    formatted = (current / 1000).toFixed(1) + 'K';
+                } else {
+                    formatted = current.toFixed(decimals);
+                }
+
+                element.textContent = formatted + suffix;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+
+            requestAnimationFrame(animate);
+        }
+
+        function loadTrendChart() {
+            const labels = [];
+            const now = new Date();
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(now.getTime() - i * 86400000);
+                labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+            }
+
+            const data = {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '验证次数',
+                        data: labels.map(() => Math.floor(Math.random() * 50000) + 80000),
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: '成功次数',
+                        data: labels.map(() => Math.floor(Math.random() * 50000) + 75000),
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            };
+
+            chartManager.createLineChart('trendChart', data);
+        }
+
+        function loadTypeDistribution() {
+            const data = {
+                labels: ['滑块验证', '点选验证', '图形验证', '行为验证'],
+                values: [35, 25, 20, 20],
+                datasets: [{
+                    data: [35, 25, 20, 20],
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(139, 92, 246, 0.8)'
+                    ]
+                }]
+            };
+
+            chartManager.createPieChart('typeDistributionChart', data, {
+                legendPosition: 'bottom',
+                cutout: '60%'
+            });
+        }
+
+        function loadRiskChart() {
+            const data = {
+                labels: ['低风险', '中风险', '高风险', '极高风险'],
+                datasets: [{
+                    label: '风险分布',
+                    data: [65, 20, 10, 5],
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(249, 115, 22, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0,
+                    borderRadius: 8
+                }]
+            };
+
+            chartManager.createBarChart('riskChart', data);
+        }
+
+        function loadResponseTimeChart() {
+            const data = {
+                labels: ['<20ms', '20-50ms', '50-100ms', '100-200ms', '>200ms'],
+                datasets: [{
+                    label: '请求分布',
+                    data: [25, 45, 20, 7, 3],
+                    backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                    borderWidth: 0,
+                    borderRadius: 8
+                }]
+            };
+
+            chartManager.createBarChart('responseTimeChart', data);
+        }
+
+        function loadDetailedData() {
+            const tbody = document.getElementById('detailTableBody');
+            if (!tbody) return;
+
+            const mockRows = [];
+            const now = new Date();
+
+            for (let i = 0; i < 10; i++) {
+                const date = new Date(now.getTime() - i * 86400000);
+                const verifications = Math.floor(Math.random() * 50000) + 80000;
+                const success = Math.floor(verifications * (0.98 + Math.random() * 0.02));
+                const failed = verifications - success;
+                const successRate = (success / verifications * 100).toFixed(2);
+                const avgTime = Math.floor(Math.random() * 30) + 30;
+                const blocked = Math.floor(Math.random() * 200) + 100;
+
+                mockRows.push(`
+                    <tr>
+                        <td>${date.toISOString().split('T')[0]}</td>
+                        <td>${verifications.toLocaleString()}</td>
+                        <td>${success.toLocaleString()}</td>
+                        <td>${failed.toLocaleString()}</td>
+                        <td><span class="badge ${successRate >= 99 ? 'bg-success' : 'bg-warning'}">${successRate}%</span></td>
+                        <td>${avgTime}ms</td>
+                        <td>${blocked}</td>
+                        <td><button class="btn btn-link btn-sm text-decoration-none"><i class="fas fa-eye"></i></button></td>
+                    </tr>
+                `);
+            }
+
+            tbody.innerHTML = mockRows.join('');
+        }
+
+        document.getElementById('dateRange').addEventListener('change', (e) => {
+            const customContainers = document.querySelectorAll('#customStartContainer, #customEndContainer');
+            if (e.target.value === 'custom') {
+                customContainers.forEach(el => el.style.display = 'block');
+            } else {
+                customContainers.forEach(el => el.style.display = 'none');
+            }
+            loadTrendChart();
+            loadStatsSummary();
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            initializeStats();
+            showNotification('数据已刷新', 'success');
+        });
+
+        document.getElementById('exportCSV').addEventListener('click', () => exportData('csv'));
+        document.getElementById('exportExcel').addEventListener('click', () => exportData('xlsx'));
+        document.getElementById('exportPDF').addEventListener('click', () => exportData('pdf'));
+
+        async function exportData(format) {
+            const tableData = [];
+            const rows = document.querySelectorAll('#detailTableBody tr');
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 7) {
+                    tableData.push({
+                        '日期': cells[0].textContent.trim(),
+                        '验证次数': cells[1].textContent.trim(),
+                        '成功次数': cells[2].textContent.trim(),
+                        '失败次数': cells[3].textContent.trim(),
+                        '成功率': cells[4].textContent.trim(),
+                        '平均响应': cells[5].textContent.trim(),
+                        '拦截数': cells[6].textContent.trim()
+                    });
+                }
+            });
+
+            try {
+                dataExporter.export(tableData, `statistics_${new Date().toISOString().split('T')[0]}`, format);
+                showNotification(`数据已导出为${format.toUpperCase()}格式`, 'success');
+            } catch (error) {
+                showNotification('导出失败: ' + error.message, 'danger');
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const container = document.createElement('div');
+            container.className = `alert alert-${type} position-fixed`;
+            container.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+            container.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2"></i>${message}`;
+            document.body.appendChild(container);
+
+            setTimeout(() => {
+                container.classList.add('show');
+                setTimeout(() => {
+                    container.classList.remove('show');
+                    setTimeout(() => container.remove(), 150);
+                }, 3000);
+            }, 10);
+        }
+    </script>
 </body>
 </html>

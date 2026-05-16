@@ -90,6 +90,13 @@ func SetupRouter() *gin.Engine {
 			captcha.POST("/verify", handler.VerifyCaptcha)
 		}
 
+		// 无感验证路由
+		verify := api.Group("/verify")
+		{
+			verify.POST("/silent", handler.SilentVerify)
+			verify.GET("/silent/status", handler.GetSilentVerifyStatus)
+		}
+
 		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
 		{
@@ -142,6 +149,16 @@ func SetupRouter() *gin.Engine {
 				// CSS来源切换
 				adminAuth.GET("/css-source", handler.GetCSSSource)
 				adminAuth.POST("/css-source", handler.SetCSSSource)
+
+				// 无感验证管理
+				silent := adminAuth.Group("/silent")
+				{
+					silent.GET("/config", handler.GetSilentConfig)
+					silent.POST("/config", handler.UpdateSilentConfig)
+					silent.PUT("/rules/:id", handler.UpdateStrategyRule)
+					silent.GET("/stats", handler.GetSilentStats)
+					silent.POST("/rate-limit/reset", handler.ResetSilentRateLimit)
+				}
 			}
 		}
 
@@ -151,6 +168,9 @@ func SetupRouter() *gin.Engine {
 				"message": "pong",
 			})
 		})
+
+		// 设备指纹路由
+		handler.RegisterFingerprintRoutes(r)
 	}
 
 	return r

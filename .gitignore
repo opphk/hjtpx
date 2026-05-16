@@ -1,24 +1,23 @@
-# Binaries for programs and plugins
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-server
-backend/server
-backend/api
-
-# Test binary, built with `go test -c`
 *.test
-
-# Output of the go coverage tool
 *.out
+captcha_test
 
-# Dependency directories
+# Go
 vendor/
+*.test
+coverage.out
+coverage.html
 
-# Go workspace file
-go.work
+# Environment
+.env
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
@@ -31,13 +30,23 @@ go.work
 .DS_Store
 Thumbs.db
 
-# Environment
-.env
-.env.local
-
 # Logs
+logs/
 *.log
 
 # Database
 *.db
-*.sqlite
+*.sqlite3
+
+# Backup
+*.bak
+*.backup
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Build
+dist/
+build/

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>功能演示 - 行为验证系统</title>
+    <meta name="description" content="体验完整的行为验证系统功能，支持滑块验证、点选验证、图形验证等多种验证方式">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <header class="bg-white shadow-sm sticky-top">
+        <div class="container">
+            <nav class="navbar navbar-expand-lg navbar-light" role="navigation" aria-label="主导航">
+                <div class="container-fluid px-0">
+                    <a class="navbar-brand fw-bold text-primary d-flex align-items-center gap-2" href="/" aria-label="返回首页">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <span>验证系统</span>
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="切换导航">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav me-auto">
+                            <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                            <li class="nav-item"><a class="nav-link active" href="/demo" aria-current="page">功能演示</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/pricing">定价</a></li>
+                            <li class="nav-item"><a class="nav-link" href="/docs">文档</a></li>
+                        </ul>
+                        <div class="d-flex gap-2">
+                            <a href="/login" class="btn btn-outline-primary btn-sm">登录</a>
+                            <a href="/register" class="btn btn-primary btn-sm">免费试用</a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="min-vh-100" id="main-content" role="main">
+        <section class="bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" role="banner">
+            <div class="container">
+                <h1 class="fw-bold mb-3">功能演示</h1>
+                <p class="lead text-white-50">体验完整的验证功能，支持多种验证方式</p>
+            </div>
+        </section>
+
+        <section class="py-5" aria-labelledby="demo-section-title">
+            <div class="container">
+                <h2 id="demo-section-title" class="sr-only">验证码演示区域</h2>
+
+                <div class="row g-4 mb-5">
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm text-center">
+                            <div class="card-body p-4">
+                                <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                    <i class="fas fa-puzzle-piece text-primary fa-2x"></i>
+                                </div>
+                                <h3 class="h5 fw-bold">滑块验证</h3>
+                                <p class="text-muted small mb-3">拖动滑块完成拼图，操作简单直观</p>
+                                <a href="#slider-demo" class="btn btn-primary">立即体验</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm text-center">
+                            <div class="card-body p-4">
+                                <div class="bg-success bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                    <i class="fas fa-hand-pointer text-success fa-2x"></i>
+                                </div>
+                                <h3 class="h5 fw-bold">点选验证</h3>
+                                <p class="text-muted small mb-3">按顺序点击指定目标，验证语义理解</p>
+                                <a href="#click-demo" class="btn btn-success">立即体验</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100 border-0 shadow-sm text-center">
+                            <div class="card-body p-4">
+                                <div class="bg-warning bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                    <i class="fas fa-image text-warning fa-2x"></i>
+                                </div>
+                                <h3 class="h5 fw-bold">图形验证</h3>
+                                <p class="text-muted small mb-3">传统字符识别，稳定可靠</p>
+                                <a href="#image-demo" class="btn btn-warning text-white">立即体验</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-5" id="slider-demo">
+                    <div class="card-body p-4">
+                        <h3 class="h5 fw-bold mb-3">
+                            <i class="fas fa-puzzle-piece text-primary me-2" aria-hidden="true"></i>滑块验证演示
+                        </h3>
+                        <p class="text-muted mb-4">拖动滑块将拼图块移动到正确位置，即可完成验证。</p>
+
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div id="slider-captcha-demo" class="mb-3"></div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="refreshSliderDemo()">
+                                        <i class="fas fa-sync me-1"></i>刷新
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="testSliderAPI()">
+                                        <i class="fas fa-code me-1"></i>API测试
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="bg-light rounded p-3">
+                                    <h4 class="h6 fw-bold mb-3">API调用示例</h4>
+                                    <pre class="mb-0 small"><code>// 生成滑块验证码
+fetch('/api/v1/captcha/slider/generate', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+.then(res => res.json())
+.then(data => {
+  console.log(data);
+  // {
+  //   session_id: "xxx",
+  //   image_url: "/captcha/slider/xxx.png",
+  //   puzzle_y: 50
+  // }
+});
+
+// 验证滑块
+fetch('/api/v1/captcha/slider/verify', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    session_id: 'xxx',
+    x: 200,
+    y: 50
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log(data);
+  // { success: true }
+});</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-5" id="click-demo">
+                    <div class="card-body p-4">
+                        <h3 class="h5 fw-bold mb-3">
+                            <i class="fas fa-hand-pointer text-success me-2" aria-hidden="true"></i>点选验证演示
+                        </h3>
+                        <p class="text-muted mb-4">按照提示文字，依次点击图片中的对应位置。</p>
+
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div id="click-captcha-demo" class="mb-3"></div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-outline-success btn-sm" onclick="refreshClickDemo()">
+                                        <i class="fas fa-sync me-1"></i>刷新
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="testClickAPI()">
+                                        <i class="fas fa-code me-1"></i>API测试
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="bg-light rounded p-3">
+                                    <h4 class="h6 fw-bold mb-3">API调用示例</h4>
+                                    <pre class="mb-0 small"><code>// 生成点选验证码
+fetch('/api/v1/captcha/click/generate', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+.then(res => res.json())
+.then(data => {
+  console.log(data);
+  // {
+  //   session_id: "xxx",
+  //   image_url: "/captcha/click/xxx.png",
+  //   hint: "请依次点击: 1, 2, 3",
+  //   max_points: 3
+  // }
+});
+
+// 验证点选
+fetch('/api/v1/captcha/click/verify', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    session_id: 'xxx',
+    points: [
+      { x: 100, y: 150, imageIndex: 0, clickOrder: 1 },
+      { x: 200, y: 100, imageIndex: 0, clickOrder: 2 },
+      { x: 300, y: 180, imageIndex: 0, clickOrder: 3 }
+    ]
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log(data);
+  // { success: true }
+});</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-5" id="image-demo">
+                    <div class="card-body p-4">
+                        <h3 class="h5 fw-bold mb-3">
+                            <i class="fas fa-image text-warning me-2" aria-hidden="true"></i>图形验证演示
+                        </h3>
+                        <p class="text-muted mb-4">输入图片中显示的字符或数字。</p>
+
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div class="text-center">
+                                    <div class="mb-3">
+                                        <img id="image-captcha-demo" src="/api/v1/captcha/image" alt="图形验证码" class="img-fluid rounded" style="max-width: 200px;">
+                                    </div>
+                                    <div class="mb-3">
+                                        <input type="text" id="image-captcha-input" class="form-control d-inline-block" style="max-width: 200px;" placeholder="请输入验证码" aria-label="验证码输入框">
+                                    </div>
+                                    <div class="d-flex gap-2 justify-content-center">
+                                        <button class="btn btn-warning text-white" onclick="verifyImageCaptcha()">
+                                            <i class="fas fa-check me-1"></i>验证
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="refreshImageDemo()">
+                                            <i class="fas fa-sync me-1"></i>刷新
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="bg-light rounded p-3">
+                                    <h4 class="h6 fw-bold mb-3">API调用示例</h4>
+                                    <pre class="mb-0 small"><code>// 获取图形验证码图片
+// 直接访问URL获取图片
+const imageUrl = '/api/v1/captcha/image';
+
+// 验证图形验证码
+fetch('/api/v1/captcha/image/verify', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    answer: 'AB12'
+  })
+})
+.then(res => res.json())
+.then(data => {
+  console.log(data);
+  // { success: true }
+});</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-5">
+                    <div class="card-body p-4">
+                        <h3 class="h5 fw-bold mb-3">
+                            <i class="fas fa-code text-info me-2" aria-hidden="true"></i>快速集成示例
+                        </h3>
+                        <p class="text-muted mb-4">只需几行代码即可将验证码集成到您的网站。</p>
+
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <div class="bg-light rounded p-3">
+                                    <h4 class="h6 fw-bold mb-3">HTML</h4>
+                                    <pre class="mb-0 small"><code>&lt;!-- 引入验证码脚本 --&gt;
+&lt;script src="https://example.com/captcha.js"&gt;&lt;/script&gt;
+
+&lt;!-- 创建验证码容器 --&gt;
+&lt;div id="captcha-container"&gt;&lt;/div&gt;
+
+&lt;!-- 初始化验证码 --&gt;
+&lt;script&gt;
+const captcha = new Captcha('captcha-container', {
+  apiBase: '/api/v1',
+  type: 'slider',
+  onSuccess: function(result) {
+    // 验证成功处理
+    console.log(result.session_id);
+  },
+  onError: function(error) {
+    // 验证失败处理
+    console.error(error);
+  }
+});
+&lt;/script&gt;</code></pre>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="bg-light rounded p-3">
+                                    <h4 class="h6 fw-bold mb-3">React</h4>
+                                    <pre class="mb-0 small"><code>import { useEffect, useRef } from 'react';
+
+function CaptchaComponent() {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const captcha = new Captcha(containerRef.current, {
+      apiBase: '/api/v1',
+      type: 'slider',
+      onSuccess: (result) => {
+        // 处理验证成功
+        console.log(result.session_id);
+      },
+      onError: (error) => {
+        // 处理验证失败
+        console.error(error);
+      }
+    });
+
+    return () => {
+      captcha.destroy();
+    };
+  }, []);
+
+  return &lt;div ref={containerRef}&gt;&lt;/div&gt;;
+}</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-dark text-white py-5" role="contentinfo">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center gap-2">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>验证系统
+                    </h5>
+                    <p class="text-white-50 small mb-3">
+                        新一代智能行为验证系统，为您的业务安全保驾护航
+                    </p>
+                </div>
+                <div class="col-6 col-lg-2 mb-4">
+                    <h6 class="fw-bold mb-3">快速链接</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="/" class="text-white-50 text-decoration-none">首页</a></li>
+                        <li class="mb-2"><a href="/demo" class="text-white-50 text-decoration-none">功能演示</a></li>
+                        <li class="mb-2"><a href="/pricing" class="text-white-50 text-decoration-none">定价</a></li>
+                        <li><a href="/docs" class="text-white-50 text-decoration-none">文档</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4 mb-4">
+                    <h6 class="fw-bold mb-3">联系我们</h6>
+                    <ul class="list-unstyled small text-white-50">
+                        <li class="mb-2"><i class="fas fa-envelope me-2" aria-hidden="true"></i>contact@example.com</li>
+                        <li class="mb-2"><i class="fas fa-phone me-2" aria-hidden="true"></i>400-888-8888</li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="border-white-50">
+            <p class="text-center text-white-50 small mb-0">&copy; 2026 验证系统. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/notification.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/captcha.js"></script>
+    <script>
+        let sliderDemo, clickDemo;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initSliderDemo();
+            initClickDemo();
+        });
+
+        function initSliderDemo() {
+            sliderDemo = new Captcha('slider-captcha-demo', {
+                apiBase: '/api/v1',
+                type: 'slider',
+                onSuccess: function(result) {
+                    console.log('滑块验证成功:', result);
+                    if (typeof notify !== 'undefined') {
+                        notify.success('验证成功！会话ID: ' + result.session_id);
+                    } else {
+                        alert('验证成功！');
+                    }
+                },
+                onError: function(error) {
+                    console.log('滑块验证失败:', error);
+                    if (typeof notify !== 'undefined') {
+                        notify.error('验证失败，请重试');
+                    }
+                }
+            });
+        }
+
+        function initClickDemo() {
+            clickDemo = new Captcha('click-captcha-demo', {
+                apiBase: '/api/v1',
+                type: 'click',
+                onSuccess: function(result) {
+                    console.log('点选验证成功:', result);
+                    if (typeof notify !== 'undefined') {
+                        notify.success('验证成功！');
+                    } else {
+                        alert('验证成功！');
+                    }
+                },
+                onError: function(error) {
+                    console.log('点选验证失败:', error);
+                    if (typeof notify !== 'undefined') {
+                        notify.error('验证失败，请重试');
+                    }
+                }
+            });
+        }
+
+        function refreshSliderDemo() {
+            if (sliderDemo) {
+                sliderDemo.refresh();
+            }
+        }
+
+        function refreshClickDemo() {
+            if (clickDemo) {
+                clickDemo.refresh();
+            }
+        }
+
+        function refreshImageDemo() {
+            const img = document.getElementById('image-captcha-demo');
+            img.src = '/api/v1/captcha/image?t=' + Date.now();
+            document.getElementById('image-captcha-input').value = '';
+        }
+
+        function verifyImageCaptcha() {
+            const answer = document.getElementById('image-captcha-input').value.trim();
+            if (!answer) {
+                if (typeof notify !== 'undefined') {
+                    notify.warning('请输入验证码');
+                }
+                return;
+            }
+
+            fetch('/api/v1/captcha/image/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ answer: answer })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (typeof notify !== 'undefined') {
+                        notify.success('验证成功！');
+                    } else {
+                        alert('验证成功！');
+                    }
+                } else {
+                    if (typeof notify !== 'undefined') {
+                        notify.error('验证失败，请重试');
+                    }
+                    refreshImageDemo();
+                }
+            })
+            .catch(error => {
+                console.error('验证失败:', error);
+                if (typeof notify !== 'undefined') {
+                    notify.error('验证失败，请重试');
+                }
+            });
+        }
+
+        function testSliderAPI() {
+            console.log('测试滑块验证API...');
+
+            fetch('/api/v1/captcha/slider/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log('生成滑块验证码:', data);
+                if (typeof notify !== 'undefined') {
+                    notify.info('API调用成功，请查看控制台');
+                }
+            })
+            .catch(error => {
+                console.error('API调用失败:', error);
+                if (typeof notify !== 'undefined') {
+                    notify.error('API调用失败');
+                }
+            });
+        }
+
+        function testClickAPI() {
+            console.log('测试点选验证API...');
+
+            fetch('/api/v1/captcha/click/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log('生成点选验证码:', data);
+                if (typeof notify !== 'undefined') {
+                    notify.info('API调用成功，请查看控制台');
+                }
+            })
+            .catch(error => {
+                console.error('API调用失败:', error);
+                if (typeof notify !== 'undefined') {
+                    notify.error('API调用失败');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -9,6 +9,10 @@ class Captcha {
         this.options = {
             apiBase: '/api/v1',
             type: 'slider',
+            timeout: 60,
+            imageCount: 6,
+            gridColumns: 3,
+            gridRows: 2,
             onSuccess: null,
             onError: null,
             onRefresh: null,
@@ -26,7 +30,13 @@ class Captcha {
         this.clickState = {
             selectedPoints: [],
             maxPoints: 3,
-            hintText: '请依次点击图中的文字'
+            hintText: '请依次点击图中的文字',
+            images: [],
+            currentImageIndex: 0,
+            countdownTimer: null,
+            countdownRemaining: 60,
+            clickHistory: [],
+            startTime: null
         };
 
         this.sessionId = null;
@@ -40,6 +50,11 @@ class Captcha {
     }
 
     render() {
+        const gridStyle = `
+            grid-template-columns: repeat(${this.options.gridColumns}, 1fr);
+            gap: 10px;
+        `;
+
         this.container.innerHTML = `
             <div class="captcha-container">
                 <div class="captcha-header">
@@ -69,15 +84,23 @@ class Captcha {
                     </div>
                     
                     <div class="captcha-content" id="click-captcha">
-                        <div class="captcha-click-hint" id="click-hint">请依次点击图中的文字</div>
-                        <div class="captcha-click-grid" id="click-grid">
-                            <img class="captcha-click-image" id="click-image" alt="点选验证码图片">
-                            <button class="captcha-refresh" id="click-refresh">🔄</button>
-                            <div class="captcha-loading" id="click-loading" style="display: none;">
-                                <div class="captcha-loading-spinner"></div>
+                        <div class="captcha-click-header">
+                            <div class="captcha-click-hint" id="click-hint">请依次点击图中的文字</div>
+                            <div class="captcha-countdown" id="click-countdown">
+                                <span class="countdown-number">60</span>
+                                <span class="countdown-text">秒</span>
+                            </div>
+                        </div>
+                        <div class="captcha-click-grid" id="click-grid" style="${gridStyle}">
+                        </div>
+                        <div class="captcha-click-progress" id="click-progress">
+                            <span class="progress-text">已选择: <span id="selected-count">0</span>/<span id="total-count">3</span></span>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
                             </div>
                         </div>
                         <div class="captcha-actions">
+                            <button class="captcha-btn captcha-btn-secondary" id="click-undo">撤销</button>
                             <button class="captcha-btn captcha-btn-secondary" id="click-clear">清除</button>
                             <button class="captcha-btn captcha-btn-primary" id="click-submit">确认</button>
                         </div>
@@ -102,9 +125,12 @@ class Captcha {
             sliderImageWrapper: this.container.querySelector('#slider-image-wrapper'),
             clickHint: this.container.querySelector('#click-hint'),
             clickGrid: this.container.querySelector('#click-grid'),
-            clickImage: this.container.querySelector('#click-image'),
-            clickRefresh: this.container.querySelector('#click-refresh'),
-            clickLoading: this.container.querySelector('#click-loading'),
+            clickCountdown: this.container.querySelector('#click-countdown'),
+            clickProgress: this.container.querySelector('#click-progress'),
+            selectedCount: this.container.querySelector('#selected-count'),
+            totalCount: this.container.querySelector('#total-count'),
+            progressFill: this.container.querySelector('#progress-fill'),
+            clickUndo: this.container.querySelector('#click-undo'),
             clickClear: this.container.querySelector('#click-clear'),
             clickSubmit: this.container.querySelector('#click-submit'),
             result: this.container.querySelector('#captcha-result')
@@ -117,7 +143,10 @@ class Captcha {
         });
 
         this.elements.sliderRefresh.addEventListener('click', () => this.refresh());
-        this.elements.clickRefresh.addEventListener('click', () => this.refresh());
+        
+        this.elements.clickUndo.addEventListener('click', () => this.undoLastClick());
+        this.elements.clickClear.addEventListener('click', () => this.clearClickPoints());
+        this.elements.clickSubmit.addEventListener('click', () => this.verifyClick());
 
         this.bindSliderEvents();
         this.bindClickEvents();
@@ -178,43 +207,75 @@ class Captcha {
     }
 
     bindClickEvents() {
-        const grid = this.elements.clickGrid;
-
-        grid.addEventListener('click', (e) => {
-            if (e.target === this.elements.clickRefresh || 
-                e.target === this.elements.clickImage) {
-                if (e.target === this.elements.clickRefresh) return;
-            }
-
-            if (this.clickState.selectedPoints.length >= this.clickState.maxPoints) {
-                return;
-            }
-
-            const rect = grid.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+        this.elements.clickGrid.addEventListener('click', (e) => {
+            const grid = this.elements.clickGrid;
             
-            const point = {
-                x: Math.round(x),
-                y: Math.round(y)
-            };
-            
-            this.clickState.selectedPoints.push(point);
-            this.addClickMarker(point, this.clickState.selectedPoints.length);
-        });
-
-        this.elements.clickClear.addEventListener('click', () => {
-            this.clearClickPoints();
-        });
-
-        this.elements.clickSubmit.addEventListener('click', () => {
-            if (this.clickState.selectedPoints.length > 0) {
-                this.verifyClick();
+            if (e.target.classList.contains('captcha-click-image')) {
+                this.handleImageClick(e, grid);
             }
         });
     }
 
-    addClickMarker(point, index) {
+    handleImageClick(e, grid) {
+        if (this.clickState.selectedPoints.length >= this.clickState.maxPoints) {
+            this.showResult('已达到最大选择数量', 'error');
+            return;
+        }
+
+        const rect = grid.getBoundingClientRect();
+        const imageRect = e.target.getBoundingClientRect();
+        
+        const x = e.clientX - imageRect.left;
+        const y = e.clientY - imageRect.top;
+        
+        const point = {
+            x: Math.round(x),
+            y: Math.round(y),
+            imageIndex: parseInt(e.target.dataset.index),
+            timestamp: Date.now()
+        };
+        
+        this.clickState.selectedPoints.push(point);
+        this.clickState.clickHistory.push(point);
+        
+        this.addClickMarker(e.target, point, this.clickState.selectedPoints.length);
+        this.updateProgress();
+        
+        this.recordClickBehavior(point);
+        
+        if (this.clickState.selectedPoints.length === this.clickState.maxPoints) {
+            setTimeout(() => {
+                this.showResult('已选择全部目标，请确认提交', 'info');
+            }, 300);
+        }
+    }
+
+    recordClickBehavior(point) {
+        if (!this.clickState.startTime) {
+            this.clickState.startTime = Date.now();
+        }
+        
+        const timeSinceStart = Date.now() - this.clickState.startTime;
+        const lastClick = this.clickState.clickHistory.length > 1 
+            ? this.clickState.clickHistory[this.clickState.clickHistory.length - 2] 
+            : null;
+        
+        const behaviorData = {
+            event: 'click',
+            x: point.x,
+            y: point.y,
+            imageIndex: point.imageIndex,
+            timestamp: Date.now(),
+            timeSinceStart: timeSinceStart,
+            timeSinceLastClick: lastClick ? Date.now() - lastClick.timestamp : 0,
+            totalClicks: this.clickState.clickHistory.length
+        };
+        
+        this.options.behaviorData = this.options.behaviorData || [];
+        this.options.behaviorData.push(behaviorData);
+    }
+
+    addClickMarker(imageElement, point, index) {
         const marker = document.createElement('div');
         marker.className = 'captcha-click-marker';
         marker.style.left = point.x + 'px';
@@ -222,18 +283,29 @@ class Captcha {
         marker.textContent = index;
         marker.dataset.index = index - 1;
         
-        marker.addEventListener('click', (e) => {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'captcha-marker-remove';
+        removeBtn.textContent = '×';
+        removeBtn.onclick = (e) => {
             e.stopPropagation();
             const idx = parseInt(marker.dataset.index);
             this.removeClickPoint(idx);
+        };
+        
+        marker.appendChild(removeBtn);
+        marker.addEventListener('click', (e) => {
+            e.stopPropagation();
         });
         
-        this.elements.clickGrid.appendChild(marker);
+        imageElement.parentElement.appendChild(marker);
+        
+        marker.style.animation = 'clickMarkerPop 0.3s ease-out';
     }
 
     removeClickPoint(index) {
         this.clickState.selectedPoints.splice(index, 1);
         this.updateClickMarkers();
+        this.updateProgress();
     }
 
     updateClickMarkers() {
@@ -241,7 +313,12 @@ class Captcha {
         markers.forEach(m => m.remove());
         
         this.clickState.selectedPoints.forEach((point, idx) => {
-            this.addClickMarker(point, idx + 1);
+            const imageElement = this.elements.clickGrid.querySelector(
+                `[data-index="${point.imageIndex}"]`
+            );
+            if (imageElement) {
+                this.addClickMarker(imageElement, point, idx + 1);
+            }
         });
     }
 
@@ -249,6 +326,31 @@ class Captcha {
         this.clickState.selectedPoints = [];
         const markers = this.elements.clickGrid.querySelectorAll('.captcha-click-marker');
         markers.forEach(m => m.remove());
+        this.updateProgress();
+    }
+
+    undoLastClick() {
+        if (this.clickState.selectedPoints.length > 0) {
+            this.clickState.selectedPoints.pop();
+            this.updateClickMarkers();
+            this.updateProgress();
+        }
+    }
+
+    updateProgress() {
+        const selected = this.clickState.selectedPoints.length;
+        const total = this.clickState.maxPoints;
+        const percentage = (selected / total) * 100;
+        
+        this.elements.selectedCount.textContent = selected;
+        this.elements.totalCount.textContent = total;
+        this.elements.progressFill.style.width = percentage + '%';
+        
+        if (percentage === 100) {
+            this.elements.progressFill.classList.add('complete');
+        } else {
+            this.elements.progressFill.classList.remove('complete');
+        }
     }
 
     updatePuzzlePosition(x) {
@@ -257,6 +359,11 @@ class Captcha {
 
     switchTab(type) {
         this.options.type = type;
+        
+        if (this.clickState.countdownTimer) {
+            clearInterval(this.clickState.countdownTimer);
+            this.clickState.countdownTimer = null;
+        }
         
         this.elements.tabs.forEach(tab => {
             tab.classList.toggle('active', tab.dataset.type === type);
@@ -350,6 +457,10 @@ class Captcha {
     async refreshClick() {
         this.clearClickPoints();
         
+        if (this.clickState.countdownTimer) {
+            clearInterval(this.clickState.countdownTimer);
+        }
+        
         try {
             const response = await fetch(`${this.options.apiBase}/captcha/click`, {
                 method: 'GET',
@@ -359,10 +470,13 @@ class Captcha {
             if (response.ok) {
                 const data = await response.json();
                 this.sessionId = data.session_id;
-                this.elements.clickImage.src = data.image_url;
+                
                 this.clickState.hintText = data.hint || '请依次点击图中的文字';
                 this.clickState.maxPoints = data.max_points || 3;
                 this.elements.clickHint.textContent = this.clickState.hintText;
+                
+                this.renderClickGrid(data.image_url);
+                this.startCountdown();
             } else {
                 this.loadDemoClick();
             }
@@ -371,13 +485,63 @@ class Captcha {
         }
     }
 
+    renderClickGrid(imageUrl) {
+        const grid = this.elements.clickGrid;
+        grid.innerHTML = '';
+        
+        const imageCount = this.options.imageCount;
+        
+        for (let i = 0; i < imageCount; i++) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'captcha-image-cell';
+            
+            const img = document.createElement('img');
+            img.className = 'captcha-click-image';
+            img.src = imageUrl;
+            img.alt = `验证码图片 ${i + 1}`;
+            img.dataset.index = i;
+            
+            const number = document.createElement('div');
+            number.className = 'captcha-image-number';
+            number.textContent = i + 1;
+            
+            wrapper.appendChild(img);
+            wrapper.appendChild(number);
+            grid.appendChild(wrapper);
+        }
+    }
+
+    startCountdown() {
+        this.clickState.countdownRemaining = this.options.timeout;
+        const countdownNumber = this.elements.clickCountdown.querySelector('.countdown-number');
+        
+        if (this.clickState.countdownTimer) {
+            clearInterval(this.clickState.countdownTimer);
+        }
+        
+        this.clickState.countdownTimer = setInterval(() => {
+            this.clickState.countdownRemaining--;
+            countdownNumber.textContent = this.clickState.countdownRemaining;
+            
+            if (this.clickState.countdownRemaining <= 10) {
+                this.elements.clickCountdown.classList.add('warning');
+            }
+            
+            if (this.clickState.countdownRemaining <= 0) {
+                clearInterval(this.clickState.countdownTimer);
+                this.showResult('验证超时，请重试', 'error');
+                setTimeout(() => this.refreshClick(), 1500);
+            }
+        }, 1000);
+    }
+
     loadDemoClick() {
         this.sessionId = 'demo_' + Date.now();
         this.clickState.hintText = '请依次点击: 1, 2, 3';
         this.clickState.maxPoints = 3;
         this.elements.clickHint.textContent = this.clickState.hintText;
         
-        this.elements.clickImage.src = 'data:image/svg+xml,' + encodeURIComponent(`
+        const demoImage = 'data:image/svg+xml,' + encodeURIComponent(`
             <svg xmlns="http://www.w3.org/2000/svg" width="360" height="220">
                 <defs>
                     <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -391,6 +555,9 @@ class Captcha {
                 <text x="300" y="110" text-anchor="middle" fill="white" font-size="32" font-family="Arial" font-weight="bold">3</text>
             </svg>
         `);
+        
+        this.renderClickGrid(demoImage);
+        this.startCountdown();
     }
 
     async verifySlider() {
@@ -458,12 +625,26 @@ class Captcha {
     }
 
     async verifyClick() {
+        if (this.clickState.selectedPoints.length !== this.clickState.maxPoints) {
+            this.showResult(`请选择全部 ${this.clickState.maxPoints} 个目标`, 'error');
+            return;
+        }
+        
         this.showLoading();
+        
+        const clickData = this.clickState.selectedPoints.map((point, index) => ({
+            x: point.x,
+            y: point.y,
+            imageIndex: point.imageIndex,
+            clickOrder: index + 1
+        }));
         
         const payload = {
             session_id: this.sessionId,
-            points: this.clickState.selectedPoints,
-            type: 'click'
+            points: clickData,
+            type: 'click',
+            behavior_data: this.options.behaviorData || [],
+            verification_time: this.clickState.startTime ? Date.now() - this.clickState.startTime : 0
         };
         
         try {
@@ -482,27 +663,38 @@ class Captcha {
             }
             
             if (success) {
+                if (this.clickState.countdownTimer) {
+                    clearInterval(this.clickState.countdownTimer);
+                }
                 this.showResult('验证成功!', 'success');
                 if (this.options.onSuccess) {
-                    this.options.onSuccess({ type: 'click', session_id: this.sessionId });
+                    this.options.onSuccess({ 
+                        type: 'click', 
+                        session_id: this.sessionId,
+                        click_count: this.clickState.selectedPoints.length,
+                        verification_time: payload.verification_time
+                    });
                 }
             } else {
                 this.showResult('验证失败，请重试', 'error');
                 if (this.options.onError) {
                     this.options.onError({ type: 'click', error: '验证失败' });
                 }
-                setTimeout(() => this.refresh(), 1500);
+                setTimeout(() => this.refreshClick(), 1500);
             }
         } catch (error) {
             const success = this.simulateClickVerify();
             if (success) {
                 this.showResult('验证成功!', 'success');
                 if (this.options.onSuccess) {
-                    this.options.onSuccess({ type: 'click', session_id: this.sessionId });
+                    this.options.onSuccess({ 
+                        type: 'click', 
+                        session_id: this.sessionId 
+                    });
                 }
             } else {
                 this.showResult('验证失败，请重试', 'error');
-                setTimeout(() => this.refresh(), 1500);
+                setTimeout(() => this.refreshClick(), 1500);
             }
         } finally {
             this.hideLoading();
@@ -510,7 +702,7 @@ class Captcha {
     }
 
     simulateClickVerify() {
-        return this.clickState.selectedPoints.length === 3;
+        return this.clickState.selectedPoints.length === this.clickState.maxPoints;
     }
 
     resetSlider() {
@@ -529,28 +721,35 @@ class Captcha {
     }
 
     clearResult() {
-        this.elements.result.classList.remove('show', 'success', 'error');
+        this.elements.result.classList.remove('show', 'success', 'error', 'info');
     }
 
     showLoading() {
         if (this.options.type === 'slider') {
             this.elements.sliderLoading.style.display = 'flex';
-        } else {
-            this.elements.clickLoading.style.display = 'flex';
         }
     }
 
     hideLoading() {
         this.elements.sliderLoading.style.display = 'none';
-        this.elements.clickLoading.style.display = 'none';
     }
 
     reset() {
+        if (this.clickState.countdownTimer) {
+            clearInterval(this.clickState.countdownTimer);
+        }
         this.clearResult();
         this.resetSlider();
         this.clearClickPoints();
         this.switchTab('slider');
         this.refresh();
+    }
+
+    destroy() {
+        if (this.clickState.countdownTimer) {
+            clearInterval(this.clickState.countdownTimer);
+        }
+        this.container.innerHTML = '';
     }
 }
 

@@ -1,0 +1,33 @@
+logging:
+  level: info
+  format: json
+  output: file
+
+  file:
+    path: logs/app.log
+    max_size: 100
+    max_age: 30
+    max_backups: 10
+    compress: true
+
+  console:
+    enabled: true
+    color: true
+
+  syslog:
+    enabled: false
+    network: udp
+    address: localhost:514
+    tag: hjtpx
+
+  rotation:
+    enabled: true
+    interval: daily
+    max_files: 30
+
+  levels:
+    default: info
+    http: warn
+    database: warn
+    redis: warn
+    security: info

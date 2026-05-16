@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 用户详情</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --sidebar-bg: #1e293b; --sidebar-hover: #334155; }
+        .sidebar { width: 250px; background-color: var(--sidebar-bg); min-height: 100vh; }
+        .sidebar .nav-link { color: rgba(255,255,255,0.7); padding: 12px 20px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { background-color: var(--sidebar-hover); color: white; }
+        .sidebar-header { border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-footer { border-top: 1px solid rgba(255,255,255,0.1); }
+        .main-wrapper { flex: 1; min-width: 0; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background-color: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+        .user-avatar-lg { width: 100px; height: 100px; font-size: 2.5rem; }
+        .chart-container { position: relative; height: 200px; }
+        .device-card { border-left: 4px solid #3b82f6; }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar d-flex flex-column flex-shrink-0">
+            <div class="sidebar-header p-3">
+                <h5 class="text-white mb-0"><i class="fas fa-shield-alt me-2"></i>管理后台</h5>
+            </div>
+            <nav class="nav flex-column mt-2">
+                <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar me-2"></i>仪表盘</a>
+                <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line me-2"></i>统计分析</a>
+                <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt me-2"></i>应用管理</a>
+                <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list me-2"></i>日志查询</a>
+                <a class="nav-link active" href="/admin/users"><i class="fas fa-users me-2"></i>用户管理</a>
+                <a class="nav-link" href="/admin/settings"><i class="fas fa-cog me-2"></i>系统设置</a>
+            </nav>
+            <div class="sidebar-footer mt-auto p-3">
+                <a href="#" id="logoutBtn" class="nav-link text-danger"><i class="fas fa-sign-out-alt me-2"></i>退出登录</a>
+            </div>
+        </div>
+
+        <div class="main-wrapper">
+            <header class="bg-white shadow-sm px-4 py-3 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-3">
+                    <a href="/admin/users" class="btn btn-link text-decoration-none"><i class="fas fa-arrow-left"></i></a>
+                    <div>
+                        <h5 class="mb-0">用户详情</h5>
+                        <small class="text-muted" id="userId">ID: 1</small>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-primary btn-sm" id="editUserBtn"><i class="fas fa-edit me-1"></i>编辑</button>
+                    <button class="btn btn-outline-danger btn-sm" id="deleteUserBtn"><i class="fas fa-trash me-1"></i>删除</button>
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </header>
+
+            <main class="p-4 bg-light min-vh-100">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0 mb-4">
+                            <div class="card-body text-center">
+                                <div class="user-avatar user-avatar-lg bg-primary mx-auto mb-3" id="userAvatarLarge">U</div>
+                                <h4 id="userName">user001</h4>
+                                <div class="mb-3">
+                                    <span class="badge bg-primary me-1">普通用户</span>
+                                    <span class="badge bg-success">活跃</span>
+                                </div>
+                                <hr>
+                                <div class="text-start">
+                                    <p class="mb-2"><i class="fas fa-envelope me-2 text-muted"></i><span id="userEmail">user001@example.com</span></p>
+                                    <p class="mb-2"><i class="fas fa-phone me-2 text-muted"></i><span id="userPhone">139****1234</span></p>
+                                    <p class="mb-2"><i class="fas fa-calendar me-2 text-muted"></i><span id="userRegisterTime">2024-01-05 10:30:00</span></p>
+                                    <p class="mb-0"><i class="fas fa-clock me-2 text-muted"></i><span id="userLastLogin">2024-01-15 12:20:00</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>安全信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-1">账号状态</small>
+                                    <span class="badge bg-success">正常</span>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-1">邮箱验证</small>
+                                    <span class="badge bg-success"><i class="fas fa-check me-1"></i>已验证</span>
+                                </div>
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-1">手机验证</small>
+                                    <span class="badge bg-success"><i class="fas fa-check me-1"></i>已验证</span>
+                                </div>
+                                <div class="mb-0">
+                                    <small class="text-muted d-block mb-1">登录设备数</small>
+                                    <span class="badge bg-info">3 台设备</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-8">
+                        <ul class="nav nav-tabs mb-4" id="userDetailTabs">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#statistics"><i class="fas fa-chart-line me-2"></i>统计</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#devices"><i class="fas fa-mobile-alt me-2"></i>设备</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#logs"><i class="fas fa-history me-2"></i>日志</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#permissions"><i class="fas fa-key me-2"></i>权限</a>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="statistics">
+                                <div class="row g-4 mb-4">
+                                    <div class="col-md-3">
+                                        <div class="card bg-primary bg-opacity-10 border-0 h-100">
+                                            <div class="card-body text-center">
+                                                <h3 id="totalVerifications">0</h3>
+                                                <small class="text-muted">总验证次数</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="card bg-success bg-opacity-10 border-0 h-100">
+                                            <div class="card-body text-center">
+                                                <h3 id="successCount">0</h3>
+                                                <small class="text-muted">成功次数</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="card bg-warning bg-opacity-10 border-0 h-100">
+                                            <div class="card-body text-center">
+                                                <h3 id="avgResponseTime">0ms</h3>
+                                                <small class="text-muted">平均响应</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="card bg-danger bg-opacity-10 border-0 h-100">
+                                            <div class="card-body text-center">
+                                                <h3 id="blockedCount">0</h3>
+                                                <small class="text-muted">被拦截次数</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="card shadow-sm border-0 mb-4">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>验证趋势</h6>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary active">7天</button>
+                                            <button class="btn btn-outline-primary">30天</button>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="chart-container">
+                                            <canvas id="verificationTrendChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <div class="card shadow-sm border-0">
+                                            <div class="card-header bg-white">
+                                                <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>验证类型分布</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="chart-container">
+                                                    <canvas id="typeDistributionChart"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card shadow-sm border-0">
+                                            <div class="card-header bg-white">
+                                                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>风险分布</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="chart-container">
+                                                    <canvas id="riskDistributionChart"></canvas>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="devices">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0"><i class="fas fa-mobile-alt me-2"></i>登录设备</h6>
+                                        <button class="btn btn-outline-danger btn-sm"><i class="fas fa-sign-out-alt me-1"></i>登出所有设备</button>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th class="border-0">设备</th>
+                                                        <th class="border-0">浏览器</th>
+                                                        <th class="border-0">IP地址</th>
+                                                        <th class="border-0">位置</th>
+                                                        <th class="border-0">最后活跃</th>
+                                                        <th class="border-0">状态</th>
+                                                        <th class="border-0">操作</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <i class="fas fa-desktop text-muted"></i>
+                                                                <span>Windows 10</span>
+                                                                <span class="badge bg-primary">当前</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>Chrome 120</td>
+                                                        <td><code>192.168.1.100</code></td>
+                                                        <td>北京</td>
+                                                        <td><small>2024-01-15 12:30</small></td>
+                                                        <td><span class="badge bg-success">可信</span></td>
+                                                        <td><button class="btn btn-link btn-sm text-danger text-decoration-none">移除</button></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <i class="fas fa-mobile-alt text-muted"></i>
+                                                                <span>iPhone 14</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>Safari</td>
+                                                        <td><code>10.0.0.50</code></td>
+                                                        <td>上海</td>
+                                                        <td><small>2024-01-14 18:45</small></td>
+                                                        <td><span class="badge bg-success">可信</span></td>
+                                                        <td><button class="btn btn-link btn-sm text-danger text-decoration-none">移除</button></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <i class="fas fa-desktop text-muted"></i>
+                                                                <span>macOS</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>Firefox 121</td>
+                                                        <td><code>203.0.113.42</code></td>
+                                                        <td>广东</td>
+                                                        <td><small>2024-01-10 09:20</small></td>
+                                                        <td><span class="badge bg-warning">待验证</span></td>
+                                                        <td><button class="btn btn-link btn-sm text-danger text-decoration-none">移除</button></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="logs">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white">
+                                        <h6 class="mb-0"><i class="fas fa-history me-2"></i>操作日志</h6>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th class="border-0">时间</th>
+                                                        <th class="border-0">操作类型</th>
+                                                        <th class="border-0">详情</th>
+                                                        <th class="border-0">IP地址</th>
+                                                        <th class="border-0">状态</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td><small>2024-01-15 12:30:45</small></td>
+                                                        <td><span class="badge bg-info">登录</span></td>
+                                                        <td>用户登录</td>
+                                                        <td><code>192.168.1.100</code></td>
+                                                        <td><span class="badge bg-success">成功</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><small>2024-01-15 12:15:30</small></td>
+                                                        <td><span class="badge bg-warning">验证</span></td>
+                                                        <td>滑块验证成功</td>
+                                                        <td><code>192.168.1.100</code></td>
+                                                        <td><span class="badge bg-success">成功</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><small>2024-01-14 18:45:20</small></td>
+                                                        <td><span class="badge bg-info">登录</span></td>
+                                                        <td>用户登录</td>
+                                                        <td><code>10.0.0.50</code></td>
+                                                        <td><span class="badge bg-success">成功</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><small>2024-01-13 10:20:15</small></td>
+                                                        <td><span class="badge bg-primary">注册</span></td>
+                                                        <td>新用户注册</td>
+                                                        <td><code>192.168.1.100</code></td>
+                                                        <td><span class="badge bg-success">成功</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tab-pane fade" id="permissions">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0"><i class="fas fa-key me-2"></i>权限管理</h6>
+                                        <button class="btn btn-primary btn-sm"><i class="fas fa-plus me-1"></i>添加权限</button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-4">
+                                            <small class="text-muted d-block mb-2">当前角色</small>
+                                            <span class="badge bg-primary fs-6">普通用户</span>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="mb-4">
+                                            <small class="text-muted d-block mb-2">已分配权限</small>
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm1" checked disabled>
+                                                        <label class="form-check-label" for="perm1">查看验证码</label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm2" checked disabled>
+                                                        <label class="form-check-label" for="perm2">使用滑块验证</label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm3" checked disabled>
+                                                        <label class="form-check-label" for="perm3">使用点选验证</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm4" checked disabled>
+                                                        <label class="form-check-label" for="perm4">使用图形验证</label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm5" disabled>
+                                                        <label class="form-check-label" for="perm5">API访问</label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm6" disabled>
+                                                        <label class="form-check-label" for="perm6">管理应用</label>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm7" disabled>
+                                                        <label class="form-check-label" for="perm7">查看统计</label>
+                                                    </div>
+                                                    <div class="form-check mb-2">
+                                                        <input class="form-check-input" type="checkbox" id="perm8" disabled>
+                                                        <label class="form-check-label" for="perm8">系统设置</label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/charts.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUserStatistics();
+            initializeCharts();
+        });
+
+        function loadUserStatistics() {
+            animateNumber('totalVerifications', 1234);
+            animateNumber('successCount', 1225);
+            document.getElementById('avgResponseTime').textContent = '45ms';
+            animateNumber('blockedCount', 9);
+        }
+
+        function animateNumber(elementId, target) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            const duration = 1500;
+            const startTime = performance.now();
+
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 4);
+                const current = Math.floor(target * eased);
+
+                element.textContent = current.toLocaleString();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+
+            requestAnimationFrame(animate);
+        }
+
+        function initializeCharts() {
+            const labels = [];
+            const now = new Date();
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(now.getTime() - i * 86400000);
+                labels.push(`${date.getMonth() + 1}/${date.getDate()}`);
+            }
+
+            const trendData = {
+                labels: labels,
+                datasets: [{
+                    label: '验证次数',
+                    data: labels.map(() => Math.floor(Math.random() * 200) + 50),
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            };
+
+            chartManager.createLineChart('verificationTrendChart', trendData, { showLegend: false });
+
+            const typeData = {
+                labels: ['滑块验证', '点选验证', '图形验证', '行为验证'],
+                values: [40, 30, 20, 10]
+            };
+
+            chartManager.createPieChart('typeDistributionChart', typeData, {
+                legendPosition: 'bottom',
+                cutout: '60%'
+            });
+
+            const riskData = {
+                labels: ['低风险', '中风险', '高风险'],
+                datasets: [{
+                    label: '风险分布',
+                    data: [85, 12, 3],
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0,
+                    borderRadius: 8
+                }]
+            };
+
+            chartManager.createBarChart('riskDistributionChart', riskData);
+        }
+
+        document.getElementById('editUserBtn').addEventListener('click', () => {
+            window.location.href = '/admin/users?action=edit&id=' + window.location.pathname.split('/').pop();
+        });
+
+        document.getElementById('deleteUserBtn').addEventListener('click', () => {
+            if (confirm('确定要删除此用户吗？此操作不可撤销。')) {
+                window.location.href = '/admin/users';
+            }
+        });
+    </script>
+</body>
+</html>
