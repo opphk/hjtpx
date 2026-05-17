@@ -732,7 +732,10 @@
                     <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
                     <li class="nav-item"><a class="nav-link" href="https://github.com/opphk/hjtpx" target="_blank">开源</a></li>
                 </ul>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="theme-toggle" id="themeToggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(201,169,110,0.3); border-radius: 50%; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; color: #c9a96e; cursor: pointer; transition: all 0.3s ease;">
+                        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+                    </button>
                     <div class="seamless-lang-switch" role="group" aria-label="语言切换">
                         <button type="button" class="seamless-lang-btn active" data-lang="zh-CN" aria-pressed="true">中文</button>
                         <button type="button" class="seamless-lang-btn" data-lang="en-US" aria-pressed="false">EN</button>
@@ -1049,6 +1052,7 @@ seamless.<span style="color: #8ab4f8;">checkStatus</span>().<span style="color: 
     </footer>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/theme.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/seamless.js"></script>
     <script>

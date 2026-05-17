@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#6366f1">
     <title>{{.Title}} - HJTPX 开发者工具</title>
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.10.5/font/bootstrap-icons.css" rel="stylesheet">
@@ -10,13 +11,39 @@
         :root {
             --primary-color: #6366f1;
             --secondary-color: #8b5cf6;
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --card-bg: white;
+            --card-header-bg: white;
+            --card-border-color: #e2e8f0;
+            --sidebar-bg: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            --sidebar-link-color: #cbd5e1;
+            --section-title-color: #1e293b;
+            --section-desc-color: #64748b;
+            --code-block-bg: #1e293b;
+            --code-block-text: #e2e8f0;
+        }
+        [data-bs-theme="dark"] {
+            --bg-color: #0f172a;
+            --text-color: #e2e8f0;
+            --card-bg: #1e293b;
+            --card-header-bg: #334155;
+            --card-border-color: #475569;
+            --sidebar-bg: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+            --sidebar-link-color: #94a3b8;
+            --section-title-color: #f1f5f9;
+            --section-desc-color: #94a3b8;
+            --code-block-bg: #020617;
+            --code-block-text: #cbd5e1;
         }
         body {
-            background-color: #f8fafc;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             min-height: 100vh;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         .sidebar {
-            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            background: var(--sidebar-bg);
             min-height: 100vh;
             position: fixed;
             top: 0;
@@ -25,7 +52,7 @@
             padding-top: 20px;
         }
         .sidebar .nav-link {
-            color: #cbd5e1;
+            color: var(--sidebar-link-color);
             padding: 12px 20px;
             margin: 4px 10px;
             border-radius: 8px;
@@ -51,22 +78,47 @@
             padding: 0 20px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         .logo i {
             color: #6366f1;
         }
+        .theme-toggle {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 18px;
+        }
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.1);
+        }
         .card {
+            background-color: var(--card-bg);
             border: none;
             border-radius: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            transition: background-color 0.3s ease;
         }
         .card-header {
-            background: white;
-            border-bottom: 1px solid #e2e8f0;
+            background: var(--card-header-bg);
+            border-bottom: 1px solid var(--card-border-color);
             font-weight: 600;
             border-radius: 12px 12px 0 0 !important;
             padding: 15px 20px;
+            color: var(--text-color);
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
         }
         .btn-primary {
             background-color: var(--primary-color);
@@ -79,20 +131,23 @@
         .section-title {
             font-size: 28px;
             font-weight: 700;
-            color: #1e293b;
+            color: var(--section-title-color);
             margin-bottom: 10px;
+            transition: color 0.3s ease;
         }
         .section-desc {
-            color: #64748b;
+            color: var(--section-desc-color);
             margin-bottom: 30px;
+            transition: color 0.3s ease;
         }
         .code-block {
-            background-color: #1e293b;
-            color: #e2e8f0;
+            background-color: var(--code-block-bg);
+            color: var(--code-block-text);
             padding: 20px;
             border-radius: 8px;
             font-family: 'Courier New', monospace;
             overflow-x: auto;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
         .json-key {
             color: #7dd3fc;
@@ -110,18 +165,48 @@
             padding-top: 20px;
         }
         .nav-tabs .nav-link {
-            color: #64748b;
+            color: var(--section-desc-color);
         }
         .nav-tabs .nav-link.active {
             color: var(--primary-color);
             font-weight: 600;
+            background-color: var(--card-bg);
+            border-color: var(--card-border-color);
+        }
+        .form-control, .form-select {
+            background-color: var(--card-bg);
+            border-color: var(--card-border-color);
+            color: var(--text-color);
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: var(--card-bg);
+            border-color: var(--primary-color);
+            color: var(--text-color);
+            box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
+        }
+        .form-control::placeholder {
+            color: var(--section-desc-color);
+        }
+        .table {
+            color: var(--text-color);
+        }
+        .table thead th {
+            background-color: var(--card-header-bg);
+            border-color: var(--card-border-color);
+        }
+        .table tbody td {
+            border-color: var(--card-border-color);
         }
     </style>
 </head>
 <body>
     <div class="sidebar">
         <div class="logo">
-            <i class="bi bi-tools"></i> HJTPX DevTools
+            <span><i class="bi bi-tools"></i> HJTPX DevTools</span>
+            <button class="theme-toggle" id="themeToggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题">
+                <i class="bi bi-moon-stars" id="themeIcon"></i>
+            </button>
         </div>
         <nav class="nav flex-column">
             <a class="nav-link {{if eq .ActivePage \"api-console\"}}active{{end}}" href="/devtools/api-console">
@@ -147,6 +232,102 @@
     </div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function() {
+            'use strict';
+            const THEME_STORAGE_KEY = 'theme';
+            const THEME_ATTRIBUTE = 'data-bs-theme';
+            
+            function getStoredTheme() {
+                return localStorage.getItem(THEME_STORAGE_KEY);
+            }
+            function setStoredTheme(theme) {
+                localStorage.setItem(THEME_STORAGE_KEY, theme);
+            }
+            function getSystemTheme() {
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            function getInitialTheme() {
+                const stored = getStoredTheme();
+                if (stored === 'auto' || !stored) {
+                    return getSystemTheme();
+                }
+                return stored;
+            }
+            function applyTheme(theme) {
+                document.documentElement.setAttribute(THEME_ATTRIBUTE, theme);
+                document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0f172a' : '#6366f1');
+            }
+            function updateThemeIcon(theme, iconElement) {
+                if (iconElement) {
+                    iconElement.className = theme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+                }
+            }
+            function toggleTheme() {
+                const current = document.documentElement.getAttribute(THEME_ATTRIBUTE);
+                const newTheme = current === 'dark' ? 'light' : 'dark';
+                applyTheme(newTheme);
+                setStoredTheme(newTheme);
+                const iconElement = document.getElementById('themeIcon');
+                updateThemeIcon(newTheme, iconElement);
+                return newTheme;
+            }
+            function initThemeToggle() {
+                const toggleBtn = document.getElementById('themeToggle');
+                const iconElement = document.getElementById('themeIcon');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', toggleTheme);
+                    toggleBtn.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleTheme();
+                        }
+                    });
+                }
+            }
+            function initSystemThemeListener() {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                    if (getStoredTheme() === 'auto' || !getStoredTheme()) {
+                        const newTheme = e.matches ? 'dark' : 'light';
+                        applyTheme(newTheme);
+                        const iconElement = document.getElementById('themeIcon');
+                        updateThemeIcon(newTheme, iconElement);
+                    }
+                });
+            }
+            function initTheme() {
+                const initialTheme = getInitialTheme();
+                applyTheme(initialTheme);
+                const iconElement = document.getElementById('themeIcon');
+                updateThemeIcon(initialTheme, iconElement);
+                initThemeToggle();
+                initSystemThemeListener();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initTheme);
+            } else {
+                initTheme();
+            }
+            window.ThemeManager = {
+                getTheme: function() {
+                    return document.documentElement.getAttribute(THEME_ATTRIBUTE);
+                },
+                setTheme: function(theme) {
+                    if (theme === 'dark' || theme === 'light' || theme === 'auto') {
+                        if (theme === 'auto') {
+                            applyTheme(getSystemTheme());
+                        } else {
+                            applyTheme(theme);
+                        }
+                        setStoredTheme(theme);
+                        const iconElement = document.getElementById('themeIcon');
+                        updateThemeIcon(document.documentElement.getAttribute(THEME_ATTRIBUTE), iconElement);
+                    }
+                },
+                toggleTheme: toggleTheme
+            };
+        })();
+    </script>
     {{block "scripts" .}}{{end}}
 </body>
 </html>

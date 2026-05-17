@@ -55,9 +55,21 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
+	r.GET("/memory-cards", func(c *gin.Context) {
+		c.HTML(200, "memory-cards.html", gin.H{
+			"title": "记忆翻牌验证码",
+		})
+	})
+
 	r.GET("/voice-captcha", func(c *gin.Context) {
 		c.HTML(200, "voice-captcha.html", gin.H{
 			"title": "语音验证码",
+		})
+	})
+
+	r.GET("/find-diff", func(c *gin.Context) {
+		c.HTML(200, "find-diff.html", gin.H{
+			"title": "找不同验证码",
 		})
 	})
 
@@ -132,8 +144,18 @@ func SetupRouter() *gin.Engine {
 			captcha.GET("/lianliankan/status/:session_id", handler.GetLianLianKanCaptchaStatus)
 			captcha.GET("/lianliankan/check/:session_id", handler.CheckLianLianKanCaptchaValid)
 			
+			captcha.POST("/memory-cards/create", handler.CreateMemoryCardsCaptcha)
+			captcha.POST("/memory-cards/verify", handler.VerifyMemoryCardsCaptcha)
+			captcha.GET("/memory-cards/status/:session_id", handler.GetMemoryCardsCaptchaStatus)
+			captcha.GET("/memory-cards/check/:session_id", handler.CheckMemoryCardsCaptchaValid)
+			
 			captcha.POST("/voice/create", handler.CreateVoiceCaptcha)
 			captcha.POST("/voice/verify", handler.VerifyVoiceCaptcha)
+
+			captcha.POST("/find-diff/create", handler.CreateFindDiffCaptcha)
+			captcha.POST("/find-diff/verify", handler.VerifyFindDiffCaptcha)
+			captcha.GET("/find-diff/status/:session_id", handler.GetFindDiffCaptchaStatus)
+			captcha.GET("/find-diff/check/:session_id", handler.CheckFindDiffCaptchaValid)
 		}
 
 		auth := api.Group("/auth")

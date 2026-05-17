@@ -97,6 +97,11 @@ func main() {
 	handler.InitVoiceCaptchaHandler(voiceGeneratorService, voiceVerifierService)
 	log.Println("Voice captcha service initialized successfully")
 
+	memoryCardsGeneratorService := captcha.NewMemoryCardsGeneratorService(sessionCache, captchaRepo)
+	memoryCardsVerifierService := captcha.NewMemoryCardsVerifierService(sessionCache, captchaRepo)
+	handler.InitMemoryCardsCaptchaHandler(memoryCardsGeneratorService, memoryCardsVerifierService)
+	log.Println("Memory cards captcha service initialized successfully")
+
 	if database.DB != nil {
 		configRepo := repository.NewConfigRepo(database.DB)
 		configCache := service.NewConfigCache(redis.Client)

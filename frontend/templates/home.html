@@ -529,55 +529,14 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/theme.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            initTheme();
             initSmoothScroll();
             initNavbarScroll();
             initKeyboardNav();
             initErrorHandling();
         });
-
-        function initTheme() {
-            const themeToggle = document.getElementById('themeToggle');
-            const themeIcon = document.getElementById('themeIcon');
-            const html = document.documentElement;
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            
-            const initialTheme = savedTheme === 'auto' ? (prefersDark ? 'dark' : 'light') : savedTheme;
-            html.setAttribute('data-bs-theme', initialTheme);
-            updateThemeIcon(initialTheme);
-
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-                if (localStorage.getItem('theme') === 'auto') {
-                    const newTheme = e.matches ? 'dark' : 'light';
-                    html.setAttribute('data-bs-theme', newTheme);
-                    updateThemeIcon(newTheme);
-                }
-            });
-
-            themeToggle.addEventListener('click', toggleTheme);
-            themeToggle.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleTheme();
-                }
-            });
-
-            function toggleTheme() {
-                const currentTheme = html.getAttribute('data-bs-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                html.setAttribute('data-bs-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                updateThemeIcon(newTheme);
-                showToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}模式`, 'success');
-            }
-
-            function updateThemeIcon(theme) {
-                themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-            }
-        }
 
         function initSmoothScroll() {
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {

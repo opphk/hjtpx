@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anti-Debug Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .status.ok {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .status.warning {
+            background-color: #fcf8e3;
+            color: #8a6d3b;
+        }
+        .status.danger {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
+        button.danger:hover {
+            background-color: #da190b;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Enhanced Anti-Debug Test Page</h1>
+        
+        <div id="status" class="status ok">
+            <strong>Status:</strong> Anti-debug protection is active (no debugger detected)
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Current State</h2>
+            <pre id="stateDisplay">Loading...</pre>
+        </div>
+
+        <div class="test-section">
+            <h2>🧪 Test Functions</h2>
+            <p>Note: These tests are for verification purposes only in a controlled environment.</p>
+            
+            <button onclick="testFingerprint()">Test Fingerprint Generation</button>
+            <button onclick="testHashFunction()">Test Hash Function</button>
+            <button onclick="getCurrentState()">Refresh State</button>
+            <button class="danger" onclick="simulateDebugger()">Simulate Debugger Detection</button>
+        </div>
+
+        <div class="test-section">
+            <h2>⚠️ Warning</h2>
+            <p>This page demonstrates the anti-debug functionality. Try opening DevTools (F12) to see the protection in action.</p>
+            <p>Try these shortcuts:</p>
+            <ul>
+                <li>F12</li>
+                <li>Ctrl+Shift+I</li>
+                <li>Ctrl+Shift+J</li>
+                <li>Ctrl+U</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Include our anti-debug script -->
+    <script src="js/anti-debug.js"></script>
+    
+    <script>
+        // Helper functions for testing
+        function getCurrentState() {
+            const state = window.EnhancedAntiDebug ? window.EnhancedAntiDebug.getState() : 'Not available';
+            document.getElementById('stateDisplay').textContent = JSON.stringify(state, null, 2);
+        }
+
+        function testFingerprint() {
+            if (window.EnhancedAntiDebug) {
+                // Access internal module if possible or test basic functionality
+                alert('Fingerprint test passed - anti-debug module is loaded');
+                getCurrentState();
+            } else {
+                alert('Anti-debug module not found');
+            }
+        }
+
+        function testHashFunction() {
+            alert('Hash function test would run internally');
+        }
+
+        function simulateDebugger() {
+            if (confirm('This will simulate a debugger detection. The page may hide. Continue?')) {
+                if (window.EnhancedAntiDebug) {
+                    window.EnhancedAntiDebug.onDetection('simulated_test', 'test');
+                }
+            }
+        }
+
+        // Update display on load
+        document.addEventListener('DOMContentLoaded', function() {
+            getCurrentState();
+            
+            // Update status periodically
+            setInterval(function() {
+                if (window.EnhancedAntiDebug) {
+                    const state = window.EnhancedAntiDebug.getState();
+                    const statusEl = document.getElementById('status');
+                    
+                    if (state.debugDetected) {
+                        statusEl.className = 'status danger';
+                        statusEl.innerHTML = `<strong>Status:</strong> Debugger detected! Reason: ${state.detectionReason?.reason || 'unknown'}`;
+                    } else {
+                        statusEl.className = 'status ok';
+                        statusEl.innerHTML = '<strong>Status:</strong> Anti-debug protection is active (no debugger detected)';
+                    }
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

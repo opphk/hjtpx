@@ -212,6 +212,11 @@
 </head>
 <body>
     <div class="container py-5">
+        <div class="text-end mb-3">
+            <button class="theme-toggle" id="themeToggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题" style="background: rgba(255,255,255,0.1); border: none; padding: 8px 12px; border-radius: 50%; cursor: pointer; color: white; transition: all 0.3s ease;">
+                <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+            </button>
+        </div>
         <div class="captcha-container">
             <div class="captcha-card">
                 <div class="card-header">
@@ -258,6 +263,7 @@
 
     <audio id="audioPlayer"></audio>
 
+    <script src="/static/js/theme.js"></script>
     <script>
         let currentSession = null;
         let selectedLanguage = 'zh-CN';

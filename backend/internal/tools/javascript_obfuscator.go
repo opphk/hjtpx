@@ -815,25 +815,77 @@ func GetRandomFloat() float64 {
 func InjectAntiDebug(code string) string {
 	antiDebug := `
 ;(function(){
-	if(window.outerHeight-window.innerHeight>100||window.outerWidth-window.innerWidth>100){
-		document.documentElement.style.display='none';
-		document.body.innerHTML='<h1>Developer tools detected</h1>';
+	'use strict';
+	var _0xCONFIG={checkInterval:100,maxTimeDrift:5000};
+	var _0xSTATE={debugDetected:!1,lastCheckTime:Date.now()};
+	function _0xNow(){return Date.now()}
+	function _0xPerfNow(){try{return performance.now()}catch(_0x){return _0xNow()}}
+	function _0xDetectDebugger(){
+		var _0x=_0xPerfNow();
+		try{debugger}catch(_0x1){}
+		if(_0xPerfNow()-_0x>50)return!0;
+		return!1
 	}
-	var _0xAD=function(){};
-	_0xAD.toString=function(){
-		if(window.devtools&&window.devtools.isOpen){
+	function _0xDetectConsole(){
+		var _0x2=!1;
+		try{
+			var _0x3=document.createElement('div');
+			_0x3.toString=function(){_0x2=!0;return'[object HTMLDivElement]'};
+			console.log('%c',_0x3)
+		}catch(_0x4){}
+		return _0x2
+	}
+	function _0xDetectTimeDrift(){
+		var _0x5=_0xNow(),_0x6=_0x5-_0xSTATE.lastCheckTime;
+		if(_0x6<0||_0x6>_0xCONFIG.maxTimeDrift)return!0;
+		_0xSTATE.lastCheckTime=_0x5;
+		return!1
+	}
+	function _0xDetectWindowSize(){
+		try{
+			var _0x7=window.outerWidth-window.innerWidth;
+			var _0x8=window.outerHeight-window.innerHeight;
+			if(_0x7>160||_0x8>160)return!0
+		}catch(_0x9){}
+		return!1
+	}
+	function _0xTakeAction(){
+		if(_0xSTATE.debugDetected)return;
+		_0xSTATE.debugDetected=!0;
+		console.warn('[Security] Debugger detected');
+		try{
 			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style=\"display:none;\"></div>';
+			setInterval(function(){
+				document.documentElement.style.display='none';
+				if(document.body)document.body.innerHTML='<div style=\"display:none;\"></div>'
+			},100)
+		}catch(_0xa){}
+	}
+	function _0xCheckAll(){
+		if(_0xSTATE.debugDetected)return;
+		if(_0xDetectDebugger()||_0xDetectConsole()||_0xDetectTimeDrift()||_0xDetectWindowSize()){
+			_0xTakeAction()
 		}
-	};
-	console.log(_0xAD);
-	setInterval(function(){
-		var _0xT=function(){};
-		_0xT.toString=function(){};
-		console.log('%c',_0xT);
-	},1000);
+	}
+	document.addEventListener('keydown',function(_0xb){
+		if(_0xSTATE.debugDetected){_0xb.preventDefault();_0xb.stopPropagation();return!1}
+		var _0xc=_0xb.key==='F12';
+		var _0xd=_0xb.ctrlKey&&_0xb.shiftKey&&(_0xb.key==='I'||_0xb.key==='i');
+		var _0xe=_0xb.ctrlKey&&_0xb.shiftKey&&(_0xb.key==='J'||_0xb.key==='j');
+		var _0xf=_0xb.ctrlKey&&(_0xb.key==='U'||_0xb.key==='u');
+		if(_0xc||_0xd||_0xe||_0xf){_0xb.preventDefault();_0xb.stopPropagation();_0xTakeAction();return!1}
+	},!0);
+	_0xCheckAll();
+	setInterval(_0xCheckAll,_0xCONFIG.checkInterval)
 })();
 `
 	return antiDebug + code
+}
+
+// InjectEnhancedAntiDebug injects the enhanced anti-debug protection code
+func InjectEnhancedAntiDebug(code string) string {
+	return InjectAntiDebug(code)
 }
 
 func CreateCodeIntegrityModule(code string, key []byte) string {
