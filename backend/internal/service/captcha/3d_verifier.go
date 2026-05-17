@@ -114,7 +114,7 @@ func (v *ThreeDVerifierService) validatePuzzle(userPuzzle, originalPuzzle *Three
 		}
 
 		validPieces++
-		pieceScore := v.calculatePieceScore(userPiece, originalPuzzle.Pieces[i], originalPuzzle.Difficulty)
+		pieceScore := v.calculatePieceScore(userPiece, &originalPuzzle.Pieces[i], originalPuzzle.Difficulty)
 		totalScore += pieceScore
 	}
 

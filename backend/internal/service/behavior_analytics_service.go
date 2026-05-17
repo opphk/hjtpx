@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
-
-	"github.com/hjtpx/hjtpx/pkg/database"
-	"github.com/hjtpx/hjtpx/pkg/models"
 )
 
 type BehaviorAnalyticsService struct{}
@@ -43,13 +40,13 @@ type Anomaly struct {
 	LastSeen      string `json:"lastSeen"`
 }
 
-type RiskDistribution struct {
+type BehaviorRiskDistribution struct {
 	Range      string  `json:"range"`
 	Count      int     `json:"count"`
 	Percentage float64 `json:"percentage"`
 }
 
-type Summary struct {
+type BehaviorSummary struct {
 	TotalSessions      int64   `json:"totalSessions"`
 	TotalInteractions  int64   `json:"totalInteractions"`
 	AvgSessionDuration float64 `json:"avgSessionDuration"`
@@ -60,8 +57,8 @@ type Summary struct {
 	HighRiskUsers      int64   `json:"highRiskUsers"`
 }
 
-func (s *BehaviorAnalyticsService) GetBehaviorSummary(period string) (*Summary, error) {
-	summary := &Summary{
+func (s *BehaviorAnalyticsService) GetBehaviorSummary(period string) (*BehaviorSummary, error) {
+	summary := &BehaviorSummary{
 		TotalSessions:      1247,
 		TotalInteractions:  89432,
 		AvgSessionDuration: 187.5,
@@ -119,8 +116,8 @@ func (s *BehaviorAnalyticsService) GetRecentTrajectories(limit int) ([]Trajector
 			
 			currentX += rand.Intn(100) - 50
 			currentY += rand.Intn(100) - 50
-			currentX = max(0, min(currentX, 1920))
-			currentY = max(0, min(currentY, 1080))
+			currentX = maxInt(0, minInt(currentX, 1920))
+			currentY = maxInt(0, minInt(currentY, 1080))
 			
 			points = append(points, BehaviorDataPoint{
 				X:         currentX,
@@ -201,8 +198,8 @@ func (s *BehaviorAnalyticsService) GetAnomalyPatterns(period string) ([]Anomaly,
 	return anomalies, nil
 }
 
-func (s *BehaviorAnalyticsService) GetRiskDistribution(period string) ([]RiskDistribution, error) {
-	distribution := []RiskDistribution{
+func (s *BehaviorAnalyticsService) GetRiskDistribution(period string) ([]BehaviorRiskDistribution, error) {
+	distribution := []BehaviorRiskDistribution{
 		{
 			Range:      "0-20",
 			Count:      892,
@@ -288,14 +285,14 @@ func (s *BehaviorAnalyticsService) exportCSV(period string) ([]byte, error) {
 	return []byte(csvContent), nil
 }
 
-func max(a, b int) int {
+func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}
 	return b
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

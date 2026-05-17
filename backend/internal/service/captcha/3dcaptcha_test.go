@@ -80,7 +80,7 @@ func TestPieceColorsAndTypes(t *testing.T) {
 	}
 }
 
-func TestGenerateSessionID(t *testing.T) {
+func TestGenerate3DSessionID(t *testing.T) {
 	// 测试generateSessionID函数（虽然是私有的，但我们可以通过Create方法间接测试）
 	service := NewThreeDGeneratorService(nil, nil)
 	

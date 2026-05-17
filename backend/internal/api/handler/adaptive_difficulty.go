@@ -1,14 +1,13 @@
 package handler
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
-	"hjtpx/backend/internal/service"
-	"hjtpx/backend/pkg/response"
+	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
 // AdaptiveDifficultyHandler 自适应难度处理器
@@ -21,6 +20,12 @@ func NewAdaptiveDifficultyHandler(adaptiveService *service.AdaptiveDifficultySer
 	return &AdaptiveDifficultyHandler{
 		adaptiveService: adaptiveService,
 	}
+}
+
+var adaptiveHandler = NewAdaptiveDifficultyHandler(service.NewAdaptiveDifficultyService())
+
+func GetAdaptiveDifficultyHandler() *AdaptiveDifficultyHandler {
+	return adaptiveHandler
 }
 
 // GetUserDifficulty 获取用户难度
@@ -117,4 +122,33 @@ func (h *AdaptiveDifficultyHandler) GetDifficultyForCaptcha(c *gin.Context) {
 		"difficulty": difficulty,
 		"user_id":    userID,
 	})
+}
+
+// Top-level functions
+func GetUserDifficulty(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().GetUserDifficulty(c)
+}
+
+func UpdateUserResult(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().UpdateUserResult(c)
+}
+
+func GetAdaptiveConfig(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().GetConfig(c)
+}
+
+func UpdateAdaptiveConfig(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().UpdateConfig(c)
+}
+
+func GetAllAdaptiveProfiles(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().GetAllProfiles(c)
+}
+
+func AddBehaviorFlag(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().AddBehaviorFlag(c)
+}
+
+func GetDifficultyForCaptcha(c *gin.Context) {
+	GetAdaptiveDifficultyHandler().GetDifficultyForCaptcha(c)
 }

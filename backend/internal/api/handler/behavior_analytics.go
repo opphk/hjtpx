@@ -208,3 +208,17 @@ func (h *BehaviorAnalyticsHandler) getRecentBehaviorLogs(limit int) ([]models.Be
 	err := database.DB.Order("created_at DESC").Limit(limit).Find(&logs).Error
 	return logs, err
 }
+
+// Top-level functions for router
+func GetUserTrajectories(c *gin.Context) {
+	GetBehaviorTrajectories(c)
+}
+
+func GetBehaviorAnomalies(c *gin.Context) {
+	GetAnomalyPatterns(c)
+}
+
+func ReplayTrajectory(c *gin.Context) {
+	// Temporary placeholder implementation
+	response.Success(c, gin.H{"message": "Replay functionality not implemented yet"})
+}

@@ -1282,12 +1282,7 @@ type VerifyRequest struct {
 	EnvironmentData json.RawMessage     `json:"environment_data,omitempty"`
 }
 
-type BehaviorDataPoint struct {
-	X         int    `json:"x"`
-	Y         int    `json:"y"`
-	Timestamp int64  `json:"timestamp"`
-	Event     string `json:"event"`
-}
+
 
 func VerifyCaptcha(c *gin.Context) {
 	startTime := time.Now()

@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
-	"strings"
 	"time"
 )
 
@@ -103,10 +101,12 @@ func (s *BiometricsService) RegisterProfile(userID string, keyboardSample *Keybo
 	profile, exists := s.profiles[userID]
 	if !exists {
 		profile = &BiometricProfile{
-			UserID:    userID,
-			CreatedAt: time.Now(),
-			KeyPairTimings: make(map[string]float64),
-			CommonKeys:     make(map[string]float64),
+			UserID:           userID,
+			CreatedAt:        time.Now(),
+			KeyboardProfile: KeyboardBiometrics{
+				KeyPairTimings: make(map[string]float64),
+				CommonKeys:     make(map[string]float64),
+			},
 		}
 	}
 
