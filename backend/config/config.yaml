@@ -6,8 +6,8 @@ postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: postgres123
-  db_name: verification
+  password: hjtpx_secure_pass_2024
+  db_name: hjtpx_db
   sslmode: disable
   max_open_conns: 100
   max_idle_conns: 20

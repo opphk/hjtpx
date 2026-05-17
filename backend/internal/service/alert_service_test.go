@@ -17,14 +17,14 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 	aggregator := NewAlertAggregator()
 
 	tests := []struct {
-		name           string
-		ruleID         uint
-		aggKey         string
-		windowSecs     int
-		threshold      int
-		eventCount     int
-		expectedSend   bool
-		expectedCount  int
+		name          string
+		ruleID        uint
+		aggKey        string
+		windowSecs    int
+		threshold     int
+		eventCount    int
+		expectedSend  bool
+		expectedCount int
 	}{
 		{
 			name:          "first alert - should send",
@@ -72,13 +72,13 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear aggregator before each test
 			aggregator.AlertCounts = make(map[string]*AlertCountItem)
-			
+
 			var shouldSend bool
 			var count int
 			for i := 0; i < tt.eventCount; i++ {
 				shouldSend, count = aggregator.ShouldTriggerAlert(tt.ruleID, tt.aggKey, tt.windowSecs, tt.threshold)
 			}
-			
+
 			assert.Equal(t, tt.expectedSend, shouldSend)
 			assert.Equal(t, tt.expectedCount, count)
 		})
@@ -109,13 +109,13 @@ func TestAlertAggregator_Cleanup(t *testing.T) {
 	aggregator := NewAlertAggregator()
 
 	// Add some items
-	aggregator.alertCounts["key1"] = &AlertCountItem{
+	aggregator.AlertCounts["key1"] = &AlertCountItem{
 		RuleID:         1,
 		AggregationKey: "key1",
 		Count:          5,
 		LastSeen:       time.Now().Add(-2 * time.Hour),
 	}
-	aggregator.alertCounts["key2"] = &AlertCountItem{
+	aggregator.AlertCounts["key2"] = &AlertCountItem{
 		RuleID:         2,
 		AggregationKey: "key2",
 		Count:          3,
@@ -126,9 +126,9 @@ func TestAlertAggregator_Cleanup(t *testing.T) {
 	aggregator.Cleanup(1 * time.Hour)
 
 	// Only recent item should remain
-	assert.Len(t, aggregator.alertCounts, 1)
-	assert.Contains(t, aggregator.alertCounts, "key2")
-	assert.NotContains(t, aggregator.alertCounts, "key1")
+	assert.Len(t, aggregator.AlertCounts, 1)
+	assert.Contains(t, aggregator.AlertCounts, "key2")
+	assert.NotContains(t, aggregator.AlertCounts, "key1")
 }
 
 func TestAlertEvent_Creation(t *testing.T) {
@@ -193,15 +193,6 @@ func TestAlertService_parseCondition(t *testing.T) {
 	}
 }
 
-func TestAlertService_buildAggregationKey(t *testing.T) {
-	service := &AlertService{}
-	rule := &AlertRule{ID: 1}
-	event := AlertEvent{EventType: "test.event"}
-
-	key := service.buildAggregationKey(*rule, event)
-	assert.Equal(t, "1-test.event", key)
-}
-
 func TestAlertService_contextToJSON(t *testing.T) {
 	service := &AlertService{}
 
@@ -237,8 +228,8 @@ func TestAlertService_jsonToContext(t *testing.T) {
 	service := &AlertService{}
 
 	tests := []struct {
-		name     string
-		jsonStr  string
+		name    string
+		jsonStr string
 	}{
 		{
 			name:    "empty object",

@@ -1479,7 +1479,7 @@ type TrajectoryPoint struct {
 	Timestamp int64
 }
 
-type ClickData struct {
+type BehaviorClickData struct {
 	X         int
 	Y         int
 	Timestamp int64
@@ -1741,7 +1741,7 @@ func CalculateTrajectorySmoothness(points []TrajectoryPoint) float64 {
 	return math.Max(0, math.Min(1, smoothness))
 }
 
-func CalculateClickInterval(clicks []ClickData) float64 {
+func CalculateClickInterval(clicks []BehaviorClickData) float64 {
 	if len(clicks) < 2 {
 		return 0
 	}
@@ -1764,7 +1764,7 @@ func CalculateClickInterval(clicks []ClickData) float64 {
 	return totalInterval / float64(count)
 }
 
-func CalculateClickPositionVariance(clicks []ClickData) float64 {
+func CalculateClickPositionVariance(clicks []BehaviorClickData) float64 {
 	if len(clicks) < 2 {
 		return 0
 	}
@@ -2074,12 +2074,12 @@ func (sc *ScoreCard) Evaluate(features *BehaviorFeatures) float64 {
 	return math.Min(score, 100)
 }
 
-func convertToClickData(trajectory []TrajectoryPoint) []ClickData {
-	clicks := make([]ClickData, 0)
+func convertToClickData(trajectory []TrajectoryPoint) []BehaviorClickData {
+	clicks := make([]BehaviorClickData, 0)
 
 	for _, p := range trajectory {
 		if p.Timestamp > 0 {
-			clicks = append(clicks, ClickData{
+			clicks = append(clicks, BehaviorClickData{
 				X:         p.X,
 				Y:         p.Y,
 				Timestamp: p.Timestamp,

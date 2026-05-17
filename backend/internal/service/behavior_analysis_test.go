@@ -1293,7 +1293,7 @@ func TestCalculateTrajectorySmoothness(t *testing.T) {
 }
 
 func TestCalculateClickInterval(t *testing.T) {
-	clicks := []ClickData{
+	clicks := []BehaviorClickData{
 		{X: 100, Y: 100, Timestamp: 1000},
 		{X: 200, Y: 200, Timestamp: 1150},
 		{X: 300, Y: 300, Timestamp: 1350},
@@ -1309,12 +1309,12 @@ func TestCalculateClickInterval(t *testing.T) {
 func TestCalculateClickPositionVariance(t *testing.T) {
 	tests := []struct {
 		name     string
-		clicks   []ClickData
+		clicks   []BehaviorClickData
 		expected float64
 	}{
 		{
 			name: "聚集点击",
-			clicks: []ClickData{
+			clicks: []BehaviorClickData{
 				{X: 100, Y: 100, Timestamp: 1000},
 				{X: 105, Y: 105, Timestamp: 1100},
 				{X: 102, Y: 98, Timestamp: 1200},
@@ -1323,7 +1323,7 @@ func TestCalculateClickPositionVariance(t *testing.T) {
 		},
 		{
 			name: "分散点击",
-			clicks: []ClickData{
+			clicks: []BehaviorClickData{
 				{X: 100, Y: 100, Timestamp: 1000},
 				{X: 500, Y: 500, Timestamp: 1100},
 				{X: 100, Y: 500, Timestamp: 1200},

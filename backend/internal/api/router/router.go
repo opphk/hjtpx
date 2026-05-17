@@ -210,7 +210,7 @@ func SetupRouter() *gin.Engine {
 		{
 			admin.POST("/login", handler.Login)
 			admin.POST("/logout", handler.Logout)
-			admin.GET("/monitoring/ws", handler.WebSocketHandler)
+			admin.GET("/monitoring/ws", handler.WebSocketMonitoringHandler)
 
 			// 需要JWT认证的路由
 			adminAuth := admin.Group("")
@@ -348,6 +348,9 @@ func SetupRouter() *gin.Engine {
 					monitoring.GET("/system-metrics", handler.GetSystemMetrics)
 					monitoring.GET("/request-metrics", handler.GetRequestMetrics)
 					monitoring.GET("/api-stats", handler.GetApiStats)
+					monitoring.GET("/realtime-data", handler.GetRealtimeMonitoringData)
+					monitoring.GET("/system-status", handler.GetRealtimeSystemStatus)
+					monitoring.GET("/realtime-alerts", handler.GetRealtimeAlerts)
 				}
 
 				// 告警系统
