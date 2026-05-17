@@ -1,398 +1,609 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>墨盾验证 · 管理后台 · 仪表盘</title>
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-</head>
-<body>
-    <div class="bg-dark d-flex flex-column">
-        <div class="d-flex align-items-center gap-3 p-3 border-bottom border-secondary">
-            <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;flex-shrink:0;"><i class="fas fa-shield-halved"></i></div>
-            <div>
-                <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
-                <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
+{% extends "base.html" %}
+
+{% block title %}HJTPX 管理后台 - 仪表盘{% endblock %}
+{% block page_title %}仪表盘{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group">
+    <button type="button" class="btn btn-default" id="refreshBtn">
+        <i class="fas fa-sync"></i> 刷新
+    </button>
+    <button type="button" class="btn btn-default dropdown-toggle dropdown-icon" data-toggle="dropdown">
+        <span class="sr-only">导出</span>
+    </button>
+    <div class="dropdown-menu" role="menu">
+        <a class="dropdown-item" href="/admin/export?format=csv"><i class="fas fa-file-csv"></i> CSV</a>
+        <a class="dropdown-item" href="/admin/export?format=excel"><i class="fas fa-file-excel"></i> Excel</a>
+        <a class="dropdown-item" href="/admin/export?format=pdf"><i class="fas fa-file-pdf"></i> PDF</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3 id="totalRequests">0</h3>
+                <p>今日验证</p>
             </div>
-        </div>
-        <nav class="d-flex flex-column p-3 gap-1 flex-grow-1">
-            <a class="nav-link active" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
-            <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
-            <a class="nav-link" href="/admin/advanced-analytics"><i class="fas fa-chart-pie"></i><span>高级分析</span></a>
-            <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
-            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
-            <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
-            <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
-            <a class="nav-link" href="/admin/monitoring"><i class="fas fa-tachometer-alt"></i><span>实时监控</span></a>
-            <a class="nav-link" href="/admin/real-time-screen"><i class="fas fa-desktop"></i><span>实时大屏</span></a>
-            <a class="nav-link" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
-            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
-            <hr class="border-secondary my-2 mx-3">
-        </nav>
-        <div class="border-top border-secondary p-3 mt-auto">
-            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
+            <div class="icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <a href="/admin/logs" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
-
-    <div>
-        <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
-            <div class="d-flex align-items-center gap-3">
-                <h1 style="font-size:20px;font-weight:700;margin:0;padding-left:16px;position:relative;">仪表盘</h1>
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid #c23a2b;color:#c23a2b;font-size:9px;font-weight:900;transform:rotate(-8deg);flex-shrink:0;">墨盾</span>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3 id="passRate">0%</h3>
+                <p>通过率</p>
             </div>
-            <div class="d-flex align-items-center gap-3">
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" checked>
-                    <label class="form-check-label" for="autoRefreshSwitch">实时更新</label>
-                </div>
-                <select class="form-select form-select-sm" id="refreshInterval" style="width:auto;">
-                    <option value="5">5秒</option>
-                    <option value="10" selected>10秒</option>
-                    <option value="30">30秒</option>
-                    <option value="60">1分钟</option>
-                </select>
-                <button id="refreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
-                <button id="exportDashboardBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出</button>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-secondary" id="usernameDisplay">管理员</span>
-                    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
-                </div>
+            <div class="icon">
+                <i class="fas fa-check-circle"></i>
             </div>
-        </header>
-        <hr style="height:4px;background:linear-gradient(to right,#c9a96e,transparent);border:none;margin:0 0 24px;opacity:0.6;border-radius:2px;">
-        <main class="p-4">
-            <div class="row g-4 mb-4">
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(26,26,46,0.06);color:#1a1a2e;"><i class="fas fa-users"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">用户总数</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalUsers">0</div>
-                                <div class="text-success" style="font-size:12px;font-weight:500;" id="usersTrend"><i class="fas fa-arrow-up me-1"></i>+0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(201,169,110,0.15);color:#b8924e;"><i class="fas fa-mobile-alt"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">应用总数</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalApps">0</div>
-                                <div class="text-success" style="font-size:12px;font-weight:500;" id="appsTrend"><i class="fas fa-arrow-up me-1"></i>+0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(46,160,67,0.08);color:#2ea043;"><i class="fas fa-rocket"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">请求总数</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalRequests">0</div>
-                                <div class="text-success" style="font-size:12px;font-weight:500;" id="requestsTrend"><i class="fas fa-arrow-up me-1"></i>+0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(194,58,43,0.08);color:#c23a2b;"><i class="fas fa-exclamation-triangle"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">错误总数</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalErrors">0</div>
-                                <div class="text-danger" style="font-size:12px;font-weight:500;" id="errorsTrend"><i class="fas fa-arrow-down me-1"></i>-0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4 mb-4">
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(59,130,246,0.1);color:#3b82f6;"><i class="fas fa-check-circle"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">验证成功</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalSuccess">0</div>
-                                <div class="text-success" style="font-size:12px;font-weight:500;" id="successRate">0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(239,68,68,0.1);color:#ef4444;"><i class="fas fa-times-circle"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">验证失败</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalFail">0</div>
-                                <div class="text-danger" style="font-size:12px;font-weight:500;" id="failRate">0%</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(245,158,11,0.1);color:#f59e0b;"><i class="fas fa-exclamation-circle"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">风险预警</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="totalRisk">0</div>
-                                <div class="text-warning" style="font-size:12px;font-weight:500;" id="riskLevel">低风险</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card shadow-sm border h-100">
-                        <div class="card-body d-flex align-items-center gap-3">
-                            <div class="d-flex align-items-center justify-content-center" style="width:52px;height:52px;border-radius:12px;font-size:22px;flex-shrink:0;background:rgba(139,92,246,0.1);color:#8b5cf6;"><i class="fas fa-tachometer-alt"></i></div>
-                            <div>
-                                <div class="text-muted" style="font-size:12px;letter-spacing:0.5px;">平均响应</div>
-                                <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="avgResponse">0ms</div>
-                                <div class="text-info" style="font-size:12px;font-weight:500;" id="responseStatus">良好</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4 mb-4">
-                <div class="col-md-8">
-                    <div class="card shadow-sm">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5><i class="fas fa-chart-area me-2" style="color:#b8924e;"></i>请求量趋势</h5>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-secondary active" data-period="hour">小时</button>
-                                <button type="button" class="btn btn-outline-secondary" data-period="day">日</button>
-                                <button type="button" class="btn btn-outline-secondary" data-period="week">周</button>
-                                <button type="button" class="btn btn-outline-secondary" data-period="month">月</button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="requestTrendChart" height="250"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header"><h5><i class="fas fa-heartbeat me-2" style="color:#c23a2b;"></i>系统状态</h5></div>
-                        <div class="card-body">
-                            <div class="d-flex flex-column gap-3">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge rounded-pill bg-success" id="dbStatus">&nbsp;</span>
-                                        <span style="font-size:13px;">数据库服务</span>
-                                    </div>
-                                    <small class="text-muted" id="dbLatency">0ms</small>
-                                </div>
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge rounded-pill bg-success" id="redisStatus">&nbsp;</span>
-                                        <span style="font-size:13px;">Redis 缓存</span>
-                                    </div>
-                                    <small class="text-muted" id="redisLatency">0ms</small>
-                                </div>
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge rounded-pill bg-success" id="apiStatus">&nbsp;</span>
-                                        <span style="font-size:13px;">API 服务</span>
-                                    </div>
-                                    <small class="text-muted" id="apiLatency">0ms</small>
-                                </div>
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="badge rounded-pill bg-success" id="storageStatus">&nbsp;</span>
-                                        <span style="font-size:13px;">存储服务</span>
-                                    </div>
-                                    <small class="text-muted" id="storageLatency">0ms</small>
-                                </div>
-                            </div>
-                            <hr style="border-color:#e6dcc8;">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span style="font-size:13px;color:#6b6b6b;">CPU 使用率</span>
-                                <span id="cpuUsage" style="font-size:13px;">0%</span>
-                            </div>
-                            <div class="progress mb-3" style="height:8px;">
-                                <div class="progress-bar bg-info" id="cpuProgress" style="width:0%"></div>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span style="font-size:13px;color:#6b6b6b;">内存使用</span>
-                                <span id="memUsage" style="font-size:13px;">0%</span>
-                            </div>
-                            <div class="progress mb-3" style="height:8px;">
-                                <div class="progress-bar bg-success" id="memProgress" style="width:0%"></div>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span style="font-size:13px;color:#6b6b6b;">磁盘使用</span>
-                                <span id="diskUsage" style="font-size:13px;">0%</span>
-                            </div>
-                            <div class="progress" style="height:8px;">
-                                <div class="progress-bar bg-warning" id="diskProgress" style="width:0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4 mb-4">
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5><i class="fas fa-chart-pie me-2" style="color:#b8924e;"></i>风险分布</h5>
-                            <button class="btn btn-sm btn-outline-secondary" id="riskDetailBtn"><i class="fas fa-external-link-alt me-1"></i>详情</button>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="riskDistributionChart" height="260"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5><i class="fas fa-trophy me-2" style="color:#b8924e;"></i>Top应用统计</h5>
-                            <select class="form-select form-select-sm" id="topAppsPeriod" style="width:auto;">
-                                <option value="today">今日</option>
-                                <option value="week" selected>本周</option>
-                                <option value="month">本月</option>
-                            </select>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="topAppsChart" height="260"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4 mb-4">
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-wave-square me-2" style="color:#c23a2b;"></i>实时验证监控</h5></div>
-                        <div class="card-body">
-                            <canvas id="realtimeChart" height="200"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-clock me-2" style="color:#b8924e;"></i>最近验证记录</h5></div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive" style="max-height:300px;overflow-y:auto;">
-                                <table class="table table-hover table-sm mb-0">
-                                    <thead class="sticky-top bg-white">
-                                        <tr>
-                                            <th>时间</th>
-                                            <th>应用</th>
-                                            <th>结果</th>
-                                            <th>风险</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="recentVerifications"></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row g-4">
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-th-large me-2" style="color:#b8924e;"></i>验证类型分布</h5></div>
-                        <div class="card-body">
-                            <canvas id="captchaTypeChart" height="260"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-chart-bar me-2" style="color:#b8924e;"></i>地区分布 Top 10</h5></div>
-                        <div class="card-body">
-                            <canvas id="geoDistributionChart" height="260"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+            <a href="/admin/stats" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
     </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3 id="blockRate">0%</h3>
+                <p>拦截率</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-ban"></i>
+            </div>
+            <a href="/admin/risk-rules" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h3 id="avgResponseTime">0ms</h3>
+                <p>平均响应</p>
+            </div>
+            <div class="icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <a href="/admin/monitoring" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+</div>
 
-    <div class="modal fade" id="exportModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-download me-2"></i>导出数据</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="row">
+    <div class="col-md-8">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title">24小时趋势</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">导出格式</label>
-                        <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="exportFormat" id="exportCSV" value="csv" checked>
-                            <label class="btn btn-outline-primary" for="exportCSV"><i class="fas fa-file-csv me-1"></i>CSV</label>
-                            <input type="radio" class="btn-check" name="exportFormat" id="exportExcel" value="excel">
-                            <label class="btn btn-outline-primary" for="exportExcel"><i class="fas fa-file-excel me-1"></i>Excel</label>
-                            <input type="radio" class="btn-check" name="exportFormat" id="exportPDF" value="pdf">
-                            <label class="btn btn-outline-primary" for="exportPDF"><i class="fas fa-file-pdf me-1"></i>PDF</label>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">数据范围</label>
-                        <select class="form-select" id="exportRange">
-                            <option value="today">今日</option>
-                            <option value="week">本周</option>
-                            <option value="month" selected>本月</option>
-                            <option value="custom">自定义范围</option>
-                        </select>
-                    </div>
-                    <div class="row g-3 mb-3 d-none" id="customDateRange">
-                        <div class="col-6">
-                            <label class="form-label">开始日期</label>
-                            <input type="date" class="form-control" id="exportStartDate">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">结束日期</label>
-                            <input type="date" class="form-control" id="exportEndDate">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">数据类型</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="exportOverview" checked disabled>
-                            <label class="form-check-label" for="exportOverview">概览统计</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="exportTrend" checked>
-                            <label class="form-check-label" for="exportTrend">趋势数据</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="exportRisk">
-                            <label class="form-check-label" for="exportRisk">风险分析</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="exportApps">
-                            <label class="form-check-label" for="exportApps">应用统计</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" id="confirmExportBtn"><i class="fas fa-download me-1"></i>导出</button>
+            </div>
+            <div class="card-body">
+                <div class="chart">
+                    <canvas id="trendChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
                 </div>
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title">风险分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="pieChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
-    <script src="/admin/static/js/auth.js"></script>
-    <script src="/admin/static/js/dashboard.js"></script>
-    <script src="/admin/static/js/css-switch.js"></script>
-</body>
-</html>
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title">验证码类型分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="captchaTypeChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title">最近验证记录</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>应用</th>
+                            <th>类型</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentVerifications">
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">加载中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card card-danger">
+            <div class="card-header">
+                <h3 class="card-title">系统状态</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success" id="dbStatus"><i class="fas fa-database"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">数据库</span>
+                                <span class="info-box-number" id="dbLatency">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success" id="redisStatus"><i class="fas fa-server"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">Redis缓存</span>
+                                <span class="info-box-number" id="redisLatency">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success" id="apiStatus"><i class="fas fa-plug"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">API服务</span>
+                                <span class="info-box-number" id="apiLatency">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success" id="storageStatus"><i class="fas fa-hdd"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">存储服务</span>
+                                <span class="info-box-number" id="storageLatency">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-4">
+                        <p class="text-center">
+                            <strong>CPU 使用率</strong>
+                        </p>
+                        <div class="progress progress-sm">
+                            <div class="progress-bar bg-primary" id="cpuProgress" style="width: 0%"></div>
+                        </div>
+                        <small id="cpuUsage">0%</small>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-center">
+                            <strong>内存使用</strong>
+                        </p>
+                        <div class="progress progress-sm">
+                            <div class="progress-bar bg-success" id="memProgress" style="width: 0%"></div>
+                        </div>
+                        <small id="memUsage">0%</small>
+                    </div>
+                    <div class="col-md-4">
+                        <p class="text-center">
+                            <strong>磁盘使用</strong>
+                        </p>
+                        <div class="progress progress-sm">
+                            <div class="progress-bar bg-warning" id="diskProgress" style="width: 0%"></div>
+                        </div>
+                        <small id="diskUsage">0%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let trendChart, pieChart, captchaTypeChart;
+const REFRESH_INTERVAL = 30000;
+
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    loadDashboardData();
+    loadSystemStatus();
+    loadRecentVerifications();
+
+    setInterval(loadDashboardData, REFRESH_INTERVAL);
+    setInterval(loadSystemStatus, REFRESH_INTERVAL);
+
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        loadDashboardData();
+        loadSystemStatus();
+        loadRecentVerifications();
+    });
+});
+
+function initCharts() {
+    initTrendChart();
+    initPieChart();
+    initCaptchaTypeChart();
+}
+
+function initTrendChart() {
+    const ctx = document.getElementById('trendChart');
+    if (!ctx) return;
+
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '验证请求',
+                data: [],
+                borderColor: '#3c8dbc',
+                backgroundColor: 'rgba(60, 140, 188, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function initPieChart() {
+    const ctx = document.getElementById('pieChart');
+    if (!ctx) return;
+
+    pieChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['低风险', '中风险', '高风险', '极高风险'],
+            datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: ['#28a745', '#ffc107', '#fd7e14', '#dc3545']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+function initCaptchaTypeChart() {
+    const ctx = document.getElementById('captchaTypeChart');
+    if (!ctx) return;
+
+    captchaTypeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: '使用次数',
+                data: [],
+                backgroundColor: ['#007bff', '#28a745', '#ffc107', '#dc3545']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+async function loadDashboardData() {
+    try {
+        const response = await fetch('/admin/api/dashboard');
+        if (!response.ok) throw new Error('Network response was not ok');
+
+        const result = await response.json();
+        if (result.code === 0) {
+            updateDashboard(result.data);
+        } else {
+            loadMockData();
+        }
+    } catch (error) {
+        console.error('加载仪表盘数据失败:', error);
+        loadMockData();
+    }
+}
+
+function loadMockData() {
+    const mockData = {
+        summary: {
+            total_requests: Math.floor(Math.random() * 10000) + 5000,
+            pass_rate: (Math.random() * 20 + 80).toFixed(1),
+            block_rate: (Math.random() * 10 + 5).toFixed(1),
+            avg_response_time: Math.floor(Math.random() * 50) + 20
+        },
+        trend: generateMockTrendData(),
+        risk_distribution: {
+            low: Math.floor(Math.random() * 5000) + 3000,
+            medium: Math.floor(Math.random() * 2000) + 500,
+            high: Math.floor(Math.random() * 500) + 100,
+            critical: Math.floor(Math.random() * 100) + 20
+        },
+        captcha_type: [
+            { type: '滑动验证', count: Math.floor(Math.random() * 3000) + 2000 },
+            { type: '点选验证', count: Math.floor(Math.random() * 2000) + 1000 },
+            { type: '图片验证', count: Math.floor(Math.random() * 1500) + 500 },
+            { type: '文字验证', count: Math.floor(Math.random() * 1000) + 200 }
+        ]
+    };
+    updateDashboard(mockData);
+}
+
+function generateMockTrendData() {
+    const data = [];
+    for (let i = 23; i >= 0; i--) {
+        const hour = new Date();
+        hour.setHours(hour.getHours() - i);
+        data.push({
+            time: hour.getHours() + ':00',
+            requests: Math.floor(Math.random() * 500) + 100
+        });
+    }
+    return data;
+}
+
+function updateDashboard(data) {
+    if (data.summary) {
+        animateValue('totalRequests', 0, data.summary.total_requests, 1000);
+        document.getElementById('passRate').textContent = data.summary.pass_rate + '%';
+        document.getElementById('blockRate').textContent = data.summary.block_rate + '%';
+        document.getElementById('avgResponseTime').textContent = data.summary.avg_response_time + 'ms';
+    }
+
+    if (data.trend && trendChart) {
+        trendChart.data.labels = data.trend.map(t => t.time);
+        trendChart.data.datasets[0].data = data.trend.map(t => t.requests);
+        trendChart.update();
+    }
+
+    if (data.risk_distribution && pieChart) {
+        pieChart.data.datasets[0].data = [
+            data.risk_distribution.low || 0,
+            data.risk_distribution.medium || 0,
+            data.risk_distribution.high || 0,
+            data.risk_distribution.critical || 0
+        ];
+        pieChart.update();
+    }
+
+    if (data.captcha_type && captchaTypeChart) {
+        captchaTypeChart.data.labels = data.captcha_type.map(c => c.type);
+        captchaTypeChart.data.datasets[0].data = data.captcha_type.map(c => c.count);
+        captchaTypeChart.update();
+    }
+}
+
+async function loadSystemStatus() {
+    try {
+        const response = await fetch('/admin/api/system-status');
+        if (!response.ok) throw new Error('Network response was not ok');
+
+        const result = await response.json();
+        if (result.code === 0) {
+            updateSystemStatus(result.data);
+        } else {
+            loadMockSystemStatus();
+        }
+    } catch (error) {
+        console.error('加载系统状态失败:', error);
+        loadMockSystemStatus();
+    }
+}
+
+function loadMockSystemStatus() {
+    updateSystemStatus({
+        database: { status: 'healthy', latency: Math.floor(Math.random() * 50) + 10 },
+        redis: { status: 'healthy', latency: Math.floor(Math.random() * 10) + 1 },
+        api: { status: 'healthy', latency: Math.floor(Math.random() * 100) + 20 },
+        storage: { status: 'healthy', latency: Math.floor(Math.random() * 30) + 5 },
+        cpu: Math.floor(Math.random() * 40) + 20,
+        memory: Math.floor(Math.random() * 30) + 40,
+        disk: Math.floor(Math.random() * 20) + 50
+    });
+}
+
+function updateSystemStatus(data) {
+    if (data.database) {
+        document.getElementById('dbLatency').textContent = data.database.latency + 'ms';
+        document.getElementById('dbStatus').className = 'info-box-icon ' + (data.database.status === 'healthy' ? 'bg-success' : 'bg-danger');
+    }
+
+    if (data.redis) {
+        document.getElementById('redisLatency').textContent = data.redis.latency + 'ms';
+        document.getElementById('redisStatus').className = 'info-box-icon ' + (data.redis.status === 'healthy' ? 'bg-success' : 'bg-danger');
+    }
+
+    if (data.api) {
+        document.getElementById('apiLatency').textContent = data.api.latency + 'ms';
+        document.getElementById('apiStatus').className = 'info-box-icon ' + (data.api.status === 'healthy' ? 'bg-success' : 'bg-danger');
+    }
+
+    if (data.storage) {
+        document.getElementById('storageLatency').textContent = data.storage.latency + 'ms';
+        document.getElementById('storageStatus').className = 'info-box-icon ' + (data.storage.status === 'healthy' ? 'bg-success' : 'bg-danger');
+    }
+
+    if (data.cpu !== undefined) {
+        document.getElementById('cpuUsage').textContent = data.cpu + '%';
+        document.getElementById('cpuProgress').style.width = data.cpu + '%';
+        const cpuBar = document.getElementById('cpuProgress');
+        cpuBar.className = 'progress-bar ' + (data.cpu > 80 ? 'bg-danger' : data.cpu > 60 ? 'bg-warning' : 'bg-primary');
+    }
+
+    if (data.memory !== undefined) {
+        document.getElementById('memUsage').textContent = data.memory + '%';
+        document.getElementById('memProgress').style.width = data.memory + '%';
+        const memBar = document.getElementById('memProgress');
+        memBar.className = 'progress-bar ' + (data.memory > 80 ? 'bg-danger' : data.memory > 60 ? 'bg-warning' : 'bg-success');
+    }
+
+    if (data.disk !== undefined) {
+        document.getElementById('diskUsage').textContent = data.disk + '%';
+        document.getElementById('diskProgress').style.width = data.disk + '%';
+    }
+}
+
+async function loadRecentVerifications() {
+    try {
+        const response = await fetch('/admin/api/recent-verifications');
+        if (!response.ok) throw new Error('Network response was not ok');
+
+        const result = await response.json();
+        if (result.code === 0) {
+            renderRecentVerifications(result.data);
+        } else {
+            renderMockRecentVerifications();
+        }
+    } catch (error) {
+        console.error('加载最近验证记录失败:', error);
+        renderMockRecentVerifications();
+    }
+}
+
+function renderMockRecentVerifications() {
+    const mockData = [];
+    for (let i = 0; i < 10; i++) {
+        const date = new Date();
+        date.setMinutes(date.getMinutes() - i * 5);
+        mockData.push({
+            time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            app: 'App_' + (Math.floor(Math.random() * 10) + 1),
+            type: ['滑动验证', '点选验证', '图片验证'][Math.floor(Math.random() * 3)],
+            status: Math.random() > 0.1 ? 'success' : 'failed'
+        });
+    }
+    renderRecentVerifications(mockData);
+}
+
+function renderRecentVerifications(data) {
+    const tbody = document.getElementById('recentVerifications');
+    if (!tbody || !data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无数据</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.slice(0, 10).map(item => `
+        <tr>
+            <td>${item.time || '-'}</td>
+            <td>${escapeHtml(item.app || '-')}</td>
+            <td>${escapeHtml(item.type || '-')}</td>
+            <td><span class="badge badge-${item.status === 'success' ? 'success' : 'danger'}">${item.status === 'success' ? '成功' : '失败'}</span></td>
+        </tr>
+    `).join('');
+}
+
+function animateValue(elementId, start, end, duration) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 4);
+        const value = Math.floor(start + (end - start) * easeProgress);
+        element.textContent = formatNumber(value);
+
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

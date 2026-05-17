@@ -11,150 +11,96 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/i18n"
 )
 
-// SetupRouter 设置路由
 func SetupRouter() *gin.Engine {
 	r := gin.New()
 
-	// 全局中间件
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS())
 	r.Use(middleware.ErrorHandler())
-	// 增强的安全中间件 - OWASP Top 10
-	r.Use(middleware.OWASPTop10SecurityMiddleware())
-	// 性能优化中间件
 	r.Use(middleware.GzipCompression())
 	r.Use(middleware.PerformanceMonitoring())
 	r.Use(middleware.RequestID())
-	// i18n 中间件
 	r.Use(i18n.Middleware())
 
-	// 翻译文件静态服务
-	translationsGroup := r.Group("/translations")
-	translationsGroup.Use(middleware.CacheControl(1 * time.Hour))
-	translationsGroup.Static("", "translations")
+	middleware.SetupSecurityMiddleware(r)
 
-	adminTranslationsGroup := r.Group("/admin/translations")
-	adminTranslationsGroup.Use(middleware.CacheControl(1 * time.Hour))
-	adminTranslationsGroup.Static("", "translations")
+	r.Static("/static", "./static")
+	r.Static("/uploads", "./uploads")
 
-	// 健康检查
-	r.GET("/health", handler.HealthCheck)
-	r.GET("/healthz", handler.Liveness)
-	r.GET("/readyz", handler.Readiness)
+	r.SetFuncMap(template.FuncMap{
+		"formatDate": func(t time.Time) string {
+			return t.Format("2006-01-02 15:04:05")
+		},
+		"formatUnixTime": func(t int64) string {
+			return time.Unix(t, 0).Format("2006-01-02 15:04:05")
+		},
+		"safeHTML": func(str string) template.HTML {
+			return template.HTML(str)
+		},
+	})
 
-	// 静态文件服务 - 带缓存优化
-	staticGroup := r.Group("/static")
-	staticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
-	staticGroup.Static("", "../frontend/static")
-	
-	adminStaticGroup := r.Group("/admin/static")
-	adminStaticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
-	adminStaticGroup.Static("", "../admin/static")
+	r.LoadHTMLGlob(filepath.Join(".", "templates", "**", "*"))
 
-	// 开发者工具静态文件服务
-	devtoolsStaticGroup := r.Group("/devtools/static")
-	devtoolsStaticGroup.Use(middleware.CacheControl(7 * 24 * time.Hour))
-	devtoolsStaticGroup.Static("", "../devtools/static")
-
-	// 加载HTML模板（合并前端、管理端和开发者工具模板，避免多次LoadHTMLGlob覆盖）
-	templates := template.Must(template.New("").Parse(""))
-	for _, glob := range []string{"../frontend/templates/*"} {
-		matches, err := filepath.Glob(glob)
-		if err != nil {
-			continue
-		}
-		for _, match := range matches {
-			template.Must(templates.ParseFiles(match))
-		}
-	}
-	r.SetHTMLTemplate(templates)
-
-	// 前端页面路由
 	r.GET("/", func(c *gin.Context) {
-		c.HTML(200, "home.html", nil)
-	})
-	r.GET("/captcha", func(c *gin.Context) {
-		c.HTML(200, "captcha.html", nil)
-	})
-	r.GET("/login", func(c *gin.Context) {
-		c.HTML(200, "home.html", nil)
-	})
-	r.GET("/register", func(c *gin.Context) {
-		c.HTML(200, "home.html", nil)
-	})
-	r.GET("/products", func(c *gin.Context) {
-		c.HTML(200, "home.html", nil)
-	})
-	r.GET("/about", func(c *gin.Context) {
-		c.HTML(200, "home.html", nil)
-	})
-	r.GET("/contact", func(c *gin.Context) {
-		c.HTML(200, "home.html", nil)
+		c.JSON(200, gin.H{
+			"code":    0,
+			"message": "Welcome to HJT PX API",
+			"version": "1.0.0",
+		})
 	})
 
-	// 管理端页面路由
-	r.GET("/admin/login", func(c *gin.Context) {
-		c.HTML(200, "login.html", nil)
-	})
-	r.GET("/admin", func(c *gin.Context) {
-		c.HTML(200, "dashboard.html", nil)
-	})
-	r.GET("/admin/stats", func(c *gin.Context) {
-		c.HTML(200, "stats.html", nil)
-	})
-	r.GET("/admin/advanced-analytics", func(c *gin.Context) {
-		c.HTML(200, "advanced-analytics.html", nil)
-	})
-	r.GET("/admin/applications", func(c *gin.Context) {
-		c.HTML(200, "applications.html", nil)
-	})
-	r.GET("/admin/logs", func(c *gin.Context) {
-		c.HTML(200, "logs.html", nil)
-	})
-	r.GET("/admin/risk-rules", func(c *gin.Context) {
-		c.HTML(200, "risk-rules.html", nil)
-	})
-	r.GET("/admin/blacklist", func(c *gin.Context) {
-		c.HTML(200, "blacklist.html", nil)
-	})
-	r.GET("/admin/monitoring", func(c *gin.Context) {
-		c.HTML(200, "monitoring.html", nil)
-	})
-	r.GET("/admin/ab-testing", func(c *gin.Context) {
-		c.HTML(200, "ab-testing.html", nil)
-	})
-	r.GET("/admin/real-time-screen", func(c *gin.Context) {
-		c.HTML(200, "real-time-screen.html", nil)
-	})
+	adminRouter := r.Group("/admin")
+	{
+		adminRouter.GET("/", func(c *gin.Context) {
+			c.HTML(200, "dashboard.html", gin.H{
+				"title": "仪表盘",
+			})
+		})
 
-	// 开发者工具页面路由
-	r.GET("/devtools", func(c *gin.Context) {
-		c.HTML(200, "api-console.html", gin.H{"Title": "API 调试控制台", "ActivePage": "api-console"})
-	})
-	r.GET("/devtools/api-console", func(c *gin.Context) {
-		c.HTML(200, "api-console.html", gin.H{"Title": "API 调试控制台", "ActivePage": "api-console"})
-	})
-	r.GET("/devtools/captcha-test", func(c *gin.Context) {
-		c.HTML(200, "captcha-test.html", gin.H{"Title": "验证码在线测试", "ActivePage": "captcha-test"})
-	})
-	r.GET("/devtools/code-generator", func(c *gin.Context) {
-		c.HTML(200, "code-generator.html", gin.H{"Title": "SDK 代码生成器", "ActivePage": "code-generator"})
-	})
-	r.GET("/devtools/examples", func(c *gin.Context) {
-		c.HTML(200, "examples.html", gin.H{"Title": "集成示例", "ActivePage": "examples"})
-	})
-	r.GET("/devtools/docs", func(c *gin.Context) {
-		c.HTML(200, "docs.html", gin.H{"Title": "API 文档", "ActivePage": "docs"})
-	})
+		adminRouter.GET("/dashboard", func(c *gin.Context) {
+			c.HTML(200, "dashboard.html", gin.H{
+				"title": "仪表盘",
+			})
+		})
 
-	// 初始化导出处理器
-	exportHandler := handler.NewExportHandler()
+		adminRouter.GET("/stats", func(c *gin.Context) {
+			c.HTML(200, "stats.html", gin.H{
+				"title": "统计分析",
+			})
+		})
 
-	// API路由组
+		adminRouter.GET("/logs", func(c *gin.Context) {
+			c.HTML(200, "logs.html", gin.H{
+				"title": "验证日志",
+			})
+		})
+
+		adminRouter.GET("/config", func(c *gin.Context) {
+			c.HTML(200, "config.html", gin.H{
+				"title": "系统配置",
+			})
+		})
+
+		adminRouter.GET("/api/dashboard", handler.GetDashboardData)
+		adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
+		adminRouter.GET("/api/system-status", handler.GetSystemStatus)
+		adminRouter.GET("/api/alerts", handler.GetDashboardAlerts)
+		adminRouter.GET("/export", handler.ExportDashboardData)
+
+		adminRouter.GET("/api/logs", handler.GetVerificationLogs)
+		adminRouter.GET("/api/logs/:id", handler.GetLogDetail)
+		adminRouter.GET("/api/logs/export", handler.ExportLogs)
+		adminRouter.DELETE("/api/logs/clear", handler.DeleteOldLogs)
+		adminRouter.GET("/api/logs/session/:session_id", handler.GetLogsBySession)
+		adminRouter.GET("/api/logs/statistics", handler.GetLogStatistics)
+		adminRouter.GET("/api/config", handler.GetAllConfig)
+		adminRouter.PUT("/api/config", handler.UpdateConfig)
+		adminRouter.GET("/api/config/export", handler.ExportConfig)
+		adminRouter.POST("/api/config/reset", handler.ResetConfig)
+	}
+
 	api := r.Group("/api/v1")
 	{
-		// 验证码相关路由
 		captcha := api.Group("/captcha")
 		{
 			captcha.GET("/slider", handler.GetSliderCaptcha)
@@ -164,252 +110,86 @@ func SetupRouter() *gin.Engine {
 			captcha.POST("/gesture/verify", handler.VerifyGestureCaptcha)
 			captcha.GET("/jigsaw", handler.GenerateJigsawCaptcha)
 			captcha.POST("/jigsaw/verify", handler.VerifyJigsawCaptcha)
+
+			captcha.POST("/create", handler.CreateSliderCaptcha)
+			captcha.POST("/verify-v2", handler.VerifySliderCaptcha)
+			captcha.GET("/status/:session_id", handler.GetSliderCaptchaStatus)
+			captcha.GET("/check/:session_id", handler.CheckSliderCaptchaValid)
 		}
 
-		// 环境检测路由
-		api.GET("/detect/script", handler.GetDetectionScript)
-		api.POST("/detect/submit", handler.SubmitDetectionData)
-		api.POST("/detect/check", handler.EnvironmentCheck)
-		api.GET("/detect/fingerprint", handler.GetFingerprintStats)
-
-		// 认证路由（供前端调用）
 		auth := api.Group("/auth")
 		{
-			userHandler := handler.GetUserHandler()
-			auth.POST("/register", userHandler.Register)
-			auth.POST("/login", userHandler.Login)
-			auth.POST("/logout", userHandler.Logout)
-			auth.POST("/refresh", userHandler.RefreshToken)
-			auth.GET("/verify-email", userHandler.VerifyEmail)
-			auth.POST("/resend-verification", userHandler.ResendVerification)
-			auth.POST("/request-password-reset", userHandler.RequestPasswordReset)
-			auth.POST("/reset-password", userHandler.ResetPassword)
+			auth.POST("/register", handler.Register)
+			auth.POST("/login", handler.Login)
+			auth.POST("/logout", handler.Logout)
+			auth.GET("/profile", handler.GetProfile)
+			auth.PUT("/profile", handler.UpdateProfile)
+			auth.POST("/change-password", handler.ChangePassword)
+			auth.POST("/refresh-token", handler.RefreshToken)
 		}
 
-		// 无感验证路由
-		seamless := api.Group("/seamless")
+		verify := api.Group("/verify")
 		{
-			seamless.POST("/verify", handler.SeamlessVerify)
+			verify.POST("/email", handler.VerifyEmail)
+			verify.POST("/phone", handler.VerifyPhone)
 		}
 
-		// 用户路由
-		user := api.Group("/user")
-		user.Use(middleware.UserAuthMiddleware())
-		{
-			userHandler := handler.GetUserHandler()
-			user.GET("/profile", userHandler.GetProfile)
-			user.PUT("/profile", userHandler.UpdateProfile)
-			user.POST("/change-password", userHandler.ChangePassword)
-			user.GET("/trusted-devices", handler.GetTrustedDevices)
-			user.POST("/trusted-devices", handler.TrustDevice)
-			user.DELETE("/trusted-devices/:id", handler.RevokeTrustedDevice)
-		}
-
-		// 管理员路由
 		admin := api.Group("/admin")
+		admin.Use(middleware.AdminAuth())
 		{
-			admin.POST("/login", handler.Login)
-			admin.POST("/logout", handler.Logout)
-			admin.GET("/monitoring/ws", handler.WebSocketMonitoringHandler)
+			admin.GET("/stats", handler.GetStats)
+			admin.GET("/users", handler.ListUsers)
+			admin.POST("/users", handler.CreateUser)
+			admin.PUT("/users/:id", handler.UpdateUser)
+			admin.DELETE("/users/:id", handler.DeleteUser)
+			admin.PUT("/users/:id/status", handler.UpdateUserStatus)
+			admin.POST("/users/:id/reset-password", handler.ResetUserPassword)
 
-			// 需要JWT认证的路由
-			adminAuth := admin.Group("")
-			adminAuth.Use(middleware.AuthMiddleware())
-			{
-				// 仪表盘数据
-				dashboard := adminAuth.Group("/dashboard")
-				{
-					dashboard.GET("/stats", handler.GetDashboardStats)
-					dashboard.GET("/activity", handler.GetRecentActivity)
-					dashboard.GET("/system-status", handler.GetSystemStatus)
-					dashboard.GET("/request-trend", handler.GetRequestTrend)
-				}
+			admin.GET("/applications", handler.ListApplications)
+			admin.POST("/applications", handler.CreateApplication)
+			admin.PUT("/applications/:id", handler.UpdateApplication)
+			admin.DELETE("/applications/:id", handler.DeleteApplication)
+			admin.POST("/applications/:id/approve", handler.ApproveApplication)
+			admin.POST("/applications/:id/reject", handler.RejectApplication)
 
-				// 统计数据
-				stats := adminAuth.Group("/stats")
-				{
-					stats.GET("/verification", handler.GetVerificationStats)
-					stats.GET("/chart", handler.GetChartData)
-					stats.GET("/trend", handler.GetTrendData)
-					stats.GET("/hourly", handler.GetHourlyStats)
-					stats.GET("/realtime", handler.GetRealtimeStats)
-					stats.GET("/risk-distribution", handler.GetRiskDistribution)
-					stats.GET("/top-ips", handler.GetTopIPs)
-					stats.GET("/application", handler.GetApplicationStats)
-					stats.GET("/captcha-type", handler.GetCaptchaTypeStats)
-					stats.GET("/report", handler.GenerateReport)
-				}
+			admin.GET("/api-keys", handler.ListAPIKeys)
+			admin.POST("/api-keys", handler.CreateAPIKey)
+			admin.DELETE("/api-keys/:id", handler.DeleteAPIKey)
+			admin.POST("/api-keys/:id/regenerate", handler.RegenerateAPIKey)
 
-				// 应用管理
-				applications := adminAuth.Group("/applications")
-				{
-					applications.GET("/summary", handler.GetApplicationsSummary)
-					applications.GET("", handler.ListApplications)
-					applications.POST("", handler.CreateApplication)
-					applications.GET("/:id", handler.GetApplication)
-					applications.PUT("/:id", handler.UpdateApplication)
-					applications.DELETE("/:id", handler.DeleteApplication)
-					applications.POST("/:id/regenerate-key", handler.RegenerateApplicationKey)
-					applications.GET("/:id/config", handler.GetApplicationConfig)
-					applications.PUT("/:id/config", handler.UpdateApplicationConfig)
-					applications.GET("/:id/statistics", handler.GetApplicationStatistics)
-				}
+			admin.GET("/verifications", handler.ListVerifications)
+			admin.GET("/verifications/:id", handler.GetVerificationDetail)
+			admin.POST("/verifications/:id/review", handler.ReviewVerification)
 
-				// 验证日志查询
-				logs := adminAuth.Group("/logs")
-				{
-					logs.GET("/summary", handler.GetLogsSummary)
-					logs.GET("", handler.GetVerificationLogs)
-					logs.GET("/statistics", handler.GetLogStatistics)
-					logs.GET("/export", handler.ExportLogs)
-					logs.GET("/export/enhanced", exportHandler.EnhancedExportLogs) // 新增增强导出
-					logs.GET("/session/:session_id", handler.GetLogsBySession)
-					logs.DELETE("/cleanup", handler.DeleteOldLogs)
-					logs.POST("/clear", handler.ClearLogs)
-					logs.GET("/:id", handler.GetLogDetail)
-				}
-				
-				// 定时导出管理
-				scheduledExports := adminAuth.Group("/scheduled-exports")
-				{
-					scheduledExports.GET("", exportHandler.ListScheduledExports)
-					scheduledExports.POST("", exportHandler.CreateScheduledExport)
-					scheduledExports.GET("/:id", exportHandler.GetScheduledExport)
-					scheduledExports.PUT("/:id", exportHandler.UpdateScheduledExport)
-					scheduledExports.DELETE("/:id", exportHandler.DeleteScheduledExport)
-					scheduledExports.POST("/:id/execute", exportHandler.ExecuteScheduledExport)
-				}
-				
-				// 报表模板管理
-				reportTemplates := adminAuth.Group("/report-templates")
-				{
-					reportTemplates.GET("", exportHandler.ListReportTemplates)
-					reportTemplates.POST("", exportHandler.CreateReportTemplate)
-					reportTemplates.GET("/:id", exportHandler.GetReportTemplate)
-					reportTemplates.PUT("/:id", exportHandler.UpdateReportTemplate)
-					reportTemplates.DELETE("/:id", exportHandler.DeleteReportTemplate)
-				}
-				
-				// 导出历史
-				exportHistory := adminAuth.Group("/export-history")
-				{
-					exportHistory.GET("", exportHandler.ListExportHistory)
-				}
+			admin.GET("/blacklist", handler.ListBlacklist)
+			admin.POST("/blacklist", handler.AddToBlacklist)
+			admin.DELETE("/blacklist/:id", handler.RemoveFromBlacklist)
 
-				// 黑名单管理
-				blacklist := adminAuth.Group("/blacklist")
-				{
-					blacklist.GET("/summary", handler.GetBlacklistSummary)
-					blacklist.GET("", handler.ListBlacklist)
-					blacklist.POST("", handler.CreateBlacklist)
-					blacklist.POST("/import", handler.ImportBlacklist)
-					blacklist.GET("/:id", handler.GetBlacklistByID)
-					blacklist.PUT("/:id", handler.UpdateBlacklist)
-					blacklist.DELETE("/:id", handler.DeleteBlacklist)
-					blacklist.POST("/:id/unblock", handler.UnblockBlacklist)
-				}
+			admin.GET("/settings", handler.GetSettings)
+			admin.PUT("/settings", handler.UpdateSettings)
 
-				// 风控规则管理
-				riskRules := adminAuth.Group("/risk-rules")
-				{
-					riskRules.GET("/summary", handler.GetRiskRulesSummary)
-					riskRules.GET("", handler.ListRiskRules)
-					riskRules.POST("", handler.CreateRiskRule)
-					riskRules.GET("/:id", handler.GetRiskRule)
-					riskRules.PUT("/:id", handler.UpdateRiskRule)
-					riskRules.DELETE("/:id", handler.DeleteRiskRule)
-					riskRules.POST("/:id/toggle", handler.ToggleRiskRule)
-				}
+			admin.GET("/risk-events", handler.ListRiskEvents)
+			admin.GET("/risk-events/:id", handler.GetRiskEventDetail)
 
-				// CSS来源切换
-				adminAuth.GET("/css-source", handler.GetCSSSource)
-				adminAuth.POST("/css-source", handler.SetCSSSource)
+			admin.GET("/traces", handler.ListTraces)
+			admin.GET("/traces/:id", handler.GetTraceDetail)
 
-				// 高级分析
-				analytics := adminAuth.Group("/analytics")
-				{
-					analytics.GET("/user-behavior", handler.GetUserBehaviorAnalysis)
-					analytics.GET("/attack-trend", handler.GetAttackTrendAnalysis)
-					analytics.POST("/generate-report", handler.GenerateRiskReport)
-					analytics.GET("/visualization", handler.GetVisualizationData)
-					analytics.GET("/report-configs", handler.ListReportConfigs)
-					analytics.POST("/report-configs", handler.CreateReportConfig)
-					analytics.GET("/report-configs/:id", handler.GetReportConfig)
-					analytics.PUT("/report-configs/:id", handler.UpdateReportConfig)
-					analytics.DELETE("/report-configs/:id", handler.DeleteReportConfig)
-				}
+			admin.GET("/alerts/channels", handler.ListAlertChannels)
+			admin.POST("/alerts/channels", handler.CreateAlertChannel)
+			admin.PUT("/alerts/channels/:id", handler.UpdateAlertChannel)
+			admin.DELETE("/alerts/channels/:id", handler.DeleteAlertChannel)
 
-				// 实时监控
-				monitoring := adminAuth.Group("/monitoring")
-				{
-					monitoring.GET("/data", handler.GetMonitoringData)
-					monitoring.GET("/alerts", handler.GetAlerts)
-					monitoring.POST("/alerts/:id/acknowledge", handler.AcknowledgeAlert)
-					monitoring.GET("/system-metrics", handler.GetSystemMetrics)
-					monitoring.GET("/request-metrics", handler.GetRequestMetrics)
-					monitoring.GET("/api-stats", handler.GetApiStats)
-					monitoring.GET("/realtime-data", handler.GetRealtimeMonitoringData)
-					monitoring.GET("/system-status", handler.GetRealtimeSystemStatus)
-					monitoring.GET("/realtime-alerts", handler.GetRealtimeAlerts)
-				}
+			admin.GET("/alerts/rules", handler.ListAlertRules)
+			admin.POST("/alerts/rules", handler.CreateAlertRule)
+			admin.PUT("/alerts/rules/:id", handler.UpdateAlertRule)
+			admin.DELETE("/alerts/rules/:id", handler.DeleteAlertRule)
+			admin.POST("/alerts/rules/:id/enable", handler.EnableAlertRule)
+			admin.POST("/alerts/rules/:id/disable", handler.DisableAlertRule)
 
-				// 告警系统
-				alerts := adminAuth.Group("/alerts")
-				{
-					// 告警渠道管理
-					alerts.GET("/channels", handler.ListAlertChannels)
-					alerts.POST("/channels", handler.CreateAlertChannel)
-					alerts.GET("/channels/:id", handler.GetAlertChannel)
-					alerts.PUT("/channels/:id", handler.UpdateAlertChannel)
-					alerts.DELETE("/channels/:id", handler.DeleteAlertChannel)
-
-					// 告警规则管理
-					alerts.GET("/rules", handler.ListAlertRules)
-					alerts.POST("/rules", handler.CreateAlertRule)
-					alerts.GET("/rules/:id", handler.GetAlertRule)
-					alerts.PUT("/rules/:id", handler.UpdateAlertRule)
-					alerts.DELETE("/rules/:id", handler.DeleteAlertRule)
-
-					// 告警记录管理
-					alerts.GET("", handler.ListAlerts)
-					alerts.GET("/:id", handler.GetAlert)
-					alerts.POST("/:id/resolve", handler.ResolveAlert)
-					alerts.GET("/:id/history", handler.GetAlertHistory)
-
-					// 测试告警
-					alerts.POST("/test", handler.SendTestAlert)
-				}
-
-				// A/B测试管理
-				abTesting := adminAuth.Group("/ab-testing")
-				{
-					abTesting.GET("/summary", handler.GetABTestSummary)
-					abTesting.GET("/active", handler.GetActiveTests)
-					abTesting.GET("", handler.ListABTests)
-					abTesting.POST("", handler.CreateABTest)
-					abTesting.GET("/:id", handler.GetABTest)
-					abTesting.PUT("/:id", handler.UpdateABTest)
-					abTesting.DELETE("/:id", handler.DeleteABTest)
-					abTesting.POST("/:id/start", handler.StartABTest)
-					abTesting.POST("/:id/stop", handler.StopABTest)
-					abTesting.GET("/:id/report", handler.GetTestReport)
-				}
-			}
+			admin.GET("/alerts/history", handler.ListAlertHistory)
+			admin.POST("/alerts/history/:id/acknowledge", handler.AcknowledgeAlert)
+			admin.POST("/alerts/history/:id/resolve", handler.ResolveAlert)
 		}
-
-		// A/B测试客户端API（无需认证，用于前端获取变体和追踪事件）
-		abTestClient := api.Group("/ab-testing")
-		{
-			abTestClient.POST("/assign", handler.AssignVariant)
-			abTestClient.POST("/event", handler.TrackEvent)
-		}
-
-		// 示例路由
-		api.GET("/ping", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"message": "pong",
-			})
-		})
 	}
 
 	return r

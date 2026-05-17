@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: captcha
+          POSTGRES_PASSWORD: captcha123
+          POSTGRES_DB: captcha_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Go Vet
+      run: go vet ./...
+    
+    - name: Run Unit Tests
+      run: go test -v -race -coverprofile=coverage.out ./...
+      env:
+        DATABASE_URL: postgres://captcha:captcha123@localhost:5432/captcha_db?sslmode=disable
+        REDIS_ADDR: localhost:6379
+    
+    - name: Upload Coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage.out
+    
+    - name: Build
+      run: go build -v ./...

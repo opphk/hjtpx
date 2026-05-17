@@ -6,13 +6,330 @@
     <title>墨盾验证 · 管理后台登录</title>
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            background: var(--bg-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-bg-ornament {
+            position: absolute;
+            font-size: 300px;
+            color: rgba(255, 255, 255, 0.05);
+            font-weight: bold;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .login-bg-ornament:first-child {
+            top: -50px;
+            left: -50px;
+        }
+
+        .login-bg-ornament:last-child {
+            bottom: -50px;
+            right: -50px;
+        }
+
+        .login-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 45px 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-brand {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-brand-icon {
+            width: 70px;
+            height: 70px;
+            background: var(--bg-gradient);
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .login-brand-icon i {
+            font-size: 32px;
+            color: white;
+        }
+
+        .login-brand-name {
+            font-size: 26px;
+            font-weight: 700;
+            color: #1F2937;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .login-seal {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .login-brand-sub {
+            font-size: 13px;
+            color: #6B7280;
+            margin-top: 8px;
+            letter-spacing: 4px;
+        }
+
+        .login-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #E5E7EB, transparent);
+            margin: 25px 0;
+        }
+
+        .form-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .form-control {
+            height: 48px;
+            border: 2px solid #E5E7EB;
+            border-radius: 10px;
+            font-size: 15px;
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .form-control.is-invalid {
+            border-color: #EF4444;
+        }
+
+        .input-group-text {
+            background: transparent;
+            border: 2px solid #E5E7EB;
+            border-right: none;
+            border-radius: 10px 0 0 10px;
+            color: #9CA3AF;
+        }
+
+        .input-group .form-control {
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+        }
+
+        .input-group:focus-within .input-group-text,
+        .input-group:focus-within .form-control {
+            border-color: var(--primary-color);
+        }
+
+        .login-btn {
+            width: 100%;
+            height: 50px;
+            background: var(--bg-gradient);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .login-btn .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        .login-btn.loading .spinner {
+            display: inline-block;
+        }
+
+        .login-btn.loading .btn-text {
+            opacity: 0.8;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .login-error {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: #FEF2F2;
+            border: 1px solid #FECACA;
+            border-radius: 8px;
+            color: #DC2626;
+            font-size: 14px;
+            display: none;
+            animation: shake 0.5s ease;
+        }
+
+        .login-error.show {
+            display: block;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #9CA3AF;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #9CA3AF;
+            cursor: pointer;
+            padding: 4px;
+            z-index: 10;
+        }
+
+        .password-toggle:hover {
+            color: #6B7280;
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper .form-control {
+            padding-right: 45px;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .remember-me input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            cursor: pointer;
+            accent-color: var(--primary-color);
+        }
+
+        .remember-me label {
+            font-size: 14px;
+            color: #6B7280;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 35px 25px;
+                border-radius: 16px;
+            }
+
+            .login-brand-icon {
+                width: 60px;
+                height: 60px;
+            }
+
+            .login-brand-name {
+                font-size: 22px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="login-bg-ornament">墨</div>
     <div class="login-bg-ornament">盾</div>
 
-    <div class="login-container bg-dark min-vh-100 d-flex align-items-center justify-content-center">
-        <div class="login-card bg-white rounded shadow-lg p-5">
+    <div class="login-container">
+        <div class="login-card">
             <div class="login-brand">
                 <div class="login-brand-icon">
                     <i class="fas fa-shield-halved"></i>
@@ -24,23 +341,39 @@
                 <div class="login-brand-sub">管 理 后 台</div>
             </div>
             <div class="login-divider"></div>
-            <form id="loginForm">
-                <div class="mb-4">
+            <form id="loginForm" novalidate>
+                <div class="mb-3">
                     <label for="username" class="form-label">
                         <i class="fas fa-user me-1" style="color: #999; font-size: 12px;"></i>
                         用户名
                     </label>
-                    <input type="text" class="form-control" id="username" name="username" placeholder="请输入管理员用户名" required autocomplete="username">
+                    <input type="text" class="form-control" id="username" name="username" 
+                           placeholder="请输入管理员用户名" required autocomplete="username"
+                           minlength="3" maxlength="50">
+                    <div class="invalid-feedback">用户名至少需要3个字符</div>
                 </div>
                 <div class="mb-3">
                     <label for="password" class="form-label">
                         <i class="fas fa-lock me-1" style="color: #999; font-size: 12px;"></i>
                         密码
                     </label>
-                    <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password">
+                    <div class="password-wrapper">
+                        <input type="password" class="form-control" id="password" name="password" 
+                               placeholder="请输入密码" required autocomplete="current-password"
+                               minlength="6" maxlength="100">
+                        <button type="button" class="password-toggle" onclick="togglePassword()">
+                            <i class="fas fa-eye" id="toggleIcon"></i>
+                        </button>
+                    </div>
+                    <div class="invalid-feedback">密码至少需要6个字符</div>
+                </div>
+                <div class="remember-me">
+                    <input type="checkbox" id="remember" name="remember">
+                    <label for="remember">记住登录状态</label>
                 </div>
                 <button type="submit" id="loginBtn" class="login-btn">
-                    <i class="fas fa-key me-2"></i>登 录
+                    <span class="spinner"></span>
+                    <span class="btn-text"><i class="fas fa-key me-2"></i>登 录</span>
                 </button>
                 <div id="loginError" class="login-error"></div>
             </form>
@@ -49,6 +382,224 @@
     </div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
-    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        const API_BASE = '/api/v1';
+        const TOKEN_KEY = 'admin_token';
+        const USER_KEY = 'admin_user';
+
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('toggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('loginError');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 5000);
+        }
+
+        function setLoading(loading) {
+            const btn = document.getElementById('loginBtn');
+            if (loading) {
+                btn.classList.add('loading');
+                btn.disabled = true;
+                btn.querySelector('.btn-text').textContent = '登录中...';
+            } else {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+                btn.querySelector('.btn-text').innerHTML = '<i class="fas fa-key me-2"></i>登 录';
+            }
+        }
+
+        function validateForm() {
+            const username = document.getElementById('username');
+            const password = document.getElementById('password');
+            let isValid = true;
+
+            if (username.value.trim().length < 3) {
+                username.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                username.classList.remove('is-invalid');
+            }
+
+            if (password.value.length < 6) {
+                password.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                password.classList.remove('is-invalid');
+            }
+
+            return isValid;
+        }
+
+        async function login(username, password) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.code === 0) {
+                    localStorage.setItem(TOKEN_KEY, data.data.token);
+                    localStorage.setItem(USER_KEY, JSON.stringify(data.data.user));
+                    
+                    if (document.getElementById('remember').checked) {
+                        localStorage.setItem('remember_me', 'true');
+                    }
+                    
+                    return { success: true };
+                }
+
+                return { success: false, message: data.message || '登录失败' };
+            } catch (error) {
+                return { success: false, message: '网络错误，请稍后重试' };
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('loginForm');
+            const token = localStorage.getItem(TOKEN_KEY);
+
+            if (token) {
+                window.location.href = '/admin/';
+                return;
+            }
+
+            document.getElementById('username').addEventListener('input', function() {
+                if (this.value.trim().length >= 3) {
+                    this.classList.remove('is-invalid');
+                }
+            });
+
+            document.getElementById('password').addEventListener('input', function() {
+                if (this.value.length >= 6) {
+                    this.classList.remove('is-invalid');
+                }
+            });
+
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                if (!validateForm()) {
+                    return;
+                }
+
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value;
+
+                setLoading(true);
+                const result = await login(username, password);
+                setLoading(false);
+
+                if (result.success) {
+                    window.location.href = '/admin/';
+                } else {
+                    showError(result.message);
+                }
+            });
+        });
+
+        const auth = {
+            getToken() {
+                return localStorage.getItem(TOKEN_KEY);
+            },
+            setToken(token) {
+                localStorage.setItem(TOKEN_KEY, token);
+            },
+            removeToken() {
+                localStorage.removeItem(TOKEN_KEY);
+            },
+            getUser() {
+                const userStr = localStorage.getItem(USER_KEY);
+                return userStr ? JSON.parse(userStr) : null;
+            },
+            setUser(user) {
+                localStorage.setItem(USER_KEY, JSON.stringify(user));
+            },
+            removeUser() {
+                localStorage.removeItem(USER_KEY);
+            },
+            isAuthenticated() {
+                const token = this.getToken();
+                return !!token;
+            },
+            async login(username, password) {
+                return login(username, password);
+            },
+            async logout() {
+                try {
+                    const token = this.getToken();
+                    if (token) {
+                        await fetch(`${API_BASE}/admin/logout`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                } finally {
+                    this.removeToken();
+                    this.removeUser();
+                    localStorage.removeItem('remember_me');
+                    window.location.href = '/admin/login';
+                }
+            },
+            async request(url, options = {}) {
+                const token = this.getToken();
+                const headers = {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                };
+
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE}${url}`, {
+                        ...options,
+                        headers
+                    });
+
+                    if (response.status === 401) {
+                        this.removeToken();
+                        this.removeUser();
+                        window.location.href = '/admin/login';
+                        throw new Error('未授权');
+                    }
+
+                    const data = await response.json();
+                    return data;
+                } catch (error) {
+                    if (error.message !== '未授权') {
+                        console.error('Request error:', error);
+                    }
+                    throw error;
+                }
+            }
+        };
+    </script>
 </body>
 </html>

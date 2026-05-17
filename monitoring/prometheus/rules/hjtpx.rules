@@ -1,0 +1,152 @@
+groups:
+  - name: hjtpx-app
+    rules:
+      - alert: HJTXPAppDown
+        expr: up{job="hjtpx-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX application is down"
+          description: "HJTPX application instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: HJTXPHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high error rate"
+          description: "HJTPX application error rate is above 5% for more than 5 minutes"
+
+      - alert: HJTXPHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high latency"
+          description: "HJTPX 95th percentile latency is above 1 second for more than 5 minutes"
+
+      - alert: HJTXPHighMemoryUsage
+        expr: process_resident_memory_bytes{job="hjtpx-app"} / process_memory_limit_bytes > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high memory usage"
+          description: "HJTPX memory usage is above 85% for more than 10 minutes"
+
+      - alert: HJTXPHighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="hjtpx-app"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high CPU usage"
+          description: "HJTPX CPU usage is above 80% for more than 10 minutes"
+
+      - alert: HJTXPHighRequestRate
+        expr: rate(http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "HJTPX high request rate"
+          description: "HJTPX request rate is above 1000 req/s for more than 5 minutes"
+
+      - alert: HJTXPBlockedRequests
+        expr: rate(captcha_blocked_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high blocked request rate"
+          description: "HJTPX blocked request rate is above 10/s for more than 5 minutes"
+
+  - name: database
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance is not responding"
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is above 80%"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_statements_mean_exec_time[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL slow queries"
+          description: "PostgreSQL average query time is above 1 second"
+
+  - name: redis
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance is not responding"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is above 85%"
+
+      - alert: RedisHighEvictionRate
+        expr: rate(redis_evicted_keys_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high eviction rate"
+          description: "Redis is evicting keys at a high rate"
+
+  - name: nginx
+    rules:
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx is down"
+          description: "Nginx instance is not responding"
+
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx high error rate"
+          description: "Nginx error rate is above 5%"
+
+      - alert: NginxHighLatency
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx high latency"
+          description: "Nginx 95th percentile latency is above 2 seconds"

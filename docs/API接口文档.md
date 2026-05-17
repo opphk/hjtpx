@@ -1,6 +1,7 @@
-# API 接口文档 v3.0
+# API 接口文档 v6.0
 
 ## 目录
+
 1. [概述](#概述)
 2. [认证](#认证)
 3. [用户端 API](#用户端-api)
@@ -11,19 +12,24 @@
 ## 概述
 
 ### 基础 URL
+
 - 生产环境: `https://api.example.com/api/v1`
 - 开发环境: `http://localhost:8080/api/v1`
 
 ### 数据格式
+
 所有请求和响应均使用 JSON 格式。
 
 ### 认证方式
+
 除公开接口外，所有接口都需要携带 JWT Token 进行认证：
+
 ```
 Authorization: Bearer <token>
 ```
 
 ### 统一响应格式
+
 ```json
 {
   "code": 0,
@@ -43,24 +49,27 @@ Authorization: Bearer <token>
 ## 认证
 
 ### 管理员登录
+
 ```
 POST /auth/login
 ```
 
 **请求参数：**
+
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | username | string | 是 | 用户名 |
 | password | string | 是 | 密码 |
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expires_at": "2024-05-17T12:00:00Z",
+    "expires_at": "2026-05-17T12:00:00Z",
     "user": {
       "id": 1,
       "username": "admin",
@@ -71,24 +80,27 @@ POST /auth/login
 ```
 
 ### 用户登录
+
 ```
 POST /auth/login
 ```
 
 **请求参数：**
+
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | username | string | 是 | 用户名（邮箱） |
 | password | string | 是 | 密码 |
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expires_at": "2024-05-17T12:00:00Z",
+    "expires_at": "2026-05-17T12:00:00Z",
     "user": {
       "id": 1,
       "username": "user@example.com"
@@ -98,11 +110,13 @@ POST /auth/login
 ```
 
 ### 用户注册
+
 ```
 POST /auth/register
 ```
 
 **请求参数：**
+
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | username | string | 是 | 用户名（邮箱） |
@@ -110,6 +124,7 @@ POST /auth/register
 | email | string | 是 | 邮箱地址 |
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -128,17 +143,20 @@ POST /auth/register
 ### 滑块验证码
 
 #### 生成滑块验证码
+
 ```
 POST /captcha/slider/generate
 ```
 
 **请求参数：**
+
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | app_id | string | 是 | 应用ID |
 | app_key | string | 是 | 应用密钥 |
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -156,6 +174,7 @@ POST /captcha/slider/generate
 ```
 
 #### 验证滑块
+
 ```
 POST /captcha/verify
 Content-Type: application/json
@@ -177,6 +196,7 @@ Content-Type: application/json
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -195,11 +215,13 @@ Content-Type: application/json
 ### 点选验证码
 
 #### 生成点选验证码
+
 ```
 POST /captcha/click/generate
 ```
 
 **请求参数：**
+
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | mode | string | 否 | 字符模式：number, letter, chinese, mixed |
@@ -207,6 +229,7 @@ POST /captcha/click/generate
 | points | int | 否 | 目标点数量（2-6），默认3 |
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -224,6 +247,7 @@ POST /captcha/click/generate
 ```
 
 #### 验证点选
+
 ```
 POST /captcha/verify
 Content-Type: application/json
@@ -242,6 +266,7 @@ Content-Type: application/json
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -257,20 +282,205 @@ Content-Type: application/json
 
 ---
 
+### 旋转验证码
+
+#### 生成旋转验证码
+
+```
+POST /captcha/rotate/generate
+```
+
+**请求参数：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| difficulty | string | 否 | 难度级别：easy, medium, hard, expert |
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "sess_rotate_xxx",
+    "background_image": "data:image/png;base64...",
+    "rotated_image": "data:image/png;base64...",
+    "target_angle": 127,
+    "difficulty": "medium"
+  }
+}
+```
+
+#### 验证旋转
+
+```
+POST /captcha/rotate/verify
+Content-Type: application/json
+
+{
+  "session_id": "sess_rotate_xxx",
+  "angle": 125,
+  "behavior_data": [...]
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "risk_score": 10.5,
+    "captcha_pass": true
+  }
+}
+```
+
+---
+
+### 手势验证码
+
+#### 生成手势验证码
+
+```
+POST /captcha/gesture/generate
+```
+
+**请求参数：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| difficulty | string | 否 | 难度级别：easy, medium, hard, expert |
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "sess_gesture_xxx",
+    "pattern_image": "data:image/png;base64...",
+    "pattern_type": "L",
+    "difficulty": "medium"
+  }
+}
+```
+
+#### 验证手势
+
+```
+POST /captcha/gesture/verify
+Content-Type: application/json
+
+{
+  "session_id": "sess_gesture_xxx",
+  "gesture_path": [
+    [50, 50], [150, 50], [150, 150]
+  ],
+  "behavior_data": [...]
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "similarity": 0.92,
+    "risk_score": 8.5,
+    "captcha_pass": true
+  }
+}
+```
+
+---
+
+### 拼图验证码
+
+#### 生成拼图验证码
+
+```
+POST /captcha/puzzle/generate
+```
+
+**请求参数：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| difficulty | string | 否 | 难度级别：easy, medium, hard, expert |
+| pieces | int | 否 | 碎片数量（4-9），默认4 |
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "sess_puzzle_xxx",
+    "background_image": "data:image/png;base64...",
+    "puzzle_image": "data:image/png;base64...",
+    "piece_positions": [[120, 80]],
+    "difficulty": "medium",
+    "pieces": 4
+  }
+}
+```
+
+#### 验证拼图
+
+```
+POST /captcha/puzzle/verify
+Content-Type: application/json
+
+{
+  "session_id": "sess_puzzle_xxx",
+  "piece_positions": [[122, 82]],
+  "behavior_data": [...]
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "accuracy": 0.95,
+    "risk_score": 11.2,
+    "captcha_pass": true
+  }
+}
+```
+
+---
+
 ### 图形验证码
 
 #### 生成图形验证码
+
 ```
 GET /captcha/image
 ```
 
 **Query参数说明：**
+
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | type | string | mixed | 字符类型：number, letter, mixed |
 | count | int | 4 | 字符数量（4-6） |
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -283,6 +493,7 @@ GET /captcha/image
 ```
 
 #### 验证图形验证码
+
 ```
 POST /captcha/image/verify
 Content-Type: application/json
@@ -294,12 +505,88 @@ Content-Type: application/json
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
     "success": true
+  }
+}
+```
+
+---
+
+### 无感验证
+
+#### 获取设备信任状态
+
+```
+POST /seamless/check
+Content-Type: application/json
+
+{
+  "device_fingerprint": "fp_xxx",
+  "behavior_sequence": [
+    {"event": "mousemove", "timestamp": 1715000001000},
+    {"event": "click", "timestamp": 1715000001500}
+  ]
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "trust_level": "high",
+    "risk_score": 5.2,
+    "requires_captcha": false,
+    "trust_duration": 3600
+  }
+}
+```
+
+---
+
+### 环境检测
+
+#### 环境检测
+
+```
+POST /detect/check
+Content-Type: application/json
+
+{
+  "fingerprint": {
+    "canvas": "canvas_fp_hash",
+    "webgl": "webgl_fp_hash",
+    "fonts": ["font1", "font2"],
+    "plugins": ["plugin1"],
+    "timezone": "Asia/Shanghai",
+    "language": "zh-CN",
+    "user_agent": "Mozilla/5.0..."
+  }
+}
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "is_proxy": false,
+    "is_vpn": false,
+    "is_tor": false,
+    "is_emulator": false,
+    "is_real_browser": true,
+    "risk_score": 10.5,
+    "fingerprint_id": "fp_unique_id"
   }
 }
 ```
@@ -313,6 +600,7 @@ Content-Type: application/json
 ### 应用管理
 
 #### 创建应用
+
 ```
 POST /admin/applications
 Authorization: Bearer <admin_token>
@@ -325,6 +613,7 @@ Content-Type: application/json
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -334,12 +623,13 @@ Content-Type: application/json
     "name": "新应用",
     "app_key": "app_yyyyyyyyyyyy",
     "app_secret": "secret_zzzzzzzzzzzz",
-    "created_at": "2024-05-16T12:00:00Z"
+    "created_at": "2026-05-17T12:00:00Z"
   }
 }
 ```
 
 #### 更新应用
+
 ```
 PUT /admin/applications/:id
 Authorization: Bearer <admin_token>
@@ -352,6 +642,7 @@ Content-Type: application/json
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -360,18 +651,20 @@ Content-Type: application/json
     "id": 2,
     "name": "更新后的应用名",
     "status": "inactive",
-    "updated_at": "2024-05-16T12:00:00Z"
+    "updated_at": "2026-05-17T12:00:00Z"
   }
 }
 ```
 
 #### 获取应用列表
+
 ```
 GET /admin/applications
 Authorization: Bearer <admin_token>
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -383,7 +676,7 @@ Authorization: Bearer <admin_token>
         "name": "测试应用",
         "app_key": "app_xxxxxxxxxxxx",
         "status": "active",
-        "created_at": "2024-05-01T10:00:00Z"
+        "created_at": "2026-05-01T10:00:00Z"
       }
     ],
     "total": 10,
@@ -394,12 +687,14 @@ Authorization: Bearer <admin_token>
 ```
 
 #### 删除应用
+
 ```
 DELETE /admin/applications/:id
 Authorization: Bearer <admin_token>
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -413,12 +708,14 @@ Authorization: Bearer <admin_token>
 ### 统计接口
 
 #### 获取验证统计
+
 ```
 GET /admin/stats/verification
 Authorization: Bearer <admin_token>
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -439,12 +736,14 @@ Authorization: Bearer <admin_token>
 ```
 
 #### 获取实时监控数据
+
 ```
 GET /admin/stats/realtime
 Authorization: Bearer <admin_token>
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -459,17 +758,90 @@ Authorization: Bearer <admin_token>
 }
 ```
 
+#### 获取趋势数据
+
+```
+GET /admin/stats/trend
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "labels": ["2026-05-10", "2026-05-11", "2026-05-12"],
+    "verification_counts": [1000, 1200, 1100],
+    "pass_rates": [85.2, 86.1, 84.8],
+    "avg_response_times": [45, 42, 48]
+  }
+}
+```
+
+#### 获取风险分布
+
+```
+GET /admin/stats/risk-distribution
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "low": 7500,
+    "medium": 1500,
+    "high": 500,
+    "critical": 100
+  }
+}
+```
+
+---
+
+### 实时监控 WebSocket
+
+#### 连接实时监控
+
+```
+WS /admin/realtime/monitor
+Authorization: Bearer <admin_token>
+```
+
+**推送数据示例：**
+
+```json
+{
+  "type": "metrics",
+  "data": {
+    "qps": 125,
+    "active_sessions": 23,
+    "cpu_usage": 45.2,
+    "memory_usage": 62.8,
+    "redis_hits": 9500,
+    "redis_misses": 500
+  }
+}
+```
+
 ---
 
 ### 黑名单管理
 
 #### 获取黑名单
+
 ```
 GET /admin/blacklist
 Authorization: Bearer <admin_token>
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -481,7 +853,7 @@ Authorization: Bearer <admin_token>
         "type": "ip",
         "value": "192.168.1.100",
         "reason": "恶意攻击",
-        "created_at": "2024-05-15T10:00:00Z"
+        "created_at": "2026-05-15T10:00:00Z"
       }
     ],
     "total": 10
@@ -490,6 +862,7 @@ Authorization: Bearer <admin_token>
 ```
 
 #### 添加黑名单
+
 ```
 POST /admin/blacklist
 Authorization: Bearer <admin_token>
@@ -503,6 +876,7 @@ Content-Type: application/json
 ```
 
 #### 删除黑名单
+
 ```
 DELETE /admin/blacklist/:id
 Authorization: Bearer <admin_token>
@@ -510,15 +884,67 @@ Authorization: Bearer <admin_token>
 
 ---
 
+### 风控规则管理
+
+#### 获取风控规则
+
+```
+GET /admin/risk-rules
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "rules": [
+      {
+        "id": 1,
+        "name": "快速连续点击",
+        "type": "click_pattern",
+        "threshold": 5,
+        "action": "block",
+        "enabled": true
+      }
+    ]
+  }
+}
+```
+
+#### 更新风控规则
+
+```
+PUT /admin/risk-rules
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "rules": [
+    {
+      "id": 1,
+      "threshold": 10,
+      "enabled": true
+    }
+  ]
+}
+```
+
+---
+
 ### 日志管理
 
 #### 获取验证日志
+
 ```
 GET /admin/logs
 Authorization: Bearer <admin_token>
 ```
 
 **响应示例：**
+
 ```json
 {
   "code": 0,
@@ -532,7 +958,7 @@ Authorization: Bearer <admin_token>
         "status": "success",
         "risk_score": 15.5,
         "ip_address": "192.168.1.1",
-        "created_at": "2024-05-16T10:00:00Z"
+        "created_at": "2026-05-17T10:00:00Z"
       }
     ],
     "total": 1000,
@@ -543,6 +969,7 @@ Authorization: Bearer <admin_token>
 ```
 
 #### 导出日志
+
 ```
 GET /admin/logs/export
 Authorization: Bearer <admin_token>
@@ -552,18 +979,100 @@ Authorization: Bearer <admin_token>
 
 ---
 
+### 告警管理
+
+#### 获取告警列表
+
+```
+GET /admin/alerts
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "type": "high_risk",
+        "message": "检测到高风险行为",
+        "status": "resolved",
+        "created_at": "2026-05-17T10:00:00Z"
+      }
+    ],
+    "total": 5
+  }
+}
+```
+
+#### 创建告警规则
+
+```
+POST /admin/alerts
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "type": "high_risk",
+  "threshold": 80,
+  "channels": ["email", "webhook"],
+  "enabled": true
+}
+```
+
+---
+
+### 审计日志
+
+#### 获取审计日志
+
+```
+GET /admin/audit-logs
+Authorization: Bearer <admin_token>
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "user_id": 1,
+        "action": "update_config",
+        "details": "修改了验证码难度设置",
+        "ip_address": "192.168.1.1",
+        "created_at": "2026-05-17T10:00:00Z"
+      }
+    ],
+    "total": 100
+  }
+}
+```
+
+---
+
 ### 健康检查
 
 #### 健康检查接口
+
 ```
 GET /health
 ```
 
 **响应示例：**
+
 ```json
 {
   "status": "healthy",
-  "timestamp": "2024-05-16T12:00:00Z",
+  "timestamp": "2026-05-17T12:00:00Z",
   "services": {
     "database": "up",
     "redis": "up"
@@ -584,6 +1093,7 @@ GET /health
 | 2001 | 验证码生成失败 |
 | 2002 | 验证码验证失败 |
 | 2003 | 验证码已过期 |
+| 2004 | 验证码类型不支持 |
 | 3001 | 服务器内部错误 |
 
 ---
@@ -600,7 +1110,7 @@ import (
     "log"
     "time"
 
-    "github.com/opphk/behavior-verification-system/sdk/go/captcha"
+    "github.com/opphk/hjtpx/sdk/go/captcha"
 )
 
 func main() {
@@ -663,6 +1173,26 @@ async function demo() {
 demo().catch(console.error);
 ```
 
+### Python SDK 示例
+
+```python
+from hjtpx import CaptchaClient
+
+client = CaptchaClient(endpoint="http://localhost:8080")
+
+# 生成滑块验证码
+slider = client.generate_slider()
+print(f"Session ID: {slider['captcha_id']}")
+
+# 验证
+result = client.verify(slider['captcha_id'], {
+    "type": "slider",
+    "x": 185,
+    "y": 120
+})
+print(f"验证结果: {result['success']}")
+```
+
 ---
 
 ## 速率限制
@@ -683,6 +1213,7 @@ demo().catch(console.error);
 ## 附录：错误响应示例
 
 ### 参数错误
+
 ```json
 {
   "code": 1001,
@@ -695,6 +1226,7 @@ demo().catch(console.error);
 ```
 
 ### 认证失败
+
 ```json
 {
   "code": 2001,
@@ -704,6 +1236,7 @@ demo().catch(console.error);
 ```
 
 ### 权限不足
+
 ```json
 {
   "code": 2003,
@@ -713,6 +1246,7 @@ demo().catch(console.error);
 ```
 
 ### 速率限制
+
 ```json
 {
   "code": 429,

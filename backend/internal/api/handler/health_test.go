@@ -113,8 +113,7 @@ func TestLivenessCheck_IsAlive(t *testing.T) {
 	assert.True(t, alive)
 }
 
-func TestGetSystemMetrics(t *testing.T) {
-	// 测试 getSystemMetrics 函数不会 panic
+func TestGetSystemMetricsInfo(t *testing.T) {
 	metrics := getSystemMetrics()
 	assert.NotNil(t, metrics)
 	assert.Contains(t, metrics, "go_version")

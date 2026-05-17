@@ -11,7 +11,11 @@ import (
 
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/router"
+	"github.com/hjtpx/hjtpx/internal/repository"
+	"github.com/hjtpx/hjtpx/internal/repository/cache"
+	"github.com/hjtpx/hjtpx/internal/repository/db"
 	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/internal/service/captcha"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/i18n"
@@ -25,7 +29,6 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	// 初始化国际化
 	i18nConfig := i18n.LocaleConfig{
 		DefaultLang:     cfg.I18n.DefaultLang,
 		TranslationsDir: cfg.I18n.TranslationsDir,
@@ -38,7 +41,6 @@ func main() {
 		log.Println("i18n initialized successfully")
 	}
 
-	// 设置默认时区
 	if err := i18n.SetDefaultTimezone(cfg.I18n.DefaultTimezone); err != nil {
 		log.Printf("Warning: Failed to set default timezone: %v", err)
 	} else {
@@ -61,17 +63,40 @@ func main() {
 		log.Println("PostgreSQL connected successfully")
 	}
 
-	// 初始化告警服务
-	if database.DB != nil {
-		handler.InitAlertService(database.DB)
-		log.Println("Alert service initialized successfully")
-	}
-
 	if err := redis.ConnectRedis(&cfg.Redis); err != nil {
 		log.Printf("Warning: Failed to connect to Redis: %v", err)
 	} else {
 		log.Println("Redis connected successfully")
 		redis.InitEnhancedCache(nil)
+	}
+
+	if database.DB != nil {
+		handler.InitAlertService(database.DB)
+		log.Println("Alert service initialized successfully")
+	}
+
+	var sessionCache *cache.SessionCache
+	if redis.Client != nil {
+		sessionCache = cache.NewSessionCache()
+		log.Println("Session cache initialized successfully")
+	}
+
+	captchaRepo := db.NewCaptchaRepository()
+	generatorService := captcha.NewGeneratorService(sessionCache, captchaRepo)
+	verifierService := captcha.NewVerifierService(sessionCache, captchaRepo)
+	handler.InitSliderCaptchaHandler(generatorService, verifierService)
+	log.Println("Slider captcha service initialized successfully")
+
+	if database.DB != nil {
+		configRepo := repository.NewConfigRepo(database.DB)
+		configCache := service.NewConfigCache(redis.Client)
+		configService := service.NewConfigService(configRepo, configCache)
+		if err := configService.InitializeDefaults(); err != nil {
+			log.Printf("Warning: Failed to initialize default configs: %v", err)
+		} else {
+			log.Println("Config service initialized successfully")
+		}
+		handler.InitConfigService(configService)
 	}
 
 	ctx := context.Background()
@@ -106,7 +131,7 @@ func main() {
 
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	if cacheOptimizer := service.GetCacheOptimizer(); cacheOptimizer != nil {
 		cacheOptimizer.Shutdown(ctxShutdown)
 	}

@@ -137,6 +137,7 @@ func AutoMigrate() error {
 	return DB.AutoMigrate(
 		&models.User{},
 		&models.Admin{},
+		&models.AdminLoginLog{},
 		&models.Application{},
 		&models.APIKeyHistory{},
 		&models.Verification{},
@@ -148,6 +149,8 @@ func AutoMigrate() error {
 		&models.AlertRule{},
 		&models.AlertRecord{},
 		&models.AlertHistory{},
+		&models.TraceRecord{},
+		&models.Config{},
 	)
 }
 

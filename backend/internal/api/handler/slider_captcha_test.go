@@ -15,9 +15,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/response"
 	"github.com/stretchr/testify/assert"
 )
+
+type TrajectoryPoint = model.TracePoint
 
 func init() {
 	gin.SetMode(gin.TestMode)

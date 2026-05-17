@@ -1,0 +1,29 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "captcha"
+  password: "captcha123"
+  dbname: "captcha_db"
+  sslmode: "disable"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+
+captcha:
+  width: 300
+  height: 150
+  slider_width: 50
+  slider_height: 50
+  expires_seconds: 300
+  max_attempts: 3
+
+jwt:
+  secret: "your-secret-key-change-in-production"
+  expires_hours: 24

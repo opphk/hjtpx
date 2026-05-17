@@ -1,0 +1,39 @@
+[Unit]
+Description=HJTPX Captcha Service
+Documentation=https://github.com/hjtpx/hjtpx
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
+PartOf=network.target
+
+[Service]
+Type=simple
+User=hjtpx
+Group=hjtpx
+WorkingDirectory=/opt/hjtpx
+Environment="GOMAXPROCS=4"
+Environment="GOGC=100"
+ExecStartPre=/opt/hjtpx/scripts/pre-check.sh
+ExecStart=/opt/hjtpx/hjtpx-server -config /opt/hjtpx/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hjtpx
+
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/hjtpx/data /var/log/hjtpx
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+LimitNOFILE=65535
+LimitNPROC=4096
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

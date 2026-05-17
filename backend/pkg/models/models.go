@@ -32,7 +32,21 @@ type Admin struct {
 	gorm.Model
 	Username     string `gorm:"size:100;uniqueIndex:idx_admins_username;not null" json:"username"`
 	PasswordHash string `gorm:"size:255;not null" json:"-"`
-	IsSuperAdmin bool   `gorm:"default:false" json:"is_super_admin"`
+	Email        string `gorm:"size:255;uniqueIndex:idx_admins_email" json:"email"`
+	Status       string `gorm:"size:20;default:active;index:idx_admins_status" json:"status"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+	LastLoginIP  string `gorm:"size:50" json:"last_login_ip"`
+	LoginCount   int `gorm:"default:0" json:"login_count"`
+	IsSuperAdmin bool `gorm:"default:false" json:"is_super_admin"`
+}
+
+type AdminLoginLog struct {
+	gorm.Model
+	AdminID    uint   `gorm:"not null;index:idx_login_log_admin" json:"admin_id"`
+	IPAddress  string `gorm:"size:50;index:idx_login_log_ip" json:"ip_address"`
+	UserAgent  string `gorm:"size:500" json:"user_agent"`
+	Status     string `gorm:"size:20;default:success;index:idx_login_log_status" json:"status"`
+	FailReason string `gorm:"size:255" json:"fail_reason,omitempty"`
 }
 
 type Application struct {
@@ -346,4 +360,53 @@ type SeamlessConfig struct {
 	BlockThreshold    float64   `gorm:"default:70" json:"block_threshold"` // 风险分高于此值直接阻止
 	WhitelistEnabled  bool      `gorm:"default:false" json:"whitelist_enabled"`
 	Application       Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+}
+
+type TraceRecord struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	SessionID      string    `gorm:"size:100;index:idx_trace_session" json:"session_id"`
+	VerificationID *uint      `gorm:"index:idx_trace_verification" json:"verification_id,omitempty"`
+	ApplicationID *uint      `gorm:"index:idx_trace_app" json:"application_id,omitempty"`
+	RawData        string    `gorm:"type:text" json:"raw_data"`
+	FeaturesData   string    `gorm:"type:text" json:"features_data"`
+	ScoreData      string    `gorm:"type:text" json:"score_data"`
+	TotalTime      int64     `json:"total_time"`
+	TotalScore     float64   `json:"total_score"`
+	MoveCount      int       `json:"move_count"`
+	AvgSpeed       float64   `json:"avg_speed"`
+	MaxSpeed       float64   `json:"max_speed"`
+	RiskFactors    string    `gorm:"type:text" json:"risk_factors"`
+	IPAddress      string    `gorm:"size:50" json:"ip_address"`
+	UserAgent      string    `gorm:"size:500" json:"user_agent"`
+	DeviceInfo     string    `gorm:"size:255" json:"device_info"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (TraceRecord) TableName() string {
+	return "trace_records"
+}
+
+type CaptchaSession struct {
+	ID            int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	SessionID     string     `gorm:"size:100;uniqueIndex;not null" json:"session_id"`
+	BackgroundURL string     `gorm:"size:500" json:"background_url"`
+	SliderURL     string     `gorm:"size:500" json:"slider_url"`
+	GapX          int        `json:"gap_x"`
+	GapY          int        `json:"gap_y"`
+	Status        string     `gorm:"size:50;default:pending" json:"status"`
+	VerifyCount   int        `gorm:"default:0" json:"verify_count"`
+	MaxAttempts   int        `gorm:"default:3" json:"max_attempts"`
+	RiskScore     float64    `gorm:"default:0" json:"risk_score"`
+	TraceScore    float64    `gorm:"default:0" json:"trace_score"`
+	EnvScore      float64    `gorm:"default:0" json:"env_score"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiredAt     time.Time  `json:"expired_at"`
+	VerifiedAt    *time.Time `json:"verified_at"`
+	ClientIP      string     `gorm:"size:50" json:"client_ip"`
+	UserAgent     string     `gorm:"size:500" json:"user_agent"`
+	Fingerprint   string     `gorm:"size:255" json:"fingerprint"`
+}
+
+func (CaptchaSession) TableName() string {
+	return "captcha_sessions"
 }

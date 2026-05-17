@@ -17,6 +17,16 @@ var (
 	ErrLockNotAcquired = errors.New("lock not acquired")
 )
 
+const (
+	CaptchaSessionTTL = 5 * time.Minute
+	ConfigCacheTTL    = 10 * time.Minute
+	UserSessionTTL    = 24 * time.Hour
+	StatsCacheTTL     = 5 * time.Minute
+	BlacklistTTL      = 1 * time.Hour
+	BehaviorCacheTTL  = 30 * time.Minute
+	RateLimitWindow   = 1 * time.Minute
+)
+
 type CacheService struct {
 	defaultTTL time.Duration
 	luaScripts map[string]*goredis.Script
@@ -575,7 +585,7 @@ func (cs *CacheService) SetCaptchaCache(ctx context.Context, captchaID string, d
 	}
 
 	key := fmt.Sprintf("captcha:%s", captchaID)
-	return cs.SetWithTTL(ctx, key, data, 5*time.Minute)
+	return cs.SetWithTTL(ctx, key, data, CaptchaSessionTTL)
 }
 
 func (cs *CacheService) GetCaptchaCache(ctx context.Context, captchaID string) (*CaptchaCache, error) {
@@ -619,7 +629,7 @@ func (cs *CacheService) SetBehaviorCache(ctx context.Context, sessionID string, 
 	}
 
 	key := fmt.Sprintf("behavior:%s", sessionID)
-	return cs.SetWithTTL(ctx, key, data, 30*time.Minute)
+	return cs.SetWithTTL(ctx, key, data, BehaviorCacheTTL)
 }
 
 func (cs *CacheService) GetBehaviorCache(ctx context.Context, sessionID string) (*BehaviorCache, error) {
@@ -659,7 +669,7 @@ func (cs *CacheService) SetSessionCache(ctx context.Context, token string, data 
 	}
 
 	key := fmt.Sprintf("session:%s", token)
-	return cs.SetWithTTL(ctx, key, data, 24*time.Hour)
+	return cs.SetWithTTL(ctx, key, data, UserSessionTTL)
 }
 
 func (cs *CacheService) GetSessionCache(ctx context.Context, token string) (*SessionCache, error) {

@@ -68,3 +68,20 @@ func TooManyRequests(c *gin.Context, message string) {
 	}
 	Error(c, http.StatusTooManyRequests, message)
 }
+
+const (
+	CodeSuccess          = 0
+	CodeInvalidParams    = 400
+	CodeUnauthorized     = 401
+	CodeForbidden        = 403
+	CodeNotFound         = 404
+	CodeServerError      = 500
+	CodeTooManyRequests  = 429
+)
+
+func Fail(c *gin.Context, code int, message string) {
+	c.JSON(http.StatusOK, Response{
+		Code:    code,
+		Message: message,
+	})
+}

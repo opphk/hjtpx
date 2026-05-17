@@ -267,6 +267,54 @@ func CreateIndexes(db *gorm.DB) error {
 			IndexName: "idx_verification_logs_session",
 			Unique:    false,
 		},
+		{
+			TableName: "captcha_sessions",
+			Columns:   []string{"status"},
+			IndexName: "idx_captcha_sessions_status",
+			Unique:    false,
+		},
+		{
+			TableName: "captcha_sessions",
+			Columns:   []string{"created_at"},
+			IndexName: "idx_captcha_sessions_created",
+			Unique:    false,
+		},
+		{
+			TableName: "captcha_sessions",
+			Columns:   []string{"client_ip", "created_at"},
+			IndexName: "idx_captcha_sessions_ip_created",
+			Unique:    false,
+		},
+		{
+			TableName: "risk_logs",
+			Columns:   []string{"risk_level"},
+			IndexName: "idx_risk_logs_risk_level",
+			Unique:    false,
+		},
+		{
+			TableName: "risk_logs",
+			Columns:   []string{"created_at"},
+			IndexName: "idx_risk_logs_created",
+			Unique:    false,
+		},
+		{
+			TableName: "risk_logs",
+			Columns:   []string{"session_id", "created_at"},
+			IndexName: "idx_risk_logs_session_created",
+			Unique:    false,
+		},
+		{
+			TableName: "ab_test_experiments",
+			Columns:   []string{"status", "start_time"},
+			IndexName: "idx_ab_test_status_start",
+			Unique:    false,
+		},
+		{
+			TableName: "audit_logs",
+			Columns:   []string{"user_id", "created_at"},
+			IndexName: "idx_audit_logs_user_created",
+			Unique:    false,
+		},
 	}
 
 	for _, idx := range indexes {
