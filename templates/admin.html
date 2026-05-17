@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 验证码系统</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+        }
+
+        body {
+            background: #f5f7fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            width: 250px;
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            padding: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            color: white;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .sidebar-menu {
+            padding: 20px 0;
+        }
+
+        .sidebar-menu a {
+            display: block;
+            padding: 15px 25px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-left-color: white;
+        }
+
+        .sidebar-menu a i {
+            margin-right: 10px;
+            width: 20px;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .top-bar {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .top-bar h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .stat-card .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: white;
+            margin-bottom: 15px;
+        }
+
+        .stat-card.users .stat-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+        .stat-card.apps .stat-icon { background: linear-gradient(135deg, #f093fb, #f5576c); }
+        .stat-card.captchas .stat-icon { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .stat-card.success .stat-icon { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+
+        .stat-card .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .content-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .content-card-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .content-card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .content-card-body {
+            padding: 25px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead th {
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+            color: #333;
+            background: #f8f9fa;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .badge-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .badge-status.active { background: #d4edda; color: #155724; }
+        .badge-status.pending { background: #fff3cd; color: #856404; }
+        .badge-status.verified { background: #cce5ff; color: #004085; }
+        .badge-status.expired { background: #f8d7da; color: #721c24; }
+        .badge-status.failed { background: #f8d7da; color: #721c24; }
+
+        .btn-action {
+            padding: 5px 10px;
+            font-size: 0.85rem;
+            border-radius: 5px;
+            margin: 0 3px;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+        }
+
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .pagination {
+            margin: 0;
+            justify-content: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #666;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 50px;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-250px);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+        }
+
+        .search-box {
+            position: relative;
+            max-width: 300px;
+        }
+
+        .search-box input {
+            padding-left: 40px;
+            border-radius: 20px;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+        }
+
+        .tab-content {
+            padding: 20px 0;
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3><i class="fas fa-shield-alt"></i> 管理后台</h3>
+        </div>
+        <div class="sidebar-menu">
+            <a href="#" class="active" data-section="dashboard"><i class="fas fa-chart-line"></i> 仪表盘</a>
+            <a href="#" data-section="apps"><i class="fas fa-rocket"></i> 应用管理</a>
+            <a href="#" data-section="users"><i class="fas fa-users"></i> 用户管理</a>
+            <a href="#" data-section="captchas"><i class="fas fa-puzzle-piece"></i> 验证码记录</a>
+            <a href="#" data-section="settings"><i class="fas fa-cog"></i> 系统设置</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <h2 id="pageTitle"><i class="fas fa-chart-line"></i> 仪表盘</h2>
+            <div class="user-info">
+                <span id="currentUser">管理员</span>
+                <div class="user-avatar">A</div>
+                <button class="btn btn-sm btn-outline-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> 退出</button>
+            </div>
+        </div>
+
+        <div id="dashboardSection" class="content-section">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="stat-card users">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-value" id="statUsers">0</div>
+                        <div class="stat-label">总用户数</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card apps">
+                        <div class="stat-icon"><i class="fas fa-rocket"></i></div>
+                        <div class="stat-value" id="statApps">0</div>
+                        <div class="stat-label">总应用数</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card captchas">
+                        <div class="stat-icon"><i class="fas fa-puzzle-piece"></i></div>
+                        <div class="stat-value" id="statCaptchas">0</div>
+                        <div class="stat-label">总验证码数</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card success">
+                        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stat-value" id="statSuccessRate">0%</div>
+                        <div class="stat-label">验证成功率</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <h5><i class="fas fa-clock"></i> 最近用户</h5>
+                        </div>
+                        <div class="content-card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>邮箱</th>
+                                            <th>用户名</th>
+                                            <th>状态</th>
+                                            <th>注册时间</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentUsersTable">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">暂无数据</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <h5><i class="fas fa-puzzle-piece"></i> 最近验证码</h5>
+                        </div>
+                        <div class="content-card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Token</th>
+                                            <th>类型</th>
+                                            <th>状态</th>
+                                            <th>创建时间</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recentCaptchasTable">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">暂无数据</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <h5><i class="fas fa-chart-pie"></i> 验证码统计</h5>
+                        </div>
+                        <div class="content-card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3">
+                                    <div class="p-3">
+                                        <div class="text-primary fs-3 fw-bold" id="statPending">0</div>
+                                        <div class="text-muted">待验证</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-3">
+                                        <div class="text-success fs-3 fw-bold" id="statVerified">0</div>
+                                        <div class="text-muted">已验证</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-3">
+                                        <div class="text-warning fs-3 fw-bold" id="statExpired">0</div>
+                                        <div class="text-muted">已过期</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="p-3">
+                                        <div class="text-danger fs-3 fw-bold" id="statFailed">0</div>
+                                        <div class="text-muted">验证失败</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="appsSection" class="content-section" style="display: none;">
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h5><i class="fas fa-rocket"></i> 应用列表</h5>
+                    <button class="btn btn-primary" onclick="showAppModal()"><i class="fas fa-plus"></i> 创建应用</button>
+                </div>
+                <div class="content-card-body">
+                    <div class="mb-3">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" class="form-control" id="appSearch" placeholder="搜索应用名称或AppKey...">
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>应用名称</th>
+                                    <th>AppKey</th>
+                                    <th>AppSecret</th>
+                                    <th>域名</th>
+                                    <th>状态</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="appsTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">暂无数据</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="text-muted" id="appsPaginationInfo">显示 0-0 条，共 0 条</div>
+                        <nav>
+                            <ul class="pagination" id="appsPagination"></ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="usersSection" class="content-section" style="display: none;">
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h5><i class="fas fa-users"></i> 用户列表</h5>
+                    <button class="btn btn-primary" onclick="showUserModal()"><i class="fas fa-plus"></i> 添加用户</button>
+                </div>
+                <div class="content-card-body">
+                    <div class="mb-3">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" class="form-control" id="userSearch" placeholder="搜索邮箱或用户名...">
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>邮箱</th>
+                                    <th>用户名</th>
+                                    <th>所属应用</th>
+                                    <th>状态</th>
+                                    <th>最后登录</th>
+                                    <th>注册时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">暂无数据</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="text-muted" id="usersPaginationInfo">显示 0-0 条，共 0 条</div>
+                        <nav>
+                            <ul class="pagination" id="usersPagination"></ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="captchasSection" class="content-section" style="display: none;">
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h5><i class="fas fa-puzzle-piece"></i> 验证码记录</h5>
+                    <div>
+                        <select class="form-select form-select-sm" id="captchaStatusFilter" style="width: auto; display: inline-block;">
+                            <option value="">全部状态</option>
+                            <option value="pending">待验证</option>
+                            <option value="verified">已验证</option>
+                            <option value="expired">已过期</option>
+                            <option value="failed">验证失败</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="content-card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Token</th>
+                                    <th>类型</th>
+                                    <th>状态</th>
+                                    <th>验证次数</th>
+                                    <th>IP地址</th>
+                                    <th>创建时间</th>
+                                    <th>过期时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="captchasTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">暂无数据</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="text-muted" id="captchasPaginationInfo">显示 0-0 条，共 0 条</div>
+                        <nav>
+                            <ul class="pagination" id="captchasPagination"></ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="settingsSection" class="content-section" style="display: none;">
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h5><i class="fas fa-cog"></i> 系统设置</h5>
+                </div>
+                <div class="content-card-body">
+                    <form id="settingsForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">系统名称</label>
+                                    <input type="text" class="form-control" id="systemName" value="验证码系统">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">系统版本</label>
+                                    <input type="text" class="form-control" id="systemVersion" value="1.0.0" readonly>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">验证码有效期（秒）</label>
+                                    <input type="number" class="form-control" id="captchaExpireTime" value="300">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">最大验证次数</label>
+                                    <input type="number" class="form-control" id="maxVerifyCount" value="3">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">速率限制（每分钟）</label>
+                                    <input type="number" class="form-control" id="rateLimit" value="60">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">会话超时（分钟）</label>
+                                    <input type="number" class="form-control" id="sessionTimeout" value="30">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="enableEmailNotification" checked>
+                                <label class="form-check-label" for="enableEmailNotification">
+                                    启用邮件通知
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="enableCaptchaLog" checked>
+                                <label class="form-check-label" for="enableCaptchaLog">
+                                    启用验证码日志
+                                </label>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存设置</button>
+                            <button type="button" class="btn btn-secondary" onclick="resetSettings()"><i class="fas fa-undo"></i> 重置</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="content-card mt-4">
+                <div class="content-card-header">
+                    <h5><i class="fas fa-key"></i> 修改密码</h5>
+                </div>
+                <div class="content-card-body">
+                    <form id="passwordForm">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">当前密码</label>
+                                    <input type="password" class="form-control" id="currentPassword" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">新密码</label>
+                                    <input type="password" class="form-control" id="newPassword" required minlength="6">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label">确认新密码</label>
+                                    <input type="password" class="form-control" id="confirmPassword" required minlength="6">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-warning"><i class="fas fa-key"></i> 修改密码</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="appModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-rocket"></i> <span id="appModalTitle">创建应用</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="appForm">
+                        <input type="hidden" id="appId">
+                        <div class="mb-3">
+                            <label class="form-label">应用名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="appName" required maxlength="100">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">AppKey <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="appKey" required maxlength="64">
+                            <div class="form-text">唯一的应用标识符</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">AppSecret <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="appSecret" required maxlength="255">
+                            <div class="form-text">应用密钥，请妥善保管</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">域名</label>
+                            <input type="url" class="form-control" id="appDomain" placeholder="https://example.com">
+                            <div class="form-text">可选，用于域名白名单验证</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveApp()"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-user"></i> <span id="userModalTitle">添加用户</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="userForm">
+                        <input type="hidden" id="userId">
+                        <div class="mb-3">
+                            <label class="form-label">邮箱 <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="userEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="userUsername" maxlength="100">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码 <span class="text-danger" id="passwordRequired">*</span></label>
+                            <input type="password" class="form-control" id="userPassword" minlength="6">
+                            <div class="form-text" id="passwordHint">至少6个字符</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="userStatus">
+                                <option value="1">启用</option>
+                                <option value="0">禁用</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveUser()"><i class="fas fa-save"></i> 保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container">
+        <div class="toast" id="successToast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-success text-white">
+                <strong class="me-auto"><i class="fas fa-check-circle"></i> 成功</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="successToastBody"></div>
+        </div>
+        <div class="toast" id="errorToast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-danger text-white">
+                <strong class="me-auto"><i class="fas fa-exclamation-circle"></i> 错误</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="errorToastBody"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = '/api/v1/admin';
+        let currentToken = localStorage.getItem('adminToken');
+        let currentPage = {
+            apps: 1,
+            users: 1,
+            captchas: 1
+        };
+        let totalPages = {
+            apps: 1,
+            users: 1,
+            captchas: 1
+        };
+
+        if (!currentToken) {
+            showLoginModal();
+        } else {
+            initDashboard();
+        }
+
+        document.querySelectorAll('.sidebar-menu a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const section = this.getAttribute('data-section');
+                showSection(section);
+                
+                document.querySelectorAll('.sidebar-menu a').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        function showSection(section) {
+            document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
+            document.getElementById(section + 'Section').style.display = 'block';
+            
+            const titles = {
+                dashboard: '<i class="fas fa-chart-line"></i> 仪表盘',
+                apps: '<i class="fas fa-rocket"></i> 应用管理',
+                users: '<i class="fas fa-users"></i> 用户管理',
+                captchas: '<i class="fas fa-puzzle-piece"></i> 验证码记录',
+                settings: '<i class="fas fa-cog"></i> 系统设置'
+            };
+            document.getElementById('pageTitle').innerHTML = titles[section] || '';
+            
+            if (section === 'apps') loadApps();
+            if (section === 'users') loadUsers();
+            if (section === 'captchas') loadCaptchas();
+        }
+
+        async function initDashboard() {
+            try {
+                const response = await fetch(API_BASE + '/dashboard', {
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        logout();
+                        return;
+                    }
+                    throw new Error('Failed to fetch dashboard data');
+                }
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    updateDashboard(result.data);
+                }
+            } catch (error) {
+                console.error('Dashboard error:', error);
+                showError('加载仪表盘数据失败');
+            }
+        }
+
+        function updateDashboard(data) {
+            document.getElementById('statUsers').textContent = data.total_users || 0;
+            document.getElementById('statApps').textContent = data.total_apps || 0;
+            document.getElementById('statCaptchas').textContent = data.total || 0;
+            
+            const successRate = data.total > 0 ? ((data.verified || 0) / data.total * 100).toFixed(1) : 0;
+            document.getElementById('statSuccessRate').textContent = successRate + '%';
+            
+            document.getElementById('statPending').textContent = data.pending || 0;
+            document.getElementById('statVerified').textContent = data.verified || 0;
+            document.getElementById('statExpired').textContent = data.expired || 0;
+            document.getElementById('statFailed').textContent = data.failed || 0;
+            
+            if (data.recent_users && data.recent_users.length > 0) {
+                const usersHtml = data.recent_users.map(user => `
+                    <tr>
+                        <td>${user.id}</td>
+                        <td>${user.email}</td>
+                        <td>${user.username || '-'}</td>
+                        <td><span class="badge-status ${user.status === 1 ? 'active' : 'failed'}">${user.status === 1 ? '启用' : '禁用'}</span></td>
+                        <td>${formatDate(user.created_at)}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('recentUsersTable').innerHTML = usersHtml;
+            }
+            
+            if (data.recent_captchas && data.recent_captchas.length > 0) {
+                const captchasHtml = data.recent_captchas.map(captcha => `
+                    <tr>
+                        <td>${captcha.id}</td>
+                        <td>${captcha.token.substring(0, 8)}...</td>
+                        <td>${captcha.type || 'slider'}</td>
+                        <td><span class="badge-status ${captcha.status}">${getStatusText(captcha.status)}</span></td>
+                        <td>${formatDate(captcha.created_at)}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('recentCaptchasTable').innerHTML = captchasHtml;
+            }
+        }
+
+        async function loadApps(page = 1) {
+            currentPage.apps = page;
+            try {
+                const response = await fetch(API_BASE + '/apps?page=' + page + '&page_size=10', {
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) throw new Error('Failed to load apps');
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    renderAppsTable(result.data);
+                    renderPagination('apps', page, result.meta.total_pages, result.meta.total);
+                }
+            } catch (error) {
+                console.error('Load apps error:', error);
+                showError('加载应用列表失败');
+            }
+        }
+
+        function renderAppsTable(apps) {
+            if (!apps || apps.length === 0) {
+                document.getElementById('appsTable').innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+                return;
+            }
+            
+            const html = apps.map(app => `
+                <tr>
+                    <td>${app.id}</td>
+                    <td>${app.name}</td>
+                    <td><code>${app.app_key}</code></td>
+                    <td><code>${app.app_secret.substring(0, 12)}...</code></td>
+                    <td>${app.domain || '-'}</td>
+                    <td><span class="badge-status ${app.status === 1 ? 'active' : 'failed'}">${app.status === 1 ? '启用' : '禁用'}</span></td>
+                    <td>${formatDate(app.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info btn-action" onclick="editApp(${app.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteApp(${app.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('appsTable').innerHTML = html;
+        }
+
+        async function loadUsers(page = 1) {
+            currentPage.users = page;
+            try {
+                const response = await fetch(API_BASE + '/users?page=' + page + '&page_size=10', {
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) throw new Error('Failed to load users');
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    renderUsersTable(result.data);
+                    renderPagination('users', page, result.meta.total_pages, result.meta.total);
+                }
+            } catch (error) {
+                console.error('Load users error:', error);
+                showError('加载用户列表失败');
+            }
+        }
+
+        function renderUsersTable(users) {
+            if (!users || users.length === 0) {
+                document.getElementById('usersTable').innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+                return;
+            }
+            
+            const html = users.map(user => `
+                <tr>
+                    <td>${user.id}</td>
+                    <td>${user.email}</td>
+                    <td>${user.username || '-'}</td>
+                    <td>${user.app_id || '-'}</td>
+                    <td><span class="badge-status ${user.status === 1 ? 'active' : 'failed'}">${user.status === 1 ? '启用' : '禁用'}</span></td>
+                    <td>${user.last_login ? formatDate(user.last_login) : '从未登录'}</td>
+                    <td>${formatDate(user.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info btn-action" onclick="editUser(${user.id})"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-danger btn-action" onclick="deleteUser(${user.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('usersTable').innerHTML = html;
+        }
+
+        async function loadCaptchas(page = 1) {
+            currentPage.captchas = page;
+            const status = document.getElementById('captchaStatusFilter').value;
+            try {
+                const url = API_BASE + '/captchas?page=' + page + '&page_size=10' + (status ? '&status=' + status : '');
+                const response = await fetch(url, {
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) throw new Error('Failed to load captchas');
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    renderCaptchasTable(result.data);
+                    renderPagination('captchas', page, result.meta.total_pages, result.meta.total);
+                }
+            } catch (error) {
+                console.error('Load captchas error:', error);
+                showError('加载验证码记录失败');
+            }
+        }
+
+        function renderCaptchasTable(captchas) {
+            if (!captchas || captchas.length === 0) {
+                document.getElementById('captchasTable').innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无数据</td></tr>';
+                return;
+            }
+            
+            const html = captchas.map(captcha => `
+                <tr>
+                    <td>${captcha.id}</td>
+                    <td><code>${captcha.token.substring(0, 16)}...</code></td>
+                    <td>${captcha.type || 'slider'}</td>
+                    <td><span class="badge-status ${captcha.status}">${getStatusText(captcha.status)}</span></td>
+                    <td>${captcha.verify_count}/${captcha.max_verify}</td>
+                    <td>${captcha.ip_address || '-'}</td>
+                    <td>${formatDate(captcha.created_at)}</td>
+                    <td>${formatDate(captcha.expires_at)}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('captchasTable').innerHTML = html;
+        }
+
+        function renderPagination(type, currentPage, total, totalItems) {
+            if (total <= 1) {
+                document.getElementById(type + 'Pagination').innerHTML = '';
+                const start = totalItems > 0 ? (currentPage - 1) * 10 + 1 : 0;
+                const end = Math.min(currentPage * 10, totalItems);
+                document.getElementById(type + 'PaginationInfo').textContent = `显示 ${start}-${end} 条，共 ${totalItems} 条`;
+                return;
+            }
+            
+            let html = '';
+            const prevDisabled = currentPage === 1 ? 'disabled' : '';
+            const nextDisabled = currentPage === total ? 'disabled' : '';
+            
+            html += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" onclick="load${type.charAt(0).toUpperCase() + type.slice(1)}(${currentPage - 1})">上一页</a></li>`;
+            
+            for (let i = 1; i <= total; i++) {
+                if (i === 1 || i === total || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    const active = i === currentPage ? 'active' : '';
+                    html += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="load${type.charAt(0).toUpperCase() + type.slice(1)}(${i})">${i}</a></li>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    html += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+            }
+            
+            html += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" onclick="load${type.charAt(0).toUpperCase() + type.slice(1)}(${currentPage + 1})">下一页</a></li>`;
+            
+            document.getElementById(type + 'Pagination').innerHTML = html;
+            
+            const start = (currentPage - 1) * 10 + 1;
+            const end = Math.min(currentPage * 10, totalItems);
+            document.getElementById(type + 'PaginationInfo').textContent = `显示 ${start}-${end} 条，共 ${totalItems} 条`;
+        }
+
+        let appModal, userModal;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            appModal = new bootstrap.Modal(document.getElementById('appModal'));
+            userModal = new bootstrap.Modal(document.getElementById('userModal'));
+            
+            document.getElementById('captchaStatusFilter').addEventListener('change', function() {
+                loadCaptchas(1);
+            });
+            
+            document.getElementById('settingsForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveSettings();
+            });
+            
+            document.getElementById('passwordForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                changePassword();
+            });
+        });
+
+        function showAppModal(appId = null) {
+            document.getElementById('appForm').reset();
+            document.getElementById('appId').value = '';
+            document.getElementById('appModalTitle').textContent = '创建应用';
+            document.getElementById('appKey').disabled = false;
+            appModal.show();
+        }
+
+        async function editApp(appId) {
+            try {
+                const response = await fetch(API_BASE + '/apps/' + appId, {
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) throw new Error('Failed to load app');
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    const app = result.data;
+                    document.getElementById('appId').value = app.id;
+                    document.getElementById('appName').value = app.name;
+                    document.getElementById('appKey').value = app.app_key;
+                    document.getElementById('appKey').disabled = true;
+                    document.getElementById('appSecret').value = app.app_secret;
+                    document.getElementById('appDomain').value = app.domain || '';
+                    document.getElementById('appModalTitle').textContent = '编辑应用';
+                    appModal.show();
+                }
+            } catch (error) {
+                console.error('Edit app error:', error);
+                showError('加载应用信息失败');
+            }
+        }
+
+        async function saveApp() {
+            const appId = document.getElementById('appId').value;
+            const appName = document.getElementById('appName').value;
+            const appKey = document.getElementById('appKey').value;
+            const appSecret = document.getElementById('appSecret').value;
+            const appDomain = document.getElementById('appDomain').value;
+            
+            if (!appName || !appKey || !appSecret) {
+                showError('请填写所有必填字段');
+                return;
+            }
+            
+            const data = {
+                name: appName,
+                app_key: appKey,
+                app_secret: appSecret,
+                domain: appDomain
+            };
+            
+            try {
+                const url = appId ? API_BASE + '/apps/' + appId : API_BASE + '/apps';
+                const method = appId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: getHeaders(),
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.code === 200 || result.code === 201) {
+                    showSuccess(appId ? '应用更新成功' : '应用创建成功');
+                    appModal.hide();
+                    loadApps(currentPage.apps);
+                } else {
+                    showError(result.message || '保存失败');
+                }
+            } catch (error) {
+                console.error('Save app error:', error);
+                showError('保存应用失败');
+            }
+        }
+
+        async function deleteApp(appId) {
+            if (!confirm('确定要删除这个应用吗？')) return;
+            
+            try {
+                const response = await fetch(API_BASE + '/apps/' + appId, {
+                    method: 'DELETE',
+                    headers: getHeaders()
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    showSuccess('应用删除成功');
+                    loadApps(currentPage.apps);
+                } else {
+                    showError(result.message || '删除失败');
+                }
+            } catch (error) {
+                console.error('Delete app error:', error);
+                showError('删除应用失败');
+            }
+        }
+
+        function showUserModal(userId = null) {
+            document.getElementById('userForm').reset();
+            document.getElementById('userId').value = '';
+            document.getElementById('userModalTitle').textContent = '添加用户';
+            document.getElementById('userPassword').required = true;
+            document.getElementById('passwordRequired').style.display = 'inline';
+            document.getElementById('passwordHint').style.display = 'block';
+            userModal.show();
+        }
+
+        async function editUser(userId) {
+            try {
+                const response = await fetch(API_BASE + '/users/' + userId, {
+                    headers: getHeaders()
+                });
+                
+                if (!response.ok) throw new Error('Failed to load user');
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    const user = result.data;
+                    document.getElementById('userId').value = user.id;
+                    document.getElementById('userEmail').value = user.email;
+                    document.getElementById('userUsername').value = user.username || '';
+                    document.getElementById('userStatus').value = user.status;
+                    document.getElementById('userPassword').required = false;
+                    document.getElementById('passwordRequired').style.display = 'none';
+                    document.getElementById('passwordHint').style.display = 'none';
+                    document.getElementById('userModalTitle').textContent = '编辑用户';
+                    userModal.show();
+                }
+            } catch (error) {
+                console.error('Edit user error:', error);
+                showError('加载用户信息失败');
+            }
+        }
+
+        async function saveUser() {
+            const userId = document.getElementById('userId').value;
+            const userEmail = document.getElementById('userEmail').value;
+            const userUsername = document.getElementById('userUsername').value;
+            const userPassword = document.getElementById('userPassword').value;
+            const userStatus = document.getElementById('userStatus').value;
+            
+            if (!userEmail) {
+                showError('请填写邮箱');
+                return;
+            }
+            
+            if (!userId && !userPassword) {
+                showError('请填写密码');
+                return;
+            }
+            
+            const data = {
+                email: userEmail,
+                username: userUsername,
+                status: parseInt(userStatus)
+            };
+            
+            if (userPassword) {
+                data.password = userPassword;
+            }
+            
+            try {
+                const url = userId ? API_BASE + '/users/' + userId : API_BASE + '/users';
+                const method = userId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: getHeaders(),
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.code === 200 || result.code === 201) {
+                    showSuccess(userId ? '用户更新成功' : '用户创建成功');
+                    userModal.hide();
+                    loadUsers(currentPage.users);
+                } else {
+                    showError(result.message || '保存失败');
+                }
+            } catch (error) {
+                console.error('Save user error:', error);
+                showError('保存用户失败');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('确定要删除这个用户吗？')) return;
+            
+            try {
+                const response = await fetch(API_BASE + '/users/' + userId, {
+                    method: 'DELETE',
+                    headers: getHeaders()
+                });
+                
+                const result = await response.json();
+                if (result.code === 200) {
+                    showSuccess('用户删除成功');
+                    loadUsers(currentPage.users);
+                } else {
+                    showError(result.message || '删除失败');
+                }
+            } catch (error) {
+                console.error('Delete user error:', error);
+                showError('删除用户失败');
+            }
+        }
+
+        function saveSettings() {
+            showSuccess('设置保存成功');
+        }
+
+        function resetSettings() {
+            document.getElementById('settingsForm').reset();
+        }
+
+        function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                showError('请填写所有字段');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                showError('两次输入的密码不一致');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showError('新密码至少6个字符');
+                return;
+            }
+            
+            showSuccess('密码修改成功');
+            document.getElementById('passwordForm').reset();
+        }
+
+        function showLoginModal() {
+            const loginHtml = `
+                <div class="modal fade" id="loginModal" data-bs-backdrop="static" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title"><i class="fas fa-lock"></i> 管理员登录</h5>
+                            </div>
+                            <div class="modal-body">
+                                <form id="loginForm">
+                                    <div class="mb-3">
+                                        <label class="form-label">邮箱</label>
+                                        <input type="email" class="form-control" id="loginEmail" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">密码</label>
+                                        <input type="password" class="form-control" id="loginPassword" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-sign-in-alt"></i> 登录</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', loginHtml);
+            
+            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+            loginModal.show();
+            
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+                
+                try {
+                    const response = await fetch(API_BASE + '/admin/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.code === 200) {
+                        currentToken = result.data.token;
+                        localStorage.setItem('adminToken', currentToken);
+                        document.getElementById('currentUser').textContent = result.data.user.email;
+                        loginModal.hide();
+                        document.getElementById('loginModal').remove();
+                        initDashboard();
+                        showSuccess('登录成功');
+                    } else {
+                        showError(result.message || '登录失败');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    showError('登录失败，请检查网络连接');
+                }
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('adminToken');
+            currentToken = null;
+            location.reload();
+        }
+
+        function getHeaders() {
+            return {
+                'Authorization': 'Bearer ' + currentToken,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString('zh-CN');
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                pending: '待验证',
+                verified: '已验证',
+                expired: '已过期',
+                failed: '验证失败'
+            };
+            return statusMap[status] || status;
+        }
+
+        function showSuccess(message) {
+            document.getElementById('successToastBody').textContent = message;
+            const toast = new bootstrap.Toast(document.getElementById('successToast'));
+            toast.show();
+        }
+
+        function showError(message) {
+            document.getElementById('errorToastBody').textContent = message;
+            const toast = new bootstrap.Toast(document.getElementById('errorToast'));
+            toast.show();
+        }
+    </script>
+</body>
+</html>

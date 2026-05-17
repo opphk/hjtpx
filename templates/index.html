@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>滑块验证码演示</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .main-container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .header-section h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .header-section p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .demo-section {
+            padding: 40px 30px;
+        }
+        
+        .captcha-demo {
+            max-width: 400px;
+            margin: 0 auto 30px;
+        }
+        
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .result-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .result-item.success {
+            border-left-color: #28a745;
+        }
+        
+        .result-item.error {
+            border-left-color: #dc3545;
+        }
+        
+        .feature-card {
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .feature-card h5 {
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .feature-card p {
+            color: #666;
+            font-size: 0.95rem;
+            margin: 0;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-badge.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-badge.verified {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .code-block {
+            background: #f5f5f5;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .main-container {
+                margin: 20px auto;
+                border-radius: 12px;
+            }
+            
+            .header-section {
+                padding: 30px 20px;
+            }
+            
+            .header-section h1 {
+                font-size: 1.8rem;
+            }
+            
+            .demo-section {
+                padding: 30px 20px;
+            }
+            
+            .captcha-demo {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <h1>🧩 滑块验证码系统</h1>
+            <p>安全可靠的行为验证解决方案</p>
+        </div>
+        
+        <div class="demo-section">
+            <div class="text-center mb-4">
+                <h3>实时演示</h3>
+                <p class="text-muted">拖动滑块完成拼图验证</p>
+                <span id="captchaStatus" class="status-badge pending">等待验证</span>
+            </div>
+            
+            <div class="captcha-demo">
+                <div id="captcha-container"></div>
+            </div>
+            
+            <div class="result-section">
+                <h5>📊 验证结果</h5>
+                <div id="resultContainer">
+                    <div class="result-item">
+                        <strong>验证码ID:</strong> <span id="resultCaptchaId">-</span>
+                    </div>
+                    <div class="result-item">
+                        <strong>验证状态:</strong> <span id="resultStatus">待验证</span>
+                    </div>
+                    <div class="result-item">
+                        <strong>验证时间:</strong> <span id="resultTime">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>🎯 滑块拖拽交互</h5>
+                        <p>流畅的拖拽体验，支持鼠标和触摸操作，滑块跟随手指/鼠标实时移动，位置精确响应。</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>📝 轨迹实时采集</h5>
+                        <p>高精度记录拖拽轨迹，包含坐标、时间戳和操作类型，支持复杂行为分析。</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>🔐 设备指纹识别</h5>
+                        <p>采集多维度设备特征，生成唯一指纹标识，有效识别机器行为。</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="feature-card">
+                        <h5>🔄 API无缝集成</h5>
+                        <p>简洁的JavaScript SDK，一行代码即可集成，支持多种配置选项和回调处理。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="mt-4">
+                <h5>💻 快速集成示例</h5>
+                <div class="code-block">
+                    <code>
+&lt;div id="captcha-container"&gt;&lt;/div&gt;<br><br>
+&lt;script src="/static/js/captcha.js"&gt;&lt;/script&gt;<br>
+&lt;script&gt;<br>
+&nbsp;&nbsp;const captcha = new SliderCaptcha({<br>
+&nbsp;&nbsp;&nbsp;&nbsp;container: 'captcha-container',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;apiHost: 'http://localhost:8080',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;appId: 'your_app_id',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;onSuccess: (data) => {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;console.log('验证成功', data);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;onFail: (msg) => {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;console.log('验证失败', msg);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;});<br>
+&lt;/script&gt;
+                    </code>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <h5>⚙️ 配置选项</h5>
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>参数</th>
+                            <th>类型</th>
+                            <th>默认值</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>container</code></td>
+                            <td>string</td>
+                            <td>'captcha-container'</td>
+                            <td>验证码容器ID</td>
+                        </tr>
+                        <tr>
+                            <td><code>apiHost</code></td>
+                            <td>string</td>
+                            <td>'http://localhost:8080'</td>
+                            <td>后端API地址</td>
+                        </tr>
+                        <tr>
+                            <td><code>appId</code></td>
+                            <td>string</td>
+                            <td>'default'</td>
+                            <td>应用标识</td>
+                        </tr>
+                        <tr>
+                            <td><code>width</code></td>
+                            <td>number</td>
+                            <td>320</td>
+                            <td>验证码宽度(px)</td>
+                        </tr>
+                        <tr>
+                            <td><code>height</code></td>
+                            <td>number</td>
+                            <td>160</td>
+                            <td>验证码高度(px)</td>
+                        </tr>
+                        <tr>
+                            <td><code>onSuccess</code></td>
+                            <td>function</td>
+                            <td>() =&gt; {}</td>
+                            <td>验证成功回调</td>
+                        </tr>
+                        <tr>
+                            <td><code>onFail</code></td>
+                            <td>function</td>
+                            <td>() =&gt; {}</td>
+                            <td>验证失败回调</td>
+                        </tr>
+                        <tr>
+                            <td><code>onError</code></td>
+                            <td>function</td>
+                            <td>() =&gt; {}</td>
+                            <td>错误处理回调</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/captcha.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const captcha = new SliderCaptcha({
+                container: 'captcha-container',
+                apiHost: 'http://localhost:8080',
+                appId: 'demo_app',
+                width: 340,
+                height: 170,
+                onSuccess: (data) => {
+                    console.log('验证成功:', data);
+                    
+                    document.getElementById('resultCaptchaId').textContent = data.captchaId;
+                    document.getElementById('resultStatus').textContent = '验证通过 ✓';
+                    document.getElementById('resultTime').textContent = new Date().toLocaleString();
+                    
+                    document.getElementById('resultContainer').querySelectorAll('.result-item').forEach(item => {
+                        item.classList.add('success');
+                    });
+                    
+                    document.getElementById('captchaStatus').textContent = '已验证';
+                    document.getElementById('captchaStatus').className = 'status-badge verified';
+                },
+                onFail: (message) => {
+                    console.log('验证失败:', message);
+                    
+                    document.getElementById('resultStatus').textContent = '验证失败 ✗';
+                    document.getElementById('resultContainer').querySelectorAll('.result-item').forEach(item => {
+                        item.classList.remove('success');
+                        item.classList.add('error');
+                    });
+                },
+                onError: (error) => {
+                    console.error('验证码错误:', error);
+                    document.getElementById('resultStatus').textContent = '系统错误';
+                    document.getElementById('captchaStatus').textContent = '错误';
+                    document.getElementById('captchaStatus').className = 'status-badge pending';
+                }
+            });
+            
+            console.log('滑块验证码初始化完成');
+        });
+    </script>
+</body>
+</html>

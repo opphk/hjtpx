@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>滑块验证码 - 集成示例</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div class="card shadow-lg">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">滑块验证码集成示例</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="loginForm">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">用户名</label>
+                                <input type="text" class="form-control" id="username" placeholder="请输入用户名" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">密码</label>
+                                <input type="password" class="form-control" id="password" placeholder="请输入密码" required>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <div id="captcha-container"></div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100" id="submitBtn" disabled>
+                                登录
+                            </button>
+                        </form>
+                        
+                        <div class="mt-4 p-3 bg-light rounded">
+                            <h6>使用说明：</h6>
+                            <ol class="mb-0">
+                                <li>填写用户名和密码</li>
+                                <li>拖动滑块完成验证</li>
+                                <li>验证通过后，点击登录按钮</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-5">
+            <div class="col-lg-12">
+                <h3 class="mb-3">集成方式</h3>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">方式一：基本集成</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>最简单的集成方式，只需提供容器ID即可：</p>
+<pre class="bg-dark text-light p-3 rounded"><code>new SliderCaptcha({
+    container: 'captcha-container'
+});</code></pre>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">方式二：完整配置</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>带回调函数和自定义参数：</p>
+<pre class="bg-dark text-light p-3 rounded"><code>new SliderCaptcha({
+    container: 'captcha-container',
+    apiHost: 'http://api.example.com',
+    appId: 'my_app',
+    width: 320,
+    height: 160,
+    onSuccess: (data) => {
+        console.log('验证成功', data);
+    },
+    onFail: (msg) => {
+        alert('验证失败: ' + msg);
+    }
+});</code></pre>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">方式三：登录表单场景</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>用于表单提交的验证码验证：</p>
+<pre class="bg-dark text-light p-3 rounded"><code>const captcha = new SliderCaptcha({
+    container: 'captcha-container',
+    onSuccess: () => {
+        document.getElementById('submitBtn').disabled = false;
+    },
+    onFail: () => {
+        document.getElementById('submitBtn').disabled = true;
+    }
+});
+
+document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (captcha.captchaId) {
+        console.log('提交表单');
+    }
+});</code></pre>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">方式四：多实例管理</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>页面上多个验证码实例：</p>
+<pre class="bg-dark text-light p-3 rounded"><code>const captchas = {};
+
+function initCaptcha(id, config) {
+    captchas[id] = new SliderCaptcha({
+        container: id,
+        ...config,
+        onSuccess: (data) => {
+            console.log(`${id} 验证成功`);
+        }
+    });
+}
+
+initCaptcha('captcha1', { appId: 'app1' });
+initCaptcha('captcha2', { appId: 'app2' });</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/captcha.js"></script>
+    <script>
+        let captchaVerified = false;
+        
+        const captcha = new SliderCaptcha({
+            container: 'captcha-container',
+            apiHost: 'http://localhost:8080',
+            appId: 'demo_app',
+            width: 340,
+            height: 170,
+            onSuccess: (data) => {
+                console.log('验证成功:', data);
+                captchaVerified = true;
+                document.getElementById('submitBtn').disabled = false;
+                alert('验证成功！可以提交表单了。');
+            },
+            onFail: (message) => {
+                console.log('验证失败:', message);
+                captchaVerified = false;
+                document.getElementById('submitBtn').disabled = true;
+            },
+            onError: (error) => {
+                console.error('验证码错误:', error);
+                alert('验证码加载失败，请刷新页面重试。');
+            }
+        });
+        
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!captchaVerified) {
+                alert('请先完成验证！');
+                return;
+            }
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            console.log('提交登录:', { username, password });
+            alert('登录功能演示结束，实际项目中这里会调用登录API。');
+        });
+        
+        document.getElementById('username').addEventListener('input', checkForm);
+        document.getElementById('password').addEventListener('input', checkForm);
+        
+        function checkForm() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (username && password && captchaVerified) {
+                submitBtn.disabled = false;
+            } else {
+                submitBtn.disabled = true;
+            }
+        }
+    </script>
+</body>
+</html>
