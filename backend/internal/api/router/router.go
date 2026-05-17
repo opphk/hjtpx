@@ -39,13 +39,19 @@ func SetupRouter() *gin.Engine {
 		},
 	})
 
-	r.LoadHTMLGlob(filepath.Join(".", "templates", "**", "*"))
+	r.LoadHTMLGlob(filepath.Join(".", "templates", "*"))
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"code":    0,
 			"message": "Welcome to HJT PX API",
 			"version": "1.0.0",
+		})
+	})
+
+	r.GET("/lianliankan", func(c *gin.Context) {
+		c.HTML(200, "lianliankan.html", gin.H{
+			"title": "连连看验证码",
 		})
 	})
 
@@ -115,6 +121,13 @@ func SetupRouter() *gin.Engine {
 			captcha.POST("/verify-v2", handler.VerifySliderCaptcha)
 			captcha.GET("/status/:session_id", handler.GetSliderCaptchaStatus)
 			captcha.GET("/check/:session_id", handler.CheckSliderCaptchaValid)
+			captcha.POST("/lianliankan/create", handler.CreateLianLianKanCaptcha)
+			captcha.POST("/lianliankan/verify", handler.VerifyLianLianKanCaptcha)
+			captcha.GET("/lianliankan/status/:session_id", handler.GetLianLianKanCaptchaStatus)
+			captcha.GET("/lianliankan/check/:session_id", handler.CheckLianLianKanCaptchaValid)
+			
+			captcha.POST("/voice/create", handler.CreateVoiceCaptcha)
+			captcha.POST("/voice/verify", handler.VerifyVoiceCaptcha)
 		}
 
 		auth := api.Group("/auth")

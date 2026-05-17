@@ -1,9 +1,13 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>墨盾验证 · 管理后台登录</title>
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -11,6 +15,24 @@
             --primary-color: #4F46E5;
             --primary-hover: #4338CA;
             --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #1F2937;
+            --text-muted: #6B7280;
+            --border-color: #E5E7EB;
+            --error-bg: #FEF2F2;
+            --error-border: #FECACA;
+            --error-text: #DC2626;
+        }
+
+        [data-bs-theme="dark"] {
+            --bg-gradient: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            --card-bg: rgba(30, 41, 59, 0.95);
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #475569;
+            --error-bg: rgba(239, 68, 68, 0.1);
+            --error-border: rgba(239, 68, 68, 0.3);
+            --error-text: #f87171;
         }
 
         * {
@@ -28,6 +50,7 @@
             justify-content: center;
             position: relative;
             overflow: hidden;
+            transition: background 0.3s ease;
         }
 
         .login-bg-ornament {
@@ -58,12 +81,13 @@
         }
 
         .login-card {
-            background: rgba(255, 255, 255, 0.95);
+            background: var(--card-bg);
             backdrop-filter: blur(10px);
             border-radius: 20px;
             padding: 45px 40px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             animation: slideUp 0.5s ease-out;
+            transition: background 0.3s ease;
         }
 
         @keyframes slideUp {
@@ -74,6 +98,13 @@
             to {
                 opacity: 1;
                 transform: translateY(0);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
             }
         }
 
@@ -102,7 +133,7 @@
         .login-brand-name {
             font-size: 26px;
             font-weight: 700;
-            color: #1F2937;
+            color: var(--text-color);
             letter-spacing: 2px;
             display: flex;
             align-items: center;
@@ -124,48 +155,60 @@
 
         .login-brand-sub {
             font-size: 13px;
-            color: #6B7280;
+            color: var(--text-muted);
             margin-top: 8px;
             letter-spacing: 4px;
         }
 
         .login-divider {
             height: 1px;
-            background: linear-gradient(to right, transparent, #E5E7EB, transparent);
+            background: linear-gradient(to right, transparent, var(--border-color), transparent);
             margin: 25px 0;
         }
 
         .form-label {
             font-size: 14px;
             font-weight: 500;
-            color: #374151;
+            color: var(--text-color);
             margin-bottom: 8px;
         }
 
         .form-control {
             height: 48px;
-            border: 2px solid #E5E7EB;
+            border: 2px solid var(--border-color);
             border-radius: 10px;
             font-size: 15px;
             padding: 12px 16px;
             transition: all 0.3s ease;
+            background: transparent;
+            color: var(--text-color);
+        }
+
+        [data-bs-theme="dark"] .form-control {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .form-control::placeholder {
+            color: var(--text-muted);
         }
 
         .form-control:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+            background: transparent;
+            color: var(--text-color);
         }
 
         .form-control.is-invalid {
-            border-color: #EF4444;
+            border-color: var(--error-text);
         }
 
         .input-group-text {
             background: transparent;
-            border: 2px solid #E5E7EB;
+            border: 2px solid var(--border-color);
             border-right: none;
             border-radius: 10px 0 0 10px;
-            color: #9CA3AF;
+            color: var(--text-muted);
         }
 
         .input-group .form-control {
@@ -235,10 +278,10 @@
         .login-error {
             margin-top: 16px;
             padding: 12px 16px;
-            background: #FEF2F2;
-            border: 1px solid #FECACA;
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
             border-radius: 8px;
-            color: #DC2626;
+            color: var(--error-text);
             font-size: 14px;
             display: none;
             animation: shake 0.5s ease;
@@ -258,7 +301,7 @@
             text-align: center;
             margin-top: 30px;
             font-size: 12px;
-            color: #9CA3AF;
+            color: var(--text-muted);
         }
 
         .password-toggle {
@@ -268,14 +311,14 @@
             transform: translateY(-50%);
             background: none;
             border: none;
-            color: #9CA3AF;
+            color: var(--text-muted);
             cursor: pointer;
             padding: 4px;
             z-index: 10;
         }
 
         .password-toggle:hover {
-            color: #6B7280;
+            color: var(--text-color);
         }
 
         .password-wrapper {
@@ -302,9 +345,32 @@
 
         .remember-me label {
             font-size: 14px;
-            color: #6B7280;
+            color: var(--text-muted);
             cursor: pointer;
             user-select: none;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.1);
         }
 
         @media (max-width: 480px) {
@@ -321,18 +387,31 @@
             .login-brand-name {
                 font-size: 22px;
             }
+
+            .theme-toggle {
+                top: 15px;
+                right: 15px;
+                width: 40px;
+                height: 40px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="login-bg-ornament">墨</div>
-    <div class="login-bg-ornament">盾</div>
+    <a href="#loginForm" class="sr-only sr-only-focusable">跳转到登录表单</a>
+    
+    <button class="theme-toggle" id="themeToggle" aria-label="切换深色/浅色主题">
+        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+    </button>
+
+    <div class="login-bg-ornament" aria-hidden="true">墨</div>
+    <div class="login-bg-ornament" aria-hidden="true">盾</div>
 
     <div class="login-container">
         <div class="login-card">
             <div class="login-brand">
                 <div class="login-brand-icon">
-                    <i class="fas fa-shield-halved"></i>
+                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
                 </div>
                 <div class="login-brand-name">
                     墨盾验证
@@ -344,25 +423,26 @@
             <form id="loginForm" novalidate>
                 <div class="mb-3">
                     <label for="username" class="form-label">
-                        <i class="fas fa-user me-1" style="color: #999; font-size: 12px;"></i>
+                        <i class="fas fa-user me-1" style="color: var(--text-muted); font-size: 12px;" aria-hidden="true"></i>
                         用户名
                     </label>
                     <input type="text" class="form-control" id="username" name="username" 
                            placeholder="请输入管理员用户名" required autocomplete="username"
-                           minlength="3" maxlength="50">
+                           minlength="3" maxlength="50" aria-describedby="usernameHelp">
                     <div class="invalid-feedback">用户名至少需要3个字符</div>
                 </div>
                 <div class="mb-3">
                     <label for="password" class="form-label">
-                        <i class="fas fa-lock me-1" style="color: #999; font-size: 12px;"></i>
+                        <i class="fas fa-lock me-1" style="color: var(--text-muted); font-size: 12px;" aria-hidden="true"></i>
                         密码
                     </label>
                     <div class="password-wrapper">
                         <input type="password" class="form-control" id="password" name="password" 
                                placeholder="请输入密码" required autocomplete="current-password"
-                               minlength="6" maxlength="100">
-                        <button type="button" class="password-toggle" onclick="togglePassword()">
-                            <i class="fas fa-eye" id="toggleIcon"></i>
+                               minlength="6" maxlength="100" aria-describedby="passwordHelp">
+                        <button type="button" class="password-toggle" id="passwordToggle" 
+                                onclick="togglePassword()" aria-label="显示/隐藏密码">
+                            <i class="fas fa-eye" id="toggleIcon" aria-hidden="true"></i>
                         </button>
                     </div>
                     <div class="invalid-feedback">密码至少需要6个字符</div>
@@ -372,10 +452,10 @@
                     <label for="remember">记住登录状态</label>
                 </div>
                 <button type="submit" id="loginBtn" class="login-btn">
-                    <span class="spinner"></span>
-                    <span class="btn-text"><i class="fas fa-key me-2"></i>登 录</span>
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span class="btn-text"><i class="fas fa-key me-2" aria-hidden="true"></i>登 录</span>
                 </button>
-                <div id="loginError" class="login-error"></div>
+                <div id="loginError" class="login-error" role="alert"></div>
             </form>
             <div class="login-footer">墨盾验证 · 安全守护</div>
         </div>
@@ -386,6 +466,40 @@
         const API_BASE = '/api/v1';
         const TOKEN_KEY = 'admin_token';
         const USER_KEY = 'admin_user';
+        const THEME_KEY = 'login_theme';
+
+        function initTheme() {
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const html = document.documentElement;
+            const savedTheme = localStorage.getItem(THEME_KEY);
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+            html.setAttribute('data-bs-theme', initialTheme);
+            updateThemeIcon(initialTheme);
+
+            themeToggle.addEventListener('click', toggleTheme);
+            themeToggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleTheme();
+                }
+            });
+
+            function toggleTheme() {
+                const currentTheme = html.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem(THEME_KEY, newTheme);
+                updateThemeIcon(newTheme);
+            }
+
+            function updateThemeIcon(theme) {
+                themeIcon.classList.remove('fa-moon', 'fa-sun');
+                themeIcon.classList.add(theme === 'dark' ? 'fa-sun' : 'fa-moon');
+            }
+        }
 
         function togglePassword() {
             const passwordInput = document.getElementById('password');
@@ -477,6 +591,8 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            
             const loginForm = document.getElementById('loginForm');
             const token = localStorage.getItem(TOKEN_KEY);
 

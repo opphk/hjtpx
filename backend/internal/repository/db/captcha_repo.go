@@ -122,3 +122,56 @@ func (r *CaptchaRepository) CleanupExpired(olderThan time.Duration) (int64, erro
 	result := db.Where("expired_at < ?", cutoff).Delete(&models.CaptchaSession{})
 	return result.RowsAffected, result.Error
 }
+
+func (r *CaptchaRepository) CreateVoiceSession(session *models.VoiceCaptchaSession) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Create(session).Error
+}
+
+func (r *CaptchaRepository) GetVoiceSession(sessionID string) (*models.VoiceCaptchaSession, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var session models.VoiceCaptchaSession
+	err := db.Where("session_id = ?", sessionID).First(&session).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+func (r *CaptchaRepository) IncrementVoiceVerifyCount(sessionID string) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	return db.Model(&models.VoiceCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Update("verify_count", gorm.Expr("verify_count + 1")).Error
+}
+
+func (r *CaptchaRepository) MarkVoiceAsVerified(sessionID string) error {
+	db := database.GetDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	now := time.Now()
+	return db.Model(&models.VoiceCaptchaSession{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"status":      "verified",
+			"verified_at": &now,
+		}).Error
+}

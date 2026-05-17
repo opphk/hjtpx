@@ -560,7 +560,8 @@ func RateLimitMiddleware(config ...RateLimitMiddlewareConfig) gin.HandlerFunc {
 }
 
 func SetupSecurityMiddleware(r *gin.Engine) {
-	r.Use(HTTPSRedirect())
+	// Disable HTTPS redirect for development environment
+	r.Use(HTTPSRedirect(HTTPSConfig{Enabled: false}))
 
 	r.Use(SecurityHeadersMiddleware())
 

@@ -1,34 +1,80 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}HJTPX 管理后台{% endblock %}</title>
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css" as="style">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style">
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #007bff;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+        }
+        [data-theme="dark"] {
+            --bg-color: #1f2937;
+            --text-color: #f3f4f6;
+            --card-bg: #374151;
+        }
+        .theme-toggle {
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .theme-toggle:hover {
+            background: rgba(0,0,0,0.1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
     {% block styles %}{% endblock %}
 </head>
 <body class="hold-transition sidebar-mini layout-fixed layout-navbar-fixed">
+    <a href="#main-content" class="sr-only sr-only-focusable">跳转到主要内容</a>
     <div class="wrapper">
-        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+        <nav class="main-header navbar navbar-expand navbar-white navbar-light" role="navigation">
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+                    <a class="nav-link" data-widget="pushmenu" href="#" role="button" aria-label="切换侧边栏">
+                        <i class="fas fa-bars" aria-hidden="true"></i>
+                    </a>
                 </li>
                 <li class="nav-item d-none d-sm-inline-block">
-                    <a href="/admin/" class="nav-link">仪表盘</a>
+                    <a href="/admin/" class="nav-link" aria-current="{% if request.path == '/admin/' %}page{% endif %}">仪表盘</a>
                 </li>
             </ul>
             <ul class="navbar-nav ml-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="/admin/logout">
-                        <i class="fas fa-sign-out-alt"></i> 退出
+                    <button class="nav-link theme-toggle border-0 bg-transparent" id="themeToggle" aria-label="切换深色/浅色主题">
+                        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logout" aria-label="退出登录">
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> 退出
                     </a>
                 </li>
             </ul>
         </nav>
 
-        <aside class="main-sidebar sidebar-dark-primary elevation-4">
+        <aside class="main-sidebar sidebar-dark-primary elevation-4" role="navigation" aria-label="侧边栏导航">
             <a href="/admin/" class="brand-link">
                 <span class="brand-text font-weight-light">HJTPX 管理后台</span>
             </a>
@@ -37,80 +83,80 @@
                 <nav class="mt-2">
                     <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
                         <li class="nav-item">
-                            <a href="/admin/" class="nav-link {% if request.path == '/admin/' %}active{% endif %}">
-                                <i class="nav-icon fas fa-tachometer-alt"></i>
+                            <a href="/admin/" class="nav-link {% if request.path == '/admin/' %}active{% endif %}" aria-current="{% if request.path == '/admin/' %}page{% endif %}">
+                                <i class="nav-icon fas fa-tachometer-alt" aria-hidden="true"></i>
                                 <p>仪表盘</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/stats" class="nav-link {% if request.path == '/admin/stats' %}active{% endif %}">
-                                <i class="nav-icon fas fa-chart-line"></i>
+                            <a href="/admin/stats" class="nav-link {% if request.path == '/admin/stats' %}active{% endif %}" aria-current="{% if request.path == '/admin/stats' %}page{% endif %}">
+                                <i class="nav-icon fas fa-chart-line" aria-hidden="true"></i>
                                 <p>统计分析</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/advanced-analytics" class="nav-link {% if request.path == '/admin/advanced-analytics' %}active{% endif %}">
-                                <i class="nav-icon fas fa-chart-pie"></i>
+                            <a href="/admin/advanced-analytics" class="nav-link {% if request.path == '/admin/advanced-analytics' %}active{% endif %}" aria-current="{% if request.path == '/admin/advanced-analytics' %}page{% endif %}">
+                                <i class="nav-icon fas fa-chart-pie" aria-hidden="true"></i>
                                 <p>高级分析</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/applications" class="nav-link {% if request.path == '/admin/applications' %}active{% endif %}">
-                                <i class="nav-icon fas fa-mobile-alt"></i>
+                            <a href="/admin/applications" class="nav-link {% if request.path == '/admin/applications' %}active{% endif %}" aria-current="{% if request.path == '/admin/applications' %}page{% endif %}">
+                                <i class="nav-icon fas fa-mobile-alt" aria-hidden="true"></i>
                                 <p>应用管理</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/logs" class="nav-link {% if request.path == '/admin/logs' %}active{% endif %}">
-                                <i class="nav-icon fas fa-clipboard-list"></i>
+                            <a href="/admin/logs" class="nav-link {% if request.path == '/admin/logs' %}active{% endif %}" aria-current="{% if request.path == '/admin/logs' %}page{% endif %}">
+                                <i class="nav-icon fas fa-clipboard-list" aria-hidden="true"></i>
                                 <p>日志查询</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/risk-rules" class="nav-link {% if request.path == '/admin/risk-rules' %}active{% endif %}">
-                                <i class="nav-icon fas fa-shield-alt"></i>
+                            <a href="/admin/risk-rules" class="nav-link {% if request.path == '/admin/risk-rules' %}active{% endif %}" aria-current="{% if request.path == '/admin/risk-rules' %}page{% endif %}">
+                                <i class="nav-icon fas fa-shield-alt" aria-hidden="true"></i>
                                 <p>风控规则</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/blacklist" class="nav-link {% if request.path == '/admin/blacklist' %}active{% endif %}">
-                                <i class="nav-icon fas fa-ban"></i>
+                            <a href="/admin/blacklist" class="nav-link {% if request.path == '/admin/blacklist' %}active{% endif %}" aria-current="{% if request.path == '/admin/blacklist' %}page{% endif %}">
+                                <i class="nav-icon fas fa-ban" aria-hidden="true"></i>
                                 <p>黑名单</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/monitoring" class="nav-link {% if request.path == '/admin/monitoring' %}active{% endif %}">
-                                <i class="nav-icon fas fa-tachometer-alt"></i>
+                            <a href="/admin/monitoring" class="nav-link {% if request.path == '/admin/monitoring' %}active{% endif %}" aria-current="{% if request.path == '/admin/monitoring' %}page{% endif %}">
+                                <i class="nav-icon fas fa-tachometer-alt" aria-hidden="true"></i>
                                 <p>实时监控</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/ab-testing" class="nav-link {% if request.path == '/admin/ab-testing' %}active{% endif %}">
-                                <i class="nav-icon fas fa-flask"></i>
+                            <a href="/admin/ab-testing" class="nav-link {% if request.path == '/admin/ab-testing' %}active{% endif %}" aria-current="{% if request.path == '/admin/ab-testing' %}page{% endif %}">
+                                <i class="nav-icon fas fa-flask" aria-hidden="true"></i>
                                 <p>A/B测试</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/real-time-screen" class="nav-link {% if request.path == '/admin/real-time-screen' %}active{% endif %}">
-                                <i class="nav-icon fas fa-desktop"></i>
+                            <a href="/admin/real-time-screen" class="nav-link {% if request.path == '/admin/real-time-screen' %}active{% endif %}" aria-current="{% if request.path == '/admin/real-time-screen' %}page{% endif %}">
+                                <i class="nav-icon fas fa-desktop" aria-hidden="true"></i>
                                 <p>实时大屏</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/notifications" class="nav-link {% if request.path == '/admin/notifications' %}active{% endif %}">
-                                <i class="nav-icon fas fa-bell"></i>
+                            <a href="/admin/notifications" class="nav-link {% if request.path == '/admin/notifications' %}active{% endif %}" aria-current="{% if request.path == '/admin/notifications' %}page{% endif %}">
+                                <i class="nav-icon fas fa-bell" aria-hidden="true"></i>
                                 <p>告警通知</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/audit-logs" class="nav-link {% if request.path == '/admin/audit-logs' %}active{% endif %}">
-                                <i class="nav-icon fas fa-history"></i>
+                            <a href="/admin/audit-logs" class="nav-link {% if request.path == '/admin/audit-logs' %}active{% endif %}" aria-current="{% if request.path == '/admin/audit-logs' %}page{% endif %}">
+                                <i class="nav-icon fas fa-history" aria-hidden="true"></i>
                                 <p>审计日志</p>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/admin/config" class="nav-link {% if request.path == '/admin/config' %}active{% endif %}">
-                                <i class="nav-icon fas fa-cog"></i>
+                            <a href="/admin/config" class="nav-link {% if request.path == '/admin/config' %}active{% endif %}" aria-current="{% if request.path == '/admin/config' %}page{% endif %}">
+                                <i class="nav-icon fas fa-cog" aria-hidden="true"></i>
                                 <p>系统配置</p>
                             </a>
                         </li>
@@ -119,7 +165,7 @@
             </div>
         </aside>
 
-        <div class="content-wrapper">
+        <div class="content-wrapper" id="main-content">
             <section class="content-header">
                 <div class="container-fluid">
                     <div class="row mb-2">
@@ -140,6 +186,8 @@
             </section>
         </div>
 
+        <div class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
         <footer class="main-footer">
             <div class="float-right d-none d-sm-inline">
                 HJTPX v1.0
@@ -155,6 +203,105 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="/admin/static/js/i18n.js"></script>
     <script src="/admin/static/js/auth.js"></script>
+    <script>
+        $(document).ready(function() {
+            initAdminTheme();
+            initAdminErrorHandling();
+            initAdminKeyboardNav();
+        });
+
+        function initAdminTheme() {
+            const themeToggle = $('#themeToggle');
+            const themeIcon = $('#themeIcon');
+            const html = $('html');
+            const savedTheme = localStorage.getItem('adminTheme') || 'light';
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            const initialTheme = savedTheme === 'auto' ? (prefersDark ? 'dark' : 'light') : savedTheme;
+            html.attr('data-theme', initialTheme);
+            updateAdminThemeIcon(initialTheme);
+
+            themeToggle.on('click', toggleAdminTheme);
+            themeToggle.on('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleAdminTheme();
+                }
+            });
+
+            function toggleAdminTheme() {
+                const currentTheme = html.attr('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.attr('data-theme', newTheme);
+                localStorage.setItem('adminTheme', newTheme);
+                updateAdminThemeIcon(newTheme);
+                showAdminToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}模式`, 'success');
+            }
+
+            function updateAdminThemeIcon(theme) {
+                themeIcon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
+            }
+        }
+
+        function initAdminErrorHandling() {
+            window.onerror = function(message, source, lineno, colno, error) {
+                showAdminToast('页面发生错误，请刷新重试', 'error');
+                console.error('Global error:', message, source, lineno, colno, error);
+                return false;
+            };
+
+            $(document).ajaxError(function(event, jqxhr, settings, thrownError) {
+                showAdminToast('请求失败，请重试', 'error');
+            });
+        }
+
+        function initAdminKeyboardNav() {
+            const focusable = $('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            focusable.each(function() {
+                if (!$(this).attr('tabindex')) {
+                    $(this).attr('tabindex', '0');
+                }
+            });
+        }
+
+        function showAdminToast(message, type = 'info') {
+            const container = $('.toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            const icons = {
+                success: 'fa-check-circle text-success',
+                error: 'fa-exclamation-triangle text-danger',
+                warning: 'fa-exclamation-circle text-warning',
+                info: 'fa-info-circle text-info'
+            };
+
+            const retryBtn = type === 'error' ? 
+                '<button class="btn btn-sm btn-light ml-2" onclick="location.reload()">重试</button>' : '';
+
+            const toastHtml = `
+                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
+                    <div class="toast-header">
+                        <i class="fas ${icons[type]} mr-2"></i>
+                        <strong class="mr-auto">提示</strong>
+                        <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="关闭">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="toast-body d-flex justify-content-between align-items-center">
+                        <span>${message}</span>
+                        ${retryBtn}
+                    </div>
+                </div>
+            `;
+            
+            container.append(toastHtml);
+            const toastEl = $('#' + toastId);
+            toastEl.toast('show');
+            toastEl.on('hidden.bs.toast', function() {
+                $(this).remove();
+            });
+        }
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

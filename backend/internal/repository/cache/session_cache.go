@@ -206,3 +206,78 @@ func (s *SessionCache) CleanupExpired(ctx context.Context) (int64, error) {
 
 	return deletedCount, nil
 }
+
+const (
+	VoiceCaptchaSessionPrefix = "captcha:voice:"
+)
+
+func (s *SessionCache) getVoiceKey(sessionID string) string {
+	return VoiceCaptchaSessionPrefix + sessionID
+}
+
+func (s *SessionCache) SetVoice(ctx context.Context, session *models.VoiceCaptchaSession) error {
+	if s.client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("failed to marshal voice session: %w", err)
+	}
+
+	key := s.getVoiceKey(session.SessionID)
+	ttl := time.Until(session.ExpiredAt)
+	if ttl <= 0 {
+		ttl = DefaultTTL
+	}
+
+	return s.client.Set(ctx, key, string(data), ttl).Err()
+}
+
+func (s *SessionCache) GetVoice(ctx context.Context, sessionID string) (*models.VoiceCaptchaSession, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+
+	key := s.getVoiceKey(sessionID)
+	data, err := s.client.Get(ctx, key).Result()
+	if err != nil {
+		if err == goredis.Nil {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var session models.VoiceCaptchaSession
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal voice session: %w", err)
+	}
+
+	return &session, nil
+}
+
+func (s *SessionCache) IncrementVoiceVerifyCount(ctx context.Context, sessionID string) error {
+	session, err := s.GetVoice(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("voice session not found")
+	}
+
+	session.VerifyCount++
+	return s.SetVoice(ctx, session)
+}
+
+func (s *SessionCache) MarkVoiceAsVerified(ctx context.Context, sessionID string) error {
+	session, err := s.GetVoice(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if session == nil {
+		return fmt.Errorf("voice session not found")
+	}
+
+	session.Status = "verified"
+	return s.SetVoice(ctx, session)
+}

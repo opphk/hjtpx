@@ -1,33 +1,116 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="hjtpx - 新一代智能行为验证系统，超越极验、易盾、五秒盾的全新一代行为验证解决方案">
     <meta name="theme-color" content="#0d6efd">
     <title>hjtpx - 行为验证系统</title>
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <style id="theme-styles">
+        :root {
+            --primary: #0d6efd;
+            --secondary: #6c757d;
+            --success: #198754;
+            --info: #0dcaf0;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light: #f8f9fa;
+            --dark: #212529;
+        }
+        [data-bs-theme="dark"] {
+            --light: #1a1a2e;
+            --dark: #f8f9fa;
+        }
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .theme-toggle {
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #0d6efd;
+            transition: all 0.3s ease;
+        }
+        .theme-toggle:hover {
+            background: rgba(13,110,253,0.2);
+            transform: scale(1.1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--primary);
+            color: white;
+            padding: 8px 16px;
+            z-index: 100;
+            transition: top 0.3s ease;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+        .error-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 400px;
+        }
+    </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+<body class="fade-in">
+    <a href="#main-content" class="skip-link">跳转到主要内容</a>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top" role="navigation" aria-label="主导航">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-                <i class="fas fa-shield-alt text-primary"></i>
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/" aria-label="hjtpx 首页">
+                <i class="fas fa-shield-alt text-primary" aria-hidden="true"></i>
                 <span class="fw-bold">hjtpx</span>
             </a>
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <i class="fas fa-bars text-primary"></i>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="切换导航">
+                <i class="fas fa-bars text-primary" aria-hidden="true"></i>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mx-auto">
-                    <li class="nav-item"><a class="nav-link active" href="/">首页</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#features">功能</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#demo">演示</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#pricing">价格</a></li>
-                    <li class="nav-item"><a class="nav-link" href="#contact">联系</a></li>
+                <ul class="navbar-nav mx-auto" role="menubar">
+                    <li class="nav-item" role="none">
+                        <a class="nav-link active" href="/" role="menuitem" aria-current="page">首页</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="#features" role="menuitem">功能</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="#demo" role="menuitem">演示</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="#pricing" role="menuitem">价格</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="#contact" role="menuitem">联系</a>
+                    </li>
                 </ul>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="theme-toggle" id="themeToggle" aria-label="切换深色/浅色主题" role="button" tabindex="0">
+                        <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
+                    </button>
                     <a href="/admin/login" class="btn btn-outline-light btn-sm px-3">管理后台</a>
                 </div>
             </div>
@@ -440,31 +523,143 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
         </div>
     </footer>
 
+    </main>
+    
+    <div id="error-toast-container" class="error-toast" aria-live="polite" aria-atomic="true"></div>
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            initSmoothScroll();
+            initNavbarScroll();
+            initKeyboardNav();
+            initErrorHandling();
+        });
+
+        function initTheme() {
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const html = document.documentElement;
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            const initialTheme = savedTheme === 'auto' ? (prefersDark ? 'dark' : 'light') : savedTheme;
+            html.setAttribute('data-bs-theme', initialTheme);
+            updateThemeIcon(initialTheme);
+
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (localStorage.getItem('theme') === 'auto') {
+                    const newTheme = e.matches ? 'dark' : 'light';
+                    html.setAttribute('data-bs-theme', newTheme);
+                    updateThemeIcon(newTheme);
+                }
+            });
+
+            themeToggle.addEventListener('click', toggleTheme);
+            themeToggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleTheme();
+                }
+            });
+
+            function toggleTheme() {
+                const currentTheme = html.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-bs-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateThemeIcon(newTheme);
+                showToast(`已切换到${newTheme === 'dark' ? '深色' : '浅色'}模式`, 'success');
+            }
+
+            function updateThemeIcon(theme) {
+                themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            }
+        }
+
+        function initSmoothScroll() {
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {
                     e.preventDefault();
                     const target = document.querySelector(this.getAttribute('href'));
                     if (target) {
-                        target.scrollIntoView({
-                            behavior: 'smooth'
-                        });
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        target.setAttribute('tabindex', '-1');
+                        target.focus();
                     }
                 });
             });
+        }
 
+        function initNavbarScroll() {
             const navbar = document.querySelector('.navbar');
             window.addEventListener('scroll', function() {
-                if (window.scrollY > 50) {
-                    navbar.classList.add('shadow');
-                } else {
-                    navbar.classList.remove('shadow');
+                navbar.classList.toggle('shadow', window.scrollY > 50);
+            });
+        }
+
+        function initKeyboardNav() {
+            const focusableElements = document.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            focusableElements.forEach(el => {
+                if (!el.hasAttribute('tabindex')) {
+                    el.setAttribute('tabindex', '0');
                 }
             });
-        });
+        }
+
+        function initErrorHandling() {
+            window.onerror = function(message, source, lineno, colno, error) {
+                showToast('页面发生错误，请刷新重试', 'error');
+                console.error('Global error:', message, source, lineno, colno, error);
+                return false;
+            };
+
+            window.addEventListener('unhandledrejection', function(event) {
+                showToast('网络请求失败，请重试', 'error');
+                console.error('Unhandled promise rejection:', event.reason);
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('error-toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            const colors = {
+                success: 'bg-success text-white',
+                error: 'bg-danger text-white',
+                warning: 'bg-warning text-dark',
+                info: 'bg-info text-dark'
+            };
+            
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-triangle',
+                warning: 'fa-exclamation-circle',
+                info: 'fa-info-circle'
+            };
+
+            const toastHtml = `
+                <div id="${toastId}" class="toast ${colors[type]} fade show" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header">
+                        <i class="fas ${icons[type]} me-2"></i>
+                        <strong class="me-auto">提示</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="关闭"></button>
+                    </div>
+                    <div class="toast-body d-flex justify-content-between align-items-center">
+                        <span>${message}</span>
+                        ${type === 'error' ? '<button class="btn btn-sm btn-light ms-2" onclick="location.reload()">重试</button>' : ''}
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', toastHtml);
+            const toastEl = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
+            toast.show();
+            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        }
 
         function loadCaptcha(type) {
             const demo = document.getElementById('captcha-demo');
@@ -479,6 +674,7 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
         function simulateSuccess() {
             const demo = document.getElementById('captcha-demo');
             demo.innerHTML = '<div class="text-center"><i class="fas fa-check-circle fa-4x text-success mb-3"></i><h4 class="text-success">验证成功!</h4><p class="text-muted">演示模式已模拟验证成功</p><button class="btn btn-outline-primary btn-sm mt-2" onclick="loadCaptcha(\'slider\')"><i class="fas fa-redo me-1"></i>重新体验</button></div>';
+            showToast('验证码验证成功', 'success');
         }
     </script>
 </body>
