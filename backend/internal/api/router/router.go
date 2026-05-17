@@ -55,6 +55,12 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
+	r.GET("/3d-captcha", func(c *gin.Context) {
+		c.HTML(200, "3dcaptcha.html", gin.H{
+			"title": "3D 验证码",
+		})
+	})
+
 	r.GET("/voice-captcha", func(c *gin.Context) {
 		c.HTML(200, "voice-captcha.html", gin.H{
 			"title": "语音验证码",
@@ -88,10 +94,22 @@ func SetupRouter() *gin.Engine {
 		})
 
 		adminRouter.GET("/config", func(c *gin.Context) {
-			c.HTML(200, "config.html", gin.H{
-				"title": "系统配置",
-			})
+		c.HTML(200, "config.html", gin.H{
+			"title": "系统配置",
 		})
+	})
+
+	adminRouter.GET("/behavior-analytics", func(c *gin.Context) {
+		c.HTML(200, "behavior-analytics.html", gin.H{
+			"title": "用户行为分析",
+		})
+	})
+
+	adminRouter.GET("/adaptive-config", func(c *gin.Context) {
+		c.HTML(200, "adaptive-config.html", gin.H{
+			"title": "自适应难度配置",
+		})
+	})
 
 		adminRouter.GET("/api/dashboard", handler.GetDashboardData)
 		adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
@@ -133,8 +151,13 @@ func SetupRouter() *gin.Engine {
 			captcha.GET("/lianliankan/check/:session_id", handler.CheckLianLianKanCaptchaValid)
 			
 			captcha.POST("/voice/create", handler.CreateVoiceCaptcha)
-			captcha.POST("/voice/verify", handler.VerifyVoiceCaptcha)
-		}
+		captcha.POST("/voice/verify", handler.VerifyVoiceCaptcha)
+		
+		captcha.POST("/3d/create", handler.CreateThreeDCaptcha)
+		captcha.POST("/3d/verify", handler.VerifyThreeDCaptcha)
+		captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
+		captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
+	}
 
 		auth := api.Group("/auth")
 		{
@@ -145,6 +168,34 @@ func SetupRouter() *gin.Engine {
 			auth.PUT("/profile", handler.UpdateProfile)
 			auth.POST("/change-password", handler.ChangePassword)
 			auth.POST("/refresh-token", handler.RefreshToken)
+		}
+
+		biometrics := api.Group("/biometrics")
+		{
+			biometrics.POST("/register", handler.RegisterBiometricProfile)
+			biometrics.POST("/verify", handler.VerifyBiometrics)
+			biometrics.GET("/profile", handler.GetBiometricProfile)
+		}
+
+		adaptive := api.Group("/adaptive")
+		{
+			adaptive.GET("/difficulty", handler.GetUserDifficulty)
+			adaptive.POST("/result", handler.UpdateUserResult)
+			adaptive.GET("/config", handler.GetAdaptiveConfig)
+			adaptive.PUT("/config", handler.UpdateAdaptiveConfig)
+			adaptive.GET("/profiles", handler.GetAllAdaptiveProfiles)
+			adaptive.POST("/flag", handler.AddBehaviorFlag)
+			adaptive.GET("/captcha-difficulty", handler.GetDifficultyForCaptcha)
+		}
+
+		behavior := api.Group("/behavior")
+		{
+			behavior.GET("/heatmap", handler.GetBehaviorHeatmap)
+			behavior.GET("/trajectories", handler.GetUserTrajectories)
+			behavior.GET("/anomalies", handler.GetBehaviorAnomalies)
+			behavior.GET("/risk-distribution", handler.GetRiskDistribution)
+			behavior.GET("/export", handler.ExportBehaviorData)
+			behavior.POST("/trajectory/replay", handler.ReplayTrajectory)
 		}
 
 		verify := api.Group("/verify")
