@@ -15,7 +15,7 @@ type TrafficPattern struct {
 	UserAgents   []string
 }
 
-type AnomalyDetectionResult struct {
+type AnomalyResult struct {
 	IsAnomaly   bool
 	AnomalyType string
 	Score       float64
@@ -84,16 +84,16 @@ func (s *AnomalyDetectionService) cleanOldData(pattern *TrafficPattern) {
 	pattern.UserAgents = filteredUserAgents
 }
 
-func (s *AnomalyDetectionService) DetectAnomaly(clientID string) *AnomalyDetectionResult {
+func (s *AnomalyDetectionService) DetectAnomaly(clientID string) *AnomalyResult {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	pattern, exists := s.patterns[clientID]
 	if !exists || len(pattern.RequestTimes) < 10 {
-		return &AnomalyDetectionResult{IsAnomaly: false, Score: 0}
+		return &AnomalyResult{IsAnomaly: false, Score: 0}
 	}
 
-	result := &AnomalyDetectionResult{
+	result := &AnomalyResult{
 		Details: make(map[string]interface{}),
 	}
 

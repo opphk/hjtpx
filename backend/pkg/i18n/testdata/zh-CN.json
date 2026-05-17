@@ -1,0 +1,4 @@
+{
+	"test_key": "测试文本",
+	"test_with_params": "你好 {name}，你 {age} 岁了"
+}

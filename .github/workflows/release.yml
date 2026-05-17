@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create release branch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git checkout -b release/${{ steps.version.outputs.version }}
+
+      - name: Update version in code
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          sed -i 's/version = "dev"/version = "${{ steps.version.outputs.version }}"/' backend/pkg/config/config.go
+          git add -A
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push origin release/${{ steps.version.outputs.version }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha
+
+      - name: Build and push release image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_VERSION=${{ steps.version.outputs.version }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+            GIT_COMMIT=${{ github.sha }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Upload scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ## Release ${{ steps.version.outputs.version }}
+
+            Docker images:
+            - `ghcr.io/hjtpx/hjtpx:${{ steps.version.outputs.version }}`
+            - `ghcr.io/hjtpx/hjtpx:latest`
+
+            ### What's Changed
+            See [commits](${{ github.server_url }}/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }})
+
+            ### Docker Image Size
+            Please check the image size after build.
+
+          files: |
+            sbom.spdx.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Helm chart release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          HELM_DIR=helm/hjtpx
+          CHART_VERSION=${{ steps.version.outputs.version }}
+
+          sed -i "s/^version:.*/version: $CHART_VERSION/" $HELM_DIR/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$CHART_VERSION\"/" $HELM_DIR/Chart.yaml
+
+          git add $HELM_DIR
+          git commit -m "chore(helm): update chart version to $CHART_VERSION"
+          git tag helm/$CHART_VERSION
+          git push origin helm/$CHART_VERSION

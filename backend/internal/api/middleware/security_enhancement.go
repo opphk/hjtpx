@@ -291,9 +291,9 @@ func SecurityLoggerMiddleware(config ...SecurityLoggerConfig) gin.HandlerFunc {
 		}
 
 		if anomalyResult, exists := c.Get("anomaly_result"); exists {
-			if result, ok := anomalyResult.(*service.AnomalyDetectionResult); ok {
-				log.AnomalyScore = result.Score
-				log.IsAnomaly = result.IsAnomaly
+			if result, ok := anomalyResult.(interface{ GetScore() float64; IsAnomaly() bool }); ok {
+				log.AnomalyScore = result.GetScore()
+				log.IsAnomaly = result.IsAnomaly()
 			}
 		}
 
@@ -324,9 +324,9 @@ func GetInputValidator() *service.InputValidator {
 	return inputValidator
 }
 
-func GetAnomalyResult(c *gin.Context) *service.AnomalyDetectionResult {
+func GetAnomalyResult(c *gin.Context) interface{} {
 	if result, exists := c.Get("anomaly_result"); exists {
-		return result.(*service.AnomalyDetectionResult)
+		return result
 	}
 	return nil
 }

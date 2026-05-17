@@ -1,0 +1,163 @@
+image:
+  repository: ghcr.io/hjtpx/hjtpx
+  pullPolicy: IfNotPresent
+  tag: latest
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 80
+  httpsPort: 443
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  hosts:
+    - host: hjtpx.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: hjtpx-tls
+  #   hosts:
+  #     - hjtpx.example.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+config:
+  GIN_MODE: release
+  SERVER_PORT: "8080"
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+  TZ: Asia/Shanghai
+
+secrets:
+  JWT_SECRET: change-me-in-production
+  POSTGRES_PASSWORD: postgres
+  REDIS_PASSWORD: ""
+
+persistence:
+  enabled: false
+  storageClass: standard
+  size: 10Gi
+
+postgresql:
+  enabled: true
+  image: postgres:16-alpine
+  persistence:
+    enabled: true
+    storageClass: standard
+    size: 10Gi
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  persistence:
+    enabled: false
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    scrapeTimeout: 10s
+  prometheusRule:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+serviceMonitor:
+  interval: 15s
+  scrapeTimeout: 10s
+  metricRelabelings: []
+  relabelings: []

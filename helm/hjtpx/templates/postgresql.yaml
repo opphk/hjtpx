@@ -1,0 +1,134 @@
+{{- if .Values.postgresql.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-postgres-init
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+data:
+  init-db.sql: |
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+    CREATE TABLE IF NOT EXISTS applications (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name VARCHAR(255) NOT NULL,
+        app_key VARCHAR(64) UNIQUE NOT NULL,
+        app_secret VARCHAR(128) NOT NULL,
+        domain VARCHAR(255),
+        status SMALLINT DEFAULT 1,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS captcha_logs (
+        id BIGSERIAL PRIMARY KEY,
+        application_id UUID REFERENCES applications(id),
+        captcha_type VARCHAR(32) NOT NULL,
+        result VARCHAR(16) NOT NULL,
+        ip_address INET,
+        user_agent TEXT,
+        duration_ms INTEGER,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_captcha_logs_app_id ON captcha_logs(application_id);
+    CREATE INDEX IF NOT EXISTS idx_captcha_logs_created_at ON captcha_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_captcha_logs_ip ON captcha_logs(ip_address);
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-postgres
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "hjtpx.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hjtpx.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "hjtpx.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.image }}
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: hjtpx_db
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 10 }}
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+      volumes:
+        - name: postgres-init
+          configMap:
+            name: {{ include "hjtpx.fullname" . }}-postgres-init
+  {{- if .Values.postgresql.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.postgresql.persistence.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size }}
+  {{- else }}
+      volumes:
+        - name: postgres-data
+          emptyDir: {}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-postgres
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+{{- end }}

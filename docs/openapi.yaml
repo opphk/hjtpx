@@ -107,12 +107,52 @@ paths:
                       image_height:
                         type: integer
                         example: 160
-  /captcha/click:
+  /captcha/image:
     get:
       tags:
         - captcha
-      summary: 获取点击验证码
-      description: 生成点击验证码
+      summary: 获取图片验证码
+      description: 生成图片验证码，返回会话ID和验证码图片
+      parameters:
+        - name: type
+          in: query
+          description: 验证码类型 (number/letter/mixed)
+          required: false
+          schema:
+            type: string
+            enum: [number, letter, mixed]
+            default: number
+        - name: count
+          in: query
+          description: 字符数量
+          required: false
+          schema:
+            type: integer
+            default: 4
+            minimum: 2
+            maximum: 8
+        - name: custom_set
+          in: query
+          description: 自定义字符集
+          required: false
+          schema:
+            type: string
+        - name: noise_mode
+          in: query
+          description: 噪点模式 (0-无, 1-点, 2-线, 3-曲线)
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 0
+            maximum: 3
+        - name: line_mode
+          in: query
+          description: 干扰线模式
+          required: false
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: 成功
@@ -130,15 +170,161 @@ paths:
                   data:
                     type: object
                     properties:
-                      session_id:
+                      challenge_id:
                         type: string
-                      image_url:
+                        example: img_abc123def456
+                        description: 验证码会话ID
+                      image:
                         type: string
                         format: byte
+                        description: Base64编码的验证码图片
+                        example: "data:image/png;base64,iVBORw0KGgo..."
+  /captcha/image/verify:
+    post:
+      tags:
+        - captcha
+      summary: 验证图片验证码
+      description: 提交图片验证码答案进行验证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - challenge_id
+                - answer
+              properties:
+                challenge_id:
+                  type: string
+                  description: 验证码会话ID
+                  example: img_abc123def456
+                answer:
+                  type: string
+                  description: 用户输入的验证码答案
+                  example: "a1b2"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        description: 验证是否成功
+                        example: true
+  /captcha/click:
+    get:
+      tags:
+        - captcha
+      summary: 获取点击验证码
+      description: 生成点击验证码，需要用户点击指定顺序的图片
+      parameters:
+        - name: width
+          in: query
+          description: 图片宽度
+          required: false
+          schema:
+            type: integer
+            default: 400
+        - name: height
+          in: query
+          description: 图片高度
+          required: false
+          schema:
+            type: integer
+            default: 300
+        - name: icon_count
+          in: query
+          description: 图标数量
+          required: false
+          schema:
+            type: integer
+            default: 9
+            minimum: 4
+            maximum: 16
+        - name: mode
+          in: query
+          description: 提示模式 (number/arrow)
+          required: false
+          schema:
+            type: string
+            enum: [number, arrow]
+            default: number
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 0
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      challenge_id:
+                        type: string
+                        description: 验证码会话ID
+                      background_image:
+                        type: string
+                        format: byte
+                        description: Base64编码的背景图片
+                      image_url:
+                        type: string
+                        description: 图片URL
                       hint:
                         type: string
+                        description: 提示文字
+                      hint_order:
+                        type: array
+                        items:
+                          type: integer
+                        description: 正确的点击顺序
                       max_points:
                         type: integer
+                        description: 最大点击次数
+                      mode:
+                        type: string
+                        description: 当前模式
+                      points:
+                        type: array
+                        items:
+                          type: array
+                          items:
+                            type: integer
+                        description: 点击位置坐标
+                      target_index:
+                        type: integer
+                        description: 目标索引
+                      icon_positions:
+                        type: array
+                        items:
+                          type: array
+                          items:
+                            type: integer
+                        description: 图标位置
+                      target_position:
+                        type: array
+                        items:
+                          type: integer
+                        description: 目标位置
   /captcha/verify:
     post:
       tags:

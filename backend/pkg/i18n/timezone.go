@@ -74,7 +74,7 @@ func ConvertTime(t time.Time, fromTz, toTz string) time.Time {
 	return t.In(fromLoc).In(toLoc)
 }
 
-func FormatTime(t time.Time, format, tz string) string {
+func FormatTimezone(t time.Time, format, tz string) string {
 	loc := GetLocation(tz)
 	return t.In(loc).Format(format)
 }

@@ -1,4 +1,4 @@
-package captcha
+package sdk
 
 import (
 	"encoding/json"
@@ -392,7 +392,7 @@ func BenchmarkSetPoolConfig(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = client.SetPoolConfig(cfg)
+		client.SetPoolConfig(cfg)
 	}
 
 	client.Close()

@@ -1,0 +1,2166 @@
+package service
+
+import (
+	"encoding/json"
+	"fmt"
+	"math"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/hjtpx/hjtpx/pkg/models"
+)
+
+func TestNewEnhancedBehaviorAnalysisService(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+	if service == nil {
+		t.Fatal("NewEnhancedBehaviorAnalysisService returned nil")
+	}
+	if service.deviceProfiles == nil {
+		t.Error("deviceProfiles not initialized")
+	}
+	if service.networkBaseline == nil {
+		t.Error("networkBaseline not initialized")
+	}
+	if service.crossDeviceHistory == nil {
+		t.Error("crossDeviceHistory not initialized")
+	}
+	if len(service.humanTypingTemplates) == 0 {
+		t.Error("humanTypingTemplates not initialized")
+	}
+	if len(service.humanMovementTemplates) == 0 {
+		t.Error("humanMovementTemplates not initialized")
+	}
+	if len(service.knownBotPatterns) == 0 {
+		t.Error("knownBotPatterns not initialized")
+	}
+}
+
+func TestAnalyzeBiometricFeatures_Mouse(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 50; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*10,
+			Y:         150 + int(float64(i)*math.Sin(float64(i)/5)),
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType: "mouse",
+			Data:     string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond),
+		})
+	}
+
+	result := service.analyzeBiometricFeatures(behaviorData)
+
+	if result.OverallScore < 0 || result.OverallScore > 1 {
+		t.Errorf("OverallScore out of range: %f", result.OverallScore)
+	}
+
+	if result.MouseMovement.MovementEntropy <= 0 {
+		t.Logf("Movement entropy: %f", result.MouseMovement.MovementEntropy)
+	}
+
+	if result.MouseMovement.BezierCurveFitting < 0 || result.MouseMovement.BezierCurveFitting > 1 {
+		t.Error("Bezier curve fitting should be between 0 and 1")
+	}
+}
+
+func TestAnalyzeBiometricFeatures_Keyboard(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	keyStrokes := []string{"t", "e", "s", "t", " ", "k", "e", "y"}
+	for i, key := range keyStrokes {
+		kp := KeyboardDataPoint{
+			Key:       key,
+			Timestamp: baseTime.Add(time.Duration(i*150+50*i*i/10) * time.Millisecond).UnixMilli(),
+			KeyDownTime: baseTime.Add(time.Duration(i*150) * time.Millisecond).UnixMilli(),
+			KeyUpTime: baseTime.Add(time.Duration(i*150+80) * time.Millisecond).UnixMilli(),
+			HoldDuration: 80,
+		}
+		dataBytes, _ := json.Marshal(kp)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType: "keyboard",
+			Data:     string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*150) * time.Millisecond),
+		})
+	}
+
+	result := service.analyzeBiometricFeatures(behaviorData)
+
+	if result.KeyboardInput.TypingRhythm.MeanInterval < 0 {
+		t.Error("Mean interval should be non-negative")
+	}
+
+	if result.KeyboardInput.TypingRhythm.ConsistencyScore < 0 || result.KeyboardInput.TypingRhythm.ConsistencyScore > 1 {
+		t.Error("Consistency score should be between 0 and 1")
+	}
+}
+
+func TestAnalyzeBiometricFeatures_Touch(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 30; i++ {
+		te := TouchEvent{
+			X:         200 + float64(i*5),
+			Y:         300 + float64(i*3),
+			Timestamp: baseTime.Add(time.Duration(i*30) * time.Millisecond).UnixMilli(),
+			EventType: "swipe",
+			Pressure:  0.5 + 0.3*math.Sin(float64(i)/3),
+		}
+		dataBytes, _ := json.Marshal(te)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType: "touch",
+			Data:     string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*30) * time.Millisecond),
+		})
+	}
+
+	result := service.analyzeBiometricFeatures(behaviorData)
+
+	if result.TouchBehavior.SwipeVelocity < 0 {
+		t.Error("Swipe velocity should be non-negative")
+	}
+
+	if result.TouchBehavior.MultiTouchPattern == "" {
+		t.Error("Multi-touch pattern should be set")
+	}
+}
+
+func TestAnalyzeMouseBiometrics(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	points := []BehaviorDataPoint{}
+	baseTime := time.Now().UnixMilli()
+
+	for i := 0; i < 100; i++ {
+		points = append(points, BehaviorDataPoint{
+			X:         100 + i*5,
+			Y:         200 + int(20*math.Sin(float64(i)/10)),
+			Timestamp: baseTime + int64(i*40),
+			Event:     "move",
+		})
+	}
+
+	features := service.analyzeMouseBiometrics(points)
+
+	if features.MovementEntropy < 0 {
+		t.Error("Movement entropy should be non-negative")
+	}
+
+	if features.BezierCurveFitting < 0 || features.BezierCurveFitting > 1 {
+		t.Error("Bezier curve fitting should be between 0 and 1")
+	}
+
+	if features.TrajectoryComplexity < 0 || features.TrajectoryComplexity > 1 {
+		t.Error("Trajectory complexity should be between 0 and 1")
+	}
+}
+
+func TestCalculateMovementEntropy(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	points := []BehaviorDataPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 10, Timestamp: 50},
+		{X: 20, Y: 20, Timestamp: 100},
+		{X: 30, Y: 10, Timestamp: 150},
+		{X: 40, Y: 0, Timestamp: 200},
+	}
+
+	entropy := service.calculateMovementEntropy(points)
+	if entropy < 0 {
+		t.Error("Entropy should be non-negative")
+	}
+
+	randomPoints := []BehaviorDataPoint{}
+	for i := 0; i < 50; i++ {
+		randomPoints = append(randomPoints, BehaviorDataPoint{
+			X:         i * 10,
+			Y:         int(100 * math.Sin(float64(i))),
+			Timestamp: int64(i * 50),
+		})
+	}
+	randomEntropy := service.calculateMovementEntropy(randomPoints)
+	if randomEntropy <= entropy {
+		t.Logf("Random entropy: %f, structured entropy: %f", randomEntropy, entropy)
+	}
+}
+
+func TestQuantizeDirection(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	testCases := []struct {
+		angle    float64
+		expected string
+	}{
+		{0, "E"},
+		{math.Pi / 4, "NE"},
+		{math.Pi / 2, "N"},
+		{3 * math.Pi / 4, "NW"},
+		{math.Pi, "W"},
+		{5 * math.Pi / 4, "SW"},
+		{3 * math.Pi / 2, "S"},
+		{7 * math.Pi / 4, "SE"},
+	}
+
+	for _, tc := range testCases {
+		result := service.quantizeDirection(tc.angle)
+		if result != tc.expected {
+			t.Errorf("quantizeDirection(%f) = %s, expected %s", tc.angle, result, tc.expected)
+		}
+	}
+}
+
+func TestCalculateBezierCurveFitting(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	points := []BehaviorDataPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 10, Timestamp: 10},
+		{X: 20, Y: 20, Timestamp: 20},
+		{X: 30, Y: 30, Timestamp: 30},
+		{X: 40, Y: 40, Timestamp: 40},
+	}
+
+	fitting := service.calculateBezierCurveFitting(points)
+	if fitting < 0 || fitting > 1 {
+		t.Errorf("Bezier fitting score should be between 0 and 1, got %f", fitting)
+	}
+
+	insufficientPoints := []BehaviorDataPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 10, Timestamp: 10},
+	}
+	fitting = service.calculateBezierCurveFitting(insufficientPoints)
+	if fitting != 0 {
+		t.Errorf("Bezier fitting for insufficient points should be 0, got %f", fitting)
+	}
+}
+
+func TestCalculateTrajectoryComplexity(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	straightLine := []BehaviorDataPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 10, Timestamp: 50},
+		{X: 20, Y: 20, Timestamp: 100},
+		{X: 30, Y: 30, Timestamp: 150},
+	}
+	straightComplexity := service.calculateTrajectoryComplexity(straightLine)
+
+	curvedPath := []BehaviorDataPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 20, Timestamp: 50},
+		{X: 20, Y: 10, Timestamp: 100},
+		{X: 30, Y: 30, Timestamp: 150},
+	}
+	curvedComplexity := service.calculateTrajectoryComplexity(curvedPath)
+
+	if curvedComplexity <= straightComplexity {
+		t.Logf("Curved complexity: %f, Straight complexity: %f", curvedComplexity, straightComplexity)
+	}
+}
+
+func TestCalculateMicroMovementRatio(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	points := []BehaviorDataPoint{}
+	for i := 0; i < 20; i++ {
+		points = append(points, BehaviorDataPoint{
+			X:         i * 3,
+			Y:         i * 2,
+			Timestamp: int64(i * 50),
+		})
+	}
+
+	ratio := service.calculateMicroMovementRatio(points)
+	if ratio < 0 || ratio > 1 {
+		t.Errorf("Micro movement ratio should be between 0 and 1, got %f", ratio)
+	}
+}
+
+func TestDetectScrollPattern(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	verticalScrolling := []BehaviorDataPoint{}
+	for i := 0; i < 20; i++ {
+		verticalScrolling = append(verticalScrolling, BehaviorDataPoint{
+			X:         100,
+			Y:         i * 20,
+			Timestamp: int64(i * 50),
+		})
+	}
+	pattern := service.detectScrollPattern(verticalScrolling)
+	if pattern != "vertical_scroll" {
+		t.Errorf("Expected vertical_scroll, got %s", pattern)
+	}
+
+	horizontalScrolling := []BehaviorDataPoint{}
+	for i := 0; i < 20; i++ {
+		horizontalScrolling = append(horizontalScrolling, BehaviorDataPoint{
+			X:         i * 20,
+			Y:         100,
+			Timestamp: int64(i * 50),
+		})
+	}
+	pattern = service.detectScrollPattern(horizontalScrolling)
+	if pattern != "horizontal_scroll" {
+		t.Errorf("Expected horizontal_scroll, got %s", pattern)
+	}
+}
+
+func TestIsMousePatternHumanLike(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	humanLike := MouseBiometricFeatures{
+		MovementEntropy:     3.5,
+		BezierCurveFitting: 0.65,
+		TrajectoryComplexity: 0.6,
+		MicroMovementRatio:  0.15,
+		IsHumanLike:        true,
+	}
+
+	if !service.isMousePatternHumanLike(humanLike) {
+		t.Error("Human-like features should be recognized")
+	}
+
+	botLike := MouseBiometricFeatures{
+		MovementEntropy:      1.0,
+		BezierCurveFitting:   0.98,
+		TrajectoryComplexity: 0.05,
+		MicroMovementRatio:   0.01,
+	}
+
+	if service.isMousePatternHumanLike(botLike) {
+		t.Error("Bot-like features should not be recognized as human")
+	}
+}
+
+func TestAnalyzeKeyboardBiometrics(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	keyStrokes := []KeyboardDataPoint{
+		{Key: "a", Timestamp: 0, KeyDownTime: 0, KeyUpTime: 80, HoldDuration: 80},
+		{Key: "b", Timestamp: 150, KeyDownTime: 150, KeyUpTime: 230, HoldDuration: 80},
+		{Key: "c", Timestamp: 280, KeyDownTime: 280, KeyUpTime: 360, HoldDuration: 80},
+		{Key: "d", Timestamp: 450, KeyDownTime: 450, KeyUpTime: 530, HoldDuration: 80},
+	}
+
+	features := service.analyzeKeyboardBiometrics(keyStrokes)
+
+	if features.TypingRhythm.MeanInterval < 0 {
+		t.Error("Mean interval should be non-negative")
+	}
+
+	if features.TypingRhythm.ConsistencyScore < 0 || features.TypingRhythm.ConsistencyScore > 1 {
+		t.Error("Consistency score should be between 0 and 1")
+	}
+}
+
+func TestCalculateDigraphLatency(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	keyStrokes := []KeyboardDataPoint{
+		{Key: "a", Timestamp: 0},
+		{Key: "b", Timestamp: 150},
+		{Key: "c", Timestamp: 300},
+		{Key: "a", Timestamp: 450},
+		{Key: "b", Timestamp: 600},
+	}
+
+	latency := make(map[string]float64)
+	service.calculateDigraphLatency(keyStrokes, latency)
+
+	if len(latency) == 0 {
+		t.Error("Digraph latency should be calculated")
+	}
+
+	expectedKey := "a:b"
+	if _, ok := latency[expectedKey]; !ok {
+		t.Errorf("Expected digraph %s to be present", expectedKey)
+	}
+}
+
+func TestAnalyzeTypingRhythm(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	keyStrokes := []KeyboardDataPoint{
+		{Key: "t", Timestamp: 0},
+		{Key: "e", Timestamp: 180},
+		{Key: "s", Timestamp: 350},
+		{Key: "t", Timestamp: 520},
+	}
+
+	rhythm := service.analyzeTypingRhythm(keyStrokes)
+
+	if rhythm.MeanInterval < 0 {
+		t.Error("Mean interval should be non-negative")
+	}
+
+	if rhythm.PatternType == "" {
+		t.Error("Pattern type should be set")
+	}
+}
+
+func TestDetectErrorRecoveryPattern(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	keyStrokesNoErrors := []KeyboardDataPoint{
+		{Key: "h", Timestamp: 0},
+		{Key: "e", Timestamp: 150},
+		{Key: "l", Timestamp: 300},
+		{Key: "l", Timestamp: 450},
+		{Key: "o", Timestamp: 600},
+	}
+	pattern := service.detectErrorRecoveryPattern(keyStrokesNoErrors)
+	if pattern != "no_errors" {
+		t.Errorf("Expected no_errors, got %s", pattern)
+	}
+
+	keyStrokesWithErrors := []KeyboardDataPoint{
+		{Key: "h", Timestamp: 0},
+		{Key: "e", Timestamp: 150},
+		{Key: "Backspace", Timestamp: 300},
+		{Key: "e", Timestamp: 400},
+		{Key: "l", Timestamp: 550},
+	}
+	pattern = service.detectErrorRecoveryPattern(keyStrokesWithErrors)
+	if pattern == "no_errors" {
+		t.Errorf("Expected some error pattern, got %s", pattern)
+	}
+}
+
+func TestCalculateFingerLoadBalance(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	keyStrokes := []KeyboardDataPoint{
+		{Key: "a", Timestamp: 0},
+		{Key: "s", Timestamp: 150},
+		{Key: "d", Timestamp: 300},
+		{Key: "f", Timestamp: 450},
+		{Key: "j", Timestamp: 600},
+		{Key: "k", Timestamp: 750},
+	}
+
+	balance := make(map[string]float64)
+	service.calculateFingerLoadBalance(keyStrokes, balance)
+
+	if balance["left_hand"]+balance["right_hand"] != 1.0 {
+		t.Error("Finger load balance should sum to 1")
+	}
+}
+
+func TestIsKeyboardPatternHumanLike(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	humanKeyboard := KeyboardBiometricFeatures{
+		TypingRhythm: TypingRhythm{
+			MeanInterval:     150,
+			StdDevInterval:  80,
+			ConsistencyScore: 0.6,
+		},
+		FingerLoadBalance: map[string]float64{
+			"left_hand":  0.5,
+			"right_hand": 0.5,
+		},
+		DigraphLatency: map[string]float64{
+			"t:h": 150,
+			"e:r": 120,
+			"r:e": 130,
+			"s:t": 140,
+		},
+	}
+
+	if !service.isKeyboardPatternHumanLike(humanKeyboard) {
+		t.Error("Human-like keyboard pattern should be recognized")
+	}
+}
+
+func TestAnalyzeTouchBiometrics(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	events := []TouchEvent{}
+	baseTime := time.Now().UnixMilli()
+
+	for i := 0; i < 30; i++ {
+		events = append(events, TouchEvent{
+			X:         200 + float64(i*5),
+			Y:         300 + float64(i*3),
+			Timestamp: baseTime + int64(i*30),
+			EventType: "swipe",
+			Pressure:  0.5,
+		})
+	}
+
+	features := service.analyzeTouchBiometrics(events)
+
+	if features.SwipeVelocity < 0 {
+		t.Error("Swipe velocity should be non-negative")
+	}
+
+	if features.PinchGestureRatio < 0 || features.PinchGestureRatio > 1 {
+		t.Error("Pinch gesture ratio should be between 0 and 1")
+	}
+}
+
+func TestCalculateSwipeVelocity(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	events := []TouchEvent{
+		{X: 0, Y: 0, Timestamp: 0, EventType: "swipe"},
+		{X: 100, Y: 100, Timestamp: 100, EventType: "swipe"},
+	}
+
+	velocity := service.calculateSwipeVelocity(events)
+	if velocity <= 0 {
+		t.Error("Swipe velocity should be positive for moving events")
+	}
+}
+
+func TestCalculateSwipeAngleVariance(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	events := []TouchEvent{
+		{X: 0, Y: 0, Timestamp: 0, EventType: "swipe"},
+		{X: 100, Y: 100, Timestamp: 100, EventType: "swipe"},
+		{X: 200, Y: 200, Timestamp: 200, EventType: "swipe"},
+	}
+
+	variance := service.calculateSwipeAngleVariance(events)
+	if variance < 0 {
+		t.Error("Angle variance should be non-negative")
+	}
+}
+
+func TestDetectMultiTouchPattern(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	eventsWithPressure := []TouchEvent{
+		{X: 100, Y: 100, Timestamp: 0, EventType: "touch", Pressure: 0.5},
+		{X: 200, Y: 200, Timestamp: 100, EventType: "touch", Pressure: 0},
+	}
+
+	pattern := service.detectMultiTouchPattern(eventsWithPressure)
+	if pattern == "" {
+		t.Error("Multi-touch pattern should be detected")
+	}
+}
+
+func TestCalculatePressureDistribution(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	events := []TouchEvent{
+		{X: 100, Y: 100, Timestamp: 0, Pressure: 0.2},
+		{X: 200, Y: 200, Timestamp: 100, Pressure: 0.5},
+		{X: 300, Y: 300, Timestamp: 200, Pressure: 0.8},
+		{X: 400, Y: 400, Timestamp: 300, Pressure: 0},
+	}
+
+	distribution := make(map[string]float64)
+	service.calculatePressureDistribution(events, distribution)
+
+	total := 0.0
+	for _, v := range distribution {
+		total += v
+	}
+
+	if total < 0.99 || total > 1.01 {
+		t.Errorf("Pressure distribution should sum to ~1, got %f", total)
+	}
+}
+
+func TestIsTouchPatternHumanLike(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	humanTouch := TouchBiometricFeatures{
+		SwipeVelocity:      1.5,
+		SwipeAngleVariance: 0.8,
+		PinchGestureRatio:  0.2,
+	}
+
+	if !service.isTouchPatternHumanLike(humanTouch) {
+		t.Error("Human-like touch pattern should be recognized")
+	}
+}
+
+func TestCalculateBiometricScore(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	feature := BiometricFeature{
+		MouseMovement: MouseBiometricFeatures{
+			IsHumanLike: true,
+		},
+		KeyboardInput: KeyboardBiometricFeatures{
+			IsHumanLike: true,
+		},
+		TouchBehavior: TouchBiometricFeatures{
+			IsHumanLike: true,
+		},
+	}
+
+	score := service.calculateBiometricScore(feature)
+	if score <= 0.5 {
+		t.Errorf("Human-like biometric score should be high, got %f", score)
+	}
+}
+
+func TestCalculateBiometricConfidence(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	feature := BiometricFeature{
+		MouseMovement: MouseBiometricFeatures{
+			MovementEntropy: 3.5,
+		},
+		KeyboardInput: KeyboardBiometricFeatures{
+			DigraphLatency: map[string]float64{"a:b": 100},
+		},
+		TouchBehavior: TouchBiometricFeatures{
+			SwipeVelocity: 1.5,
+		},
+	}
+
+	confidence := service.calculateBiometricConfidence(feature)
+	if confidence < 0.5 {
+		t.Errorf("Confidence should be high with multiple data sources, got %f", confidence)
+	}
+}
+
+func TestAnalyzeDeviceBehavior(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 20; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*10,
+			Y:         200,
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:   "move",
+			Data:       string(dataBytes),
+			Timestamp:  baseTime.Add(time.Duration(i*100) * time.Millisecond),
+		})
+	}
+
+	deviceData := map[string]interface{}{
+		"user_agent": "Mozilla/5.0 Test Browser",
+		"fingerprint": "abc123",
+		"screen":     "1920x1080",
+	}
+
+	pattern := service.analyzeDeviceBehavior(behaviorData, deviceData)
+
+	if pattern.DeviceFingerprint == "" {
+		t.Error("Device fingerprint should be generated")
+	}
+
+	if len(pattern.SessionPatterns) == 0 {
+		t.Error("Session patterns should be extracted")
+	}
+}
+
+func TestExtractDeviceFingerprint(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{
+		"user_agent": "Mozilla/5.0",
+		"fingerprint": "fp123",
+		"screen": "1920x1080",
+		"不对": "data",
+	}
+
+	fingerprint := service.extractDeviceFingerprint(deviceData)
+
+	if fingerprint == "" {
+		t.Error("Fingerprint should not be empty")
+	}
+
+	if len(fingerprint) != 64 {
+		t.Errorf("SHA256 hash should be 64 characters, got %d", len(fingerprint))
+	}
+}
+
+func TestExtractSessions(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	baseTime := time.Now()
+	behaviorData := []models.BehaviorData{
+		{DataType: "move", Timestamp: baseTime},
+		{DataType: "click", Timestamp: baseTime.Add(100 * time.Millisecond)},
+		{DataType: "move", Timestamp: baseTime.Add(200 * time.Millisecond)},
+	}
+
+	sessions := service.extractSessions(behaviorData)
+
+	if len(sessions) < 1 {
+		t.Error("At least one session should be extracted")
+	}
+}
+
+func TestAnalyzeUsageHabits(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	sessions := []SessionPattern{
+		{
+			SessionID:      "session1",
+			StartTime:      time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+			Duration:       60000,
+			ActionSequence: []string{"move", "click"},
+		},
+		{
+			SessionID:      "session2",
+			StartTime:      time.Date(2024, 1, 15, 14, 0, 0, 0, time.UTC),
+			Duration:       90000,
+			ActionSequence: []string{"move", "click", "scroll"},
+		},
+	}
+
+	habits := service.analyzeUsageHabits(sessions)
+
+	if habits.AverageSessionLength <= 0 {
+		t.Error("Average session length should be calculated")
+	}
+
+	if habits.HabitConsistency < 0 || habits.HabitConsistency > 1 {
+		t.Error("Habit consistency should be between 0 and 1")
+	}
+}
+
+func TestAnalyzeSequencePatterns(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{
+		{DataType: "move", Timestamp: time.Now()},
+		{DataType: "click", Timestamp: time.Now().Add(50 * time.Millisecond)},
+		{DataType: "move", Timestamp: time.Now().Add(100 * time.Millisecond)},
+		{DataType: "click", Timestamp: time.Now().Add(150 * time.Millisecond)},
+		{DataType: "scroll", Timestamp: time.Now().Add(200 * time.Millisecond)},
+	}
+
+	patterns := service.analyzeSequencePatterns(behaviorData)
+
+	if patterns.SequenceEntropy < 0 {
+		t.Error("Sequence entropy should be non-negative")
+	}
+}
+
+func TestDetectAnomalies(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 50; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*10,
+			Y:         200,
+			Timestamp: baseTime.Add(time.Duration(i*20) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*20) * time.Millisecond),
+		})
+	}
+
+	pattern := DeviceBehaviorPattern{
+		SequencePatternMatch: SequencePatternMatch{
+			MatchedPatterns:   []string{},
+			UnusualSequences: []string{"move->move->move"},
+		},
+	}
+
+	anomaly := service.detectAnomalies(behaviorData, pattern)
+
+	if anomaly.AnomalyScore < 0 || anomaly.AnomalyScore > 100 {
+		t.Error("Anomaly score should be between 0 and 100")
+	}
+}
+
+func TestCheckDeviceConsistency(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	consistentPattern := DeviceBehaviorPattern{
+		SessionPatterns: []SessionPattern{
+			{Duration: 60000},
+			{Duration: 65000},
+			{Duration: 55000},
+		},
+	}
+
+	if !service.checkDeviceConsistency(consistentPattern) {
+		t.Error("Consistent pattern should be recognized")
+	}
+
+	inconsistentPattern := DeviceBehaviorPattern{
+		SessionPatterns: []SessionPattern{
+			{Duration: 1000},
+			{Duration: 1000000},
+			{Duration: 800},
+		},
+	}
+
+	if service.checkDeviceConsistency(inconsistentPattern) {
+		t.Error("Inconsistent pattern should not be recognized as consistent")
+	}
+}
+
+func TestAnalyzeNetworkBehavior(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	networkData := map[string]interface{}{
+		"requests": []interface{}{
+			map[string]interface{}{"timestamp": float64(1000)},
+			map[string]interface{}{"timestamp": float64(1150)},
+			map[string]interface{}{"timestamp": float64(1300)},
+			map[string]interface{}{"timestamp": float64(1450)},
+		},
+		"time_slots": map[string]interface{}{
+			"10": float64(5),
+			"14": float64(3),
+		},
+	}
+
+	analysis := service.analyzeNetworkBehavior(networkData)
+
+	if analysis.RequestTiming.InterRequestInterval.MeanInterval <= 0 {
+		t.Error("Mean interval should be calculated")
+	}
+}
+
+func TestCalculateInterRequestStats(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	requests := []interface{}{
+		map[string]interface{}{"timestamp": float64(1000)},
+		map[string]interface{}{"timestamp": float64(1200)},
+		map[string]interface{}{"timestamp": float64(1400)},
+	}
+
+	stats := service.calculateInterRequestStats(requests)
+
+	if stats.MeanInterval <= 0 {
+		t.Error("Mean interval should be positive")
+	}
+
+	if stats.MinInterval <= 0 {
+		t.Error("Min interval should be positive")
+	}
+}
+
+func TestDetectBurstPatterns(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	requests := []interface{}{
+		map[string]interface{}{"timestamp": float64(1000)},
+		map[string]interface{}{"timestamp": float64(1100)},
+		map[string]interface{}{"timestamp": float64(1200)},
+		map[string]interface{}{"timestamp": float64(2000)},
+		map[string]interface{}{"timestamp": float64(2100)},
+	}
+
+	bursts := service.detectBurstPatterns(requests)
+
+	if len(bursts) == 0 {
+		t.Log("No bursts detected in this pattern")
+	}
+}
+
+func TestAnalyzeTCPIPFeatures(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	networkData := map[string]interface{}{
+		"packets": []interface{}{
+			map[string]interface{}{"size": float64(1500), "ttl": float64(64), "window": float64(65535)},
+			map[string]interface{}{"size": float64(1400), "ttl": float64(64), "window": float64(65535)},
+		},
+		"retransmission_rate": float64(0.05),
+	}
+
+	features := service.analyzeTCPIPFeatures(networkData)
+
+	if features.RetransmissionRate < 0 {
+		t.Error("Retransmission rate should be non-negative")
+	}
+}
+
+func TestAssessNetworkQuality(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	networkData := map[string]interface{}{
+		"latency": []interface{}{float64(50), float64(55), float64(45), float64(52), float64(48)},
+		"packet_loss": float64(0.01),
+	}
+
+	quality := service.assessNetworkQuality(networkData)
+
+	if quality.LatencyConsistency < 0 || quality.LatencyConsistency > 1 {
+		t.Error("Latency consistency should be between 0 and 1")
+	}
+}
+
+func TestAnalyzeRequestPatterns(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	networkData := map[string]interface{}{
+		"request_sequence": []interface{}{"GET", "GET", "POST", "GET", "GET"},
+	}
+
+	patterns := service.analyzeRequestPatterns(networkData)
+
+	if patterns.RequestSequenceEntropy < 0 {
+		t.Error("Request sequence entropy should be non-negative")
+	}
+}
+
+func TestCalculateBotPatternScore(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	patterns := RequestPatternAnalysis{
+		CommonSequences: []string{"GET->GET->GET", "POST->GET->GET"},
+		RareSequences:   []string{"DELETE->GET->PUT"},
+		SequentialPatterns: map[string]int{
+			"GET->GET->GET": 20,
+			"POST->GET->GET": 15,
+		},
+		RequestSequenceEntropy: 1.2,
+	}
+
+	score := service.calculateBotPatternScore(patterns)
+
+	if score < 0 {
+		t.Error("Bot pattern score should be non-negative")
+	}
+}
+
+func TestAnalyzeCrossDeviceTracking(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{
+		"user_id": "user123",
+		"linked_devices": []interface{}{"device1", "device2"},
+	}
+
+	tracking := service.analyzeCrossDeviceTracking(deviceData)
+
+	if tracking.SuspicionScore < 0 || tracking.SuspicionScore > 100 {
+		t.Error("Suspicion score should be between 0 and 100")
+	}
+}
+
+func TestDetectSuspiciousSwitches(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	tracking := &CrossDeviceTracking{
+		DeviceSwitchEvents: []DeviceSwitchEvent{
+			{
+				FromDevice: "device1",
+				ToDevice:   "device2",
+				SwitchTime: time.Now(),
+				TimeGap:    60000,
+			},
+		},
+	}
+
+	service.detectSuspiciousSwitches(tracking)
+}
+
+func TestCalculateSuspicionScore(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	tracking := CrossDeviceTracking{
+		BehaviorConsistency: BehaviorConsistency{
+			OverallConsistency: 0.3,
+		},
+		DeviceSwitchEvents: []DeviceSwitchEvent{
+			{IsGeoImpossible: true},
+		},
+		AccountLinkage: AccountLinkageResult{
+			IsSuspicious: true,
+		},
+	}
+
+	score := service.calculateSuspicionScore(tracking)
+
+	if score < 30 {
+		t.Errorf("Suspicion score should be higher with suspicious indicators, got %f", score)
+	}
+}
+
+func TestCalculateCombinedRiskScore(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	result := &EnhancedVerificationResult{
+		BiometricAnalysis: BiometricFeature{
+			OverallScore: 0.3,
+		},
+		DeviceBehavior: DeviceBehaviorPattern{
+			IsConsistent: false,
+			AnomalyDetection: AnomalyDetectionResult{
+				AnomalyScore: 60,
+			},
+		},
+		NetworkAnalysis: NetworkBehaviorAnalysis{
+			BotLikelihoodScore: 70,
+		},
+		CrossDeviceTracking: CrossDeviceTracking{
+			SuspicionScore: 50,
+		},
+		RiskFactors: make(map[string]float64),
+	}
+
+	service.calculateCombinedRiskScore(result)
+
+	if result.CombinedRiskScore < 0 || result.CombinedRiskScore > 100 {
+		t.Error("Combined risk score should be between 0 and 100")
+	}
+
+	if len(result.Recommendations) == 0 {
+		t.Error("Recommendations should be generated")
+	}
+}
+
+func TestValidateBehavioralFingerprint(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 50; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*10,
+			Y:         200 + int(20*math.Sin(float64(i)/5)),
+			Timestamp: baseTime.Add(time.Duration(i*50+i%10*20) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50+i%10*20) * time.Millisecond),
+		})
+	}
+
+	isValid, confidence := service.ValidateBehavioralFingerprint(behaviorData)
+
+	if !isValid && confidence > 0 {
+		t.Logf("Validation result: valid=%v, confidence=%f", isValid, confidence)
+	}
+}
+
+func TestDetectAdvancedBotPatterns(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 100; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*5,
+			Y:         200,
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond),
+		})
+	}
+
+	matches := service.DetectAdvancedBotPatterns(behaviorData, nil)
+
+	t.Logf("Detected %d bot patterns", len(matches))
+}
+
+func TestCalculateBotAccuracy(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	results := []*EnhancedVerificationResult{
+		{IsBot: true, CombinedRiskScore: 80},
+		{IsBot: false, CombinedRiskScore: 20},
+		{IsBot: true, CombinedRiskScore: 70},
+		{IsBot: false, CombinedRiskScore: 30},
+	}
+	groundTruth := []bool{true, false, true, false}
+
+	accuracy := service.CalculateBotAccuracy(results, groundTruth)
+
+	if accuracy != 100.0 {
+		t.Errorf("Accuracy should be 100%% for matching predictions, got %.2f%%", accuracy)
+	}
+}
+
+func TestOptimizeThresholds(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	results := []*EnhancedVerificationResult{
+		{CombinedRiskScore: 80, BiometricAnalysis: BiometricFeature{OverallScore: 0.2}, NetworkAnalysis: NetworkBehaviorAnalysis{BotLikelihoodScore: 80}, CrossDeviceTracking: CrossDeviceTracking{SuspicionScore: 70}},
+		{CombinedRiskScore: 30, BiometricAnalysis: BiometricFeature{OverallScore: 0.8}, NetworkAnalysis: NetworkBehaviorAnalysis{BotLikelihoodScore: 30}, CrossDeviceTracking: CrossDeviceTracking{SuspicionScore: 20}},
+	}
+	labels := []bool{true, false}
+
+	thresholds := service.OptimizeThresholds(results, labels)
+
+	if thresholds["combined"] <= 0 || thresholds["combined"] > 100 {
+		t.Error("Combined threshold should be between 0 and 100")
+	}
+}
+
+func TestTrainMLModel(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	trainingData := []*EnhancedVerificationResult{
+		{
+			BiometricAnalysis: BiometricFeature{OverallScore: 0.2},
+			NetworkAnalysis: NetworkBehaviorAnalysis{BotLikelihoodScore: 80},
+			CrossDeviceTracking: CrossDeviceTracking{SuspicionScore: 70},
+			IsBot: true,
+		},
+		{
+			BiometricAnalysis: BiometricFeature{OverallScore: 0.8},
+			NetworkAnalysis: NetworkBehaviorAnalysis{BotLikelihoodScore: 20},
+			CrossDeviceTracking: CrossDeviceTracking{SuspicionScore: 10},
+			IsBot: false,
+		},
+	}
+	labels := []bool{true, false}
+
+	config := service.TrainMLModel(trainingData, labels)
+
+	if config.BotThreshold <= 0 || config.BotThreshold > 100 {
+		t.Error("Bot threshold should be between 0 and 100")
+	}
+}
+
+func TestExportFeatureVector(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	result := &EnhancedVerificationResult{
+		BiometricAnalysis: BiometricFeature{
+			OverallScore: 0.7,
+			MouseMovement: MouseBiometricFeatures{
+				MovementEntropy:     3.5,
+				BezierCurveFitting: 0.65,
+			},
+			KeyboardInput: KeyboardBiometricFeatures{
+				TypingRhythm: TypingRhythm{
+					MeanInterval:     150,
+					StdDevInterval:  80,
+					ConsistencyScore: 0.6,
+				},
+			},
+			TouchBehavior: TouchBiometricFeatures{
+				SwipeVelocity:      1.5,
+				SwipeAngleVariance: 0.8,
+			},
+		},
+		DeviceBehavior: DeviceBehaviorPattern{
+			IsConsistent: true,
+			AnomalyDetection: AnomalyDetectionResult{
+				AnomalyScore: 30,
+			},
+			SequencePatternMatch: SequencePatternMatch{
+				SequenceEntropy: 2.5,
+				MatchScore:      0.6,
+			},
+		},
+		NetworkAnalysis: NetworkBehaviorAnalysis{
+			BotLikelihoodScore: 40,
+			RequestTiming: RequestTimingAnalysis{
+				InterRequestInterval: InterRequestInterval{
+					MeanInterval: 500,
+					StdDevInterval: 100,
+					IsTooRegular: false,
+				},
+			},
+			NetworkQuality: NetworkQualityAssessment{
+				QualityGrade: "good",
+			},
+		},
+		CrossDeviceTracking: CrossDeviceTracking{
+			SuspicionScore: 20,
+			BehaviorConsistency: BehaviorConsistency{
+				OverallConsistency: 0.8,
+			},
+			IsSuspiciousSwitch: false,
+			AccountLinkage: AccountLinkageResult{
+				LinkageStrength: 0.3,
+			},
+		},
+	}
+
+	vector := service.ExportFeatureVector(result)
+
+	if vector["biometric_score"] != 0.7 {
+		t.Errorf("Expected biometric_score 0.7, got %f", vector["biometric_score"])
+	}
+
+	if len(vector) < 20 {
+		t.Error("Feature vector should contain multiple features")
+	}
+}
+
+func TestImportAndAnalyze(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	featureVector := map[string]float64{
+		"biometric_score":        0.7,
+		"mouse_entropy":           3.5,
+		"bezier_fitting":         0.65,
+		"trajectory_complexity":   0.6,
+		"micro_movement_ratio":   0.15,
+		"typing_mean_interval":   150,
+		"typing_std_interval":    80,
+		"typing_consistency":     0.6,
+		"swipe_velocity":         1.5,
+		"swipe_angle_variance":    0.8,
+		"device_consistency":      1,
+		"anomaly_score":          30,
+		"sequence_entropy":        2.5,
+		"pattern_match_score":    0.6,
+		"bot_likelihood":         40,
+		"inter_request_mean":     500,
+		"inter_request_std":      100,
+		"is_request_regular":     0,
+		"network_quality":         0.75,
+		"cross_device_suspicion": 20,
+		"behavior_consistency":   0.8,
+		"is_suspicious_switch":   0,
+		"linkage_strength":       0.3,
+	}
+
+	result := service.ImportAndAnalyze(featureVector)
+
+	if result.CombinedRiskScore < 0 || result.CombinedRiskScore > 100 {
+		t.Error("Combined risk score should be between 0 and 100")
+	}
+}
+
+func TestUpdateAndGetDeviceProfile(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	userID := "user123"
+	profile := &DeviceBehaviorPattern{
+		DeviceFingerprint: "fp123",
+		IsConsistent:     true,
+	}
+
+	service.UpdateDeviceProfile(userID, profile)
+
+	retrieved := service.GetDeviceProfile(userID)
+	if retrieved == nil {
+		t.Fatal("Profile should be retrievable")
+	}
+	if retrieved.DeviceFingerprint != "fp123" {
+		t.Error("Retrieved fingerprint should match")
+	}
+}
+
+func TestRecordDeviceSwitch(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	userID := "user123"
+	event := DeviceSwitchEvent{
+		FromDevice: "device1",
+		ToDevice:   "device2",
+		SwitchTime: time.Now(),
+		TimeGap:   60000,
+	}
+
+	service.RecordDeviceSwitch(userID, event)
+
+	if len(service.crossDeviceHistory[userID]) != 1 {
+		t.Error("Device switch should be recorded")
+	}
+}
+
+func TestInitializeAndGetNetworkBaseline(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	ip := "192.168.1.1"
+	baseline := &NetworkBaseline{
+		MeanLatency:      50,
+		StdDevLatency:    10,
+		RequestFrequency: 10,
+	}
+
+	service.InitializeNetworkBaseline(ip, baseline)
+
+	retrieved := service.GetNetworkBaseline(ip)
+	if retrieved == nil {
+		t.Fatal("Baseline should be retrievable")
+	}
+	if retrieved.MeanLatency != 50 {
+		t.Error("Retrieved mean latency should match")
+	}
+}
+
+func TestVerifyEnhanced(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 30; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*10,
+			Y:         200 + int(20*math.Sin(float64(i)/5)),
+			Timestamp: baseTime.Add(time.Duration(i*50+i%10*20) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50+i%10*20) * time.Millisecond),
+		})
+	}
+
+	request := &EnhancedVerificationRequest{
+		SessionID:    "test-session",
+		UserID:       "user123",
+		IPAddress:    "192.168.1.1",
+		UserAgent:    "Mozilla/5.0",
+		BehaviorData: behaviorData,
+		NetworkData: map[string]interface{}{
+			"requests": []interface{}{
+				map[string]interface{}{"timestamp": float64(1000)},
+				map[string]interface{}{"timestamp": float64(1150)},
+				map[string]interface{}{"timestamp": float64(1300)},
+			},
+		},
+		DeviceData: map[string]interface{}{
+			"user_id": "user123",
+		},
+	}
+
+	pass, result, err := service.VerifyEnhanced(request)
+	if err != nil {
+		t.Fatalf("VerifyEnhanced returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Result should not be nil")
+	}
+
+	t.Logf("Verification result: pass=%v, risk_score=%.2f", pass, result.CombinedRiskScore)
+}
+
+func TestGenerateEnhancedReport(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	result := &EnhancedVerificationResult{
+		CombinedRiskScore: 65,
+		IsBot:             true,
+		BotConfidence:     75,
+		BiometricAnalysis: BiometricFeature{
+			OverallScore:     0.3,
+			IsHumanLike:     false,
+			MouseMovement: MouseBiometricFeatures{
+				MovementEntropy:     2.5,
+				BezierCurveFitting:  0.9,
+				TrajectoryComplexity: 0.1,
+			},
+			KeyboardInput: KeyboardBiometricFeatures{
+				TypingRhythm: TypingRhythm{
+					PatternType:     "fast",
+					MeanInterval:    80,
+				},
+			},
+			TouchBehavior: TouchBiometricFeatures{
+				SwipeVelocity: 3.0,
+			},
+		},
+		DeviceBehavior: DeviceBehaviorPattern{
+			IsConsistent: false,
+			SessionPatterns: []SessionPattern{
+				{SessionID: "session1"},
+			},
+			AnomalyDetection: AnomalyDetectionResult{
+				IsAnomalous: true,
+				AnomalyType: "bot_behavior",
+				Severity:    "high",
+				AnomalyScore: 70,
+			},
+		},
+		NetworkAnalysis: NetworkBehaviorAnalysis{
+			BotLikelihoodScore: 60,
+			RequestTiming: RequestTimingAnalysis{
+				InterRequestInterval: InterRequestInterval{
+					IsTooRegular: true,
+				},
+			},
+			TCPIPFeatures: TCPIPFeatureAnalysis{
+				IsSuspicious: true,
+			},
+			NetworkQuality: NetworkQualityAssessment{
+				QualityGrade: "excellent",
+			},
+		},
+		CrossDeviceTracking: CrossDeviceTracking{
+			IsSuspiciousSwitch: true,
+			SuspicionScore:     55,
+			DeviceAssociations: []DeviceAssociation{
+				{DeviceID: "device1"},
+			},
+			BehaviorConsistency: BehaviorConsistency{
+				OverallConsistency: 0.4,
+			},
+		},
+		RiskFactors: map[string]float64{
+			"biometric":       70,
+			"device_behavior":  65,
+			"network":         60,
+			"cross_device":    55,
+		},
+		Recommendations: []string{
+			"建议进行额外的验证挑战",
+		},
+		DetectionMethods: []string{
+			"mouse_biometric_analysis",
+			"keyboard_biometric_analysis",
+		},
+	}
+
+	report := service.GenerateEnhancedReport(result)
+
+	if len(report) == 0 {
+		t.Error("Report should not be empty")
+	}
+
+	if len(report) < 100 {
+		t.Error("Report should contain substantial content")
+	}
+}
+
+func TestConcurrency(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			userID := fmt.Sprintf("user%d", idx%3)
+			profile := &DeviceBehaviorPattern{
+				DeviceFingerprint: fmt.Sprintf("fp%d", idx),
+			}
+
+			service.UpdateDeviceProfile(userID, profile)
+
+		 retrieved := service.GetDeviceProfile(userID)
+		 if retrieved == nil {
+			 t.Errorf("Profile should be retrievable for user %s", userID)
+		 }
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestMeanFloat(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []float64{1, 2, 3, 4, 5}
+	mean := service.meanFloat(values)
+
+	if math.Abs(mean-3.0) > 0.001 {
+		t.Errorf("Mean should be 3.0, got %f", mean)
+	}
+
+	emptyMean := service.meanFloat([]float64{})
+	if emptyMean != 0 {
+		t.Error("Mean of empty slice should be 0")
+	}
+}
+
+func TestStdDevFloat(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []float64{2, 4, 4, 4, 5, 5, 7, 9}
+	stdDev := service.stdDevFloat(values)
+
+	if stdDev <= 0 {
+		t.Error("StdDev should be positive for non-uniform data")
+	}
+
+	uniformStdDev := service.stdDevFloat([]float64{5, 5, 5, 5})
+	if uniformStdDev != 0 {
+		t.Error("StdDev of uniform data should be 0")
+	}
+}
+
+func TestMedianFloat(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []float64{5, 2, 8, 1, 9, 3, 7, 4, 6}
+	median := service.medianFloat(values)
+
+	if median != 5 {
+		t.Errorf("Median should be 5, got %f", median)
+	}
+
+	evenValues := []float64{1, 2, 3, 4}
+	evenMedian := service.medianFloat(evenValues)
+
+	if evenMedian != 2.5 {
+		t.Errorf("Median of even count should be 2.5, got %f", evenMedian)
+	}
+}
+
+func TestPointDistance(t *testing.T) {
+	_ = BehaviorDataPoint{X: 0, Y: 0}
+	_ = BehaviorDataPoint{X: 3, Y: 4}
+
+	distance := math.Sqrt(3*3 + 4*4)
+	expectedDist := distance
+
+	if math.Abs(expectedDist-5.0) > 0.001 {
+		t.Errorf("Distance should be 5.0, got %f", expectedDist)
+	}
+}
+
+func TestCalculateFeatureImportance(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	trainingData := []*EnhancedVerificationResult{
+		{
+			IsBot: true,
+			BiometricAnalysis: BiometricFeature{
+				OverallScore: 0.2,
+			},
+		},
+		{
+			IsBot: false,
+			BiometricAnalysis: BiometricFeature{
+				OverallScore: 0.8,
+			},
+		},
+	}
+	labels := []bool{true, false}
+
+	importance := service.calculateFeatureImportance(trainingData, labels)
+
+	if importance["biometric"] < 0 {
+		t.Error("Feature importance should be non-negative")
+	}
+}
+
+func TestApplyMLModel(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	result := &EnhancedVerificationResult{
+		BiometricAnalysis: BiometricFeature{
+			OverallScore: 0.3,
+		},
+		NetworkAnalysis: NetworkBehaviorAnalysis{
+			BotLikelihoodScore: 70,
+		},
+		CrossDeviceTracking: CrossDeviceTracking{
+			SuspicionScore: 60,
+		},
+	}
+
+	config := &MLModelConfig{
+		BiometricWeight:    0.4,
+		NetworkWeight:      0.3,
+		CrossDeviceWeight:  0.3,
+		BotThreshold:       50.0,
+		ConfidenceThreshold: 0.7,
+	}
+
+	adjusted := service.ApplyMLModel(result, config)
+
+	if adjusted.CombinedRiskScore < 0 || adjusted.CombinedRiskScore > 100 {
+		t.Error("Combined risk score should be between 0 and 100")
+	}
+}
+
+func TestCompareMousePatterns(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{
+		"mouse_pattern": map[string]float64{
+			"speed": 1.5,
+		},
+	}
+
+	similarity := service.compareMousePatterns(deviceData)
+
+	if similarity < 0 || similarity > 1 {
+		t.Error("Pattern similarity should be between 0 and 1")
+	}
+}
+
+func TestCompareKeyboardPatterns(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{}
+
+	similarity := service.compareKeyboardPatterns(deviceData)
+
+	if similarity < 0 || similarity > 1 {
+		t.Error("Pattern similarity should be between 0 and 1")
+	}
+}
+
+func TestGetLinkedDevices(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{
+		"linked_devices": []interface{}{"device1", "device2", "device3"},
+	}
+
+	devices := service.getLinkedDevices(deviceData)
+
+	if len(devices) != 3 {
+		t.Errorf("Expected 3 linked devices, got %d", len(devices))
+	}
+}
+
+func TestGetSharedIPs(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{
+		"shared_ips": []interface{}{"192.168.1.1", "10.0.0.1"},
+	}
+
+	ips := service.getSharedIPs(deviceData)
+
+	if len(ips) != 2 {
+		t.Errorf("Expected 2 shared IPs, got %d", len(ips))
+	}
+}
+
+func TestCheckGeoImpossibility(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	event := DeviceSwitchEvent{
+		FromDevice: "device1",
+		ToDevice:   "device2",
+		TimeGap:    60000,
+	}
+
+	isImpossible := service.checkGeoImpossibility(event)
+
+	if isImpossible {
+		t.Log("Geo impossibility correctly detected")
+	}
+}
+
+func TestEstimateDistance(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	distance := service.estimateDistance("device1", "device2")
+
+	if distance < 0 {
+		t.Error("Distance should be non-negative")
+	}
+}
+
+func TestExtractMousePattern(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{
+		"mouse_pattern": map[string]interface{}{
+			"speed": float64(1.5),
+			"entropy": float64(3.5),
+		},
+	}
+
+	pattern := service.extractMousePattern(deviceData)
+
+	if len(pattern) != 2 {
+		t.Errorf("Expected 2 pattern features, got %d", len(pattern))
+	}
+}
+
+func TestGetMousePatternBaseline(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	deviceData := map[string]interface{}{}
+
+	baseline := service.getMousePatternBaseline(deviceData)
+
+	if baseline != nil {
+		t.Error("Baseline should be nil for empty device data")
+	}
+}
+
+func TestCalculateRequestSequenceEntropy(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	requests := []interface{}{"GET", "POST", "GET", "POST", "PUT"}
+
+	entropy := service.calculateRequestSequenceEntropy(requests)
+
+	if entropy < 0 {
+		t.Error("Entropy should be non-negative")
+	}
+}
+
+func TestGetRequestType(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	req1 := map[string]interface{}{"type": "GET"}
+	req2 := map[string]interface{}{"method": "POST"}
+	req3 := "DELETE"
+
+	reqType1 := service.getRequestType(req1)
+	reqType2 := service.getRequestType(req2)
+	reqType3 := service.getRequestType(req3)
+
+	if reqType1 != "GET" {
+		t.Errorf("Expected GET, got %s", reqType1)
+	}
+	if reqType2 != "POST" {
+		t.Errorf("Expected POST, got %s", reqType2)
+	}
+	if reqType3 != "DELETE" {
+		t.Errorf("Expected DELETE, got %s", reqType3)
+	}
+}
+
+func TestExtractTimestamp(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	req := map[string]interface{}{"timestamp": float64(1234567890)}
+
+	timestamp, ok := service.extractTimestamp(req)
+
+	if !ok {
+		t.Error("Should successfully extract timestamp")
+	}
+	if timestamp != 1234567890 {
+		t.Errorf("Expected timestamp 1234567890, got %d", timestamp)
+	}
+}
+
+func TestComputeControlPoints(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	p0 := BehaviorDataPoint{X: 0, Y: 0, Timestamp: 0}
+	p1 := BehaviorDataPoint{X: 10, Y: 10, Timestamp: 10}
+	p2 := BehaviorDataPoint{X: 20, Y: 20, Timestamp: 20}
+	p3 := BehaviorDataPoint{X: 30, Y: 30, Timestamp: 30}
+
+	points := service.computeControlPoints(p0, p1, p2, p3)
+
+	if len(points) != 4 {
+		t.Errorf("Expected 4 control points, got %d", len(points))
+	}
+}
+
+func TestEvaluateBezier(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	controlPoints := []EnhancedPoint{
+		{X: 0, Y: 0},
+		{X: 10, Y: 10},
+		{X: 20, Y: 20},
+		{X: 30, Y: 30},
+	}
+
+	point := service.evaluateBezier(controlPoints, 0.5)
+
+	if point.X == 0 && point.Y == 0 {
+		t.Error("Point at t=0.5 should not be at origin")
+	}
+}
+
+func TestPointDistanceEnhanced(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	p1 := EnhancedPoint{X: 0, Y: 0}
+	p2 := BehaviorDataPoint{X: 3, Y: 4}
+
+	distance := service.pointDistanceEnhanced(p1, p2)
+
+	if math.Abs(distance-5.0) > 0.001 {
+		t.Errorf("Distance should be 5.0, got %f", distance)
+	}
+}
+
+func TestComputeAngle(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	p1 := BehaviorDataPoint{X: 0, Y: 0, Timestamp: 0}
+	p2 := BehaviorDataPoint{X: 10, Y: 10, Timestamp: 10}
+	p3 := BehaviorDataPoint{X: 20, Y: 0, Timestamp: 20}
+
+	angle := service.computeAngle(p1, p2, p3)
+
+	if angle < 0 || angle > math.Pi {
+		t.Errorf("Angle should be between 0 and PI, got %f", angle)
+	}
+}
+
+func TestMinFloat(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []float64{5, 2, 8, 1, 9}
+	minVal := service.minFloat(values)
+
+	if minVal != 1 {
+		t.Errorf("Min should be 1, got %f", minVal)
+	}
+}
+
+func TestMaxFloat(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []float64{5, 2, 8, 1, 9}
+	maxVal := service.maxFloat(values)
+
+	if maxVal != 9 {
+		t.Errorf("Max should be 9, got %f", maxVal)
+	}
+}
+
+func TestMeanInt64(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []int64{100, 200, 300}
+	mean := service.meanInt64(values)
+
+	if mean != 200 {
+		t.Errorf("Mean should be 200, got %f", mean)
+	}
+}
+
+func TestStdDevInt64(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	values := []int64{100, 200, 300}
+	stdDev := service.stdDevInt64(values)
+
+	if stdDev <= 0 {
+		t.Error("StdDev should be positive for non-uniform data")
+	}
+}
+
+func TestCheckIdenticalIntervals(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 10; i++ {
+		point := BehaviorDataPoint{
+			X:         i * 10,
+			Y:         i * 10,
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond),
+		})
+	}
+
+	identical := service.checkIdenticalIntervals(behaviorData)
+
+	if identical {
+		t.Log("Identical intervals detected as expected")
+	}
+}
+
+func TestCheckMechanicalRegularity(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 10; i++ {
+		point := BehaviorDataPoint{
+			X:         i * 10,
+			Y:         i * 10,
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond),
+		})
+	}
+
+	regular := service.checkMechanicalRegularity(behaviorData)
+
+	if regular {
+		t.Log("Mechanical regularity detected")
+	}
+}
+
+func TestCheckLowCurvature(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 10; i++ {
+		point := BehaviorDataPoint{
+			X:         i * 100,
+			Y:         i * 100,
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond),
+		})
+	}
+
+	lowCurv := service.checkLowCurvature(behaviorData)
+
+	if lowCurv {
+		t.Log("Low curvature detected")
+	}
+}
+
+func TestCheckHighEfficiency(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 10; i++ {
+		point := BehaviorDataPoint{
+			X:         i * 100,
+			Y:         i * 100,
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*100) * time.Millisecond),
+		})
+	}
+
+	highEff := service.checkHighEfficiency(behaviorData)
+
+	if highEff {
+		t.Log("High efficiency detected")
+	}
+}
+
+func TestCheckFastResponse(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 10; i++ {
+		point := BehaviorDataPoint{
+			X:         i * 10,
+			Y:         i * 10,
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond),
+		})
+	}
+
+	fast := service.checkFastResponse(behaviorData)
+
+	if fast {
+		t.Log("Fast response detected")
+	}
+}
+
+func TestCheckNoHesitation(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 10; i++ {
+		point := BehaviorDataPoint{
+			X:         i * 10,
+			Y:         i * 10,
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond),
+		})
+	}
+
+	noHesitation := service.checkNoHesitation(behaviorData)
+
+	if noHesitation {
+		t.Log("No hesitation detected")
+	}
+}
+
+func TestAnalyzeEnhanced(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	behaviorData := []models.BehaviorData{}
+	baseTime := time.Now()
+
+	for i := 0; i < 20; i++ {
+		point := BehaviorDataPoint{
+			X:         100 + i*10,
+			Y:         200 + int(20*math.Sin(float64(i)/5)),
+			Timestamp: baseTime.Add(time.Duration(i*50+i%10*20) * time.Millisecond).UnixMilli(),
+			Event:     "move",
+		}
+		dataBytes, _ := json.Marshal(point)
+		behaviorData = append(behaviorData, models.BehaviorData{
+			DataType:  "move",
+			Data:      string(dataBytes),
+			Timestamp: baseTime.Add(time.Duration(i*50+i%10*20) * time.Millisecond),
+		})
+	}
+
+	networkData := map[string]interface{}{
+		"requests": []interface{}{
+			map[string]interface{}{"timestamp": float64(1000)},
+			map[string]interface{}{"timestamp": float64(1150)},
+			map[string]interface{}{"timestamp": float64(1300)},
+		},
+	}
+
+	deviceData := map[string]interface{}{
+		"user_id": "user123",
+		"user_agent": "Mozilla/5.0",
+	}
+
+	result, err := service.AnalyzeEnhanced(behaviorData, networkData, deviceData)
+
+	if err != nil {
+		t.Fatalf("AnalyzeEnhanced returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Result should not be nil")
+	}
+
+	if result.CombinedRiskScore < 0 || result.CombinedRiskScore > 100 {
+		t.Error("Combined risk score should be between 0 and 100")
+	}
+}
+
+func TestGenerateEnhancedReportFull(t *testing.T) {
+	service := NewEnhancedBehaviorAnalysisService()
+
+	result := &EnhancedVerificationResult{
+		CombinedRiskScore: 65,
+		IsBot:             true,
+		BotConfidence:     75,
+		BiometricAnalysis: BiometricFeature{
+			OverallScore:     0.3,
+			IsHumanLike:     false,
+			MouseMovement: MouseBiometricFeatures{
+				MovementEntropy:     2.5,
+				BezierCurveFitting:  0.9,
+				TrajectoryComplexity: 0.1,
+			},
+			KeyboardInput: KeyboardBiometricFeatures{
+				TypingRhythm: TypingRhythm{
+					PatternType:     "fast",
+					MeanInterval:    80,
+				},
+			},
+			TouchBehavior: TouchBiometricFeatures{
+				SwipeVelocity: 3.0,
+			},
+		},
+		DeviceBehavior: DeviceBehaviorPattern{
+			IsConsistent: false,
+			SessionPatterns: []SessionPattern{
+				{SessionID: "session1"},
+			},
+			AnomalyDetection: AnomalyDetectionResult{
+				IsAnomalous: true,
+				AnomalyType: "bot_behavior",
+				Severity:    "high",
+				AnomalyScore: 70,
+			},
+		},
+		NetworkAnalysis: NetworkBehaviorAnalysis{
+			BotLikelihoodScore: 60,
+			RequestTiming: RequestTimingAnalysis{
+				InterRequestInterval: InterRequestInterval{
+					IsTooRegular: true,
+				},
+			},
+			TCPIPFeatures: TCPIPFeatureAnalysis{
+				IsSuspicious: true,
+			},
+			NetworkQuality: NetworkQualityAssessment{
+				QualityGrade: "excellent",
+			},
+		},
+		CrossDeviceTracking: CrossDeviceTracking{
+			IsSuspiciousSwitch: true,
+			SuspicionScore:     55,
+			DeviceAssociations: []DeviceAssociation{
+				{DeviceID: "device1"},
+			},
+			BehaviorConsistency: BehaviorConsistency{
+				OverallConsistency: 0.4,
+			},
+		},
+		RiskFactors: map[string]float64{
+			"biometric":       70,
+			"device_behavior":  65,
+			"network":         60,
+			"cross_device":    55,
+		},
+		Recommendations: []string{
+			"建议进行额外的验证挑战",
+		},
+		DetectionMethods: []string{
+			"mouse_biometric_analysis",
+			"keyboard_biometric_analysis",
+		},
+	}
+
+	report := service.GenerateEnhancedReport(result)
+
+	if len(report) == 0 {
+		t.Error("Report should not be empty")
+	}
+
+	if len(report) < 100 {
+		t.Error("Report should contain substantial content")
+	}
+}

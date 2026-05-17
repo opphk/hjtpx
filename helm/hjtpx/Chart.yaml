@@ -1,0 +1,22 @@
+apiVersion: v2
+name: hjtpx
+description: A Helm chart for hjtpx - Advanced CAPTCHA & Security Platform
+type: application
+version: 1.0.0
+appVersion: "latest"
+kubeVersion: ">=1.25.0-0"
+keywords:
+  - captcha
+  - security
+  - authentication
+  - anti-bot
+  - golang
+maintainers:
+  - name: hjtpx
+    email: dev@hjtpx.example.com
+home: https://github.com/hjtpx/hjtpx
+sources:
+  - https://github.com/hjtpx/hjtpx
+annotations:
+  category: Security
+  licenses: MIT

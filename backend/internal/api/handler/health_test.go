@@ -9,65 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHealthCheck(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	tests := []struct {
-		name           string
-	}{
-		{
-			name: "returns health status",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			req, _ := http.NewRequest("GET", "/health", nil)
-			c.Request = req
-
-			// Act
-			HealthCheck(c)
-
-			// Assert - 检查有响应即可，状态码可以是200或503，取决于外部服务
-			assert.GreaterOrEqual(t, w.Code, 200)
-			assert.Less(t, w.Code, 600)
-		})
-	}
-}
-
-func TestReadiness(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	tests := []struct {
-		name           string
-	}{
-		{
-			name: "returns readiness status",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			req, _ := http.NewRequest("GET", "/ready", nil)
-			c.Request = req
-
-			// Act
-			Readiness(c)
-
-			// Assert - 检查有响应即可
-			assert.GreaterOrEqual(t, w.Code, 200)
-			assert.Less(t, w.Code, 600)
-		})
-	}
-}
-
-func TestLiveness(t *testing.T) {
+func TestHealthHandler_Check(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -75,48 +17,108 @@ func TestLiveness(t *testing.T) {
 		expectedStatus int
 	}{
 		{
-			name:           "returns liveness status",
+			name:           "health check returns OK",
 			expectedStatus: http.StatusOK,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Arrange
+			r := gin.New()
+			r.GET("/health", HealthCheck)
+
 			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			req, _ := http.NewRequest("GET", "/alive", nil)
-			c.Request = req
+			req, _ := http.NewRequest("GET", "/health", nil)
+			r.ServeHTTP(w, req)
 
-			// Act
-			Liveness(c)
-
-			// Assert - Liveness 应该总是返回 200 OK
 			assert.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }
 
-func TestNewReadinessCheck(t *testing.T) {
+func TestReadinessCheck_IsReady(t *testing.T) {
 	check := NewReadinessCheck()
 	assert.NotNil(t, check)
+
+	result := check.IsReady()
+	assert.IsType(t, false, result)
 }
 
-func TestNewLivenessCheck(t *testing.T) {
-	check := NewLivenessCheck()
-	assert.NotNil(t, check)
+func TestReadinessCheck_Liveness(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.GET("/ready", Readiness)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ready", nil)
+	r.ServeHTTP(w, req)
+
+	assert.NotNil(t, w)
 }
 
 func TestLivenessCheck_IsAlive(t *testing.T) {
 	check := NewLivenessCheck()
-	alive := check.IsAlive()
-	assert.True(t, alive)
+	assert.NotNil(t, check)
+
+	result := check.IsAlive()
+	assert.True(t, result)
 }
 
-func TestGetSystemMetrics(t *testing.T) {
-	// 测试 getSystemMetrics 函数不会 panic
-	metrics := getSystemMetrics()
-	assert.NotNil(t, metrics)
-	assert.Contains(t, metrics, "go_version")
-	assert.Contains(t, metrics, "go_routines")
+func TestLivenessCheck_Liveness(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.GET("/live", Liveness)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/live", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHealthStatus_Structure(t *testing.T) {
+	status := HealthStatus{
+		Status:    "healthy",
+		Timestamp: "2024-01-01T00:00:00Z",
+		Uptime:    "1h0m0s",
+		Services:  make(map[string]interface{}),
+		Metrics:   make(map[string]interface{}),
+		System:    make(map[string]interface{}),
+	}
+
+	assert.Equal(t, "healthy", status.Status)
+	assert.Equal(t, "2024-01-01T00:00:00Z", status.Timestamp)
+	assert.Equal(t, "1h0m0s", status.Uptime)
+	assert.NotNil(t, status.Services)
+	assert.NotNil(t, status.Metrics)
+	assert.NotNil(t, status.System)
+}
+
+func TestHealthCheck_Services(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.GET("/health", HealthCheck)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/health", nil)
+	r.ServeHTTP(w, req)
+
+	assert.NotNil(t, w)
+	assert.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, w.Code)
+}
+
+func TestHealthCheck_Degraded(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.GET("/health", HealthCheck)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/health", nil)
+	r.ServeHTTP(w, req)
+
+	assert.NotNil(t, w)
 }

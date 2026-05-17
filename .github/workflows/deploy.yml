@@ -1,0 +1,174 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Image tag to deploy (default: latest)'
+        required: false
+        default: 'latest'
+  push:
+    branches:
+      - main
+    paths:
+      - 'k8s/**'
+      - 'helm/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Validate Helm chart
+        run: |
+          helm lint helm/hjtpx
+
+      - name: Validate K8s manifests
+        uses: device关暗/setup-kubectl@v4
+        with:
+          version: '1.29.0'
+
+      - name: Template Helm chart
+        run: |
+          helm template hjtpx helm/hjtpx \
+            --set image.tag=${{ github.event.inputs.image_tag || 'latest' }} \
+            --set ingress.enabled=false \
+            > /tmp/rendered.yaml
+
+  deploy-staging:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.event.inputs.environment == 'staging' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: '1.29.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > $KUBECONFIG
+          echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+
+      - name: Deploy to staging
+        run: |
+          helm upgrade --install hjtpx-staging helm/hjtpx \
+            --namespace hjtpx-staging \
+            --create-namespace \
+            --values helm/hjtpx/values-staging.yaml \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ github.event.inputs.image_tag || 'latest' }} \
+            --wait --timeout 5m \
+            --atomic
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/hjtpx-staging -n hjtpx-staging --timeout=300s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n hjtpx-staging
+          kubectl get svc -n hjtpx-staging
+
+  deploy-production:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.event.inputs.environment == 'production'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: '1.29.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > $KUBECONFIG
+          echo "KUBECONFIG=$KUBECONFIG" >> $GITHUB_ENV
+
+      - name: Backup current deployment
+        run: |
+          kubectl get all -n hjtpx -o yaml > /tmp/backup-${{ github.run_id }}.yaml
+
+      - name: Deploy to production
+        run: |
+          helm upgrade --install hjtpx helm/hjtpx \
+            --namespace hjtpx \
+            --create-namespace \
+            --values helm/hjtpx/values-production.yaml \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ github.event.inputs.image_tag || 'latest' }} \
+            --wait --timeout 10m \
+            --atomic \
+            --cleanup-on-fail
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/hjtpx -n hjtpx --timeout=600s
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n hjtpx
+          kubectl get svc -n hjtpx
+
+      - name: Run smoke tests
+        run: |
+          SLEEP=30
+          for i in {1..12}; do
+            if curl -sf http://hjtpx.hjtpx.svc.cluster.local/health > /dev/null; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Waiting for service... attempt $i"
+            sleep $SLEEP
+          done
+          echo "Health check failed"
+          exit 1
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Production deployment failed for hjtpx"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

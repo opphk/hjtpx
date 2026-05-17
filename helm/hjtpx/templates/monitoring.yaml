@@ -1,0 +1,60 @@
+{{- if .Values.monitoring.enabled -}}
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "hjtpx.fullname" . }}
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "hjtpx.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.monitoring.prometheusRule.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-alerts
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+    role: alert-rules
+spec:
+  groups:
+    - name: {{ include "hjtpx.fullname" . }}-api
+      rules:
+        - alert: API Down
+          expr: up{job="{{ include "hjtpx.fullname" . }}"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "hjtpx API is down"
+            description: "hjtpx API has been down for more than 1 minute"
+        - alert: High Error Rate
+          expr: rate(http_requests_total{job="{{ include "hjtpx.fullname" . }}", status=~"5.."}[5m]) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High error rate detected"
+            description: "Error rate is above 5% for 5 minutes"
+        - alert: High Latency
+          expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="{{ include "hjtpx.fullname" . }}"}[5m])) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency detected"
+            description: "95th percentile latency is above 500ms"
+{{- end }}
+{{- end }}

@@ -12,15 +12,19 @@
 ### 2. 在线文档
 - [api-docs.html](api-docs.html) - 美观的在线API文档页面（可直接在浏览器打开）
 
-### 3. 开发工具
+### 3. 使用指南
+- [使用指南.md](使用指南.md) - **用户快速上手指南**（推荐新用户阅读）
+- [最佳实践.md](最佳实践.md) - **最佳实践指南**（推荐开发者阅读）
+
+### 4. 开发工具
 - [postman-collection.json](postman-collection.json) - Postman API集合，可直接导入使用
 
-### 4. SDK
+### 5. SDK
 - [Go SDK](../sdk/go/) - Go语言SDK，包含示例代码
 - [JavaScript SDK](../sdk/javascript/) - JavaScript/Node.js SDK
 - [Python SDK](../sdk/python/) - Python SDK
 
-### 5. 其他文档
+### 6. 其他文档
 - [架构设计.md](架构设计.md) - 系统架构设计文档
 - [部署文档.md](部署文档.md) - 部署指南
 - [配置说明.md](配置说明.md) - 配置项详细说明
@@ -29,6 +33,7 @@
 - [性能调优指南.md](性能调优指南.md) - 性能优化指南
 - [监控运维手册.md](监控运维手册.md) - 监控和运维手册
 - [故障排查手册.md](故障排查手册.md) - 问题排查指南
+- [运维手册.md](运维手册.md) - 日常运维手册
 - [贡献指南.md](贡献指南.md) - 贡献代码指南
 
 ---

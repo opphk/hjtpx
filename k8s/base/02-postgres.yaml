@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hjtpx-postgres
+  namespace: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/component: database
+spec:
+  serviceName: hjtpx-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hjtpx
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hjtpx
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+              name: postgres
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hjtpx-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: hjtpx_db
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+      volumes:
+        - name: postgres-init
+          configMap:
+            name: hjtpx-postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hjtpx-postgres
+  namespace: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/component: database
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hjtpx-postgres-init
+  namespace: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/component: database
+data:
+  init-db.sql: |
+    -- hjtpx database initialization script
+    -- This script runs automatically on first startup
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+    -- Application tables
+    CREATE TABLE IF NOT EXISTS applications (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name VARCHAR(255) NOT NULL,
+        app_key VARCHAR(64) UNIQUE NOT NULL,
+        app_secret VARCHAR(128) NOT NULL,
+        domain VARCHAR(255),
+        status SMALLINT DEFAULT 1,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS captcha_logs (
+        id BIGSERIAL PRIMARY KEY,
+        application_id UUID REFERENCES applications(id),
+        captcha_type VARCHAR(32) NOT NULL,
+        result VARCHAR(16) NOT NULL,
+        ip_address INET,
+        user_agent TEXT,
+        duration_ms INTEGER,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_captcha_logs_app_id ON captcha_logs(application_id);
+    CREATE INDEX IF NOT EXISTS idx_captcha_logs_created_at ON captcha_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_captcha_logs_ip ON captcha_logs(ip_address);

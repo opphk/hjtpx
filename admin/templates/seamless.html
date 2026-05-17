@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+
+{% block title %}无感验证管理 - 墨盾验证{% endblock %}
+
+{% block page_title %}无感验证管理{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js">
+<style>
+    .stat-card {
+        border-left: 4px solid #c23a2b;
+        transition: transform 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    .trust-badge {
+        font-size: 11px;
+        padding: 3px 8px;
+        border-radius: 10px;
+    }
+    .trust-high { background: #d4edda; color: #155724; }
+    .trust-medium { background: #fff3cd; color: #856404; }
+    .trust-low { background: #f8d7da; color: #721c24; }
+    .risk-indicator {
+        width: 100%;
+        height: 8px;
+        border-radius: 4px;
+        background: #e9ecef;
+        overflow: hidden;
+    }
+    .risk-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s;
+    }
+    .risk-low { background: #28a745; }
+    .risk-medium { background: #ffc107; }
+    .risk-high { background: #dc3545; }
+    .device-list-item {
+        padding: 12px 16px;
+        border-bottom: 1px solid #eee;
+        transition: background 0.15s;
+    }
+    .device-list-item:hover {
+        background: #f8f9fa;
+    }
+    .rule-item {
+        border-left: 3px solid transparent;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        background: #fff;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .rule-item.active {
+        border-left-color: #28a745;
+    }
+    .rule-item.disabled {
+        opacity: 0.6;
+    }
+    .factor-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        margin: 2px;
+    }
+    .factor-positive { background: #d4edda; color: #155724; }
+    .factor-negative { background: #f8d7da; color: #721c24; }
+    .factor-neutral { background: #e9ecef; color: #495057; }
+    .decision-allow { color: #28a745; }
+    .decision-challenge { color: #ffc107; }
+    .decision-block { color: #dc3545; }
+    .tab-content { padding-top: 20px; }
+    .nav-tabs .nav-link {
+        color: #6c757d;
+        border: none;
+        padding: 10px 20px;
+    }
+    .nav-tabs .nav-link.active {
+        color: #c23a2b;
+        border-bottom: 2px solid #c23a2b;
+        background: transparent;
+    }
+    .pagination-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6c757d;
+    }
+    .empty-state i {
+        font-size: 48px;
+        margin-bottom: 16px;
+        color: #dee2e6;
+    }
+    .action-btn {
+        padding: 4px 10px;
+        font-size: 12px;
+    }
+    .modal-header {
+        background: #f8f9fa;
+        border-bottom: 2px solid #c23a2b;
+    }
+    .badge-critical { background: #dc3545; }
+    .badge-high { background: #fd7e14; }
+    .badge-medium { background: #ffc107; color: #000; }
+    .badge-low { background: #28a745; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted mb-1" style="font-size:12px;">总设备数</div>
+                    <div style="font-weight:700;font-size:24px;" id="totalDevices">0</div>
+                    <div class="text-success small" id="devicesChange"><i class="fas fa-arrow-up"></i> +0%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted mb-1" style="font-size:12px;">信任设备</div>
+                    <div style="font-weight:700;font-size:24px;" id="trustedDevices">0</div>
+                    <div class="text-success small" id="trustedChange"><i class="fas fa-arrow-up"></i> +0%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted mb-1" style="font-size:12px;">总验证数</div>
+                    <div style="font-weight:700;font-size:24px;" id="totalVerifications">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted mb-1" style="font-size:12px;">通过率</div>
+                    <div style="font-weight:700;font-size:24px;" id="allowRate">0%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted mb-1" style="font-size:12px;">风险设备</div>
+                    <div style="font-weight:700;font-size:24px;" id="anomalyCount">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card stat-card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted mb-1" style="font-size:12px;">Bot检测</div>
+                    <div style="font-weight:700;font-size:24px;" id="botCount">0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs" id="seamlessTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="devices-tab" data-bs-toggle="tab" data-bs-target="#devices" type="button">
+                <i class="fas fa-mobile-alt me-1"></i>设备管理
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="trust-tab" data-bs-toggle="tab" data-bs-target="#trust" type="button">
+                <i class="fas fa-shield-alt me-1"></i>信任设备
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="rules-tab" data-bs-toggle="tab" data-bs-target="#rules" type="button">
+                <i class="fas fa-gavel me-1"></i>验证规则
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button">
+                <i class="fas fa-chart-line me-1"></i>行为分析
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button">
+                <i class="fas fa-history me-1"></i>验证记录
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="seamlessTabContent">
+        <div class="tab-pane fade show active" id="devices" role="tabpanel">
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>设备列表</h5>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" id="deviceRiskFilter" style="width:150px;">
+                            <option value="">全部风险</option>
+                            <option value="low">低风险</option>
+                            <option value="medium">中风险</option>
+                            <option value="high">高风险</option>
+                            <option value="critical">严重</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshDeviceList()">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>指纹</th>
+                                    <th>风险评分</th>
+                                    <th>风险等级</th>
+                                    <th>设备类型</th>
+                                    <th>首次访问</th>
+                                    <th>最近访问</th>
+                                    <th>访问次数</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deviceTableBody">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination-container" id="devicePagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="trust" role="tabpanel">
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>信任设备管理</h5>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" id="trustLevelFilter" style="width:150px;">
+                            <option value="">全部等级</option>
+                            <option value="full">完全信任</option>
+                            <option value="high">高度信任</option>
+                            <option value="medium">中等信任</option>
+                            <option value="low">低信任</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshTrustList()">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>设备名称</th>
+                                    <th>指纹</th>
+                                    <th>信任等级</th>
+                                    <th>信任评分</th>
+                                    <th>成功次数</th>
+                                    <th>失败次数</th>
+                                    <th>首次信任</th>
+                                    <th>到期时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trustTableBody">
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination-container" id="trustPagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="rules" role="tabpanel">
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-gavel me-2"></i>验证规则配置</h5>
+                    <button class="btn btn-sm btn-primary" onclick="showCreateRuleModal()">
+                        <i class="fas fa-plus me-1"></i>添加规则
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="rulesList" class="p-3">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-spinner fa-spin me-2"></i>加载中...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="analytics" role="tabpanel">
+            <div class="row mt-3">
+                <div class="col-md-8">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>决策趋势</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="decisionTrendChart" height="100"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0"><i class="fas fa-pie-chart me-2"></i>决策分布</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="decisionDistChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>异常检测</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>类型</th>
+                                    <th>严重程度</th>
+                                    <th>描述</th>
+                                    <th>风险评分</th>
+                                    <th>时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="anomalyTableBody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>加载中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="history" role="tabpanel">
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>验证记录</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label">会话ID</label>
+                            <input type="text" class="form-control" id="historySessionId" placeholder="输入会话ID">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">决策结果</label>
+                            <select class="form-select" id="historyDecision">
+                                <option value="">全部</option>
+                                <option value="allow">允许</option>
+                                <option value="challenge">挑战</option>
+                                <option value="block">阻止</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button class="btn btn-dark w-100" onclick="searchHistory()">
+                                <i class="fas fa-search me-1"></i>搜索
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>会话ID</th>
+                                    <th>决策</th>
+                                    <th>风险评分</th>
+                                    <th>信任评分</th>
+                                    <th>处理时间</th>
+                                    <th>决策因素</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        请输入会话ID进行搜索
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deviceDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-mobile-alt me-2"></i>设备详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deviceDetailContent">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-success" id="trustDeviceBtn">
+                    <i class="fas fa-shield-alt me-1"></i>信任此设备
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="ruleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-gavel me-2"></i><span id="ruleModalTitle">添加规则</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ruleForm">
+                    <input type="hidden" id="ruleId">
+                    <div class="mb-3">
+                        <label class="form-label">规则名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="ruleName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">规则类型</label>
+                        <select class="form-select" id="ruleType">
+                            <option value="risk">风险规则</option>
+                            <option value="trust">信任规则</option>
+                            <option value="behavior">行为规则</option>
+                            <option value="ip">IP规则</option>
+                            <option value="device">设备规则</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">优先级</label>
+                        <input type="number" class="form-control" id="rulePriority" value="50" min="0" max="100">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">条件表达式</label>
+                        <input type="text" class="form-control" id="ruleCondition" placeholder="如: ${risk_score} >= 70">
+                        <small class="text-muted">支持变量: ${risk_score}, ${trust_score}, ${ip_country}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">动作</label>
+                        <select class="form-select" id="ruleAction">
+                            <option value="allow">允许</option>
+                            <option value="challenge">挑战验证</option>
+                            <option value="block">阻止</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">风险权重</label>
+                        <input type="number" class="form-control" id="ruleWeight" value="0" step="0.1">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="ruleEnabled" checked>
+                        <label class="form-check-label" for="ruleEnabled">启用此规则</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveRule()">
+                    <i class="fas fa-save me-1"></i>保存
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/admin/static/js/seamless.js"></script>
+{% endblock %}

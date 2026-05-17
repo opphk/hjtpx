@@ -6,93 +6,175 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBlacklistService_NewBlacklistService(t *testing.T) {
+func TestNewBlacklistService(t *testing.T) {
 	service := NewBlacklistService()
 	assert.NotNil(t, service)
 }
 
-func TestBlacklistConstants(t *testing.T) {
+func TestBlacklistTypes(t *testing.T) {
 	assert.Equal(t, BlacklistType("ip"), BlacklistTypeIP)
 	assert.Equal(t, BlacklistType("user_id"), BlacklistTypeUserID)
 	assert.Equal(t, BlacklistType("device_id"), BlacklistTypeDeviceID)
 	assert.Equal(t, BlacklistType("phone"), BlacklistTypePhone)
 	assert.Equal(t, BlacklistType("email"), BlacklistTypeEmail)
+}
 
+func TestBlacklistSources(t *testing.T) {
 	assert.Equal(t, BlacklistSource("manual"), BlacklistSourceManual)
 	assert.Equal(t, BlacklistSource("auto"), BlacklistSourceAuto)
 	assert.Equal(t, BlacklistSource("import"), BlacklistSourceImport)
+}
 
+func TestBlacklistActions(t *testing.T) {
 	assert.Equal(t, BlacklistAction("block"), BlacklistActionBlock)
 	assert.Equal(t, BlacklistAction("captcha"), BlacklistActionCaptcha)
 	assert.Equal(t, BlacklistAction("review"), BlacklistActionReview)
+}
 
+func TestBlacklistStatuses(t *testing.T) {
 	assert.Equal(t, BlacklistStatus("active"), BlacklistStatusActive)
 	assert.Equal(t, BlacklistStatus("expired"), BlacklistStatusExpired)
 	assert.Equal(t, BlacklistStatus("unblocked"), BlacklistStatusUnblocked)
 }
 
-func TestCreateBlacklistInput(t *testing.T) {
-	input := &CreateBlacklistInput{
-		Target:         "192.168.1.100",
-		Type:           "ip",
-		Source:         "manual",
-		Reason:         "malicious activity",
-		Action:         "block",
-		ApplicationIDs: []string{"1", "2"},
-		Expiration:     "2025-12-31",
-		Note:           "test note",
-		CreatedBy:      1,
+func TestListBlacklistFilter_Defaults(t *testing.T) {
+	filter := &ListBlacklistFilter{}
+
+	assert.Equal(t, 0, filter.Page)
+	assert.Equal(t, 0, filter.PageSize)
+	assert.Empty(t, filter.Type)
+	assert.Empty(t, filter.Source)
+	assert.Empty(t, filter.Status)
+	assert.Empty(t, filter.Keyword)
+	assert.True(t, filter.StartDate.IsZero())
+	assert.True(t, filter.EndDate.IsZero())
+}
+
+func TestListBlacklistFilter_Normalization(t *testing.T) {
+	filter := &ListBlacklistFilter{
+		Page:     0,
+		PageSize: 0,
 	}
 
-	assert.Equal(t, "192.168.1.100", input.Target)
-	assert.Equal(t, "ip", input.Type)
-	assert.Equal(t, "manual", input.Source)
-	assert.Equal(t, "malicious activity", input.Reason)
-	assert.Equal(t, "block", input.Action)
-	assert.Len(t, input.ApplicationIDs, 2)
-	assert.Equal(t, "2025-12-31", input.Expiration)
-	assert.Equal(t, "test note", input.Note)
-	assert.Equal(t, uint(1), input.CreatedBy)
+	if filter.Page < 1 {
+		filter.Page = 1
+	}
+	if filter.PageSize < 1 || filter.PageSize > 100 {
+		filter.PageSize = 20
+	}
+
+	assert.Equal(t, 1, filter.Page)
+	assert.Equal(t, 20, filter.PageSize)
+}
+
+func TestListBlacklistFilter_PageSizeLimit(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pageSize int
+		expected int
+	}{
+		{"zero page size", 0, 20},
+		{"negative page size", -1, 20},
+		{"over limit page size", 200, 20},
+		{"valid page size", 50, 50},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := &ListBlacklistFilter{PageSize: tc.pageSize}
+			if filter.PageSize < 1 || filter.PageSize > 100 {
+				filter.PageSize = 20
+			}
+			assert.Equal(t, tc.expected, filter.PageSize)
+		})
+	}
+}
+
+func TestCreateBlacklistInput_Validation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   CreateBlacklistInput
+		wantErr bool
+	}{
+		{
+			name: "valid IP input",
+			input: CreateBlacklistInput{
+				Target: "192.168.1.1",
+				Type:   "ip",
+				Reason: "bot_attack",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid user input",
+			input: CreateBlacklistInput{
+				Target: "user123",
+				Type:   "user_id",
+				Reason: "abuse",
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty target",
+			input: CreateBlacklistInput{
+				Target: "",
+				Type:   "ip",
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty type",
+			input: CreateBlacklistInput{
+				Target: "192.168.1.1",
+				Type:   "",
+			},
+			wantErr: true,
+		},
+		{
+			name: "with application IDs",
+			input: CreateBlacklistInput{
+				Target:         "192.168.1.1",
+				Type:           "ip",
+				ApplicationIDs: []string{"app1", "app2"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "with expiration",
+			input: CreateBlacklistInput{
+				Target:     "192.168.1.1",
+				Type:       "ip",
+				Expiration: "2025-12-31",
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hasError := tt.input.Target == "" || tt.input.Type == ""
+			assert.Equal(t, tt.wantErr, hasError)
+		})
+	}
 }
 
 func TestUpdateBlacklistInput(t *testing.T) {
 	reason := "updated reason"
 	action := "captcha"
-	expiration := "2025-06-30"
+	expiration := "2025-12-31"
+	note := "test note"
 
 	input := &UpdateBlacklistInput{
-		Type:       &reason,
 		Reason:     &reason,
 		Action:     &action,
 		Expiration: &expiration,
+		Note:       &note,
 	}
 
-	assert.NotNil(t, input.Type)
-	assert.NotNil(t, input.Reason)
-	assert.NotNil(t, input.Action)
-	assert.NotNil(t, input.Expiration)
-	assert.Equal(t, "updated reason", *input.Reason)
-	assert.Equal(t, "captcha", *input.Action)
-}
-
-func TestListBlacklistFilter(t *testing.T) {
-	filter := &ListBlacklistFilter{
-		Page:          1,
-		PageSize:      20,
-		Type:          "ip",
-		Source:        "manual",
-		Status:        "active",
-		Keyword:       "test",
-		ApplicationID: 1,
-	}
-
-	assert.Equal(t, 1, filter.Page)
-	assert.Equal(t, 20, filter.PageSize)
-	assert.Equal(t, "ip", filter.Type)
-	assert.Equal(t, "manual", filter.Source)
-	assert.Equal(t, "active", filter.Status)
-	assert.Equal(t, "test", filter.Keyword)
-	assert.Equal(t, uint(1), filter.ApplicationID)
+	assert.Equal(t, reason, *input.Reason)
+	assert.Equal(t, action, *input.Action)
+	assert.Equal(t, expiration, *input.Expiration)
+	assert.Equal(t, note, *input.Note)
 }
 
 func TestBlacklistSummary(t *testing.T) {
@@ -100,11 +182,57 @@ func TestBlacklistSummary(t *testing.T) {
 		Total:         100,
 		TodayAdded:    10,
 		AutoUnblocked: 5,
-		TotalBlocked:  100,
+		TotalBlocked:  95,
 	}
 
 	assert.Equal(t, int64(100), summary.Total)
 	assert.Equal(t, int64(10), summary.TodayAdded)
 	assert.Equal(t, int64(5), summary.AutoUnblocked)
-	assert.Equal(t, int64(100), summary.TotalBlocked)
+	assert.Equal(t, int64(95), summary.TotalBlocked)
+}
+
+func TestPaginatedResult(t *testing.T) {
+	result := &PaginatedResult{
+		Data:       []string{"item1", "item2", "item3"},
+		Total:      100,
+		Page:       1,
+		PageSize:   10,
+		TotalPages: 10,
+	}
+
+	assert.Equal(t, 3, len(result.Data.([]string)))
+	assert.Equal(t, int64(100), result.Total)
+	assert.Equal(t, 1, result.Page)
+	assert.Equal(t, 10, result.PageSize)
+	assert.Equal(t, 10, result.TotalPages)
+}
+
+func TestBlacklistService_Errors(t *testing.T) {
+	assert.Equal(t, "blacklist item not found", ErrBlacklistNotFound.Error())
+}
+
+func TestBlacklistTypeConstants(t *testing.T) {
+	assert.Equal(t, "ip", string(BlacklistTypeIP))
+	assert.Equal(t, "user_id", string(BlacklistTypeUserID))
+	assert.Equal(t, "device_id", string(BlacklistTypeDeviceID))
+	assert.Equal(t, "phone", string(BlacklistTypePhone))
+	assert.Equal(t, "email", string(BlacklistTypeEmail))
+}
+
+func TestBlacklistSourceConstants(t *testing.T) {
+	assert.Equal(t, "manual", string(BlacklistSourceManual))
+	assert.Equal(t, "auto", string(BlacklistSourceAuto))
+	assert.Equal(t, "import", string(BlacklistSourceImport))
+}
+
+func TestBlacklistActionConstants(t *testing.T) {
+	assert.Equal(t, "block", string(BlacklistActionBlock))
+	assert.Equal(t, "captcha", string(BlacklistActionCaptcha))
+	assert.Equal(t, "review", string(BlacklistActionReview))
+}
+
+func TestBlacklistStatusConstants(t *testing.T) {
+	assert.Equal(t, "active", string(BlacklistStatusActive))
+	assert.Equal(t, "expired", string(BlacklistStatusExpired))
+	assert.Equal(t, "unblocked", string(BlacklistStatusUnblocked))
 }

@@ -1,0 +1,249 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'hjtpx'
+        env: 'production'
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: []
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'hjtpx-api'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - hjtpx
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alert-rules
+  namespace: monitoring
+data:
+  hjtpx-alerts.yml: |
+    groups:
+      - name: hjtpx
+        interval: 30s
+        rules:
+          - alert: HjtpxDown
+            expr: up{job="hjtpx-api"} == 0
+            for: 1m
+            labels:
+              severity: critical
+              component: api
+            annotations:
+              summary: "hjtpx API is down"
+              description: "hjtpx API pod has been down for more than 1 minute"
+
+          - alert: HjtpxHighLatency
+            expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="hjtpx-api"}[5m])) by (le)) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "hjtpx high latency"
+              description: "95th percentile latency above 500ms for 5 minutes"
+
+          - alert: HjtpxHighErrorRate
+            expr: sum(rate(http_requests_total{job="hjtpx-api", status=~"5.."}[5m])) / sum(rate(http_requests_total{job="hjtpx-api"}[5m])) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "hjtpx high error rate"
+              description: "Error rate above 5% for 5 minutes"
+
+          - alert: HjtpxHighMemoryUsage
+            expr: (container_memory_usage_bytes{pod=~"hjtpx-.*", container="hjtpx"} / container_spec_memory_limit_bytes{pod=~"hjtpx-.*", container="hjtpx"}) > 0.85
+            for: 5m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "hjtpx high memory usage"
+              description: "Memory usage above 85% for 5 minutes"
+
+          - alert: HjtpxPodRestartingTooMuch
+            expr: rate(kube_pod_container_status_restarts_total{pod=~"hjtpx-.*"}[1h]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "hjtpx pods restarting frequently"
+              description: "Pods restarting more than 6 times per hour"
+
+          - alert: HjtpxDatabaseConnectionFailing
+            expr: rate(postgresql_errors_total[5m]) > 0
+            for: 2m
+            labels:
+              severity: critical
+              component: database
+            annotations:
+              summary: "PostgreSQL errors detected"
+              description: "PostgreSQL error rate is non-zero"
+
+          - alert: HjtpxCacheConnectionFailing
+            expr: rate(redis_errors_total[5m]) > 0
+            for: 2m
+            labels:
+              severity: warning
+              component: cache
+            annotations:
+              summary: "Redis errors detected"
+              description: "Redis error rate is non-zero"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources:
+      - servicemonitors
+      - prometheusrules
+      - podmonitors
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.48.0
+          args:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+            - '--web.console.templates=/usr/share/prometheus/consoles'
+            - '--storage.tsdb.retention.time=15d'
+            - '--web.enable-lifecycle'
+          ports:
+            - containerPort: 9090
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: rules
+              mountPath: /etc/prometheus/rules
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: rules
+          configMap:
+            name: alert-rules
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/managed-by: kubectl
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hjtpx-monitoring
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/component: monitoring

@@ -339,22 +339,22 @@ func (pe *PipelineExecutor) Exec() ([]goredis.Cmder, error) {
 	return pe.cmds, nil
 }
 
-type BatchOperator struct {
+type RedisBatchOperator struct {
 	client     goredis.Cmdable
 	batchSize  int
 }
 
-func NewBatchOperator(client goredis.Cmdable, batchSize int) *BatchOperator {
+func NewRedisBatchOperator(client goredis.Cmdable, batchSize int) *RedisBatchOperator {
 	if batchSize <= 0 {
 		batchSize = 100
 	}
-	return &BatchOperator{
+	return &RedisBatchOperator{
 		client:    client,
 		batchSize: batchSize,
 	}
 }
 
-func (bo *BatchOperator) MSet(ctx context.Context, items map[string]interface{}, expiration time.Duration) error {
+func (bo *RedisBatchOperator) MSet(ctx context.Context, items map[string]interface{}, expiration time.Duration) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -386,7 +386,7 @@ func (bo *BatchOperator) MSet(ctx context.Context, items map[string]interface{},
 	return nil
 }
 
-func (bo *BatchOperator) MGet(ctx context.Context, keys []string) (map[string]string, error) {
+func (bo *RedisBatchOperator) MGet(ctx context.Context, keys []string) (map[string]string, error) {
 	if len(keys) == 0 {
 		return make(map[string]string), nil
 	}
@@ -415,7 +415,7 @@ func (bo *BatchOperator) MGet(ctx context.Context, keys []string) (map[string]st
 	return result, nil
 }
 
-func (bo *BatchOperator) MDel(ctx context.Context, keys []string) (int64, error) {
+func (bo *RedisBatchOperator) MDel(ctx context.Context, keys []string) (int64, error) {
 	if len(keys) == 0 {
 		return 0, nil
 	}

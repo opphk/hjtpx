@@ -1,0 +1,107 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hjtpx
+  namespace: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hjtpx
+      app.kubernetes.io/component: api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - hjtpx
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: hjtpx-alerts
+  namespace: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+    app.kubernetes.io/component: monitoring
+    role: alert-rules
+spec:
+  groups:
+    - name: hjtpx-api
+      rules:
+        - alert: HjtpxAPIDown
+          expr: up{job="hjtpx"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "hjtpx API is down"
+            description: "hjtpx API has been down for more than 1 minute"
+        - alert: HjtpxHighErrorRate
+          expr: rate(http_requests_total{service="hjtpx", status=~"5.."}[5m]) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "hjtpx high error rate"
+            description: "Error rate is above 5% for 5 minutes"
+        - alert: HjtpxHighLatency
+          expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service="hjtpx"}[5m])) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "hjtpx high latency"
+            description: "95th percentile latency is above 500ms"
+        - alert: HjtpxHighMemoryUsage
+          expr: (container_memory_usage_bytes{pod=~"hjtpx-.*"} / container_spec_memory_limit_bytes{pod=~"hjtpx-.*"}) > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "hjtpx high memory usage"
+            description: "Memory usage is above 85% for 5 minutes"
+        - alert: HjtpxHighCPUUsage
+          expr: (container_cpu_usage_seconds_total{pod=~"hjtpx-.*"} / container_spec_cpu_quota{pod=~"hjtpx-.*"}) > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "hjtpx high CPU usage"
+            description: "CPU usage is above 85% for 5 minutes"
+    - name: hjtpx-business
+      rules:
+        - alert: HjtpxHighCaptchaFailureRate
+          expr: rate(captcha_results_total{result="fail"}[5m]) / rate(captcha_results_total[5m]) > 0.3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High captcha failure rate"
+            description: "Captcha failure rate is above 30%"
+        - alert: HjtpxLowSuccessRate
+          expr: rate(captcha_results_total{result="success"}[5m]) / rate(captcha_results_total[5m]) < 0.7
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Low captcha success rate"
+            description: "Captcha success rate is below 70%"
+---
+apiVersion: v1
+kind: PodDisruptionBudget
+metadata:
+  name: hjtpx-pdb
+  namespace: hjtpx
+  labels:
+    app.kubernetes.io/name: hjtpx
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hjtpx
+      app.kubernetes.io/component: api
+  minAvailable: 1

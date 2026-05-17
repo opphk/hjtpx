@@ -1,0 +1,94 @@
+{{- if .Values.redis.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-redis
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ include "hjtpx.fullname" . }}-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hjtpx.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "hjtpx.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          ports:
+            - containerPort: 6379
+              name: redis
+          command:
+            - redis-server
+            {{- if .Values.secrets.REDIS_PASSWORD }}
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            {{- end }}
+            - --maxmemory
+            - 256mb
+            - --maxmemory-policy
+            - allkeys-lru
+            - --appendonly
+            - "yes"
+          env:
+            {{- if .Values.secrets.REDIS_PASSWORD }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-secrets
+                  key: REDIS_PASSWORD
+            {{- end }}
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 10 }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: redis-data
+          {{- if .Values.redis.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "hjtpx.fullname" . }}-redis
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-redis
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/component: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+{{- end }}

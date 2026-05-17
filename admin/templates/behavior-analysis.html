@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 行为分析</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        .sidebar {
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            width: 260px;
+            position: fixed;
+            left: 0;
+            top: 0;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.7);
+            padding: 0.875rem 1.25rem;
+            border-radius: 8px;
+            margin: 0.25rem 0.75rem;
+            transition: all 0.3s;
+        }
+        .sidebar .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        .sidebar .nav-link.active {
+            background: linear-gradient(135deg, #c23a2b 0%, #8b2a1e 100%);
+            color: #fff;
+        }
+        .main-content {
+            margin-left: 260px;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        .metric-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .risk-badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .risk-critical { background: #ef4444; color: white; }
+        .risk-high { background: #f97316; color: white; }
+        .risk-medium { background: #eab308; color: #1f2937; }
+        .risk-low { background: #22c55e; color: white; }
+        .tab-nav {
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 1.5rem;
+        }
+        .tab-nav .nav-link {
+            border: none;
+            color: #6b7280;
+            font-weight: 500;
+            padding: 1rem 1.5rem;
+            position: relative;
+        }
+        .tab-nav .nav-link:hover {
+            color: #c23a2b;
+        }
+        .tab-nav .nav-link.active {
+            color: #c23a2b;
+            background: transparent;
+        }
+        .tab-nav .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #c23a2b;
+        }
+        .table-modern {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .table-modern thead th {
+            background: #f9fafb;
+            border-bottom: 2px solid #e5e7eb;
+            font-weight: 600;
+            color: #374151;
+            padding: 1rem;
+        }
+        .table-modern tbody tr:hover {
+            background: #f9fafb;
+        }
+        .table-modern td {
+            padding: 1rem;
+            vertical-align: middle;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .btn-action {
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        .trajectory-canvas {
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="d-flex">
+        <div class="sidebar">
+            <div class="p-4 text-center border-bottom border-secondary">
+                <div class="d-flex align-items-center justify-content-center gap-3">
+                    <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;">
+                        <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <div class="text-start">
+                        <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
+                        <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
+                    </div>
+                </div>
+            </div>
+            <nav class="d-flex flex-column p-3 gap-1">
+                <a class="nav-link" href="/admin/">
+                    <i class="fas fa-chart-bar me-2"></i>仪表盘
+                </a>
+                <a class="nav-link" href="/admin/stats">
+                    <i class="fas fa-chart-line me-2"></i>统计分析
+                </a>
+                <a class="nav-link" href="/admin/advanced-analytics">
+                    <i class="fas fa-chart-pie me-2"></i>高级分析
+                </a>
+                <a class="nav-link active" href="/admin/behavior-analysis">
+                    <i class="fas fa-fingerprint me-2"></i>行为分析
+                </a>
+                <a class="nav-link" href="/admin/applications">
+                    <i class="fas fa-mobile-alt me-2"></i>应用管理
+                </a>
+                <a class="nav-link" href="/admin/logs">
+                    <i class="fas fa-clipboard-list me-2"></i>日志查询
+                </a>
+                <a class="nav-link" href="/admin/risk-rules">
+                    <i class="fas fa-shield-alt me-2"></i>风控规则
+                </a>
+                <a class="nav-link" href="/admin/blacklist">
+                    <i class="fas fa-ban me-2"></i>黑名单
+                </a>
+            </nav>
+        </div>
+
+        <div class="main-content flex-grow-1">
+            <header class="bg-white border-bottom px-4 py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <h1 style="font-size:20px;font-weight:700;margin:0;">行为分析</h1>
+                        <span class="badge bg-danger">Beta</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="refreshData()">
+                            <i class="fas fa-sync me-1"></i>刷新
+                        </button>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-secondary" id="usernameDisplay">管理员</span>
+                            <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-4">
+                <ul class="nav tab-nav" id="behaviorTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="trajectory-tab" data-bs-toggle="tab" data-bs-target="#trajectory" type="button" role="tab">
+                            <i class="fas fa-route me-2"></i>行为轨迹
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab">
+                            <i class="fas fa-user-circle me-2"></i>用户画像
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="anomaly-tab" data-bs-toggle="tab" data-bs-target="#anomaly" type="button" role="tab">
+                            <i class="fas fa-exclamation-triangle me-2"></i>异常检测
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="rules-tab" data-bs-toggle="tab" data-bs-target="#rules" type="button" role="tab">
+                            <i class="fas fa-cogs me-2"></i>检测规则
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="behaviorTabContent">
+                    <div class="tab-pane fade show active" id="trajectory" role="tabpanel">
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;">
+                                            <i class="fas fa-route"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="totalTrajectories">0</div>
+                                            <div class="stat-label">总轨迹数</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#10b981,#059669);color:white;">
+                                            <i class="fas fa-user"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="humanRate">0%</div>
+                                            <div class="stat-label">人类比例</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;">
+                                            <i class="fas fa-robot"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="botRate">0%</div>
+                                            <div class="stat-label">机器人比例</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:white;">
+                                            <i class="fas fa-exclamation-circle"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="avgRiskScore">0</div>
+                                            <div class="stat-label">平均风险分</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-8">
+                                <div class="chart-container">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0"><i class="fas fa-chart-line me-2 text-primary"></i>轨迹趋势</h5>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary active" onclick="setTrajectoryRange('7d')">7天</button>
+                                            <button class="btn btn-outline-secondary" onclick="setTrajectoryRange('30d')">30天</button>
+                                            <button class="btn btn-outline-secondary" onclick="setTrajectoryRange('90d')">90天</button>
+                                        </div>
+                                    </div>
+                                    <canvas id="trajectoryTrendChart" height="280"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="chart-container">
+                                    <h5 class="mb-3"><i class="fas fa-chart-pie me-2 text-primary"></i>轨迹分布</h5>
+                                    <canvas id="trajectoryDistributionChart" height="260"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chart-container mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="fas fa-list me-2 text-primary"></i>轨迹列表</h5>
+                                <div class="d-flex gap-2">
+                                    <input type="text" class="form-control form-control-sm" placeholder="搜索用户ID" id="trajectorySearch" style="width:200px;">
+                                    <select class="form-select form-select-sm" id="trajectoryFilter" style="width:150px;">
+                                        <option value="">全部</option>
+                                        <option value="human">人类</option>
+                                        <option value="bot">机器人</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-modern mb-0" id="trajectoryTable">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>用户ID</th>
+                                            <th>会话ID</th>
+                                            <th>点数</th>
+                                            <th>总距离</th>
+                                            <th>平均速度</th>
+                                            <th>路径效率</th>
+                                            <th>风险评分</th>
+                                            <th>类型</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="trajectoryTableBody">
+                                        <tr>
+                                            <td colspan="10" class="text-center text-muted py-4">加载中...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="text-muted">显示 <span id="trajectoryCount">0</span> 条记录</div>
+                                <nav><ul class="pagination pagination-sm mb-0" id="trajectoryPagination"></ul></nav>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="profile" role="tabpanel">
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:white;">
+                                            <i class="fas fa-users"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="totalProfiles">0</div>
+                                            <div class="stat-label">用户画像总数</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#ec4899,#db2777);color:white;">
+                                            <i class="fas fa-user-check"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="activeProfiles">0</div>
+                                            <div class="stat-label">活跃画像</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#14b8a6,#0d9488);color:white;">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="avgTrustScore">0</div>
+                                            <div class="stat-label">平均信任分</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#f97316,#ea580c);color:white;">
+                                            <i class="fas fa-tags"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="segmentCount">0</div>
+                                            <div class="stat-label">用户分群</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-4">
+                                <div class="chart-container">
+                                    <h5 class="mb-3"><i class="fas fa-chart-pie me-2 text-primary"></i>风险等级分布</h5>
+                                    <canvas id="riskLevelChart" height="260"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="chart-container">
+                                    <h5 class="mb-3"><i class="fas fa-chart-bar me-2 text-primary"></i>用户特征对比</h5>
+                                    <canvas id="featureComparisonChart" height="260"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chart-container">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="fas fa-users me-2 text-primary"></i>用户画像列表</h5>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select form-select-sm" id="riskLevelFilter" style="width:150px;">
+                                        <option value="">全部风险等级</option>
+                                        <option value="critical">严重</option>
+                                        <option value="high">高</option>
+                                        <option value="medium">中</option>
+                                        <option value="low">低</option>
+                                        <option value="minimal">极低</option>
+                                    </select>
+                                    <input type="text" class="form-control form-control-sm" placeholder="搜索用户ID" id="profileSearch" style="width:200px;">
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-modern mb-0" id="profileTable">
+                                    <thead>
+                                        <tr>
+                                            <th>用户ID</th>
+                                            <th>风险等级</th>
+                                            <th>信任评分</th>
+                                            <th>鼠标速度</th>
+                                            <th>点击频率</th>
+                                            <th>路径效率</th>
+                                            <th>机器人概率</th>
+                                            <th>标签</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="profileTableBody">
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted py-4">加载中...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="anomaly" role="tabpanel">
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:white;">
+                                            <i class="fas fa-bell"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="totalAnomalies">0</div>
+                                            <div class="stat-label">异常总数</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#f97316,#ea580c);color:white;">
+                                            <i class="fas fa-clock"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="pendingAnomalies">0</div>
+                                            <div class="stat-label">待处理</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#eab308,#ca8a04);color:white;">
+                                            <i class="fas fa-check-circle"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="processedAnomalies">0</div>
+                                            <div class="stat-label">已处理</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="metric-card">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="metric-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a);color:white;">
+                                            <i class="fas fa-times-circle"></i>
+                                        </div>
+                                        <div>
+                                            <div class="stat-value" id="falsePositives">0</div>
+                                            <div class="stat-label">误报数</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6">
+                                <div class="chart-container">
+                                    <h5 class="mb-3"><i class="fas fa-chart-bar me-2 text-primary"></i>异常类型分布</h5>
+                                    <canvas id="anomalyTypeChart" height="260"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="chart-container">
+                                    <h5 class="mb-3"><i class="fas fa-chart-bar me-2 text-danger"></i>异常严重程度</h5>
+                                    <canvas id="anomalySeverityChart" height="260"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="chart-container">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2 text-danger"></i>异常记录</h5>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select form-select-sm" id="anomalySeverityFilter" style="width:150px;">
+                                        <option value="">全部严重性</option>
+                                        <option value="critical">严重</option>
+                                        <option value="high">高</option>
+                                        <option value="medium">中</option>
+                                        <option value="low">低</option>
+                                    </select>
+                                    <select class="form-select form-select-sm" id="anomalyTypeFilter" style="width:150px;">
+                                        <option value="">全部类型</option>
+                                        <option value="speed_anomaly">速度异常</option>
+                                        <option value="path_anomaly">路径异常</option>
+                                        <option value="click_anomaly">点击异常</option>
+                                        <option value="bot_detection">机器人检测</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-modern mb-0" id="anomalyTable">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>用户ID</th>
+                                            <th>类型</th>
+                                            <th>严重性</th>
+                                            <th>评分</th>
+                                            <th>描述</th>
+                                            <th>检测时间</th>
+                                            <th>状态</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="anomalyTableBody">
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted py-4">加载中...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="rules" role="tabpanel">
+                        <div class="chart-container">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="fas fa-cogs me-2 text-primary"></i>检测规则管理</h5>
+                                <button class="btn btn-primary btn-sm" onclick="showCreateRuleModal()">
+                                    <i class="fas fa-plus me-1"></i>创建规则
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-modern mb-0" id="rulesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>名称</th>
+                                            <th>类型</th>
+                                            <th>严重性</th>
+                                            <th>阈值</th>
+                                            <th>动作</th>
+                                            <th>状态</th>
+                                            <th>创建时间</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rulesTableBody">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted py-4">加载中...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="trajectoryDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-route me-2"></i>轨迹详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <canvas id="trajectoryDetailCanvas" class="trajectory-canvas" width="700" height="400"></canvas>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">基本信息</label>
+                                <div class="bg-light p-3 rounded">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">用户ID:</span>
+                                        <span id="detailUserId">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">会话ID:</span>
+                                        <span id="detailSessionId">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">点数:</span>
+                                        <span id="detailPointCount">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">总距离:</span>
+                                        <span id="detailTotalDistance">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">行为特征</label>
+                                <div class="bg-light p-3 rounded">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">平均速度:</span>
+                                        <span id="detailAvgSpeed">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">路径效率:</span>
+                                        <span id="detailPathEfficiency">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">方向变化:</span>
+                                        <span id="detailDirectionChanges">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">点击次数:</span>
+                                        <span id="detailClickCount">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">风险评估</label>
+                                <div class="bg-light p-3 rounded">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">风险评分:</span>
+                                        <span id="detailRiskScore" class="fw-bold">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">置信度:</span>
+                                        <span id="detailConfidence">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">判定:</span>
+                                        <span id="detailIsBot" class="badge">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+let trajectoryChart, trajectoryDistributionChart, riskLevelChart, featureChart, anomalyTypeChart, anomalySeverityChart;
+
+document.addEventListener('DOMContentLoaded', () => {
+    initializeCharts();
+    loadTrajectoryStatistics();
+    loadTrajectoryList();
+    loadProfileStatistics();
+    loadAnomalyStatistics();
+    loadRulesList();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    document.getElementById('trajectorySearch')?.addEventListener('input', debounce(loadTrajectoryList, 300));
+    document.getElementById('trajectoryFilter')?.addEventListener('change', loadTrajectoryList);
+    document.getElementById('profileSearch')?.addEventListener('input', debounce(loadProfileList, 300));
+    document.getElementById('riskLevelFilter')?.addEventListener('change', loadProfileList);
+    document.getElementById('anomalySeverityFilter')?.addEventListener('change', loadAnomalyList);
+    document.getElementById('anomalyTypeFilter')?.addEventListener('change', loadAnomalyList);
+}
+
+function initializeCharts() {
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' }
+        }
+    };
+
+    trajectoryChart = new Chart(document.getElementById('trajectoryTrendChart'), {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: '轨迹数', data: [], borderColor: '#3b82f6', tension: 0.4, fill: true }] },
+        options: { ...chartOptions }
+    });
+
+    trajectoryDistributionChart = new Chart(document.getElementById('trajectoryDistributionChart'), {
+        type: 'doughnut',
+        data: { labels: ['人类', '机器人'], datasets: [{ data: [0, 0], backgroundColor: ['#10b981', '#ef4444'] }] },
+        options: chartOptions
+    });
+
+    riskLevelChart = new Chart(document.getElementById('riskLevelChart'), {
+        type: 'pie',
+        data: { labels: ['严重', '高', '中', '低', '极低'], datasets: [{ data: [0, 0, 0, 0, 0], backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'] }] },
+        options: chartOptions
+    });
+
+    featureChart = new Chart(document.getElementById('featureComparisonChart'), {
+        type: 'radar',
+        data: { labels: ['鼠标速度', '点击频率', '路径效率', '方向变化', '风险评分'], datasets: [{ label: '当前用户', data: [0, 0, 0, 0, 0], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)' }] },
+        options: chartOptions
+    });
+
+    anomalyTypeChart = new Chart(document.getElementById('anomalyTypeChart'), {
+        type: 'bar',
+        data: { labels: ['速度异常', '路径异常', '点击异常', '机器人'], datasets: [{ label: '数量', data: [0, 0, 0, 0], backgroundColor: '#f97316' }] },
+        options: { ...chartOptions, indexAxis: 'y' }
+    });
+
+    anomalySeverityChart = new Chart(document.getElementById('anomalySeverityChart'), {
+        type: 'bar',
+        data: { labels: ['严重', '高', '中', '低'], datasets: [{ label: '数量', data: [0, 0, 0, 0], backgroundColor: ['#ef4444', '#f97316', '#eab308', '#22c55e'] }] },
+        options: chartOptions
+    });
+}
+
+async function loadTrajectoryStatistics() {
+    try {
+        const result = await auth.request('/api/v1/admin/behavior/trajectories/statistics');
+        if (result.success && result.data) {
+            const data = result.data;
+            document.getElementById('totalTrajectories').textContent = data.total_count || 0;
+            document.getElementById('humanRate').textContent = ((1 - (data.bot_rate || 0) / 100) * 100).toFixed(1) + '%';
+            document.getElementById('botRate').textContent = (data.bot_rate || 0).toFixed(1) + '%';
+            document.getElementById('avgRiskScore').textContent = (data.avg_risk_score || 0).toFixed(1);
+        }
+    } catch (error) {
+        console.error('Failed to load trajectory statistics:', error);
+    }
+}
+
+async function loadTrajectoryList(page = 1) {
+    const search = document.getElementById('trajectorySearch')?.value || '';
+    const filter = document.getElementById('trajectoryFilter')?.value || '';
+
+    try {
+        const params = new URLSearchParams({ page, page_size: 10 });
+        if (search) params.append('user_id', search);
+
+        const result = await auth.request(`/api/v1/admin/behavior/trajectories?${params}`);
+        const tbody = document.getElementById('trajectoryTableBody');
+
+        if (result.success && result.data && result.data.items) {
+            const items = result.data.items;
+            document.getElementById('trajectoryCount').textContent = result.data.total || 0;
+
+            if (items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.id}</td>
+                    <td><code>${item.user_id || '-'}</code></td>
+                    <td><code>${item.session_id || '-'}</code></td>
+                    <td>${item.points?.length || 0}</td>
+                    <td>${(item.total_distance || 0).toFixed(2)}</td>
+                    <td>${(item.average_speed || 0).toFixed(4)}</td>
+                    <td>${((item.path_efficiency || 0) * 100).toFixed(1)}%</td>
+                    <td><span class="badge ${getRiskBadgeClass(item.risk_score)}">${(item.risk_score || 0).toFixed(1)}</span></td>
+                    <td>${item.is_bot_likely ? '<span class="badge bg-danger">机器人</span>' : '<span class="badge bg-success">人类</span>'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary btn-action" onclick="showTrajectoryDetail(${item.id})">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">暂无数据</td></tr>';
+        }
+    } catch (error) {
+        console.error('Failed to load trajectory list:', error);
+        document.getElementById('trajectoryTableBody').innerHTML = '<tr><td colspan="10" class="text-center text-danger py-4">加载失败</td></tr>';
+    }
+}
+
+async function loadProfileStatistics() {
+    try {
+        const result = await auth.request('/api/v1/admin/behavior/profiles/statistics');
+        if (result.success && result.data) {
+            const data = result.data;
+            document.getElementById('totalProfiles').textContent = data.total_profiles || 0;
+            document.getElementById('activeProfiles').textContent = data.active_profiles || 0;
+            document.getElementById('avgTrustScore').textContent = (data.avg_trust_score || 0).toFixed(1);
+
+            if (data.risk_distribution) {
+                const levels = ['critical', 'high', 'medium', 'low', 'minimal'];
+                const levelNames = ['严重', '高', '中', '低', '极低'];
+                const levelColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
+                const counts = levels.map(level => data.risk_distribution[level] || 0);
+                riskLevelChart.data.labels = levelNames;
+                riskLevelChart.data.datasets[0].data = counts;
+                riskLevelChart.data.datasets[0].backgroundColor = levelColors;
+                riskLevelChart.update();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load profile statistics:', error);
+    }
+}
+
+async function loadProfileList(page = 1) {
+    const search = document.getElementById('profileSearch')?.value || '';
+    const riskLevel = document.getElementById('riskLevelFilter')?.value || '';
+
+    try {
+        const params = new URLSearchParams({ page, page_size: 10 });
+        if (search) params.append('user_id', search);
+        if (riskLevel) params.append('risk_level', riskLevel);
+
+        const result = await auth.request(`/api/v1/admin/behavior/profiles?${params}`);
+        const tbody = document.getElementById('profileTableBody');
+
+        if (result.success && result.data && result.data.items) {
+            const items = result.data.items;
+
+            if (items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td><code>${item.user_id || '-'}</code></td>
+                    <td><span class="badge ${getRiskBadgeClass(item.risk_level)}">${getRiskLevelText(item.risk_level)}</span></td>
+                    <td>${(item.trust_score || 0).toFixed(1)}</td>
+                    <td>${(item.features?.mouse_speed_avg || 0).toFixed(2)}</td>
+                    <td>${(item.features?.click_frequency || 0).toFixed(2)}</td>
+                    <td>${((item.features?.path_efficiency_avg || 0) * 100).toFixed(1)}%</td>
+                    <td>${((item.features?.bot_rate || 0) * 100).toFixed(1)}%</td>
+                    <td>${renderLabels(item.labels)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary btn-action" onclick="viewProfile('${item.user_id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>';
+        }
+    } catch (error) {
+        console.error('Failed to load profile list:', error);
+    }
+}
+
+async function loadAnomalyStatistics() {
+    try {
+        const result = await auth.request('/api/v1/admin/behavior/anomalies/statistics');
+        if (result.success && result.data) {
+            const data = result.data;
+            document.getElementById('totalAnomalies').textContent = data.total_anomalies || 0;
+            document.getElementById('pendingAnomalies').textContent = data.pending_count || 0;
+            document.getElementById('processedAnomalies').textContent = data.processed_count || 0;
+            document.getElementById('falsePositives').textContent = data.false_positive_count || 0;
+
+            if (data.by_type) {
+                const types = ['speed_anomaly', 'path_anomaly', 'click_anomaly', 'bot_detection'];
+                const typeNames = ['速度异常', '路径异常', '点击异常', '机器人'];
+                const counts = types.map(type => data.by_type[type] || 0);
+                anomalyTypeChart.data.labels = typeNames;
+                anomalyTypeChart.data.datasets[0].data = counts;
+                anomalyTypeChart.update();
+            }
+
+            if (data.by_severity) {
+                const severities = ['critical', 'high', 'medium', 'low'];
+                const severityNames = ['严重', '高', '中', '低'];
+                const counts = severities.map(sev => data.by_severity[sev] || 0);
+                anomalySeverityChart.data.labels = severityNames;
+                anomalySeverityChart.data.datasets[0].data = counts;
+                anomalySeverityChart.update();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load anomaly statistics:', error);
+    }
+}
+
+async function loadAnomalyList(page = 1) {
+    const severity = document.getElementById('anomalySeverityFilter')?.value || '';
+    const type = document.getElementById('anomalyTypeFilter')?.value || '';
+
+    try {
+        const params = new URLSearchParams({ page, page_size: 10 });
+        if (severity) params.append('severity', severity);
+        if (type) params.append('type', type);
+
+        const result = await auth.request(`/api/v1/admin/behavior/anomalies?${params}`);
+        const tbody = document.getElementById('anomalyTableBody');
+
+        if (result.success && result.data && result.data.items) {
+            const items = result.data.items;
+
+            if (items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.id}</td>
+                    <td><code>${item.user_id || '-'}</code></td>
+                    <td>${getAnomalyTypeText(item.type)}</td>
+                    <td><span class="badge ${getSeverityBadgeClass(item.severity)}">${getSeverityText(item.severity)}</span></td>
+                    <td>${(item.score || 0).toFixed(1)}</td>
+                    <td>${item.description || '-'}</td>
+                    <td>${formatDate(item.detected_at)}</td>
+                    <td>${item.is_processed ? '<span class="badge bg-success">已处理</span>' : '<span class="badge bg-warning">待处理</span>'}</td>
+                    <td>
+                        ${!item.is_processed ? `
+                            <button class="btn btn-sm btn-success btn-action me-1" onclick="processAnomaly(${item.id}, false)">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary btn-action me-1" onclick="processAnomaly(${item.id}, true)">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>';
+        }
+    } catch (error) {
+        console.error('Failed to load anomaly list:', error);
+    }
+}
+
+async function loadRulesList() {
+    try {
+        const result = await auth.request('/api/v1/admin/behavior/rules');
+        const tbody = document.getElementById('rulesTableBody');
+
+        if (result.success && result.data) {
+            const items = result.data;
+
+            if (items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = items.map(item => `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${getAnomalyTypeText(item.type)}</td>
+                    <td><span class="badge ${getSeverityBadgeClass(item.severity)}">${getSeverityText(item.severity)}</span></td>
+                    <td>${item.threshold}</td>
+                    <td>${item.action || '-'}</td>
+                    <td>${item.is_enabled ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">禁用</span>'}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary btn-action me-1" onclick="editRule(${item.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-${item.is_enabled ? 'warning' : 'success'} btn-action" onclick="toggleRule(${item.id}, ${!item.is_enabled})">
+                            <i class="fas fa-${item.is_enabled ? 'pause' : 'play'}"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">暂无数据</td></tr>';
+        }
+    } catch (error) {
+        console.error('Failed to load rules list:', error);
+    }
+}
+
+async function processAnomaly(id, isFalsePositive) {
+    if (!confirm(isFalsePositive ? '确认标记为误报?' : '确认标记为已处理?')) return;
+
+    try {
+        const result = await auth.request(`/api/v1/admin/behavior/anomalies/${id}/process`, {
+            method: 'POST',
+            body: JSON.stringify({ is_false_positive: isFalsePositive })
+        });
+
+        if (result.success) {
+            showToast('success', '处理成功');
+            loadAnomalyList();
+            loadAnomalyStatistics();
+        } else {
+            showToast('error', '处理失败');
+        }
+    } catch (error) {
+        showToast('error', '处理失败: ' + error.message);
+    }
+}
+
+async function toggleRule(id, enabled) {
+    try {
+        const result = await auth.request(`/api/v1/admin/behavior/rules/${id}/toggle`, {
+            method: 'POST',
+            body: JSON.stringify({ enabled })
+        });
+
+        if (result.success) {
+            showToast('success', '操作成功');
+            loadRulesList();
+        } else {
+            showToast('error', '操作失败');
+        }
+    } catch (error) {
+        showToast('error', '操作失败: ' + error.message);
+    }
+}
+
+function showTrajectoryDetail(id) {
+    const modal = new bootstrap.Modal(document.getElementById('trajectoryDetailModal'));
+    modal.show();
+}
+
+function viewProfile(userId) {
+    auth.request(`/api/v1/admin/behavior/profiles/${userId}`).then(result => {
+        if (result.success && result.data) {
+            featureChart.data.datasets[0].data = [
+                result.data.features?.mouse_speed_avg || 0,
+                result.data.features?.click_frequency || 0,
+                (result.data.features?.path_efficiency_avg || 0) * 100,
+                result.data.features?.direction_change_avg || 0,
+                result.data.features?.risk_score_avg || 0
+            ];
+            featureChart.update();
+        }
+    });
+}
+
+function showCreateRuleModal() {
+    showToast('info', '规则创建功能开发中');
+}
+
+function setTrajectoryRange(range) {
+    document.querySelectorAll('#trajectory .btn-group button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
+
+function getRiskBadgeClass(score) {
+    if (score >= 70) return 'bg-danger';
+    if (score >= 50) return 'bg-warning';
+    if (score >= 30) return 'bg-info';
+    return 'bg-success';
+}
+
+function getRiskLevelText(level) {
+    const map = { critical: '严重', high: '高', medium: '中', low: '低', minimal: '极低' };
+    return map[level] || level;
+}
+
+function getSeverityBadgeClass(severity) {
+    const map = { critical: 'bg-danger', high: 'bg-warning', medium: 'bg-info', low: 'bg-secondary' };
+    return map[severity] || 'bg-secondary';
+}
+
+function getSeverityText(severity) {
+    const map = { critical: '严重', high: '高', medium: '中', low: '低' };
+    return map[severity] || severity;
+}
+
+function getAnomalyTypeText(type) {
+    const map = {
+        speed_anomaly: '速度异常',
+        path_anomaly: '路径异常',
+        click_anomaly: '点击异常',
+        bot_detection: '机器人检测',
+        direction_anomaly: '方向异常'
+    };
+    return map[type] || type;
+}
+
+function renderLabels(labels) {
+    if (!labels) return '-';
+    const labelMap = { suspicious: '可疑', power_user: '高级用户', high_risk: '高风险', multi_ip: '多IP', frequent: '频繁', fast_mouse: '快速鼠标', efficient: '高效' };
+    return Object.keys(labels).map(key => `<span class="badge bg-secondary me-1">${labelMap[key] || key}</span>`).join('');
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN');
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function showToast(type, message) {
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+    document.body.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
+function refreshData() {
+    loadTrajectoryStatistics();
+    loadTrajectoryList();
+    loadProfileStatistics();
+    loadProfileList();
+    loadAnomalyStatistics();
+    loadAnomalyList();
+    loadRulesList();
+}
+    </script>
+</body>
+</html>

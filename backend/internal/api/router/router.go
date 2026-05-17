@@ -59,7 +59,7 @@ func SetupRouter() *gin.Engine {
 
 	// 加载HTML模板（合并前端、管理端和开发者工具模板，避免多次LoadHTMLGlob覆盖）
 	templates := template.Must(template.New("").Parse(""))
-	for _, glob := range []string{"../frontend/templates/*"} {
+	for _, glob := range []string{"../frontend/templates/*", "../admin/templates/*"} {
 		matches, err := filepath.Glob(glob)
 		if err != nil {
 			continue
@@ -124,8 +124,20 @@ func SetupRouter() *gin.Engine {
 	r.GET("/admin/ab-testing", func(c *gin.Context) {
 		c.HTML(200, "ab-testing.html", nil)
 	})
+	r.GET("/admin/seamless", func(c *gin.Context) {
+		c.HTML(200, "seamless.html", nil)
+	})
 	r.GET("/admin/real-time-screen", func(c *gin.Context) {
 		c.HTML(200, "real-time-screen.html", nil)
+	})
+	r.GET("/admin/reports", func(c *gin.Context) {
+		c.HTML(200, "reports.html", nil)
+	})
+	r.GET("/admin/visualization", func(c *gin.Context) {
+		c.HTML(200, "visualization.html", nil)
+	})
+	r.GET("/admin/batch-operations", func(c *gin.Context) {
+		c.HTML(200, "batch-operations.html", nil)
 	})
 
 	// 开发者工具页面路由
@@ -150,6 +162,9 @@ func SetupRouter() *gin.Engine {
 
 	// 初始化导出处理器
 	exportHandler := handler.NewExportHandler()
+
+	// 初始化行为分析处理器
+	behaviorHandler := handler.GetBehaviorHandler()
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -339,6 +354,34 @@ func SetupRouter() *gin.Engine {
 					analytics.DELETE("/report-configs/:id", handler.DeleteReportConfig)
 				}
 
+				// 用户行为分析
+				behavior := adminAuth.Group("/behavior")
+				{
+					behavior.GET("/trajectories", behaviorHandler.ListTrajectories)
+					behavior.GET("/trajectories/:id", behaviorHandler.GetTrajectory)
+					behavior.POST("/trajectories", behaviorHandler.SaveTrajectory)
+					behavior.POST("/trajectories/:id/analyze", behaviorHandler.AnalyzeTrajectory)
+					behavior.GET("/trajectories/visualization", behaviorHandler.GetTrajectoryVisualization)
+					behavior.GET("/trajectories/statistics", behaviorHandler.GetTrajectoryStatistics)
+					behavior.GET("/trajectories/user/:user_id/summary", behaviorHandler.GetUserTrajectorySummary)
+
+					behavior.GET("/profiles", behaviorHandler.ListProfiles)
+					behavior.GET("/profiles/:user_id", behaviorHandler.GetUserProfile)
+					behavior.POST("/profiles", behaviorHandler.CreateOrUpdateProfile)
+
+					behavior.GET("/anomalies", behaviorHandler.GetAnomalies)
+					behavior.GET("/anomalies/recent", behaviorHandler.GetRecentAnomalies)
+					behavior.POST("/anomalies/:id/process", behaviorHandler.ProcessAnomaly)
+					behavior.GET("/anomalies/statistics", behaviorHandler.GetAnomalyStatistics)
+					behavior.GET("/anomalies/export", behaviorHandler.ExportAnomalies)
+					behavior.GET("/anomalies/patterns", behaviorHandler.AnalyzePatterns)
+
+					behavior.GET("/rules", behaviorHandler.ListRules)
+					behavior.POST("/rules", behaviorHandler.CreateRule)
+					behavior.DELETE("/rules/:id", behaviorHandler.DeleteRule)
+					behavior.POST("/rules/:id/toggle", behaviorHandler.ToggleRule)
+				}
+
 				// 实时监控
 				monitoring := adminAuth.Group("/monitoring")
 				{
@@ -390,6 +433,16 @@ func SetupRouter() *gin.Engine {
 					abTesting.POST("/:id/start", handler.StartABTest)
 					abTesting.POST("/:id/stop", handler.StopABTest)
 					abTesting.GET("/:id/report", handler.GetTestReport)
+				}
+
+				// 无感验证管理
+				seamless := adminAuth.Group("/seamless")
+				{
+					seamless.GET("/dashboard", handler.GetDashboardStats)
+					seamless.GET("/fingerprint", handler.GetFingerprintInfo)
+					seamless.GET("/trust", handler.GetTrustedDevices)
+					seamless.POST("/trust", handler.TrustDevice)
+					seamless.DELETE("/trust/:fingerprint", handler.RevokeTrustedDevice)
 				}
 			}
 		}

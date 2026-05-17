@@ -5,23 +5,206 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="hjtpx - 新一代智能行为验证系统，超越极验、易盾、五秒盾的全新一代行为验证解决方案">
     <meta name="theme-color" content="#0d6efd">
+    <meta name="robots" content="index, follow">
     <title>hjtpx - 行为验证系统</title>
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="preconnect" href="https://cdn.bootcdn.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --focus-color: #0d6efd;
+        }
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--focus-color);
+            color: white;
+            padding: 8px 16px;
+            z-index: 10000;
+            transition: top 0.3s;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        .error-notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+            pointer-events: none;
+        }
+        .error-notification {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideInRight 0.3s ease;
+            pointer-events: auto;
+            border-left: 4px solid #dc3545;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .performance-metrics {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            background: rgba(0,0,0,0.85);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: white;
+            font-size: 0.75rem;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: none;
+        }
+        .performance-metrics.show {
+            display: block;
+        }
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.25rem;
+        }
+        .metric-value.good { color: #28a745; }
+        .metric-value.warning { color: #ffc107; }
+        .metric-value.bad { color: #dc3545; }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .captcha-loading {
+            position: relative;
+        }
+        .captcha-loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .accessibility-toolbar {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 9998;
+        }
+        .accessibility-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #0d6efd;
+            background: white;
+            color: #0d6efd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .accessibility-btn:hover, .accessibility-btn:focus {
+            background: #0d6efd;
+            color: white;
+        }
+        .high-contrast * {
+            border-color: #000 !important;
+        }
+        .high-contrast a {
+            text-decoration: underline !important;
+        }
+        .validation-error {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .validation-error-icon {
+            color: #856404;
+        }
+        .validation-error-title {
+            font-weight: 600;
+            color: #856404;
+        }
+        .validation-error-message {
+            font-size: 0.875rem;
+            color: #856404;
+        }
+        .progress-indicator {
+            width: 100%;
+            height: 4px;
+            background: #e9ecef;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-indicator-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0d6efd, #0dcaf0);
+            transition: width 0.3s ease;
+        }
+    </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+    <a href="#main-content" class="skip-link">跳转到主要内容</a>
+    
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top" role="navigation" aria-label="主导航">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
-                <i class="fas fa-shield-alt text-primary"></i>
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/" aria-label="hjtpx 首页">
+                <i class="fas fa-shield-alt text-primary" aria-hidden="true"></i>
                 <span class="fw-bold">hjtpx</span>
             </a>
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <i class="fas fa-bars text-primary"></i>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="切换导航">
+                <i class="fas fa-bars text-primary" aria-hidden="true"></i>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mx-auto">
-                    <li class="nav-item"><a class="nav-link active" href="/">首页</a></li>
+                <ul class="navbar-nav mx-auto" role="list">
+                    <li class="nav-item"><a class="nav-link active" href="/" aria-current="page">首页</a></li>
                     <li class="nav-item"><a class="nav-link" href="#features">功能</a></li>
                     <li class="nav-item"><a class="nav-link" href="#demo">演示</a></li>
                     <li class="nav-item"><a class="nav-link" href="#pricing">价格</a></li>
@@ -34,227 +217,233 @@
         </div>
     </nav>
 
-    <section class="bg-dark text-white" style="position: relative; min-height: 92vh; display: flex; align-items: center; overflow: hidden;">
-        <div class="container position-relative" style="z-index: 1;">
-            <div class="row align-items-center">
-                <div class="col-lg-7 text-center text-lg-start">
-                    <div class="d-inline-flex align-items-center gap-2 mb-4 px-3 py-2" style="background: rgba(13,110,253,0.1); border: 1px solid rgba(13,110,253,0.2); border-radius: 4px;">
-                        <i class="fas fa-code-branch text-primary" style="font-size: 0.8rem;"></i>
-                        <span class="text-primary" style="font-size: 0.85rem; letter-spacing: 1px;">开源 · 免费 · 可商用</span>
+    <main id="main-content" role="main">
+        <section class="bg-dark text-white" style="position: relative; min-height: 92vh; display: flex; align-items: center; overflow: hidden;" aria-labelledby="hero-title">
+            <div class="container position-relative" style="z-index: 1;">
+                <div class="row align-items-center">
+                    <div class="col-lg-7 text-center text-lg-start">
+                        <div class="d-inline-flex align-items-center gap-2 mb-4 px-3 py-2" style="background: rgba(13,110,253,0.1); border: 1px solid rgba(13,110,253,0.2); border-radius: 4px;" role="note">
+                            <i class="fas fa-code-branch text-primary" style="font-size: 0.8rem;" aria-hidden="true"></i>
+                            <span class="text-primary" style="font-size: 0.85rem; letter-spacing: 1px;">开源 · 免费 · 可商用</span>
+                        </div>
+                        <h1 class="display-3 fw-bold text-white mb-3" style="line-height: 1.3;" id="hero-title">
+                            新一代<br>
+                            <span class="text-primary">智能行为验证</span>系统
+                        </h1>
+                        <p class="fs-5 mb-4" style="color: rgba(255,255,255,0.6); max-width: 540px; line-height: 1.8;">
+                            hjtpx —— 超越极验、易盾、五秒盾的全新一代行为验证解决方案。<br class="d-none d-md-block">
+                            融合多种验证方式，为您的网站提供坚若磐石的安全防护。
+                        </p>
+                        <div class="d-flex flex-wrap gap-3 justify-content-center justify-content-lg-start">
+                            <a href="#demo" class="btn btn-primary btn-lg px-4">
+                                <i class="fas fa-play me-2" aria-hidden="true"></i>立即体验
+                            </a>
+                            <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" class="btn btn-outline-light btn-lg px-4">
+                                <i class="fab fa-github me-2" aria-hidden="true"></i>GitHub
+                            </a>
+                        </div>
+                        <div class="d-flex flex-wrap gap-4 mt-4 justify-content-center justify-content-lg-start" role="list">
+                            <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;" role="listitem">
+                                <i class="fas fa-check-circle text-primary" aria-hidden="true"></i>
+                                <span>AI 行为分析</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;" role="listitem">
+                                <i class="fas fa-check-circle text-primary" aria-hidden="true"></i>
+                                <span>多种验证方式</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;" role="listitem">
+                                <i class="fas fa-check-circle text-primary" aria-hidden="true"></i>
+                                <span>零成本接入</span>
+                            </div>
+                        </div>
                     </div>
-                    <h1 class="display-3 fw-bold text-white mb-3" style="line-height: 1.3;">
-                        新一代<br>
-                        <span class="text-primary">智能行为验证</span>系统
-                    </h1>
-                    <p class="fs-5 mb-4" style="color: rgba(255,255,255,0.6); max-width: 540px; line-height: 1.8;">
-                        hjtpx —— 超越极验、易盾、五秒盾的全新一代行为验证解决方案。<br class="d-none d-md-block">
-                        融合多种验证方式，为您的网站提供坚若磐石的安全防护。
+                    <div class="col-lg-5 text-center mt-5 mt-lg-0">
+                        <div class="d-inline-block p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; backdrop-filter: blur(8px);">
+                            <div class="mb-3">
+                                <span class="d-inline-flex align-items-center justify-content-center text-primary fw-bold" style="width: 80px; height: 80px; font-size: 24px; border: 2px solid #0d6efd; transform: rotate(-3deg);">免费</span>
+                            </div>
+                            <p class="fs-4 mb-0 text-primary fw-bold">安全 · 高效 · 可靠</p>
+                            <p style="color: rgba(255,255,255,0.4); font-size: 0.85rem; margin-top: 0.5rem;">超越极验 · 易盾 · 五秒盾</p>
+                            <div class="d-flex justify-content-center gap-3 mt-3" role="list">
+                                <span class="badge bg-primary" role="listitem">Go</span>
+                                <span class="badge bg-primary" role="listitem">PostgreSQL</span>
+                                <span class="badge bg-primary" role="listitem">Redis</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-5" style="background: white;" aria-labelledby="stats-title">
+            <h2 id="stats-title" class="sr-only">系统统计</h2>
+            <div class="container py-4">
+                <div class="row g-4 text-center" role="list">
+                    <div class="col-6 col-lg-3" role="listitem">
+                        <div class="display-4 fw-bold text-primary" aria-label="日均验证量: 10000+">10K+</div>
+                        <div class="small text-muted text-uppercase mt-1">日均验证量</div>
+                    </div>
+                    <div class="col-6 col-lg-3" role="listitem">
+                        <div class="display-4 fw-bold text-primary" aria-label="服务可用性: 99.9%">99.9%</div>
+                        <div class="small text-muted text-uppercase mt-1">服务可用性</div>
+                    </div>
+                    <div class="col-6 col-lg-3" role="listitem">
+                        <div class="display-4 fw-bold text-primary" aria-label="平均响应时间: 小于100毫秒">&lt;100ms</div>
+                        <div class="small text-muted text-uppercase mt-1">平均响应时间</div>
+                    </div>
+                    <div class="col-6 col-lg-3" role="listitem">
+                        <div class="display-4 fw-bold text-primary" aria-label="QPS支持: 5000+">5000+</div>
+                        <div class="small text-muted text-uppercase mt-1">QPS 支持</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="py-5 bg-light" aria-labelledby="features-title">
+            <div class="container py-5">
+                <div class="text-center mb-5">
+                    <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 核心功能 —</span>
+                    <h2 class="fw-bold fs-2 mt-2" id="features-title">全方位的验证解决方案</h2>
+                    <hr class="w-25 mx-auto">
+                    <p class="mt-3 text-muted" style="max-width: 600px; margin: 1rem auto 0;">
+                        从滑块到行为分析，从图形验证到AI风控，我们提供一站式的安全防护
                     </p>
-                    <div class="d-flex flex-wrap gap-3 justify-content-center justify-content-lg-start">
-                        <a href="#demo" class="btn btn-primary btn-lg px-4">
-                            <i class="fas fa-play me-2"></i>立即体验
-                        </a>
-                        <a href="https://github.com/opphk/hjtpx" target="_blank" class="btn btn-outline-light btn-lg px-4">
-                            <i class="fab fa-github me-2"></i>GitHub
-                        </a>
-                    </div>
-                    <div class="d-flex flex-wrap gap-4 mt-4 justify-content-center justify-content-lg-start">
-                        <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">
-                            <i class="fas fa-check-circle text-primary"></i>
-                            <span>AI 行为分析</span>
-                        </div>
-                        <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">
-                            <i class="fas fa-check-circle text-primary"></i>
-                            <span>多种验证方式</span>
-                        </div>
-                        <div class="d-flex align-items-center gap-2" style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">
-                            <i class="fas fa-check-circle text-primary"></i>
-                            <span>零成本接入</span>
-                        </div>
-                    </div>
                 </div>
-                <div class="col-lg-5 text-center mt-5 mt-lg-0">
-                    <div class="d-inline-block p-4" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; backdrop-filter: blur(8px);">
-                        <div class="mb-3">
-                            <span class="d-inline-flex align-items-center justify-content-center text-primary fw-bold" style="width: 80px; height: 80px; font-size: 24px; border: 2px solid #0d6efd; transform: rotate(-3deg);">免费</span>
+                <div class="row g-4">
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card shadow-sm h-100" style="padding: 2rem;" role="article" aria-labelledby="feature-slider">
+                            <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #0d6efd;" aria-hidden="true">
+                                <i class="fas fa-puzzle-piece"></i>
+                            </div>
+                            <h5 class="fw-bold" id="feature-slider">滑块验证</h5>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                拖动滑块完成验证，智能分析用户行为轨迹，精准识别自动化攻击。
+                            </p>
                         </div>
-                        <p class="fs-4 mb-0 text-primary fw-bold">安全 · 高效 · 可靠</p>
-                        <p style="color: rgba(255,255,255,0.4); font-size: 0.85rem; margin-top: 0.5rem;">超越极验 · 易盾 · 五秒盾</p>
-                        <div class="d-flex justify-content-center gap-3 mt-3">
-                            <span class="badge bg-primary">Go</span>
-                            <span class="badge bg-primary">PostgreSQL</span>
-                            <span class="badge bg-primary">Redis</span>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card shadow-sm h-100" style="padding: 2rem;" role="article" aria-labelledby="feature-click">
+                            <div class="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #198754;" aria-hidden="true">
+                                <i class="fas fa-hand-pointer"></i>
+                            </div>
+                            <h5 class="fw-bold" id="feature-click">点选验证</h5>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                按序点击目标字符，简单易用，让机器无从下手。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card shadow-sm h-100" style="padding: 2rem;" role="article" aria-labelledby="feature-image">
+                            <div class="d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #ffc107;" aria-hidden="true">
+                                <i class="fas fa-image"></i>
+                            </div>
+                            <h5 class="fw-bold" id="feature-image">图形验证</h5>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                识别扭曲字符，经典且可靠，适合多种场景。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card shadow-sm h-100" style="padding: 2rem;" role="article" aria-labelledby="feature-ai">
+                            <div class="d-inline-flex align-items-center justify-content-center bg-info bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #0dcaf0;" aria-hidden="true">
+                                <i class="fas fa-brain"></i>
+                            </div>
+                            <h5 class="fw-bold" id="feature-ai">行为分析</h5>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                AI 驱动，多维度分析鼠标轨迹和键盘模式，精准识别机器人。
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="py-5" style="background: white;">
-        <div class="container py-4">
-            <div class="row g-4 text-center">
-                <div class="col-6 col-lg-3">
-                    <div class="display-4 fw-bold text-primary">10K+</div>
-                    <div class="small text-muted text-uppercase mt-1">日均验证量</div>
+        <section id="demo" class="py-5" style="background: white;" aria-labelledby="demo-title">
+            <div class="container py-5">
+                <div class="text-center mb-5">
+                    <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 在线演示 —</span>
+                    <h2 class="fw-bold fs-2 mt-2" id="demo-title">亲身体验验证系统</h2>
+                    <hr class="w-25 mx-auto">
+                    <p class="mt-3 text-muted" style="max-width: 600px; margin: 1rem auto 0;">
+                        点击下方按钮，体验不同类型的验证码
+                    </p>
                 </div>
-                <div class="col-6 col-lg-3">
-                    <div class="display-4 fw-bold text-primary">99.9%</div>
-                    <div class="small text-muted text-uppercase mt-1">服务可用性</div>
-                </div>
-                <div class="col-6 col-lg-3">
-                    <div class="display-4 fw-bold text-primary">&lt;100ms</div>
-                    <div class="small text-muted text-uppercase mt-1">平均响应时间</div>
-                </div>
-                <div class="col-6 col-lg-3">
-                    <div class="display-4 fw-bold text-primary">5000+</div>
-                    <div class="small text-muted text-uppercase mt-1">QPS 支持</div>
+                <div class="row justify-content-center">
+                    <div class="col-lg-8">
+                        <div class="card shadow">
+                            <div class="card-body p-5">
+                                <div id="captcha-demo" class="text-center" role="region" aria-label="验证码演示区域">
+                                    <div class="text-muted mb-4">
+                                        <i class="fas fa-mouse-pointer fa-3x mb-3 text-primary" aria-hidden="true"></i>
+                                        <p>点击下方按钮加载验证码</p>
+                                    </div>
+                                </div>
+                                <div class="progress-indicator" id="captcha-progress" style="display: none;" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-indicator-fill" id="captcha-progress-fill" style="width: 0%;"></div>
+                                </div>
+                                <div class="text-center mt-4" role="group" aria-label="验证码类型选择">
+                                    <button class="btn btn-outline-primary me-2" onclick="loadCaptcha('slider')" aria-label="滑块验证">
+                                        <i class="fas fa-arrows-alt-h me-1" aria-hidden="true"></i>滑块验证
+                                    </button>
+                                    <button class="btn btn-outline-success me-2" onclick="loadCaptcha('click')" aria-label="点选验证">
+                                        <i class="fas fa-hand-pointer me-1" aria-hidden="true"></i>点选验证
+                                    </button>
+                                    <button class="btn btn-outline-warning" onclick="loadCaptcha('image')" aria-label="图形验证">
+                                        <i class="fas fa-image me-1" aria-hidden="true"></i>图形验证
+                                    </button>
+                                </div>
+                                <div id="error-container" class="mt-3" role="alert" aria-live="polite"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="features" class="py-5 bg-light">
-        <div class="container py-5">
-            <div class="text-center mb-5">
-                <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 核心功能 —</span>
-                <h2 class="fw-bold fs-2 mt-2">全方位的验证解决方案</h2>
-                <hr class="w-25 mx-auto">
-                <p class="mt-3 text-muted" style="max-width: 600px; margin: 1rem auto 0;">
-                    从滑块到行为分析，从图形验证到AI风控，我们提供一站式的安全防护
-                </p>
-            </div>
-            <div class="row g-4">
-                <div class="col-md-6 col-lg-3">
-                    <div class="card shadow-sm h-100" style="padding: 2rem;">
-                        <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #0d6efd;">
-                            <i class="fas fa-puzzle-piece"></i>
-                        </div>
-                        <h5 class="fw-bold">滑块验证</h5>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            拖动滑块完成验证，智能分析用户行为轨迹，精准识别自动化攻击。
+        <section class="py-5 bg-light" aria-labelledby="integration-title">
+            <div class="container py-5">
+                <div class="row align-items-center g-5">
+                    <div class="col-lg-6">
+                        <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 接入流程 —</span>
+                        <h2 class="fw-bold fs-2 mt-2" id="integration-title">三步集成，即刻安全</h2>
+                        <hr class="w-25">
+                        <p class="mt-3 text-muted" style="max-width: 480px; line-height: 1.8;">
+                            开源免费，无需任何费用。简单的API调用，即可为您的网站穿上坚不可摧的铠甲。
                         </p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-3">
-                    <div class="card shadow-sm h-100" style="padding: 2rem;">
-                        <div class="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #198754;">
-                            <i class="fas fa-hand-pointer"></i>
-                        </div>
-                        <h5 class="fw-bold">点选验证</h5>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            按序点击目标字符，简单易用，让机器无从下手。
-                        </p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-3">
-                    <div class="card shadow-sm h-100" style="padding: 2rem;">
-                        <div class="d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #ffc107;">
-                            <i class="fas fa-image"></i>
-                        </div>
-                        <h5 class="fw-bold">图形验证</h5>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            识别扭曲字符，经典且可靠，适合多种场景。
-                        </p>
-                    </div>
-                </div>
-                <div class="col-md-6 col-lg-3">
-                    <div class="card shadow-sm h-100" style="padding: 2rem;">
-                        <div class="d-inline-flex align-items-center justify-content-center bg-info bg-opacity-10 rounded-circle mb-3" style="width: 56px; height: 56px; font-size: 22px; color: #0dcaf0;">
-                            <i class="fas fa-brain"></i>
-                        </div>
-                        <h5 class="fw-bold">行为分析</h5>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            AI 驱动，多维度分析鼠标轨迹和键盘模式，精准识别机器人。
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section id="demo" class="py-5" style="background: white;">
-        <div class="container py-5">
-            <div class="text-center mb-5">
-                <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 在线演示 —</span>
-                <h2 class="fw-bold fs-2 mt-2">亲身体验验证系统</h2>
-                <hr class="w-25 mx-auto">
-                <p class="mt-3 text-muted" style="max-width: 600px; margin: 1rem auto 0;">
-                    点击下方按钮，体验不同类型的验证码
-                </p>
-            </div>
-            <div class="row justify-content-center">
-                <div class="col-lg-8">
-                    <div class="card shadow">
-                        <div class="card-body p-5">
-                            <div id="captcha-demo" class="text-center">
-                                <div class="text-muted mb-4">
-                                    <i class="fas fa-mouse-pointer fa-3x mb-3 text-primary"></i>
-                                    <p>点击下方按钮加载验证码</p>
+                        <div class="mt-4">
+                            <div class="d-flex gap-3 mb-4">
+                                <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 56px; height: 56px; font-size: 1.2rem; flex-shrink: 0;" aria-hidden="true">01</span>
+                                <div>
+                                    <h6 class="fw-bold">注册账号</h6>
+                                    <p class="mb-0 text-muted" style="font-size: 0.9rem;">免费注册，创建您的应用，获取 API Key</p>
                                 </div>
                             </div>
-                            <div class="text-center mt-4">
-                                <button class="btn btn-outline-primary me-2" onclick="loadCaptcha('slider')">
-                                    <i class="fas fa-arrows-alt-h me-1"></i>滑块验证
-                                </button>
-                                <button class="btn btn-outline-success me-2" onclick="loadCaptcha('click')">
-                                    <i class="fas fa-hand-pointer me-1"></i>点选验证
-                                </button>
-                                <button class="btn btn-outline-warning" onclick="loadCaptcha('image')">
-                                    <i class="fas fa-image me-1"></i>图形验证
-                                </button>
+                            <div class="d-flex gap-3 mb-4">
+                                <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 56px; height: 56px; font-size: 1.2rem; flex-shrink: 0;" aria-hidden="true">02</span>
+                                <div>
+                                    <h6 class="fw-bold">接入SDK</h6>
+                                    <p class="mb-0 text-muted" style="font-size: 0.9rem;">下载 Go SDK，几行代码完成集成</p>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-3">
+                                <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 56px; height: 56px; font-size: 1.2rem; flex-shrink: 0;" aria-hidden="true">03</span>
+                                <div>
+                                    <h6 class="fw-bold">上线运行</h6>
+                                    <p class="mb-0 text-muted" style="font-size: 0.9rem;">一键部署，实时监控，AI 自动优化防护策略</p>
+                                </div>
                             </div>
                         </div>
+                        <a href="#demo" class="btn btn-primary mt-4 px-4">
+                            <i class="fas fa-rocket me-2" aria-hidden="true"></i>立即体验
+                        </a>
                     </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-5 bg-light">
-        <div class="container py-5">
-            <div class="row align-items-center g-5">
-                <div class="col-lg-6">
-                    <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 接入流程 —</span>
-                    <h2 class="fw-bold fs-2 mt-2">三步集成，即刻安全</h2>
-                    <hr class="w-25">
-                    <p class="mt-3 text-muted" style="max-width: 480px; line-height: 1.8;">
-                        开源免费，无需任何费用。简单的API调用，即可为您的网站穿上坚不可摧的铠甲。
-                    </p>
-                    <div class="mt-4">
-                        <div class="d-flex gap-3 mb-4">
-                            <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 56px; height: 56px; font-size: 1.2rem; flex-shrink: 0;">01</span>
-                            <div>
-                                <h6 class="fw-bold">注册账号</h6>
-                                <p class="mb-0 text-muted" style="font-size: 0.9rem;">免费注册，创建您的应用，获取 API Key</p>
+                    <div class="col-lg-6">
+                        <div class="p-4 bg-light" style="border-radius: 8px;">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="fas fa-terminal text-primary" aria-hidden="true"></i>
+                                <span class="fw-bold text-primary" style="font-size: 0.9rem;">快速集成示例</span>
                             </div>
-                        </div>
-                        <div class="d-flex gap-3 mb-4">
-                            <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 56px; height: 56px; font-size: 1.2rem; flex-shrink: 0;">02</span>
-                            <div>
-                                <h6 class="fw-bold">接入SDK</h6>
-                                <p class="mb-0 text-muted" style="font-size: 0.9rem;">下载 Go SDK，几行代码完成集成</p>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-3">
-                            <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 56px; height: 56px; font-size: 1.2rem; flex-shrink: 0;">03</span>
-                            <div>
-                                <h6 class="fw-bold">上线运行</h6>
-                                <p class="mb-0 text-muted" style="font-size: 0.9rem;">一键部署，实时监控，AI 自动优化防护策略</p>
-                            </div>
-                        </div>
-                    </div>
-                    <a href="#demo" class="btn btn-primary mt-4 px-4">
-                        <i class="fas fa-rocket me-2"></i>立即体验
-                    </a>
-                </div>
-                <div class="col-lg-6">
-                    <div class="p-4 bg-light" style="border-radius: 8px;">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <i class="fas fa-terminal text-primary"></i>
-                            <span class="fw-bold text-primary" style="font-size: 0.9rem;">快速集成示例</span>
-                        </div>
-                        <pre class="bg-dark text-light p-3 mb-0" style="border-radius: 4px; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;"><span class="text-primary">// 引入SDK</span>
+                            <pre class="bg-dark text-light p-3 mb-0" style="border-radius: 4px; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;" aria-label="代码示例"><span class="text-primary">// 引入SDK</span>
 <span style="color: #8ab4f8;">import</span> <span style="color: #e8c88a;">"github.com/opphk/hjtpx/sdk/go"</span>
 
 <span class="text-primary">// 初始化客户端</span>
@@ -272,129 +461,130 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
     <span style="color: #e8c88a;">"slider"</span>,
     userInput,
 )</pre>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section id="pricing" class="py-5 bg-primary text-white">
-        <div class="container py-5">
-            <div class="text-center mb-5">
-                <span style="font-size: 0.9rem; letter-spacing: 3px; opacity: 0.8;">— 开源免费 —</span>
-                <h2 class="fw-bold fs-2 mt-2">完全开源 · 永久免费</h2>
-                <hr class="w-25 mx-auto" style="border-color: rgba(255,255,255,0.3);">
-                <p class="mt-3" style="max-width: 600px; margin: 1rem auto 0; opacity: 0.8;">
-                    hjtpx 以 MIT 许可证开源，您可以自由使用、修改和分发。<br>
-                    没有任何隐藏费用，没有任何功能限制，真正的永久免费。
-                </p>
+        <section id="pricing" class="py-5 bg-primary text-white" aria-labelledby="pricing-title">
+            <div class="container py-5">
+                <div class="text-center mb-5">
+                    <span style="font-size: 0.9rem; letter-spacing: 3px; opacity: 0.8;">— 开源免费 —</span>
+                    <h2 class="fw-bold fs-2 mt-2" id="pricing-title">完全开源 · 永久免费</h2>
+                    <hr class="w-25 mx-auto" style="border-color: rgba(255,255,255,0.3);">
+                    <p class="mt-3" style="max-width: 600px; margin: 1rem auto 0; opacity: 0.8;">
+                        hjtpx 以 MIT 许可证开源，您可以自由使用、修改和分发。<br>
+                        没有任何隐藏费用，没有任何功能限制，真正的永久免费。
+                    </p>
+                </div>
+                <div class="row g-4 justify-content-center">
+                    <div class="col-md-4">
+                        <div class="card h-100 text-center" role="article" aria-labelledby="pricing-personal">
+                            <div class="card-body p-4">
+                                <h5 class="card-title fw-bold" id="pricing-personal">个人版</h5>
+                                <div class="display-4 fw-bold my-3">¥0</div>
+                                <p class="text-muted">永久免费</p>
+                                <ul class="list-unstyled text-start mb-4">
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>所有验证类型</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>无限使用量</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>基础统计</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>社区支持</li>
+                                </ul>
+                                <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary w-100">开始使用</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 text-center border-primary border-2" role="article" aria-labelledby="pricing-enterprise">
+                            <div class="card-body p-4">
+                                <span class="badge bg-primary position-absolute top-0 start-50 translate-middle">推荐</span>
+                                <h5 class="card-title fw-bold" id="pricing-enterprise">企业版</h5>
+                                <div class="display-4 fw-bold my-3">¥0</div>
+                                <p class="text-muted">开源免费</p>
+                                <ul class="list-unstyled text-start mb-4">
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>所有验证类型</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>无限使用量</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>高级统计分析</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>自定义配置</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>技术支持</li>
+                                </ul>
+                                <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" class="btn btn-primary w-100">立即部署</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 text-center" role="article" aria-labelledby="pricing-deploy">
+                            <div class="card-body p-4">
+                                <h5 class="card-title fw-bold" id="pricing-deploy">私有化部署</h5>
+                                <div class="display-4 fw-bold my-3">¥0</div>
+                                <p class="text-muted">完全免费</p>
+                                <ul class="list-unstyled text-start mb-4">
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>完全控制</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>数据隐私</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>Docker一键部署</li>
+                                    <li class="mb-2"><i class="fas fa-check text-success me-2" aria-hidden="true"></i>完全定制</li>
+                                </ul>
+                                <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary w-100">获取源码</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="row g-4 justify-content-center">
-                <div class="col-md-4">
-                    <div class="card h-100 text-center">
-                        <div class="card-body p-4">
-                            <h5 class="card-title fw-bold">个人版</h5>
-                            <div class="display-4 fw-bold my-3">¥0</div>
-                            <p class="text-muted">永久免费</p>
-                            <ul class="list-unstyled text-start mb-4">
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>所有验证类型</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>无限使用量</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>基础统计</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>社区支持</li>
-                            </ul>
-                            <a href="https://github.com/opphk/hjtpx" target="_blank" class="btn btn-outline-primary w-100">开始使用</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100 text-center border-primary border-2">
-                        <div class="card-body p-4">
-                            <span class="badge bg-primary position-absolute top-0 start-50 translate-middle">推荐</span>
-                            <h5 class="card-title fw-bold">企业版</h5>
-                            <div class="display-4 fw-bold my-3">¥0</div>
-                            <p class="text-muted">开源免费</p>
-                            <ul class="list-unstyled text-start mb-4">
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>所有验证类型</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>无限使用量</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>高级统计分析</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>自定义配置</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>技术支持</li>
-                            </ul>
-                            <a href="https://github.com/opphk/hjtpx" target="_blank" class="btn btn-primary w-100">立即部署</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card h-100 text-center">
-                        <div class="card-body p-4">
-                            <h5 class="card-title fw-bold">私有化部署</h5>
-                            <div class="display-4 fw-bold my-3">¥0</div>
-                            <p class="text-muted">完全免费</p>
-                            <ul class="list-unstyled text-start mb-4">
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>完全控制</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>数据隐私</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Docker一键部署</li>
-                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>完全定制</li>
-                            </ul>
-                            <a href="https://github.com/opphk/hjtpx" target="_blank" class="btn btn-outline-primary w-100">获取源码</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="py-5" style="background: white;">
-        <div class="container py-4">
-            <div class="text-center mb-5">
-                <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 技术优势 —</span>
-                <h2 class="fw-bold fs-2 mt-2">为什么选择 hjtpx</h2>
-                <hr class="w-25 mx-auto">
+        <section class="py-5" style="background: white;" aria-labelledby="advantages-title">
+            <div class="container py-4">
+                <div class="text-center mb-5">
+                    <span class="text-primary" style="font-size: 0.9rem; letter-spacing: 3px;">— 技术优势 —</span>
+                    <h2 class="fw-bold fs-2 mt-2" id="advantages-title">为什么选择 hjtpx</h2>
+                    <hr class="w-25 mx-auto">
+                </div>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card border-primary border-start h-100" style="padding: 1.5rem;" role="article" aria-labelledby="adv-high-perf">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="fas fa-bolt text-primary" aria-hidden="true"></i>
+                                <span class="fw-bold" id="adv-high-perf">高性能</span>
+                            </div>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                Go语言开发，极致性能。Redis缓存加速，异步任务队列，支持高并发场景。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-primary border-start h-100" style="padding: 1.5rem;" role="article" aria-labelledby="adv-high-sec">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="fas fa-lock text-primary" aria-hidden="true"></i>
+                                <span class="fw-bold" id="adv-high-sec">高安全</span>
+                            </div>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                AI行为分析、CSRF防护、请求签名、敏感加密，多层级安全体系。
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-primary border-start h-100" style="padding: 1.5rem;" role="article" aria-labelledby="adv-easy">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="fas fa-expand-arrows-alt text-primary" aria-hidden="true"></i>
+                                <span class="fw-bold" id="adv-easy">易扩展</span>
+                            </div>
+                            <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
+                                模块化设计，Docker一键部署。完整的Go SDK，API文档详尽，轻松集成。
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="card border-primary border-start h-100" style="padding: 1.5rem;">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <i class="fas fa-bolt text-primary"></i>
-                            <span class="fw-bold">高性能</span>
-                        </div>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            Go语言开发，极致性能。Redis缓存加速，异步任务队列，支持高并发场景。
-                        </p>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card border-primary border-start h-100" style="padding: 1.5rem;">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <i class="fas fa-lock text-primary"></i>
-                            <span class="fw-bold">高安全</span>
-                        </div>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            AI行为分析、CSRF防护、请求签名、敏感加密，多层级安全体系。
-                        </p>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card border-primary border-start h-100" style="padding: 1.5rem;">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <i class="fas fa-expand-arrows-alt text-primary"></i>
-                            <span class="fw-bold">易扩展</span>
-                        </div>
-                        <p class="mb-0 text-muted" style="font-size: 0.9rem; line-height: 1.7;">
-                            模块化设计，Docker一键部署。完整的Go SDK，API文档详尽，轻松集成。
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
+        </section>
+    </main>
 
-    <footer id="contact" class="bg-dark">
+    <footer id="contact" class="bg-dark" role="contentinfo">
         <div class="container py-5">
             <div class="row g-4">
                 <div class="col-lg-4">
                     <div class="d-flex align-items-center gap-2 mb-3">
-                        <i class="fas fa-shield-alt text-primary fs-4"></i>
+                        <i class="fas fa-shield-alt text-primary fs-4" aria-hidden="true"></i>
                         <span class="fw-bold fs-4 text-white">hjtpx</span>
                     </div>
                     <p style="color: rgba(255,255,255,0.4); font-size: 0.9rem; line-height: 1.7;">
@@ -402,8 +592,8 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
                         致力于为每一个网站提供免费、开源、可靠的行为验证服务。
                     </p>
                     <div class="d-flex gap-3">
-                        <a href="https://github.com/opphk/hjtpx" target="_blank" class="text-muted" style="font-size: 1.2rem; text-decoration: none;">
-                            <i class="fab fa-github"></i>
+                        <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" class="text-muted" style="font-size: 1.2rem; text-decoration: none;" aria-label="GitHub">
+                            <i class="fab fa-github" aria-hidden="true"></i>
                         </a>
                     </div>
                 </div>
@@ -433,53 +623,277 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
             </div>
             <div class="border-top border-secondary mt-4 pt-4 text-center">
                 <p style="color: rgba(255,255,255,0.3); font-size: 0.85rem; margin-bottom: 0;">
-                    <i class="fas fa-copyright me-1"></i> 2026 hjtpx · MIT License ·
-                    <a href="https://github.com/opphk/hjtpx" target="_blank" class="text-primary" style="text-decoration: none;">GitHub</a>
+                    <i class="fas fa-copyright me-1" aria-hidden="true"></i> 2026 hjtpx · MIT License ·
+                    <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" class="text-primary" style="text-decoration: none;">GitHub</a>
                 </p>
             </div>
         </div>
     </footer>
 
+    <div class="accessibility-toolbar" role="toolbar" aria-label="辅助功能">
+        <button class="accessibility-btn" id="contrastToggle" title="切换高对比度模式" aria-label="切换高对比度模式" aria-pressed="false">
+            <i class="fas fa-adjust" aria-hidden="true"></i>
+        </button>
+        <button class="accessibility-btn" id="perfToggle" title="显示性能指标" aria-label="显示性能指标" aria-pressed="false">
+            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="performance-metrics" id="performanceMetrics" role="region" aria-label="性能指标">
+        <div class="metric-item">
+            <span class="metric-label">页面加载</span>
+            <span class="metric-value" id="pageLoadTime">--</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-label">首次绘制</span>
+            <span class="metric-value" id="fcpTime">--</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-label">FPS</span>
+            <span class="metric-value" id="fpsMetric">--</span>
+        </div>
+    </div>
+
+    <div id="error-notifications" class="error-notification-container" role="region" aria-label="错误通知"></div>
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/i18n.js"></script>
+    <script src="/static/js/performance.js"></script>
+    <script src="/static/js/error-handler.js"></script>
+    <script src="/static/js/accessibility.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-                anchor.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    const target = document.querySelector(this.getAttribute('href'));
-                    if (target) {
-                        target.scrollIntoView({
-                            behavior: 'smooth'
+        (function() {
+            'use strict';
+            
+            let performanceOptimizer;
+            let errorHandler;
+            let accessibilityManager;
+            
+            window.PageUX = {
+                init: async function() {
+                    try {
+                        performanceOptimizer = await PerformanceOptimizer.init({
+                            targetLoadTime: 1000,
+                            enableResourceHints: true,
+                            enableLazyLoading: true
+                        });
+                        
+                        errorHandler = await ErrorHandler.init({
+                            maxRetries: 3,
+                            retryDelay: 1000,
+                            enableNotifications: true
+                        });
+                        
+                        accessibilityManager = await AccessibilityManager.init({
+                            enableFocusManagement: true,
+                            enableKeyboardNavigation: true,
+                            enableScreenReader: true,
+                            enableSkipLinks: true
+                        });
+                        
+                        this.setupEventListeners();
+                        this.setupSmoothScrolling();
+                        this.setupNavbarScrollEffect();
+                        this.setupAccessibilityToggles();
+                        this.setupProgressTracking();
+                        
+                        window.addEventListener('load', function() {
+                            setTimeout(function() {
+                                performanceOptimizer.collectMetrics();
+                            }, 0);
+                        });
+                        
+                        console.log('Page UX optimization initialized successfully');
+                    } catch (error) {
+                        console.error('Failed to initialize Page UX:', error);
+                    }
+                },
+                
+                setupEventListeners: function() {
+                    errorHandler.on('error:handled', function(errorInfo) {
+                        console.log('Error handled:', errorInfo.type);
+                    });
+                    
+                    performanceOptimizer.on('metrics:collected', function(metrics) {
+                        window.PageUX.updateMetricsDisplay(metrics);
+                    });
+                },
+                
+                setupSmoothScrolling: function() {
+                    document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+                        anchor.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const target = document.querySelector(this.getAttribute('href'));
+                            if (target) {
+                                target.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'start'
+                                });
+                                accessibilityManager.announce('已滚动到目标区域');
+                            }
+                        });
+                    });
+                },
+                
+                setupNavbarScrollEffect: function() {
+                    const navbar = document.querySelector('.navbar');
+                    if (navbar) {
+                        window.addEventListener('scroll', function() {
+                            if (window.scrollY > 50) {
+                                navbar.classList.add('shadow');
+                            } else {
+                                navbar.classList.remove('shadow');
+                            }
                         });
                     }
-                });
-            });
-
-            const navbar = document.querySelector('.navbar');
-            window.addEventListener('scroll', function() {
-                if (window.scrollY > 50) {
-                    navbar.classList.add('shadow');
-                } else {
-                    navbar.classList.remove('shadow');
+                },
+                
+                setupAccessibilityToggles: function() {
+                    const contrastToggle = document.getElementById('contrastToggle');
+                    const perfToggle = document.getElementById('perfToggle');
+                    
+                    if (contrastToggle) {
+                        contrastToggle.addEventListener('click', function() {
+                            const isHighContrast = document.body.classList.toggle('high-contrast');
+                            this.setAttribute('aria-pressed', isHighContrast.toString());
+                            accessibilityManager.announce(isHighContrast ? '已启用高对比度模式' : '已禁用高对比度模式');
+                        });
+                    }
+                    
+                    if (perfToggle) {
+                        perfToggle.addEventListener('click', function() {
+                            const metrics = document.getElementById('performanceMetrics');
+                            const isVisible = metrics.classList.toggle('show');
+                            this.setAttribute('aria-pressed', isVisible.toString());
+                        });
+                    }
+                },
+                
+                setupProgressTracking: function() {
+                    const progressBar = document.getElementById('captcha-progress');
+                    const progressFill = document.getElementById('captcha-progress-fill');
+                    
+                    this.showProgress = function(percentage) {
+                        if (progressBar && progressFill) {
+                            progressBar.style.display = 'block';
+                            progressFill.style.width = percentage + '%';
+                            progressBar.setAttribute('aria-valuenow', percentage);
+                        }
+                    };
+                    
+                    this.hideProgress = function() {
+                        if (progressBar) {
+                            progressBar.style.display = 'none';
+                            if (progressFill) progressFill.style.width = '0%';
+                        }
+                    };
+                },
+                
+                updateMetricsDisplay: function(metrics) {
+                    const loadTimeEl = document.getElementById('pageLoadTime');
+                    const fcpEl = document.getElementById('fcpTime');
+                    const fpsEl = document.getElementById('fpsMetric');
+                    
+                    if (loadTimeEl) {
+                        loadTimeEl.textContent = Math.round(metrics.pageLoadTime) + 'ms';
+                        loadTimeEl.className = 'metric-value ' + this.getLoadTimeClass(metrics.pageLoadTime);
+                    }
+                    
+                    if (fcpEl) {
+                        fcpEl.textContent = Math.round(metrics.firstContentfulPaint) + 'ms';
+                        fcpEl.className = 'metric-value ' + this.getLoadTimeClass(metrics.firstContentfulPaint);
+                    }
+                    
+                    if (fpsEl) {
+                        fpsEl.textContent = metrics.fps || '--';
+                        fpsEl.className = 'metric-value ' + this.getFPSClass(metrics.fps);
+                    }
+                },
+                
+                getLoadTimeClass: function(time) {
+                    if (time < 500) return 'good';
+                    if (time < 1000) return 'warning';
+                    return 'bad';
+                },
+                
+                getFPSClass: function(fps) {
+                    if (!fps) return '';
+                    if (fps >= 55) return 'good';
+                    if (fps >= 30) return 'warning';
+                    return 'bad';
+                },
+                
+                showError: function(message, type) {
+                    const container = document.getElementById('error-container');
+                    if (!container) return;
+                    
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'validation-error';
+                    errorDiv.setAttribute('role', 'alert');
+                    errorDiv.innerHTML = 
+                        '<div class="validation-error-icon"><i class="fas fa-exclamation-circle text-danger" aria-hidden="true"></i></div>' +
+                        '<div class="validation-error-content">' +
+                            '<div class="validation-error-title">操作失败</div>' +
+                            '<div class="validation-error-message">' + message + '</div>' +
+                        '</div>';
+                    
+                    container.appendChild(errorDiv);
+                    
+                    setTimeout(function() {
+                        errorDiv.remove();
+                    }, 5000);
+                },
+                
+                announce: function(message) {
+                    if (accessibilityManager) {
+                        accessibilityManager.announce(message);
+                    }
                 }
-            });
-        });
-
-        function loadCaptcha(type) {
-            const demo = document.getElementById('captcha-demo');
-            const loaders = {
-                slider: '<div class="captcha-container"><div class="row"><div class="col-md-6 mb-3"><div class="card bg-light"><div class="card-body text-center p-4"><i class="fas fa-image fa-4x text-primary mb-3"></i><p class="text-muted mb-0">请拖动滑块完成拼图</p></div></div></div><div class="col-md-6"><div class="bg-light p-4 rounded"><div class="d-flex align-items-center gap-2 mb-3"><div class="bg-secondary rounded" style="width: 40px; height: 40px;"></div><div class="progress flex-grow-1" style="height: 8px;"><div class="progress-bar bg-primary" style="width: 0%"></div></div></div><p class="text-muted small mb-0">演示模式：点击下方按钮模拟验证</p><button class="btn btn-success btn-sm mt-3" onclick="simulateSuccess()"><i class="fas fa-check me-1"></i>模拟验证成功</button></div></div></div></div>',
-                click: '<div class="captcha-container"><div class="card bg-light"><div class="card-body text-center p-4"><p class="mb-3">请按顺序点击: <strong class="text-primary">A → B → C</strong></p><div class="d-flex justify-content-center gap-3 mb-3"><span class="badge bg-primary p-3" style="font-size: 1.5rem;">A</span><span class="badge bg-success p-3" style="font-size: 1.5rem;">B</span><span class="badge bg-warning p-3" style="font-size: 1.5rem;">C</span><span class="badge bg-danger p-3" style="font-size: 1.5rem;">D</span></div><p class="text-muted small">演示模式：点击下方按钮模拟验证</p><button class="btn btn-success btn-sm" onclick="simulateSuccess()"><i class="fas fa-check me-1"></i>模拟验证成功</button></div></div></div>',
-                image: '<div class="captcha-container"><div class="card bg-light"><div class="card-body text-center p-4"><div class="mb-3"><div class="d-inline-flex align-items-center justify-content-center bg-white border rounded px-4 py-3" style="font-family: monospace; font-size: 1.5rem; letter-spacing: 4px; background: linear-gradient(180deg, #f0f0f0, #e0e0e0);"><span class="text-dark">X7K9</span></div></div><p class="text-muted mb-3">请输入图片中的字符（不区分大小写）</p><div class="row justify-content-center"><div class="col-md-4"><input type="text" class="form-control text-center" placeholder="请输入验证码" maxlength="4"></div></div><button class="btn btn-primary btn-sm mt-3" onclick="simulateSuccess()"><i class="fas fa-paper-plane me-1"></i>提交验证</button></div></div></div>'
             };
-            demo.innerHTML = loaders[type] || loaders.slider;
-        }
-
-        function simulateSuccess() {
-            const demo = document.getElementById('captcha-demo');
-            demo.innerHTML = '<div class="text-center"><i class="fas fa-check-circle fa-4x text-success mb-3"></i><h4 class="text-success">验证成功!</h4><p class="text-muted">演示模式已模拟验证成功</p><button class="btn btn-outline-primary btn-sm mt-2" onclick="loadCaptcha(\'slider\')"><i class="fas fa-redo me-1"></i>重新体验</button></div>';
-        }
+            
+            document.addEventListener('DOMContentLoaded', function() {
+                window.PageUX.init();
+            });
+            
+            window.loadCaptcha = function(type) {
+                const demo = document.getElementById('captcha-demo');
+                if (!demo) return;
+                
+                try {
+                    window.PageUX.showProgress(30);
+                    
+                    const loaders = {
+                        slider: '<div class="captcha-container"><div class="row"><div class="col-md-6 mb-3"><div class="card bg-light"><div class="card-body text-center p-4"><i class="fas fa-image fa-4x text-primary mb-3" aria-hidden="true"></i><p class="text-muted mb-0">请拖动滑块完成拼图</p></div></div></div><div class="col-md-6"><div class="bg-light p-4 rounded"><div class="d-flex align-items-center gap-2 mb-3"><div class="bg-secondary rounded" style="width: 40px; height: 40px;"></div><div class="progress flex-grow-1" style="height: 8px;"><div class="progress-bar bg-primary" style="width: 0%"></div></div></div><p class="text-muted small mb-0">演示模式：点击下方按钮模拟验证</p><button class="btn btn-success btn-sm mt-3" onclick="simulateSuccess()"><i class="fas fa-check me-1" aria-hidden="true"></i>模拟验证成功</button></div></div></div></div>',
+                        click: '<div class="captcha-container"><div class="card bg-light"><div class="card-body text-center p-4"><p class="mb-3">请按顺序点击: <strong class="text-primary">A → B → C</strong></p><div class="d-flex justify-content-center gap-3 mb-3"><span class="badge bg-primary p-3" style="font-size: 1.5rem;">A</span><span class="badge bg-success p-3" style="font-size: 1.5rem;">B</span><span class="badge bg-warning p-3" style="font-size: 1.5rem;">C</span><span class="badge bg-danger p-3" style="font-size: 1.5rem;">D</span></div><p class="text-muted small">演示模式：点击下方按钮模拟验证</p><button class="btn btn-success btn-sm" onclick="simulateSuccess()"><i class="fas fa-check me-1" aria-hidden="true"></i>模拟验证成功</button></div></div></div>',
+                        image: '<div class="captcha-container"><div class="card bg-light"><div class="card-body text-center p-4"><div class="mb-3"><div class="d-inline-flex align-items-center justify-content-center bg-white border rounded px-4 py-3" style="font-family: monospace; font-size: 1.5rem; letter-spacing: 4px; background: linear-gradient(180deg, #f0f0f0, #e0e0e0);"><span class="text-dark">X7K9</span></div></div><p class="text-muted mb-3">请输入图片中的字符（不区分大小写）</p><div class="row justify-content-center"><div class="col-md-4"><input type="text" class="form-control text-center" placeholder="请输入验证码" maxlength="4" aria-label="验证码输入框"></div></div><button class="btn btn-primary btn-sm mt-3" onclick="simulateSuccess()"><i class="fas fa-paper-plane me-1" aria-hidden="true"></i>提交验证</button></div></div></div>'
+                    };
+                    
+                    setTimeout(function() {
+                        window.PageUX.showProgress(100);
+                        demo.innerHTML = loaders[type] || loaders.slider;
+                        window.PageUX.announce('验证码已加载');
+                        
+                        setTimeout(function() {
+                            window.PageUX.hideProgress();
+                        }, 300);
+                    }, 500);
+                } catch (error) {
+                    window.PageUX.hideProgress();
+                    window.PageUX.showError('验证码加载失败，请重试');
+                    if (errorHandler) {
+                        errorHandler.handleError(error, { type: 'captcha', captchaType: type });
+                    }
+                }
+            };
+            
+            window.simulateSuccess = function() {
+                const demo = document.getElementById('captcha-demo');
+                if (!demo) return;
+                
+                window.PageUX.announce('验证成功');
+                demo.innerHTML = '<div class="text-center"><i class="fas fa-check-circle fa-4x text-success mb-3" aria-hidden="true"></i><h4 class="text-success">验证成功!</h4><p class="text-muted">演示模式已模拟验证成功</p><button class="btn btn-outline-primary btn-sm mt-2" onclick="loadCaptcha(\'slider\')"><i class="fas fa-redo me-1" aria-hidden="true"></i>重新体验</button></div>';
+            };
+        })();
     </script>
 </body>
 </html>

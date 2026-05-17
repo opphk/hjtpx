@@ -1,15 +1,16 @@
 # hjtpx Go SDK
 
-A comprehensive Go SDK for hjtpx captcha services, providing support for image captcha, slider captcha, and click captcha with advanced features like connection pooling, automatic retries, and detailed error handling.
+A comprehensive Go SDK for hjtpx captcha and behavior verification services, providing support for multiple captcha types, authentication, environment detection, and admin management with advanced features like automatic retries and detailed error handling.
 
 ## Features
 
-- **Multiple Captcha Types**: Support for image captcha, slider captcha, and click captcha
-- **Connection Pool Management**: Configurable HTTP connection pooling for optimal performance
+- **Multiple Captcha Types**: Support for image captcha, slider captcha, click captcha, and gesture captcha
+- **Authentication**: User registration, login, token management
+- **Environment Detection**: Browser fingerprinting, automation detection, proxy detection
+- **Admin Management**: Dashboard stats, application management, logs, blacklists, risk rules
 - **Automatic Retries**: Built-in retry mechanism with exponential backoff for failed requests
 - **Comprehensive Error Handling**: Detailed error types and error code extraction utilities
-- **Statistics & Monitoring**: Track request statistics including success rate, retry count, and error tracking
-- **Thread-Safe**: Safe for concurrent use with proper mutex protection
+- **Thread-Safe**: Safe for concurrent use
 - **Configurable**: Extensive configuration options for timeouts, pool sizes, and retry behavior
 
 ## Installation
@@ -25,268 +26,267 @@ package main
 
 import (
     "fmt"
+    "log"
+    "time"
+
     "github.com/hjtpx/hjtpx/sdk/go"
 )
 
 func main() {
-    cfg := &sdk.Config{
-        BaseURL:   "http://localhost:8080",
-        MaxRetries: 3,
-        HTTPTimeout: 10 * time.Second,
-    }
+    client := sdk.NewClient(
+        sdk.WithEndpoint("http://localhost:8080/api/v1"),
+        sdk.WithAPIKey("your-api-key"),
+        sdk.WithTimeout(30*time.Second),
+    )
+    defer func() {}()
 
-    client := sdk.NewCaptchaClient("your-app-id", "your-app-secret", cfg)
-    defer client.Close()
-
-    sliderResult, err := client.GenerateSliderCaptcha()
+    slider, err := client.GetSliderCaptcha(&sdk.SliderCaptchaRequest{
+        Width:     320,
+        Height:    160,
+        Tolerance: 8,
+    })
     if err != nil {
-        fmt.Printf("Error: %v\n", err)
-        return
+        log.Fatalf("Failed to get slider captcha: %v", err)
     }
 
-    fmt.Printf("Slider Captcha ID: %s\n", sliderResult.ChallengeID)
+    fmt.Printf("Got slider captcha: %s\n", slider.ChallengeID)
 
-    verifyResult, err := client.VerifySliderCaptcha(sliderResult.ChallengeID, "120")
+    verifyResp, err := client.VerifySliderCaptcha(slider.ChallengeID, "185")
     if err != nil {
-        fmt.Printf("Verification error: %v\n", err)
-        return
+        log.Fatalf("Failed to verify: %v", err)
     }
 
-    fmt.Printf("Verification success: %v\n", verifyResult.Success)
+    fmt.Printf("Verification success: %v\n", verifyResp.Success)
 }
 ```
 
 ## Configuration Options
 
-The `Config` struct provides extensive customization options:
+### Client Options
 
 ```go
-type Config struct {
-    // Connection pool configuration
-    MaxIdleConns    int           // Maximum idle connections (default: 10)
-    MaxOpenConns    int           // Maximum open connections (default: 100)
-    ConnMaxLifetime time.Duration // Connection max lifetime (default: 30 minutes)
-    ConnMaxIdleTime time.Duration // Idle connection timeout (default: 5 minutes)
-
-    // Timeout configuration
-    HTTPTimeout  time.Duration // Total HTTP timeout (default: 30 seconds)
-    DialTimeout  time.Duration // Dial timeout (default: 10 seconds)
-    ReadTimeout  time.Duration // Read timeout (default: 15 seconds)
-    WriteTimeout time.Duration // Write timeout (default: 15 seconds)
-
-    // Retry configuration
-    MaxRetries int           // Maximum retry attempts (default: 3)
-    RetryDelay time.Duration // Base retry delay (default: 100ms)
-
-    // Basic configuration
-    BaseURL   string // API endpoint (default: "http://localhost:8080")
-    AppID     string // Application ID
-    AppSecret string // Application Secret
-    DebugMode bool   // Enable debug logging
-}
-```
-
-## API Reference
-
-### CaptchaClient
-
-The main client for interacting with the captcha service.
-
-#### Constructor
-
-```go
-func NewCaptchaClient(appID, appSecret string, cfg *Config) *CaptchaClient
-```
-
-Creates a new captcha client with the specified credentials and configuration. If `cfg` is nil, default values will be used.
-
-#### Methods
-
-##### Close
-
-```go
-func (c *CaptchaClient) Close() error
-```
-
-Closes the client and releases all resources. Safe to call multiple times.
-
-##### SetPoolConfig
-
-```go
-func (c *CaptchaClient) SetPoolConfig(cfg *Config) error
-```
-
-Updates the connection pool configuration at runtime. Returns an error if the client is closed.
-
-##### GetStats
-
-```go
-func (c *CaptchaClient) GetStats() PoolStats
-```
-
-Returns current pool statistics:
-
-```go
-type PoolStats struct {
-    ActiveConnections  int
-    IdleConnections   int
-    TotalRequests     int64
-    FailedRequests    int64
-    SuccessfulRequests int64
-    RetriedRequests   int64
-    SuccessRate       float64
-    LastError         error
-    LastErrorTime     time.Time
-}
-```
-
-### Captcha Generation Methods
-
-#### GenerateSliderCaptcha
-
-```go
-func (c *CaptchaClient) GenerateSliderCaptcha() (*SliderCaptchaResponse, error)
-```
-
-Generates a new slider captcha challenge.
-
-Returns:
-- `SliderCaptchaResponse`: Contains challenge_id, background_image, slider_image, slider_width, slider_height
-
-#### GenerateClickCaptcha
-
-```go
-func (c *CaptchaClient) GenerateClickCaptcha() (*ClickCaptchaResponse, error)
-```
-
-Generates a new click captcha challenge.
-
-Returns:
-- `ClickCaptchaResponse`: Contains challenge_id, background_image, target_position, target_index, icon_positions
-
-#### GenerateImageCaptcha
-
-```go
-func (c *CaptchaClient) GenerateImageCaptcha(req *ImageCaptchaRequest) (*ImageCaptchaResponse, error)
-```
-
-Generates a new image captcha challenge. If `req` is nil, default parameters are used.
-
-```go
-type ImageCaptchaRequest struct {
-    Type      CaptchaType // number, letter, or mixed
-    Count     int         // Number of characters (default: 4)
-    CustomSet string      // Custom character set
-    NoiseMode int         // Noise level (0-10)
-    LineMode  int         // Line interference level (0-10)
-}
-```
-
-Returns:
-- `ImageCaptchaResponse`: Contains challenge_id and base64-encoded image
-
-### Captcha Verification Methods
-
-#### VerifySliderCaptcha
-
-```go
-func (c *CaptchaClient) VerifySliderCaptcha(captchaID, answer string) (*VerifyCaptchaResponse, error)
-```
-
-Verifies a slider captcha solution.
-
-Parameters:
-- `captchaID`: The challenge ID from GenerateSliderCaptcha
-- `answer`: The slider offset position (string representation)
-
-Returns:
-- `VerifyCaptchaResponse`: Contains success, score, and risk_level
-
-#### VerifyClickCaptcha
-
-```go
-func (c *CaptchaClient) VerifyClickCaptcha(captchaID string, clicks []ClickData) (*VerifyCaptchaResponse, error)
-```
-
-Verifies a click captcha solution.
-
-Parameters:
-- `captchaID`: The challenge ID from GenerateClickCaptcha
-- `clicks`: Array of ClickData with X, Y coordinates and Duration
-
-```go
-type ClickData struct {
-    X        int
-    Y        int
-    Duration int64 // milliseconds
-}
-```
-
-Returns:
-- `VerifyCaptchaResponse`: Contains success, score, and risk_level
-
-#### VerifyImageCaptcha
-
-```go
-func (c *CaptchaClient) VerifyImageCaptcha(captchaID, answer string) (*VerifyImageCaptchaResponse, error)
-```
-
-Verifies an image captcha answer.
-
-Parameters:
-- `captchaID`: The challenge ID from GenerateImageCaptcha
-- `answer`: The user's input answer (e.g., "a1b2c3")
-
-Returns:
-- `VerifyImageCaptchaResponse`: Contains success boolean
-
-### Utility Methods
-
-#### ExtractBase64Image
-
-```go
-func (c *CaptchaClient) ExtractBase64Image(dataURI string) ([]byte, error)
-```
-
-Extracts raw image bytes from a base64 data URI.
-
-## Error Handling
-
-The SDK provides comprehensive error handling utilities:
-
-### Error Types
-
-```go
-var (
-    ErrNetworkError        = errors.New("network error")
-    ErrTimeout            = errors.New("request timeout")
-    ErrInvalidResponse    = errors.New("invalid response")
-    ErrServerError        = errors.New("server error")
-    ErrInvalidParams      = errors.New("invalid parameters")
-    ErrVerificationFailed = errors.New("verification failed")
-    ErrRateLimited        = errors.New("rate limited")
-    ErrUnauthorized       = errors.New("unauthorized")
-    ErrInternalError      = errors.New("internal error")
+client := sdk.NewClient(
+    sdk.WithAPIKey("your-api-key"),           // API Key
+    sdk.WithAPISecret("your-api-secret"),     // API Secret
+    sdk.WithEndpoint("http://localhost:8080/api/v1"), // API Endpoint
+    sdk.WithTimeout(30*time.Second),           // HTTP Timeout
+    sdk.WithDebugMode(true),                   // Enable debug logging
+    sdk.WithHTTPClient(customHTTPClient),       // Custom HTTP client
 )
 ```
 
-### Error Utilities
+### Config Struct
 
 ```go
-// Check if an error is an SDKError
-func IsSDKError(err error) bool
-
-// Get the error code from an SDKError
-func GetSDKErrorCode(err error) int
+cfg := &sdk.Config{
+    MaxIdleConns:    10,           // Maximum idle connections
+    MaxOpenConns:   100,           // Maximum open connections
+    ConnMaxLifetime: 30*time.Minute, // Connection max lifetime
+    ConnMaxIdleTime:  5*time.Minute,  // Idle connection timeout
+    HTTPTimeout:      30*time.Second, // Total HTTP timeout
+    DialTimeout:      10*time.Second, // Dial timeout
+    ReadTimeout:      15*time.Second, // Read timeout
+    WriteTimeout:     15*time.Second, // Write timeout
+    MaxRetries:       3,            // Maximum retry attempts
+    RetryDelay:       100*time.Millisecond, // Base retry delay
+    BaseURL:          "http://localhost:8080/api/v1",
+    DebugMode:        false,
+}
 ```
 
-### Example
+## Captcha API
+
+### Slider Captcha
 
 ```go
-client := sdk.NewCaptchaClient("app-id", "app-secret", cfg)
-defer client.Close()
+slider, err := client.GetSliderCaptcha(&sdk.SliderCaptchaRequest{
+    Width:     320,
+    Height:    160,
+    Tolerance: 8,
+})
+if err != nil {
+    log.Fatal(err)
+}
 
-result, err := client.GenerateSliderCaptcha()
+verifyResp, err := client.VerifySliderCaptcha(slider.ChallengeID, "185")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Success: %v\n", verifyResp.Success)
+```
+
+### Click Captcha
+
+```go
+click, err := client.GetClickCaptcha(&sdk.ClickCaptchaRequest{
+    Width:     400,
+    Height:    300,
+    IconCount: 9,
+    Mode:      "number",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+clicks := []sdk.ClickData{
+    {X: 100, Y: 150, Duration: 500},
+    {X: 200, Y: 250, Duration: 300},
+    {X: 300, Y: 100, Duration: 400},
+}
+
+verifyResp, err := client.VerifyClickCaptcha(click.ChallengeID, clicks)
+```
+
+### Image Captcha
+
+```go
+image, err := client.GenerateImageCaptcha(&sdk.ImageCaptchaRequest{
+    Type:  sdk.CaptchaTypeMixed,
+    Count: 4,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+verifyResp, err := client.VerifyImageCaptcha(&sdk.VerifyImageCaptchaRequest{
+    ChallengeID: image.ChallengeID,
+    Answer:     "a1b2",
+})
+```
+
+### Gesture Captcha
+
+```go
+gesture, err := client.GetGestureCaptcha()
+if err != nil {
+    log.Fatal(err)
+}
+
+verifyResp, err := client.VerifyGestureCaptcha(&sdk.VerifyGestureRequest{
+    ChallengeID: gesture.ChallengeID,
+    Pattern:    []int{1, 3, 5, 7, 9},
+})
+```
+
+### Universal Verify
+
+```go
+req := &sdk.VerifyCaptchaRequest{
+    ChallengeID: "challenge-id",
+    Action:     "slide",
+    X:          185,
+    Y:          100,
+}
+resp, err := client.VerifyCaptcha(req)
+```
+
+## Authentication API
+
+```go
+auth := client.Auth()
+
+resp, err := auth.Login(&sdk.LoginRequest{
+    Username: "testuser",
+    Password: "password123",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Access token: %s\n", resp.AccessToken)
+
+userClient := client.User()
+profile, err := userClient.GetProfile()
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("User: %s\n", profile.Username)
+```
+
+### Token Manager
+
+```go
+tm := sdk.NewTokenManager(client)
+tm.SetTokens(resp.AccessToken, resp.RefreshToken, resp.ExpiresIn)
+
+if tm.IsTokenExpired() {
+    if err := tm.Refresh(); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+## Environment Detection API
+
+```go
+detect := client.Detect()
+
+result, err := detect.Check(&sdk.EnvironmentCheckRequest{
+    Fingerprint:   "user-unique-fingerprint-hash",
+    CanvasHash:    "canvas-fingerprint-hash",
+    WebGLVendor:   "NVIDIA Corporation",
+    WebGLRenderer: "GeForce GTX 1080",
+    Fonts:         []string{"Arial", "Helvetica"},
+    ProxyDetected: false,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Is bot: %v\n", result.IsBot)
+fmt.Printf("Risk level: %s\n", result.RiskLevel)
+fmt.Printf("Risk score: %.2f\n", result.RiskScore)
+```
+
+### Submit Detection Data
+
+```go
+submitResp, err := detect.Submit(&sdk.DetectionSubmitRequest{
+    DetectionID: "detection-id",
+    RiskScore:   15.5,
+    Chain:       []string{"webgl", "canvas", "fonts"},
+    Fingerprint: "base64-encoded-fingerprint",
+})
+```
+
+## Admin API
+
+```go
+admin := client.Admin("admin-token")
+
+stats, err := admin.GetDashboardStats()
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Total requests: %d\n", stats.TotalRequests)
+
+realtime, err := admin.GetRealtimeStats()
+fmt.Printf("Current QPS: %.2f\n", realtime.CurrentQPS)
+```
+
+### Admin Methods
+
+```go
+admin.GetDashboardStats()           // Dashboard statistics
+admin.GetRecentActivity(10)          // Recent activity
+admin.GetSystemStatus()            // System status
+admin.GetRequestTrend(...)          // Request trend
+admin.GetVerificationStats(...)    // Verification statistics
+admin.GetChartData("verification", "week") // Chart data
+admin.GetTrendData(7)             // Trend data
+admin.GetHourlyStats("2024-01-15") // Hourly stats
+admin.GetRealtimeStats()          // Real-time stats
+admin.GetRiskDistribution()       // Risk distribution
+admin.GetTopIPs(10, "all")       // Top IPs
+admin.GetApplicationStats(10)      // Application stats
+admin.GetCaptchaTypeStats()       // Captcha type stats
+admin.GenerateReport(...)         // Generate report
+```
+
+## Error Handling
+
+```go
+slider, err := client.GetSliderCaptcha(nil)
 if err != nil {
     if sdk.IsSDKError(err) {
         code := sdk.GetSDKErrorCode(err)
@@ -307,138 +307,63 @@ if err != nil {
 }
 ```
 
-## Connection Pool Management
-
-The SDK manages HTTP connections efficiently with configurable pool settings:
-
-### Default Configuration
+### Error Types
 
 ```go
-cfg := &sdk.Config{
-    MaxIdleConns:    10,
-    MaxOpenConns:   100,
-    ConnMaxLifetime: 30 * time.Minute,
-    ConnMaxIdleTime: 5 * time.Minute,
-}
+var (
+    sdk.ErrNetworkError        = errors.New("network error")
+    sdk.ErrTimeout            = errors.New("request timeout")
+    sdk.ErrInvalidResponse    = errors.New("invalid response")
+    sdk.ErrServerError        = errors.New("server error")
+    sdk.ErrInvalidParams      = errors.New("invalid parameters")
+    sdk.ErrVerificationFailed = errors.New("verification failed")
+    sdk.ErrRateLimited        = errors.New("rate limited")
+    sdk.ErrUnauthorized       = errors.New("unauthorized")
+    sdk.ErrInternalError      = errors.New("internal error")
+)
 ```
 
-### Monitoring
+## CaptchaClient (Simple Wrapper)
+
+For simple use cases, use `CaptchaClient`:
 
 ```go
-client := sdk.NewCaptchaClient("app-id", "app-secret", cfg)
+client := sdk.NewCaptchaClient("app-id", "app-secret", &sdk.Config{
+    BaseURL:    "http://localhost:8080/api/v1",
+    HTTPTimeout: 30 * time.Second,
+    MaxRetries: 3,
+})
+
+slider, err := client.GenerateSliderCaptcha()
+click, err := client.GenerateClickCaptcha()
+image, err := client.GenerateImageCaptchaWithOptions(sdk.CaptchaTypeMixed, 4)
 
 stats := client.GetStats()
-fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-fmt.Printf("Success Rate: %.2f%%\n", stats.SuccessRate)
-fmt.Printf("Retried Requests: %d\n", stats.RetriedRequests)
-fmt.Printf("Active Connections: %d\n", stats.ActiveConnections)
 ```
 
-### Dynamic Configuration
+## Utility Functions
+
+### Extract Base64 Image
 
 ```go
-newCfg := &sdk.Config{
-    MaxIdleConns:  50,
-    MaxOpenConns: 200,
-    MaxRetries:   5,
-}
-
-err := client.SetPoolConfig(newCfg)
+base64Data, err := client.ExtractBase64Image(imageResp.Image)
+// base64Data contains raw image bytes
 ```
 
-## Automatic Retries
-
-The SDK automatically retries failed requests with configurable behavior:
-
-### Retry Conditions
-
-- HTTP 5xx errors (server errors)
-- HTTP 429 (rate limited) - with Retry-After header support
-- Network timeouts
-- Connection failures
-
-### Configuration
+### Query Parameters
 
 ```go
-cfg := &sdk.Config{
-    MaxRetries: 3,           // Maximum retry attempts
-    RetryDelay: 100 * time.Millisecond, // Base delay
+params := map[string]interface{}{
+    "width": 320,
+    "height": 160,
+    "mode": "number",
 }
-```
-
-The SDK uses exponential backoff: delay = baseDelay * retryAttempt
-
-### Disabling Retries
-
-```go
-cfg := &sdk.Config{
-    MaxRetries: 0, // Disable retries
-}
-```
-
-## Complete Example
-
-```go
-package main
-
-import (
-    "fmt"
-    "time"
-
-    "github.com/hjtpx/hjtpx/sdk/go"
-)
-
-func main() {
-    cfg := &sdk.Config{
-        BaseURL:        "http://localhost:8080",
-        MaxIdleConns:   10,
-        MaxOpenConns:   100,
-        HTTPTimeout:    10 * time.Second,
-        MaxRetries:     3,
-        RetryDelay:     100 * time.Millisecond,
-        DebugMode:      true,
-    }
-
-    client := sdk.NewCaptchaClient("your-app-id", "your-app-secret", cfg)
-    defer client.Close()
-
-    // Generate and verify slider captcha
-    slider, err := client.GenerateSliderCaptcha()
-    if err != nil {
-        fmt.Printf("Slider generation failed: %v\n", err)
-        return
-    }
-    fmt.Printf("Slider Captcha: %s\n", slider.ChallengeID)
-
-    // Generate and verify click captcha
-    click, err := client.GenerateClickCaptcha()
-    if err != nil {
-        fmt.Printf("Click generation failed: %v\n", err)
-        return
-    }
-    fmt.Printf("Click Captcha: %s\n", click.ChallengeID)
-
-    clicks := []sdk.ClickData{
-        {X: click.IconPositions[click.TargetIndex][0], Y: click.IconPositions[click.TargetIndex][1], Duration: 500},
-    }
-
-    verifyResult, err := client.VerifyClickCaptcha(click.ChallengeID, clicks)
-    if err != nil {
-        fmt.Printf("Click verification failed: %v\n", err)
-        return
-    }
-    fmt.Printf("Click verification: %v\n", verifyResult.Success)
-
-    // Print statistics
-    stats := client.GetStats()
-    fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-    fmt.Printf("Success Rate: %.2f%%\n", stats.SuccessRate)
-}
+queryString := sdk.ParseQueryParams(params)
 ```
 
 ## Testing
 
-Run the SDK tests:
+Run SDK tests:
 
 ```bash
 cd sdk/go
@@ -450,6 +375,13 @@ Run benchmarks:
 ```bash
 go test -bench=. -benchmem
 ```
+
+## Examples
+
+See `examples/` directory for complete examples:
+
+- `examples/quickstart/` - Basic usage
+- More examples coming soon
 
 ## License
 

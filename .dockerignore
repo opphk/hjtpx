@@ -1,51 +1,26 @@
+# Git
 .git/
-.github/
 .gitignore
-README.md
+.github/
+
+# Documentation
 *.md
-*.log
-*.tmp
-*.swp
-*.swo
-*~
-.env.local
-.env.development
-.env.production
-docker-compose*.yml
+docs/
+BEHAVIOR_ANALYSIS_ENHANCEMENT.md
+CODE_QUALITY_REPORT.md
+TEST_REPORT.md
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker
 Dockerfile*
+docker-compose*.yml
 .dockerignore
- Makefile
-coverage.txt
-coverage/
-*.cover
-.nyc_output/
-node_modules/
-vendor/
-vendor/bundle/
-vendor/cache/
-vendor/gems/
-vendor/java/
-vendor/node_modules/
-vendor/php/
-vendor/python/
-*.test
-*.out
-*.exe
-*.dll
-*.so
-*.dylib
-*.a
-*.o
-*.obj
-*.pdb
-*.exe
-dist/
-build/
-bin/
-target/
-out/
-tmp/
-temp/
+
+# IDE & Editor
 .vscode/
 .idea/
 *.iml
@@ -53,15 +28,51 @@ temp/
 *.tmproj
 .DS_Store
 Thumbs.db
+
+# Logs & Temp
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+coverage/
+.nyc_output/
+
+# Test files
+*_test.go
+*_test.js
+*_test.ts
+*.test
+*.spec.js
+*.spec.ts
+coverage.txt
+coverage.out
+
+# Build artifacts
+vendor/
+dist/
+build/
+bin/
+target/
+out/
+tmp/
+temp/
+
+# Development files
+Makefile
+benchmark/
+devtools/
+e2e/
+scripts/
+nginx/
+monitoring/
 *.bak
 *.backup
 *.orig
 *.rej
 *.sample
-.env
-.env.*
-!.env.example
-web/static/*
-!web/static/.gitkeep
+
+# Node modules (exclude from build)
+node_modules/
 frontend/node_modules/
 admin/node_modules/

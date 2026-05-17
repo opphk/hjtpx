@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"runtime"
 	"strings"
@@ -66,6 +68,42 @@ func (c *BenchmarkHTTPClient) DoRequest(method, endpoint string, body interface{
 	return resp.StatusCode, time.Since(start), nil
 }
 
+func (c *BenchmarkHTTPClient) DoRequestWithHeaders(method, endpoint string, body interface{}, headers map[string]string) (int, time.Duration, []byte, error) {
+	start := time.Now()
+
+	var reqBody []byte
+	if body != nil {
+		var err error
+		reqBody, err = json.Marshal(body)
+		if err != nil {
+			return 0, 0, nil, err
+		}
+	}
+
+	req, err := http.NewRequest(method, c.baseURL+endpoint, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return 0, time.Since(start), nil, err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, time.Since(start), nil, err
+	}
+
+	return resp.StatusCode, time.Since(start), bodyBytes, nil
+}
+
 func BenchmarkSliderGenerate(b *testing.B) {
 	client := NewBenchmarkHTTPClient(benchmarkBaseURL)
 
@@ -110,7 +148,7 @@ func BenchmarkSliderVerify(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/slider/verify", body)
+		statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/verify", body)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -162,7 +200,7 @@ func BenchmarkClickVerify(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/click/verify", body)
+		statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/verify", body)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -209,7 +247,7 @@ func BenchmarkImageVerify(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/image/verify", body)
+		statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/verify", body)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -266,7 +304,7 @@ func BenchmarkSliderVerifyParallel(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/slider/verify", body)
+			statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/verify", body)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -622,6 +660,103 @@ func BenchmarkSustainedLoad(b *testing.B) {
 	fmt.Printf("  Error Rate: %.2f%%\n", float64(failedRequests)/float64(totalRequests)*100)
 }
 
+func BenchmarkBurstLoad(b *testing.B) {
+	client := NewBenchmarkHTTPClient(benchmarkBaseURL)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	var wg sync.WaitGroup
+	var totalRequests int64
+	var successfulRequests int64
+	var failedRequests int64
+
+	for burst := 0; burst < 10; burst++ {
+		wg.Add(1)
+		go func(burstNum int) {
+			defer wg.Done()
+
+			for i := 0; i < 100; i++ {
+				body := map[string]interface{}{
+					"app_id": 1,
+					"length": 4,
+					"width":  120,
+					"height": 40,
+				}
+
+				statusCode, _, err := client.DoRequest("POST", "/api/v1/captcha/image/generate", body)
+				atomic.AddInt64(&totalRequests, 1)
+
+				if err != nil || (statusCode != http.StatusOK && statusCode != http.StatusCreated) {
+					atomic.AddInt64(&failedRequests, 1)
+				} else {
+					atomic.AddInt64(&successfulRequests, 1)
+				}
+			}
+		}(burst)
+	}
+
+	wg.Wait()
+
+	b.ReportMetric(float64(totalRequests), "total_requests")
+	b.ReportMetric(float64(successfulRequests), "successful_requests")
+	b.ReportMetric(float64(failedRequests), "failed_requests")
+}
+
+func BenchmarkRampUpLoad(b *testing.B) {
+	client := NewBenchmarkHTTPClient(benchmarkBaseURL)
+
+	concurrencyLevels := []int{10, 50, 100, 200, 500}
+	duration := 10 * time.Second
+
+	b.ResetTimer()
+
+	for _, concurrency := range concurrencyLevels {
+		b.Run(fmt.Sprintf("Concurrency-%d", concurrency), func(b *testing.B) {
+			var wg sync.WaitGroup
+			var totalRequests int64
+
+			stopChan := make(chan struct{})
+
+			for i := 0; i < concurrency; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+
+					ticker := time.NewTicker(10 * time.Millisecond)
+					defer ticker.Stop()
+
+					for {
+						select {
+						case <-ticker.C:
+							body := map[string]interface{}{
+								"app_id": 1,
+								"length": 4,
+								"width":  120,
+								"height": 40,
+							}
+
+							_, _, err := client.DoRequest("POST", "/api/v1/captcha/image/generate", body)
+							if err == nil {
+								atomic.AddInt64(&totalRequests, 1)
+							}
+
+						case <-stopChan:
+							return
+						}
+					}
+				}()
+			}
+
+			time.Sleep(duration)
+			close(stopChan)
+			wg.Wait()
+
+			fmt.Printf("Concurrency: %d, Total Requests: %d\n", concurrency, totalRequests)
+		})
+	}
+}
+
 func calculatePercentiles(latencies []time.Duration) (p50, p95, p99 time.Duration) {
 	if len(latencies) == 0 {
 		return 0, 0, 0
@@ -942,6 +1077,67 @@ func BenchmarkHTTPClientCreation(b *testing.B) {
 	}
 }
 
+func BenchmarkCapacityPlanner(b *testing.B) {
+	planner := NewCapacityPlanner(10000)
+
+	b.Run("Calculate Required Instances", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			planner.CalculateRequiredInstances(float64(1000 + i*100))
+		}
+	})
+
+	b.Run("Should Scale", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			planner.ShouldScale(float64(8000 + i*100))
+		}
+	})
+
+	b.Run("Estimate Cost", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			planner.EstimateCost(5+i, 24*time.Hour)
+		}
+	})
+}
+
+func BenchmarkDBOptimizer(b *testing.B) {
+	optimizer := NewDBOptimizer()
+
+	b.Run("Add Indexes", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = optimizer.AddIndexes()
+		}
+	})
+
+	b.Run("Create Composite Indexes", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = optimizer.CreateCompositeIndexes()
+		}
+	})
+}
+
+func BenchmarkCacheOptimizer(b *testing.B) {
+	optimizer := NewCacheOptimizer()
+
+	b.Run("Optimize TTL", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = optimizer.OptimizeTTL(int64(1000 + i*100))
+		}
+	})
+
+	b.Run("Generate Cache Key", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_ = optimizer.GenerateCacheKey("prefix", fmt.Sprintf("key_%d", i), "suffix")
+		}
+	})
+}
+
 func printSystemInfo() {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
@@ -953,4 +1149,309 @@ func printSystemInfo() {
 	fmt.Printf("  Goroutines: %d\n", runtime.NumGoroutine())
 	fmt.Printf("  Memory Alloc: %d MB\n", memStats.Alloc/1024/1024)
 	fmt.Printf("  Memory Sys: %d MB\n", memStats.Sys/1024/1024)
+}
+
+func TestPerformanceMetrics(t *testing.T) {
+	metrics := NewPerformanceMetrics("Test Scenario")
+
+	for i := 0; i < 1000; i++ {
+		latency := time.Duration(10+ i%100) * time.Millisecond
+		metrics.RecordLatency(latency)
+		if i%2 == 0 {
+			metrics.RecordSuccess()
+		} else {
+			metrics.RecordFailure()
+		}
+	}
+
+	metrics.CalculateFinalMetrics()
+
+	if metrics.TotalRequests != 1000 {
+		t.Errorf("Expected 1000 total requests, got %d", metrics.TotalRequests)
+	}
+
+	if metrics.SuccessfulRequests != 500 {
+		t.Errorf("Expected 500 successful requests, got %d", metrics.SuccessfulRequests)
+	}
+
+	if metrics.LatencyP50 == 0 {
+		t.Error("P50 latency should not be zero")
+	}
+
+	if metrics.LatencyP99 == 0 {
+		t.Error("P99 latency should not be zero")
+	}
+}
+
+func TestCapacityPlanner(t *testing.T) {
+	planner := NewCapacityPlanner(10000)
+
+	t.Run("Calculate Required Instances", func(t *testing.T) {
+		instances := planner.CalculateRequiredInstances(1000)
+		if instances != 10 {
+			t.Errorf("Expected 10 instances, got %d", instances)
+		}
+	})
+
+	t.Run("Should Scale", func(t *testing.T) {
+		shouldScale := planner.ShouldScale(8000)
+		if !shouldScale {
+			t.Error("Should scale at 80% utilization")
+		}
+	})
+
+	t.Run("Estimate Cost", func(t *testing.T) {
+		cost := planner.EstimateCost(5, 24*time.Hour)
+		if cost <= 0 {
+			t.Error("Cost should be positive")
+		}
+	})
+}
+
+func TestCacheOptimizer(t *testing.T) {
+	optimizer := NewCacheOptimizer()
+
+	t.Run("Optimize TTL", func(t *testing.T) {
+		ttl := optimizer.OptimizeTTL(5000)
+		if ttl == 0 {
+			t.Error("TTL should not be zero")
+		}
+	})
+
+	t.Run("Generate Cache Key", func(t *testing.T) {
+		key := optimizer.GenerateCacheKey("app", "user", "123")
+		if !strings.Contains(key, "hjtpx:cache:") {
+			t.Error("Key should contain prefix")
+		}
+	})
+
+	t.Run("Should Warmup", func(t *testing.T) {
+		optimizer.RecordHitRate(0.7)
+		if !optimizer.ShouldWarmup() {
+			t.Error("Should warmup when hit rate is below 0.8")
+		}
+	})
+}
+
+func TestQueryCache(t *testing.T) {
+	cache := NewQueryCache(100)
+
+	t.Run("Set and Get", func(t *testing.T) {
+		cache.Set("key1", "value1", 5*time.Minute)
+		val, exists := cache.Get("key1")
+		if !exists {
+			t.Error("Key should exist")
+		}
+		if val != "value1" {
+			t.Error("Value should match")
+		}
+	})
+
+	t.Run("Get Hit Rate", func(t *testing.T) {
+		cache.Clear()
+		cache.Set("key1", "value1", 5*time.Minute)
+		cache.Get("key1")
+		cache.Get("key1")
+		cache.Get("nonexistent")
+
+		hitRate := cache.GetHitRate()
+		if math.Abs(hitRate - 0.666) > 0.01 {
+			t.Errorf("Expected hit rate ~0.666, got %f", hitRate)
+		}
+	})
+}
+
+func TestRateLimiter(t *testing.T) {
+	limiter := NewRateLimiter(10, time.Minute)
+
+	t.Run("Allow Requests", func(t *testing.T) {
+		for i := 0; i < 10; i++ {
+			if !limiter.Allow("user1") {
+				t.Errorf("Request %d should be allowed", i+1)
+			}
+		}
+	})
+
+	t.Run("Block After Limit", func(t *testing.T) {
+		if limiter.Allow("user1") {
+			t.Error("Request should be blocked after limit")
+		}
+	})
+
+	t.Run("Get Remaining", func(t *testing.T) {
+		remaining := limiter.GetRemaining("user1")
+		if remaining != 0 {
+			t.Errorf("Expected 0 remaining, got %d", remaining)
+		}
+	})
+}
+
+func TestWorkerPool(t *testing.T) {
+	pool := NewWorkerPool(5, 100)
+	pool.Start()
+	defer pool.Stop()
+
+	t.Run("Submit Job", func(t *testing.T) {
+		pool.Submit(func() interface{} {
+			return "test_result"
+		})
+
+		select {
+		case <-pool.resultQueue:
+		case <-time.After(time.Second):
+			t.Error("Job should complete within timeout")
+		}
+	})
+
+	t.Run("Submit With Timeout", func(t *testing.T) {
+		res, ok := pool.SubmitWithTimeout(func() interface{} {
+			return "test_result"
+		}, time.Second)
+
+		if !ok {
+			t.Error("Job should complete within timeout")
+		}
+		if res != "test_result" {
+			t.Error("Result should match")
+		}
+	})
+}
+
+func TestConnectionPool(t *testing.T) {
+	pool := NewConnectionPool(100, 10, time.Hour)
+
+	t.Run("Acquire and Release", func(t *testing.T) {
+		pool.Acquire()
+		open, _ := pool.GetStats()
+		if open != 1 {
+			t.Errorf("Expected 1 open connection, got %d", open)
+		}
+
+		pool.Release()
+		open, _ = pool.GetStats()
+		if open != 0 {
+			t.Errorf("Expected 0 open connection after release, got %d", open)
+		}
+	})
+}
+
+func TestScenarioResult(t *testing.T) {
+	scenario := BenchmarkScenario{
+		Name:        "Test Scenario",
+		Description: "Test Description",
+		Endpoint:    "/api/v1/test",
+		Method:      "GET",
+		Body:        nil,
+		Concurrency: 10,
+		Duration:    10 * time.Second,
+		AppID:       1,
+	}
+
+	result := RunScenarioOnce(scenario)
+
+	if result.Metrics.TotalRequests != 1 {
+		t.Errorf("Expected 1 request, got %d", result.Metrics.TotalRequests)
+	}
+}
+
+func TestSystemInfo(t *testing.T) {
+	info := GetSystemInfo()
+
+	if info.CPUCores <= 0 {
+		t.Error("CPU cores should be positive")
+	}
+
+	if info.GoVersion == "" {
+		t.Error("Go version should not be empty")
+	}
+
+	if info.OS == "" {
+		t.Error("OS should not be empty")
+	}
+
+	if info.NumGoroutine <= 0 {
+		t.Error("Goroutine count should be positive")
+	}
+}
+
+func TestGenerateReport(t *testing.T) {
+	metrics := []*PerformanceMetrics{
+		NewPerformanceMetrics("Test 1"),
+		NewPerformanceMetrics("Test 2"),
+	}
+
+	for i := 0; i < 100; i++ {
+		metrics[0].RecordLatency(time.Duration(10+i) * time.Millisecond)
+		metrics[0].RecordSuccess()
+		metrics[1].RecordLatency(time.Duration(20+i) * time.Millisecond)
+		metrics[1].RecordSuccess()
+	}
+
+	metrics[0].CalculateFinalMetrics()
+	metrics[1].CalculateFinalMetrics()
+
+	report := GenerateReport(metrics)
+
+	if report.PerformanceGoals.TargetQPS != 10000 {
+		t.Errorf("Expected target QPS 10000, got %f", report.PerformanceGoals.TargetQPS)
+	}
+
+	if report.PerformanceGoals.TargetP99Latency != 50*time.Millisecond {
+		t.Errorf("Expected target P99 latency 50ms, got %v", report.PerformanceGoals.TargetP99Latency)
+	}
+
+	if len(report.Recommendations) == 0 {
+		t.Error("Report should have recommendations")
+	}
+}
+
+func TestPerformanceAnalysis(t *testing.T) {
+	goals := PerformanceGoals{
+		TargetQPS:        10000,
+		TargetP99Latency: 50 * time.Millisecond,
+		TargetErrorRate:  1.0,
+	}
+
+	metrics := []*PerformanceMetrics{
+		{
+			Name:     "Test",
+			QPS:      5000,
+			LatencyP99: 100 * time.Millisecond,
+			ErrorRate: 0.5,
+		},
+	}
+
+	analysis := analyzePerformance(metrics, goals)
+
+	if analysis.OverallScore == 0 {
+		t.Error("Overall score should not be zero")
+	}
+
+	if len(analysis.Bottlenecks) == 0 {
+		t.Error("Should identify bottlenecks")
+	}
+}
+
+func TestRunScenariosByCategory(t *testing.T) {
+	scenarios := NormalScenarios
+	if len(scenarios) == 0 {
+		t.Error("Normal scenarios should not be empty")
+	}
+
+	scenarios = PeakScenarios
+	if len(scenarios) == 0 {
+		t.Error("Peak scenarios should not be empty")
+	}
+
+	scenarios = AbnormalScenarios
+	if len(scenarios) == 0 {
+		t.Error("Abnormal scenarios should not be empty")
+	}
+}
+
+func TestRunProgressiveBenchmark(t *testing.T) {
+	concurrencyLevels := []int{10, 50, 100, 200, 500}
+	if len(concurrencyLevels) != 5 {
+		t.Errorf("Expected 5 concurrency levels, got %d", len(concurrencyLevels))
+	}
 }

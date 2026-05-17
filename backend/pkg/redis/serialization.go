@@ -251,32 +251,6 @@ func (cpm *ConnectionPoolMonitor) Close() {
 	cpm.cancel()
 }
 
-type PerformanceOptimizer struct {
-	serializer      *OptimizedSerializer
-	poolMonitor     *ConnectionPoolMonitor
-	batchOperator   *BatchOperator
-}
-
-func NewPerformanceOptimizer(client goredis.Cmdable) *PerformanceOptimizer {
-	return &PerformanceOptimizer{
-		serializer:    NewOptimizedSerializer(),
-		poolMonitor:   NewConnectionPoolMonitor(client, 10*time.Second),
-		batchOperator: NewBatchOperator(client, 100),
-	}
-}
-
-func (po *PerformanceOptimizer) GetSerializer() *OptimizedSerializer {
-	return po.serializer
-}
-
-func (po *PerformanceOptimizer) GetBatchOperator() *BatchOperator {
-	return po.batchOperator
-}
-
-func (po *PerformanceOptimizer) Close() {
-	po.poolMonitor.Close()
-}
-
 type LazyLoader struct {
 	cache     *EnhancedCache
 	loader    func(ctx context.Context, key string) (interface{}, error)
@@ -440,19 +414,4 @@ func (atm *AdaptiveTtlManager) GetTtl(key string) time.Duration {
 
 func (atm *AdaptiveTtlManager) Reset() {
 	atm.accessCounts = &sync.Map{}
-}
-
-var (
-	globalOptimizer *PerformanceOptimizer
-	globalOptimizerOnce sync.Once
-)
-
-func InitPerformanceOptimizer(client goredis.Cmdable) {
-	globalOptimizerOnce.Do(func() {
-		globalOptimizer = NewPerformanceOptimizer(client)
-	})
-}
-
-func GetPerformanceOptimizer() *PerformanceOptimizer {
-	return globalOptimizer
 }

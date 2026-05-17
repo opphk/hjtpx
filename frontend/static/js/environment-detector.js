@@ -5,7 +5,9 @@ class EnvironmentDetector {
             sampleRate: 0.3,
             chainCount: 12,
             enableAll: true,
-            sessionId: null
+            sessionId: null,
+            antiDebug: true,
+            encryption: true
         }, options);
         this.results = {};
         this.riskScore = 0;
@@ -44,6 +46,245 @@ class EnvironmentDetector {
             gpu: 6,
             speech: 3
         };
+        this._debugMonitor = null;
+        this._initAntiDebug();
+    }
+
+    _initAntiDebug() {
+        if (!this.options.antiDebug) return;
+        
+        this._debugMonitor = {
+            debuggerDetectionActive: false,
+            consoleMonitorActive: false,
+            breakpointMonitorActive: false,
+            screenshotProtectionActive: false,
+            events: []
+        };
+        
+        this._setupDebuggerDetection();
+        this._setupConsoleDetection();
+        this._setupBreakpointDetection();
+        this._setupScreenshotProtection();
+    }
+
+    _setupDebuggerDetection() {
+        const _t = this;
+        const _checkDevTools = function() {
+            const _threshold = 160;
+            const _w = window.outerWidth - window.innerWidth;
+            const _h = window.outerHeight - window.innerHeight;
+            
+            if ((_w > _threshold) || (_h > _threshold)) {
+                _t._reportDebugEvent('devtools_opened', 'high', 'Developer tools detected via dimension analysis');
+                return true;
+            }
+            
+            const _dateBefore = Date.now();
+            debugger;
+            const _dateAfter = Date.now();
+            
+            if (_dateAfter - _dateBefore > 100) {
+                _t._reportDebugEvent('debugger_keyword', 'critical', 'debugger keyword execution detected');
+                return true;
+            }
+            
+            return false;
+        };
+        
+        setInterval(_checkDevTools, 2000);
+    }
+
+    _setupConsoleDetection() {
+        const _t = this;
+        const _origConsole = {
+            log: console.log.bind(console),
+            warn: console.warn.bind(console),
+            error: console.error.bind(console),
+            info: console.info.bind(console),
+            debug: console.debug.bind(console)
+        };
+        
+        const _interceptors = ['log', 'warn', 'error', 'info', 'debug', 'table', 'dir', 'dirxml'];
+        
+        _interceptors.forEach(function(_m) {
+            if (console[_m]) {
+                console[_m] = function() {
+                    _t._reportDebugEvent('console_activity', 'medium', 'Console method ' + _m + ' invoked');
+                    _origConsole[_m].apply(console, arguments);
+                };
+            }
+        });
+        
+        Object.defineProperty(console, 'commandLineAPI', {
+            get: function() {
+                _t._reportDebugEvent('cli_access', 'high', 'Console command line API accessed');
+                return undefined;
+            }
+        });
+    }
+
+    _setupBreakpointDetection() {
+        const _t = this;
+        const _origFetch = window.fetch;
+        const _origXHR = window.XMLHttpRequest;
+        const _origWebSocket = window.WebSocket;
+        
+        if (_origFetch) {
+            window.fetch = function() {
+                const _args = arguments;
+                _t._monitorNetworkCall(_args);
+                return _origFetch.apply(this, _args);
+            };
+        }
+        
+        if (_origXHR) {
+            window.XMLHttpRequest = function() {
+                const _xhr = new _origXHR();
+                const _origOpen = _xhr.open.bind(_xhr);
+                const _origSend = _xhr.send.bind(_xhr);
+                
+                _xhr.open = function() {
+                    _t._monitorXHRCall(arguments);
+                    return _origOpen.apply(this, arguments);
+                };
+                
+                _xhr.send = function() {
+                    _t._monitorXHRSend(arguments);
+                    return _origSend.apply(this, arguments);
+                };
+                
+                return _xhr;
+            };
+        }
+    }
+
+    _monitorNetworkCall(args) {
+        if (args && args[0] && typeof args[0] === 'string') {
+            const _url = args[0];
+            if (_url.includes('/debug') || _url.includes('/internal') || _url.includes('/admin')) {
+                this._reportDebugEvent('suspicious_network', 'high', 'Suspicious API call: ' + _url);
+            }
+        }
+    }
+
+    _monitorXHRCall(args) {
+        if (args && args[1]) {
+            const _method = args[0];
+            const _url = args[1];
+            if (_url && _url.includes) {
+                if (_url.includes('debug') || _url.includes('source')) {
+                    this._reportDebugEvent('xhr_debug', 'high', 'XHR to debug endpoint: ' + _url);
+                }
+            }
+        }
+    }
+
+    _monitorXHRSend(args) {
+    }
+
+    _setupScreenshotProtection() {
+        if (!this.options.antiDebug) return;
+        
+        const _t = this;
+        
+        if (HTMLCanvasElement && HTMLCanvasElement.prototype) {
+            const _origToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            const _origToBlob = HTMLCanvasElement.prototype.toBlob;
+            
+            HTMLCanvasElement.prototype.toDataURL = function() {
+                if (document.hidden || document.webkitHidden) {
+                    _t._reportDebugEvent('screenshot_blocked', 'high', 'Screenshot attempt while page hidden');
+                    throw new Error('Screenshot blocked');
+                }
+                return _origToDataURL.apply(this, arguments);
+            };
+            
+            if (_origToBlob) {
+                HTMLCanvasElement.prototype.toBlob = function() {
+                    if (document.hidden || document.webkitHidden) {
+                        _t._reportDebugEvent('screenshot_blocked', 'high', 'Blob capture attempt while page hidden');
+                        throw new Error('Screenshot blocked');
+                    }
+                    return _origToBlob.apply(this, arguments);
+                };
+            }
+        }
+        
+        document.addEventListener('webkitvisibilitychange', function() {
+            if (document.webkitHidden) {
+                _t._reportDebugEvent('page_hidden', 'low', 'Page became hidden - potential screenshot context');
+            }
+        });
+        
+        document.addEventListener('copy', function(e) {
+            if (document.webkitHidden) {
+                e.preventDefault();
+                _t._reportDebugEvent('copy_blocked', 'medium', 'Copy blocked while page hidden');
+                return false;
+            }
+        });
+        
+        document.addEventListener('contextmenu', function(e) {
+            if (document.webkitHidden) {
+                e.preventDefault();
+                _t._reportDebugEvent('context_menu_blocked', 'medium', 'Context menu blocked while page hidden');
+                return false;
+            }
+        });
+    }
+
+    _reportDebugEvent(type, severity, details) {
+        if (!this._debugMonitor) return;
+        
+        const _event = {
+            type: type,
+            severity: severity,
+            details: details,
+            timestamp: Date.now()
+        };
+        
+        this._debugMonitor.events.push(_event);
+        
+        if (this._debugMonitor.events.length > 50) {
+            this._debugMonitor.events.shift();
+        }
+        
+        if (this._shouldBlock(type, severity)) {
+            this._handleBlockingAction(type);
+        }
+    }
+
+    _shouldBlock(type, severity) {
+        const _criticalTypes = ['debugger_keyword', 'devtools_opened'];
+        const _highSeverityActions = ['block', 'disconnect'];
+        
+        if (_criticalTypes.includes(type) && severity === 'critical') {
+            return true;
+        }
+        
+        return false;
+    }
+
+    _handleBlockingAction(type) {
+        switch(type) {
+            case 'debugger_keyword':
+            case 'devtools_opened':
+                document.documentElement.style.display = 'none';
+                document.body.innerHTML = '';
+                document.body.style.background = '#000';
+                console.clear();
+                break;
+        }
+    }
+
+    getDebugEvents() {
+        return this._debugMonitor ? this._debugMonitor.events : [];
+    }
+
+    clearDebugEvents() {
+        if (this._debugMonitor) {
+            this._debugMonitor.events = [];
+        }
     }
 
     getDetectionMethods() {
@@ -122,7 +363,8 @@ class EnvironmentDetector {
             chain_order: Object.values(methodAliases),
             risk_score: this.riskScore,
             duration_ms: Math.round(duration),
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            debug_events: this.getDebugEvents()
         };
     }
 
@@ -136,6 +378,20 @@ class EnvironmentDetector {
                 const weight = this.weights[key] || 5;
                 weightedScore += result.score * weight;
                 totalWeight += weight;
+            }
+        }
+
+        if (this._debugMonitor && this._debugMonitor.events.length > 0) {
+            const _criticalCount = this._debugMonitor.events.filter(e => e.severity === 'critical').length;
+            const _highCount = this._debugMonitor.events.filter(e => e.severity === 'high').length;
+            
+            if (_criticalCount > 0) {
+                weightedScore += _criticalCount * 30;
+                totalWeight += _criticalCount;
+            }
+            if (_highCount > 0) {
+                weightedScore += _highCount * 15;
+                totalWeight += _highCount;
             }
         }
 
@@ -689,10 +945,10 @@ class EnvironmentDetector {
             ctx.fillRect(125, 1, 62, 20);
             ctx.fillStyle = '#069';
             ctx.font = '11pt Arial';
-            ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 2, 15);
+            ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 2, 15);
             ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
             ctx.font = '18pt Arial';
-            ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 4, 45);
+            ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 4, 45);
 
             ctx.globalCompositeOperation = 'multiply';
             ctx.fillStyle = 'rgb(255,0,255)';
@@ -1424,11 +1680,252 @@ class EnvironmentDetector {
         return {
             risk_score: this.riskScore,
             chain_count: this.detectionChain.length,
-            results: this.results
+            results: this.results,
+            debug_events: this.getDebugEvents()
         };
+    }
+}
+
+class CryptoObfuscator {
+    constructor(options = {}) {
+        this.options = Object.assign({
+            level: 3,
+            encodeStrings: true,
+            scrambleVariables: true,
+            injectDeadCode: true,
+            enableControlFlow: true
+        }, options);
+        
+        this._key = this._generateKey();
+        this._variableMap = new Map();
+        this._functionMap = new Map();
+    }
+
+    _generateKey() {
+        const _chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let _key = '';
+        for (let _i = 0; _i < 32; _i++) {
+            _key += _chars.charAt(Math.floor(Math.random() * _chars.length));
+        }
+        return _key;
+    }
+
+    _obfuscateString(str) {
+        return 'atob("' + btoa(unescape(encodeURIComponent(str))) + '")';
+    }
+
+    _generateObfuscatedName(prefix) {
+        const _chars = 'abcdefghijklmnopqrstuvwxyz';
+        let _name = prefix || '_';
+        for (let _i = 0; _i < 5; _i++) {
+            _name += _chars.charAt(Math.floor(Math.random() * _chars.length));
+        }
+        return _name;
+    }
+
+    _injectDeadCode() {
+        const _patterns = [
+            '(function(){var _x=Date.now();if(_x%3===0){return true;}})();',
+            'var _p=Math.random();if(_p>0.999){console.log("");}'
+        ];
+        return _patterns[Math.floor(Math.random() * _patterns.length)];
+    }
+
+    obfuscate(code) {
+        if (!code || typeof code !== 'string') {
+            return code;
+        }
+
+        let _result = code;
+
+        if (this.options.encodeStrings) {
+            const _stringRegex = /"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'/g;
+            let _match;
+            let _index = 0;
+            const _strings = [];
+            
+            while ((_match = _stringRegex.exec(code)) !== null) {
+                _strings.push(_match[0]);
+            }
+            
+            _strings.forEach(_str => {
+                _result = _result.replace(_str, '_S' + _index + '_');
+                _index++;
+            });
+            
+            _strings.forEach((_str, _i) => {
+                const _obf = this._obfuscateString(_str.slice(1, -1));
+                _result = _result.replace('_S' + _i + '_', _obf);
+            });
+        }
+
+        if (this.options.scrambleVariables) {
+            const _varRegex = /\b(var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\b/g;
+            let _varMatch;
+            const _vars = [];
+            
+            while ((_varMatch = _varRegex.exec(code)) !== null) {
+                if (!this._variableMap.has(_varMatch[2])) {
+                    this._variableMap.set(_varMatch[2], this._generateObfuscatedName('_'));
+                }
+                _vars.push({ original: _varMatch[2], obfuscated: this._variableMap.get(_varMatch[2]) });
+            }
+            
+            _vars.forEach(_v => {
+                const _regex = new RegExp('\\b' + _v.original + '\\b', 'g');
+                _result = _result.replace(_regex, _v.obfuscated);
+            });
+        }
+
+        if (this.options.injectDeadCode) {
+            _result += ';' + this._injectDeadCode();
+        }
+
+        if (this.options.enableControlFlow) {
+            const _flowWrapper = `(function(_ctx){var _s=0;_ctx._dispatch=function(){switch(_s){case 0:${_result};_s=1;break;case 1:return;}};return _ctx;})(this);`;
+            _result = _flowWrapper;
+        }
+
+        return _result;
+    }
+
+    minify(code) {
+        if (!code) return code;
+        
+        let _result = code;
+        _result = _result.replace(/\s+/g, ' ');
+        _result = _result.replace(/\s*([{};,=+\-*/<>!?&|:])\s*/g, '$1');
+        _result = _result.replace(/;\}/g, '}');
+        _result = _result.replace(/\{;/g, '{');
+        
+        return _result;
+    }
+}
+
+class RequestEncryptor {
+    constructor(publicKey) {
+        this._publicKey = publicKey;
+        this._sessionKey = null;
+        this._sessionId = null;
+    }
+
+    async _generateSessionKey() {
+        const _key = new Uint8Array(32);
+        crypto.getRandomValues(_key);
+        return Array.from(_key).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async _encryptWithAES(data, key) {
+        const _encoder = new TextEncoder();
+        const _data = _encoder.encode(data);
+        const _keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            this._hexToBytes(key),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveBits', 'deriveKey']
+        );
+        
+        const _cryptoKey = await crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: new Uint8Array(16), iterations: 100000, hash: 'SHA-256' },
+            _keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+        
+        const _iv = crypto.getRandomValues(new Uint8Array(12));
+        const _encrypted = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: _iv },
+            _cryptoKey,
+            _data
+        );
+        
+        const _result = new Uint8Array(_iv.length + _encrypted.byteLength);
+        _result.set(_iv, 0);
+        _result.set(new Uint8Array(_encrypted), _iv.length);
+        
+        return this._bytesToHex(_result);
+    }
+
+    _hexToBytes(hex) {
+        const _bytes = new Uint8Array(hex.length / 2);
+        for (let _i = 0; _i < hex.length; _i += 2) {
+            _bytes[_i / 2] = parseInt(hex.substr(_i, 2), 16);
+        }
+        return _bytes;
+    }
+
+    _bytesToHex(bytes) {
+        return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async encryptRequest(data) {
+        if (!this._sessionKey) {
+            this._sessionKey = await this._generateSessionKey();
+            this._sessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+        
+        const _encrypted = await this._encryptWithAES(JSON.stringify(data), this._sessionKey);
+        
+        return {
+            session_id: this._sessionId,
+            data: _encrypted,
+            timestamp: Date.now(),
+            checksum: await this._computeChecksum(_encrypted)
+        };
+    }
+
+    async _computeChecksum(data) {
+        const _encoder = new TextEncoder();
+        const _data = _encoder.encode(data);
+        const _hashBuffer = await crypto.subtle.digest('SHA-256', _data);
+        return this._bytesToHex(new Uint8Array(_hashBuffer));
+    }
+
+    async decryptResponse(encryptedResponse) {
+        if (!this._sessionKey) {
+            throw new Error('No session key available');
+        }
+        
+        const _decrypted = await this._decryptWithAES(encryptedResponse.data, this._sessionKey);
+        return JSON.parse(_decrypted);
+    }
+
+    async _decryptWithAES(data, key) {
+        const _bytes = this._hexToBytes(data);
+        const _iv = _bytes.slice(0, 12);
+        const _encrypted = _bytes.slice(12);
+        
+        const _keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            this._hexToBytes(key),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveBits', 'deriveKey']
+        );
+        
+        const _cryptoKey = await crypto.subtle.deriveKey(
+            { name: 'PBKDF2', salt: new Uint8Array(16), iterations: 100000, hash: 'SHA-256' },
+            _keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+        
+        const _decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: _iv },
+            _cryptoKey,
+            _encrypted
+        );
+        
+        const _decoder = new TextDecoder();
+        return _decoder.decode(_decrypted);
     }
 }
 
 if (typeof window !== 'undefined') {
     window.EnvironmentDetector = EnvironmentDetector;
+    window.CryptoObfuscator = CryptoObfuscator;
+    window.RequestEncryptor = RequestEncryptor;
 }

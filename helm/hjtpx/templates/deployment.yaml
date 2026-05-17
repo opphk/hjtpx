@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hjtpx.fullname" . }}
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hjtpx.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "hjtpx.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- include "hjtpx.podAnnotations" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "hjtpx.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: GIN_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-config
+                  key: GIN_MODE
+            - name: SERVER_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-config
+                  key: SERVER_PORT
+            - name: TZ
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-config
+                  key: TZ
+            - name: POSTGRES_HOST
+              value: {{ include "hjtpx.fullname" . }}-postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: hjtpx_db
+            - name: POSTGRES_SSLMODE
+              value: disable
+            - name: REDIS_HOST
+              value: {{ include "hjtpx.fullname" . }}-redis
+            - name: REDIS_PORT
+              value: "6379"
+            {{- if .Values.secrets.REDIS_PASSWORD }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-secrets
+                  key: REDIS_PASSWORD
+            {{- end }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "hjtpx.fullname" . }}-secrets
+                  key: JWT_SECRET
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 10 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 10 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: app-logs
+              mountPath: /var/log/hjtpx
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: app-logs
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hjtpx.fullname" . }}
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "hjtpx.selectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 8080
+      protocol: TCP
+      name: http
+{{- if .Values.service.httpsPort }}
+    - port: {{ .Values.service.httpsPort }}
+      targetPort: 8443
+      protocol: TCP
+      name: https
+{{- end }}

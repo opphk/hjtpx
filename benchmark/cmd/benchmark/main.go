@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,25 @@ const (
 	BenchmarkBaseURL = "http://localhost:8080"
 )
 
+var (
+	scenarioCategory string
+	concurrency      int
+	duration         int
+	outputFormat     string
+	runProgressive   bool
+)
+
+func init() {
+	flag.StringVar(&scenarioCategory, "category", "all", "Benchmark category: normal, peak, abnormal, or all")
+	flag.IntVar(&concurrency, "concurrency", 100, "Number of concurrent workers")
+	flag.IntVar(&duration, "duration", 60, "Test duration in seconds")
+	flag.StringVar(&outputFormat, "format", "text", "Output format: text, json, or html")
+	flag.BoolVar(&runProgressive, "progressive", false, "Run progressive benchmark with increasing concurrency")
+}
+
 func main() {
+	flag.Parse()
+
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Println("PERFORMANCE BENCHMARK SUITE")
 	fmt.Println(strings.Repeat("=", 80))
@@ -26,6 +45,9 @@ func main() {
 	fmt.Printf("Go Version: %s\n", runtime.Version())
 	fmt.Printf("CPU Cores: %d\n", runtime.NumCPU())
 	fmt.Printf("Initial Goroutines: %d\n", runtime.NumGoroutine())
+	fmt.Printf("Category: %s\n", scenarioCategory)
+	fmt.Printf("Concurrency: %d\n", concurrency)
+	fmt.Printf("Duration: %ds\n", duration)
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Println()
 
@@ -40,11 +62,17 @@ func main() {
 		fmt.Println("Starting benchmarks anyway...")
 	}
 
-	results := runAllBenchmarks()
+	var results []*benchmark.ScenarioResult
+
+	if runProgressive {
+		fmt.Println("Running Progressive Benchmark...")
+		results = runProgressiveBenchmark()
+	} else {
+		results = runBenchmarksByCategory()
+	}
 
 	printSummary(results)
-
-	generateJSONReport(results)
+	generateReports(results)
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("Benchmark completed at:", time.Now().Format(time.RFC3339))
@@ -53,7 +81,7 @@ func main() {
 
 func checkServiceHealth() bool {
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(BenchmarkBaseURL + "/api/v1/health")
+	resp, err := client.Get(BenchmarkBaseURL + "/health")
 	if err != nil {
 		return false
 	}
@@ -61,11 +89,28 @@ func checkServiceHealth() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func runAllBenchmarks() []*benchmark.ScenarioResult {
-	results := make([]*benchmark.ScenarioResult, 0, len(benchmark.Scenarios))
+func runBenchmarksByCategory() []*benchmark.ScenarioResult {
+	var scenarios []benchmark.BenchmarkScenario
 
-	for i, scenario := range benchmark.Scenarios {
-		fmt.Printf("\n[%d/%d] Running: %s\n", i+1, len(benchmark.Scenarios), scenario.Name)
+	switch scenarioCategory {
+	case "normal":
+		scenarios = benchmark.NormalScenarios
+		fmt.Println("Running Normal Load Scenarios...")
+	case "peak":
+		scenarios = benchmark.PeakScenarios
+		fmt.Println("Running Peak Load Scenarios...")
+	case "abnormal":
+		scenarios = benchmark.AbnormalScenarios
+		fmt.Println("Running Abnormal Condition Scenarios...")
+	default:
+		scenarios = benchmark.Scenarios
+		fmt.Println("Running All Scenarios...")
+	}
+
+	results := make([]*benchmark.ScenarioResult, 0, len(scenarios))
+
+	for i, scenario := range scenarios {
+		fmt.Printf("\n[%d/%d] Running: %s\n", i+1, len(scenarios), scenario.Name)
 		fmt.Printf("Description: %s\n", scenario.Description)
 		fmt.Printf("Concurrency: %d | Duration: %v\n", scenario.Concurrency, scenario.Duration)
 
@@ -75,19 +120,62 @@ func runAllBenchmarks() []*benchmark.ScenarioResult {
 		metrics := result.Metrics
 		fmt.Printf("Results:\n")
 		fmt.Printf("  - Total Requests: %d\n", metrics.TotalRequests)
+		fmt.Printf("  - Successful: %d | Failed: %d\n", metrics.SuccessfulRequests, metrics.FailedRequests)
 		fmt.Printf("  - QPS: %.2f\n", metrics.QPS)
+		fmt.Printf("  - P50 Latency: %v\n", metrics.LatencyP50)
 		fmt.Printf("  - P95 Latency: %v\n", metrics.LatencyP95)
+		fmt.Printf("  - P99 Latency: %v\n", metrics.LatencyP99)
 		fmt.Printf("  - Error Rate: %.2f%%\n", metrics.ErrorRate)
 
 		if len(result.Errors) > 0 {
 			fmt.Printf("  - Errors: %d\n", len(result.Errors))
 		}
 
-		if i < len(benchmark.Scenarios)-1 {
+		if i < len(scenarios)-1 {
 			pauseDuration := 5 * time.Second
 			fmt.Printf("\nPausing %v before next scenario...\n", pauseDuration)
 			time.Sleep(pauseDuration)
 		}
+	}
+
+	return results
+}
+
+func runProgressiveBenchmark() []*benchmark.ScenarioResult {
+	results := make([]*benchmark.ScenarioResult, 0)
+
+	concurrencyLevels := []int{10, 50, 100, 200, 500}
+
+	for _, conc := range concurrencyLevels {
+		scenario := benchmark.BenchmarkScenario{
+			Name:        fmt.Sprintf("Image Captcha Generate - Concurrency %d", conc),
+			Description: fmt.Sprintf("Testing with %d concurrent workers", conc),
+			Endpoint:    "/api/v1/captcha/image/generate",
+			Method:      "POST",
+			Body: map[string]interface{}{
+				"app_id": 1,
+				"length": 4,
+				"width":  120,
+				"height": 40,
+			},
+			Concurrency: conc,
+			Duration:    30 * time.Second,
+			AppID:       1,
+		}
+
+		fmt.Printf("\nRunning: %s\n", scenario.Name)
+		fmt.Printf("Concurrency: %d | Duration: %v\n", conc, scenario.Duration)
+
+		result := benchmark.RunScenario(scenario)
+		results = append(results, result)
+
+		metrics := result.Metrics
+		fmt.Printf("Results:\n")
+		fmt.Printf("  - Total Requests: %d\n", metrics.TotalRequests)
+		fmt.Printf("  - QPS: %.2f\n", metrics.QPS)
+		fmt.Printf("  - P99 Latency: %v\n", metrics.LatencyP99)
+
+		time.Sleep(5 * time.Second)
 	}
 
 	return results
@@ -101,6 +189,8 @@ func printSummary(results []*benchmark.ScenarioResult) {
 	totalQPS := 0.0
 	totalRequests := int64(0)
 	totalErrors := int64(0)
+	passedScenarios := 0
+	totalScenarios := len(results)
 
 	for _, result := range results {
 		metrics := result.Metrics
@@ -109,21 +199,37 @@ func printSummary(results []*benchmark.ScenarioResult) {
 		totalErrors += metrics.FailedRequests
 
 		status := "PASS"
-		if metrics.QPS < 5000 || metrics.LatencyP99 > 100*time.Millisecond || metrics.ErrorRate > 1.0 {
-			status = "FAIL"
+		targetMet := metrics.QPS >= 10000 && metrics.LatencyP99 <= 50*time.Millisecond && metrics.ErrorRate <= 1.0
+
+		if !targetMet {
+			status = "WARN"
+			if metrics.QPS < 5000 || metrics.ErrorRate > 5.0 {
+				status = "FAIL"
+			}
+		} else {
+			passedScenarios++
 		}
 
 		fmt.Printf("\n[%s] %s\n", status, metrics.Name)
-		fmt.Printf("  QPS: %.2f (target: >5000)\n", metrics.QPS)
-		fmt.Printf("  P99 Latency: %v (target: <100ms)\n", metrics.LatencyP99)
-		fmt.Printf("  Error Rate: %.2f%%\n", metrics.ErrorRate)
+		fmt.Printf("  QPS: %.2f (target: >10000)\n", metrics.QPS)
+		fmt.Printf("  P99 Latency: %v (target: <50ms)\n", metrics.LatencyP99)
+		fmt.Printf("  Error Rate: %.2f%% (target: <1%%)\n", metrics.ErrorRate)
 		fmt.Printf("  Memory: %d bytes\n", metrics.MemoryUsage)
 	}
 
 	fmt.Println("\n" + strings.Repeat("-", 80))
+
+	totalLatency := time.Duration(0)
+	for _, r := range results {
+		totalLatency += r.Metrics.LatencyP99
+	}
+	avgP99Latency := totalLatency / time.Duration(len(results))
+
 	fmt.Printf("\nTotal Combined QPS: %.2f\n", totalQPS)
+	fmt.Printf("Average P99 Latency: %v\n", avgP99Latency)
 	fmt.Printf("Total Requests: %d\n", totalRequests)
 	fmt.Printf("Total Errors: %d\n", totalErrors)
+	fmt.Printf("Scenarios Passed: %d/%d\n", passedScenarios, totalScenarios)
 
 	if totalRequests > 0 {
 		overallErrorRate := float64(totalErrors) / float64(totalRequests) * 100
@@ -131,6 +237,22 @@ func printSummary(results []*benchmark.ScenarioResult) {
 	}
 
 	report := benchmark.GenerateReport(collectMetrics(results))
+
+	fmt.Println("\n" + strings.Repeat("-", 80))
+	fmt.Println("PERFORMANCE ANALYSIS")
+	fmt.Println(strings.Repeat("-", 80))
+	fmt.Printf("Overall Score: %.2f%%\n", report.Analysis.OverallScore)
+	fmt.Printf("QPS Score: %.2f%%\n", report.Analysis.QPSScore)
+	fmt.Printf("Latency Score: %.2f%%\n", report.Analysis.LatencyScore)
+	fmt.Printf("Error Rate Score: %.2f%%\n", report.Analysis.ErrorRateScore)
+
+	if len(report.Analysis.Bottlenecks) > 0 {
+		fmt.Println("\nBottlenecks Identified:")
+		for _, bottleneck := range report.Analysis.Bottlenecks {
+			fmt.Printf("  - %s\n", bottleneck)
+		}
+	}
+
 	fmt.Println("\n" + strings.Repeat("-", 80))
 	fmt.Println("RECOMMENDATIONS")
 	fmt.Println(strings.Repeat("-", 80))
@@ -148,11 +270,12 @@ func collectMetrics(results []*benchmark.ScenarioResult) []*benchmark.Performanc
 }
 
 type ReportData struct {
-	GeneratedAt    time.Time                     `json:"generated_at"`
-	SystemInfo     benchmark.SystemInfo          `json:"system_info"`
-	Results        []ScenarioResultData          `json:"results"`
-	Summary        SummaryData                   `json:"summary"`
-	Recommendations []string                      `json:"recommendations"`
+	GeneratedAt     time.Time                      `json:"generated_at"`
+	SystemInfo      benchmark.SystemInfo           `json:"system_info"`
+	Results         []ScenarioResultData           `json:"results"`
+	Summary         SummaryData                     `json:"summary"`
+	Recommendations []string                       `json:"recommendations"`
+	Analysis        benchmark.PerformanceAnalysis   `json:"analysis"`
 }
 
 type ScenarioResultData struct {
@@ -160,27 +283,28 @@ type ScenarioResultData struct {
 	Description        string  `json:"description"`
 	TotalRequests      int64   `json:"total_requests"`
 	SuccessfulRequests int64   `json:"successful_requests"`
-	FailedRequests     int64   `json:"failed_requests"`
-	QPS                float64 `json:"qps"`
-	LatencyP50         string  `json:"latency_p50"`
-	LatencyP95         string  `json:"latency_p95"`
-	LatencyP99         string  `json:"latency_p99"`
-	AvgLatency         string  `json:"avg_latency"`
-	ErrorRate          float64 `json:"error_rate"`
-	MemoryUsage        uint64  `json:"memory_usage"`
-	Duration           string  `json:"duration"`
+	FailedRequests    int64   `json:"failed_requests"`
+	QPS               float64 `json:"qps"`
+	LatencyP50        string  `json:"latency_p50"`
+	LatencyP95        string  `json:"latency_p95"`
+	LatencyP99        string  `json:"latency_p99"`
+	AvgLatency        string  `json:"avg_latency"`
+	ErrorRate         float64 `json:"error_rate"`
+	MemoryUsage       uint64  `json:"memory_usage"`
+	Duration          string  `json:"duration"`
 }
 
 type SummaryData struct {
-	TotalQPS         float64 `json:"total_qps"`
-	TotalRequests    int64   `json:"total_requests"`
-	TotalErrors      int64   `json:"total_errors"`
-	OverallErrorRate float64 `json:"overall_error_rate"`
-	ScenariosPassed  int     `json:"scenarios_passed"`
-	ScenariosFailed  int     `json:"scenarios_failed"`
+	TotalQPS          float64 `json:"total_qps"`
+	TotalRequests     int64   `json:"total_requests"`
+	TotalErrors       int64   `json:"total_errors"`
+	OverallErrorRate  float64 `json:"overall_error_rate"`
+	ScenariosPassed   int     `json:"scenarios_passed"`
+	ScenariosFailed   int     `json:"scenarios_failed"`
+	AverageP99Latency string  `json:"average_p99_latency"`
 }
 
-func generateJSONReport(results []*benchmark.ScenarioResult) {
+func generateReports(results []*benchmark.ScenarioResult) {
 	reportData := ReportData{
 		GeneratedAt: time.Now(),
 		SystemInfo:  benchmark.GetSystemInfo(),
@@ -191,14 +315,17 @@ func generateJSONReport(results []*benchmark.ScenarioResult) {
 	totalRequests := int64(0)
 	totalErrors := int64(0)
 	scenariosPassed := 0
+	totalP99Latency := time.Duration(0)
 
 	for _, result := range results {
 		metrics := result.Metrics
 		totalQPS += metrics.QPS
 		totalRequests += metrics.TotalRequests
 		totalErrors += metrics.FailedRequests
+		totalP99Latency += metrics.LatencyP99
 
-		if metrics.QPS >= 5000 && metrics.LatencyP99 <= 100*time.Millisecond && metrics.ErrorRate <= 1.0 {
+		targetMet := metrics.QPS >= 10000 && metrics.LatencyP99 <= 50*time.Millisecond && metrics.ErrorRate <= 1.0
+		if targetMet {
 			scenariosPassed++
 		}
 
@@ -207,34 +334,52 @@ func generateJSONReport(results []*benchmark.ScenarioResult) {
 			Description:        result.Scenario.Description,
 			TotalRequests:      metrics.TotalRequests,
 			SuccessfulRequests: metrics.SuccessfulRequests,
-			FailedRequests:     metrics.FailedRequests,
-			QPS:                metrics.QPS,
-			LatencyP50:         metrics.LatencyP50.String(),
-			LatencyP95:         metrics.LatencyP95.String(),
-			LatencyP99:         metrics.LatencyP99.String(),
-			AvgLatency:         metrics.AvgLatency.String(),
-			ErrorRate:          metrics.ErrorRate,
-			MemoryUsage:        metrics.MemoryUsage,
-			Duration:           metrics.Duration.String(),
+			FailedRequests:    metrics.FailedRequests,
+			QPS:               metrics.QPS,
+			LatencyP50:        metrics.LatencyP50.String(),
+			LatencyP95:        metrics.LatencyP95.String(),
+			LatencyP99:        metrics.LatencyP99.String(),
+			AvgLatency:        metrics.AvgLatency.String(),
+			ErrorRate:         metrics.ErrorRate,
+			MemoryUsage:       metrics.MemoryUsage,
+			Duration:          metrics.Duration.String(),
 		})
 	}
 
+	avgP99Latency := time.Duration(0)
+	if len(results) > 0 {
+		avgP99Latency = totalP99Latency / time.Duration(len(results))
+	}
+
 	reportData.Summary = SummaryData{
-		TotalQPS:         totalQPS,
-		TotalRequests:    totalRequests,
-		TotalErrors:      totalErrors,
-		OverallErrorRate: 0,
+		TotalQPS:          totalQPS,
+		TotalRequests:     totalRequests,
+		TotalErrors:       totalErrors,
+		OverallErrorRate:  0,
+		ScenariosPassed:   scenariosPassed,
+		ScenariosFailed:  len(results) - scenariosPassed,
+		AverageP99Latency: avgP99Latency.String(),
 	}
 
 	if totalRequests > 0 {
 		reportData.Summary.OverallErrorRate = float64(totalErrors) / float64(totalRequests) * 100
 	}
-	reportData.Summary.ScenariosPassed = scenariosPassed
-	reportData.Summary.ScenariosFailed = len(results) - scenariosPassed
 
 	report := benchmark.GenerateReport(collectMetrics(results))
 	reportData.Recommendations = report.Recommendations
+	reportData.Analysis = report.Analysis
 
+	switch outputFormat {
+	case "json":
+		generateJSONReport(reportData)
+	case "html":
+		generateHTMLReport(reportData)
+	default:
+		generateJSONReport(reportData)
+	}
+}
+
+func generateJSONReport(reportData ReportData) {
 	filename := fmt.Sprintf("benchmark_report_%s.json", time.Now().Format("20060102_150405"))
 	data, err := json.MarshalIndent(reportData, "", "  ")
 	if err != nil {
@@ -248,6 +393,135 @@ func generateJSONReport(results []*benchmark.ScenarioResult) {
 	}
 
 	fmt.Printf("\nJSON report saved to: %s\n", filename)
+}
+
+func generateHTMLReport(reportData ReportData) {
+	filename := fmt.Sprintf("benchmark_report_%s.html", time.Now().Format("20060102_150405"))
+
+	html := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Performance Benchmark Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
+        h2 { color: #555; margin-top: 30px; }
+        .metric { display: inline-block; background: #e8f5e9; padding: 15px 25px; margin: 10px; border-radius: 5px; }
+        .metric-value { font-size: 2em; font-weight: bold; color: #2e7d32; }
+        .metric-label { color: #666; font-size: 0.9em; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #4CAF50; color: white; }
+        .pass { color: #4CAF50; font-weight: bold; }
+        .warn { color: #ff9800; font-weight: bold; }
+        .fail { color: #f44336; font-weight: bold; }
+        .summary { background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .recommendation { background: #fff3e0; padding: 15px; margin: 10px 0; border-left: 4px solid #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Performance Benchmark Report</h1>
+        <p>Generated at: ` + reportData.GeneratedAt.Format(time.RFC3339) + `</p>
+
+        <div class="summary">
+            <h2>System Information</h2>
+            <p>Go Version: ` + reportData.SystemInfo.GoVersion + `</p>
+            <p>CPU Cores: ` + fmt.Sprintf("%d", reportData.SystemInfo.CPUCores) + `</p>
+            <p>OS: ` + reportData.SystemInfo.OS + `/` + reportData.SystemInfo.Arch + `</p>
+            <p>Goroutines: ` + fmt.Sprintf("%d", reportData.SystemInfo.NumGoroutine) + `</p>
+        </div>
+
+        <h2>Summary</h2>
+        <div class="metric">
+            <div class="metric-value">` + fmt.Sprintf("%.2f", reportData.Summary.TotalQPS) + `</div>
+            <div class="metric-label">Total QPS</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">` + fmt.Sprintf("%d", reportData.Summary.TotalRequests) + `</div>
+            <div class="metric-label">Total Requests</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">` + reportData.Summary.AverageP99Latency + `</div>
+            <div class="metric-label">Avg P99 Latency</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">` + fmt.Sprintf("%.2f%%", reportData.Summary.OverallErrorRate) + `</div>
+            <div class="metric-label">Error Rate</div>
+        </div>
+
+        <h2>Results</h2>
+        <table>
+            <tr>
+                <th>Scenario</th>
+                <th>QPS</th>
+                <th>P99 Latency</th>
+                <th>Error Rate</th>
+                <th>Status</th>
+            </tr>`
+
+	for _, result := range reportData.Results {
+		status := "pass"
+		statusText := "PASS"
+		if result.QPS < 5000 || result.ErrorRate > 5.0 {
+			status = "fail"
+			statusText = "FAIL"
+		} else if result.QPS < 10000 || result.ErrorRate > 1.0 {
+			status = "warn"
+			statusText = "WARN"
+		}
+
+		html += fmt.Sprintf(`
+            <tr>
+                <td>%s</td>
+                <td>%.2f</td>
+                <td>%s</td>
+                <td>%.2f%%</td>
+                <td class="%s">%s</td>
+            </tr>`, result.Name, result.QPS, result.LatencyP99, result.ErrorRate, status, statusText)
+	}
+
+	html += `
+        </table>
+
+        <h2>Analysis</h2>
+        <div class="summary">
+            <p><strong>Overall Score:</strong> ` + fmt.Sprintf("%.2f%%", reportData.Analysis.OverallScore) + `</p>
+            <p><strong>QPS Score:</strong> ` + fmt.Sprintf("%.2f%%", reportData.Analysis.QPSScore) + `</p>
+            <p><strong>Latency Score:</strong> ` + fmt.Sprintf("%.2f%%", reportData.Analysis.LatencyScore) + `</p>
+            <p><strong>Error Rate Score:</strong> ` + fmt.Sprintf("%.2f%%", reportData.Analysis.ErrorRateScore) + `</p>
+        </div>`
+
+	if len(reportData.Analysis.Bottlenecks) > 0 {
+		html += `
+        <h2>Bottlenecks</h2>
+        <ul>`
+		for _, bottleneck := range reportData.Analysis.Bottlenecks {
+			html += `<li>` + bottleneck + `</li>`
+		}
+		html += `</ul>`
+	}
+
+	if len(reportData.Recommendations) > 0 {
+		html += `
+        <h2>Recommendations</h2>`
+		for _, rec := range reportData.Recommendations {
+			html += `<div class="recommendation">` + rec + `</div>`
+		}
+	}
+
+	html += `
+    </div>
+</body>
+</html>`
+
+	if err := os.WriteFile(filename, []byte(html), 0644); err != nil {
+		fmt.Printf("Error saving HTML report: %v\n", err)
+		return
+	}
+
+	fmt.Printf("\nHTML report saved to: %s\n", filename)
 }
 
 func executeHTTPRequest(method, url string, body interface{}, headers map[string]string) (int, []byte, error) {

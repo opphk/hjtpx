@@ -88,6 +88,8 @@ type EnhancedCache struct {
 	versionManager *VersionManager
 	metrics        *Metrics
 	mu             sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
 }
 
 type l1Metrics struct {
@@ -166,6 +168,8 @@ func NewEnhancedCache(config *CacheConfig) *EnhancedCache {
 		config = DefaultCacheConfig
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	cache := &EnhancedCache{
 		config:         config,
 		l1Cache:        &sync.Map{},
@@ -176,6 +180,8 @@ func NewEnhancedCache(config *CacheConfig) *EnhancedCache {
 		bloomFilter:    NewBloomFilter(100000, 0.01),
 		versionManager: NewVersionManager(),
 		metrics:        NewMetrics(),
+		ctx:            ctx,
+		cancel:         cancel,
 	}
 
 	if config.L1Enabled {
@@ -434,17 +440,22 @@ func (ec *EnhancedCache) startL1Eviction() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
-		ec.l1Cache.Range(func(key, value interface{}) bool {
-			entry := value.(*l1Entry)
-			if now.After(entry.expiresAt) {
-				ec.l1Cache.Delete(key)
-				ec.l1Metrics.size.Add(-1)
-				ec.l1Metrics.evictions.Add(1)
-			}
-			return true
-		})
+	for {
+		select {
+		case <-ec.ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			ec.l1Cache.Range(func(key, value interface{}) bool {
+				entry := value.(*l1Entry)
+				if now.After(entry.expiresAt) {
+					ec.l1Cache.Delete(key)
+					ec.l1Metrics.size.Add(-1)
+					ec.l1Metrics.evictions.Add(1)
+				}
+				return true
+			})
+		}
 	}
 }
 
@@ -571,14 +582,19 @@ func (ec *EnhancedCache) startHotKeyTracking() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		ec.hotKeys.Range(func(key, value interface{}) bool {
-			info := value.(*HotKeyInfo)
-			if time.Since(info.LastAccess) > 30*time.Minute {
-				ec.hotKeys.Delete(key)
-			}
-			return true
-		})
+	for {
+		select {
+		case <-ec.ctx.Done():
+			return
+		case <-ticker.C:
+			ec.hotKeys.Range(func(key, value interface{}) bool {
+				info := value.(*HotKeyInfo)
+				if time.Since(info.LastAccess) > 30*time.Minute {
+					ec.hotKeys.Delete(key)
+				}
+				return true
+			})
+		}
 	}
 }
 
@@ -633,6 +649,12 @@ func (ec *EnhancedCache) calculateAvgLatency() time.Duration {
 		return 0
 	}
 	return time.Duration(ec.stats.TotalLatency.Load() / total)
+}
+
+func (ec *EnhancedCache) Close() {
+	if ec.cancel != nil {
+		ec.cancel()
+	}
 }
 
 func (ec *EnhancedCache) Clear(ctx context.Context, level CacheLevel) error {

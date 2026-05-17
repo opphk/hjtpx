@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behavior Verification System API Documentation</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --code-bg: #1e293b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .nav-tab {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .nav-tab:hover {
+            background: var(--bg-color);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .content-section {
+            display: none;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .card-header:hover {
+            background: var(--bg-color);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .method-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .method-get {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .method-post {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .method-put {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .method-delete {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .endpoint-path {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+
+        .card-body {
+            padding: 1.5rem;
+            display: none;
+        }
+
+        .card.open .card-body {
+            display: block;
+        }
+
+        .arrow {
+            transition: transform 0.2s;
+        }
+
+        .card.open .arrow {
+            transform: rotate(180deg);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .param-table th,
+        .param-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .param-table th {
+            background: var(--bg-color);
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .param-name {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            color: var(--primary-color);
+        }
+
+        .param-required {
+            color: var(--error-color);
+            font-size: 0.75rem;
+            margin-left: 0.25rem;
+        }
+
+        .param-type {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin: 1rem 0;
+        }
+
+        .code-block .comment {
+            color: #6b7280;
+        }
+
+        .code-block .string {
+            color: #a5f3fc;
+        }
+
+        .code-block .keyword {
+            color: #c084fc;
+        }
+
+        .code-block .number {
+            color: #fbbf24;
+        }
+
+        .example-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .example-tab {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            border-radius: 0.375rem;
+        }
+
+        .example-tab.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .example-content {
+            display: none;
+        }
+
+        .example-content.active {
+            display: block;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            color: #92400e;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 250px;
+            height: 100vh;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .sidebar-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-nav a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 0.375rem;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .sidebar-nav a:hover {
+            background: var(--bg-color);
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav a.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 2rem;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .quick-start {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .quick-start-card {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .quick-start-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .quick-start-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            color: white;
+            font-size: 1.5rem;
+        }
+
+        .quick-start-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .quick-start-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-title">hjtpx API</div>
+        <ul class="sidebar-nav">
+            <li><a href="#overview" class="active">概览</a></li>
+            <li><a href="#quickstart">快速开始</a></li>
+            <li><a href="#authentication">认证</a></li>
+            <li><a href="#captcha">验证码</a></li>
+            <li><a href="#detection">环境检测</a></li>
+            <li><a href="#admin">管理后台</a></li>
+            <li><a href="#sdks">SDK</a></li>
+            <li><a href="#errors">错误码</a></li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <header class="header">
+            <h1>Behavior Verification System API</h1>
+            <p>完整的验证码、认证、环境检测与管理API文档</p>
+            <span class="version-badge">Version 2.0.0</span>
+        </header>
+
+        <div class="container">
+            <section id="overview" class="content-section active">
+                <h2 class="section-title">API 概览</h2>
+                
+                <div class="alert alert-info">
+                    <strong>Base URL:</strong> <code>https://api.example.com/api/v1</code>
+                    <br>
+                    <strong>开发环境:</strong> <code>http://localhost:8080/api/v1</code>
+                </div>
+
+                <h3 class="section-title">支持的功能</h3>
+                <div class="quick-start">
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">🔐</div>
+                        <h3>多种验证码类型</h3>
+                        <p>支持滑块验证码、点击验证码、图片验证码、手势验证码</p>
+                    </div>
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">🛡️</div>
+                        <h3>环境检测</h3>
+                        <p>浏览器指纹采集、自动化工具检测、代理检测</p>
+                    </div>
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">📊</div>
+                        <h3>行为分析</h3>
+                        <p>轨迹分析、风险评分、设备指纹识别</p>
+                    </div>
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">👥</div>
+                        <h3>管理后台</h3>
+                        <p>应用管理、日志分析、黑名单管理、风控规则配置</p>
+                    </div>
+                </div>
+
+                <h3 class="section-title">通用响应格式</h3>
+                <div class="code-block">
+{
+  "code": 0,
+  "message": "success",
+  "data": { ... }
+}
+                </div>
+
+                <h3 class="section-title">认证方式</h3>
+                <p>API支持两种认证方式：</p>
+                <ul style="margin: 1rem 0; padding-left: 2rem;">
+                    <li><strong>API Key:</strong> 在请求头中添加 <code>X-API-Key</code></li>
+                    <li><strong>JWT Token:</strong> 在请求头中添加 <code>Authorization: Bearer &lt;token&gt;</code></li>
+                </ul>
+            </section>
+
+            <section id="quickstart" class="content-section">
+                <h2 class="section-title">快速开始</h2>
+
+                <div class="alert alert-success">
+                    <strong>5分钟快速集成</strong> - 按照以下步骤快速集成验证码服务
+                </div>
+
+                <h3>1. 安装 SDK</h3>
+                <div class="code-block">
+go get github.com/hjtpx/hjtpx/sdk/go
+                </div>
+
+                <h3>2. 初始化客户端</h3>
+                <div class="code-block">
+<span class="keyword">import</span> (
+    <span class="string">"github.com/hjtpx/hjtpx/sdk/go"</span>
+)
+
+client := sdk.NewClient(
+    sdk.WithEndpoint(<span class="string">"http://localhost:8080/api/v1"</span>),
+    sdk.WithAPIKey(<span class="string">"your-api-key"</span>),
+)
+                </div>
+
+                <h3>3. 获取并验证验证码</h3>
+                <div class="code-block">
+<span class="comment">// 获取滑块验证码</span>
+slider, err := client.GetSliderCaptcha(&sdk.SliderCaptchaRequest{
+    Width:     <span class="number">320</span>,
+    Height:    <span class="number">160</span>,
+    Tolerance: <span class="number">8</span>,
+})
+
+<span class="comment">// 验证用户滑动</span>
+verifyResp, err := client.VerifySliderCaptcha(slider.ChallengeID, <span class="string">"185"</span>)
+<span class="keyword">if</span> verifyResp.Success {
+    <span class="comment">// 验证通过，继续业务逻辑</span>
+}
+                </div>
+
+                <h3>4. 完整示例</h3>
+                <div class="code-block">
+<span class="keyword">package</span> main
+
+<span class="keyword">import</span> (
+    <span class="string">"fmt"</span>
+    <span class="string">"log"</span>
+
+    <span class="string">"github.com/hjtpx/hjtpx/sdk/go"</span>
+)
+
+<span class="keyword">func</span> <span class="keyword">main</span>() {
+    client := sdk.NewClient(
+        sdk.WithEndpoint(<span class="string">"http://localhost:8080/api/v1"</span>),
+    )
+
+    slider, err := client.GetSliderCaptcha(nil)
+    <span class="keyword">if</span> err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf(<span class="string">"Got captcha: %s\n"</span>, slider.ChallengeID)
+
+    resp, err := client.VerifySliderCaptcha(slider.ChallengeID, <span class="string">"185"</span>)
+    <span class="keyword">if</span> err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf(<span class="string">"Verification: %v\n"</span>, resp.Success)
+}
+                </div>
+            </section>
+
+            <section id="captcha" class="content-section">
+                <h2 class="section-title">验证码接口</h2>
+
+                <div class="card open">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/captcha/slider</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取滑块验证码，返回背景图和滑块图</p>
+                        
+                        <h4>请求参数</h4>
+                        <table class="param-table">
+                            <thead>
+                                <tr>
+                                    <th>参数名</th>
+                                    <th>类型</th>
+                                    <th>必填</th>
+                                    <th>说明</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="param-name">width</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>图片宽度，默认320</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">height</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>图片高度，默认160</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">tolerance</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>容差值，默认8</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <h4>响应示例</h4>
+                        <div class="code-block">
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "challenge_id": "slider_abc123",
+    "background_image": "data:image/png;base64,...",
+    "slider_image": "data:image/png;base64,...",
+    "target_x": 185,
+    "puzzle_y": 80,
+    "slider_width": 50,
+    "slider_height": 50
+  }
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-post">POST</span>
+                            <span class="endpoint-path">/captcha/verify</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">验证用户输入的验证码答案</p>
+                        
+                        <h4>请求体</h4>
+                        <div class="code-block">
+{
+  "challenge_id": "slider_abc123",
+  "x": 185,
+  "y": 80,
+  "trajectory": [
+    {"x": 10, "y": 80, "t": 0},
+    {"x": 50, "y": 80, "t": 100},
+    {"x": 185, "y": 80, "t": 500}
+  ]
+}
+                        </div>
+
+                        <h4>响应示例</h4>
+                        <div class="code-block">
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "score": 0.85,
+    "message": "Verification passed",
+    "trajectory_result": {
+      "score": 0.85,
+      "passed": true,
+      "reasons": []
+    }
+  }
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/captcha/image</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取图片验证码</p>
+                        
+                        <h4>请求参数</h4>
+                        <table class="param-table">
+                            <thead>
+                                <tr>
+                                    <th>参数名</th>
+                                    <th>类型</th>
+                                    <th>必填</th>
+                                    <th>说明</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="param-name">type</span></td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td>否</td>
+                                    <td>类型: number/letter/mixed</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">count</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>字符数量，默认4</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">noise_mode</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>噪点模式: 0-无, 1-点, 2-线, 3-曲线</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/captcha/click</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取点击验证码，需要按正确顺序点击图标</p>
+                        
+                        <h4>请求参数</h4>
+                        <table class="param-table">
+                            <thead>
+                                <tr>
+                                    <th>参数名</th>
+                                    <th>类型</th>
+                                    <th>必填</th>
+                                    <th>说明</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="param-name">width</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>图片宽度，默认400</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">height</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>图片高度，默认300</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">icon_count</span></td>
+                                    <td><span class="param-type">integer</span></td>
+                                    <td>否</td>
+                                    <td>图标数量，默认9</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="param-name">mode</span></td>
+                                    <td><span class="param-type">string</span></td>
+                                    <td>否</td>
+                                    <td>提示模式: number/arrow</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/captcha/gesture</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取手势验证码，用户需要按指定顺序连接点位</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="detection" class="content-section">
+                <h2 class="section-title">环境检测接口</h2>
+
+                <div class="card open">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-post">POST</span>
+                            <span class="endpoint-path">/detect/check</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">环境检测，检测浏览器指纹、设备信息和潜在风险</p>
+                        
+                        <h4>请求体</h4>
+                        <div class="code-block">
+{
+  "fingerprint": "user-unique-fingerprint",
+  "canvas_hash": "canvas-fingerprint-hash",
+  "webgl_vendor": "NVIDIA Corporation",
+  "webgl_renderer": "GeForce GTX 1080",
+  "fonts": ["Arial", "Helvetica", "Times New Roman"],
+  "plugins": ["Chrome PDF Plugin"],
+  "proxy_detected": false,
+  "timezone": "Asia/Shanghai",
+  "language": "zh-CN"
+}
+                        </div>
+
+                        <h4>响应示例</h4>
+                        <div class="code-block">
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "is_bot": false,
+    "risk_level": "low",
+    "risk_score": 10.5,
+    "detected_flags": [],
+    "fingerprint": "user-unique-fingerprint",
+    "is_unique": true
+  }
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/detect/script</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取浏览器指纹采集脚本</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-post">POST</span>
+                            <span class="endpoint-path">/detect/submit</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">提交检测数据用于分析</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="authentication" class="content-section">
+                <h2 class="section-title">认证接口</h2>
+
+                <div class="card open">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-post">POST</span>
+                            <span class="endpoint-path">/auth/login</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">用户登录</p>
+                        
+                        <h4>请求体</h4>
+                        <div class="code-block">
+{
+  "username": "user@example.com",
+  "password": "password123",
+  "captcha_token": "optional-captcha-token"
+}
+                        </div>
+
+                        <h4>响应示例</h4>
+                        <div class="code-block">
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 900,
+    "user": {
+      "id": 1,
+      "username": "user@example.com",
+      "email": "user@example.com"
+    }
+  }
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-post">POST</span>
+                            <span class="endpoint-path">/auth/register</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">用户注册</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-post">POST</span>
+                            <span class="endpoint-path">/auth/refresh</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">刷新访问令牌</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="admin" class="content-section">
+                <h2 class="section-title">管理后台接口</h2>
+
+                <div class="alert alert-warning">
+                    <strong>需要管理员权限</strong> - 以下接口需要JWT Token认证
+                </div>
+
+                <div class="card open">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/admin/dashboard/stats</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取仪表盘统计数据</p>
+                        
+                        <h4>响应示例</h4>
+                        <div class="code-block">
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "totalUsers": 1000,
+    "totalApps": 50,
+    "totalRequests": 50000,
+    "totalErrors": 500
+  }
+}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/admin/stats/realtime</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取实时统计数据</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/admin/applications</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取应用列表，支持分页</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/admin/logs</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">获取验证日志</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">POST</span>
+                            <span class="endpoint-path">/admin/blacklist</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">添加黑名单，支持IP/指纹/用户ID</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard(this)">
+                        <div class="card-title">
+                            <span class="method-badge method-get">GET</span>
+                            <span class="endpoint-path">/admin/risk-rules</span>
+                        </div>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="card-body">
+                        <p style="margin-bottom: 1rem;">风控规则管理</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="errors" class="content-section">
+                <h2 class="section-title">错误码</h2>
+
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>错误码</th>
+                            <th>说明</th>
+                            <th>解决方案</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="param-name" style="color: var(--error-color);">400</span></td>
+                            <td>请求参数错误</td>
+                            <td>检查请求参数格式</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name" style="color: var(--error-color);">401</span></td>
+                            <td>未授权/认证失败</td>
+                            <td>检查API Key或Token</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name" style="color: var(--error-color);">403</span></td>
+                            <td>权限不足</td>
+                            <td>联系管理员授权</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name" style="color: var(--error-color);">404</span></td>
+                            <td>资源不存在</td>
+                            <td>检查Challenge ID</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name" style="color: var(--error-color);">429</span></td>
+                            <td>请求过于频繁</td>
+                            <td>降低请求频率</td>
+                        </tr>
+                        <tr>
+                            <td><span class="param-name" style="color: var(--error-color);">500</span></td>
+                            <td>服务器内部错误</td>
+                            <td>稍后重试</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3 class="section-title" style="margin-top: 2rem;">SDK错误类型</h3>
+                <div class="code-block">
+<span class="keyword">var</span> (
+    ErrNetworkError        = errors.New(<span class="string">"network error"</span>)
+    ErrTimeout            = errors.New(<span class="string">"request timeout"</span>)
+    ErrInvalidResponse    = errors.New(<span class="string">"invalid response"</span>)
+    ErrServerError        = errors.New(<span class="string">"server error"</span>)
+    ErrInvalidParams      = errors.New(<span class="string">"invalid parameters"</span>)
+    ErrVerificationFailed = errors.New(<span class="string">"verification failed"</span>)
+    ErrRateLimited        = errors.New(<span class="string">"rate limited"</span>)
+    ErrUnauthorized       = errors.New(<span class="string">"unauthorized"</span>)
+    ErrInternalError      = errors.New(<span class="string">"internal error"</span>)
+)
+                </div>
+            </section>
+
+            <section id="sdks" class="content-section">
+                <h2 class="section-title">SDK下载</h2>
+
+                <div class="quick-start">
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">🐹</div>
+                        <h3>Go SDK</h3>
+                        <p>github.com/hjtpx/hjtpx/sdk/go</p>
+                        <div class="code-block" style="margin-top: 1rem; padding: 0.5rem;">
+go get github.com/hjtpx/hjtpx/sdk/go
+                        </div>
+                    </div>
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">🌐</div>
+                        <h3>JavaScript SDK</h3>
+                        <p>即将支持</p>
+                    </div>
+                    <div class="quick-start-card">
+                        <div class="quick-start-icon">🐍</div>
+                        <h3>Python SDK</h3>
+                        <p>即将支持</p>
+                    </div>
+                </div>
+
+                <h3 class="section-title">OpenAPI 规范</h3>
+                <p>完整OpenAPI规范文档: <a href="openapi.yaml">openapi.yaml</a></p>
+                <p>可导入到 Postman、Swagger UI 等工具使用</p>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        function toggleCard(header) {
+            const card = header.parentElement;
+            card.classList.toggle('open');
+        }
+
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+
+                document.querySelectorAll('.content-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+
+                const targetId = this.getAttribute('href').substring(1);
+                document.getElementById(targetId).classList.add('active');
+            });
+        });
+
+        const searchBox = document.createElement('input');
+        searchBox.type = 'text';
+        searchBox.className = 'search-box';
+        searchBox.placeholder = '搜索 API...';
+        searchBox.style.cssText = 'margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; width: 100%; font-size: 0.95rem;';
+        
+        searchBox.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            document.querySelectorAll('.card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+
+        const container = document.querySelector('.container');
+        if (container) {
+            container.insertBefore(searchBox, container.firstChild);
+        }
+    </script>
+</body>
+</html>

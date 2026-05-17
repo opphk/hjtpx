@@ -36,6 +36,10 @@ type DetailedMetrics struct {
 	TotalRequests     int64                        `json:"total_requests"`
 	Hits              int64                        `json:"hits"`
 	Misses            int64                        `json:"misses"`
+	L1Hits            int64                        `json:"l1_hits"`
+	L1Misses          int64                        `json:"l1_misses"`
+	L2Hits            int64                        `json:"l2_hits"`
+	L2Misses          int64                        `json:"l2_misses"`
 	Sets              int64                        `json:"sets"`
 	Deletes           int64                        `json:"deletes"`
 	Errors            int64                        `json:"errors"`
@@ -241,6 +245,10 @@ func (cmc *CacheMetricsCollector) GetDetailedMetrics() *DetailedMetrics {
 		TotalRequests:     totalRequests,
 		Hits:              hits,
 		Misses:            misses,
+		L1Hits:            l1Hits,
+		L1Misses:          l1Misses,
+		L2Hits:            l2Hits,
+		L2Misses:          l2Misses,
 		Sets:              cmc.stats.Sets.Load(),
 		Deletes:           cmc.stats.Deletes.Load(),
 		Errors:            cmc.stats.Errors.Load(),

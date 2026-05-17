@@ -1,0 +1,48 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hjtpx.fullname" . }}-network-policy
+  labels:
+    {{- include "hjtpx.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hjtpx.selectorLabels" . | nindent 4 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+{{- end }}

@@ -1,0 +1,4 @@
+{
+	"test_key": "Test text",
+	"test_with_params": "Hello {name}, you are {age} years old"
+}

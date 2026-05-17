@@ -2589,4 +2589,490 @@ Authorization: Bearer {your_token_here}
 
 **认证要求**：需要管理员Token
 
-**请求参数
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| type | string | 否 | 可视化类型：heatmap, scatter, geographic |
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "heatmap": [...],
+    "scatter": [...],
+    "geographic": [...]
+  }
+}
+```
+
+---
+
+#### 获取热力图数据
+
+**接口地址**：`GET /api/v1/admin/analytics/heatmap`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+| granularity | string | 否 | 粒度：hour, day, week |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "data": [
+      {"x": "2024-01-01 00:00", "y": "2024-01-01 00:00", "value": 100},
+      {"x": "2024-01-01 00:00", "y": "2024-01-01 01:00", "value": 150}
+    ]
+  }
+}
+```
+
+---
+
+#### 获取地理分布数据
+
+**接口地址**：`GET /api/v1/admin/analytics/geographic`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "countries": [
+      {"code": "CN", "name": "中国", "count": 10000},
+      {"code": "US", "name": "美国", "count": 5000}
+    ],
+    "regions": [
+      {"country": "CN", "region": "北京", "count": 3000},
+      {"country": "CN", "region": "上海", "count": 2500}
+    ]
+  }
+}
+```
+
+---
+
+#### 获取漏斗分析数据
+
+**接口地址**：`GET /api/v1/admin/analytics/funnel`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| funnel_type | string | 是 | 漏斗类型：verification, conversion |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "steps": [
+      {"name": "页面访问", "count": 10000, "rate": 100},
+      {"name": "验证码展示", "count": 9000, "rate": 90},
+      {"name": "验证完成", "count": 8500, "rate": 85},
+      {"name": "验证成功", "count": 8200, "rate": 82}
+    ],
+    "total_conversion": 82
+  }
+}
+```
+
+---
+
+### 管理端通知API
+
+#### 获取通知列表
+
+**接口地址**：`GET /api/v1/admin/notifications`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认1 |
+| page_size | int | 否 | 每页数量，默认20 |
+| type | string | 否 | 通知类型：alert, system, info |
+| is_read | boolean | 否 | 是否已读 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "type": "alert",
+        "title": "高风险攻击告警",
+        "content": "检测到来自 192.168.1.100 的异常请求",
+        "is_read": false,
+        "created_at": "2024-01-15T12:00:00Z"
+      }
+    ],
+    "total": 100,
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+---
+
+#### 标记通知已读
+
+**接口地址**：`PUT /api/v1/admin/notifications/:id/read`
+
+**认证要求**：需要管理员Token
+
+**路径参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | int | 是 | 通知ID |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "is_read": true,
+    "read_at": "2024-01-15T12:30:00Z"
+  }
+}
+```
+
+---
+
+#### 标记全部已读
+
+**接口地址**：`PUT /api/v1/admin/notifications/read-all`
+
+**认证要求**：需要管理员Token
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "updated_count": 50
+  }
+}
+```
+
+---
+
+#### 删除通知
+
+**接口地址**：`DELETE /api/v1/admin/notifications/:id`
+
+**认证要求**：需要管理员Token
+
+**路径参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| id | int | 是 | 通知ID |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": null
+}
+```
+
+---
+
+### 管理端CSS切换API
+
+#### 获取CSS配置
+
+**接口地址**：`GET /api/v1/admin/css-config`
+
+**认证要求**：需要管理员Token
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "current_css": "default",
+    "available_css": ["default", "dark", "light", "custom"],
+    "custom_css_url": ""
+  }
+}
+```
+
+---
+
+#### 更新CSS配置
+
+**接口地址**：`PUT /api/v1/admin/css-config`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+```json
+{
+  "current_css": "dark",
+  "custom_css_url": ""
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "current_css": "dark",
+    "updated_at": "2024-01-15T12:00:00Z"
+  }
+}
+```
+
+---
+
+### 管理端实时监控WebSocket API
+
+#### 连接实时监控
+
+**接口地址**：`WS /api/v1/admin/monitoring/ws`
+
+**认证要求**：需要管理员Token
+
+**连接示例**：
+
+```javascript
+const ws = new WebSocket('ws://localhost:8080/api/v1/admin/monitoring/ws?token=xxx');
+
+ws.onmessage = function(event) {
+  const data = JSON.parse(event.data);
+  if (data.type === 'metrics') {
+    console.log('Current metrics:', data.payload);
+  }
+};
+
+ws.onclose = function() {
+  console.log('Connection closed');
+};
+```
+
+**消息类型**：
+
+| 类型 | 说明 | 频率 |
+|------|------|------|
+| metrics | 实时指标 | 每秒 |
+| alert | 告警通知 | 实时 |
+| stats | 统计更新 | 每5秒 |
+
+---
+
+### 管理端高级分析API
+
+#### 获取行为分析数据
+
+**接口地址**：`GET /api/v1/admin/behavior-analysis`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+| group_by | string | 否 | 分组：hour, day, week, month |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "trajectory_analysis": {
+      "average_speed": 150.5,
+      "average_acceleration": 2.3,
+      "suspicious_rate": 5.2
+    },
+    "click_pattern": {
+      "average_click_interval": 500,
+      "average_click_count": 5
+    },
+    "mouse_movement": {
+      "smoothness": 85.5,
+      "straightness": 0.7
+    }
+  }
+}
+```
+
+---
+
+#### 获取批量操作结果
+
+**接口地址**：`GET /api/v1/admin/batch-operations`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| page | int | 否 | 页码，默认1 |
+| page_size | int | 否 | 每页数量，默认20 |
+| type | string | 否 | 操作类型 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "list": [
+      {
+        "id": 1,
+        "type": "bulk_blacklist",
+        "status": "completed",
+        "total": 100,
+        "success": 95,
+        "failed": 5,
+        "created_at": "2024-01-15T12:00:00Z",
+        "completed_at": "2024-01-15T12:05:00Z"
+      }
+    ],
+    "total": 10,
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+---
+
+#### 导出数据
+
+**接口地址**：`POST /api/v1/admin/export`
+
+**认证要求**：需要管理员Token
+
+**请求参数**：
+
+```json
+{
+  "type": "logs",
+  "format": "csv",
+  "filters": {
+    "start_date": "2024-01-01",
+    "end_date": "2024-01-15",
+    "captcha_type": "slider"
+  }
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "task_id": "export_123",
+    "status": "processing",
+    "estimated_time": 60
+  }
+}
+```
+
+---
+
+#### 获取导出任务状态
+
+**接口地址**：`GET /api/v1/admin/export/:task_id`
+
+**认证要求**：需要管理员Token
+
+**路径参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| task_id | string | 是 | 任务ID |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "task_id": "export_123",
+    "status": "completed",
+    "download_url": "/api/v1/admin/export/export_123/download",
+    "expires_at": "2024-01-15T13:00:00Z"
+  }
+}
+```
+
+---
+
+#### 下载导出文件
+
+**接口地址**：`GET /api/v1/admin/export/:task_id/download`
+
+**认证要求**：需要管理员Token
+
+**响应**：文件下载
+
+---
+
+## SDK示例
+
+### Go SDK

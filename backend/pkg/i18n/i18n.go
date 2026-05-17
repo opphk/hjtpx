@@ -25,6 +25,31 @@ var (
 		"it-IT",
 		"ru-RU",
 		"ar-SA",
+		"th-TH",
+		"vi-VN",
+		"id-ID",
+		"ms-MY",
+		"tl-PH",
+		"fa-IR",
+		"he-IL",
+		"tr-TR",
+		"pl-PL",
+		"nl-NL",
+	}
+	supportedLangsExt = []string{
+		"el-GR",
+		"cs-CZ",
+		"sv-SE",
+		"da-DK",
+		"fi-FI",
+		"no-NO",
+		"hu-HU",
+		"ro-RO",
+		"uk-UA",
+		"bg-BG",
+		"hr-HR",
+		"sk-SK",
+		"sl-SI",
 	}
 )
 
@@ -99,13 +124,21 @@ func IsSupported(lang string) bool {
 			return true
 		}
 	}
+	for _, l := range supportedLangsExt {
+		if l == lang {
+			return true
+		}
+	}
 	return false
 }
 
 func GetSupportedLangs() []string {
 	mu.RLock()
 	defer mu.RUnlock()
-	return append([]string{}, supportedLangs...)
+	result := make([]string, 0, len(supportedLangs)+len(supportedLangsExt))
+	result = append(result, supportedLangs...)
+	result = append(result, supportedLangsExt...)
+	return result
 }
 
 func Translate(lang, key string, args ...interface{}) string {

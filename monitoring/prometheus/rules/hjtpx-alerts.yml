@@ -1,0 +1,314 @@
+groups:
+  - name: hjtpx.service.health
+    rules:
+      - alert: ServiceDown
+        expr: up{job="hjtpx-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.instance }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute"
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="hjtpx-app", status=~"5.."}[5m])) /
+            sum(rate(http_requests_total{job="hjtpx-app"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "High error rate on {{ $labels.instance }}"
+          description: "Error rate is above 5% for more than 5 minutes (current: {{ $value | printf \"%.2f\" }}%)"
+
+      - alert: ServiceLatencyHigh
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) by (le)) > 5
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "High latency on {{ $labels.instance }}"
+          description: "P99 latency is above 5 seconds for more than 5 minutes"
+
+      - alert: ResponseTimeDegraded
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) by (le)) > 2
+        for: 10m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Response time degraded on {{ $labels.instance }}"
+          description: "P95 latency is above 2 seconds for more than 10 minutes"
+
+  - name: hjtpx.business.metrics
+    rules:
+      - alert: LowVerificationSuccessRate
+        expr: |
+          (
+            sum(rate(captcha_verification_total{job="hjtpx-app", status="success"}[5m])) /
+            sum(rate(captcha_verification_total{job="hjtpx-app"}[5m]))
+          ) < 0.8
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "Low CAPTCHA verification success rate"
+          description: "Verification success rate is below 80% for more than 15 minutes (current: {{ $value | printf \"%.2f\" }}%)"
+
+      - alert: HighVerificationFailureRate
+        expr: |
+          sum(rate(captcha_verification_total{job="hjtpx-app", status="failure"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "High CAPTCHA verification failure rate"
+          description: "Verification failures are occurring at a high rate"
+
+      - alert: NoUserActivity
+        expr: |
+          increase(user_logins_total{job="hjtpx-app"}[1h]) == 0
+        for: 2h
+        labels:
+          severity: low
+        annotations:
+          summary: "No user activity detected"
+          description: "No user logins in the past 2 hours"
+
+  - name: hjtpx.security.threats
+    rules:
+      - alert: SecurityAttackDetected
+        expr: |
+          sum(rate(security_attack_attempts_total{job="hjtpx-app"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: "Security attack detected on {{ $labels.instance }}"
+          description: "{{ $value | printf \"%.2f\" }} attacks per second detected"
+
+      - alert: HighBotDetectionRate
+        expr: |
+          sum(rate(security_bot_detection_total{job="hjtpx-app"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "High bot detection rate"
+          description: "More than 10 bot detections per second"
+
+      - alert: DDoSAttackSuspected
+        expr: |
+          sum(rate(security_ddos_detection_total{job="hjtpx-app"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DDoS attack suspected"
+          description: "DDoS detection triggered on {{ $labels.instance }}"
+
+      - alert: BruteForceAttackDetected
+        expr: |
+          sum(rate(security_brute_force_detection_total{job="hjtpx-app"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: "Brute force attack detected"
+          description: "Brute force attack pattern detected on {{ $labels.instance }}"
+
+      - alert: RateLimitExceededHigh
+        expr: |
+          sum(rate(security_rate_limit_exceeded_total{job="hjtpx-app"}[5m])) > 100
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "High rate limit exceeded events"
+          description: "Rate limit exceeded events are high ({{ $value | printf \"%.2f\" }} per second)"
+
+      - alert: XSSAttemptDetected
+        expr: |
+          sum(rate(security_xss_attempts_total{job="hjtpx-app"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: "XSS attack attempt detected"
+          description: "XSS attack attempt detected on {{ $labels.instance }}"
+
+      - alert: SQLInjectionAttemptDetected
+        expr: |
+          sum(rate(security_sql_injection_attempts_total{job="hjtpx-app"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SQL injection attempt detected"
+          description: "SQL injection attempt detected on {{ $labels.instance }}"
+
+      - alert: HighAuthenticationFailures
+        expr: |
+          sum(rate(security_authentication_failures_total{job="hjtpx-app"}[5m])) > 50
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "High authentication failure rate"
+          description: "More than 50 authentication failures per second"
+
+  - name: hjtpx.resource.usage
+    rules:
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            go_memory_heap_bytes{job="hjtpx-app"} /
+            (go_memory_heap_bytes{job="hjtpx-app"} + (go_memory_total_bytes{job="hjtpx-app"} - go_memory_heap_bytes{job="hjtpx-app"}))
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: high
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% for more than 10 minutes"
+
+      - alert: MemoryLeakSuspected
+        expr: |
+          (
+            go_memory_heap_bytes{job="hjtpx-app"} -
+            go_memory_heap_bytes{job="hjtpx-app"} offset 1h
+          ) > 1e+9
+        for: 30m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Possible memory leak on {{ $labels.instance }}"
+          description: "Memory usage has increased by more than 1GB in the past hour"
+
+      - alert: GoroutineLeak
+        expr: |
+          go_goroutines{job="hjtpx-app"} > 10000
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "Possible goroutine leak on {{ $labels.instance }}"
+          description: "Goroutine count is above 10000 for more than 15 minutes"
+
+      - alert: HighCPUUsage
+        expr: |
+          go_cpu_usage_percent{job="hjtpx-app"} > 80
+        for: 10m
+        labels:
+          severity: medium
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 10 minutes"
+
+      - alert: FrequentGC
+        expr: |
+          rate(go_gc_count_total{job="hjtpx-app"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Frequent garbage collection on {{ $labels.instance }}"
+          description: "GC is running more than 10 times per 5 minutes"
+
+  - name: hjtpx.database.metrics
+    rules:
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          (
+            database_connections_in_use{job="hjtpx-app"} /
+            (database_connections_active{job="hjtpx-app"} + database_connections_idle{job="hjtpx-app"})
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "More than 90% of database connections are in use"
+
+      - alert: DatabaseQuerySlow
+        expr: |
+          histogram_quantile(0.95, sum(rate(database_query_duration_seconds_bucket{job="hjtpx-app"}[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Slow database queries on {{ $labels.instance }}"
+          description: "P95 database query time is above 1 second"
+
+      - alert: DatabaseErrors
+        expr: |
+          sum(rate(database_query_errors_total{job="hjtpx-app"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Database errors detected"
+          description: "Database errors are occurring ({{ $value | printf \"%.2f\" }} per second)"
+
+  - name: hjtpx.cache.metrics
+    rules:
+      - alert: LowCacheHitRate
+        expr: |
+          cache_hit_rate{job="hjtpx-app"} < 0.6
+        for: 15m
+        labels:
+          severity: medium
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is below 60% for more than 15 minutes"
+
+      - alert: RedisErrors
+        expr: |
+          sum(rate(redis_errors_total{job="hjtpx-app"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Redis errors detected"
+          description: "Redis errors are occurring at a high rate"
+
+  - name: hjtpx.alerting.metrics
+    rules:
+      - alert: AlertResponseTimeHigh
+        expr: |
+          (
+            avg_over_time(alert_response_time_sum[5m]) /
+            avg_over_time(alert_response_time_count[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Alert response time above target"
+          description: "Average alert response time is above 5 seconds"
+
+      - alert: AlertProcessingBacklog
+        expr: |
+          alert_buffer_size{job="hjtpx-app"} > 1000
+        for: 10m
+        labels:
+          severity: high
+        annotations:
+          summary: "Alert processing backlog detected"
+          description: "Alert buffer has more than 1000 pending alerts"
+
+      - alert: AlertProcessingFailures
+        expr: |
+          (
+            rate(alerts_failed_total{job="hjtpx-app"}[5m]) /
+            rate(alerts_processed_total{job="hjtpx-app"}[5m])
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "High alert processing failure rate"
+          description: "More than 10% of alerts are failing to process"

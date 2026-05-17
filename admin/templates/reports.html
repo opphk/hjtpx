@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 报表中心</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary-red: #c23a2b;
+            --gold: #c9a96e;
+            --dark: #1a1a2e;
+        }
+        body { background: #f5f5f5; min-height: 100vh; }
+        .sidebar { background: var(--dark); min-height: 100vh; position: fixed; left: 0; top: 0; width: 250px; }
+        .main-wrapper { margin-left: 250px; min-height: 100vh; }
+        .sidebar-brand { padding: 20px; border-bottom: 1px solid rgba(201, 169, 110, 0.3); display: flex; align-items: center; gap: 12px; }
+        .sidebar-brand-icon { width: 44px; height: 44px; background: linear-gradient(135deg, var(--primary-red), #8b2a1e); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--gold); font-size: 22px; }
+        .sidebar-brand-text { font-weight: 700; font-size: 20px; color: var(--gold); }
+        .sidebar-brand-sub { font-size: 11px; color: rgba(201, 169, 110, 0.5); letter-spacing: 2px; }
+        .nav-link { color: rgba(255, 255, 255, 0.7); padding: 12px 20px; display: flex; align-items: center; gap: 12px; transition: all 0.3s; border-radius: 8px; margin: 4px 12px; text-decoration: none; }
+        .nav-link:hover, .nav-link.active { background: rgba(201, 169, 110, 0.15); color: var(--gold); }
+        .nav-link i { width: 20px; text-align: center; }
+        .sidebar-divider { height: 1px; background: rgba(201, 169, 110, 0.3); margin: 10px 20px; }
+        .top-header { background: white; border-bottom: 1px solid #eee; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
+        .page-title { font-size: 24px; font-weight: 700; color: var(--dark); margin: 0; position: relative; padding-left: 20px; }
+        .page-title::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 24px; background: var(--primary-red); border-radius: 2px; }
+        .seal-stamp { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1.5px solid var(--primary-red); color: var(--primary-red); font-size: 9px; font-weight: 900; transform: rotate(-8deg); }
+        .brush-divider { height: 4px; background: linear-gradient(to right, var(--gold), transparent); border: none; margin: 0 0 24px 0; opacity: 0.6; border-radius: 2px; }
+        .main-content { padding: 24px; }
+        .user-avatar { width: 36px; height: 36px; background: var(--primary-red); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; }
+        .card-stat { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #eee; }
+        .stat-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--dark); line-height: 1.2; }
+        .stat-label { font-size: 12px; color: #666; letter-spacing: 0.5px; }
+        .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #eee; margin-bottom: 24px; }
+        .template-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 2px solid #eee; cursor: pointer; transition: all 0.3s; }
+        .template-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+        .template-card.active { border-color: var(--primary-red); background: rgba(194, 58, 43, 0.05); }
+        .template-icon { width: 60px; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 12px; }
+        .btn-gold { background: var(--gold); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: all 0.3s; }
+        .btn-gold:hover { background: #b8924e; color: white; }
+        .btn-cinnabar { background: var(--primary-red); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; transition: all 0.3s; }
+        .btn-cinnabar:hover { background: #a33325; color: white; }
+        .nav-tabs-custom { border-bottom: 2px solid #eee; }
+        .nav-tabs-custom .nav-link { border: none; color: #666; padding: 12px 20px; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .nav-tabs-custom .nav-link:hover { color: var(--primary-red); border-color: transparent; }
+        .nav-tabs-custom .nav-link.active { color: var(--primary-red); border-bottom-color: var(--primary-red); background: transparent; }
+        .field-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 8px; }
+        .field-item:hover { background: #e9ecef; }
+        .dimension-tag { display: inline-block; padding: 4px 12px; background: rgba(59, 130, 246, 0.1); color: #3b82f6; border-radius: 20px; font-size: 12px; margin-right: 6px; margin-bottom: 6px; }
+        .metric-tag { display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.1); color: #10b981; border-radius: 20px; font-size: 12px; margin-right: 6px; margin-bottom: 6px; }
+        .export-format-btn { padding: 15px 20px; border: 2px solid #eee; border-radius: 12px; background: white; cursor: pointer; transition: all 0.3s; text-align: center; }
+        .export-format-btn:hover { border-color: var(--gold); }
+        .export-format-btn.active { border-color: var(--primary-red); background: rgba(194, 58, 43, 0.05); }
+        .export-format-btn i { font-size: 32px; margin-bottom: 8px; display: block; }
+        .preview-table { font-size: 13px; }
+        .preview-table th { background: #f8f9fa; font-weight: 600; white-space: nowrap; }
+        .schedule-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #e8f5e9; color: #2e7d32; border-radius: 20px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-icon"><i class="fas fa-shield-halved"></i></div>
+            <div>
+                <div class="sidebar-brand-text">墨盾验证</div>
+                <div class="sidebar-brand-sub">· 管理后台 ·</div>
+            </div>
+        </div>
+        <nav class="mt-3">
+            <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
+            <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
+            <a class="nav-link" href="/admin/advanced-analytics"><i class="fas fa-chart-pie"></i><span>高级分析</span></a>
+            <a class="nav-link" href="/admin/reports"><i class="fas fa-file-alt"></i><span>报表中心</span></a>
+            <a class="nav-link" href="/admin/visualization"><i class="fas fa-chart-area"></i><span>数据可视化</span></a>
+            <a class="nav-link" href="/admin/batch-operations"><i class="fas fa-layer-group"></i><span>批量操作</span></a>
+            <div class="sidebar-divider"></div>
+            <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
+            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
+            <div class="sidebar-divider"></div>
+        </nav>
+        <div class="border-top border-secondary p-3 mt-auto">
+            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <header class="top-header">
+            <div class="d-flex align-items-center gap-3">
+                <h1 class="page-title">报表中心</h1>
+                <span class="seal-stamp">墨盾</span>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-outline-secondary btn-sm" id="refreshBtn"><i class="fas fa-sync me-1"></i>刷新</button>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted" id="usernameDisplay">管理员</span>
+                    <div class="user-avatar" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        <hr class="brush-divider">
+        <main class="main-content">
+            <ul class="nav nav-tabs-custom mb-4" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#custom-report" type="button"><i class="fas fa-cog me-2"></i>自定义报表</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#report-templates" type="button"><i class="fas fa-copy me-2"></i>报表模板</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#data-export" type="button"><i class="fas fa-download me-2"></i>数据导出</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#report-schedule" type="button"><i class="fas fa-clock me-2"></i>定时任务</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="custom-report">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-3">
+                            <div class="card-stat">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;"><i class="fas fa-file-alt"></i></div>
+                                    <div>
+                                        <div class="stat-label">自定义报表</div>
+                                        <div class="stat-value" id="customReportsCount">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card-stat">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-download"></i></div>
+                                    <div>
+                                        <div class="stat-label">导出次数</div>
+                                        <div class="stat-value" id="exportCount">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card-stat">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;"><i class="fas fa-clock"></i></div>
+                                    <div>
+                                        <div class="stat-label">定时任务</div>
+                                        <div class="stat-value" id="scheduleCount">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card-stat">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;"><i class="fas fa-history"></i></div>
+                                    <div>
+                                        <div class="stat-label">历史报表</div>
+                                        <div class="stat-value" id="historyCount">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="chart-card">
+                                <h5 class="mb-4"><i class="fas fa-list-check me-2" style="color: var(--gold);"></i>配置报表维度</h5>
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">可用维度</label>
+                                    <div class="mb-2">
+                                        <span class="dimension-tag"><i class="fas fa-calendar me-1"></i>时间</span>
+                                        <span class="dimension-tag"><i class="fas fa-mobile-alt me-1"></i>应用</span>
+                                        <span class="dimension-tag"><i class="fas fa-globe me-1"></i>地区</span>
+                                        <span class="dimension-tag"><i class="fas fa-shield-alt me-1"></i>验证类型</span>
+                                        <span class="dimension-tag"><i class="fas fa-exclamation-triangle me-1"></i>风险等级</span>
+                                        <span class="dimension-tag"><i class="fas fa-clock me-1"></i>时段</span>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-primary" id="addDimensionBtn"><i class="fas fa-plus me-1"></i>添加维度</button>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold">已选维度</label>
+                                    <div id="selectedDimensions">
+                                        <div class="field-item">
+                                            <span><i class="fas fa-calendar text-primary me-2"></i>时间</span>
+                                            <button class="btn btn-sm btn-link text-danger p-0"><i class="fas fa-times"></i></button>
+                                        </div>
+                                        <div class="field-item">
+                                            <span><i class="fas fa-mobile-alt text-primary me-2"></i>应用</span>
+                                            <button class="btn btn-sm btn-link text-danger p-0"><i class="fas fa-times"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label fw-bold">可用指标</label>
+                                    <div class="mb-2">
+                                        <span class="metric-tag"><i class="fas fa-rocket me-1"></i>请求量</span>
+                                        <span class="metric-tag"><i class="fas fa-check-circle me-1"></i>成功数</span>
+                                        <span class="metric-tag"><i class="fas fa-times-circle me-1"></i>失败数</span>
+                                        <span class="metric-tag"><i class="fas fa-percent me-1"></i>成功率</span>
+                                        <span class="metric-tag"><i class="fas fa-clock me-1"></i>平均响应</span>
+                                        <span class="metric-tag"><i class="fas fa-users me-1"></i>独立用户</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="chart-card">
+                                <div class="d-flex justify-content-between align-items-center mb-4">
+                                    <h5 class="mb-0"><i class="fas fa-eye me-2" style="color: var(--gold);"></i>报表预览</h5>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary active" data-chart="table"><i class="fas fa-table"></i></button>
+                                        <button class="btn btn-outline-secondary" data-chart="bar"><i class="fas fa-chart-bar"></i></button>
+                                        <button class="btn btn-outline-secondary" data-chart="line"><i class="fas fa-chart-line"></i></button>
+                                        <button class="btn btn-outline-secondary" data-chart="pie"><i class="fas fa-chart-pie"></i></button>
+                                    </div>
+                                </div>
+                                <div id="reportPreview">
+                                    <div class="table-responsive">
+                                        <table class="table preview-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>日期</th>
+                                                    <th>应用</th>
+                                                    <th>请求量</th>
+                                                    <th>成功数</th>
+                                                    <th>失败数</th>
+                                                    <th>成功率</th>
+                                                    <th>平均响应</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="previewTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <canvas id="previewChart" height="200" style="display: none;"></canvas>
+                                <div class="mt-4 d-flex gap-2">
+                                    <button class="btn-gold flex-fill" id="saveReportBtn"><i class="fas fa-save me-2"></i>保存报表</button>
+                                    <button class="btn-cinnabar flex-fill" id="exportReportBtn"><i class="fas fa-download me-2"></i>导出数据</button>
+                                    <button class="btn btn-outline-secondary" id="printPreviewBtn"><i class="fas fa-print me-2"></i>打印</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="report-templates">
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="daily">
+                                <div class="template-icon mx-auto" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;"><i class="fas fa-calendar-day"></i></div>
+                                <h6>日报表</h6>
+                                <p class="text-muted small mb-2">每日运营数据汇总</p>
+                                <span class="badge bg-primary">使用 245 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="weekly">
+                                <div class="template-icon mx-auto" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-calendar-week"></i></div>
+                                <h6>周报表</h6>
+                                <p class="text-muted small mb-2">每周数据趋势分析</p>
+                                <span class="badge bg-success">使用 89 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="monthly">
+                                <div class="template-icon mx-auto" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;"><i class="fas fa-calendar-alt"></i></div>
+                                <h6>月报表</h6>
+                                <p class="text-muted small mb-2">月度综合运营报告</p>
+                                <span class="badge bg-warning">使用 56 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="security">
+                                <div class="template-icon mx-auto" style="background: rgba(194, 58, 43, 0.1); color: #c23a2b;"><i class="fas fa-shield-alt"></i></div>
+                                <h6>安全报告</h6>
+                                <p class="text-muted small mb-2">安全事件与风险分析</p>
+                                <span class="badge bg-danger">使用 124 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="performance">
+                                <div class="template-icon mx-auto" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;"><i class="fas fa-tachometer-alt"></i></div>
+                                <h6>性能报告</h6>
+                                <p class="text-muted small mb-2">系统性能与响应分析</p>
+                                <span class="badge bg-secondary">使用 67 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="user">
+                                <div class="template-icon mx-auto" style="background: rgba(236, 72, 153, 0.1); color: #ec4899;"><i class="fas fa-users"></i></div>
+                                <h6>用户报告</h6>
+                                <p class="text-muted small mb-2">用户行为与增长分析</p>
+                                <span class="badge bg-secondary">使用 45 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="application">
+                                <div class="template-icon mx-auto" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;"><i class="fas fa-mobile-alt"></i></div>
+                                <h6>应用报告</h6>
+                                <p class="text-muted small mb-2">各应用使用情况对比</p>
+                                <span class="badge bg-secondary">使用 78 次</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="template-card text-center" data-template="custom" style="border-style: dashed;">
+                                <div class="template-icon mx-auto" style="background: rgba(107, 114, 128, 0.1); color: #6b7280;"><i class="fas fa-plus"></i></div>
+                                <h6>自定义模板</h6>
+                                <p class="text-muted small mb-2">创建自定义报表模板</p>
+                                <span class="badge bg-secondary">新建</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-card" id="templateDetail">
+                        <h5 class="mb-4"><i class="fas fa-info-circle me-2" style="color: var(--gold);"></i>模板详情</h5>
+                        <div class="alert alert-info"><i class="fas fa-hand-pointer me-2"></i>请选择一个模板查看详情</div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="data-export">
+                    <div class="row g-4">
+                        <div class="col-md-8">
+                            <div class="chart-card">
+                                <h5 class="mb-4"><i class="fas fa-file-export me-2" style="color: var(--gold);"></i>导出配置</h5>
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label">数据源</label>
+                                        <select class="form-select" id="exportDataSource">
+                                            <option value="requests">验证请求记录</option>
+                                            <option value="users">用户数据</option>
+                                            <option value="applications">应用数据</option>
+                                            <option value="logs">日志数据</option>
+                                            <option value="security">安全事件</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">时间范围</label>
+                                        <select class="form-select" id="exportTimeRange">
+                                            <option value="today">今日</option>
+                                            <option value="yesterday">昨日</option>
+                                            <option value="7d">最近7天</option>
+                                            <option value="30d" selected>最近30天</option>
+                                            <option value="90d">最近90天</option>
+                                            <option value="custom">自定义</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 d-none" id="customDateRange">
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <label class="form-label">开始日期</label>
+                                                <input type="date" class="form-control" id="exportStartDate">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">结束日期</label>
+                                                <input type="date" class="form-control" id="exportEndDate">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">预估数据量</label>
+                                                <input type="text" class="form-control" id="estimatedSize" readonly placeholder="计算中...">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label">导出字段</label>
+                                    <div class="row g-2">
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox" checked disabled><label class="form-check-label">ID</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">时间</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">应用</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox" checked><label class="form-check-label">结果</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">用户IP</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">设备信息</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">地理位置</label></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check"><input class="form-check-input" type="checkbox"><label class="form-check-label">风险评分</label></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label">导出格式</label>
+                                    <div class="row g-3">
+                                        <div class="col-md-3">
+                                            <div class="export-format-btn active" data-format="csv">
+                                                <i class="fas fa-file-csv" style="color: #28a745;"></i>
+                                                <div class="fw-bold">CSV</div>
+                                                <small class="text-muted">逗号分隔</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="export-format-btn" data-format="excel">
+                                                <i class="fas fa-file-excel" style="color: #217346;"></i>
+                                                <div class="fw-bold">Excel</div>
+                                                <small class="text-muted">.xlsx 格式</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="export-format-btn" data-format="json">
+                                                <i class="fas fa-file-code" style="color: #f59e0b;"></i>
+                                                <div class="fw-bold">JSON</div>
+                                                <small class="text-muted">结构化数据</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="export-format-btn" data-format="pdf">
+                                                <i class="fas fa-file-pdf" style="color: #dc3545;"></i>
+                                                <div class="fw-bold">PDF</div>
+                                                <small class="text-muted">便携式文档</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-3">
+                                    <button class="btn-gold flex-fill" id="startExportBtn"><i class="fas fa-download me-2"></i>开始导出</button>
+                                    <button class="btn btn-outline-secondary" id="scheduleExportBtn"><i class="fas fa-clock me-2"></i>定时导出</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="chart-card">
+                                <h5 class="mb-4"><i class="fas fa-history me-2" style="color: var(--gold);"></i>导出历史</h5>
+                                <div id="exportHistory">
+                                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
+                                        <div><div class="fw-bold">验证报表_2024-01-15.csv</div><small class="text-muted">2024-01-15 14:30</small></div>
+                                        <div><span class="badge bg-success">完成</span></div>
+                                    </div>
+                                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
+                                        <div><div class="fw-bold">用户数据_2024-01-14.xlsx</div><small class="text-muted">2024-01-14 10:15</small></div>
+                                        <div><span class="badge bg-success">完成</span></div>
+                                    </div>
+                                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
+                                        <div><div class="fw-bold">安全事件_2024-01-13.pdf</div><small class="text-muted">2024-01-13 16:45</small></div>
+                                        <div><span class="badge bg-success">完成</span></div>
+                                    </div>
+                                    <div class="d-flex align-items-center justify-content-between py-3">
+                                        <div><div class="fw-bold">日志导出_2024-01-12.json</div><small class="text-muted">2024-01-12 09:00</small></div>
+                                        <div><span class="badge bg-warning">处理中</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="report-schedule">
+                    <div class="row g-4">
+                        <div class="col-md-5">
+                            <div class="chart-card">
+                                <h5 class="mb-4"><i class="fas fa-calendar-plus me-2" style="color: var(--gold);"></i>创建定时任务</h5>
+                                <div class="mb-3">
+                                    <label class="form-label">任务名称</label>
+                                    <input type="text" class="form-control" id="scheduleName" placeholder="例如：每日运营报表">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">报表模板</label>
+                                    <select class="form-select" id="scheduleTemplate">
+                                        <option value="daily">日报表</option>
+                                        <option value="weekly">周报表</option>
+                                        <option value="monthly">月报表</option>
+                                        <option value="security">安全报告</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">执行周期</label>
+                                    <select class="form-select" id="scheduleFrequency">
+                                        <option value="daily">每天</option>
+                                        <option value="weekly">每周</option>
+                                        <option value="monthly">每月</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">执行时间</label>
+                                    <input type="time" class="form-control" id="scheduleTime" value="09:00">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">导出格式</label>
+                                    <select class="form-select" id="scheduleFormat">
+                                        <option value="csv">CSV</option>
+                                        <option value="excel">Excel</option>
+                                        <option value="pdf">PDF</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">通知方式</label>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" id="notifyEmail" checked><label class="form-check-label">邮件通知</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" id="notifyWebhook"><label class="form-check-label">Webhook 回调</label></div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">通知邮箱</label>
+                                    <input type="email" class="form-control" id="notifyEmailAddress" placeholder="admin@example.com">
+                                </div>
+                                <button class="btn-gold w-100" id="createScheduleBtn"><i class="fas fa-plus me-2"></i>创建定时任务</button>
+                            </div>
+                        </div>
+                        <div class="col-md-7">
+                            <div class="chart-card">
+                                <h5 class="mb-4"><i class="fas fa-list-check me-2" style="color: var(--gold);"></i>定时任务列表</h5>
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>任务名称</th>
+                                                <th>执行周期</th>
+                                                <th>下次执行</th>
+                                                <th>状态</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="scheduleListBody">
+                                            <tr>
+                                                <td><i class="fas fa-calendar-day me-2 text-primary"></i>每日运营报表</td>
+                                                <td>每天 09:00</td>
+                                                <td>明天 09:00</td>
+                                                <td><span class="schedule-badge"><i class="fas fa-play"></i>运行中</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-link text-primary"><i class="fas fa-edit"></i></button>
+                                                    <button class="btn btn-sm btn-link text-danger"><i class="fas fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><i class="fas fa-calendar-week me-2 text-success"></i>周数据汇总</td>
+                                                <td>每周一 08:00</td>
+                                                <td>下周一 08:00</td>
+                                                <td><span class="schedule-badge"><i class="fas fa-play"></i>运行中</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-link text-primary"><i class="fas fa-edit"></i></button>
+                                                    <button class="btn btn-sm btn-link text-danger"><i class="fas fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><i class="fas fa-shield-alt me-2 text-danger"></i>安全周报</td>
+                                                <td>每周五 18:00</td>
+                                                <td>周五 18:00</td>
+                                                <td><span class="schedule-badge"><i class="fas fa-pause"></i>已暂停</span></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-link text-primary"><i class="fas fa-play"></i></button>
+                                                    <button class="btn btn-sm btn-link text-danger"><i class="fas fa-trash"></i></button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal fade" id="exportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-download me-2"></i>导出数据</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center" id="exportModalBody">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <p>正在导出数据，请稍候...</p>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="saveReportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-save me-2"></i>保存报表</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">报表名称</label>
+                        <input type="text" class="form-control" id="reportName" placeholder="输入报表名称">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" id="reportDescription" rows="3" placeholder="报表描述（可选）"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-cinnabar" id="confirmSaveReport">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/reports.js"></script>
+</body>
+</html>
