@@ -55,6 +55,12 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
+	r.GET("/voice-captcha", func(c *gin.Context) {
+		c.HTML(200, "voice-captcha.html", gin.H{
+			"title": "语音验证码",
+		})
+	})
+
 	adminRouter := r.Group("/admin")
 	{
 		adminRouter.GET("/", func(c *gin.Context) {

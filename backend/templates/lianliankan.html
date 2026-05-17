@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="墨盾验证 - 连连看验证码">
+    <title>连连看验证码 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --captcha-primary: #c9a96e;
+            --captcha-success: #28a745;
+            --captcha-danger: #dc3545;
+            --captcha-dark: #1a1a2e;
+            --captcha-light: #f8f9fa;
+            --captcha-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-bs-theme="dark"] {
+            --captcha-light: #2d2d44;
+            --captcha-dark: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .captcha-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, #d4b87a 100%);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .card-header h1 {
+            font-size: 1.5rem;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 24px;
+        }
+
+        .board-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .board {
+            display: grid;
+            gap: 4px;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .tile {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .tile:hover {
+            border-color: var(--captcha-primary);
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(201, 169, 110, 0.3);
+        }
+
+        .tile.selected {
+            border-color: var(--captcha-primary);
+            background: rgba(201, 169, 110, 0.1);
+            box-shadow: 0 0 0 3px rgba(201, 169, 110, 0.3);
+        }
+
+        .tile.matched {
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0);
+        }
+
+        .tile.wrong {
+            animation: shake 0.5s ease;
+            border-color: var(--captcha-danger);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, #d4b87a 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(201, 169, 110, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--captcha-light);
+            color: var(--captcha-dark);
+            border: 1px solid #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--captcha-light);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .info-item i {
+            color: var(--captcha-primary);
+        }
+
+        .result-banner {
+            display: none;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 16px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-banner.show {
+            display: block;
+        }
+
+        .result-banner.success {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--captcha-success);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+        }
+
+        .result-banner.error {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--captcha-danger);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(201, 169, 110, 0.2);
+            border-top-color: var(--captcha-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="captcha-card">
+            <div class="card-header">
+                <h1><i class="fas fa-gamepad me-2"></i>连连看验证码</h1>
+            </div>
+            <div class="card-body">
+                <div class="info-bar">
+                    <div class="info-item">
+                        <i class="fas fa-check-double"></i>
+                        <span>匹配对数: <strong id="match-count">0</strong>/<span id="total-pairs">0</span></span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-clock"></i>
+                        <span id="timer">00:00</span>
+                    </div>
+                </div>
+
+                <div class="board-container">
+                    <div id="board" class="board"></div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-secondary" id="refresh-btn">
+                        <i class="fas fa-redo me-2"></i>刷新
+                    </button>
+                    <button class="btn btn-primary" id="submit-btn">
+                        <i class="fas fa-check me-2"></i>提交验证
+                    </button>
+                </div>
+
+                <div id="result-banner" class="result-banner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        class LianLianKanCaptcha {
+            constructor() {
+                this.sessionId = null;
+                this.board = null;
+                this.boardData = null;
+                this.tileIcons = [];
+                this.selectedTile = null;
+                this.matchedTiles = new Set();
+                this.matchedPairs = [];
+                this.timerInterval = null;
+                this.seconds = 0;
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.refresh();
+            }
+
+            bindEvents() {
+                document.getElementById('refresh-btn').addEventListener('click', () => this.refresh());
+                document.getElementById('submit-btn').addEventListener('click', () => this.submit());
+            }
+
+            async refresh() {
+                this.showLoading(true);
+                this.hideResult();
+                this.resetTimer();
+
+                try {
+                    const response = await fetch('/api/v1/captcha/lianliankan/create', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            width: 6,
+                            height: 6,
+                            tile_types: 8
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.code === 0) {
+                        this.sessionId = result.data.session_id;
+                        this.boardData = result.data.board;
+                        this.tileIcons = result.data.tile_icons;
+                        this.renderBoard();
+                        this.startTimer();
+                    } else {
+                        this.showResult(false, result.message || '生成验证码失败');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showResult(false, '网络错误，请重试');
+                } finally {
+                    this.showLoading(false);
+                }
+            }
+
+            renderBoard() {
+                this.selectedTile = null;
+                this.matchedTiles = new Set();
+                this.matchedPairs = [];
+                document.getElementById('match-count').textContent = '0';
+                document.getElementById('total-pairs').textContent = this.boardData.pair_count;
+
+                const boardEl = document.getElementById('board');
+                boardEl.innerHTML = '';
+                boardEl.style.gridTemplateColumns = `repeat(${this.boardData.width}, 50px)`;
+
+                for (let y = 0; y < this.boardData.height; y++) {
+                    for (let x = 0; x < this.boardData.width; x++) {
+                        const tile = this.boardData.tiles[y][x];
+                        const tileEl = document.createElement('div');
+                        tileEl.className = 'tile';
+                        tileEl.dataset.x = x;
+                        tileEl.dataset.y = y;
+                        tileEl.dataset.index = tile.index;
+                        tileEl.dataset.type = tile.type;
+                        tileEl.textContent = this.tileIcons[tile.type];
+                        tileEl.addEventListener('click', () => this.handleTileClick(tile, tileEl));
+                        boardEl.appendChild(tileEl);
+                    }
+                }
+            }
+
+            handleTileClick(tile, tileEl) {
+                if (this.matchedTiles.has(tile.index)) {
+                    return;
+                }
+
+                if (this.selectedTile && this.selectedTile.index === tile.index) {
+                    tileEl.classList.remove('selected');
+                    this.selectedTile = null;
+                    return;
+                }
+
+                if (this.selectedTile) {
+                    if (this.selectedTile.type === tile.type) {
+                        this.matchTiles(this.selectedTile, tile);
+                    } else {
+                        this.wrongMatch(this.selectedTile, tile);
+                    }
+                } else {
+                    tileEl.classList.add('selected');
+                    this.selectedTile = tile;
+                }
+            }
+
+            matchTiles(tile1, tile2) {
+                const tile1El = document.querySelector(`.tile[data-index="${tile1.index}"]`);
+                const tile2El = document.querySelector(`.tile[data-index="${tile2.index}"]`);
+
+                tile1El.classList.remove('selected');
+                tile1El.classList.add('matched');
+                tile2El.classList.add('matched');
+
+                this.matchedTiles.add(tile1.index);
+                this.matchedTiles.add(tile2.index);
+                this.matchedPairs.push({
+                    tile1: tile1,
+                    tile2: tile2
+                });
+
+                this.selectedTile = null;
+                document.getElementById('match-count').textContent = this.matchedPairs.length;
+
+                if (this.matchedPairs.length === this.boardData.pair_count) {
+                    setTimeout(() => this.submit(), 500);
+                }
+            }
+
+            wrongMatch(tile1, tile2) {
+                const tile1El = document.querySelector(`.tile[data-index="${tile1.index}"]`);
+                const tile2El = document.querySelector(`.tile[data-index="${tile2.index}"]`);
+
+                tile1El.classList.remove('selected');
+                tile1El.classList.add('wrong');
+                tile2El.classList.add('wrong');
+
+                this.selectedTile = null;
+
+                setTimeout(() => {
+                    tile1El.classList.remove('wrong');
+                    tile2El.classList.remove('wrong');
+                }, 500);
+            }
+
+            async submit() {
+                if (!this.sessionId) {
+                    this.showResult(false, '请先生成验证码');
+                    return;
+                }
+
+                this.showLoading(true);
+
+                try {
+                    const response = await fetch('/api/v1/captcha/lianliankan/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            session_id: this.sessionId,
+                            board: this.boardData,
+                            pairs: this.matchedPairs
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.code === 0) {
+                        this.showResult(result.data.success, result.data.message || (result.data.success ? '验证成功！' : '验证失败'));
+                        if (result.data.success) {
+                            this.stopTimer();
+                        }
+                    } else {
+                        this.showResult(false, result.message || '验证失败');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    this.showResult(false, '网络错误，请重试');
+                } finally {
+                    this.showLoading(false);
+                }
+            }
+
+            startTimer() {
+                this.seconds = 0;
+                this.updateTimerDisplay();
+                this.timerInterval = setInterval(() => {
+                    this.seconds++;
+                    this.updateTimerDisplay();
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            resetTimer() {
+                this.stopTimer();
+                this.seconds = 0;
+                this.updateTimerDisplay();
+            }
+
+            updateTimerDisplay() {
+                const minutes = Math.floor(this.seconds / 60).toString().padStart(2, '0');
+                const seconds = (this.seconds % 60).toString().padStart(2, '0');
+                document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+            }
+
+            showResult(success, message) {
+                const banner = document.getElementById('result-banner');
+                banner.className = `result-banner show ${success ? 'success' : 'error'}`;
+                banner.innerHTML = `
+                    <i class="fas fa-${success ? 'check-circle' : 'times-circle'} me-2"></i>
+                    <strong>${message}</strong>
+                `;
+            }
+
+            hideResult() {
+                const banner = document.getElementById('result-banner');
+                banner.classList.remove('show');
+            }
+
+            showLoading(show) {
+                const overlay = document.getElementById('loading-overlay');
+                if (show) {
+                    overlay.classList.add('show');
+                } else {
+                    overlay.classList.remove('show');
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new LianLianKanCaptcha();
+        });
+    </script>
+</body>
+</html>

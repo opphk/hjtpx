@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="墨盾验证 - 无感验证，体验零打扰的智能人机识别">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>无感验证 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <script src="/static/js/environment-detector.js" defer></script>
+    <style>
+        :root {
+            --seamless-primary: #c9a96e;
+            --seamless-success: #28a745;
+            --seamless-danger: #dc3545;
+            --seamless-warning: #ffc107;
+            --seamless-dark: #1a1a2e;
+            --seamless-light: #f8f9fa;
+            --seamless-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        [data-bs-theme="dark"] {
+            --seamless-light: #2d2d44;
+            --seamless-dark: #f8f9fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+        }
+
+        [data-bs-theme="dark"] body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
+        }
+
+        .page-hero {
+            background: linear-gradient(135deg, var(--seamless-dark) 0%, #2d2d44 100%);
+            padding: 8rem 0 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-hero-particle {
+            position: absolute;
+            background: var(--seamless-primary);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float-particle 8s ease-in-out infinite;
+        }
+
+        @keyframes float-particle {
+            0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+            50% { transform: translateY(-30px) scale(1.2); opacity: 0.6; }
+        }
+
+        .font-serif {
+            font-family: 'Noto Serif SC', 'STSong', serif;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .slide-in-left {
+            animation: slideInLeft 0.4s ease-out;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: var(--seamless-transition);
+            border: 1px solid rgba(201,169,110,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        [data-bs-theme="dark"] .demo-card {
+            background: #2d2d44;
+        }
+
+        .demo-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(201,169,110,0.15) !important;
+        }
+
+        .demo-card.active-card {
+            border-color: var(--seamless-primary);
+            box-shadow: 0 0 0 3px rgba(201,169,110,0.2);
+        }
+
+        .demo-card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid rgba(201,169,110,0.1);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: linear-gradient(135deg, rgba(201,169,110,0.03) 0%, rgba(201,169,110,0.06) 100%);
+        }
+
+        .demo-card-body {
+            padding: 1.5rem;
+        }
+
+        .icon-wrap {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--seamless-primary) 0%, #d4b87a 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(201,169,110,0.3);
+        }
+
+        .btn {
+            border-radius: 6px;
+            font-weight: 500;
+            transition: var(--seamless-transition);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--seamless-primary) 0%, #d4b87a 100%);
+            border-color: var(--seamless-primary);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #b8954f 0%, #c9a96e 100%);
+            border-color: #b8954f;
+            box-shadow: 0 4px 12px rgba(201,169,110,0.4);
+        }
+
+        .btn-dark {
+            background: var(--seamless-dark);
+            border-color: var(--seamless-dark);
+            color: white;
+        }
+
+        [data-bs-theme="dark"] .btn-dark {
+            background: #3d3d5c;
+            border-color: #3d3d5c;
+        }
+
+        .btn-dark:hover {
+            background: #2d2d44;
+            border-color: #2d2d44;
+        }
+
+        .btn-outline-secondary {
+            border-color: #dee2e6;
+            color: #6c757d;
+        }
+
+        .btn-outline-secondary:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+            color: #495057;
+        }
+
+        .seamless-demo-area {
+            position: relative;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, rgba(201,169,110,0.05) 0%, rgba(201,169,110,0.1) 100%);
+            border: 1px dashed rgba(201,169,110,0.3);
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: var(--seamless-transition);
+        }
+
+        .seamless-demo-area:hover {
+            border-color: var(--seamless-primary);
+            background: linear-gradient(135deg, rgba(201,169,110,0.08) 0%, rgba(201,169,110,0.15) 100%);
+        }
+
+        .seamless-status-display {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .seamless-status-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            transition: var(--seamless-transition);
+        }
+
+        .seamless-status-icon.checking {
+            color: var(--seamless-primary);
+            animation: pulse-icon 2s ease-in-out infinite;
+        }
+
+        .seamless-status-icon.trusted {
+            color: var(--seamless-success);
+        }
+
+        .seamless-status-icon.untrusted {
+            color: var(--seamless-danger);
+        }
+
+        .seamless-status-icon.pending {
+            color: var(--seamless-warning);
+        }
+
+        @keyframes pulse-icon {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .seamless-status-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 0.5rem;
+        }
+
+        [data-bs-theme="dark"] .seamless-status-title {
+            color: #f8f9fa;
+        }
+
+        .seamless-status-desc {
+            font-size: 0.9rem;
+            color: #6c757d;
+            line-height: 1.6;
+        }
+
+        .seamless-progress-container {
+            width: 100%;
+            max-width: 300px;
+            margin: 1.5rem auto;
+        }
+
+        .seamless-progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            position: relative;
+        }
+
+        .seamless-progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 12px;
+            left: 24px;
+            right: 24px;
+            height: 2px;
+            background: #dee2e6;
+            z-index: 0;
+        }
+
+        .seamless-progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .seamless-step-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #dee2e6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            margin-bottom: 0.5rem;
+            transition: var(--seamless-transition);
+        }
+
+        .seamless-step-icon.active {
+            background: var(--seamless-primary);
+            animation: pulse-step 1.5s ease-in-out infinite;
+        }
+
+        .seamless-step-icon.completed {
+            background: var(--seamless-success);
+        }
+
+        .seamless-step-icon.pending {
+            background: #dee2e6;
+        }
+
+        @keyframes pulse-step {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(201,169,110,0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(201,169,110,0); }
+        }
+
+        .seamless-step-label {
+            font-size: 0.75rem;
+            color: #6c757d;
+            text-align: center;
+            max-width: 60px;
+        }
+
+        .seamless-step-label.active {
+            color: var(--seamless-primary);
+            font-weight: 500;
+        }
+
+        .seamless-step-label.completed {
+            color: var(--seamless-success);
+        }
+
+        .seamless-progress-bar-wrapper {
+            width: 100%;
+            height: 6px;
+            background: rgba(201,169,110,0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .seamless-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--seamless-primary) 0%, #d4b87a 100%);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        .seamless-progress-text {
+            font-size: 0.8rem;
+            color: #6c757d;
+            text-align: center;
+        }
+
+        .seamless-fingerprint-display {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            width: 100%;
+            max-width: 320px;
+            margin: 1rem auto;
+        }
+
+        .seamless-fingerprint-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(201,169,110,0.05);
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+
+        .seamless-fingerprint-item i {
+            color: var(--seamless-primary);
+            width: 16px;
+        }
+
+        .seamless-fingerprint-item span {
+            color: #495057;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        [data-bs-theme="dark"] .seamless-fingerprint-item span {
+            color: #adb5bd;
+        }
+
+        .seamless-result-banner {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: var(--seamless-transition);
+            margin-top: 1rem;
+        }
+
+        .seamless-result-banner.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .seamless-result-banner.success {
+            background: rgba(40,167,69,0.1);
+            color: var(--seamless-success);
+            border: 1px solid rgba(40,167,69,0.2);
+        }
+
+        .seamless-result-banner.error {
+            background: rgba(220,53,69,0.1);
+            color: var(--seamless-danger);
+            border: 1px solid rgba(220,53,69,0.2);
+        }
+
+        .seamless-trust-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .seamless-trust-badge.trusted {
+            background: rgba(40,167,69,0.1);
+            color: var(--seamless-success);
+            border: 1px solid rgba(40,167,69,0.2);
+        }
+
+        .seamless-trust-badge.untrusted {
+            background: rgba(220,53,69,0.1);
+            color: var(--seamless-danger);
+            border: 1px solid rgba(220,53,69,0.2);
+        }
+
+        .seamless-trust-badge.pending {
+            background: rgba(255,193,7,0.1);
+            color: var(--seamless-warning);
+            border: 1px solid rgba(255,193,7,0.2);
+        }
+
+        .seamless-error-hint {
+            background: rgba(220,53,69,0.1);
+            border: 1px solid rgba(220,53,69,0.3);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin-top: 1rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .seamless-error-hint i {
+            color: var(--seamless-danger);
+            margin-top: 0.125rem;
+        }
+
+        .seamless-error-hint-text {
+            flex: 1;
+        }
+
+        .seamless-error-hint-title {
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 0.25rem;
+        }
+
+        [data-bs-theme="dark"] .seamless-error-hint-title {
+            color: #f8f9fa;
+        }
+
+        .seamless-error-hint-desc {
+            font-size: 0.875rem;
+            color: #6c757d;
+            line-height: 1.5;
+        }
+
+        .seamless-info-card {
+            background: rgba(201,169,110,0.05);
+            border: 1px solid rgba(201,169,110,0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .seamless-info-card-title {
+            font-weight: 600;
+            color: var(--seamless-primary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .seamless-info-card-content {
+            font-size: 0.85rem;
+            color: #6c757d;
+            line-height: 1.6;
+        }
+
+        .feature-icon-wrap {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--seamless-primary) 0%, #d4b87a 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(201,169,110,0.3);
+        }
+
+        .tech-badge {
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            border: 1px solid;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .nav-link {
+            border-radius: 8px;
+            padding: 0.6rem 1.2rem;
+            transition: var(--seamless-transition);
+            border: 1px solid transparent;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: rgba(201,169,110,0.1);
+            border-color: rgba(201,169,110,0.2);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, var(--seamless-primary) 0%, #d4b87a 100%);
+            color: white !important;
+            border-color: var(--seamless-primary);
+            box-shadow: 0 4px 12px rgba(201,169,110,0.3);
+        }
+
+        .seamless-lang-switch {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+
+        .seamless-lang-btn {
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            transition: var(--seamless-transition);
+            font-size: inherit;
+        }
+
+        .seamless-lang-btn.active {
+            background: var(--seamless-primary);
+            color: white;
+        }
+
+        .seamless-lang-btn:hover:not(.active) {
+            color: white;
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .seamless-success-bounce {
+            animation: bounce 0.6s ease-out;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .seamless-error-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @media (max-width: 991.98px) {
+            .nav-pills {
+                flex-wrap: wrap;
+            }
+
+            .nav-link {
+                flex: 1 1 45%;
+                min-width: 120px;
+            }
+
+            .demo-card-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .icon-wrap {
+                margin: 0 auto;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .page-hero {
+                padding: 6rem 0 3rem;
+            }
+
+            .display-4 {
+                font-size: 2rem;
+            }
+
+            .nav-link {
+                flex: 1 1 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            .demo-card-body {
+                padding: 1rem;
+            }
+
+            .seamless-demo-area {
+                min-height: 250px;
+            }
+
+            .seamless-fingerprint-display {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        [role="button"] {
+            cursor: pointer;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--seamless-primary);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-contrast: high) {
+            :root {
+                --seamless-primary: #ffd700;
+                --seamless-success: #00ff00;
+                --seamless-danger: #ff0000;
+                --seamless-dark: #000000;
+                --seamless-light: #ffffff;
+            }
+            
+            .demo-card {
+                border: 2px solid #000;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <span class="fw-bold small text-uppercase" style="border: 1px solid #c9a96e; color: #c9a96e; padding: 1px 4px; font-size: 0.7rem;">墨盾</span>
+                <span class="font-serif fw-bold fs-5" style="color: #c9a96e;">墨盾验证</span>
+            </a>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="color: #c9a96e;">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav mx-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/captcha">在线体验</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/seamless">无感验证</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
+                    <li class="nav-item"><a class="nav-link" href="https://github.com/opphk/hjtpx" target="_blank">开源</a></li>
+                </ul>
+                <div class="d-flex gap-2">
+                    <div class="seamless-lang-switch" role="group" aria-label="语言切换">
+                        <button type="button" class="seamless-lang-btn active" data-lang="zh-CN" aria-pressed="true">中文</button>
+                        <button type="button" class="seamless-lang-btn" data-lang="en-US" aria-pressed="false">EN</button>
+                    </div>
+                    <a href="/login" class="btn btn-ghost-light btn-sm px-3">登录</a>
+                    <a href="/register" class="btn btn-danger btn-sm px-3">注册</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <section class="page-hero">
+        <div class="page-hero-particles" id="heroParticles"></div>
+        <div class="container position-relative" style="z-index: 1;">
+            <div class="text-center">
+                <div class="d-inline-flex align-items-center gap-2 mb-3 px-3 py-2" style="background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.2); border-radius: 4px;">
+                    <i class="fas fa-shield-alt" style="color: #c9a96e; font-size: 0.8rem;"></i>
+                    <span style="color: #c9a96e; font-size: 0.85rem; letter-spacing: 1px;">零打扰 · 智能识别</span>
+                </div>
+                <h1 class="display-4 fw-bold text-white mb-3 font-serif">
+                    无感验证
+                </h1>
+                <div class="hr w-25 mx-auto" style="background: linear-gradient(90deg, transparent, #c9a96e 20%, #c9a96e 80%, transparent); opacity: 0.5;"></div>
+                <p class="fs-5 mt-3" style="color: rgba(255,255,255,0.6); max-width: 560px; margin-left: auto; margin-right: auto; line-height: 1.8;">
+                    无需任何操作，后台静默完成人机识别。<br>
+                    感受 <span style="color: #c9a96e;">零打扰</span> 的智能验证体验
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5 bg-light">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="font-serif fs-6" style="color: #c9a96e; letter-spacing: 3px;">— 实时演示 —</span>
+                <h2 class="font-serif fw-bold fs-2 mt-2" style="color: #1a1a2e;">体验无感验证</h2>
+                <div class="hr w-25 mx-auto mt-3"></div>
+            </div>
+
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="demo-card shadow-sm fade-in">
+                        <div class="demo-card-header">
+                            <div class="icon-wrap">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div>
+                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" data-i18n="seamlessTitle">设备信任验证</h5>
+                                <small style="color: #6c757d;" data-i18n="seamlessDesc">自动识别可信设备</small>
+                            </div>
+                        </div>
+                        <div class="demo-card-body">
+                            <div class="seamless-demo-area" id="seamlessDemoArea" role="application" aria-label="无感验证演示区域" aria-live="polite">
+                                <div class="seamless-status-display" id="seamlessStatusDisplay">
+                                    <div class="seamless-status-icon checking" id="seamlessStatusIcon">
+                                        <i class="fas fa-shield-alt"></i>
+                                    </div>
+                                    <div class="seamless-status-title" id="seamlessStatusTitle" data-i18n="checkingStatus">正在检测设备...</div>
+                                    <div class="seamless-status-desc" id="seamlessStatusDesc" data-i18n="checkingDesc">正在收集设备信息并分析行为特征</div>
+                                </div>
+
+                                <div class="seamless-progress-container" id="seamlessProgressContainer">
+                                    <div class="seamless-progress-steps" id="seamlessProgressSteps">
+                                        <div class="seamless-progress-step" data-step="fingerprint">
+                                            <div class="seamless-step-icon active" id="stepIconFingerprint">
+                                                <i class="fas fa-fingerprint"></i>
+                                            </div>
+                                            <div class="seamless-step-label active" id="stepLabelFingerprint" data-i18n="stepFingerprint">采集指纹</div>
+                                        </div>
+                                        <div class="seamless-progress-step" data-step="behavior">
+                                            <div class="seamless-step-icon pending" id="stepIconBehavior">
+                                                <i class="fas fa-brain"></i>
+                                            </div>
+                                            <div class="seamless-step-label" id="stepLabelBehavior" data-i18n="stepBehavior">行为分析</div>
+                                        </div>
+                                        <div class="seamless-progress-step" data-step="risk">
+                                            <div class="seamless-step-icon pending" id="stepIconRisk">
+                                                <i class="fas fa-chart-line"></i>
+                                            </div>
+                                            <div class="seamless-step-label" id="stepLabelRisk" data-i18n="stepRisk">风险评估</div>
+                                        </div>
+                                        <div class="seamless-progress-step" data-step="result">
+                                            <div class="seamless-step-icon pending" id="stepIconResult">
+                                                <i class="fas fa-check"></i>
+                                            </div>
+                                            <div class="seamless-step-label" id="stepLabelResult" data-i18n="stepResult">完成</div>
+                                        </div>
+                                    </div>
+                                    <div class="seamless-progress-bar-wrapper">
+                                        <div class="seamless-progress-bar" id="seamlessProgressBar" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="seamless-progress-text" id="seamlessProgressText" data-i18n="progressText">准备开始...</div>
+                                </div>
+
+                                <div class="seamless-fingerprint-display" id="seamlessFingerprintDisplay" style="display: none;">
+                                    <div class="seamless-fingerprint-item">
+                                        <i class="fas fa-desktop"></i>
+                                        <span id="fpDevice">--</span>
+                                    </div>
+                                    <div class="seamless-fingerprint-item">
+                                        <i class="fas fa-globe"></i>
+                                        <span id="fpBrowser">--</span>
+                                    </div>
+                                    <div class="seamless-fingerprint-item">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        <span id="fpLocation">--</span>
+                                    </div>
+                                    <div class="seamless-fingerprint-item">
+                                        <i class="fas fa-clock"></i>
+                                        <span id="fpTimezone">--</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 d-flex align-items-center justify-content-center gap-2 flex-wrap">
+                                <button class="btn btn-danger" id="startSeamlessBtn" aria-label="开始无感验证">
+                                    <i class="fas fa-play me-1"></i>
+                                    <span data-i18n="startVerify">开始验证</span>
+                                </button>
+                                <button class="btn btn-dark" id="resetSeamlessBtn" aria-label="重置验证">
+                                    <i class="fas fa-redo me-1"></i>
+                                    <span data-i18n="resetVerify">重置</span>
+                                </button>
+                                <button class="btn btn-outline-secondary" id="trustDeviceBtn" aria-label="信任此设备" disabled>
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    <span data-i18n="trustDevice">信任设备</span>
+                                </button>
+                            </div>
+
+                            <div class="seamless-result-banner" id="seamlessResult" role="status" aria-live="polite">
+                                <i class="fas fa-check-circle" id="resultIcon"></i>
+                                <span id="seamlessResultText"></span>
+                            </div>
+
+                            <div class="seamless-error-hint" id="seamlessErrorHint" style="display: none;">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <div class="seamless-error-hint-text">
+                                    <div class="seamless-error-hint-title" id="errorTitle"></div>
+                                    <div class="seamless-error-hint-desc" id="errorDesc"></div>
+                                </div>
+                            </div>
+
+                            <div class="seamless-info-card" id="seamlessInfoCard">
+                                <div class="seamless-info-card-title">
+                                    <i class="fas fa-info-circle"></i>
+                                    <span data-i18n="infoTitle">关于无感验证</span>
+                                </div>
+                                <div class="seamless-info-card-content" data-i18n="infoContent">
+                                    无感验证通过采集设备指纹、分析用户行为模式、评估访问风险，在后台静默完成人机识别。
+                                    整个过程用户无感知，无需任何操作，真正实现零打扰的验证体验。
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5" style="background: white;">
+        <div class="container py-4">
+            <div class="text-center mb-5">
+                <span class="font-serif fs-6" style="color: #c9a96e; letter-spacing: 3px;">— 技术特性 —</span>
+                <h2 class="font-serif fw-bold fs-2 mt-2" style="color: #1a1a2e;">多维度智能检测</h2>
+                <div class="hr w-25 mx-auto mt-3"></div>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
+                        <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <div>
+                            <h6 class="font-serif fw-bold mb-1">设备指纹识别</h6>
+                            <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">
+                                采集屏幕分辨率、浏览器指纹、Canvas特征、音频指纹等多维度信息，构建唯一设备标识
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
+                        <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div>
+                            <h6 class="font-serif fw-bold mb-1">行为序列分析</h6>
+                            <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">
+                                分析鼠标轨迹、键盘节奏、页面浏览模式，识别机器人和真人操作差异
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
+                        <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div>
+                            <h6 class="font-serif fw-bold mb-1">实时风险评分</h6>
+                            <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">
+                                综合20+维度特征进行风险评分，毫秒级响应，精准识别异常流量
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="py-5 bg-light">
+        <div class="container py-4">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-6">
+                    <div style="background: white; border-radius: 4px; padding: 1.5rem; border-left: 3px solid #c9a96e;">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fas fa-code" style="color: #c9a96e;"></i>
+                            <span class="font-serif fw-bold" style="font-size: 0.9rem;">集成示例</span>
+                        </div>
+                        <pre style="background: #1a1a2e; color: #e0e0e0; padding: 1.2rem; border-radius: 4px; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;"><span style="color: #c9a96e;">// 初始化无感验证</span>
+<span style="color: #8ab4f8;">const</span> seamless = <span style="color: #8ab4f8;">new</span> <span style="color: #82c882;">SeamlessCaptcha</span>({
+    apiBase: <span style="color: #e8c88a;">'/api/v1'</span>,
+    autoVerify: <span style="color: #8ab4f8;">true</span>,
+    onTrustChange: <span style="color: #82c882;">function</span>(status) {
+        <span style="color: #8ab4f8;">console</span>.<span style="color: #8ab4f8;">log</span>(<span style="color: #e8c88a;">'设备状态变更:'</span>, status);
+    }
+});
+
+<span style="color: #c9a96e;">// 检查设备信任状态</span>
+seamless.<span style="color: #8ab4f8;">checkStatus</span>().<span style="color: #8ab4f8;">then</span>(result => {
+    <span style="color: #8ab4f8;">console</span>.<span style="color: #8ab4f8;">log</span>(<span style="color: #e8c88a;">'信任状态:'</span>, result);
+});</pre>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div style="background: white; border-radius: 4px; padding: 1.5rem; border-left: 3px solid #c9a96e;">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fas fa-layer-group" style="color: #c9a96e;"></i>
+                            <span class="font-serif fw-bold" style="font-size: 0.9rem;">验证流程</span>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge" style="background: var(--seamless-primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.75rem;">1</span>
+                                <span style="color: #495057; font-size: 0.9rem;">页面加载时自动采集设备指纹</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge" style="background: var(--seamless-primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.75rem;">2</span>
+                                <span style="color: #495057; font-size: 0.9rem;">后台实时分析用户行为序列</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge" style="background: var(--seamless-primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.75rem;">3</span>
+                                <span style="color: #495057; font-size: 0.9rem;">综合评分计算风险等级</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge" style="background: var(--seamless-primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.75rem;">4</span>
+                                <span style="color: #495057; font-size: 0.9rem;">返回验证结果，标记可信设备</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer style="background: #1a1a2e;">
+        <div class="container py-5">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <span class="fw-bold small text-uppercase" style="border: 1px solid #c9a96e; color: #c9a96e; padding: 1px 4px; font-size: 0.7rem;">墨盾</span>
+                        <span class="font-serif fw-bold fs-5" style="color: #c9a96e;">墨盾验证</span>
+                    </div>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 0.9rem; line-height: 1.7;">
+                        以墨为盾，以技为矛。<br>
+                        致力于为每一个网站提供免费、开源、可靠的行为验证服务。
+                    </p>
+                    <div class="d-flex gap-3">
+                        <a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); font-size: 1.2rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">
+                            <i class="fab fa-github"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="fw-bold mb-3" style="color: #c9a96e; font-family: 'Noto Serif SC', serif;">产品</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="/captcha" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">在线体验</a></li>
+                        <li class="mb-2"><a href="/seamless" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">无感验证</a></li>
+                        <li class="mb-2"><a href="/about" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">功能介绍</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="fw-bold mb-3" style="color: #c9a96e; font-family: 'Noto Serif SC', serif;">开源</h6>
+                    <ul class="list-unstyled">
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">GitHub</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/issues" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">提交Issue</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/pulls" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">贡献代码</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-4">
+                    <h6 class="fw-bold mb-3" style="color: #c9a96e; font-family: 'Noto Serif SC', serif;">关于墨盾</h6>
+                    <p style="color: rgba(255,255,255,0.4); font-size: 0.9rem; line-height: 1.7;">
+                        墨盾验证是一个开源的行为验证码系统，使用 Go 语言开发。<br>
+                        我们坚信安全不应该是奢侈品，因此我们选择永久免费开放。
+                    </p>
+                </div>
+            </div>
+            <div class="border-top border-secondary mt-4 pt-4 text-center">
+                <p style="color: rgba(255,255,255,0.3); font-size: 0.85rem; margin-bottom: 0;">
+                    <i class="fas fa-copyright me-1"></i> 2026 墨盾验证 · 以 MIT 许可证开源 · 
+                    <a href="https://github.com/opphk/hjtpx" target="_blank" style="color: #c9a96e; text-decoration: none;">GitHub</a>
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/seamless.js"></script>
+    <script>
+        (function() {
+            var container = document.getElementById('heroParticles');
+            if (!container) return;
+            for (var i = 0; i < 15; i++) {
+                var p = document.createElement('div');
+                p.className = 'page-hero-particle';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                p.style.animationDelay = Math.random() * 8 + 's';
+                p.style.animationDuration = (6 + Math.random() * 6) + 's';
+                p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+                container.appendChild(p);
+            }
+        })();
+
+        var seamlessCaptcha = null;
+        var langManager = null;
+
+        try {
+            langManager = new CaptchaLanguageManager();
+        } catch (e) {
+            langManager = { getLocale: function() { return 'zh-CN'; } };
+        }
+
+        function initSeamlessCaptcha() {
+            try {
+                seamlessCaptcha = new SeamlessCaptcha('seamlessDemoArea', {
+                    apiBase: '/api/v1',
+                    language: langManager.getLocale(),
+                    autoStart: false,
+                    showProgress: true,
+                    showFingerprint: true,
+                    onStatusChange: function(status) {
+                        updateStatusDisplay(status);
+                    },
+                    onStepChange: function(step, progress) {
+                        updateStepDisplay(step, progress);
+                    },
+                    onTrustChange: function(isTrusted, trustLevel) {
+                        handleTrustChange(isTrusted, trustLevel);
+                    },
+                    onComplete: function(result) {
+                        handleVerificationComplete(result);
+                    },
+                    onError: function(error) {
+                        handleVerificationError(error);
+                    }
+                });
+            } catch (e) {
+                console.error('SeamlessCaptcha init error:', e);
+            }
+        }
+
+        function updateStatusDisplay(status) {
+            var icon = document.getElementById('seamlessStatusIcon');
+            var title = document.getElementById('seamlessStatusTitle');
+            var desc = document.getElementById('seamlessStatusDesc');
+
+            if (!icon || !title || !desc) return;
+
+            icon.className = 'seamless-status-icon';
+            icon.innerHTML = '<i class="fas fa-shield-alt"></i>';
+
+            switch (status) {
+                case 'checking':
+                    icon.classList.add('checking');
+                    title.textContent = getTranslation('checkingStatus');
+                    desc.textContent = getTranslation('checkingDesc');
+                    break;
+                case 'fingerprinting':
+                    icon.classList.add('checking');
+                    title.textContent = getTranslation('fingerprintingStatus');
+                    desc.textContent = getTranslation('fingerprintingDesc');
+                    break;
+                case 'analyzing':
+                    icon.classList.add('checking');
+                    title.textContent = getTranslation('analyzingStatus');
+                    desc.textContent = getTranslation('analyzingDesc');
+                    break;
+                case 'scoring':
+                    icon.classList.add('checking');
+                    title.textContent = getTranslation('scoringStatus');
+                    desc.textContent = getTranslation('scoringDesc');
+                    break;
+                case 'trusted':
+                    icon.classList.add('trusted');
+                    icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+                    title.textContent = getTranslation('trustedStatus');
+                    desc.textContent = getTranslation('trustedDesc');
+                    break;
+                case 'untrusted':
+                    icon.classList.add('untrusted');
+                    icon.innerHTML = '<i class="fas fa-times-circle"></i>';
+                    title.textContent = getTranslation('untrustedStatus');
+                    desc.textContent = getTranslation('untrustedDesc');
+                    break;
+                case 'pending':
+                    icon.classList.add('pending');
+                    icon.innerHTML = '<i class="fas fa-clock"></i>';
+                    title.textContent = getTranslation('pendingStatus');
+                    desc.textContent = getTranslation('pendingDesc');
+                    break;
+            }
+        }
+
+        function updateStepDisplay(step, progress) {
+            var steps = ['fingerprint', 'behavior', 'risk', 'result'];
+            var stepIndex = steps.indexOf(step);
+            
+            for (var i = 0; i < steps.length; i++) {
+                var stepName = steps[i];
+                var icon = document.getElementById('stepIcon' + stepName.charAt(0).toUpperCase() + stepName.slice(1));
+                var label = document.getElementById('stepLabel' + stepName.charAt(0).toUpperCase() + stepName.slice(1));
+                
+                if (!icon || !label) continue;
+
+                icon.className = 'seamless-step-icon';
+                label.className = 'seamless-step-label';
+
+                if (i < stepIndex) {
+                    icon.classList.add('completed');
+                    icon.innerHTML = '<i class="fas fa-check"></i>';
+                    label.classList.add('completed');
+                } else if (i === stepIndex) {
+                    icon.classList.add('active');
+                    icon.innerHTML = '<i class="fas fa-spinner fa-pulse"></i>';
+                    label.classList.add('active');
+                } else {
+                    icon.classList.add('pending');
+                    icon.innerHTML = '<i class="fas fa-circle"></i>';
+                }
+            }
+
+            var progressBar = document.getElementById('seamlessProgressBar');
+            var progressText = document.getElementById('seamlessProgressText');
+            if (progressBar) progressBar.style.width = progress + '%';
+            if (progressText) progressText.textContent = getStepLabel(step) + ' - ' + progress + '%';
+        }
+
+        function getStepLabel(step) {
+            var labels = {
+                'fingerprint': getTranslation('stepFingerprint'),
+                'behavior': getTranslation('stepBehavior'),
+                'risk': getTranslation('stepRisk'),
+                'result': getTranslation('stepResult')
+            };
+            return labels[step] || step;
+        }
+
+        function handleTrustChange(isTrusted, trustLevel) {
+            var trustBtn = document.getElementById('trustDeviceBtn');
+            if (trustBtn) {
+                trustBtn.disabled = !isTrusted;
+            }
+
+            var fpDisplay = document.getElementById('seamlessFingerprintDisplay');
+            if (fpDisplay && isTrusted) {
+                fpDisplay.style.display = 'grid';
+            }
+        }
+
+        function handleVerificationComplete(result) {
+            var resultBanner = document.getElementById('seamlessResult');
+            var resultText = document.getElementById('seamlessResultText');
+            var resultIcon = document.getElementById('resultIcon');
+
+            if (!resultBanner || !resultText || !resultIcon) return;
+
+            if (result.success) {
+                resultBanner.className = 'seamless-result-banner show success';
+                resultIcon.className = 'fas fa-check-circle';
+                resultText.textContent = getTranslation('verificationSuccess') + ' ' + getTranslation('trustLevel') + ': ' + result.trust_level;
+                animateSuccess(resultBanner);
+            } else {
+                resultBanner.className = 'seamless-result-banner show error';
+                resultIcon.className = 'fas fa-times-circle';
+                resultText.textContent = getTranslation('verificationFailed');
+                animateError(resultBanner);
+            }
+        }
+
+        function handleVerificationError(error) {
+            var errorHint = document.getElementById('seamlessErrorHint');
+            var errorTitle = document.getElementById('errorTitle');
+            var errorDesc = document.getElementById('errorDesc');
+
+            if (!errorHint || !errorTitle || !errorDesc) return;
+
+            errorHint.style.display = 'flex';
+            errorTitle.textContent = error.title || getTranslation('errorTitle');
+            errorDesc.textContent = error.message || getTranslation('errorMessage');
+        }
+
+        function startVerification() {
+            if (seamlessCaptcha && typeof seamlessCaptcha.start === 'function') {
+                seamlessCaptcha.start();
+            }
+        }
+
+        function resetVerification() {
+            if (seamlessCaptcha && typeof seamlessCaptcha.reset === 'function') {
+                seamlessCaptcha.reset();
+            }
+
+            var resultBanner = document.getElementById('seamlessResult');
+            var errorHint = document.getElementById('seamlessErrorHint');
+            var fpDisplay = document.getElementById('seamlessFingerprintDisplay');
+            var trustBtn = document.getElementById('trustDeviceBtn');
+
+            if (resultBanner) resultBanner.className = 'seamless-result-banner';
+            if (errorHint) errorHint.style.display = 'none';
+            if (fpDisplay) fpDisplay.style.display = 'none';
+            if (trustBtn) trustBtn.disabled = true;
+
+            updateStatusDisplay('checking');
+            updateStepDisplay('fingerprint', 0);
+        }
+
+        function trustDevice() {
+            if (seamlessCaptcha && typeof seamlessCaptcha.trustDevice === 'function') {
+                seamlessCaptcha.trustDevice();
+            }
+        }
+
+        function animateSuccess(element) {
+            element.classList.add('seamless-success-bounce');
+            setTimeout(function() {
+                element.classList.remove('seamless-success-bounce');
+            }, 600);
+        }
+
+        function animateError(element) {
+            element.classList.add('seamless-error-shake');
+            setTimeout(function() {
+                element.classList.remove('seamless-error-shake');
+            }, 500);
+        }
+
+        var translations = {
+            'zh-CN': {
+                seamlessTitle: '设备信任验证',
+                seamlessDesc: '自动识别可信设备',
+                checkingStatus: '正在检测设备...',
+                checkingDesc: '正在收集设备信息并分析行为特征',
+                fingerprintingStatus: '采集设备指纹',
+                fingerprintingDesc: '正在采集浏览器指纹、屏幕分辨率等信息',
+                analyzingStatus: '分析行为模式',
+                analyzingDesc: '正在分析鼠标轨迹、键盘节奏等行为',
+                scoringStatus: '计算风险评分',
+                scoringDesc: '正在综合评估设备风险等级',
+                trustedStatus: '设备可信',
+                trustedDesc: '该设备通过所有安全检测，可以安全访问',
+                untrustedStatus: '设备风险较高',
+                untrustedDesc: '检测到异常行为，建议完成其他验证',
+                pendingStatus: '等待验证',
+                pendingDesc: '请稍候，正在处理验证请求',
+                stepFingerprint: '采集指纹',
+                stepBehavior: '行为分析',
+                stepRisk: '风险评估',
+                stepResult: '完成',
+                progressText: '准备开始...',
+                startVerify: '开始验证',
+                resetVerify: '重置',
+                trustDevice: '信任设备',
+                infoTitle: '关于无感验证',
+                infoContent: '无感验证通过采集设备指纹、分析用户行为模式、评估访问风险，在后台静默完成人机识别。整个过程用户无感知，无需任何操作，真正实现零打扰的验证体验。',
+                verificationSuccess: '验证成功！',
+                verificationFailed: '验证失败，请重试',
+                trustLevel: '信任等级',
+                errorTitle: '验证出错',
+                errorMessage: '验证过程中出现错误，请重试'
+            },
+            'en-US': {
+                seamlessTitle: 'Device Trust Verification',
+                seamlessDesc: 'Automatically identify trusted devices',
+                checkingStatus: 'Checking device...',
+                checkingDesc: 'Collecting device information and analyzing behavior',
+                fingerprintingStatus: 'Collecting fingerprint',
+                fingerprintingDesc: 'Collecting browser fingerprint and screen resolution',
+                analyzingStatus: 'Analyzing behavior',
+                analyzingDesc: 'Analyzing mouse trajectory and keyboard rhythm',
+                scoringStatus: 'Calculating risk score',
+                scoringDesc: 'Evaluating device risk level',
+                trustedStatus: 'Device Trusted',
+                trustedDesc: 'This device passed all security checks',
+                untrustedStatus: 'High Risk Device',
+                untrustedDesc: 'Abnormal behavior detected, additional verification recommended',
+                pendingStatus: 'Pending Verification',
+                pendingDesc: 'Please wait, processing verification request',
+                stepFingerprint: 'Fingerprint',
+                stepBehavior: 'Analysis',
+                stepRisk: 'Risk Score',
+                stepResult: 'Complete',
+                progressText: 'Preparing...',
+                startVerify: 'Start',
+                resetVerify: 'Reset',
+                trustDevice: 'Trust Device',
+                infoTitle: 'About Passive Verification',
+                infoContent: 'Passive verification completes bot detection by collecting device fingerprints, analyzing user behavior patterns, and evaluating access risks silently in the background. The entire process is invisible to users with zero interference.',
+                verificationSuccess: 'Verification successful!',
+                verificationFailed: 'Verification failed, please retry',
+                trustLevel: 'Trust Level',
+                errorTitle: 'Verification Error',
+                errorMessage: 'An error occurred during verification, please retry'
+            }
+        };
+
+        function getTranslation(key) {
+            var lang = localStorage.getItem('seamless-lang') || 'zh-CN';
+            var trans = translations[lang] || translations['zh-CN'];
+            return trans[key] || key;
+        }
+
+        function initLanguageSwitcher() {
+            var langBtns = document.querySelectorAll('.seamless-lang-btn');
+            langBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var lang = this.getAttribute('data-lang');
+                    langBtns.forEach(function(b) {
+                        b.classList.remove('active');
+                        b.setAttribute('aria-pressed', 'false');
+                    });
+                    this.classList.add('active');
+                    this.setAttribute('aria-pressed', 'true');
+                    switchLanguage(lang);
+                });
+            });
+
+            var savedLang = localStorage.getItem('seamless-lang') || 'zh-CN';
+            var langBtn = document.querySelector('.seamless-lang-btn[data-lang="' + savedLang + '"]');
+            if (langBtn) {
+                langBtn.click();
+            }
+        }
+
+        function switchLanguage(lang) {
+            localStorage.setItem('seamless-lang', lang);
+            document.documentElement.lang = lang;
+
+            var trans = translations[lang];
+            if (!trans) return;
+
+            document.querySelectorAll('[data-i18n]').forEach(function(el) {
+                var key = el.getAttribute('data-i18n');
+                if (trans[key]) {
+                    el.textContent = trans[key];
+                }
+            });
+
+            if (seamlessCaptcha && seamlessCaptcha.updateLanguage) {
+                seamlessCaptcha.updateLanguage(lang);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initSeamlessCaptcha();
+            initLanguageSwitcher();
+
+            var startBtn = document.getElementById('startSeamlessBtn');
+            var resetBtn = document.getElementById('resetSeamlessBtn');
+            var trustBtn = document.getElementById('trustDeviceBtn');
+
+            if (startBtn) {
+                startBtn.addEventListener('click', startVerification);
+            }
+            if (resetBtn) {
+                resetBtn.addEventListener('click', resetVerification);
+            }
+            if (trustBtn) {
+                trustBtn.addEventListener('click', trustDevice);
+            }
+        });
+
+        window.SeamlessUI = {
+            updateStatus: updateStatusDisplay,
+            updateStep: updateStepDisplay,
+            getTranslation: getTranslation,
+            switchLanguage: switchLanguage,
+            start: startVerification,
+            reset: resetVerification,
+            trust: trustDevice
+        };
+    </script>
+</body>
+</html>

@@ -87,6 +87,16 @@ func main() {
 	handler.InitSliderCaptchaHandler(generatorService, verifierService)
 	log.Println("Slider captcha service initialized successfully")
 
+	lianLianKanGeneratorService := captcha.NewLianLianKanGeneratorService(sessionCache, captchaRepo)
+	lianLianKanVerifierService := captcha.NewLianLianKanVerifierService(sessionCache, captchaRepo)
+	handler.InitLianLianKanCaptchaHandler(lianLianKanGeneratorService, lianLianKanVerifierService)
+	log.Println("LianLianKan captcha service initialized successfully")
+
+	voiceGeneratorService := captcha.NewVoiceGeneratorService(sessionCache, captchaRepo)
+	voiceVerifierService := captcha.NewVoiceVerifierService(sessionCache, captchaRepo)
+	handler.InitVoiceCaptchaHandler(voiceGeneratorService, voiceVerifierService)
+	log.Println("Voice captcha service initialized successfully")
+
 	if database.DB != nil {
 		configRepo := repository.NewConfigRepo(database.DB)
 		configCache := service.NewConfigCache(redis.Client)
