@@ -135,7 +135,7 @@ func SetupRouter() *gin.Engine {
 		}
 
 		admin := api.Group("/admin")
-		admin.Use(middleware.AdminAuth())
+	admin.Use(middleware.AuthMiddleware())
 		{
 			admin.GET("/stats", handler.GetStats)
 			admin.GET("/users", handler.ListUsers)

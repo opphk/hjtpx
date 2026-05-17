@@ -264,12 +264,12 @@ func StringToTitle(s string) string {
 	return strings.ToTitle(s)
 }
 
-func StringToLowerSpecial(case mapping rune, s string) string {
-	return strings.ToLowerSpecial(unicode.SpecialCase{mapping}, s)
+func StringToLowerSpecial(s string) string {
+	return strings.ToLower(s)
 }
 
-func StringToUpperSpecial(case mapping rune, s string) string {
-	return strings.ToUpperSpecial(unicode.SpecialCase{mapping}, s)
+func StringToUpperSpecial(s string) string {
+	return strings.ToUpper(s)
 }
 
 func StringMap(mapper func(rune) rune, s string) string {
