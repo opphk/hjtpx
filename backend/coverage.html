@@ -3,7 +3,7 @@
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<title>metrics: Go Coverage Report</title>
+		<title>captcha: Go Coverage Report</title>
 		<style>
 			body {
 				background: black;
@@ -55,164 +55,2834 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/hjtpx/hjtpx/pkg/metrics/metrics.go (90.5%)</option>
+				<option value="file0">github.com/hjtpx/hjtpx/internal/service/captcha/3d_generator.go (65.1%)</option>
 				
-				<option value="file1">github.com/hjtpx/hjtpx/pkg/response/response.go (100.0%)</option>
+				<option value="file1">github.com/hjtpx/hjtpx/internal/service/captcha/3d_verifier.go (4.9%)</option>
+				
+				<option value="file2">github.com/hjtpx/hjtpx/internal/service/captcha/generator.go (47.6%)</option>
+				
+				<option value="file3">github.com/hjtpx/hjtpx/internal/service/captcha/image.go (94.9%)</option>
+				
+				<option value="file4">github.com/hjtpx/hjtpx/internal/service/captcha/lianliankan_generator.go (59.7%)</option>
+				
+				<option value="file5">github.com/hjtpx/hjtpx/internal/service/captcha/lianliankan_verifier.go (25.0%)</option>
+				
+				<option value="file6">github.com/hjtpx/hjtpx/internal/service/captcha/verifier.go (18.0%)</option>
+				
+				<option value="file7">github.com/hjtpx/hjtpx/internal/service/captcha/voice_generator.go (93.7%)</option>
+				
+				<option value="file8">github.com/hjtpx/hjtpx/internal/service/captcha/voice_verifier.go (0.0%)</option>
+				
+				<option value="file9">github.com/hjtpx/hjtpx/internal/service/trace/extractor.go (89.7%)</option>
+				
+				<option value="file10">github.com/hjtpx/hjtpx/internal/service/trace/matcher.go (69.0%)</option>
+				
+				<option value="file11">github.com/hjtpx/hjtpx/internal/service/trace/service.go (0.0%)</option>
 				
 				</select>
 			</div>
 			<div id="legend">
 				<span>not tracked</span>
 			
-				<span class="cov0">not covered</span>
-				<span class="cov8">covered</span>
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
 			
 			</div>
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package metrics
+		<pre class="file" id="file0" style="display: none">package captcha
 
 import (
-        "sync/atomic"
+        "context"
+        "encoding/json"
+        "fmt"
+        "math/rand"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type ThreeDPuzzle struct {
+        Pieces     []ThreeDPiece `json:"pieces"`
+        GridSize   int           `json:"gridSize"`
+        Difficulty string        `json:"difficulty"`
+        TargetRotX float64       `json:"targetRotX"`
+        TargetRotY float64       `json:"targetRotY"`
+        TargetRotZ float64       `json:"targetRotZ"`
+}
+
+type ThreeDPiece struct {
+        ID        int     `json:"id"`
+        Type      string  `json:"type"`
+        Color     string  `json:"color"`
+        PositionX float64 `json:"positionX"`
+        PositionY float64 `json:"positionY"`
+        PositionZ float64 `json:"positionZ"`
+        RotationX float64 `json:"rotationX"`
+        RotationY float64 `json:"rotationY"`
+        RotationZ float64 `json:"rotationZ"`
+        Scale     float64 `json:"scale"`
+}
+
+type CreateThreeDRequest struct {
+        Difficulty  string `json:"difficulty"`
+        ClientIP    string `json:"clientIP"`
+        UserAgent   string `json:"userAgent"`
+        Fingerprint string `json:"fingerprint"`
+}
+
+type CreateThreeDResponse struct {
+        SessionID string        `json:"sessionID"`
+        Puzzle    *ThreeDPuzzle `json:"puzzle"`
+        ExpiresIn int64         `json:"expiresIn"`
+        ExpiresAt int64         `json:"expiresAt"`
+}
+
+type ThreeDGeneratorService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+func NewThreeDGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *ThreeDGeneratorService <span class="cov3" title="4">{
+        return &amp;ThreeDGeneratorService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
+}</span>
+
+var pieceColors = []string{
+        "#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6",
+        "#1abc9c", "#e91e63", "#00bcd4", "#8bc34a", "#ff9800",
+}
+
+var pieceTypes = []string{
+        "cube", "cylinder", "sphere", "cone", "torus",
+}
+
+func (s *ThreeDGeneratorService) Create(ctx context.Context, req *CreateThreeDRequest) (*CreateThreeDResponse, error) <span class="cov2" title="2">{
+        difficulty := req.Difficulty
+        if difficulty == "" </span><span class="cov0" title="0">{
+                difficulty = "medium"
+        }</span>
+
+        <span class="cov2" title="2">gridSize := s.getGridSizeByDifficulty(difficulty)
+        puzzle := s.generatePuzzle(gridSize, difficulty)
+
+        sessionID := generateSessionID()
+        expiresAt := time.Now().Add(5 * time.Minute)
+
+        puzzleData, err := json.Marshal(puzzle)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to marshal puzzle: %w", err)
+        }</span>
+
+        <span class="cov2" title="2">session := &amp;models.CaptchaSession{
+                SessionID:     sessionID,
+                BackgroundURL: string(puzzleData),
+                Status:        "pending",
+                VerifyCount:   0,
+                MaxAttempts:   3,
+                CreatedAt:     time.Now(),
+                ExpiredAt:     expiresAt,
+                ClientIP:      req.ClientIP,
+                UserAgent:     req.UserAgent,
+                Fingerprint:   req.Fingerprint,
+        }
+
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.Set(ctx, session); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to cache session: %w", err)
+                }</span>
+        }
+
+        <span class="cov2" title="2">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.Create(session); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to save session: %w", err)
+                }</span>
+        }
+
+        <span class="cov2" title="2">return &amp;CreateThreeDResponse{
+                SessionID: sessionID,
+                Puzzle:    puzzle,
+                ExpiresIn: int64(5 * time.Minute / time.Second),
+                ExpiresAt: expiresAt.Unix(),
+        }, nil</span>
+}
+
+func (s *ThreeDGeneratorService) getGridSizeByDifficulty(difficulty string) int <span class="cov6" title="12">{
+        switch difficulty </span>{
+        case "easy":<span class="cov2" title="2">
+                return 2</span>
+        case "medium":<span class="cov3" title="4">
+                return 3</span>
+        case "hard":<span class="cov2" title="2">
+                return 4</span>
+        case "expert":<span class="cov2" title="2">
+                return 5</span>
+        default:<span class="cov2" title="2">
+                return 3</span>
+        }
+}
+
+func (s *ThreeDGeneratorService) generatePuzzle(gridSize int, difficulty string) *ThreeDPuzzle <span class="cov4" title="6">{
+        rand.Seed(time.Now().UnixNano())
+
+        targetRotX := rand.Float64() * 360
+        targetRotY := rand.Float64() * 360
+        targetRotZ := rand.Float64() * 360
+
+        pieceCount := gridSize * gridSize
+        pieces := make([]ThreeDPiece, 0, pieceCount)
+
+        for i := 0; i &lt; pieceCount; i++ </span><span class="cov10" title="72">{
+                piece := ThreeDPiece{
+                        ID:        i,
+                        Type:      pieceTypes[rand.Intn(len(pieceTypes))],
+                        Color:     pieceColors[rand.Intn(len(pieceColors))],
+                        PositionX: float64(i%gridSize) - float64(gridSize-1)/2,
+                        PositionY: float64(i/gridSize) - float64(gridSize-1)/2,
+                        PositionZ: 0,
+                        Scale:     0.8,
+                }
+
+                switch difficulty </span>{
+                case "easy":<span class="cov3" title="4">
+                        piece.RotationX = rand.Float64() * 90
+                        piece.RotationY = rand.Float64() * 90</span>
+                case "medium":<span class="cov7" title="27">
+                        piece.RotationX = rand.Float64() * 180
+                        piece.RotationY = rand.Float64() * 180
+                        piece.RotationZ = rand.Float64() * 90</span>
+                case "hard":<span class="cov6" title="16">
+                        piece.RotationX = rand.Float64() * 360
+                        piece.RotationY = rand.Float64() * 360
+                        piece.RotationZ = rand.Float64() * 180</span>
+                case "expert":<span class="cov7" title="25">
+                        piece.RotationX = rand.Float64() * 360
+                        piece.RotationY = rand.Float64() * 360
+                        piece.RotationZ = rand.Float64() * 360</span>
+                }
+
+                <span class="cov10" title="72">pieces = append(pieces, piece)</span>
+        }
+
+        <span class="cov4" title="6">return &amp;ThreeDPuzzle{
+                Pieces:     pieces,
+                GridSize:   gridSize,
+                Difficulty: difficulty,
+                TargetRotX: targetRotX,
+                TargetRotY: targetRotY,
+                TargetRotZ: targetRotZ,
+        }</span>
+}
+
+func (s *ThreeDGeneratorService) GetSession(ctx context.Context, sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                session, err := s.sessionCache.Get(ctx, sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                session, err := s.captchaRepo.GetBySessionID(sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("session not found: %s", sessionID)</span>
+}
+
+func (s *ThreeDGeneratorService) DeleteSession(ctx context.Context, sessionID string) error <span class="cov0" title="0">{
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.Delete(ctx, sessionID); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov0" title="0">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.Delete(sessionID); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package captcha
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "math"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type VerifyThreeDRequest struct {
+        SessionID string        `json:"sessionID" binding:"required"`
+        Puzzle    *ThreeDPuzzle `json:"puzzle" binding:"required"`
+        RiskScore float64       `json:"riskScore"`
+}
+
+type VerifyThreeDResult struct {
+        Success bool    `json:"success"`
+        Message string  `json:"message"`
+        Score   float64 `json:"score"`
+}
+
+type ThreeDVerifierService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+func NewThreeDVerifierService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *ThreeDVerifierService <span class="cov1" title="1">{
+        return &amp;ThreeDVerifierService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
+}</span>
+
+func (v *ThreeDVerifierService) Verify(ctx context.Context, req *VerifyThreeDRequest) (*VerifyThreeDResult, error) <span class="cov0" title="0">{
+        session, err := v.getSession(req.SessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return &amp;VerifyThreeDResult{
+                        Success: false,
+                        Message: "验证码已过期",
+                        Score:   0,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return &amp;VerifyThreeDResult{
+                        Success: false,
+                        Message: "验证次数已用完",
+                        Score:   0,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">v.incrementVerifyCount(req.SessionID)
+
+        if session.Status == "verified" </span><span class="cov0" title="0">{
+                return &amp;VerifyThreeDResult{
+                        Success: true,
+                        Message: "验证码已验证通过",
+                        Score:   100,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">originalPuzzle := &amp;ThreeDPuzzle{}
+        if err := json.Unmarshal([]byte(session.BackgroundURL), originalPuzzle); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to unmarshal puzzle: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">isValid, score := v.validatePuzzle(req.Puzzle, originalPuzzle)
+
+        if isValid </span><span class="cov0" title="0">{
+                v.markAsVerified(req.SessionID, req.RiskScore, 0, 0)
+                return &amp;VerifyThreeDResult{
+                        Success: true,
+                        Message: "验证成功",
+                        Score:   score,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">return &amp;VerifyThreeDResult{
+                Success: false,
+                Message: "验证失败",
+                Score:   score,
+        }, nil</span>
+}
+
+func (v *ThreeDVerifierService) validatePuzzle(userPuzzle, originalPuzzle *ThreeDPuzzle) (bool, float64) <span class="cov0" title="0">{
+        if userPuzzle == nil || originalPuzzle == nil </span><span class="cov0" title="0">{
+                return false, 0
+        }</span>
+
+        <span class="cov0" title="0">if userPuzzle.GridSize != originalPuzzle.GridSize </span><span class="cov0" title="0">{
+                return false, 0
+        }</span>
+
+        <span class="cov0" title="0">if len(userPuzzle.Pieces) != len(originalPuzzle.Pieces) </span><span class="cov0" title="0">{
+                return false, 0
+        }</span>
+
+        <span class="cov0" title="0">totalScore := 0.0
+        validPieces := 0
+
+        for i := range originalPuzzle.Pieces </span><span class="cov0" title="0">{
+                userPiece := findPieceByID(userPuzzle.Pieces, originalPuzzle.Pieces[i].ID)
+                if userPiece == nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">validPieces++
+                pieceScore := v.calculatePieceScore(userPiece, &amp;originalPuzzle.Pieces[i], originalPuzzle.Difficulty)
+                totalScore += pieceScore</span>
+        }
+
+        <span class="cov0" title="0">if validPieces == 0 </span><span class="cov0" title="0">{
+                return false, 0
+        }</span>
+
+        <span class="cov0" title="0">avgScore := totalScore / float64(validPieces)
+        passThreshold := v.getPassThreshold(originalPuzzle.Difficulty)
+
+        return avgScore &gt;= passThreshold, avgScore</span>
+}
+
+func (v *ThreeDVerifierService) calculatePieceScore(userPiece, originalPiece *ThreeDPiece, difficulty string) float64 <span class="cov0" title="0">{
+        rotXDiff := v.normalizeAngleDiff(userPiece.RotationX, originalPiece.RotationX)
+        rotYDiff := v.normalizeAngleDiff(userPiece.RotationY, originalPiece.RotationY)
+        rotZDiff := v.normalizeAngleDiff(userPiece.RotationZ, originalPiece.RotationZ)
+
+        maxDiff := v.getMaxAllowedDiff(difficulty)
+
+        rotXScore := math.Max(0, 1-rotXDiff/maxDiff)
+        rotYScore := math.Max(0, 1-rotYDiff/maxDiff)
+        rotZScore := math.Max(0, 1-rotZDiff/maxDiff)
+
+        posXDiff := math.Abs(userPiece.PositionX - originalPiece.PositionX)
+        posYDiff := math.Abs(userPiece.PositionY - originalPiece.PositionY)
+        posZDiff := math.Abs(userPiece.PositionZ - originalPiece.PositionZ)
+
+        posXScore := math.Max(0, 1-posXDiff/2)
+        posYScore := math.Max(0, 1-posYDiff/2)
+        posZScore := math.Max(0, 1-posZDiff/2)
+
+        totalScore := (rotXScore + rotYScore + rotZScore + posXScore + posYScore + posZScore) / 6
+        return totalScore * 100
+}</span>
+
+func (v *ThreeDVerifierService) normalizeAngleDiff(angle1, angle2 float64) float64 <span class="cov0" title="0">{
+        diff := math.Abs(angle1 - angle2)
+        for diff &gt; 180 </span><span class="cov0" title="0">{
+                diff = 360 - diff
+        }</span>
+        <span class="cov0" title="0">return diff</span>
+}
+
+func (v *ThreeDVerifierService) getMaxAllowedDiff(difficulty string) float64 <span class="cov0" title="0">{
+        switch difficulty </span>{
+        case "easy":<span class="cov0" title="0">
+                return 45</span>
+        case "medium":<span class="cov0" title="0">
+                return 30</span>
+        case "hard":<span class="cov0" title="0">
+                return 20</span>
+        case "expert":<span class="cov0" title="0">
+                return 15</span>
+        default:<span class="cov0" title="0">
+                return 30</span>
+        }
+}
+
+func (v *ThreeDVerifierService) getPassThreshold(difficulty string) float64 <span class="cov0" title="0">{
+        switch difficulty </span>{
+        case "easy":<span class="cov0" title="0">
+                return 70</span>
+        case "medium":<span class="cov0" title="0">
+                return 80</span>
+        case "hard":<span class="cov0" title="0">
+                return 85</span>
+        case "expert":<span class="cov0" title="0">
+                return 90</span>
+        default:<span class="cov0" title="0">
+                return 80</span>
+        }
+}
+
+func findPieceByID(pieces []ThreeDPiece, id int) *ThreeDPiece <span class="cov7" title="3">{
+        for i := range pieces </span><span class="cov10" title="5">{
+                if pieces[i].ID == id </span><span class="cov1" title="1">{
+                        return &amp;pieces[i]
+                }</span>
+        }
+        <span class="cov4" title="2">return nil</span>
+}
+
+func (v *ThreeDVerifierService) getSession(sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                session, err := v.sessionCache.Get(context.Background(), sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                session, err := v.captchaRepo.GetBySessionID(sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("session not found: %s", sessionID)</span>
+}
+
+func (v *ThreeDVerifierService) incrementVerifyCount(sessionID string) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                _ = v.sessionCache.IncrementVerifyCount(context.Background(), sessionID)
+        }</span>
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                _ = v.captchaRepo.UpdateVerifyCount(sessionID)
+        }</span>
+}
+
+func (v *ThreeDVerifierService) markAsVerified(sessionID string, riskScore, traceScore, envScore float64) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                _ = v.sessionCache.UpdateStatus(context.Background(), sessionID, "verified")
+        }</span>
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                _ = v.captchaRepo.UpdateStatus(sessionID, "verified")
+                _ = v.captchaRepo.UpdateRiskScore(sessionID, riskScore, traceScore, envScore)
+        }</span>
+}
+
+func (v *ThreeDVerifierService) GetSessionStatus(ctx context.Context, sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        return v.getSession(sessionID)
+}</span>
+
+func (v *ThreeDVerifierService) CheckSessionValid(ctx context.Context, sessionID string) (bool, string) <span class="cov0" title="0">{
+        session, err := v.getSession(sessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return false, "会话不存在"
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return false, "验证码已过期"
+        }</span>
+
+        <span class="cov0" title="0">if session.Status == "verified" </span><span class="cov0" title="0">{
+                return false, "验证码已验证通过"
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return false, "验证次数已用完"
+        }</span>
+
+        <span class="cov0" title="0">return true, ""</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package captcha
+
+import (
+        "context"
+        "encoding/base64"
+        "fmt"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type GeneratorService struct {
+        imageGenerator *ImageGenerator
+        sessionCache   *cache.SessionCache
+        captchaRepo    *db.CaptchaRepository
+}
+
+type CreateCaptchaRequest struct {
+        Width        int    `json:"width"`
+        Height       int    `json:"height"`
+        SliderWidth  int    `json:"slider_width"`
+        SliderHeight int    `json:"slider_height"`
+        ClientIP     string `json:"client_ip"`
+        UserAgent    string `json:"user_agent"`
+        Fingerprint  string `json:"fingerprint"`
+}
+
+type CreateCaptchaResponse struct {
+        SessionID     string `json:"session_id"`
+        BackgroundURL string `json:"background_url"`
+        SliderURL     string `json:"slider_url"`
+        GapX          int    `json:"gap_x"`
+        GapY          int    `json:"gap_y"`
+        ExpiresIn     int64  `json:"expires_in"`
+        ExpiresAt     int64  `json:"expires_at"`
+}
+
+func NewGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *GeneratorService <span class="cov4" title="5">{
+        return &amp;GeneratorService{
+                imageGenerator: NewImageGenerator(),
+                sessionCache:   sessionCache,
+                captchaRepo:    captchaRepo,
+        }
+}</span>
+
+func (s *GeneratorService) Create(ctx context.Context, req *CreateCaptchaRequest) (*CreateCaptchaResponse, error) <span class="cov3" title="4">{
+        if req.Width &gt; 0 &amp;&amp; req.Height &gt; 0 </span><span class="cov2" title="2">{
+                s.imageGenerator.SetDimensions(req.Width, req.Height, req.SliderWidth, req.SliderHeight)
+        }</span>
+
+        <span class="cov3" title="4">result, err := s.imageGenerator.GenerateSliderCaptcha()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to generate captcha images: %w", err)
+        }</span>
+
+        <span class="cov3" title="4">sessionID := generateSessionID()
+
+        expiresAt := time.Now().Add(5 * time.Minute)
+
+        session := &amp;models.CaptchaSession{
+                SessionID:   sessionID,
+                Status:      "pending",
+                VerifyCount: 0,
+                MaxAttempts: 3,
+                RiskScore:   0,
+                TraceScore:  0,
+                EnvScore:    0,
+                CreatedAt:   time.Now(),
+                ExpiredAt:   expiresAt,
+                ClientIP:    req.ClientIP,
+                UserAgent:   req.UserAgent,
+                Fingerprint: req.Fingerprint,
+                GapX:        result.GapX,
+                GapY:        result.GapY,
+        }
+
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.Set(ctx, session); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to cache session: %w", err)
+                }</span>
+        }
+
+        <span class="cov3" title="4">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.Create(session); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to save session to database: %w", err)
+                }</span>
+        }
+
+        <span class="cov3" title="4">backgroundURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(result.Background)
+        sliderURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(result.Slider)
+
+        return &amp;CreateCaptchaResponse{
+                SessionID:     sessionID,
+                BackgroundURL: backgroundURL,
+                SliderURL:     sliderURL,
+                GapX:          result.GapX,
+                GapY:          result.GapY,
+                ExpiresIn:     int64(5 * time.Minute / time.Second),
+                ExpiresAt:     expiresAt.Unix(),
+        }, nil</span>
+}
+
+func (s *GeneratorService) GetSession(ctx context.Context, sessionID string) (*models.CaptchaSession, error) <span class="cov1" title="1">{
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                session, err := s.sessionCache.Get(ctx, sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov1" title="1">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                session, err := s.captchaRepo.GetBySessionID(sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov1" title="1">return nil, fmt.Errorf("session not found: %s", sessionID)</span>
+}
+
+func (s *GeneratorService) DeleteSession(ctx context.Context, sessionID string) error <span class="cov1" title="1">{
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.Delete(ctx, sessionID); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov1" title="1">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.Delete(sessionID); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov1" title="1">return nil</span>
+}
+
+func (s *GeneratorService) CleanupExpired(ctx context.Context) (int64, error) <span class="cov0" title="0">{
+        var totalDeleted int64
+
+        if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                deleted, err := s.captchaRepo.CleanupExpired(5 * time.Minute)
+                if err != nil </span><span class="cov0" title="0">{
+                        return 0, err
+                }</span>
+                <span class="cov0" title="0">totalDeleted += deleted</span>
+        }
+
+        <span class="cov0" title="0">return totalDeleted, nil</span>
+}
+
+func generateSessionID() string <span class="cov10" title="111">{
+        return fmt.Sprintf("captcha_%d_%d", time.Now().UnixNano(), time.Now().UnixMicro()%10000)
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package captcha
+
+import (
+        "bytes"
+        "encoding/base64"
+        "image"
+        "image/color"
+        "image/draw"
+        "image/png"
+        "math"
+        "math/rand"
+        "sync"
         "time"
 )
 
 var (
-        startTime    = time.Now()
-        requestCount uint64
-        successCount uint64
-        failureCount uint64
+        imagePool = sync.Pool{
+                New: func() interface{} <span class="cov1" title="3">{
+                        return &amp;bytes.Buffer{}
+                }</span>,
+        }
+        rgbaPool = sync.Pool{
+                New: func() interface{} <span class="cov2" title="6">{
+                        return image.NewRGBA(image.Rect(0, 0, 320, 160))
+                }</span>,
+        }
 )
 
-func init() <span class="cov8" title="1">{
-        go metricsCollector()
+type ImageGenerator struct {
+        width        int
+        height       int
+        sliderWidth  int
+        sliderHeight int
+}
+
+type CaptchaResult struct {
+        Background []byte
+        Slider     []byte
+        GapX       int
+        GapY       int
+}
+
+func NewImageGenerator() *ImageGenerator <span class="cov2" title="13">{
+        return &amp;ImageGenerator{
+                width:        320,
+                height:       160,
+                sliderWidth:  40,
+                sliderHeight: 40,
+        }
 }</span>
 
-func metricsCollector() <span class="cov8" title="1">{
-        ticker := time.NewTicker(1 * time.Minute)
-        defer ticker.Stop()
-        for range ticker.C </span><span class="cov0" title="0">{
-                if atomic.LoadUint64(&amp;requestCount) &gt; 0 </span><span class="cov0" title="0">{
-                        atomic.StoreUint64(&amp;requestCount, atomic.LoadUint64(&amp;requestCount)/2)
+func (g *ImageGenerator) SetDimensions(width, height, sliderWidth, sliderHeight int) <span class="cov1" title="4">{
+        g.width = width
+        g.height = height
+        g.sliderWidth = sliderWidth
+        g.sliderHeight = sliderHeight
+}</span>
+
+func (g *ImageGenerator) GenerateSliderCaptcha() (*CaptchaResult, error) <span class="cov2" title="6">{
+        g.width = 320
+        g.height = 160
+        g.sliderWidth = 40
+        g.sliderHeight = 40
+
+        background := g.generateBackground()
+
+        gapX := rand.Intn(g.width-g.sliderWidth-20) + 10
+        gapY := rand.Intn(g.height-g.sliderHeight-20) + 10
+
+        gap := image.Rect(gapX, gapY, gapX+g.sliderWidth, gapY+g.sliderHeight)
+
+        bgImage := g.applyGap(background, gap)
+
+        sliderImage := g.extractSlider(background, gap)
+
+        bgImage = g.applyEdgeFeather(bgImage, gap)
+
+        bgImage = g.addInterference(bgImage)
+
+        bgData := g.encodePNG(bgImage)
+        sliderData := g.encodePNG(sliderImage)
+
+        return &amp;CaptchaResult{
+                Background: bgData,
+                Slider:     sliderData,
+                GapX:       gapX,
+                GapY:       gapY,
+        }, nil
+}</span>
+
+func (g *ImageGenerator) generateBackground() *image.RGBA <span class="cov2" title="6">{
+        img := rgbaPool.Get().(*image.RGBA)
+        bounds := img.Bounds()
+        if bounds.Dx() != g.width || bounds.Dy() != g.height </span><span class="cov0" title="0">{
+                *img = *image.NewRGBA(image.Rect(0, 0, g.width, g.height))
+        }</span> else<span class="cov2" title="6"> {
+                for y := 0; y &lt; g.height; y++ </span><span class="cov5" title="960">{
+                        for x := 0; x &lt; g.width; x++ </span><span class="cov10" title="307200">{
+                                img.Set(x, y, color.RGBA{R: 0, G: 0, B: 0, A: 0})
+                        }</span>
+                }
+        }
+
+        <span class="cov2" title="6">bgType := rand.Intn(5)
+        switch bgType </span>{
+        case 0:<span class="cov0" title="0">
+                g.drawGradientBackground(img)</span>
+        case 1:<span class="cov1" title="1">
+                g.drawPatternBackground(img)</span>
+        case 2:<span class="cov1" title="3">
+                g.drawSolidColorBackground(img)</span>
+        case 3:<span class="cov1" title="1">
+                g.drawNoiseBackground(img)</span>
+        case 4:<span class="cov1" title="1">
+                g.drawGeometricBackground(img)</span>
+        default:<span class="cov0" title="0">
+                g.drawGradientBackground(img)</span>
+        }
+
+        <span class="cov2" title="6">return img</span>
+}
+
+func (g *ImageGenerator) recycleBackground(img *image.RGBA) <span class="cov0" title="0">{
+        rgbaPool.Put(img)
+}</span>
+
+func (g *ImageGenerator) drawGradientBackground(img *image.RGBA) <span class="cov1" title="1">{
+        r1 := uint8(180 + rand.Intn(60))
+        g1 := uint8(180 + rand.Intn(60))
+        b1 := uint8(200 + rand.Intn(55))
+        r2 := uint8(100 + rand.Intn(80))
+        g2 := uint8(120 + rand.Intn(60))
+        b2 := uint8(160 + rand.Intn(60))
+
+        for y := 0; y &lt; g.height; y++ </span><span class="cov4" title="160">{
+                t := float64(y) / float64(g.height)
+                r := uint8(float64(r1)*(1-t) + float64(r2)*t)
+                col := uint8(float64(g1)*(1-t) + float64(g2)*t)
+                b := uint8(float64(b1)*(1-t) + float64(b2)*t)
+                for x := 0; x &lt; g.width; x++ </span><span class="cov8" title="51200">{
+                        img.Set(x, y, color.RGBA{R: r, G: col, B: b, A: 255})
                 }</span>
         }
 }
 
-func IncrementRequestCount() <span class="cov8" title="1">{
-        atomic.AddUint64(&amp;requestCount, 1)
-}</span>
+func (g *ImageGenerator) drawPatternBackground(img *image.RGBA) <span class="cov1" title="1">{
+        r1 := uint8(60 + rand.Intn(40))
+        g1 := uint8(80 + rand.Intn(40))
+        b1 := uint8(100 + rand.Intn(40))
+        r2 := uint8(140 + rand.Intn(60))
+        g2 := uint8(160 + rand.Intn(60))
+        b2 := uint8(180 + rand.Intn(60))
 
-func IncrementSuccessCount() <span class="cov8" title="1">{
-        atomic.AddUint64(&amp;successCount, 1)
-}</span>
+        for y := 0; y &lt; g.height; y++ </span><span class="cov4" title="160">{
+                for x := 0; x &lt; g.width; x++ </span><span class="cov8" title="51200">{
+                        patternValue := math.Sin(float64(x)*0.05) * math.Cos(float64(y)*0.05)
+                        ratio := (patternValue + 1) / 2
 
-func IncrementFailureCount() <span class="cov8" title="1">{
-        atomic.AddUint64(&amp;failureCount, 1)
-}</span>
+                        r := uint8(float64(r1)*(1-ratio) + float64(r2)*ratio)
+                        col := uint8(float64(g1)*(1-ratio) + float64(g2)*ratio)
+                        b := uint8(float64(b1)*(1-ratio) + float64(b2)*ratio)
 
-func GetRequestCount() uint64 <span class="cov8" title="1">{
-        return atomic.LoadUint64(&amp;requestCount)
-}</span>
-
-func GetSuccessCount() uint64 <span class="cov8" title="1">{
-        return atomic.LoadUint64(&amp;successCount)
-}</span>
-
-func GetFailureCount() uint64 <span class="cov8" title="1">{
-        return atomic.LoadUint64(&amp;failureCount)
-}</span>
-
-func GetSuccessRate() float64 <span class="cov8" title="1">{
-        total := atomic.LoadUint64(&amp;requestCount)
-        if total == 0 </span><span class="cov8" title="1">{
-                return 100.0
-        }</span>
-        <span class="cov8" title="1">success := atomic.LoadUint64(&amp;successCount)
-        return float64(success) / float64(total) * 100</span>
+                        img.Set(x, y, color.RGBA{R: r, G: col, B: b, A: 255})
+                }</span>
+        }
 }
 
-func GetUptime() time.Duration <span class="cov8" title="1">{
-        return time.Since(startTime)
+func (g *ImageGenerator) drawSolidColorBackground(img *image.RGBA) <span class="cov1" title="3">{
+        baseColor := &amp;image.Uniform{
+                C: color.RGBA{
+                        R: uint8(100 + rand.Intn(100)),
+                        G: uint8(100 + rand.Intn(100)),
+                        B: uint8(100 + rand.Intn(100)),
+                        A: 255,
+                },
+        }
+
+        draw.Draw(img, img.Bounds(), baseColor, image.Point{}, draw.Src)
+
+        noiseCount := 500
+        for i := 0; i &lt; noiseCount; i++ </span><span class="cov6" title="1500">{
+                x := rand.Intn(g.width)
+                y := rand.Intn(g.height)
+                noise := int16(rand.Intn(40) - 20)
+
+                orig := img.RGBAAt(x, y)
+                r := g.clampUint8(int(orig.R) + int(noise))
+                col := g.clampUint8(int(orig.G) + int(noise))
+                b := g.clampUint8(int(orig.B) + int(noise))
+
+                img.Set(x, y, color.RGBA{R: r, G: col, B: b, A: 255})
+        }</span>
+}
+
+func (g *ImageGenerator) drawNoiseBackground(img *image.RGBA) <span class="cov1" title="1">{
+        for y := 0; y &lt; g.height; y++ </span><span class="cov4" title="160">{
+                for x := 0; x &lt; g.width; x++ </span><span class="cov8" title="51200">{
+                        r := uint8(rand.Intn(180) + 40)
+                        gVal := uint8(rand.Intn(180) + 40)
+                        b := uint8(rand.Intn(180) + 40)
+
+                        img.Set(x, y, color.RGBA{R: r, G: gVal, B: b, A: 255})
+                }</span>
+        }
+}
+
+func (g *ImageGenerator) drawGeometricBackground(img *image.RGBA) <span class="cov1" title="1">{
+        g.drawGradientBackground(img)
+
+        shapeCount := 8 + rand.Intn(8)
+        for i := 0; i &lt; shapeCount; i++ </span><span class="cov2" title="14">{
+                shapeType := rand.Intn(3)
+                x := rand.Intn(g.width)
+                y := rand.Intn(g.height)
+                size := 10 + rand.Intn(30)
+
+                c := color.RGBA{
+                        R: uint8(rand.Intn(200)),
+                        G: uint8(rand.Intn(200)),
+                        B: uint8(rand.Intn(200)),
+                        A: uint8(30 + rand.Intn(50)),
+                }
+
+                switch shapeType </span>{
+                case 0:<span class="cov2" title="5">
+                        g.drawFilledCircle(img, x, y, size, c)</span>
+                case 1:<span class="cov1" title="2">
+                        g.drawFilledRect(img, x-size/2, y-size/2, size, size, c)</span>
+                case 2:<span class="cov2" title="7">
+                        g.drawLine(img, rand.Intn(g.width), rand.Intn(g.height),
+                                rand.Intn(g.width), rand.Intn(g.height), c)</span>
+                }
+        }
+}
+
+func (g *ImageGenerator) applyGap(background *image.RGBA, gap image.Rectangle) *image.RGBA <span class="cov2" title="6">{
+        result := image.NewRGBA(background.Bounds())
+
+        draw.Draw(result, result.Bounds(), background, background.Bounds().Min, draw.Src)
+
+        darkColor := &amp;image.Uniform{
+                C: color.RGBA{
+                        R: 40,
+                        G: 40,
+                        B: 40,
+                        A: 255,
+                },
+        }
+
+        draw.Draw(result, gap, darkColor, image.Point{}, draw.Src)
+
+        innerMargin := 3
+        innerGap := image.Rect(
+                gap.Min.X+innerMargin,
+                gap.Min.Y+innerMargin,
+                gap.Max.X-innerMargin,
+                gap.Max.Y-innerMargin,
+        )
+
+        if innerGap.Min.X &lt; innerGap.Max.X &amp;&amp; innerGap.Min.Y &lt; innerGap.Max.Y </span><span class="cov2" title="6">{
+                shadowColor := &amp;image.Uniform{
+                        C: color.RGBA{
+                                R: 20,
+                                G: 20,
+                                B: 20,
+                                A: 200,
+                        },
+                }
+                draw.Draw(result, innerGap, shadowColor, image.Point{}, draw.Src)
+        }</span>
+
+        <span class="cov2" title="6">return result</span>
+}
+
+func (g *ImageGenerator) extractSlider(background *image.RGBA, gap image.Rectangle) *image.RGBA <span class="cov2" title="6">{
+        sliderImg := image.NewRGBA(image.Rect(0, 0, g.sliderWidth, g.sliderHeight))
+
+        margin := 4
+        extractRect := image.Rect(
+                gap.Min.X-margin,
+                gap.Min.Y-margin,
+                gap.Max.X+margin,
+                gap.Max.Y+margin,
+        )
+
+        if extractRect.Min.X &lt; 0 </span><span class="cov0" title="0">{
+                extractRect.Min.X = 0
+        }</span>
+        <span class="cov2" title="6">if extractRect.Min.Y &lt; 0 </span><span class="cov0" title="0">{
+                extractRect.Min.Y = 0
+        }</span>
+        <span class="cov2" title="6">if extractRect.Max.X &gt; g.width </span><span class="cov0" title="0">{
+                extractRect.Max.X = g.width
+        }</span>
+        <span class="cov2" title="6">if extractRect.Max.Y &gt; g.height </span><span class="cov0" title="0">{
+                extractRect.Max.Y = g.height
+        }</span>
+
+        <span class="cov2" title="6">draw.Draw(sliderImg, sliderImg.Bounds(), &amp;image.Uniform{
+                C: color.RGBA{R: 200, G: 200, B: 200, A: 255},
+        }, image.Point{}, draw.Src)
+
+        offsetX := -extractRect.Min.X + margin
+        offsetY := -extractRect.Min.Y + margin
+
+        for y := 0; y &lt; extractRect.Dy(); y++ </span><span class="cov5" title="288">{
+                for x := 0; x &lt; extractRect.Dx(); x++ </span><span class="cov7" title="13824">{
+                        srcX := extractRect.Min.X + x
+                        srcY := extractRect.Min.Y + y
+
+                        dstX := x + offsetX
+                        dstY := y + offsetY
+
+                        if dstX &gt;= 0 &amp;&amp; dstX &lt; g.sliderWidth &amp;&amp; dstY &gt;= 0 &amp;&amp; dstY &lt; g.sliderHeight </span><span class="cov0" title="0">{
+                                pixel := background.RGBAAt(srcX, srcY)
+                                sliderImg.SetRGBA(dstX, dstY, pixel)
+                        }</span>
+                }
+        }
+
+        <span class="cov2" title="6">g.addSliderBorder(sliderImg)
+
+        return sliderImg</span>
+}
+
+func (g *ImageGenerator) addSliderBorder(slider *image.RGBA) <span class="cov2" title="6">{
+        bounds := slider.Bounds()
+
+        for x := 0; x &lt; bounds.Dx(); x++ </span><span class="cov4" title="240">{
+                for offset := 0; offset &lt; 2; offset++ </span><span class="cov5" title="480">{
+                        if bounds.Min.Y+offset &lt; bounds.Max.Y </span><span class="cov5" title="480">{
+                                p := slider.RGBAAt(x, bounds.Min.Y+offset)
+                                slider.Set(x, bounds.Min.Y+offset, color.RGBA{
+                                        R: g.clampUint8(int(p.R) * 70 / 100),
+                                        G: g.clampUint8(int(p.G) * 70 / 100),
+                                        B: g.clampUint8(int(p.B) * 70 / 100),
+                                        A: 255,
+                                })
+                        }</span>
+
+                        <span class="cov5" title="480">if bounds.Max.Y-1-offset &gt;= bounds.Min.Y </span><span class="cov5" title="480">{
+                                p := slider.RGBAAt(x, bounds.Max.Y-1-offset)
+                                slider.Set(x, bounds.Max.Y-1-offset, color.RGBA{
+                                        R: g.clampUint8(int(p.R) * 70 / 100),
+                                        G: g.clampUint8(int(p.G) * 70 / 100),
+                                        B: g.clampUint8(int(p.B) * 70 / 100),
+                                        A: 255,
+                                })
+                        }</span>
+                }
+        }
+
+        <span class="cov2" title="6">for y := 0; y &lt; bounds.Dy(); y++ </span><span class="cov4" title="240">{
+                for offset := 0; offset &lt; 2; offset++ </span><span class="cov5" title="480">{
+                        if bounds.Min.X+offset &lt; bounds.Max.X </span><span class="cov5" title="480">{
+                                p := slider.RGBAAt(bounds.Min.X+offset, y)
+                                slider.Set(bounds.Min.X+offset, y, color.RGBA{
+                                        R: g.clampUint8(int(p.R) * 70 / 100),
+                                        G: g.clampUint8(int(p.G) * 70 / 100),
+                                        B: g.clampUint8(int(p.B) * 70 / 100),
+                                        A: 255,
+                                })
+                        }</span>
+
+                        <span class="cov5" title="480">if bounds.Max.X-1-offset &gt;= bounds.Min.X </span><span class="cov5" title="480">{
+                                p := slider.RGBAAt(bounds.Max.X-1-offset, y)
+                                slider.Set(bounds.Max.X-1-offset, y, color.RGBA{
+                                        R: g.clampUint8(int(p.R) * 70 / 100),
+                                        G: g.clampUint8(int(p.G) * 70 / 100),
+                                        B: g.clampUint8(int(p.B) * 70 / 100),
+                                        A: 255,
+                                })
+                        }</span>
+                }
+        }
+}
+
+func (g *ImageGenerator) applyEdgeFeather(img *image.RGBA, gap image.Rectangle) *image.RGBA <span class="cov2" title="6">{
+        result := image.NewRGBA(img.Bounds())
+
+        draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+        featherRadius := 2.0
+
+        for y := gap.Min.Y - int(featherRadius); y &lt;= gap.Max.Y+int(featherRadius); y++ </span><span class="cov4" title="270">{
+                for x := gap.Min.X - int(featherRadius); x &lt;= gap.Max.X+int(featherRadius); x++ </span><span class="cov7" title="12150">{
+                        if x &lt; 0 || x &gt;= g.width || y &lt; 0 || y &gt;= g.height </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+
+                        <span class="cov7" title="12150">distToEdge := g.getDistanceToRectEdge(x, y, gap)
+
+                        if distToEdge &lt; featherRadius &amp;&amp; distToEdge &gt;= 0 </span><span class="cov7" title="10584">{
+                                factor := distToEdge / featherRadius
+                                alpha := uint8(float64(255) * factor)
+
+                                pixel := img.RGBAAt(x, y)
+                                blended := color.RGBA{
+                                        R: pixel.R,
+                                        G: pixel.G,
+                                        B: pixel.B,
+                                        A: alpha,
+                                }
+                                result.SetRGBA(x, y, blended)
+                        }</span>
+                }
+        }
+
+        <span class="cov2" title="6">return result</span>
+}
+
+func (g *ImageGenerator) getDistanceToRectEdge(x, y int, rect image.Rectangle) float64 <span class="cov7" title="12150">{
+        dx := 0
+        dy := 0
+
+        if x &lt; rect.Min.X </span><span class="cov5" title="540">{
+                dx = rect.Min.X - x
+        }</span> else<span class="cov7" title="11610"> if x &gt;= rect.Max.X </span><span class="cov5" title="810">{
+                dx = x - rect.Max.X + 1
+        }</span>
+
+        <span class="cov7" title="12150">if y &lt; rect.Min.Y </span><span class="cov5" title="540">{
+                dy = rect.Min.Y - y
+        }</span> else<span class="cov7" title="11610"> if y &gt;= rect.Max.Y </span><span class="cov5" title="810">{
+                dy = y - rect.Max.Y + 1
+        }</span>
+
+        <span class="cov7" title="12150">if dx == 0 &amp;&amp; dy == 0 </span><span class="cov7" title="9600">{
+                return 0
+        }</span>
+
+        <span class="cov6" title="2550">return math.Sqrt(float64(dx*dx + dy*dy))</span>
+}
+
+func (g *ImageGenerator) addInterference(img *image.RGBA) *image.RGBA <span class="cov2" title="6">{
+        g.addNoiseDots(img, 300)
+
+        g.addCracks(img, 3)
+
+        g.addBrightnessVariation(img)
+
+        g.addSmallCircles(img, 15)
+
+        return img
 }</span>
 
-func ResetMetrics() <span class="cov8" title="1">{
-        atomic.StoreUint64(&amp;requestCount, 0)
-        atomic.StoreUint64(&amp;successCount, 0)
-        atomic.StoreUint64(&amp;failureCount, 0)
+func (g *ImageGenerator) addNoiseDots(img *image.RGBA, count int) <span class="cov2" title="6">{
+        for i := 0; i &lt; count; i++ </span><span class="cov6" title="1800">{
+                x := rand.Intn(g.width)
+                y := rand.Intn(g.height)
+                radius := rand.Intn(2) + 1
+
+                c := color.RGBA{
+                        R: uint8(rand.Intn(256)),
+                        G: uint8(rand.Intn(256)),
+                        B: uint8(rand.Intn(256)),
+                        A: uint8(20 + rand.Intn(40)),
+                }
+
+                for dy := -radius; dy &lt;= radius; dy++ </span><span class="cov7" title="7234">{
+                        for dx := -radius; dx &lt;= radius; dx++ </span><span class="cov8" title="30872">{
+                                if dx*dx+dy*dy &lt;= radius*radius </span><span class="cov7" title="16336">{
+                                        px, py := x+dx, y+dy
+                                        if px &gt;= 0 &amp;&amp; px &lt; g.width &amp;&amp; py &gt;= 0 &amp;&amp; py &lt; g.height </span><span class="cov7" title="16254">{
+                                                img.Set(px, py, c)
+                                        }</span>
+                                }
+                        }
+                }
+        }
+}
+
+func (g *ImageGenerator) addCracks(img *image.RGBA, count int) <span class="cov2" title="6">{
+        for i := 0; i &lt; count; i++ </span><span class="cov3" title="18">{
+                startX := rand.Intn(g.width)
+                startY := rand.Intn(g.height)
+
+                steps := 5 + rand.Intn(10)
+                prevX, prevY := startX, startY
+
+                crackColor := color.RGBA{
+                        R: uint8(rand.Intn(100)),
+                        G: uint8(rand.Intn(100)),
+                        B: uint8(rand.Intn(100)),
+                        A: uint8(40 + rand.Intn(40)),
+                }
+
+                for j := 0; j &lt; steps; j++ </span><span class="cov4" title="170">{
+                        dx := rand.Intn(20) - 10
+                        dy := rand.Intn(20) - 10
+
+                        newX := prevX + dx
+                        newY := prevY + dy
+
+                        if newX &lt; 0 </span><span class="cov0" title="0">{
+                                newX = 0
+                        }</span>
+                        <span class="cov4" title="170">if newX &gt;= g.width </span><span class="cov0" title="0">{
+                                newX = g.width - 1
+                        }</span>
+                        <span class="cov4" title="170">if newY &lt; 0 </span><span class="cov1" title="1">{
+                                newY = 0
+                        }</span>
+                        <span class="cov4" title="170">if newY &gt;= g.height </span><span class="cov2" title="13">{
+                                newY = g.height - 1
+                        }</span>
+
+                        <span class="cov4" title="170">g.drawLine(img, prevX, prevY, newX, newY, crackColor)
+
+                        prevX, prevY = newX, newY</span>
+                }
+        }
+}
+
+func (g *ImageGenerator) addBrightnessVariation(img *image.RGBA) <span class="cov2" title="6">{
+        brightCount := 3 + rand.Intn(5)
+
+        for i := 0; i &lt; brightCount; i++ </span><span class="cov3" title="31">{
+                centerX := rand.Intn(g.width)
+                centerY := rand.Intn(g.height)
+                radius := 10 + rand.Intn(20)
+
+                variation := int16(-30 + rand.Intn(60))
+
+                for y := centerY - radius; y &lt;= centerY+radius; y++ </span><span class="cov6" title="1217">{
+                        for x := centerX - radius; x &lt;= centerX+radius; x++ </span><span class="cov8" title="51527">{
+                                if x &lt; 0 || x &gt;= g.width || y &lt; 0 || y &gt;= g.height </span><span class="cov7" title="5592">{
+                                        continue</span>
+                                }
+
+                                <span class="cov8" title="45935">dx := x - centerX
+                                dy := y - centerY
+                                dist := math.Sqrt(float64(dx*dx + dy*dy))
+
+                                if dist &lt;= float64(radius) </span><span class="cov8" title="35076">{
+                                        factor := 1.0 - (dist / float64(radius))
+                                        adjustment := int16(float64(variation) * factor)
+
+                                        p := img.RGBAAt(x, y)
+                                        img.Set(x, y, color.RGBA{
+                                                R: g.clampUint8(int(p.R) + int(adjustment)),
+                                                G: g.clampUint8(int(p.G) + int(adjustment)),
+                                                B: g.clampUint8(int(p.B) + int(adjustment)),
+                                                A: 255,
+                                        })
+                                }</span>
+                        }
+                }
+        }
+}
+
+func (g *ImageGenerator) addSmallCircles(img *image.RGBA, count int) <span class="cov2" title="6">{
+        for i := 0; i &lt; count; i++ </span><span class="cov4" title="90">{
+                x := rand.Intn(g.width)
+                y := rand.Intn(g.height)
+                radius := 3 + rand.Intn(5)
+
+                c := color.RGBA{
+                        R: uint8(rand.Intn(256)),
+                        G: uint8(rand.Intn(256)),
+                        B: uint8(rand.Intn(256)),
+                        A: uint8(60 + rand.Intn(40)),
+                }
+
+                g.drawFilledCircle(img, x, y, radius, c)
+        }</span>
+}
+
+func (g *ImageGenerator) drawFilledCircle(img *image.RGBA, cx, cy, radius int, c color.RGBA) <span class="cov4" title="96">{
+        for dy := -radius; dy &lt;= radius; dy++ </span><span class="cov6" title="1294">{
+                for dx := -radius; dx &lt;= radius; dx++ </span><span class="cov8" title="29432">{
+                        if dx*dx+dy*dy &lt;= radius*radius </span><span class="cov8" title="21060">{
+                                x, y := cx+dx, cy+dy
+                                if x &gt;= 0 &amp;&amp; x &lt; g.width &amp;&amp; y &gt;= 0 &amp;&amp; y &lt; g.height </span><span class="cov8" title="18851">{
+                                        img.Set(x, y, c)
+                                }</span>
+                        }
+                }
+        }
+}
+
+func (g *ImageGenerator) drawFilledRect(img *image.RGBA, x, y, w, h int, c color.RGBA) <span class="cov1" title="3">{
+        for dy := 0; dy &lt; h; dy++ </span><span class="cov4" title="78">{
+                for dx := 0; dx &lt; w; dx++ </span><span class="cov6" title="2284">{
+                        px, py := x+dx, y+dy
+                        if px &gt;= 0 &amp;&amp; px &lt; g.width &amp;&amp; py &gt;= 0 &amp;&amp; py &lt; g.height </span><span class="cov6" title="2284">{
+                                img.Set(px, py, c)
+                        }</span>
+                }
+        }
+}
+
+func (g *ImageGenerator) drawLine(img *image.RGBA, x1, y1, x2, y2 int, c color.RGBA) <span class="cov4" title="178">{
+        dx := x2 - x1
+        dy := y2 - y1
+        steps := int(math.Sqrt(float64(dx*dx + dy*dy)))
+        if steps &lt; 1 </span><span class="cov1" title="2">{
+                steps = 1
+        }</span>
+
+        <span class="cov4" title="178">for i := 0; i &lt;= steps; i++ </span><span class="cov6" title="2056">{
+                t := float64(i) / float64(steps)
+                x := x1 + int(float64(dx)*t+0.5)
+                y := y1 + int(float64(dy)*t+0.5)
+
+                if x &gt;= 0 &amp;&amp; x &lt; g.width &amp;&amp; y &gt;= 0 &amp;&amp; y &lt; g.height </span><span class="cov6" title="2056">{
+                        img.Set(x, y, c)
+                }</span>
+        }
+}
+
+func (g *ImageGenerator) clampUint8(val int) uint8 <span class="cov9" title="115495">{
+        if val &lt; 0 </span><span class="cov4" title="111">{
+                return 0
+        }</span>
+        <span class="cov9" title="115384">if val &gt; 255 </span><span class="cov4" title="82">{
+                return 255
+        }</span>
+        <span class="cov9" title="115302">return uint8(val)</span>
+}
+
+func (g *ImageGenerator) encodePNG(img *image.RGBA) []byte <span class="cov2" title="13">{
+        buf := imagePool.Get().(*bytes.Buffer)
+        defer func() </span><span class="cov2" title="13">{
+                buf.Reset()
+                imagePool.Put(buf)
+        }</span>()
+
+        <span class="cov2" title="13">encoder := png.Encoder{CompressionLevel: png.BestSpeed}
+        if err := encoder.Encode(buf, img); err != nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov2" title="13">result := make([]byte, buf.Len())
+        copy(result, buf.Bytes())
+        return result</span>
+}
+
+func (g *ImageGenerator) EncodeToBase64(img *image.RGBA) string <span class="cov1" title="1">{
+        data := g.encodePNG(img)
+        return base64.StdEncoding.EncodeToString(data)
+}</span>
+
+func init() <span class="cov1" title="1">{
+        rand.Seed(time.Now().UnixNano())
 }</span>
 </pre>
 		
-		<pre class="file" id="file1" style="display: none">package response
+		<pre class="file" id="file4" style="display: none">package captcha
 
 import (
-        "net/http"
+        "context"
+        "encoding/json"
+        "fmt"
+        "math/rand"
+        "time"
 
-        "github.com/gin-gonic/gin"
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
 )
 
-// Response 统一响应结构
-type Response struct {
-        Code    int         `json:"code"`
-        Message string      `json:"message"`
-        Data    interface{} `json:"data,omitempty"`
+type LianLianKanTile struct {
+        Type  int `json:"type"`
+        X     int `json:"x"`
+        Y     int `json:"y"`
+        Index int `json:"index"`
 }
 
-// Success 成功响应
-func Success(c *gin.Context, data interface{}) <span class="cov8" title="1">{
-        c.JSON(http.StatusOK, Response{
-                Code:    0,
-                Message: "success",
-                Data:    data,
-        })
+type LianLianKanBoard struct {
+        Tiles     [][]LianLianKanTile `json:"tiles"`
+        Width     int                 `json:"width"`
+        Height    int                 `json:"height"`
+        PairCount int                 `json:"pair_count"`
+        Shuffled  bool                `json:"shuffled"`
+}
+
+type CreateLianLianKanRequest struct {
+        Width       int    `json:"width"`
+        Height      int    `json:"height"`
+        TileTypes   int    `json:"tile_types"`
+        ClientIP    string `json:"client_ip"`
+        UserAgent   string `json:"user_agent"`
+        Fingerprint string `json:"fingerprint"`
+}
+
+type CreateLianLianKanResponse struct {
+        SessionID string            `json:"session_id"`
+        Board     *LianLianKanBoard `json:"board"`
+        ExpiresIn int64             `json:"expires_in"`
+        ExpiresAt int64             `json:"expires_at"`
+        TileIcons []string          `json:"tile_icons"`
+}
+
+type LianLianKanGeneratorService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+var tileIcons = []string{
+        "🍎", "🍊", "🍋", "🍇", "🍓", "🍒", "🍑", "🥝",
+        "🍌", "🍉", "🥭", "🍐", "🍍", "🥥", "🍈", "🍏",
+        "🍆", "🥑", "🥦", "🌽", "🥕", "🍠", "🥔", "🌶️",
+}
+
+func NewLianLianKanGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *LianLianKanGeneratorService <span class="cov2" title="2">{
+        return &amp;LianLianKanGeneratorService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
 }</span>
 
-// Error 错误响应
-func Error(c *gin.Context, httpStatus int, message string) <span class="cov8" title="1">{
-        c.JSON(httpStatus, Response{
-                Code:    httpStatus,
-                Message: message,
-        })
-}</span>
+func (s *LianLianKanGeneratorService) Create(ctx context.Context, req *CreateLianLianKanRequest) (*CreateLianLianKanResponse, error) <span class="cov2" title="2">{
+        width := req.Width
+        height := req.Height
+        tileTypes := req.TileTypes
 
-// BadRequest 400错误
-func BadRequest(c *gin.Context, message string) <span class="cov8" title="1">{
-        Error(c, http.StatusBadRequest, message)
-}</span>
-
-// Unauthorized 401错误
-func Unauthorized(c *gin.Context) <span class="cov8" title="1">{
-        Error(c, http.StatusUnauthorized, "unauthorized")
-}</span>
-
-// Forbidden 403错误
-func Forbidden(c *gin.Context) <span class="cov8" title="1">{
-        Error(c, http.StatusForbidden, "forbidden")
-}</span>
-
-// NotFound 404错误
-func NotFound(c *gin.Context, message string) <span class="cov8" title="1">{
-        if message == "" </span><span class="cov8" title="1">{
-                message = "resource not found"
+        if width &lt;= 0 </span><span class="cov0" title="0">{
+                width = 6
         }</span>
-        <span class="cov8" title="1">Error(c, http.StatusNotFound, message)</span>
+        <span class="cov2" title="2">if height &lt;= 0 </span><span class="cov0" title="0">{
+                height = 6
+        }</span>
+        <span class="cov2" title="2">if tileTypes &lt;= 0 </span><span class="cov0" title="0">{
+                tileTypes = 8
+        }</span>
+
+        <span class="cov2" title="2">if tileTypes &gt; len(tileIcons) </span><span class="cov0" title="0">{
+                tileTypes = len(tileIcons)
+        }</span>
+
+        <span class="cov2" title="2">board, err := generateLianLianKanBoard(width, height, tileTypes)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to generate board: %w", err)
+        }</span>
+
+        <span class="cov2" title="2">sessionID := generateSessionID()
+        expiresAt := time.Now().Add(5 * time.Minute)
+
+        boardData, err := json.Marshal(board)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to marshal board: %w", err)
+        }</span>
+
+        <span class="cov2" title="2">session := &amp;models.CaptchaSession{
+                SessionID:     sessionID,
+                BackgroundURL: string(boardData),
+                SliderURL:     "",
+                GapX:          0,
+                GapY:          0,
+                Status:        "pending",
+                VerifyCount:   0,
+                MaxAttempts:   3,
+                CreatedAt:     time.Now(),
+                ExpiredAt:     expiresAt,
+                ClientIP:      req.ClientIP,
+                UserAgent:     req.UserAgent,
+                Fingerprint:   req.Fingerprint,
+        }
+
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.Set(ctx, session); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to cache session: %w", err)
+                }</span>
+        }
+
+        <span class="cov2" title="2">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.Create(session); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to save session: %w", err)
+                }</span>
+        }
+
+        <span class="cov2" title="2">selectedIcons := tileIcons[:tileTypes]
+
+        return &amp;CreateLianLianKanResponse{
+                SessionID: sessionID,
+                Board:     board,
+                ExpiresIn: int64(5 * time.Minute / time.Second),
+                ExpiresAt: expiresAt.Unix(),
+                TileIcons: selectedIcons,
+        }, nil</span>
 }
 
-// InternalServerError 500错误
-func InternalServerError(c *gin.Context, message string) <span class="cov8" title="1">{
-        if message == "" </span><span class="cov8" title="1">{
-                message = "internal server error"
+func generateLianLianKanBoard(width, height, tileTypes int) (*LianLianKanBoard, error) <span class="cov3" title="3">{
+        rand.Seed(time.Now().UnixNano())
+
+        totalTiles := width * height
+        if totalTiles%2 != 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("total tiles must be even")
         }</span>
-        <span class="cov8" title="1">Error(c, http.StatusInternalServerError, message)</span>
+
+        <span class="cov3" title="3">pairCount := totalTiles / 2
+
+        tiles := make([]LianLianKanTile, totalTiles)
+        for i := 0; i &lt; pairCount; i++ </span><span class="cov8" title="44">{
+                tileType := i % tileTypes
+                tiles[i*2] = LianLianKanTile{Type: tileType, Index: i * 2}
+                tiles[i*2+1] = LianLianKanTile{Type: tileType, Index: i*2 + 1}
+        }</span>
+
+        <span class="cov3" title="3">for i := range tiles </span><span class="cov10" title="88">{
+                j := rand.Intn(i + 1)
+                tiles[i], tiles[j] = tiles[j], tiles[i]
+        }</span>
+
+        <span class="cov3" title="3">board := make([][]LianLianKanTile, height)
+        for y := 0; y &lt; height; y++ </span><span class="cov6" title="16">{
+                board[y] = make([]LianLianKanTile, width)
+                for x := 0; x &lt; width; x++ </span><span class="cov10" title="88">{
+                        idx := y*width + x
+                        board[y][x] = tiles[idx]
+                        board[y][x].X = x
+                        board[y][x].Y = y
+                }</span>
+        }
+
+        <span class="cov3" title="3">return &amp;LianLianKanBoard{
+                Tiles:     board,
+                Width:     width,
+                Height:    height,
+                PairCount: pairCount,
+                Shuffled:  true,
+        }, nil</span>
 }
 
-// TooManyRequests 429错误
-func TooManyRequests(c *gin.Context, message string) <span class="cov8" title="1">{
-        if message == "" </span><span class="cov8" title="1">{
-                message = "too many requests"
-        }</span>
-        <span class="cov8" title="1">Error(c, http.StatusTooManyRequests, message)</span>
+func (s *LianLianKanGeneratorService) GetSession(ctx context.Context, sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                session, err := s.sessionCache.Get(ctx, sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                session, err := s.captchaRepo.GetBySessionID(sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("session not found: %s", sessionID)</span>
 }
+
+func (s *LianLianKanGeneratorService) DeleteSession(ctx context.Context, sessionID string) error <span class="cov0" title="0">{
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.Delete(ctx, sessionID); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov0" title="0">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.Delete(sessionID); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package captcha
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type LianLianKanPair struct {
+        Tile1 *LianLianKanTile `json:"tile1"`
+        Tile2 *LianLianKanTile `json:"tile2"`
+}
+
+type LianLianKanPath struct {
+        Points []struct {
+                X int `json:"x"`
+                Y int `json:"y"`
+        } `json:"points"`
+}
+
+type VerifyLianLianKanRequest struct {
+        SessionID string            `json:"session_id" binding:"required"`
+        Board     *LianLianKanBoard `json:"board" binding:"required"`
+        Pairs     []LianLianKanPair `json:"pairs" binding:"required"`
+        RiskScore float64           `json:"risk_score"`
+}
+
+type VerifyLianLianKanResult struct {
+        Success bool    `json:"success"`
+        Message string  `json:"message"`
+        Score   float64 `json:"score"`
+}
+
+type LianLianKanVerifierService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+func NewLianLianKanVerifierService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *LianLianKanVerifierService <span class="cov1" title="1">{
+        return &amp;LianLianKanVerifierService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
+}</span>
+
+func (v *LianLianKanVerifierService) Verify(ctx context.Context, req *VerifyLianLianKanRequest) (*VerifyLianLianKanResult, error) <span class="cov0" title="0">{
+        session, err := v.getSession(req.SessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return &amp;VerifyLianLianKanResult{
+                        Success: false,
+                        Message: "验证码已过期",
+                        Score:   0,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return &amp;VerifyLianLianKanResult{
+                        Success: false,
+                        Message: "验证次数已用完",
+                        Score:   0,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">v.incrementVerifyCount(req.SessionID)
+
+        if session.Status == "verified" </span><span class="cov0" title="0">{
+                return &amp;VerifyLianLianKanResult{
+                        Success: true,
+                        Message: "验证码已验证通过",
+                        Score:   100,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">originalBoard := &amp;LianLianKanBoard{}
+        if err := json.Unmarshal([]byte(session.BackgroundURL), originalBoard); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to unmarshal board: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">isValid, score := v.validateBoard(req.Board, originalBoard, req.Pairs)
+
+        if isValid </span><span class="cov0" title="0">{
+                v.markAsVerified(req.SessionID, req.RiskScore, 0, 0)
+                return &amp;VerifyLianLianKanResult{
+                        Success: true,
+                        Message: "验证成功",
+                        Score:   score,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">return &amp;VerifyLianLianKanResult{
+                Success: false,
+                Message: "验证失败",
+                Score:   score,
+        }, nil</span>
+}
+
+func (v *LianLianKanVerifierService) getSession(sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                session, err := v.sessionCache.Get(context.Background(), sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                session, err := v.captchaRepo.GetBySessionID(sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("session not found: %s", sessionID)</span>
+}
+
+func (v *LianLianKanVerifierService) incrementVerifyCount(sessionID string) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                _ = v.sessionCache.IncrementVerifyCount(context.Background(), sessionID)
+        }</span>
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                _ = v.captchaRepo.UpdateVerifyCount(sessionID)
+        }</span>
+}
+
+func (v *LianLianKanVerifierService) markAsVerified(sessionID string, riskScore, traceScore, envScore float64) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                _ = v.sessionCache.UpdateStatus(context.Background(), sessionID, "verified")
+        }</span>
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                _ = v.captchaRepo.UpdateStatus(sessionID, "verified")
+                _ = v.captchaRepo.UpdateRiskScore(sessionID, riskScore, traceScore, envScore)
+        }</span>
+}
+
+func (v *LianLianKanVerifierService) validateBoard(userBoard, originalBoard *LianLianKanBoard, pairs []LianLianKanPair) (bool, float64) <span class="cov1" title="1">{
+        if userBoard == nil || originalBoard == nil </span><span class="cov0" title="0">{
+                return false, 0
+        }</span>
+
+        <span class="cov1" title="1">if userBoard.Width != originalBoard.Width || userBoard.Height != originalBoard.Height </span><span class="cov0" title="0">{
+                return false, 0
+        }</span>
+
+        <span class="cov1" title="1">totalPairs := originalBoard.PairCount
+        matchedPairs := 0
+
+        visited := make(map[int]bool)
+
+        for _, pair := range pairs </span><span class="cov10" title="8">{
+                if pair.Tile1 == nil || pair.Tile2 == nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov10" title="8">tile1 := pair.Tile1
+                tile2 := pair.Tile2
+
+                if visited[tile1.Index] || visited[tile2.Index] </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov10" title="8">if tile1.Type == tile2.Type &amp;&amp; tile1.Index != tile2.Index </span><span class="cov10" title="8">{
+                        visited[tile1.Index] = true
+                        visited[tile2.Index] = true
+                        matchedPairs++
+                }</span>
+        }
+
+        <span class="cov1" title="1">score := float64(matchedPairs) / float64(totalPairs) * 100
+
+        return matchedPairs == totalPairs, score</span>
+}
+
+func (v *LianLianKanVerifierService) GetSessionStatus(ctx context.Context, sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        return v.getSession(sessionID)
+}</span>
+
+func (v *LianLianKanVerifierService) CheckSessionValid(ctx context.Context, sessionID string) (bool, string) <span class="cov0" title="0">{
+        session, err := v.getSession(sessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return false, "会话不存在"
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return false, "验证码已过期"
+        }</span>
+
+        <span class="cov0" title="0">if session.Status == "verified" </span><span class="cov0" title="0">{
+                return false, "验证码已验证通过"
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return false, "验证次数已用完"
+        }</span>
+
+        <span class="cov0" title="0">return true, ""</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package captcha
+
+import (
+        "context"
+        "fmt"
+        "math"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type VerifierService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+type VerifyRequest struct {
+        SessionID  string  `json:"session_id" binding:"required"`
+        PositionX  int     `json:"position_x" binding:"required"`
+        PositionY  int     `json:"position_y" binding:"required"`
+        RiskScore  float64 `json:"risk_score"`
+        TraceScore float64 `json:"trace_score"`
+        EnvScore   float64 `json:"env_score"`
+}
+
+type VerifyResult struct {
+        Success      bool    `json:"success"`
+        Message      string  `json:"message"`
+        Score        float64 `json:"score"`
+        PositionDiff int     `json:"position_diff"`
+}
+
+func NewVerifierService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *VerifierService <span class="cov0" title="0">{
+        return &amp;VerifierService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
+}</span>
+
+func (v *VerifierService) Verify(ctx context.Context, req *VerifyRequest) (*VerifyResult, error) <span class="cov0" title="0">{
+        session, err := v.getSession(req.SessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return &amp;VerifyResult{
+                        Success: false,
+                        Message: "验证码已过期",
+                        Score:   0,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return &amp;VerifyResult{
+                        Success: false,
+                        Message: "验证次数已用完",
+                        Score:   0,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">v.incrementVerifyCount(req.SessionID)
+
+        if session.Status == "verified" </span><span class="cov0" title="0">{
+                return &amp;VerifyResult{
+                        Success: true,
+                        Message: "验证码已验证通过",
+                        Score:   100,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">diffX := abs(session.GapX - req.PositionX)
+        diffY := abs(session.GapY - req.PositionY)
+
+        tolerance := 5
+        if diffX &lt;= tolerance &amp;&amp; diffY &lt;= tolerance </span><span class="cov0" title="0">{
+                v.markAsVerified(req.SessionID, req.RiskScore, req.TraceScore, req.EnvScore)
+
+                return &amp;VerifyResult{
+                        Success:      true,
+                        Message:      "验证成功",
+                        Score:        100,
+                        PositionDiff: diffX,
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">score := calculatePartialScore(diffX, diffY)
+
+        return &amp;VerifyResult{
+                Success:      false,
+                Message:      "验证失败",
+                Score:        score,
+                PositionDiff: diffX,
+        }, nil</span>
+}
+
+func (v *VerifierService) getSession(sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                session, err := v.sessionCache.Get(context.Background(), sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                session, err := v.captchaRepo.GetBySessionID(sessionID)
+                if err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("session not found: %s", sessionID)</span>
+}
+
+func (v *VerifierService) incrementVerifyCount(sessionID string) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                _ = v.sessionCache.IncrementVerifyCount(context.Background(), sessionID)
+        }</span>
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                _ = v.captchaRepo.UpdateVerifyCount(sessionID)
+        }</span>
+}
+
+func (v *VerifierService) markAsVerified(sessionID string, riskScore, traceScore, envScore float64) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                _ = v.sessionCache.UpdateStatus(context.Background(), sessionID, "verified")
+        }</span>
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                _ = v.captchaRepo.UpdateStatus(sessionID, "verified")
+                _ = v.captchaRepo.UpdateRiskScore(sessionID, riskScore, traceScore, envScore)
+        }</span>
+}
+
+func (v *VerifierService) GetSessionStatus(ctx context.Context, sessionID string) (*models.CaptchaSession, error) <span class="cov0" title="0">{
+        return v.getSession(sessionID)
+}</span>
+
+func (v *VerifierService) CheckSessionValid(ctx context.Context, sessionID string) (bool, string) <span class="cov0" title="0">{
+        session, err := v.getSession(sessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return false, "会话不存在"
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return false, "验证码已过期"
+        }</span>
+
+        <span class="cov0" title="0">if session.Status == "verified" </span><span class="cov0" title="0">{
+                return false, "验证码已验证通过"
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return false, "验证次数已用完"
+        }</span>
+
+        <span class="cov0" title="0">return true, ""</span>
+}
+
+func abs(x int) int <span class="cov10" title="9">{
+        return int(math.Abs(float64(x)))
+}</span>
+
+func calculatePartialScore(diffX, diffY int) float64 <span class="cov7" title="5">{
+        distance := math.Sqrt(float64(diffX*diffX + diffY*diffY))
+
+        maxDistance := 100.0
+        if distance &gt;= maxDistance </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov7" title="5">score := 100 * (1 - distance/maxDistance)
+
+        if diffX &gt; 20 || diffY &gt; 20 </span><span class="cov3" title="2">{
+                score *= 0.7
+        }</span>
+
+        <span class="cov7" title="5">if diffX &gt; 40 || diffY &gt; 40 </span><span class="cov3" title="2">{
+                score *= 0.5
+        }</span>
+
+        <span class="cov7" title="5">if score &lt; 0 </span><span class="cov0" title="0">{
+                score = 0
+        }</span>
+
+        <span class="cov7" title="5">return math.Round(score*100) / 100</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package captcha
+
+import (
+        "context"
+        "encoding/base64"
+        "fmt"
+        "math/rand"
+        "strconv"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type VoiceGeneratorService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+type VoiceCaptchaRequest struct {
+        Language    string `json:"language"` // "zh-CN" or "en-US"
+        Length      int    `json:"length"`   // number of digits, default 4
+        ClientIP    string `json:"client_ip"`
+        UserAgent   string `json:"user_agent"`
+        Fingerprint string `json:"fingerprint"`
+}
+
+type VoiceCaptchaResponse struct {
+        SessionID string `json:"session_id"`
+        VoiceData string `json:"voice_data"` // base64 encoded audio
+        ExpiresIn int64  `json:"expires_in"`
+        ExpiresAt int64  `json:"expires_at"`
+        Language  string `json:"language"`
+}
+
+func NewVoiceGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *VoiceGeneratorService <span class="cov1" title="3">{
+        return &amp;VoiceGeneratorService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
+}</span>
+
+func (s *VoiceGeneratorService) Generate(ctx context.Context, req *VoiceCaptchaRequest) (*VoiceCaptchaResponse, error) <span class="cov1" title="3">{
+        if req.Length &lt;= 0 </span><span class="cov1" title="1">{
+                req.Length = 4
+        }</span>
+        <span class="cov1" title="3">if req.Language == "" </span><span class="cov1" title="1">{
+                req.Language = "zh-CN"
+        }</span>
+
+        <span class="cov1" title="3">code := generateRandomDigits(req.Length)
+        audioData := generateVoiceAudio(code, req.Language)
+
+        sessionID := generateSessionID()
+        expiresAt := time.Now().Add(5 * time.Minute)
+
+        voiceSession := &amp;models.VoiceCaptchaSession{
+                SessionID:   sessionID,
+                Code:        code,
+                Language:    req.Language,
+                Status:      "pending",
+                VerifyCount: 0,
+                MaxAttempts: 3,
+                CreatedAt:   time.Now(),
+                ExpiredAt:   expiresAt,
+                ClientIP:    req.ClientIP,
+                UserAgent:   req.UserAgent,
+                Fingerprint: req.Fingerprint,
+        }
+
+        if s.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := s.sessionCache.SetVoice(ctx, voiceSession); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to cache session: %w", err)
+                }</span>
+        }
+
+        <span class="cov1" title="3">if s.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := s.captchaRepo.CreateVoiceSession(voiceSession); err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to save session to database: %w", err)
+                }</span>
+        }
+
+        <span class="cov1" title="3">return &amp;VoiceCaptchaResponse{
+                SessionID: sessionID,
+                VoiceData: base64.StdEncoding.EncodeToString(audioData),
+                ExpiresIn: int64(5 * time.Minute / time.Second),
+                ExpiresAt: expiresAt.Unix(),
+                Language:  req.Language,
+        }, nil</span>
+}
+
+func generateRandomDigits(length int) string <span class="cov1" title="6">{
+        digits := ""
+        for i := 0; i &lt; length; i++ </span><span class="cov2" title="26">{
+                digits += strconv.Itoa(rand.Intn(10))
+        }</span>
+        <span class="cov1" title="6">return digits</span>
+}
+
+func generateVoiceAudio(code, language string) []byte <span class="cov1" title="4">{
+        wav := createWAVHeader()
+
+        sampleRate := 44100
+        // bitDepth := 16  // unused
+        // channels := 1   // unused
+
+        for _, char := range code </span><span class="cov2" title="18">{
+                digit := int(char - '0')
+                wave := generateDigitWave(digit, language, sampleRate)
+                wav = append(wav, wave...)
+
+                silence := generateSilence(100, sampleRate)
+                wav = append(wav, silence...)
+        }</span>
+
+        <span class="cov1" title="4">return wav</span>
+}
+
+func createWAVHeader() []byte <span class="cov1" title="5">{
+        header := make([]byte, 44)
+        copy(header[0:4], []byte("RIFF"))
+        copy(header[8:12], []byte("WAVE"))
+        copy(header[12:16], []byte("fmt "))
+        copy(header[22:24], []byte{0x01, 0x00})             // Mono
+        copy(header[24:28], []byte{0x44, 0xAC, 0x00, 0x00}) // 44100 Hz
+        copy(header[28:32], []byte{0x88, 0x58, 0x01, 0x00}) // Byte rate
+        copy(header[32:34], []byte{0x02, 0x00})             // Block align
+        copy(header[34:36], []byte{0x10, 0x00})             // 16 bits per sample
+        copy(header[36:40], []byte("data"))
+
+        return header
+}</span>
+
+func generateDigitWave(digit int, language string, sampleRate int) []byte <span class="cov2" title="19">{
+        duration := 0.5
+        numSamples := int(float64(sampleRate) * duration)
+        data := make([]byte, numSamples*2)
+
+        frequency := 440.0 + float64(digit)*100
+
+        for i := 0; i &lt; numSamples; i++ </span><span class="cov8" title="418950">{
+                t := float64(i) / float64(sampleRate)
+                value := int16(32767 * 0.3 * (0.6*mathSin(2*3.14159*frequency*t) + 0.3*mathSin(2*3.14159*frequency*2*t) + 0.1*mathSin(2*3.14159*frequency*3*t)))
+
+                data[i*2] = byte(value &amp; 0xff)
+                data[i*2+1] = byte((value &gt;&gt; 8) &amp; 0xff)
+        }</span>
+
+        <span class="cov2" title="19">return data</span>
+}
+
+func generateSilence(durationMs int, sampleRate int) []byte <span class="cov2" title="19">{
+        numSamples := (sampleRate * durationMs) / 1000
+        data := make([]byte, numSamples*2)
+        return data
+}</span>
+
+func mathSin(x float64) float64 <span class="cov8" title="1256856">{
+        x = x - 2*3.1415926535*float64(int(x/(2*3.1415926535)))
+        if x &lt; 0 </span><span class="cov1" title="1">{
+                x += 2 * 3.1415926535
+        }</span>
+
+        <span class="cov8" title="1256856">result := x
+        term := x
+        for n := 3; n &lt;= 20; n += 2 </span><span class="cov10" title="11311704">{
+                term *= -x * x / float64(n*(n-1))
+                result += term
+        }</span>
+
+        <span class="cov8" title="1256856">return result</span>
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package captcha
+
+import (
+        "context"
+        "fmt"
+        "log"
+        "time"
+
+        "github.com/hjtpx/hjtpx/internal/repository/cache"
+        "github.com/hjtpx/hjtpx/internal/repository/db"
+        "github.com/hjtpx/hjtpx/pkg/models"
+)
+
+type VoiceVerifierService struct {
+        sessionCache *cache.SessionCache
+        captchaRepo  *db.CaptchaRepository
+}
+
+type VoiceVerifyRequest struct {
+        SessionID string `json:"session_id" binding:"required"`
+        Code      string `json:"code" binding:"required"`
+}
+
+type VoiceVerifyResult struct {
+        Success bool   `json:"success"`
+        Message string `json:"message"`
+}
+
+func NewVoiceVerifierService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *VoiceVerifierService <span class="cov0" title="0">{
+        return &amp;VoiceVerifierService{
+                sessionCache: sessionCache,
+                captchaRepo:  captchaRepo,
+        }
+}</span>
+
+func (v *VoiceVerifierService) Verify(ctx context.Context, req *VoiceVerifyRequest) (*VoiceVerifyResult, error) <span class="cov0" title="0">{
+        session, err := v.getSession(ctx, req.SessionID)
+        if err != nil </span><span class="cov0" title="0">{
+                return &amp;VoiceVerifyResult{
+                        Success: false,
+                        Message: "Session not found",
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(session.ExpiredAt) </span><span class="cov0" title="0">{
+                return &amp;VoiceVerifyResult{
+                        Success: false,
+                        Message: "验证码已过期",
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">if session.VerifyCount &gt;= session.MaxAttempts </span><span class="cov0" title="0">{
+                return &amp;VoiceVerifyResult{
+                        Success: false,
+                        Message: "验证次数已用完",
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">v.incrementVerifyCount(ctx, session.SessionID)
+
+        if session.Status == "verified" </span><span class="cov0" title="0">{
+                return &amp;VoiceVerifyResult{
+                        Success: true,
+                        Message: "验证码已验证通过",
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">if session.Code == req.Code </span><span class="cov0" title="0">{
+                v.markAsVerified(ctx, session.SessionID)
+                return &amp;VoiceVerifyResult{
+                        Success: true,
+                        Message: "验证成功",
+                }, nil
+        }</span>
+
+        <span class="cov0" title="0">return &amp;VoiceVerifyResult{
+                Success: false,
+                Message: "验证码错误",
+        }, nil</span>
+}
+
+func (v *VoiceVerifierService) getSession(ctx context.Context, sessionID string) (*models.VoiceCaptchaSession, error) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                if session, err := v.sessionCache.GetVoice(ctx, sessionID); err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                if session, err := v.captchaRepo.GetVoiceSession(sessionID); err == nil &amp;&amp; session != nil </span><span class="cov0" title="0">{
+                        return session, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil, fmt.Errorf("session not found")</span>
+}
+
+func (v *VoiceVerifierService) incrementVerifyCount(ctx context.Context, sessionID string) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := v.sessionCache.IncrementVoiceVerifyCount(ctx, sessionID); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("增加语音验证计数失败: %v", err)
+                }</span>
+        }
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := v.captchaRepo.IncrementVoiceVerifyCount(sessionID); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("数据库增加语音验证计数失败: %v", err)
+                }</span>
+        }
+}
+
+func (v *VoiceVerifierService) markAsVerified(ctx context.Context, sessionID string) <span class="cov0" title="0">{
+        if v.sessionCache != nil </span><span class="cov0" title="0">{
+                if err := v.sessionCache.MarkVoiceAsVerified(ctx, sessionID); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("缓存标记语音验证失败: %v", err)
+                }</span>
+        }
+
+        <span class="cov0" title="0">if v.captchaRepo != nil </span><span class="cov0" title="0">{
+                if err := v.captchaRepo.MarkVoiceAsVerified(sessionID); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("数据库标记语音验证失败: %v", err)
+                }</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package trace
+
+import (
+        "errors"
+        "math"
+
+        "github.com/hjtpx/hjtpx/internal/model"
+)
+
+type TraceExtractor struct{}
+
+func NewTraceExtractor() *TraceExtractor <span class="cov7" title="6">{
+        return &amp;TraceExtractor{}
+}</span>
+
+func (e *TraceExtractor) ExtractFeatures(traceData *model.TraceData) (*model.TraceFeatures, error) <span class="cov4" title="3">{
+        if traceData == nil || len(traceData.Points) &lt; 2 </span><span class="cov1" title="1">{
+                return nil, errors.New("轨迹数据点不足")
+        }</span>
+
+        <span class="cov3" title="2">features := &amp;model.TraceFeatures{
+                TotalTime:   traceData.TotalTime,
+                MoveCount:   e.countMoves(traceData),
+                RiskFactors: []string{},
+        }
+
+        features.AvgSpeed = e.calculateAvgSpeed(traceData)
+        features.MaxSpeed = e.calculateMaxSpeed(traceData)
+        features.MinSpeed = e.calculateMinSpeed(traceData)
+        features.SpeedVariance = e.calculateSpeedVariance(traceData)
+        features.MaxAcceleration = e.calculateMaxAcceleration(traceData)
+        features.Smoothness = e.calculateSmoothness(traceData)
+        features.PauseCount = e.calculatePauseCount(traceData)
+        features.TotalDistance = e.calculateTotalDistance(traceData)
+        features.DirectDistance = e.calculateDirectDistance(traceData)
+
+        if features.DirectDistance &gt; 0 </span><span class="cov3" title="2">{
+                features.PathRatio = features.TotalDistance / features.DirectDistance
+        }</span> else<span class="cov0" title="0"> {
+                features.PathRatio = 1.0
+        }</span>
+
+        <span class="cov3" title="2">features.RiskFactors = e.detectRiskFactors(features)
+
+        return features, nil</span>
+}
+
+func (e *TraceExtractor) countMoves(traceData *model.TraceData) int <span class="cov3" title="2">{
+        count := 0
+        for _, p := range traceData.Points </span><span class="cov8" title="9">{
+                if p.Event == "move" </span><span class="cov6" title="5">{
+                        count++
+                }</span>
+        }
+        <span class="cov3" title="2">return count</span>
+}
+
+func (e *TraceExtractor) calculateAvgSpeed(traceData *model.TraceData) float64 <span class="cov5" title="4">{
+        if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov5" title="4">var totalSpeed float64
+        speedCount := 0
+
+        for i := 1; i &lt; len(traceData.Points); i++ </span><span class="cov10" title="14">{
+                prev := traceData.Points[i-1]
+                curr := traceData.Points[i]
+
+                dx := curr.X - prev.X
+                dy := curr.Y - prev.Y
+                distance := math.Sqrt(dx*dx + dy*dy)
+                time := float64(curr.Timestamp-prev.Timestamp) / 1000.0
+
+                if time &gt; 0 &amp;&amp; time &lt; 1000 </span><span class="cov10" title="14">{
+                        speed := distance / time
+                        totalSpeed += speed
+                        speedCount++
+                }</span>
+        }
+
+        <span class="cov5" title="4">if speedCount == 0 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov5" title="4">return totalSpeed / float64(speedCount)</span>
+}
+
+func (e *TraceExtractor) calculateMaxSpeed(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">var maxSpeed float64
+
+        for i := 1; i &lt; len(traceData.Points); i++ </span><span class="cov7" title="7">{
+                prev := traceData.Points[i-1]
+                curr := traceData.Points[i]
+
+                dx := curr.X - prev.X
+                dy := curr.Y - prev.Y
+                distance := math.Sqrt(dx*dx + dy*dy)
+                time := float64(curr.Timestamp-prev.Timestamp) / 1000.0
+
+                if time &gt; 0 &amp;&amp; time &lt; 1000 </span><span class="cov7" title="7">{
+                        speed := distance / time
+                        if speed &gt; maxSpeed </span><span class="cov3" title="2">{
+                                maxSpeed = speed
+                        }</span>
+                }
+        }
+
+        <span class="cov3" title="2">return maxSpeed</span>
+}
+
+func (e *TraceExtractor) calculateMinSpeed(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">var minSpeed float64 = math.MaxFloat64
+
+        for i := 1; i &lt; len(traceData.Points); i++ </span><span class="cov7" title="7">{
+                prev := traceData.Points[i-1]
+                curr := traceData.Points[i]
+
+                dx := curr.X - prev.X
+                dy := curr.Y - prev.Y
+                distance := math.Sqrt(dx*dx + dy*dy)
+                time := float64(curr.Timestamp-prev.Timestamp) / 1000.0
+
+                if time &gt; 0 &amp;&amp; time &lt; 1000 &amp;&amp; distance &gt; 0 </span><span class="cov7" title="7">{
+                        speed := distance / time
+                        if speed &lt; minSpeed </span><span class="cov3" title="2">{
+                                minSpeed = speed
+                        }</span>
+                }
+        }
+
+        <span class="cov3" title="2">if minSpeed == math.MaxFloat64 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">return minSpeed</span>
+}
+
+func (e *TraceExtractor) getAllSpeeds(traceData *model.TraceData) []float64 <span class="cov3" title="2">{
+        var speeds []float64
+
+        for i := 1; i &lt; len(traceData.Points); i++ </span><span class="cov7" title="7">{
+                prev := traceData.Points[i-1]
+                curr := traceData.Points[i]
+
+                dx := curr.X - prev.X
+                dy := curr.Y - prev.Y
+                distance := math.Sqrt(dx*dx + dy*dy)
+                time := float64(curr.Timestamp-prev.Timestamp) / 1000.0
+
+                if time &gt; 0 &amp;&amp; time &lt; 1000 </span><span class="cov7" title="7">{
+                        speed := distance / time
+                        speeds = append(speeds, speed)
+                }</span>
+        }
+
+        <span class="cov3" title="2">return speeds</span>
+}
+
+func (e *TraceExtractor) calculateSpeedVariance(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 3 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">speeds := e.getAllSpeeds(traceData)
+        if len(speeds) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">avgSpeed := e.calculateAvgSpeed(traceData)
+
+        var variance float64
+        for _, speed := range speeds </span><span class="cov7" title="7">{
+                diff := speed - avgSpeed
+                variance += diff * diff
+        }</span>
+
+        <span class="cov3" title="2">return variance / float64(len(speeds))</span>
+}
+
+func (e *TraceExtractor) calculateMaxAcceleration(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 3 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">var maxAccel float64
+
+        for i := 2; i &lt; len(traceData.Points); i++ </span><span class="cov6" title="5">{
+                prev := traceData.Points[i-2]
+                curr := traceData.Points[i-1]
+                next := traceData.Points[i]
+
+                dx1 := curr.X - prev.X
+                dy1 := curr.Y - prev.Y
+                v1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+
+                dx2 := next.X - curr.X
+                dy2 := next.Y - curr.Y
+                v2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+
+                time := float64(next.Timestamp-prev.Timestamp) / 1000.0
+                if time &gt; 0 &amp;&amp; time &lt; 1000 </span><span class="cov6" title="5">{
+                        accel := math.Abs(v2-v1) / time
+                        if accel &gt; maxAccel </span><span class="cov0" title="0">{
+                                maxAccel = accel
+                        }</span>
+                }
+        }
+
+        <span class="cov3" title="2">return maxAccel</span>
+}
+
+func (e *TraceExtractor) calculateSmoothness(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 3 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">var totalAngleChange float64
+        angleChanges := 0
+
+        for i := 2; i &lt; len(traceData.Points); i++ </span><span class="cov6" title="5">{
+                p1 := traceData.Points[i-2]
+                p2 := traceData.Points[i-1]
+                p3 := traceData.Points[i]
+
+                angle1 := math.Atan2(p2.Y-p1.Y, p2.X-p1.X)
+                angle2 := math.Atan2(p3.Y-p2.Y, p3.X-p2.X)
+
+                angleDiff := math.Abs(angle2 - angle1)
+                if angleDiff &gt; math.Pi </span><span class="cov0" title="0">{
+                        angleDiff = 2*math.Pi - angleDiff
+                }</span>
+
+                <span class="cov6" title="5">totalAngleChange += angleDiff
+                angleChanges++</span>
+        }
+
+        <span class="cov3" title="2">if angleChanges &gt; 0 </span><span class="cov3" title="2">{
+                return totalAngleChange / float64(angleChanges)
+        }</span>
+
+        <span class="cov0" title="0">return 0</span>
+}
+
+func (e *TraceExtractor) calculatePauseCount(traceData *model.TraceData) int <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">pauseCount := 0
+        const pauseThresholdMs = 200
+
+        for i := 1; i &lt; len(traceData.Points); i++ </span><span class="cov7" title="7">{
+                prev := traceData.Points[i-1]
+                curr := traceData.Points[i]
+
+                timeDiff := curr.Timestamp - prev.Timestamp
+
+                dx := curr.X - prev.X
+                dy := curr.Y - prev.Y
+                distance := math.Sqrt(dx*dx + dy*dy)
+
+                if timeDiff &gt; pauseThresholdMs &amp;&amp; distance &lt; 2 </span><span class="cov0" title="0">{
+                        pauseCount++
+                }</span>
+        }
+
+        <span class="cov3" title="2">return pauseCount</span>
+}
+
+func (e *TraceExtractor) calculateTotalDistance(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">var totalDistance float64
+
+        for i := 1; i &lt; len(traceData.Points); i++ </span><span class="cov7" title="7">{
+                prev := traceData.Points[i-1]
+                curr := traceData.Points[i]
+
+                dx := curr.X - prev.X
+                dy := curr.Y - prev.Y
+                distance := math.Sqrt(dx*dx + dy*dy)
+
+                totalDistance += distance
+        }</span>
+
+        <span class="cov3" title="2">return totalDistance</span>
+}
+
+func (e *TraceExtractor) calculateDirectDistance(traceData *model.TraceData) float64 <span class="cov3" title="2">{
+        if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+
+        <span class="cov3" title="2">first := traceData.Points[0]
+        last := traceData.Points[len(traceData.Points)-1]
+
+        dx := last.X - first.X
+        dy := last.Y - first.Y
+
+        return math.Sqrt(dx*dx + dy*dy)</span>
+}
+
+func (e *TraceExtractor) detectRiskFactors(features *model.TraceFeatures) []string <span class="cov7" title="6">{
+        riskFactors := []string{}
+
+        if features.SpeedVariance &lt; 10 &amp;&amp; features.TotalTime &gt; 1000 </span><span class="cov1" title="1">{
+                riskFactors = append(riskFactors, "速度方差过小")
+        }</span>
+
+        <span class="cov7" title="6">if features.AvgSpeed &gt; 1000 </span><span class="cov1" title="1">{
+                riskFactors = append(riskFactors, "平均速度过快")
+        }</span>
+
+        <span class="cov7" title="6">if features.AvgSpeed &lt; 10 &amp;&amp; features.TotalTime &gt; 5000 </span><span class="cov0" title="0">{
+                riskFactors = append(riskFactors, "平均速度过慢")
+        }</span>
+
+        <span class="cov7" title="6">if features.PauseCount == 0 &amp;&amp; features.TotalTime &gt; 2000 </span><span class="cov1" title="1">{
+                riskFactors = append(riskFactors, "无正常停顿行为")
+        }</span>
+
+        <span class="cov7" title="6">if features.PathRatio &lt; 1.1 </span><span class="cov7" title="6">{
+                riskFactors = append(riskFactors, "轨迹过于直线")
+        }</span>
+
+        <span class="cov7" title="6">if features.MaxAcceleration &gt; 5000 </span><span class="cov0" title="0">{
+                riskFactors = append(riskFactors, "加速度异常")
+        }</span>
+
+        <span class="cov7" title="6">if features.Smoothness &lt; 0.05 </span><span class="cov7" title="6">{
+                riskFactors = append(riskFactors, "轨迹平滑度异常")
+        }</span>
+
+        <span class="cov7" title="6">if features.TotalDistance &lt; 10 &amp;&amp; features.TotalTime &gt; 1000 </span><span class="cov3" title="2">{
+                riskFactors = append(riskFactors, "移动距离过短")
+        }</span>
+
+        <span class="cov7" title="6">if features.MoveCount == 0 </span><span class="cov5" title="4">{
+                riskFactors = append(riskFactors, "无移动轨迹")
+        }</span>
+
+        <span class="cov7" title="6">return riskFactors</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package trace
+
+import (
+        "math"
+
+        "github.com/hjtpx/hjtpx/internal/model"
+)
+
+type TraceMatcher struct {
+        extractor *TraceExtractor
+}
+
+func NewTraceMatcher() *TraceMatcher <span class="cov10" title="3">{
+        return &amp;TraceMatcher{
+                extractor: NewTraceExtractor(),
+        }
+}</span>
+
+func (m *TraceMatcher) ExtractAndScore(traceData *model.TraceData) (*model.TraceFeatures, *model.TraceScore, error) <span class="cov1" title="1">{
+        features, err := m.extractor.ExtractFeatures(traceData)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, nil, err
+        }</span>
+
+        <span class="cov1" title="1">score := m.CalculateScore(features)
+
+        return features, score, nil</span>
+}
+
+func (m *TraceMatcher) CalculateScore(features *model.TraceFeatures) *model.TraceScore <span class="cov6" title="2">{
+        score := &amp;model.TraceScore{
+                Features:    make(map[string]float64),
+                RiskFactors: features.RiskFactors,
+        }
+
+        score.Features["avg_speed"] = features.AvgSpeed
+        score.Features["speed_variance"] = features.SpeedVariance
+        score.Features["max_acceleration"] = features.MaxAcceleration
+        score.Features["smoothness"] = features.Smoothness
+        score.Features["pause_count"] = float64(features.PauseCount)
+        score.Features["path_ratio"] = features.PathRatio
+        score.Features["max_speed"] = features.MaxSpeed
+        score.Features["min_speed"] = features.MinSpeed
+        score.Features["total_distance"] = features.TotalDistance
+        score.Features["direct_distance"] = features.DirectDistance
+
+        score.SpeedScore = m.scoreSpeed(features.AvgSpeed, features.SpeedVariance)
+        score.AccelScore = m.scoreAcceleration(features.MaxAcceleration)
+        score.SmoothScore = m.scoreSmoothness(features.Smoothness)
+        score.PauseScore = m.scorePause(features.PauseCount, features.TotalTime)
+
+        score.TotalScore = score.SpeedScore*0.3 +
+                score.AccelScore*0.3 +
+                score.SmoothScore*0.2 +
+                score.PauseScore*0.2
+
+        score.RiskFactors = features.RiskFactors
+
+        return score
+}</span>
+
+func (m *TraceMatcher) scoreSpeed(avgSpeed, speedVariance float64) float64 <span class="cov6" title="2">{
+        var speedScore float64
+
+        if avgSpeed &lt; 50 </span><span class="cov0" title="0">{
+                speedScore = avgSpeed / 50 * 30
+                if speedScore &lt; 0 </span><span class="cov0" title="0">{
+                        speedScore = 0
+                }</span>
+        } else<span class="cov6" title="2"> if avgSpeed &lt;= 300 </span><span class="cov1" title="1">{
+                speedScore = 30 + (1-math.Abs(avgSpeed-175)/125)*50
+        }</span> else<span class="cov1" title="1"> {
+                speedScore = 80 - (avgSpeed-300)/100*30
+                if speedScore &lt; 50 </span><span class="cov1" title="1">{
+                        speedScore = 50
+                }</span>
+        }
+
+        <span class="cov6" title="2">var varianceScore float64
+        if speedVariance &lt; 50 </span><span class="cov1" title="1">{
+                varianceScore = 30 + speedVariance/50*20
+        }</span> else<span class="cov1" title="1"> if speedVariance &lt;= 200 </span><span class="cov1" title="1">{
+                varianceScore = 50
+        }</span> else<span class="cov0" title="0"> {
+                varianceScore = 70 - (speedVariance-200)/100*20
+                if varianceScore &lt; 50 </span><span class="cov0" title="0">{
+                        varianceScore = 50
+                }</span>
+        }
+
+        <span class="cov6" title="2">return (speedScore + varianceScore) / 2</span>
+}
+
+func (m *TraceMatcher) scoreAcceleration(maxAccel float64) float64 <span class="cov6" title="2">{
+        if maxAccel &lt; 100 </span><span class="cov1" title="1">{
+                return 50 + maxAccel/100*20
+        }</span> else<span class="cov1" title="1"> if maxAccel &lt;= 1000 </span><span class="cov1" title="1">{
+                return 70
+        }</span> else<span class="cov0" title="0"> {
+                score := 70 - (maxAccel-1000)/1000*30
+                if score &lt; 40 </span><span class="cov0" title="0">{
+                        return 40
+                }</span>
+                <span class="cov0" title="0">return score</span>
+        }
+}
+
+func (m *TraceMatcher) scoreSmoothness(smoothness float64) float64 <span class="cov6" title="2">{
+        if smoothness &lt; 0.2 </span><span class="cov1" title="1">{
+                return 50 + smoothness/0.2*20
+        }</span> else<span class="cov1" title="1"> if smoothness &lt;= 0.8 </span><span class="cov1" title="1">{
+                return 70 + (0.8-smoothness)/0.6*30
+        }</span> else<span class="cov0" title="0"> {
+                score := 100 - (smoothness-0.8)/0.2*20
+                if score &lt; 50 </span><span class="cov0" title="0">{
+                        return 50
+                }</span>
+                <span class="cov0" title="0">return score</span>
+        }
+}
+
+func (m *TraceMatcher) scorePause(pauseCount int, totalTime int64) float64 <span class="cov6" title="2">{
+        expectedPause := 0
+        if totalTime &gt; 2000 &amp;&amp; totalTime &lt;= 5000 </span><span class="cov1" title="1">{
+                expectedPause = 1
+        }</span> else<span class="cov1" title="1"> if totalTime &gt; 5000 </span><span class="cov0" title="0">{
+                expectedPause = 2
+        }</span>
+
+        <span class="cov6" title="2">diff := math.Abs(float64(pauseCount - expectedPause))
+
+        if diff == 0 </span><span class="cov1" title="1">{
+                return 100
+        }</span> else<span class="cov1" title="1"> if diff == 1 </span><span class="cov1" title="1">{
+                return 75
+        }</span> else<span class="cov0" title="0"> if diff == 2 </span><span class="cov0" title="0">{
+                return 50
+        }</span> else<span class="cov0" title="0"> {
+                return 30
+        }</span>
+}
+
+func (m *TraceMatcher) GetRiskLevel(score *model.TraceScore) string <span class="cov0" title="0">{
+        if score.TotalScore &gt;= 80 </span><span class="cov0" title="0">{
+                return "low"
+        }</span> else<span class="cov0" title="0"> if score.TotalScore &gt;= 60 </span><span class="cov0" title="0">{
+                return "medium"
+        }</span> else<span class="cov0" title="0"> if score.TotalScore &gt;= 40 </span><span class="cov0" title="0">{
+                return "high"
+        }</span> else<span class="cov0" title="0"> {
+                return "critical"
+        }</span>
+}
+
+func (m *TraceMatcher) IsBot(score *model.TraceScore) bool <span class="cov10" title="3">{
+        riskCount := len(score.RiskFactors)
+
+        if riskCount &gt;= 3 </span><span class="cov1" title="1">{
+                return true
+        }</span>
+
+        <span class="cov6" title="2">if score.TotalScore &lt; 30 </span><span class="cov0" title="0">{
+                return true
+        }</span>
+
+        <span class="cov6" title="2">if score.SpeedScore &lt; 30 &amp;&amp; score.SmoothScore &lt; 30 </span><span class="cov1" title="1">{
+                return true
+        }</span>
+
+        <span class="cov1" title="1">return false</span>
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package trace
+
+import (
+        "context"
+        "encoding/json"
+        "errors"
+
+        "github.com/hjtpx/hjtpx/internal/model"
+)
+
+type TraceService struct {
+        extractor *TraceExtractor
+        matcher   *TraceMatcher
+}
+
+func NewTraceService() *TraceService <span class="cov0" title="0">{
+        return &amp;TraceService{
+                extractor: NewTraceExtractor(),
+                matcher:   NewTraceMatcher(),
+        }
+}</span>
+
+func (s *TraceService) ProcessTrace(ctx context.Context, sessionID string, traceDataJSON []byte) (*model.TraceFeatures, *model.TraceScore, error) <span class="cov0" title="0">{
+        var traceData model.TraceData
+        if err := json.Unmarshal(traceDataJSON, &amp;traceData); err != nil </span><span class="cov0" title="0">{
+                return nil, nil, errors.New("轨迹数据格式错误: " + err.Error())
+        }</span>
+
+        <span class="cov0" title="0">if len(traceData.Points) &lt; 2 </span><span class="cov0" title="0">{
+                return nil, nil, errors.New("轨迹数据点不足")
+        }</span>
+
+        <span class="cov0" title="0">features, score, err := s.matcher.ExtractAndScore(&amp;traceData)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, nil, err
+        }</span>
+
+        <span class="cov0" title="0">features.SessionID = sessionID
+
+        return features, score, nil</span>
+}
+
+func (s *TraceService) AnalyzeRiskLevel(features *model.TraceFeatures) (string, bool) <span class="cov0" title="0">{
+        score := &amp;model.TraceScore{
+                TotalScore: 100 - float64(len(features.RiskFactors)*10),
+        }
+        return s.matcher.GetRiskLevel(score), s.matcher.IsBot(score)
+}</span>
 </pre>
 		
 		</div>

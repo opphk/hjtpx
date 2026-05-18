@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"image"
 	"net/http"
 	"net/http/httptest"
 	"testing"
