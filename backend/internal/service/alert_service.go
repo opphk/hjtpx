@@ -33,6 +33,7 @@ type AlertEvent struct {
 type AlertAggregator struct {
 	AlertCounts     map[string]*AlertCountItem
 	AlertSummaries  map[string]*AlertSummary
+	AlertFingerprints map[string]*AlertFingerprint
 	mu              sync.RWMutex
 	CleanupInterval time.Duration
 }
@@ -61,6 +62,17 @@ type AlertSummary struct {
 	UniqueMessages map[string]int
 }
 
+// AlertFingerprint 告警指纹
+type AlertFingerprint struct {
+	RuleID          uint
+	Fingerprint     string
+	Count           int
+	FirstSeen       time.Time
+	LastSeen        time.Time
+	SuppressedUntil time.Time
+	IsSuppressed    bool
+}
+
 // 保持向后兼容的别名
 type alertCountItem = AlertCountItem
 
@@ -79,6 +91,7 @@ func NewAlertAggregator() *AlertAggregator {
 	return &AlertAggregator{
 		AlertCounts:     make(map[string]*AlertCountItem),
 		AlertSummaries:  make(map[string]*AlertSummary),
+		AlertFingerprints: make(map[string]*AlertFingerprint),
 		CleanupInterval: 5 * time.Minute,
 	}
 }
@@ -352,6 +365,88 @@ func (aa *AlertAggregator) Cleanup(oldThreshold time.Duration) {
 			delete(aa.AlertCounts, key)
 		}
 	}
+	for key, summary := range aa.AlertSummaries {
+		if now.Sub(summary.LastSeen) > oldThreshold {
+			delete(aa.AlertSummaries, key)
+		}
+	}
+	for key, fp := range aa.AlertFingerprints {
+		if now.Sub(fp.LastSeen) > oldThreshold {
+			delete(aa.AlertFingerprints, key)
+		}
+	}
+}
+
+// GenerateFingerprint 生成告警指纹
+func (aa *AlertAggregator) GenerateFingerprint(ruleID uint, eventType, severity, message string) string {
+	data := fmt.Sprintf("%d-%s-%s-%s", ruleID, eventType, severity, message)
+	hash := 0
+	for _, c := range data {
+		hash = 31*hash + int(c)
+	}
+	return fmt.Sprintf("%d-%d", ruleID, hash)
+}
+
+// IsAlertDuplicate 检查是否是重复告警
+func (aa *AlertAggregator) IsAlertDuplicate(ruleID uint, eventType, severity, message string, window time.Duration) (bool, int) {
+	aa.mu.Lock()
+	defer aa.mu.Unlock()
+	now := time.Now()
+	fingerprint := aa.GenerateFingerprint(ruleID, eventType, severity, message)
+	key := fmt.Sprintf("%s-%d", fingerprint, ruleID)
+	if existing, exists := aa.AlertFingerprints[key]; exists {
+		if existing.SuppressedUntil.After(now) {
+			return true, existing.Count
+		}
+		if now.Sub(existing.LastSeen) < window {
+			existing.Count++
+			existing.LastSeen = now
+			return true, existing.Count
+		}
+	}
+	return false, 0
+}
+
+// SuppressAlert 抑制告警
+func (aa *AlertAggregator) SuppressAlert(ruleID uint, eventType, severity, message string, duration time.Duration) {
+	aa.mu.Lock()
+	defer aa.mu.Unlock()
+	now := time.Now()
+	fingerprint := aa.GenerateFingerprint(ruleID, eventType, severity, message)
+	key := fmt.Sprintf("%s-%d", fingerprint, ruleID)
+	fp := &AlertFingerprint{
+		RuleID:          ruleID,
+		Fingerprint:     fingerprint,
+		Count:           1,
+		FirstSeen:       now,
+		LastSeen:        now,
+		SuppressedUntil: now.Add(duration),
+		IsSuppressed:   true,
+	}
+	aa.AlertFingerprints[key] = fp
+}
+
+// GetAlertSummary 获取告警摘要
+func (aa *AlertAggregator) GetAlertSummary(ruleID uint, aggKey string) *AlertSummary {
+	aa.mu.RLock()
+	defer aa.mu.RUnlock()
+	if summary, exists := aa.AlertSummaries[aggKey]; exists {
+		return summary
+	}
+	return nil
+}
+
+// GetAggregatedAlertCount 获取聚合后的告警数量
+func (aa *AlertAggregator) GetAggregatedAlertCount(ruleID uint, eventType string) int {
+	aa.mu.RLock()
+	defer aa.mu.RUnlock()
+	count := 0
+	for key, item := range aa.AlertCounts {
+		if item.RuleID == ruleID && strings.Contains(key, eventType) {
+			count += item.Count
+		}
+	}
+	return count
 }
 
 // CreateRule 创建告警规则
@@ -532,4 +627,126 @@ func (as *AlertService) GetAlertHistory(alertID uint) ([]models.AlertHistory, er
 		return nil, err
 	}
 	return histories, nil
+}
+
+// ListAlertHistory 查询告警历史
+func (as *AlertService) ListAlertHistory(query AlertHistoryQuery) ([]models.AlertHistory, int64, error) {
+	var histories []models.AlertHistory
+	var total int64
+	if as.db == nil {
+		return []models.AlertHistory{}, 0, nil
+	}
+	db := as.db.Model(&models.AlertHistory{})
+	if query.AlertID > 0 {
+		db = db.Where("alert_id = ?", query.AlertID)
+	}
+	if query.Action != "" {
+		db = db.Where("action = ?", query.Action)
+	}
+	if query.StartTime != nil {
+		db = db.Where("created_at >= ?", query.StartTime)
+	}
+	if query.EndTime != nil {
+		db = db.Where("created_at <= ?", query.EndTime)
+	}
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (query.Page - 1) * query.PageSize
+	if err := db.Order("created_at DESC").Offset(offset).Limit(query.PageSize).Find(&histories).Error; err != nil {
+		return nil, 0, err
+	}
+	return histories, total, nil
+}
+
+// ListAlertRecords 查询告警记录
+func (as *AlertService) ListAlertRecords(query AlertRecordQuery) ([]models.AlertRecord, int64, error) {
+	var alerts []models.AlertRecord
+	var total int64
+	if as.db == nil {
+		return []models.AlertRecord{}, 0, nil
+	}
+	db := as.db.Model(&models.AlertRecord{})
+	if query.RuleID > 0 {
+		db = db.Where("rule_id = ?", query.RuleID)
+	}
+	if query.Status != "" {
+		db = db.Where("status = ?", query.Status)
+	}
+	if query.Severity != "" {
+		db = db.Where("severity = ?", query.Severity)
+	}
+	if query.EventType != "" {
+		db = db.Where("event_type = ?", query.EventType)
+	}
+	if query.StartTime != nil {
+		db = db.Where("created_at >= ?", query.StartTime)
+	}
+	if query.EndTime != nil {
+		db = db.Where("created_at <= ?", query.EndTime)
+	}
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (query.Page - 1) * query.PageSize
+	if err := db.Order("created_at DESC").Offset(offset).Limit(query.PageSize).Find(&alerts).Error; err != nil {
+		return nil, 0, err
+	}
+	return alerts, total, nil
+}
+
+// AlertHistoryQuery 告警历史查询条件
+type AlertHistoryQuery struct {
+	AlertID    uint
+	Action     string
+	Page       int
+	PageSize   int
+	StartTime  *time.Time
+	EndTime    *time.Time
+}
+
+// AlertRecordQuery 告警记录查询条件
+type AlertRecordQuery struct {
+	RuleID     uint
+	Status     string
+	Severity   string
+	EventType  string
+	Page       int
+	PageSize   int
+	StartTime  *time.Time
+	EndTime    *time.Time
+}
+
+// GetAlertStatistics 获取告警统计信息
+func (as *AlertService) GetAlertStatistics(startTime, endTime time.Time) (*AlertStatistics, error) {
+	if as.db == nil {
+		return &AlertStatistics{}, nil
+	}
+	var stats AlertStatistics
+	var totalAlerts int64
+	var resolvedAlerts int64
+	as.db.Model(&models.AlertRecord{}).Where("created_at BETWEEN ? AND ?", startTime, endTime).Count(&totalAlerts)
+	as.db.Model(&models.AlertRecord{}).Where("status = ? AND created_at BETWEEN ? AND ?", "resolved", startTime, endTime).Count(&resolvedAlerts)
+	stats.TotalAlerts = totalAlerts
+	stats.ResolvedAlerts = resolvedAlerts
+	stats.ActiveAlerts = totalAlerts - resolvedAlerts
+	if totalAlerts > 0 {
+		stats.ResolutionRate = float64(resolvedAlerts) / float64(totalAlerts) * 100
+	}
+	as.db.Model(&models.AlertRecord{}).Where("severity = ? AND created_at BETWEEN ? AND ?", "critical", startTime, endTime).Count(&stats.CriticalCount)
+	as.db.Model(&models.AlertRecord{}).Where("severity = ? AND created_at BETWEEN ? AND ?", "warning", startTime, endTime).Count(&stats.WarningCount)
+	as.db.Model(&models.AlertRecord{}).Where("severity = ? AND created_at BETWEEN ? AND ?", "info", startTime, endTime).Count(&stats.InfoCount)
+	as.db.Model(&models.AlertRecord{}).Where("created_at >= ?", startTime).Count(&stats.ActiveAlerts)
+	return &stats, nil
+}
+
+// AlertStatistics 告警统计信息
+type AlertStatistics struct {
+	TotalAlerts     int64
+	ResolvedAlerts  int64
+	ActiveAlerts    int64
+	ResolutionRate  float64
+	CriticalCount   int64
+	WarningCount    int64
+	InfoCount       int64
 }

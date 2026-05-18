@@ -1,0 +1,282 @@
+groups:
+  - name: hjtpx-app-enhanced
+    interval: 30s
+    rules:
+      - alert: HJTXPHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high response time detected"
+          description: "P95 response time is above 500ms for more than 3 minutes. Current value: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: HJTXPVeryHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 1.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical response time detected"
+          description: "P95 response time is above 1.5 seconds for more than 2 minutes. Current value: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: HJTXPHighCPULoad
+        expr: rate(process_cpu_seconds_total{job="hjtpx-app"}[5m]) * 100 > 70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high CPU usage"
+          description: "CPU usage is above 70% for more than 5 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPHighMemoryPressure
+        expr: process_resident_memory_bytes{job="hjtpx-app"} / process_memory_limit_bytes > 0.80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high memory usage"
+          description: "Memory usage is above 80% for more than 10 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPTooManyConnections
+        expr: go_goroutines{job="hjtpx-app"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX too many goroutines"
+          description: "Number of goroutines is above 1000. Current count: {{ $value }}"
+
+      - alert: HJTXPConnectionPoolExhausted
+        expr: rate(go_gc_duration_seconds_count{job="hjtpx-app"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high GC activity"
+          description: "Garbage collection is running frequently. GC count rate: {{ $value }}"
+
+  - name: captcha-service
+    interval: 30s
+    rules:
+      - alert: CaptchaHighFailureRate
+        expr: rate(captcha_verification_total{job="hjtpx-app",status="failed"}[5m]) / rate(captcha_verification_total{job="hjtpx-app"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Captcha high failure rate"
+          description: "Captcha failure rate is above 10%. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: CaptchaVerificationTimeout
+        expr: histogram_quantile(0.95, rate(captcha_verification_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Captcha verification timeout"
+          description: "95th percentile verification time is above 2 seconds. Current value: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: CaptchaServiceDown
+        expr: up{job="hjtpx-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Captcha service is down"
+          description: "Captcha service instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: CaptchaHighBlockRate
+        expr: rate(captcha_verification_total{job="hjtpx-app",status="blocked"}[5m]) / rate(captcha_verification_total{job="hjtpx-app"}[5m]) > 0.15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Captcha high block rate"
+          description: "Captcha block rate is above 15%. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+  - name: websocket-service
+    interval: 30s
+    rules:
+      - alert: WebSocketHighLatency
+        expr: histogram_quantile(0.95, rate(ws_message_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket high message latency"
+          description: "95th percentile message latency is above 500ms. Current value: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: WebSocketConnectionErrors
+        expr: rate(ws_connections_total{job="hjtpx-app",status="error"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket connection errors detected"
+          description: "WebSocket error rate is above 5/s. Current rate: {{ $value }}"
+
+      - alert: WebSocketTooManyConnections
+        expr: ws_connections_active{job="hjtpx-app"} > 5000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket too many active connections"
+          description: "Active WebSocket connections exceeds 5000. Current count: {{ $value }}"
+
+      - alert: WebSocketMessageBacklog
+        expr: ws_message_queue_size{job="hjtpx-app"} > 1000
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WebSocket message backlog detected"
+          description: "WebSocket message queue size exceeds 1000. Current size: {{ $value }}"
+
+  - name: security-monitoring
+    interval: 30s
+    rules:
+      - alert: HighRiskVerificationRate
+        expr: rate(captcha_verification_total{job="hjtpx-app",risk_level="high"}[5m]) / rate(captcha_verification_total{job="hjtpx-app"}[5m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High risk verification rate elevated"
+          description: "High risk verification rate is above 20%. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: SecurityAnalysisSlowdown
+        expr: histogram_quantile(0.95, rate(security_analysis_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Security analysis performance degraded"
+          description: "Security analysis P95 time is above 1 second. Current value: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: BlacklistHitRate
+        expr: rate(blacklist_hits_total{job="hjtpx-app"}[5m]) > 100
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Blacklist hit rate is high"
+          description: "Blacklist hit rate is above 100/s. May indicate ongoing attack. Current rate: {{ $value }}"
+
+      - alert: RateLimitThrottling
+        expr: rate(rate_limit_requests_total{job="hjtpx-app",status="throttled"}[5m]) / rate(rate_limit_requests_total{job="hjtpx-app"}[5m]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limiting throttling detected"
+          description: "More than 30% of requests are being throttled. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+  - name: cache-monitoring
+    interval: 30s
+    rules:
+      - alert: RedisHighMemoryPressure
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis high memory pressure"
+          description: "Redis memory usage is above 90%. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: RedisLowHitRate
+        expr: rate(redis_keyspace_hits_total{job="redis-exporter"}[5m]) / (rate(redis_keyspace_hits_total{job="redis-exporter"}[5m]) + rate(redis_keyspace_misses_total{job="redis-exporter"}[5m])) < 0.5
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis low cache hit rate"
+          description: "Cache hit rate is below 50%. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: RedisHighEvictionRate
+        expr: rate(redis_evicted_keys_total{job="redis-exporter"}[5m]) > 500
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis high key eviction rate"
+          description: "Redis is evicting keys at a high rate. Current rate: {{ $value }}/s"
+
+      - alert: RedisConnectionPoolExhausted
+        expr: redis_connected_clients / redis_config_maxclients > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection pool nearly exhausted"
+          description: "Redis connection usage is above 95%. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+  - name: application-health
+    interval: 15s
+    rules:
+      - alert: ApplicationHealthCheckFailing
+        expr: up{job="hjtpx-health"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application health check failing"
+          description: "Health check endpoint is not responding for more than 1 minute"
+
+      - alert: ApplicationReadinessCheckFailing
+        expr: up{job="hjtpx-health"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Application readiness check failing"
+          description: "Readiness probe is not responding"
+
+      - alert: ApplicationPanicDetected
+        expr: rate(go_panic_total{job="hjtpx-app"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application panic detected"
+          description: "Application has triggered a panic. Panic rate: {{ $value }}/s"
+
+  - name: database-monitoring
+    interval: 30s
+    rules:
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_statements_mean_exec_time{job="postgres-exporter"}[5m]) > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Average query execution time is above 500ms. Current value: {{ $value | printf \"%.2f\" }}ms"
+
+      - alert: PostgreSQLHighConnectionUsage
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "Connection usage is above 85%. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag_seconds > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication lag"
+          description: "Replication lag is above 10 seconds. Current lag: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: PostgreSQLLongRunningTransactions
+        expr: rate(pg_stat_database_blocked{job="postgres-exporter"}[5m]) > 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL long running transactions"
+          description: "High number of blocked transactions detected. Current rate: {{ $value }}"

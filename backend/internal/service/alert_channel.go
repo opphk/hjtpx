@@ -31,25 +31,29 @@ type AlertChannel interface {
 type ChannelType string
 
 const (
-	ChannelTypeSlack    ChannelType = "slack"
-	ChannelTypeWebhook  ChannelType = "webhook"
-	ChannelTypeEmail   ChannelType = "email"
-	ChannelTypeDingTalk ChannelType = "dingtalk"
+	ChannelTypeSlack     ChannelType = "slack"
+	ChannelTypeWebhook   ChannelType = "webhook"
+	ChannelTypeEmail     ChannelType = "email"
+	ChannelTypeDingTalk  ChannelType = "dingtalk"
+	ChannelTypeFeishu    ChannelType = "feishu"
+	ChannelTypeWeCom    ChannelType = "wecom"
 )
 
 // SlackConfig Slack 配置
 type SlackConfig struct {
-	WebhookURL string `json:"webhook_url"`
-	Channel    string `json:"channel"`
-	Username   string `json:"username,omitempty"`
-	IconEmoji  string `json:"icon_emoji,omitempty"`
+	WebhookURL string            `json:"webhook_url"`
+	Channel    string            `json:"channel"`
+	Username   string           `json:"username,omitempty"`
+	IconEmoji  string           `json:"icon_emoji,omitempty"`
 }
 
 // WebhookConfig Webhook 配置
 type WebhookConfig struct {
-	URL     string            `json:"url"`
-	Method  string            `json:"method"`
-	Headers map[string]string `json:"headers,omitempty"`
+	URL        string            `json:"url"`
+	Method     string            `json:"method"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Timeout    int               `json:"timeout"`
+	RetryCount int               `json:"retry_count"`
 }
 
 // EmailConfig Email 配置
@@ -318,8 +322,202 @@ func CreateChannel(channelType string, config map[string]interface{}) (AlertChan
 		return NewEmailChannel(config)
 	case ChannelTypeDingTalk:
 		return NewDingTalkChannel(config)
+	case ChannelTypeFeishu:
+		return NewFeishuChannel(config)
+	case ChannelTypeWeCom:
+		return NewWeComChannel(config)
 	default:
 		return nil, fmt.Errorf("unsupported channel type: %s", channelType)
+	}
+}
+
+// FeishuConfig 飞书配置
+type FeishuConfig struct {
+	WebhookURL string `json:"webhook_url"`
+}
+
+// WeComConfig 企业微信配置
+type WeComConfig struct {
+	WebhookURL string `json:"webhook_url"`
+	AgentID   string `json:"agent_id"`
+}
+
+// FeishuChannel 飞书告警渠道
+type FeishuChannel struct {
+	BaseChannel
+	feishuConfig *FeishuConfig
+}
+
+// NewFeishuChannel 创建飞书渠道
+func NewFeishuChannel(config map[string]interface{}) (*FeishuChannel, error) {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+	var feishuConfig FeishuConfig
+	if err := json.Unmarshal(data, &feishuConfig); err != nil {
+		return nil, err
+	}
+	if feishuConfig.WebhookURL == "" {
+		return nil, fmt.Errorf("feishu webhook URL is required")
+	}
+	return &FeishuChannel{
+		BaseChannel:  NewBaseChannel(config),
+		feishuConfig: &feishuConfig,
+	}, nil
+}
+
+// Name 渠道名称
+func (f *FeishuChannel) Name() string {
+	return "feishu"
+}
+
+// ValidateConfig 验证配置
+func (f *FeishuChannel) ValidateConfig() error {
+	if f.feishuConfig.WebhookURL == "" {
+		return fmt.Errorf("feishu webhook URL is required")
+	}
+	return nil
+}
+
+// Send 发送告警
+func (f *FeishuChannel) Send(msg AlertMessage) error {
+	payload := f.buildFeishuPayload(msg)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Post(f.feishuConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("feishu API returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (f *FeishuChannel) buildFeishuPayload(msg AlertMessage) map[string]interface{} {
+	return map[string]interface{}{
+		"msg_type": "interactive",
+		"card": map[string]interface{}{
+			"header": map[string]interface{}{
+				"title": map[string]interface{}{
+					"tag":     "plain_text",
+					"content": fmt.Sprintf("[%s] %s", strings.ToUpper(msg.Severity), msg.Title),
+				},
+				"template": f.getFeishuTemplateColor(msg.Severity),
+			},
+			"elements": []map[string]interface{}{
+				{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**严重级别:** %s\n\n**事件ID:** %s\n\n**时间:** %s", strings.ToUpper(msg.Severity), msg.EventID, msg.Timestamp.Format("2006-01-02 15:04:05")),
+					},
+				},
+				{
+					"tag": "hr",
+				},
+				{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": fmt.Sprintf("**详细信息:**\n%s", msg.Message),
+					},
+				},
+			},
+		},
+	}
+}
+
+func (f *FeishuChannel) getFeishuTemplateColor(severity string) string {
+	switch strings.ToLower(severity) {
+	case "critical", "error":
+		return "red"
+	case "warning", "warn":
+		return "orange"
+	case "info":
+		return "blue"
+	default:
+		return "blue"
+	}
+}
+
+// WeComChannel 企业微信告警渠道
+type WeComChannel struct {
+	BaseChannel
+	wecomConfig *WeComConfig
+}
+
+// NewWeComChannel 创建企业微信渠道
+func NewWeComChannel(config map[string]interface{}) (*WeComChannel, error) {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+	var wecomConfig WeComConfig
+	if err := json.Unmarshal(data, &wecomConfig); err != nil {
+		return nil, err
+	}
+	if wecomConfig.WebhookURL == "" {
+		return nil, fmt.Errorf("wecom webhook URL is required")
+	}
+	return &WeComChannel{
+		BaseChannel:  NewBaseChannel(config),
+		wecomConfig: &wecomConfig,
+	}, nil
+}
+
+// Name 渠道名称
+func (w *WeComChannel) Name() string {
+	return "wecom"
+}
+
+// ValidateConfig 验证配置
+func (w *WeComChannel) ValidateConfig() error {
+	if w.wecomConfig.WebhookURL == "" {
+		return fmt.Errorf("wecom webhook URL is required")
+	}
+	return nil
+}
+
+// Send 发送告警
+func (w *WeComChannel) Send(msg AlertMessage) error {
+	payload := w.buildWeComPayload(msg)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	resp, err := http.Post(w.wecomConfig.WebhookURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("wecom API returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (w *WeComChannel) buildWeComPayload(msg AlertMessage) map[string]interface{} {
+	content := fmt.Sprintf("[%s] %s\n\n", strings.ToUpper(msg.Severity), msg.Title)
+	content += fmt.Sprintf("严重级别: %s\n", strings.ToUpper(msg.Severity))
+	content += fmt.Sprintf("事件ID: %s\n", msg.EventID)
+	content += fmt.Sprintf("时间: %s\n\n", msg.Timestamp.Format("2006-01-02 15:04:05"))
+	content += fmt.Sprintf("详细信息:\n%s\n", msg.Message)
+	if len(msg.Context) > 0 {
+		content += "\n上下文:\n"
+		for k, v := range msg.Context {
+			content += fmt.Sprintf("- %s: %v\n", k, v)
+		}
+	}
+	return map[string]interface{}{
+		"msgtype": "text",
+		"text": map[string]interface{}{
+			"content": content,
+		},
 	}
 }
 

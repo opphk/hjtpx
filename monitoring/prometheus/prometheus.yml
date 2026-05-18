@@ -4,7 +4,8 @@ global:
   external_labels:
     cluster: 'hjtpx'
     environment: 'production'
-  retention: 15d
+  retention: 30d
+  query_log_file: '/var/log/prometheus/query.log'
 
 alerting:
   alertmanagers:
@@ -44,7 +45,7 @@ scrape_configs:
         target_label: metrics_path
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: '(go_|http_|process_|app_|captcha_|auth_|security_|cache_|db_|redis_|middleware_).*'
+        regex: '(go_|http_|process_|app_|captcha_|auth_|security_|cache_|db_|redis_|middleware_|ws_|grpc_).*'
         action: keep
       - source_labels: [__name__]
         regex: '.*_internal.*'
@@ -174,3 +175,41 @@ alerting:
         - source_labels: [__meta_kubernetes_pod_container_port_number]
           regex: "9093"
           action: keep
+
+  - job_name: 'blackboxExporter'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://app:8080/health
+        - http://app:8080/ready
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: 'pushGateway'
+    static_configs:
+      - targets: ['pushgateway:9091']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'pushgateway'
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'cadvisor'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: '(container_|machine_|kube_|cadvisor_).*'
+        action: keep
