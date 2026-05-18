@@ -422,6 +422,46 @@ func (s *ApplicationService) GetApplicationStatistics(id uint) (*ApplicationStat
 	}, nil
 }
 
+func (s *ApplicationService) UpdateApplicationConfigWithMerge(id uint, newConfig *ApplicationConfig) error {
+	application, err := s.GetApplicationByID(id)
+	if err != nil {
+		return err
+	}
+
+	var currentConfig ApplicationConfig
+	if application.Config != "" && application.Config != "{}" {
+		if err := json.Unmarshal([]byte(application.Config), &currentConfig); err != nil {
+			return fmt.Errorf("failed to parse current config: %w", err)
+		}
+	}
+
+	if newConfig.CaptchaTypes != nil && len(newConfig.CaptchaTypes) > 0 {
+		currentConfig.CaptchaTypes = newConfig.CaptchaTypes
+	}
+	if newConfig.MaxVerifyPerMinute > 0 {
+		currentConfig.MaxVerifyPerMinute = newConfig.MaxVerifyPerMinute
+	}
+	if newConfig.MaxVerifyPerDay > 0 {
+		currentConfig.MaxVerifyPerDay = newConfig.MaxVerifyPerDay
+	}
+	if newConfig.AllowedIPs != nil {
+		currentConfig.AllowedIPs = newConfig.AllowedIPs
+	}
+	if newConfig.BlockRefusedRequests {
+		currentConfig.BlockRefusedRequests = newConfig.BlockRefusedRequests
+	}
+	if newConfig.CustomSettings != nil {
+		currentConfig.CustomSettings = newConfig.CustomSettings
+	}
+
+	configJSON, err := json.Marshal(currentConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	return database.DB.Model(application).Update("config", string(configJSON)).Error
+}
+
 type ApplicationStatistics struct {
 	TotalVerifications  int64                 `json:"total_verifications"`
 	PassedVerifications int64                 `json:"passed_verifications"`

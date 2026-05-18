@@ -12,13 +12,86 @@
                             <button type="button" class="btn btn-tool" id="toggleAdvancedSearch">
                                 <i class="fas fa-filter"></i> 高级搜索
                             </button>
-                            <button type="button" class="btn btn-tool" id="exportBtn">
-                                <i class="fas fa-download"></i> 导出
+                            <button type="button" class="btn btn-tool" id="toggleStats">
+                                <i class="fas fa-chart-bar"></i> 统计
                             </button>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-tool dropdown-toggle" data-bs-toggle="dropdown">
+                                    <i class="fas fa-download"></i> 导出
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="exportLogs('csv')">导出 CSV</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="exportLogs('xlsx')">导出 Excel</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="exportLogs('pdf')">导出 PDF</a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="exportLogs('json')">导出 JSON</a></li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
-                        <!-- 高级搜索区域 -->
+                        <div id="statsSection" class="mb-4" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="small-box bg-info">
+                                        <div class="inner">
+                                            <h3 id="statTotalCount">0</h3>
+                                            <p>总日志数</p>
+                                        </div>
+                                        <div class="icon"><i class="fas fa-list"></i></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="small-box bg-success">
+                                        <div class="inner">
+                                            <h3 id="statSuccessRate">0%</h3>
+                                            <p>成功率</p>
+                                        </div>
+                                        <div class="icon"><i class="fas fa-check-circle"></i></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="small-box bg-warning">
+                                        <div class="inner">
+                                            <h3 id="statAvgRisk">0</h3>
+                                            <p>平均风险分</p>
+                                        </div>
+                                        <div class="icon"><i class="fas fa-shield-alt"></i></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="small-box bg-danger">
+                                        <div class="inner">
+                                            <h3 id="statAvgDuration">0ms</h3>
+                                            <p>平均耗时</p>
+                                        </div>
+                                        <div class="icon"><i class="fas fa-clock"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="card-title">风险分布</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="riskDistributionChart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="card-title">状态分布</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="statusDistributionChart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="advancedSearchSection" class="mb-4" style="display: none;">
                             <div class="card card-outline card-primary">
                                 <div class="card-header">
@@ -61,7 +134,6 @@
                                 </div>
                             </div>
                             
-                            <!-- 保存的搜索 -->
                             <div class="card card-outline card-info">
                                 <div class="card-header">
                                     <h5 class="card-title">保存的搜索</h5>
@@ -72,7 +144,6 @@
                             </div>
                         </div>
                         
-                        <!-- 基本搜索 -->
                         <div class="row mb-3">
                             <div class="col-md-2">
                                 <select class="form-control" id="filterStatus">
@@ -91,11 +162,37 @@
                                     <option value="critical">极高风险</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <select class="form-control" id="filterCaptchaType">
+                                    <option value="">全部类型</option>
+                                    <option value="slider">滑块</option>
+                                    <option value="click">点选</option>
+                                    <option value="voice">语音</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <input type="text" class="form-control" id="filterIP" placeholder="IP地址">
+                            </div>
+                            <div class="col-md-2">
                                 <input type="date" class="form-control" id="filterStartDate">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <input type="date" class="form-control" id="filterEndDate">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <input type="number" class="form-control" id="filterMinRiskScore" placeholder="最低风险分" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="col-md-2">
+                                <input type="number" class="form-control" id="filterMaxRiskScore" placeholder="最高风险分" min="0" max="100" step="0.1">
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-control" id="filterStatsDays">
+                                    <option value="7">最近7天</option>
+                                    <option value="14">最近14天</option>
+                                    <option value="30">最近30天</option>
+                                </select>
                             </div>
                             <div class="col-md-2">
                                 <button type="button" class="btn btn-primary" id="searchBtn">
@@ -113,6 +210,7 @@
                                     <th>风险等级</th>
                                     <th>风险评分</th>
                                     <th>IP地址</th>
+                                    <th>耗时</th>
                                     <th>时间</th>
                                     <th>操作</th>
                                 </tr>
@@ -122,9 +220,14 @@
                         </table>
 
                         <div class="row mt-3">
-                            <div class="col-md-12">
+                            <div class="col-md-6">
+                                <div class="dataTables_info">
+                                    共 <span id="totalRecords">0</span> 条记录，每页 <span id="pageSizeDisplay">20</span> 条
+                                </div>
+                            </div>
+                            <div class="col-md-6">
                                 <nav>
-                                    <ul class="pagination justify-content-center" id="pagination">
+                                    <ul class="pagination justify-content-end" id="pagination">
                                     </ul>
                                 </nav>
                             </div>
@@ -137,7 +240,7 @@
 </section>
 
 <div class="modal fade" id="detailModal">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h4 class="modal-title">日志详情</h4>
@@ -152,7 +255,6 @@
     </div>
 </div>
 
-<!-- 保存搜索模态框 -->
 <div class="modal fade" id="saveSearchModal">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -180,38 +282,166 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="/admin/static/js/advanced-search.js"></script>
 <script>
 let currentPage = 1;
 const pageSize = 20;
 let searchInstance = null;
+let riskChart = null;
+let statusChart = null;
 
 $(function() {
-    // 初始化高级搜索
+    initDefaultDates();
     searchInstance = initAdvancedSearch('logs');
     
-    // 重写搜索成功回调
     searchInstance.onSearchSuccess = function(data) {
         renderTable(data.data || []);
         renderPagination(data.total || 0, data.page || 1);
+        updateRecordCount(data.total || 0);
     };
 
     loadLogs();
+    loadStats();
 
     $('#searchBtn').click(function() {
         currentPage = 1;
         loadLogs();
     });
 
-    $('#exportBtn').click(function() {
-        exportLogs();
-    });
-    
-    // 高级搜索开关
     $('#toggleAdvancedSearch').click(function() {
         $('#advancedSearchSection').toggle();
     });
+    
+    $('#toggleStats').click(function() {
+        $('#statsSection').toggle();
+        if ($('#statsSection').is(':visible')) {
+            loadStats();
+        }
+    });
+    
+    $('#filterStatsDays').change(function() {
+        if ($('#statsSection').is(':visible')) {
+            loadStats();
+        }
+    });
 });
+
+function initDefaultDates() {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const formatDate = (date) => {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    };
+    
+    $('#filterStartDate').val(formatDate(weekAgo));
+    $('#filterEndDate').val(formatDate(now));
+}
+
+function loadStats() {
+    const days = parseInt($('#filterStatsDays').val()) || 7;
+    
+    $.get('/admin/api/logs/stats/analysis', { days: days, group_by_app: true }, function(response) {
+        if (response.code === 0 && response.data) {
+            const data = response.data;
+            
+            $('#statTotalCount').text(formatNumber(data.total_logs || 0));
+            
+            const totalSuccess = data.total_logs - data.total_failed;
+            const successRate = data.total_logs > 0 ? (totalSuccess / data.total_logs * 100).toFixed(1) : 0;
+            $('#statSuccessRate').text(successRate + '%');
+            
+            $('#statAvgRisk').text((data.avg_risk_score || 0).toFixed(1));
+            $('#statAvgDuration').text(Math.round(data.avg_duration || 0) + 'ms');
+            
+            renderRiskChart(data.risk_stats || []);
+            renderStatusChart(data.status_stats || []);
+        }
+    }).fail(function() {
+        console.error('Failed to load stats');
+    });
+}
+
+function renderRiskChart(riskStats) {
+    const ctx = document.getElementById('riskDistributionChart');
+    if (!ctx) return;
+    
+    if (riskChart) {
+        riskChart.destroy();
+    }
+    
+    const labels = riskStats.map(s => {
+        const map = { 'low': '低风险', 'medium': '中风险', 'high': '高风险', 'critical': '极高风险' };
+        return map[s.risk_level] || s.risk_level;
+    });
+    const data = riskStats.map(s => s.count);
+    const colors = ['#28a745', '#ffc107', '#fd7e14', '#dc3545'];
+    
+    riskChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors.slice(0, data.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+
+function renderStatusChart(statusStats) {
+    const ctx = document.getElementById('statusDistributionChart');
+    if (!ctx) return;
+    
+    if (statusChart) {
+        statusChart.destroy();
+    }
+    
+    const labels = statusStats.map(s => {
+        const map = { 'success': '成功', 'failed': '失败', 'blocked': '拦截', 'pending': '待处理' };
+        return map[s.status] || s.status;
+    });
+    const data = statusStats.map(s => s.count);
+    const colors = ['#28a745', '#dc3545', '#ffc107', '#6c757d'];
+    
+    statusChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '数量',
+                data: data,
+                backgroundColor: colors.slice(0, data.length)
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
 
 function loadLogs() {
     const filters = {
@@ -220,37 +450,48 @@ function loadLogs() {
     };
 
     const status = $('#filterStatus').val();
-    if (status) {
-        filters.status = status;
-    }
+    if (status) filters.status = status;
 
     const riskLevel = $('#filterRiskLevel').val();
-    if (riskLevel) {
-        filters.risk_level = riskLevel;
-    }
+    if (riskLevel) filters.risk_level = riskLevel;
+    
+    const captchaType = $('#filterCaptchaType').val();
+    if (captchaType) filters.captcha_type = captchaType;
+    
+    const ip = $('#filterIP').val();
+    if (ip) filters.ip_address = ip;
 
     const startDate = $('#filterStartDate').val();
-    if (startDate) {
-        filters.start_date = startDate;
-    }
+    if (startDate) filters.start_date = startDate;
 
     const endDate = $('#filterEndDate').val();
-    if (endDate) {
-        filters.end_date = endDate;
-    }
+    if (endDate) filters.end_date = endDate;
+    
+    const minRiskScore = $('#filterMinRiskScore').val();
+    if (minRiskScore) filters.min_risk_score = parseFloat(minRiskScore);
+    
+    const maxRiskScore = $('#filterMaxRiskScore').val();
+    if (maxRiskScore) filters.max_risk_score = parseFloat(maxRiskScore);
 
     $.get('/admin/api/logs', filters, function(response) {
         if (response.code === 0) {
             renderTable(response.data.logs || []);
             renderPagination(response.data.total || 0, response.data.page || 1);
+            updateRecordCount(response.data.total || 0);
         } else {
             renderTable([]);
             renderPagination(0, 1);
+            updateRecordCount(0);
         }
     }).fail(function() {
         renderTable([]);
         renderPagination(0, 1);
+        updateRecordCount(0);
     });
+}
+
+function updateRecordCount(total) {
+    $('#totalRecords').text(total);
 }
 
 function renderTable(logs) {
@@ -258,7 +499,7 @@ function renderTable(logs) {
     tbody.empty();
 
     if (logs.length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center">暂无数据</td></tr>');
+        tbody.html('<tr><td colspan="9" class="text-center">暂无数据</td></tr>');
         return;
     }
 
@@ -269,16 +510,17 @@ function renderTable(logs) {
         const riskText = getRiskLevelText(log.risk_level);
 
         const sessionId = log.session_id || '';
-        const displaySessionId = sessionId.length > 16 ? sessionId.substring(0, 16) + '...' : sessionId;
+        const displaySessionId = sessionId.length > 20 ? sessionId.substring(0, 20) + '...' : sessionId;
 
         const row = `
             <tr>
                 <td>${log.id}</td>
                 <td title="${sessionId}">${displaySessionId}</td>
-                <td><span class="badge badge-${statusClass}">${statusText}</span></td>
-                <td><span class="badge badge-${riskClass}">${riskText}</span></td>
+                <td><span class="badge bg-${statusClass}">${statusText}</span></td>
+                <td><span class="badge bg-${riskClass}">${riskText}</span></td>
                 <td>${(log.risk_score || 0).toFixed(1)}</td>
                 <td>${log.ip_address || '-'}</td>
+                <td>${(log.duration || 0)}ms</td>
                 <td>${formatDate(log.created_at)}</td>
                 <td>
                     <button class="btn btn-sm btn-info" onclick="showDetail(${log.id})">
@@ -399,8 +641,8 @@ function showDetail(id) {
             html += '<tr><th width="30%">ID</th><td>' + log.id + '</td></tr>';
             html += '<tr><th>会话ID</th><td>' + (log.session_id || '-') + '</td></tr>';
             html += '<tr><th>验证码类型</th><td>' + (log.captcha_type || '-') + '</td></tr>';
-            html += '<tr><th>状态</th><td><span class="badge badge-' + getStatusBadgeClass(log.status) + '">' + getStatusText(log.status) + '</span></td></tr>';
-            html += '<tr><th>风险等级</th><td><span class="badge badge-' + getRiskBadgeClass(log.risk_level) + '">' + getRiskLevelText(log.risk_level) + '</span></td></tr>';
+            html += '<tr><th>状态</th><td><span class="badge bg-' + getStatusBadgeClass(log.status) + '">' + getStatusText(log.status) + '</span></td></tr>';
+            html += '<tr><th>风险等级</th><td><span class="badge bg-' + getRiskBadgeClass(log.risk_level) + '">' + getRiskLevelText(log.risk_level) + '</span></td></tr>';
             html += '<tr><th>风险评分</th><td>' + (log.risk_score || 0).toFixed(2) + '</td></tr>';
             html += '<tr><th>IP地址</th><td>' + (log.ip_address || '-') + '</td></tr>';
             html += '<tr><th>User Agent</th><td>' + (log.user_agent || '-') + '</td></tr>';
@@ -416,25 +658,39 @@ function showDetail(id) {
     });
 }
 
-function exportLogs() {
+function exportLogs(format) {
     const params = [];
+    
     const status = $('#filterStatus').val();
     if (status) params.push('status=' + encodeURIComponent(status));
-
+    
     const riskLevel = $('#filterRiskLevel').val();
     if (riskLevel) params.push('risk_level=' + encodeURIComponent(riskLevel));
+    
+    const captchaType = $('#filterCaptchaType').val();
+    if (captchaType) params.push('captcha_type=' + encodeURIComponent(captchaType));
+    
+    const ip = $('#filterIP').val();
+    if (ip) params.push('ip_address=' + encodeURIComponent(ip));
 
     const startDate = $('#filterStartDate').val();
     if (startDate) params.push('start_date=' + encodeURIComponent(startDate));
 
     const endDate = $('#filterEndDate').val();
     if (endDate) params.push('end_date=' + encodeURIComponent(endDate));
+    
+    const minRiskScore = $('#filterMinRiskScore').val();
+    if (minRiskScore) params.push('min_risk_score=' + encodeURIComponent(minRiskScore));
+    
+    const maxRiskScore = $('#filterMaxRiskScore').val();
+    if (maxRiskScore) params.push('max_risk_score=' + encodeURIComponent(maxRiskScore));
+    
+    params.push('format=' + encodeURIComponent(format));
 
     const queryString = params.length > 0 ? '?' + params.join('&') : '';
     window.location.href = '/admin/api/logs/export' + queryString;
 }
 
-// 高级搜索辅助函数
 function executeAdvancedSearch() {
     if (searchInstance) {
         searchInstance.page = 1;

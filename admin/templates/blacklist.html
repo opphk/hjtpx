@@ -38,7 +38,9 @@
             </div>
             <div class="top-header-right">
                 <button id="addBlacklistBtn" class="btn-cinnabar btn-sm"><i class="fas fa-plus me-1"></i>添加黑名单</button>
-                <button id="importBlacklistBtn" class="btn-outline-gold"><i class="fas fa-upload me-1"></i>批量导入</button>
+                <button id="importBlacklistBtn" class="btn-outline-gold" data-bs-toggle="modal" data-bs-target="#batchImportModal"><i class="fas fa-upload me-1"></i>批量导入</button>
+                <button id="batchDeleteBtn" class="btn-danger btn-sm" disabled onclick="openBatchDeleteModal()"><i class="fas fa-trash me-1"></i>批量删除 (<span id="batchDeleteCount">0</span>)</button>
+                <button id="viewBatchOpsBtn" class="btn-outline-secondary btn-sm"><i class="fas fa-list me-1"></i>操作记录</button>
                 <div class="user-display">
                     <span class="user-name" id="usernameDisplay">管理员</span>
                     <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar">A</div>
@@ -363,6 +365,141 @@
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
                     <button type="button" class="btn-ink" onclick="saveCurrentSearch()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="batchDeleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-trash-alt me-2"></i>批量删除黑名单</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        确定要删除选中的 <strong id="batchDeleteCount">0</strong> 条黑名单记录吗？
+                    </div>
+                    <p class="text-muted small">此操作支持回滚，您可以在操作记录中查看详情并回滚。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-danger btn-sm" id="batchDeleteBtn" onclick="handleBatchDelete()">
+                        <i class="fas fa-trash me-1"></i>确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="batchImportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-upload me-2"></i>批量导入黑名单</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">导入类型</label>
+                        <select class="form-select" id="batchImportType">
+                            <option value="ip">IP地址</option>
+                            <option value="user_id">用户ID</option>
+                            <option value="device_id">设备ID</option>
+                            <option value="phone">手机号</option>
+                            <option value="email">邮箱</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">封禁原因</label>
+                        <input type="text" class="form-control" id="batchImportReason" placeholder="统一封禁原因">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">目标数据（每行一个）</label>
+                        <textarea class="form-control" id="batchImportTargets" rows="8" placeholder="192.168.1.1&#10;10.0.0.0/24&#10;user_malicious_001"></textarea>
+                        <small class="text-muted">同步导入最多支持100条记录</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-ink" id="batchImportSyncBtn">
+                        <i class="fas fa-upload me-1"></i>确认导入
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="batchOperationsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-list-alt me-2"></i>批量操作记录</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>操作类型</th>
+                                    <th>目标类型</th>
+                                    <th>状态</th>
+                                    <th>进度</th>
+                                    <th>成功/失败</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batchOperationsBody">
+                                <tr><td colspan="7" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="batchOperationDetailModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>批量操作详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="batchOpDetailContent">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="failedItemsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-circle me-2"></i>失败项详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>目标ID</th>
+                                <th>错误信息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="failedItemsContent">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>

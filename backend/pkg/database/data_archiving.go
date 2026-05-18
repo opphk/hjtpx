@@ -699,6 +699,22 @@ func (c *CompressionArchiver) CompressArchiveTable(tableName, archiveTable strin
 	}
 
 	log.Printf("Starting compression for archive table: %s", archiveTable)
+
+	var indexCount int64
+	DB.Raw("SELECT COUNT(*) FROM pg_indexes WHERE tablename = ?", archiveTable).Scan(&indexCount)
+
+	if indexCount > 5 {
+		dropIndexSQL := fmt.Sprintf(`
+			DROP INDEX CONCURRENTLY IF EXISTS %s_composite_idx;
+			CREATE INDEX CONCURRENTLY IF NOT EXISTS %s_created_idx ON %s (created_at);
+		`, archiveTable, archiveTable, archiveTable)
+
+		if err := DB.Exec(dropIndexSQL).Error; err != nil {
+			log.Printf("Index optimization failed for %s: %v", archiveTable, err)
+		}
+	}
+
+	log.Printf("Compression and optimization completed for %s", archiveTable)
 	return nil
 }
 

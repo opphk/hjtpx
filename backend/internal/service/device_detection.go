@@ -165,15 +165,305 @@ func (s *DeviceDetectionService) initializeSignatures() {
 		Weight: 0.85,
 	}
 
+	s.knownEmulators["BlueStacks"] = &EmulatorSignature{
+		Name: "BlueStacks",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)bluestacks`),
+			regexp.MustCompile(`(?i)bst.*(?:special|split|instance)`),
+			regexp.MustCompile(`(?i)android.*bluestacks`),
+		},
+		Indicators: []string{
+			"BlueStacks",
+			"bst-helper",
+			"bstsdfsdksandbox",
+			"Android on x86",
+		},
+		Weight: 0.95,
+	}
+
+	s.knownEmulators["Nox"] = &EmulatorSignature{
+		Name: "Nox",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)nox`),
+			regexp.MustCompile(`(?i)noxplayer`),
+			regexp.MustCompile(`(?i)noxsandbox`),
+		},
+		Indicators: []string{
+			"Nox",
+			"NoxPlayer",
+			"NoxApp",
+			"android-virtualbox",
+		},
+		Weight: 0.93,
+	}
+
+	s.knownEmulators["Memu"] = &EmulatorSignature{
+		Name: "Memu",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)memu`),
+			regexp.MustCompile(`(?i)memuplay`),
+			regexp.MustCompile(`(?i)memuplayer`),
+		},
+		Indicators: []string{
+			"Memu",
+			"MemuPlayer",
+			"Microvirt",
+			"Android on MEmu",
+		},
+		Weight: 0.92,
+	}
+
+	s.knownEmulators["LDPlayer"] = &EmulatorSignature{
+		Name: "LDPlayer",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)ldplayer`),
+			regexp.MustCompile(`(?i)ld-play`),
+			regexp.MustCompile(`(?i)leidian`),
+		},
+		Indicators: []string{
+			"LDPlayer",
+			"LeiDroid",
+			"ldlib",
+			"ldvbox",
+		},
+		Weight: 0.91,
+	}
+
+	s.knownEmulators["Mumu"] = &EmulatorSignature{
+		Name: "Mumu",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)mumu`),
+			regexp.MustCompile(`(?i)mumux`),
+			regexp.MustCompile(`(?i)xiaomu`),
+		},
+		Indicators: []string{
+			"MuMu",
+			"mumu模拟器",
+			"Netease MuMu",
+			"mumu_x86",
+		},
+		Weight: 0.88,
+	}
+
+	s.knownEmulators["Genymotion"] = &EmulatorSignature{
+		Name: "Genymotion",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)genymotion`),
+			regexp.MustCompile(`(?i)genyotion`),
+		},
+		Indicators: []string{
+			"Genymotion",
+			"vbox86p",
+			"vbox86t",
+			"Genymobile",
+		},
+		Weight: 0.94,
+	}
+
+	s.knownEmulators["Gameloop"] = &EmulatorSignature{
+		Name: "Gameloop",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)gameloop`),
+			regexp.MustCompile(`(?i)tencentgameloop`),
+			regexp.MustCompile(`(?i)txgame`),
+		},
+		Indicators: []string{
+			"GameLoop",
+			"Tencent Gaming Buddy",
+			"android-gameloop",
+		},
+		Weight: 0.90,
+	}
+
+	s.knownEmulators["SmartGaGa"] = &EmulatorSignature{
+		Name: "SmartGaGa",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)smartgaga`),
+			regexp.MustCompile(`(?i)smartga`),
+		},
+		Indicators: []string{
+			"SmartGaGa",
+			"SmartGaga",
+			"windows-sandbox",
+		},
+		Weight: 0.87,
+	}
+
+	s.knownEmulators["WindRoy"] = &EmulatorSignature{
+		Name: "WindRoy",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)windroy`),
+			regexp.MustCompile(`(?i)windroye`),
+		},
+		Indicators: []string{
+			"WindRoy",
+			"WindRoye",
+			"Microvirt",
+		},
+		Weight: 0.85,
+	}
+
+	s.knownEmulators["Droid4X"] = &EmulatorSignature{
+		Name: "Droid4X",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)droid4x`),
+			regexp.MustCompile(`(?i)macsigner`),
+		},
+		Indicators: []string{
+			"Droid4X",
+			"droid4x-system",
+			"com.hypergryph.arknights",
+		},
+		Weight: 0.84,
+	}
+
+	s.knownEmulators["YouWei"] = &EmulatorSignature{
+		Name: "YouWei",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)youwei`),
+			regexp.MustCompile(`(?i)youwin`),
+		},
+		Indicators: []string{
+			"YouWei",
+			"YouWin",
+			"android-wechat",
+		},
+		Weight: 0.82,
+	}
+
+	s.knownEmulators["雷电云"] = &EmulatorSignature{
+		Name: "雷电云",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)ldyun`),
+			regexp.MustCompile(`(?i)ldy`),
+			regexp.MustCompile(`(?i)lei(dian)?.*cloud`),
+		},
+		Indicators: []string{
+			"LDYun",
+			"ldy_api",
+			"android-cloud-ldy",
+			"雷电云手机",
+		},
+		Weight: 0.96,
+	}
+
+	s.knownEmulators["多多云"] = &EmulatorSignature{
+		Name: "多多云",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)ddyun`),
+			regexp.MustCompile(`(?i)ddy`),
+			regexp.MustCompile(`(?i)duoduo.*cloud`),
+		},
+		Indicators: []string{
+			"DDYun",
+			"ddy_api",
+			"android-cloud-ddy",
+			"多多云手机",
+		},
+		Weight: 0.95,
+	}
+
+	s.knownEmulators["红警"] = &EmulatorSignature{
+		Name: "红警云手机",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)hongji`),
+			regexp.MustCompile(`(?i)redalert`),
+			regexp.MustCompile(`(?i)red.?alert`),
+		},
+		Indicators: []string{
+			"HongJi",
+			"hongjicloud",
+			"android-cloud-hj",
+			"红警云",
+		},
+		Weight: 0.94,
+	}
+
+	s.knownEmulators["双子云"] = &EmulatorSignature{
+		Name: "双子云手机",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)shuangzi`),
+			regexp.MustCompile(`(?i)gemini.*cloud`),
+		},
+		Indicators: []string{
+			"ShuangZi",
+			"szcloud",
+			"android-cloud-sz",
+		},
+		Weight: 0.90,
+	}
+
+	s.knownEmulators["蜂窝云"] = &EmulatorSignature{
+		Name: "蜂窝云手机",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)fengwo`),
+			regexp.MustCompile(`(?i)fwcloud`),
+			regexp.MustCompile(`(?i)beecow`),
+		},
+		Indicators: []string{
+			"FengWo",
+			"FWCloud",
+			"android-cloud-fw",
+			"蜂窝云",
+		},
+		Weight: 0.89,
+	}
+
+	s.knownEmulators["云帅云"] = &EmulatorSignature{
+		Name: "云帅云手机",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)yunshuai`),
+			regexp.MustCompile(`(?i)yscloud`),
+		},
+		Indicators: []string{
+			"YunShuai",
+			"YSCloud",
+			"android-cloud-ys",
+		},
+		Weight: 0.88,
+	}
+
+	s.knownEmulators["蓝光云"] = &EmulatorSignature{
+		Name: "蓝光云手机",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)languang`),
+			regexp.MustCompile(`(?i)lgcloud`),
+			regexp.MustCompile(`(?i)bluelight`),
+		},
+		Indicators: []string{
+			"LanGuang",
+			"LGCloud",
+			"android-cloud-lg",
+		},
+		Weight: 0.87,
+	}
+
+	s.knownEmulators["山寨云"] = &EmulatorSignature{
+		Name: "山寨云手机",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)shanzhai`),
+			regexp.MustCompile(`(?i)szcloud`),
+		},
+		Indicators: []string{
+			"ShanZhai",
+			"SZCloud",
+			"android-cloud-sz",
+		},
+		Weight: 0.86,
+	}
+
 	s.knownVMs["VMware"] = &VMSignature{
 		Name: "VMware",
 		Patterns: []*regexp.Regexp{
 			regexp.MustCompile(`(?i)vmware`),
 			regexp.MustCompile(`(?i)vmware.*virtual`),
+			regexp.MustCompile(`(?i)vmware[_-]? Tools`),
 		},
 		Indicators: []string{
 			"VMware7,1",
 			"VMware Virtual Platform",
+			"VMware Vista",
+			"VMware7",
 		},
 		Weight: 0.95,
 	}
@@ -183,10 +473,14 @@ func (s *DeviceDetectionService) initializeSignatures() {
 		Patterns: []*regexp.Regexp{
 			regexp.MustCompile(`(?i)virtualbox`),
 			regexp.MustCompile(`(?i)vbox`),
+			regexp.MustCompile(`(?i)vboxclient`),
 		},
 		Indicators: []string{
 			"VirtualBox",
 			"VBOX",
+			"vbox86p",
+			"vbox86t",
+			"VBoxSharedFolders",
 		},
 		Weight: 0.92,
 	}
@@ -196,12 +490,57 @@ func (s *DeviceDetectionService) initializeSignatures() {
 		Patterns: []*regexp.Regexp{
 			regexp.MustCompile(`(?i)qemu`),
 			regexp.MustCompile(`(?i)kvm`),
+			regexp.MustCompile(`(?i)tcg`),
 		},
 		Indicators: []string{
 			"QEMU Virtual CPU",
 			"KVM",
+			"Standard PC (Q35 + ICH9",
+			"TCG",
 		},
 		Weight: 0.88,
+	}
+
+	s.knownVMs["HyperV"] = &VMSignature{
+		Name: "Hyper-V",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)hyper[_-]?v`),
+			regexp.MustCompile(`(?i)microsoft.*virtual`),
+		},
+		Indicators: []string{
+			"Microsoft Hyper-V",
+			"Virtual Machine",
+			"HYPER-V",
+			"Microsoft Corporation",
+		},
+		Weight: 0.90,
+	}
+
+	s.knownVMs["Parallels"] = &VMSignature{
+		Name: "Parallels",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)parallels`),
+			regexp.MustCompile(`(?i)prl_`),
+		},
+		Indicators: []string{
+			"Parallels",
+			"Parallels Virtual Platform",
+			"prl_vm_app",
+		},
+		Weight: 0.89,
+	}
+
+	s.knownVMs["Xen"] = &VMSignature{
+		Name: "Xen",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)xen`),
+		},
+		Indicators: []string{
+			"Xen",
+			"HVM domU",
+			"XenSource",
+		},
+		Weight: 0.87,
 	}
 
 	s.knownContainers["Docker"] = &ContainerSignature{
@@ -212,6 +551,8 @@ func (s *DeviceDetectionService) initializeSignatures() {
 		Indicators: []string{
 			"/.dockerenv",
 			"container=docker",
+			"docker-init",
+			"docker-cluster",
 		},
 		Weight: 0.85,
 	}
@@ -220,12 +561,40 @@ func (s *DeviceDetectionService) initializeSignatures() {
 		Name: "Kubernetes",
 		Patterns: []*regexp.Regexp{
 			regexp.MustCompile(`(?i)kubernetes`),
+			regexp.MustCompile(`(?i)k8s`),
 		},
 		Indicators: []string{
 			"KUBERNETES_SERVICE_PORT",
 			"kubernetes.io",
+			"kube-cluster",
 		},
 		Weight: 0.82,
+	}
+
+	s.knownContainers["LXC"] = &ContainerSignature{
+		Name: "LXC",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)lxc`),
+		},
+		Indicators: []string{
+			"/dev/lxd/sock",
+			"lxc/",
+			"machine-id",
+		},
+		Weight: 0.80,
+	}
+
+	s.knownContainers["cgroup"] = &ContainerSignature{
+		Name: "Container (cgroup)",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)container`),
+		},
+		Indicators: []string{
+			"1:freezer:/",
+			"1:name=systemd:",
+			"/sys/fs/cgroup/",
+		},
+		Weight: 0.75,
 	}
 }
 

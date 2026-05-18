@@ -495,3 +495,357 @@ func (s *StatsService) generateMonthlyReport(date time.Time) (string, error) {
 
 	return report, nil
 }
+
+type LogTimeStats struct {
+	Date         string `json:"date"`
+	TotalCount   int64  `json:"total_count"`
+	SuccessCount int64  `json:"success_count"`
+	FailedCount  int64  `json:"failed_count"`
+	AvgRiskScore float64 `json:"avg_risk_score"`
+}
+
+type LogAppStats struct {
+	ApplicationID   uint   `json:"application_id"`
+	ApplicationName string `json:"application_name"`
+	TotalCount      int64  `json:"total_count"`
+	SuccessCount    int64  `json:"success_count"`
+	FailedCount     int64  `json:"failed_count"`
+	AvgRiskScore    float64 `json:"avg_risk_score"`
+}
+
+type LogStatusStats struct {
+	Status     string  `json:"status"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+type LogRiskStats struct {
+	RiskLevel  string  `json:"risk_level"`
+	MinScore   float64 `json:"min_score"`
+	MaxScore   float64 `json:"max_score"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+type LogAnalysisStats struct {
+	TimeStats     []LogTimeStats     `json:"time_stats"`
+	AppStats      []LogAppStats      `json:"app_stats"`
+	StatusStats   []LogStatusStats   `json:"status_stats"`
+	RiskStats     []LogRiskStats     `json:"risk_stats"`
+	TotalLogs     int64              `json:"total_logs"`
+	TotalSuccess  int64              `json:"total_success"`
+	TotalFailed   int64              `json:"total_failed"`
+	AvgRiskScore  float64            `json:"avg_risk_score"`
+	AvgDuration   float64            `json:"avg_duration"`
+	GeneratedAt   time.Time          `json:"generated_at"`
+}
+
+func (s *StatsService) GetLogAnalysisStats(days int, groupByApp bool) (*LogAnalysisStats, error) {
+	if days <= 0 {
+		days = 7
+	}
+
+	now := time.Now()
+	startDate := now.AddDate(0, 0, -days)
+
+	stats := &LogAnalysisStats{
+		GeneratedAt: now,
+	}
+
+	var totalCount int64
+	database.DB.Model(&models.VerificationLog{}).Where("created_at >= ?", startDate).Count(&totalCount)
+	stats.TotalLogs = totalCount
+
+	if totalCount == 0 {
+		return stats, nil
+	}
+
+	database.DB.Model(&models.VerificationLog{}).
+		Select("COALESCE(AVG(risk_score), 0) as avg_risk").
+		Where("created_at >= ?", startDate).
+		Scan(&stats.AvgRiskScore)
+
+	var avgDur float64
+	database.DB.Model(&models.VerificationLog{}).
+		Select("COALESCE(AVG(duration), 0) as avg_dur").
+		Where("created_at >= ?", startDate).
+		Scan(&avgDur)
+	stats.AvgDuration = avgDur
+
+	timeStats := s.getLogTimeStats(days, startDate)
+	stats.TimeStats = timeStats
+
+	statusStats := s.getLogStatusStats(startDate, totalCount)
+	stats.StatusStats = statusStats
+
+	riskStats := s.getLogRiskStats(startDate, totalCount)
+	stats.RiskStats = riskStats
+
+	if groupByApp {
+		appStats := s.getLogAppStats(startDate)
+		stats.AppStats = appStats
+	}
+
+	return stats, nil
+}
+
+func (s *StatsService) getLogTimeStats(days int, startDate time.Time) []LogTimeStats {
+	var results []LogTimeStats
+
+	for i := days - 1; i >= 0; i-- {
+		date := time.Now().AddDate(0, 0, -i)
+		startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+		endOfDay := startOfDay.Add(24 * time.Hour)
+
+		var stat LogTimeStats
+		stat.Date = startOfDay.Format("2006-01-02")
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).
+			Count(&stat.TotalCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "success", startOfDay, endOfDay).
+			Count(&stat.SuccessCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "failed", startOfDay, endOfDay).
+			Count(&stat.FailedCount)
+
+		var avgRisk float64
+		database.DB.Model(&models.VerificationLog{}).
+			Select("COALESCE(AVG(risk_score), 0) as avg_risk").
+			Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).
+			Scan(&avgRisk)
+		stat.AvgRiskScore = avgRisk
+
+		results = append(results, stat)
+	}
+
+	return results
+}
+
+func (s *StatsService) getLogStatusStats(startDate time.Time, totalCount int64) []LogStatusStats {
+	var statuses []string
+	database.DB.Model(&models.VerificationLog{}).
+		Select("DISTINCT status").
+		Where("created_at >= ?", startDate).
+		Pluck("status", &statuses)
+
+	var results []LogStatusStats
+	for _, status := range statuses {
+		var stat LogStatusStats
+		stat.Status = status
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ?", status, startDate).
+			Count(&stat.Count)
+
+		if totalCount > 0 {
+			stat.Percentage = float64(stat.Count) / float64(totalCount) * 100
+		}
+		results = append(results, stat)
+	}
+
+	return results
+}
+
+func (s *StatsService) getLogRiskStats(startDate time.Time, totalCount int64) []LogRiskStats {
+	levels := []struct {
+		level string
+		min, max float64
+	}{
+		{"low", 0, 30},
+		{"medium", 30, 60},
+		{"high", 60, 80},
+		{"critical", 80, 100},
+	}
+
+	var results []LogRiskStats
+	for _, l := range levels {
+		var stat LogRiskStats
+		stat.RiskLevel = l.level
+		stat.MinScore = l.min
+		stat.MaxScore = l.max
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("risk_score >= ? AND risk_score < ? AND created_at >= ?", l.min, l.max, startDate).
+			Count(&stat.Count)
+
+		if totalCount > 0 {
+			stat.Percentage = float64(stat.Count) / float64(totalCount) * 100
+		}
+		results = append(results, stat)
+	}
+
+	return results
+}
+
+func (s *StatsService) getLogAppStats(startDate time.Time) []LogAppStats {
+	var results []LogAppStats
+
+	rows, err := database.DB.Model(&models.VerificationLog{}).
+		Select("verification_logs.application_id, applications.name, COUNT(*) as total_count, SUM(CASE WHEN verification_logs.status = 'success' THEN 1 ELSE 0 END) as success_count, SUM(CASE WHEN verification_logs.status = 'failed' THEN 1 ELSE 0 END) as failed_count, COALESCE(AVG(verification_logs.risk_score), 0) as avg_risk_score").
+		Joins("LEFT JOIN applications ON verification_logs.application_id = applications.id").
+		Where("verification_logs.created_at >= ?", startDate).
+		Group("verification_logs.application_id, applications.name").
+		Order("total_count DESC").
+		Limit(20).
+		Rows()
+
+	if err != nil {
+		return results
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var stat LogAppStats
+		var appName *string
+		if err := rows.Scan(&stat.ApplicationID, &appName, &stat.TotalCount, &stat.SuccessCount, &stat.FailedCount, &stat.AvgRiskScore); err != nil {
+			continue
+		}
+		if appName != nil {
+			stat.ApplicationName = *appName
+		} else {
+			stat.ApplicationName = fmt.Sprintf("App-%d", stat.ApplicationID)
+		}
+		results = append(results, stat)
+	}
+
+	return results
+}
+
+type LogTrendStats struct {
+	Period     string  `json:"period"`
+	HourlyStats []struct {
+		Hour         int
+		TotalCount   int64
+		SuccessCount int64
+		FailedCount  int64
+	} `json:"hourly_stats"`
+	DailyStats []struct {
+		Day          string
+		TotalCount   int64
+		SuccessCount int64
+		FailedCount  int64
+	} `json:"daily_stats"`
+	WeeklyStats []struct {
+		Week         string
+		TotalCount   int64
+		SuccessCount int64
+		FailedCount  int64
+	} `json:"weekly_stats"`
+}
+
+func (s *StatsService) GetLogTrendStats(date string) (*LogTrendStats, error) {
+	targetDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		targetDate = time.Now()
+	}
+
+	stats := &LogTrendStats{
+		Period: targetDate.Format("2006-01-02"),
+	}
+
+	startOfDay := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, targetDate.Location())
+
+	for hour := 0; hour < 24; hour++ {
+		startHour := startOfDay.Add(time.Duration(hour) * time.Hour)
+		endHour := startHour.Add(time.Hour)
+
+		var hourStat struct {
+			Hour         int
+			TotalCount   int64
+			SuccessCount int64
+			FailedCount  int64
+		}
+		hourStat.Hour = hour
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("created_at >= ? AND created_at < ?", startHour, endHour).
+			Count(&hourStat.TotalCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "success", startHour, endHour).
+			Count(&hourStat.SuccessCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "failed", startHour, endHour).
+			Count(&hourStat.FailedCount)
+
+		stats.HourlyStats = append(stats.HourlyStats, hourStat)
+	}
+
+	weekStart := targetDate.AddDate(0, 0, -int(targetDate.Weekday()))
+	for i := 0; i < 7; i++ {
+		day := weekStart.AddDate(0, 0, i)
+		startOfDay := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+		endOfDay := startOfDay.Add(24 * time.Hour)
+
+		var dayStat struct {
+			Day          string
+			TotalCount   int64
+			SuccessCount int64
+			FailedCount  int64
+		}
+		dayStat.Day = startOfDay.Format("2006-01-02")
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).
+			Count(&dayStat.TotalCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "success", startOfDay, endOfDay).
+			Count(&dayStat.SuccessCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "failed", startOfDay, endOfDay).
+			Count(&dayStat.FailedCount)
+
+		stats.DailyStats = append(stats.DailyStats, dayStat)
+	}
+
+	year, week := targetDate.ISOWeek()
+	for i := 3; i >= 0; i-- {
+		w := week - i
+		y := year
+		if w <= 0 {
+			y--
+			w += 52
+		}
+
+		weekStart := getWeekStart(y, w)
+		weekEnd := weekStart.AddDate(0, 0, 7)
+
+		var weekStat struct {
+			Week         string
+			TotalCount   int64
+			SuccessCount int64
+			FailedCount  int64
+		}
+		weekStat.Week = fmt.Sprintf("%d-W%02d", y, w)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("created_at >= ? AND created_at < ?", weekStart, weekEnd).
+			Count(&weekStat.TotalCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "success", weekStart, weekEnd).
+			Count(&weekStat.SuccessCount)
+
+		database.DB.Model(&models.VerificationLog{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", "failed", weekStart, weekEnd).
+			Count(&weekStat.FailedCount)
+
+		stats.WeeklyStats = append(stats.WeeklyStats, weekStat)
+	}
+
+	return stats, nil
+}
+
+func getWeekStart(year, week int) time.Time {
+	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
+	_, w := jan4.ISOWeek()
+	daysToMonday := (int(jan4.Weekday()) + 6) % 7
+	firstMonday := jan4.AddDate(0, 0, -daysToMonday)
+	return firstMonday.AddDate(0, 0, (week-w)*7)
+}

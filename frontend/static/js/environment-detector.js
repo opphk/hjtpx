@@ -143,7 +143,11 @@ class EnvironmentDetector {
             'detectProxyVPN',
             'detectDatacenterIP',
             'detectTimezoneMismatch',
-            'detectWebRTCLeak'
+            'detectWebRTCLeak',
+            'detectEmulators',
+            'detectCloudPhones',
+            'detectVirtualMachines',
+            'detectContainers'
         ];
     }
 
@@ -2012,6 +2016,381 @@ class EnvironmentDetector {
             }
         } catch (e) {}
         return components.join('|');
+    }
+
+    async detectEmulators() {
+        let score = 0;
+        const detections = [];
+        const emulatorSignatures = {
+            bluestacks: {
+                patterns: [/bluestacks/i, /bst.*(?:special|split|instance)/i, /android.*bluestacks/i],
+                indicators: ['BlueStacks', 'bst-helper', 'bstsdfsdksandbox', 'Android on x86'],
+                weight: 0.95
+            },
+            nox: {
+                patterns: [/nox/i, /noxplayer/i, /noxsandbox/i],
+                indicators: ['Nox', 'NoxPlayer', 'NoxApp', 'android-virtualbox'],
+                weight: 0.93
+            },
+            memu: {
+                patterns: [/memu/i, /memuplay/i, /memuplayer/i],
+                indicators: ['Memu', 'MemuPlayer', 'Microvirt', 'Android on MEmu'],
+                weight: 0.92
+            },
+            ldplayer: {
+                patterns: [/ldplayer/i, /ld-play/i, /leidian/i],
+                indicators: ['LDPlayer', 'LeiDroid', 'ldlib', 'ldvbox'],
+                weight: 0.91
+            },
+            mumu: {
+                patterns: [/mumu/i, /mumux/i, /xiaomu/i],
+                indicators: ['MuMu', 'mumu模拟器', 'Netease MuMu', 'mumu_x86'],
+                weight: 0.88
+            },
+            genymotion: {
+                patterns: [/genymotion/i, /genyotion/i],
+                indicators: ['Genymotion', 'vbox86p', 'vbox86t', 'Genymobile'],
+                weight: 0.94
+            },
+            gameloop: {
+                patterns: [/gameloop/i, /tencentgameloop/i, /txgame/i],
+                indicators: ['GameLoop', 'Tencent Gaming Buddy', 'android-gameloop'],
+                weight: 0.90
+            },
+            smartgaga: {
+                patterns: [/smartgaga/i, /smartga/i],
+                indicators: ['SmartGaGa', 'SmartGaga', 'windows-sandbox'],
+                weight: 0.87
+            },
+            windroy: {
+                patterns: [/windroy/i, /windroye/i],
+                indicators: ['WindRoy', 'WindRoye', 'Microvirt'],
+                weight: 0.85
+            },
+            droid4x: {
+                patterns: [/droid4x/i, /macsigner/i],
+                indicators: ['Droid4X', 'droid4x-system'],
+                weight: 0.84
+            }
+        };
+
+        try {
+            const ua = navigator.userAgent || '';
+            const platform = navigator.platform || '';
+            
+            for (const [name, signature] of Object.entries(emulatorSignatures)) {
+                let matched = false;
+                
+                for (const pattern of signature.patterns) {
+                    if (pattern.test(ua)) {
+                        score += 40 * signature.weight;
+                        detections.push('emulator_pattern:' + name);
+                        matched = true;
+                        break;
+                    }
+                }
+                
+                if (!matched) {
+                    for (const indicator of signature.indicators) {
+                        if (ua.includes(indicator)) {
+                            score += 35 * signature.weight;
+                            detections.push('emulator_indicator:' + name);
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const touchPoints = navigator.maxTouchPoints;
+            if (touchPoints === 0 && /android|iphone|ipad/i.test(ua)) {
+                score += 25;
+                detections.push('no_touch_mobile_emulator');
+            }
+
+            if (/linux/i.test(platform) && /android|iphone/i.test(ua)) {
+                score += 20;
+                detections.push('linux_mobile_ua');
+            }
+
+        } catch (e) {
+            score += 15;
+            detections.push('emulator_detection_error');
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectCloudPhones() {
+        let score = 0;
+        const detections = [];
+        const cloudPhoneSignatures = {
+            '雷电云': {
+                patterns: [/ldyun/i, /ldy/i, /lei(dian)?.*cloud/i],
+                indicators: ['LDYun', 'ldy_api', 'android-cloud-ldy', '雷电云手机'],
+                weight: 0.96
+            },
+            '多多云': {
+                patterns: [/ddyun/i, /ddy/i, /duoduo.*cloud/i],
+                indicators: ['DDYun', 'ddy_api', 'android-cloud-ddy', '多多云手机'],
+                weight: 0.95
+            },
+            '红警': {
+                patterns: [/hongji/i, /redalert/i, /red.?alert/i],
+                indicators: ['HongJi', 'hongjicloud', 'android-cloud-hj', '红警云'],
+                weight: 0.94
+            },
+            '双子云': {
+                patterns: [/shuangzi/i, /gemini.*cloud/i],
+                indicators: ['ShuangZi', 'szcloud', 'android-cloud-sz'],
+                weight: 0.90
+            },
+            '蜂窝云': {
+                patterns: [/fengwo/i, /fwcloud/i, /beecow/i],
+                indicators: ['FengWo', 'FWCloud', 'android-cloud-fw', '蜂窝云'],
+                weight: 0.89
+            },
+            '云帅云': {
+                patterns: [/yunshuai/i, /yscloud/i],
+                indicators: ['YunShuai', 'YSCloud', 'android-cloud-ys'],
+                weight: 0.88
+            },
+            '蓝光云': {
+                patterns: [/languang/i, /lgcloud/i, /bluelight/i],
+                indicators: ['LanGuang', 'LGCloud', 'android-cloud-lg'],
+                weight: 0.87
+            },
+            '山寨云': {
+                patterns: [/shanzhai/i, /szcloud/i],
+                indicators: ['ShanZhai', 'SZCloud', 'android-cloud-sz'],
+                weight: 0.86
+            }
+        };
+
+        try {
+            const ua = navigator.userAgent || '';
+            
+            for (const [name, signature] of Object.entries(cloudPhoneSignatures)) {
+                let matched = false;
+                
+                for (const pattern of signature.patterns) {
+                    if (pattern.test(ua)) {
+                        score += 45 * signature.weight;
+                        detections.push('cloud_phone_pattern:' + name);
+                        matched = true;
+                        break;
+                    }
+                }
+                
+                if (!matched) {
+                    for (const indicator of signature.indicators) {
+                        if (ua.includes(indicator)) {
+                            score += 40 * signature.weight;
+                            detections.push('cloud_phone_indicator:' + name);
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (timezone && /china|beijing|shanghai/i.test(timezone)) {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        if (/virtualbox|vbox|vmware|qemu|kvm/i.test(renderer)) {
+                            score += 30;
+                            detections.push('cloud_phone_webgl');
+                        }
+                    }
+                }
+            }
+
+        } catch (e) {
+            score += 15;
+            detections.push('cloud_phone_detection_error');
+        }
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectVirtualMachines() {
+        let score = 0;
+        const detections = [];
+        const vmSignatures = {
+            vmware: {
+                patterns: [/vmware/i, /vmware.*virtual/i, /vmware[_-]?tools/i],
+                indicators: ['VMware7,1', 'VMware Virtual Platform', 'VMware Vista', 'VMware7'],
+                weight: 0.95
+            },
+            virtualbox: {
+                patterns: [/virtualbox/i, /vbox/i, /vboxclient/i],
+                indicators: ['VirtualBox', 'VBOX', 'vbox86p', 'vbox86t', 'VBoxSharedFolders'],
+                weight: 0.92
+            },
+            hyperv: {
+                patterns: [/hyper[_-]?v/i, /microsoft.*virtual/i],
+                indicators: ['Microsoft Hyper-V', 'Virtual Machine', 'HYPER-V', 'Microsoft Corporation'],
+                weight: 0.90
+            },
+            parallels: {
+                patterns: [/parallels/i, /prl_/i],
+                indicators: ['Parallels', 'Parallels Virtual Platform', 'prl_vm_app'],
+                weight: 0.89
+            },
+            qemu: {
+                patterns: [/qemu/i, /kvm/i, /tcg/i],
+                indicators: ['QEMU Virtual CPU', 'KVM', 'Standard PC (Q35 + ICH9', 'TCG'],
+                weight: 0.88
+            },
+            xen: {
+                patterns: [/xen/i],
+                indicators: ['Xen', 'HVM domU', 'XenSource'],
+                weight: 0.87
+            }
+        };
+
+        try {
+            const ua = navigator.userAgent || '';
+            
+            for (const [name, signature] of Object.entries(vmSignatures)) {
+                let matched = false;
+                
+                for (const pattern of signature.patterns) {
+                    if (pattern.test(ua)) {
+                        score += 40 * signature.weight;
+                        detections.push('vm_pattern:' + name);
+                        matched = true;
+                        break;
+                    }
+                }
+                
+                if (!matched) {
+                    for (const indicator of signature.indicators) {
+                        if (ua.includes(indicator)) {
+                            score += 35 * signature.weight;
+                            detections.push('vm_indicator:' + name);
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const cpu = navigator.hardwareConcurrency;
+            if (cpu && cpu < 2) {
+                score += 20;
+                detections.push('low_core_count');
+            }
+
+            const mem = navigator.deviceMemory;
+            if (mem && mem < 1) {
+                score += 25;
+                detections.push('low_device_memory');
+            }
+
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        if (/vmware|virtualbox|parallels|qemu|kvm|hyperv/i.test(renderer)) {
+                            score += 45;
+                            detections.push('vm_webgl_renderer');
+                        }
+                    }
+                }
+            } catch (e) {}
+
+        } catch (e) {
+            score += 20;
+            detections.push('vm_detection_error');
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectContainers() {
+        let score = 0;
+        const detections = [];
+        const containerSignatures = {
+            docker: {
+                patterns: [/docker/i],
+                indicators: ['/.dockerenv', 'container=docker', 'docker-init', 'docker-cluster'],
+                weight: 0.85
+            },
+            kubernetes: {
+                patterns: [/kubernetes/i, /k8s/i],
+                indicators: ['KUBERNETES_SERVICE_PORT', 'kubernetes.io', 'kube-cluster'],
+                weight: 0.82
+            },
+            lxc: {
+                patterns: [/lxc/i],
+                indicators: ['/dev/lxd/sock', 'lxc/', 'machine-id'],
+                weight: 0.80
+            },
+            cgroup: {
+                patterns: [/container/i],
+                indicators: ['1:freezer:/', '1:name=systemd:', '/sys/fs/cgroup/'],
+                weight: 0.75
+            }
+        };
+
+        try {
+            const ua = navigator.userAgent || '';
+            
+            for (const [name, signature] of Object.entries(containerSignatures)) {
+                let matched = false;
+                
+                for (const pattern of signature.patterns) {
+                    if (pattern.test(ua)) {
+                        score += 35 * signature.weight;
+                        detections.push('container_pattern:' + name);
+                        matched = true;
+                        break;
+                    }
+                }
+                
+                if (!matched) {
+                    for (const indicator of signature.indicators) {
+                        if (ua.includes(indicator)) {
+                            score += 30 * signature.weight;
+                            detections.push('container_indicator:' + name);
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (navigator.storage && navigator.storage.estimate) {
+                try {
+                    const est = await navigator.storage.estimate();
+                    if (est.quota === 0) {
+                        score += 25;
+                        detections.push('zero_storage_quota');
+                    }
+                } catch (e) {}
+            }
+
+            if (navigator.cookieEnabled === false) {
+                score += 20;
+                detections.push('cookies_disabled');
+            }
+
+            if (navigator.hardwareConcurrency && navigator.hardwareConcurrency > 64) {
+                score += 15;
+                detections.push('unrealistic_cores');
+            }
+
+        } catch (e) {
+            score += 15;
+            detections.push('container_detection_error');
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
     toJSON() {

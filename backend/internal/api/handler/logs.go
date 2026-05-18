@@ -248,6 +248,9 @@ type ExportLogsRequest struct {
 	EndDate       string `form:"end_date"`
 	RiskLevel     string `form:"risk_level"`
 	Format        string `form:"format,default=csv"`
+	IPAddress     string `form:"ip_address"`
+	MinRiskScore  float64 `form:"min_risk_score"`
+	MaxRiskScore  float64 `form:"max_risk_score"`
 }
 
 // ExportLogs 导出日志
@@ -294,18 +297,32 @@ func ExportLogs(c *gin.Context) {
 		StartDate:     startDate,
 		EndDate:       endDate,
 		Format:        req.Format,
+		IPAddress:     req.IPAddress,
+		MinRiskScore:  req.MinRiskScore,
+		MaxRiskScore:  req.MaxRiskScore,
 	}
 
-	data, err := handler.logService.ExportLogs(params)
+	data, contentType, err := handler.logService.ExportLogs(params)
 	if err != nil {
 		response.InternalServerError(c, "导出失败")
 		return
 	}
 
-	filename := fmt.Sprintf("verification_logs_%s.csv", time.Now().Format("20060102150405"))
-	c.Header("Content-Type", "text/csv")
+	filename := fmt.Sprintf("verification_logs_%s", time.Now().Format("20060102150405"))
+	switch req.Format {
+	case "xlsx", "excel":
+		filename += ".xlsx"
+	case "pdf":
+		filename += ".pdf"
+	case "json":
+		filename += ".json"
+	default:
+		filename += ".csv"
+	}
+
+	c.Header("Content-Type", contentType)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Data(200, "text/csv", data)
+	c.Data(200, contentType, data)
 }
 
 func DeleteOldLogs(c *gin.Context) {
@@ -513,4 +530,46 @@ func DeleteSavedLogSearch(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "删除成功"})
+}
+
+type LogAnalysisRequest struct {
+	Days       int  `form:"days,default=7"`
+	GroupByApp bool `form:"group_by_app"`
+}
+
+func GetLogAnalysisStats(c *gin.Context) {
+	handler := GetLogHandler()
+	var req LogAnalysisRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		req.Days = 7
+		req.GroupByApp = false
+	}
+
+	stats, err := handler.statsService.GetLogAnalysisStats(req.Days, req.GroupByApp)
+	if err != nil {
+		response.InternalServerError(c, "获取统计失败")
+		return
+	}
+
+	response.Success(c, stats)
+}
+
+type LogTrendRequest struct {
+	Date string `form:"date"`
+}
+
+func GetLogTrendStats(c *gin.Context) {
+	handler := GetLogHandler()
+	var req LogTrendRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		req.Date = time.Now().Format("2006-01-02")
+	}
+
+	stats, err := handler.statsService.GetLogTrendStats(req.Date)
+	if err != nil {
+		response.InternalServerError(c, "获取趋势统计失败")
+		return
+	}
+
+	response.Success(c, stats)
 }

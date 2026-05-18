@@ -2,11 +2,13 @@ let blacklistPage = 1;
 let blacklistPageSize = 10;
 let currentBlacklist = [];
 let currentView = 'table';
+let batchOperationModal = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadBlacklistSummary();
     loadBlacklist();
     setupEventListeners();
+    setupBatchOperationModal();
 });
 
 function setupEventListeners() {
@@ -41,8 +43,13 @@ function setupEventListeners() {
         selectAllCheckbox.addEventListener('change', (e) => {
             const checkboxes = document.querySelectorAll('.bl-checkbox');
             checkboxes.forEach(cb => cb.checked = e.target.checked);
+            updateBatchDeleteButton();
         });
     }
+
+    document.querySelectorAll('.bl-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBatchDeleteButton);
+    });
 
     const viewButtons = document.querySelectorAll('[data-view]');
     viewButtons.forEach(btn => {
@@ -69,6 +76,361 @@ function setupEventListeners() {
     if (form) {
         form.addEventListener('submit', handleBlacklistSubmit);
     }
+
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', handleBatchDelete);
+    }
+
+    const batchImportSyncBtn = document.getElementById('batchImportSyncBtn');
+    if (batchImportSyncBtn) {
+        batchImportSyncBtn.addEventListener('click', handleBatchImportSync);
+    }
+
+    const viewBatchOpsBtn = document.getElementById('viewBatchOpsBtn');
+    if (viewBatchOpsBtn) {
+        viewBatchOpsBtn.addEventListener('click', () => loadBatchOperations());
+    }
+}
+
+function setupBatchOperationModal() {
+    const modalEl = document.getElementById('batchOperationModal');
+    if (modalEl) {
+        batchOperationModal = new bootstrap.Modal(modalEl);
+    }
+}
+
+function updateBatchDeleteButton() {
+    const selectedCount = getSelectedCount();
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    const batchDeleteCount = document.getElementById('batchDeleteCount');
+
+    if (batchDeleteBtn && batchDeleteCount) {
+        batchDeleteCount.textContent = selectedCount;
+        batchDeleteBtn.disabled = selectedCount === 0;
+    }
+}
+
+function getSelectedCount() {
+    return document.querySelectorAll('.bl-checkbox:checked').length;
+}
+
+function getSelectedIds() {
+    const ids = [];
+    document.querySelectorAll('.bl-checkbox:checked').forEach(cb => {
+        const id = parseInt(cb.dataset.id);
+        if (!isNaN(id)) {
+            ids.push(id);
+        }
+    });
+    return ids;
+}
+
+async function handleBatchDelete() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        showToast('请选择要删除的记录', 'warning');
+        return;
+    }
+
+    if (!confirm(`确定要删除选中的 ${ids.length} 条黑名单记录吗？此操作支持回滚。`)) {
+        return;
+    }
+
+    try {
+        const response = await auth.request('/admin/batch/blacklist/delete', {
+            method: 'POST',
+            body: JSON.stringify({ ids: ids })
+        });
+
+        if (response.code === 0) {
+            showToast(`批量删除任务已创建，任务ID: ${response.data.operation_id}`, 'success');
+            document.getElementById('batchDeleteModal')?.classList.remove('show');
+            document.querySelectorAll('.bl-checkbox:checked').forEach(cb => cb.checked = false);
+            updateBatchDeleteButton();
+
+            pollBatchOperationProgress(response.data.operation_id);
+        } else {
+            showToast(response.message || '删除失败', 'danger');
+        }
+    } catch (error) {
+        showToast('删除失败: ' + error.message, 'danger');
+    }
+}
+
+async function handleBatchImportSync() {
+    const targets = document.getElementById('batchImportTargets').value.trim().split('\n').filter(t => t.trim());
+    const importType = document.getElementById('batchImportType').value;
+    const importReason = document.getElementById('batchImportReason').value;
+
+    if (targets.length === 0) {
+        showToast('请输入要导入的数据', 'warning');
+        return;
+    }
+
+    if (targets.length > 100) {
+        showToast('同步导入最多支持100条记录', 'warning');
+        return;
+    }
+
+    try {
+        const response = await auth.request('/admin/batch/blacklist/import-sync', {
+            method: 'POST',
+            body: JSON.stringify({
+                type: importType,
+                targets: targets,
+                reason: importReason
+            })
+        });
+
+        if (response.code === 0) {
+            showToast(`成功导入 ${response.data.succeeded} 条记录，失败 ${response.data.failed} 条`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('batchImportModal'))?.hide();
+            loadBlacklist();
+            loadBlacklistSummary();
+        } else {
+            showToast(response.message || '导入失败', 'danger');
+        }
+    } catch (error) {
+        showToast('导入失败: ' + error.message, 'danger');
+    }
+}
+
+function openBatchDeleteModal() {
+    const modal = new bootstrap.Modal(document.getElementById('batchDeleteModal'));
+    modal.show();
+}
+
+function openBatchImportModal() {
+    const modal = new bootstrap.Modal(document.getElementById('batchImportModal'));
+    modal.show();
+}
+
+async function pollBatchOperationProgress(operationId) {
+    const pollInterval = setInterval(async () => {
+        try {
+            const response = await auth.request(`/admin/batch-operations/${operationId}/progress`);
+            if (response.code === 0) {
+                const data = response.data;
+                updateBatchProgressUI(operationId, data);
+
+                if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+                    clearInterval(pollInterval);
+                    showBatchOperationResult(operationId, data);
+                    loadBlacklist();
+                    loadBlacklistSummary();
+                }
+            }
+        } catch (error) {
+            clearInterval(pollInterval);
+        }
+    }, 1000);
+
+    setTimeout(() => clearInterval(pollInterval), 60000);
+}
+
+function updateBatchProgressUI(operationId, data) {
+    let progressBar = document.getElementById(`progress-${operationId}`);
+    if (!progressBar) {
+        const progressContainer = document.getElementById('batchProgressContainer') || createBatchProgressContainer();
+        progressBar = document.createElement('div');
+        progressBar.id = `progress-${operationId}`;
+        progressBar.className = 'alert alert-info mb-2';
+        progressBar.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <span>操作进行中...</span>
+                <span class="badge bg-primary">0%</span>
+            </div>
+            <div class="progress mt-2" style="height: 6px;">
+                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+            </div>
+            <small class="text-muted mt-1">已处理: 0/${data.total}</small>
+        `;
+        progressContainer.appendChild(progressBar);
+    }
+
+    progressBar.className = `alert alert-${data.status === 'failed' ? 'danger' : data.status === 'completed' ? 'success' : 'info'} mb-2`;
+    progressBar.querySelector('.badge').textContent = `${data.progress}%`;
+    progressBar.querySelector('.progress-bar').style.width = `${data.progress}%`;
+    progressBar.querySelector('.text-muted').textContent = `已处理: ${data.processed}/${data.total} | 成功: ${data.succeeded} | 失败: ${data.failed}`;
+}
+
+function createBatchProgressContainer() {
+    const container = document.createElement('div');
+    container.id = 'batchProgressContainer';
+    container.className = 'fixed-bottom ms-4 mb-4';
+    container.style.maxWidth = '400px';
+    container.style.zIndex = '1050';
+    document.body.appendChild(container);
+    return container;
+}
+
+function showBatchOperationResult(operationId, data) {
+    const container = document.getElementById('batchProgressContainer');
+    if (container) {
+        const resultDiv = document.getElementById(`progress-${operationId}`);
+        if (resultDiv) {
+            resultDiv.className = `alert alert-${data.status === 'completed' ? 'success' : 'danger'} mb-2`;
+            resultDiv.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><strong>批量操作${data.status === 'completed' ? '完成' : '失败'}</strong></span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="showBatchOperationDetail('${operationId}')">详情</button>
+                        ${data.can_rollback ? `<button class="btn btn-sm btn-warning" onclick="rollbackBatchOperation('${operationId}')">回滚</button>` : ''}
+                        <button class="btn btn-sm btn-close ms-2" onclick="this.parentElement.parentElement.remove()"></button>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="me-3">成功: <strong class="text-success">${data.succeeded}</strong></span>
+                    <span class="me-3">失败: <strong class="text-danger">${data.failed}</strong></span>
+                    ${data.failed_items && data.failed_items.length > 0 ? `<a href="#" onclick="showFailedItems(${JSON.stringify(data.failed_items).replace(/"/g, '&quot;')})">查看失败项</a>` : ''}
+                </div>
+            `;
+
+            setTimeout(() => {
+                if (resultDiv) {
+                    resultDiv.remove();
+                }
+            }, 30000);
+        }
+    }
+}
+
+async function rollbackBatchOperation(operationId) {
+    if (!confirm('确定要回滚此操作吗？')) return;
+
+    try {
+        const response = await auth.request(`/admin/batch-operations/${operationId}/rollback`, {
+            method: 'POST'
+        });
+
+        if (response.code === 0) {
+            showToast('回滚成功', 'success');
+            loadBlacklist();
+            loadBlacklistSummary();
+        } else {
+            showToast(response.message || '回滚失败', 'danger');
+        }
+    } catch (error) {
+        showToast('回滚失败: ' + error.message, 'danger');
+    }
+}
+
+async function showBatchOperationDetail(operationId) {
+    try {
+        const response = await auth.request(`/admin/batch-operations/${operationId}`);
+        if (response.code === 0) {
+            const data = response.data;
+            const modal = new bootstrap.Modal(document.getElementById('batchOperationDetailModal'));
+            document.getElementById('batchOpDetailContent').innerHTML = `
+                <table class="table table-bordered">
+                    <tr><td class="text-muted" style="width: 120px;">操作ID</td><td>${data.id}</td></tr>
+                    <tr><td class="text-muted">操作类型</td><td>${data.operation_type}</td></tr>
+                    <tr><td class="text-muted">目标类型</td><td>${data.target_type}</td></tr>
+                    <tr><td class="text-muted">状态</td><td><span class="badge ${getBatchStatusBadgeClass(data.status)}">${getBatchStatusText(data.status)}</span></td></tr>
+                    <tr><td class="text-muted">总数</td><td>${data.total}</td></tr>
+                    <tr><td class="text-muted">已处理</td><td>${data.processed}</td></tr>
+                    <tr><td class="text-muted">成功</td><td class="text-success">${data.succeeded}</td></tr>
+                    <tr><td class="text-muted">失败</td><td class="text-danger">${data.failed}</td></tr>
+                    <tr><td class="text-muted">跳过</td><td>${data.skipped}</td></tr>
+                    <tr><td class="text-muted">进度</td><td>${data.progress}%</td></tr>
+                    <tr><td class="text-muted">可回滚</td><td>${data.can_rollback ? '是' : '否'}</td></tr>
+                    <tr><td class="text-muted">已回滚</td><td>${data.is_rolled_back ? '是' : '否'}</td></tr>
+                    ${data.result ? `<tr><td class="text-muted">结果</td><td><pre class="mb-0" style="max-height: 200px; overflow-y: auto;">${JSON.stringify(JSON.parse(data.result), null, 2)}</pre></td></tr>` : ''}
+                    ${data.error_message ? `<tr><td class="text-muted">错误信息</td><td class="text-danger">${data.error_message}</td></tr>` : ''}
+                </table>
+            `;
+            modal.show();
+        }
+    } catch (error) {
+        showToast('获取详情失败', 'danger');
+    }
+}
+
+function showFailedItems(failedItems) {
+    const modal = new bootstrap.Modal(document.getElementById('failedItemsModal'));
+    document.getElementById('failedItemsContent').innerHTML = failedItems.map(item => `
+        <tr>
+            <td>${item.target_id}</td>
+            <td class="text-danger">${item.error}</td>
+        </tr>
+    `).join('');
+    modal.show();
+}
+
+function getBatchStatusBadgeClass(status) {
+    const map = {
+        'pending': 'bg-secondary',
+        'running': 'bg-primary',
+        'completed': 'bg-success',
+        'failed': 'bg-danger',
+        'cancelled': 'bg-warning'
+    };
+    return map[status] || 'bg-secondary';
+}
+
+function getBatchStatusText(status) {
+    const map = {
+        'pending': '等待中',
+        'running': '进行中',
+        'completed': '已完成',
+        'failed': '失败',
+        'cancelled': '已取消'
+    };
+    return map[status] || status;
+}
+
+async function loadBatchOperations() {
+    try {
+        const response = await auth.request('/admin/batch-operations?size=20');
+        if (response.code === 0) {
+            renderBatchOperationsList(response.data.list || []);
+        }
+        const modal = new bootstrap.Modal(document.getElementById('batchOperationsModal'));
+        modal.show();
+    } catch (error) {
+        showToast('加载批量操作记录失败', 'danger');
+    }
+}
+
+function renderBatchOperationsList(operations) {
+    const tbody = document.getElementById('batchOperationsBody');
+    if (!tbody) return;
+
+    if (operations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无批量操作记录</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = operations.map(op => `
+        <tr>
+            <td>${op.id}</td>
+            <td><span class="badge bg-info">${getBatchOperationTypeText(op.operation_type)}</span></td>
+            <td>${op.target_type}</td>
+            <td><span class="badge ${getBatchStatusBadgeClass(op.status)}">${getBatchStatusText(op.status)}</span></td>
+            <td>
+                <div class="progress" style="height: 6px; width: 80px;">
+                    <div class="progress-bar bg-${op.status === 'failed' ? 'danger' : op.status === 'completed' ? 'success' : 'primary'}" style="width: ${op.progress}%"></div>
+                </div>
+                <small>${op.progress}%</small>
+            </td>
+            <td>${op.succeeded}/${op.failed}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-secondary" onclick="showBatchOperationDetail(${op.id})">详情</button>
+                ${op.can_rollback && !op.is_rolled_back ? `<button class="btn btn-sm btn-outline-warning ms-1" onclick="rollbackBatchOperation(${op.id})">回滚</button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getBatchOperationTypeText(type) {
+    const map = {
+        'blacklist_import': '黑名单导入',
+        'blacklist_delete': '黑名单删除',
+        'application_config': '应用配置',
+        'rule_update': '规则更新'
+    };
+    return map[type] || type;
 }
 
 async function loadBlacklistSummary() {
@@ -229,7 +591,7 @@ function renderBlacklistTable() {
 
     tbody.innerHTML = currentBlacklist.map(item => `
         <tr class="${item.status !== 'active' ? 'text-muted' : ''}">
-            <td><input type="checkbox" class="bl-checkbox" data-id="${item.id}"></td>
+            <td><input type="checkbox" class="bl-checkbox" data-id="${item.id}" onchange="updateBatchDeleteButton()"></td>
             <td>
                 <strong>${escapeHtml(item.target)}</strong>
                 <br><small class="text-muted">ID: ${item.id}</small>
@@ -426,8 +788,11 @@ async function handleImport() {
         };
 
         try {
-            await auth.request('/admin/blacklist/import', { method: 'POST', body: JSON.stringify(data) });
-            showToast(`成功导入 ${targets.length} 条记录`, 'success');
+            await auth.request('/admin/batch/blacklist/import', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            showToast(`导入任务已创建，正在处理 ${targets.length} 条记录`, 'success');
             bootstrap.Modal.getInstance(document.getElementById('importModal'))?.hide();
             loadBlacklist();
             loadBlacklistSummary();
