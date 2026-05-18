@@ -3052,6 +3052,87 @@ func crc32Checksum(data string) uint32 {
 	return ^crc
 }
 
+func GenerateCRC32Check(code string) string {
+	crc := crc32Checksum(code)
+	return fmt.Sprintf("window.__crc32='%08x';", crc)
+}
+
+func GenerateMultiLayerIntegrityCheck(code string, config ObfuscatorConfig) string {
+	sha256Hash := sha256.Sum256([]byte(code))
+	sha256Str := hex.EncodeToString(sha256Hash[:])
+
+	crc32Value := crc32Checksum(code)
+	crc32Str := fmt.Sprintf("%08x", crc32Value)
+
+	checksum := GenerateCustomHash(code, string(config.StringEncryptionKey))
+
+	return fmt.Sprintf(`
+;(function(){
+	var _0xMLI={
+		sha256:'%s',
+		crc32:'%s',
+		checksum:'%s',
+		interval:%d,
+		maxChecks:%d,
+		checkCount:0,
+		timer:null,
+		markers:[],
+		createMarkers:function(){
+			for(var i=0;i<3;i++){
+				var m=document.createElement('div');
+				m.id='_0xMLI_m_'+i;
+				m.style.display='none';
+				m.setAttribute('data-v',this.sha256);
+				document.body.appendChild(m);
+				this.markers.push(m.id);
+			}
+		},
+		verifyMarkers:function(){
+			for(var i=0;i<this.markers.length;i++){
+				var el=document.getElementById(this.markers[i]);
+				if(!el||el.getAttribute('data-v')!==this.sha256){
+					return false;
+				}
+			}
+			return true;
+		},
+		verifyTiming:function(){
+			var s=performance.now();
+			var sum=0;
+			for(var i=0;i<500;i++){sum+=Math.random()*i;}
+			var e=performance.now();
+			return e-s<75;
+		},
+		verify:function(){
+			if(this.checkCount>=this.maxChecks){
+				clearInterval(this.timer);
+				return true;
+			}
+			if(!this.verifyMarkers()||!this.verifyTiming()){
+				this.block();
+				return false;
+			}
+			this.checkCount++;
+			return true;
+		},
+		block:function(){
+			clearInterval(this.timer);
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial;"><div><h1>多层完整性校验失败</h1><p>代码已被篡改</p></div></div>';
+			throw new Error('Multi-layer integrity check failed');
+		},
+		start:function(){
+			this.createMarkers();
+			var self=this;
+			this.timer=setInterval(function(){self.verify();},this.interval);
+		}
+	};
+	_0xMLI.start();
+	window.__MLI=_0xMLI;
+})();
+`, sha256Str, crc32Str, checksum, 12000, 60)
+}
+
 func GenerateCustomHash(code string, key string) string {
 	h := sha256.New()
 	h.Write([]byte(code))
@@ -3521,6 +3602,163 @@ func GenerateTimeBasedVerification() string {
 `
 }
 
+func GenerateEnhancedBreakpointDetection() string {
+	return `
+;(function(){
+	var _0xEBD={
+		executionCount:0,
+		lastExecution:Date.now(),
+		executionThreshold:100,
+		timeThreshold:5000,
+		stackDepth:0,
+		maxStackDepth:50,
+		detectors:[
+			function(){
+				var s=performance.now();
+				debugger;
+				var e=performance.now();
+				if(e-s>50){
+					return true;
+				}
+				return false;
+			},
+			function(){
+				try{
+					var f=new Function('debugger;');
+					f();
+					return false;
+				}catch(e){
+					return true;
+				}
+			},
+			function(){
+				var s=Date.now();
+				eval('debugger;');
+				var e=Date.now();
+				return e-s>50;
+			},
+			function(){
+				var start=performance.timing.navigationStart;
+				var load=performance.timing.loadEventEnd;
+				var diff=load-start;
+				if(diff>this.timeThreshold){
+					return true;
+				}
+				return false;
+			}
+		],
+		detect:function(){
+			for(var i=0;i<this.detectors.length;i++){
+				try{
+					if(this.detectors[i]()){
+						return true;
+					}
+				}catch(e){}
+			}
+			return false;
+		},
+		checkExecutionFlow:function(){
+			this.executionCount++;
+			var now=Date.now();
+			var elapsed=now-this.lastExecution;
+			if(elapsed>this.timeThreshold&&this.executionCount>this.executionThreshold){
+				return true;
+			}
+			this.lastExecution=now;
+			return false;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.detect()||self.checkExecutionFlow()){
+					self.block();
+				}
+			},3000);
+			Object.defineProperty(window,'constructor',{
+				get:function(){
+					self.block();
+					return function(){};
+				},
+				configurable:false
+			});
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial;"><div><h1>断点检测激活</h1><p>检测到异常执行行为</p></div></div>';
+			throw new Error('Breakpoint detection triggered');
+		},
+		init:function(){
+			this.protect();
+		}
+	};
+	_0xEBD.init();
+	window.__EBD=_0xEBD;
+})();
+`
+}
+
+func GenerateExecutionTimeDetection() string {
+	return `
+;(function(){
+	var _0xETD={
+		startTime:Date.now(),
+		lastCheck:Date.now(),
+		baselineTime:0,
+		thresholdMultiplier:5,
+		timeSamples:[],
+		maxSamples:10,
+		calculateBaseline:function(){
+			var sum=0;
+			for(var i=0;i<this.timeSamples.length;i++){
+				sum+=this.timeSamples[i];
+			}
+			this.baselineTime=sum/this.timeSamples.length;
+		},
+		addSample:function(time){
+			this.timeSamples.push(time);
+			if(this.timeSamples.length>this.maxSamples){
+				this.timeSamples.shift();
+			}
+			if(this.timeSamples.length>=this.maxSamples){
+				this.calculateBaseline();
+			}
+		},
+		detectAnomaly:function(){
+			var now=Date.now();
+			var elapsed=now-this.lastCheck;
+			this.addSample(elapsed);
+			if(this.baselineTime>0){
+				var threshold=this.baselineTime*this.thresholdMultiplier;
+				if(elapsed>threshold){
+					return true;
+				}
+			}
+			this.lastCheck=now;
+			return false;
+		},
+		protect:function(){
+			var self=this;
+			var checkInterval=setInterval(function(){
+				if(self.detectAnomaly()){
+					self.block();
+				}
+			},4000);
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial;"><div><h1>执行时间异常</h1><p>检测到代码执行时间异常</p></div></div>';
+			throw new Error('Execution time anomaly detected');
+		},
+		init:function(){
+			this.protect();
+		}
+	};
+	_0xETD.init();
+	window.__ETD=_0xETD;
+})();
+`
+}
+
 func GenerateMemoryProtection() string {
 	return `
 ;(function(){
@@ -3661,7 +3899,7 @@ func (o *Obfuscator) ApplyFullProtection(code string) (string, error) {
 		result = o.compressCodeAdvanced(result)
 	}
 
-	result = GenerateEnhancedAntiDebug() + result
+	result = GenerateAdvancedAntiDebugEnhanced() + result
 
 	result = result + GenerateMemoryProtection()
 
@@ -3669,6 +3907,85 @@ func (o *Obfuscator) ApplyFullProtection(code string) (string, error) {
 	result = result + GenerateAdvancedIntegrityCheck(hash, string(o.config.StringEncryptionKey))
 
 	result = result + GenerateTimeBasedVerification()
+
+	return result, nil
+}
+
+func (o *Obfuscator) ApplyMaximumProtection(code string) (string, error) {
+	if code == "" {
+		return "", errors.New("code cannot be empty")
+	}
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	o.variableMap = make(map[string]string)
+	o.functionMap = make(map[string]string)
+	o.usedNames = make(map[string]bool)
+	o.stringCount = 0
+	o.functionCount = 0
+
+	var result string = code
+
+	if o.config.RemoveComments {
+		result = o.removeComments(result)
+	}
+
+	if o.config.EnableVariableObfuscation {
+		result = o.obfuscateVariablesAdvanced(result)
+	}
+
+	if o.config.EnableNameMangling {
+		result = o.applyNameMangling(result)
+	}
+
+	if o.config.EnableStringEncryption {
+		result = o.encryptStringsDynamic(result)
+	}
+
+	if o.config.EnableFunctionWrapping {
+		result = o.wrapCodeAdvanced(result)
+	}
+
+	if o.config.EnableControlFlowFlattening {
+		result = o.flattenControlFlowAdvanced(result)
+		result = o.addStateMachineFlattening(result)
+		result = o.addOpaquePredicate(result)
+		result = o.addLoopUnswitching(result)
+	}
+
+	if o.config.EnableDeadCodeInjection {
+		result = o.injectDeadCodeAdvanced(result)
+	}
+
+	if o.config.EnableNumberObfuscation {
+		result = o.ObfuscateNumbers(result)
+	}
+
+	if o.config.EnableBooleanObfuscation {
+		result = o.ObfuscateBooleans(result)
+	}
+
+	if o.config.EnableArrayLiteralObfuscation {
+		result = o.ObfuscateArrayLiterals(result)
+	}
+
+	if o.config.EnableCodeCompression {
+		result = o.compressCodeAdvanced(result)
+	}
+
+	result = GenerateAdvancedAntiDebugEnhanced() + result
+
+	result = result + GenerateMemoryProtection()
+
+	hash, _ := GenerateFileHash(code, "sha256")
+	result = result + GenerateAdvancedIntegrityCheck(hash, string(o.config.StringEncryptionKey))
+
+	result = result + GenerateTimeBasedVerification()
+
+	result = result + GenerateAdvancedCodeIntegrity(code, o.config)
+
+	result = result + GenerateEnhancedDynamicLoader(map[string]string{}, o.config)
 
 	return result, nil
 }
@@ -4179,6 +4496,203 @@ func GenerateEnhancedDynamicLoader(modules map[string]string, config ObfuscatorC
 
 	loader += `})();`
 	return loader
+}
+
+func GenerateEncryptedDynamicLoader(config ObfuscatorConfig) string {
+	keyStr := base64.StdEncoding.EncodeToString(config.StringEncryptionKey)
+
+	return fmt.Sprintf(`
+;(function(){
+	var _0xK=atob('%s');
+	var _0xEDL={
+		modules:{},
+		cache:{},
+		lru:{},
+		loadOrder:[],
+		maxCache:50,
+		accessCount:0,
+		register:function(name,code){
+			var encrypted=this.encrypt(code);
+			this.modules[name]=encrypted;
+		},
+		decrypt:function(data){
+			var result='';
+			for(var i=0;i<data.length;i++){
+				result+=String.fromCharCode(data.charCodeAt(i)^_0xK.charCodeAt(i%%_0xK.length));
+			}
+			return result;
+		},
+		encrypt:function(data){
+			var result='';
+			for(var i=0;i<data.length;i++){
+				result+=String.fromCharCode(data.charCodeAt(i)^_0xK.charCodeAt(i%%_0xK.length));
+			}
+			return btoa(result);
+		},
+		load:function(name){
+			if(this.cache[name]){
+				this.lru[name]=++this.accessCount;
+				return this.cache[name];
+			}
+			var encrypted=this.modules[name];
+			if(!encrypted)return null;
+			var code=this.decrypt(atob(encrypted));
+			this.evictIfNeeded();
+			this.cache[name]=code;
+			this.lru[name]=++this.accessCount;
+			this.loadOrder.push(name);
+			return code;
+		},
+		evictIfNeeded:function(){
+			if(Object.keys(this.cache).length>=this.maxCache){
+				var minAccess=Infinity;
+				var oldest=null;
+				for(var name in this.lru){
+					if(this.lru[name]<minAccess){
+						minAccess=this.lru[name];
+						oldest=name;
+					}
+				}
+				if(oldest){
+					delete this.cache[oldest];
+					delete this.lru[oldest];
+					var idx=this.loadOrder.indexOf(oldest);
+					if(idx>-1)this.loadOrder.splice(idx,1);
+				}
+			}
+		},
+		evalModule:function(name){
+			var code=this.load(name);
+			if(code){
+				try{return eval(code);}catch(e){return null;}
+			}
+			return null;
+		},
+		preload:function(names,cb){
+			var loaded=0;
+			var total=names.length;
+			var self=this;
+			names.forEach(function(n){
+				self.load(n);
+				loaded++;
+				if(loaded===total&&cb)cb();
+			});
+		},
+		clear:function(){
+			this.cache={};
+			this.lru={};
+			this.loadOrder=[];
+			this.accessCount=0;
+		},
+		getStats:function(){
+			return{
+				cacheSize:Object.keys(this.cache).length,
+				maxCache:this.maxCache,
+				loadCount:this.loadOrder.length,
+				accessCount:this.accessCount
+			};
+		}
+	};
+	window.__EDL=_0xEDL;
+})();
+`, keyStr)
+}
+
+type LRUCache struct {
+	capacity int
+	cache    map[string]string
+	order    []string
+	mu       sync.RWMutex
+}
+
+func NewLRUCache(capacity int) *LRUCache {
+	if capacity <= 0 {
+		capacity = 50
+	}
+	return &LRUCache{
+		capacity: capacity,
+		cache:    make(map[string]string),
+		order:    make([]string, 0),
+	}
+}
+
+func (l *LRUCache) Get(key string) (string, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	value, exists := l.cache[key]
+	if exists {
+		l.moveToFront(key)
+	}
+	return value, exists
+}
+
+func (l *LRUCache) Put(key, value string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, exists := l.cache[key]; exists {
+		l.moveToFront(key)
+		l.cache[key] = value
+	} else {
+		if len(l.cache) >= l.capacity {
+			l.removeOldest()
+		}
+		l.cache[key] = value
+		l.order = append([]string{key}, l.order...)
+	}
+}
+
+func (l *LRUCache) Remove(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	delete(l.cache, key)
+	for i, k := range l.order {
+		if k == key {
+			l.order = append(l.order[:i], l.order[i+1:]...)
+			break
+		}
+	}
+}
+
+func (l *LRUCache) Clear() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.cache = make(map[string]string)
+	l.order = make([]string, 0)
+}
+
+func (l *LRUCache) moveToFront(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for i, k := range l.order {
+		if k == key {
+			l.order = append([]string{key}, append(l.order[:i], l.order[i+1:]...)...)
+			break
+		}
+	}
+}
+
+func (l *LRUCache) removeOldest() {
+	if len(l.order) > 0 {
+		oldest := l.order[len(l.order)-1]
+		delete(l.cache, oldest)
+		l.order = l.order[:len(l.order)-1]
+	}
+}
+
+func (l *LRUCache) GetStats() map[string]interface{} {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	return map[string]interface{}{
+		"size":     len(l.cache),
+		"capacity": l.capacity,
+		"order":    l.order,
+	}
 }
 
 func GenerateAdvancedAntiDebugEnhanced() string {
