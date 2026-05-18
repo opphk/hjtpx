@@ -3,6 +3,7 @@ package trace
 import (
 	"errors"
 	"math"
+	"sort"
 
 	"github.com/hjtpx/hjtpx/internal/model"
 )
@@ -351,4 +352,465 @@ func (e *TraceExtractor) detectRiskFactors(features *model.TraceFeatures) []stri
 	}
 
 	return riskFactors
+}
+
+type AdvancedFeatures struct {
+	MedianSpeed              float64
+	SpeedSkewness           float64
+	SpeedKurtosis           float64
+	SpeedEntropy            float64
+	SpeedVariance           float64
+	MedianAcceleration      float64
+	AccelerationVariance    float64
+	AccelerationSkewness    float64
+	JerkMean                float64
+	JerkMax                 float64
+	CurvatureMedian         float64
+	CurvatureVariance       float64
+	CurvatureMax            float64
+	DirectionChangeRate     float64
+	DirectionEntropy        float64
+	Sinuosity               float64
+	StartEndAngle           float64
+	AreaUnderCurve          float64
+	TimeNormalizedDistance  float64
+	VelocityProfileEntropy  float64
+	AccelerationProfileEntropy float64
+}
+
+func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*AdvancedFeatures, error) {
+	if traceData == nil || len(traceData.Points) < 3 {
+		return nil, errors.New("轨迹数据点不足")
+	}
+
+	features := &AdvancedFeatures{}
+
+	speeds := e.getAllSpeeds(traceData)
+	if len(speeds) > 0 {
+		features.MedianSpeed = e.medianFloat(speeds)
+		features.SpeedVariance = e.varianceFloat(speeds)
+		features.SpeedSkewness = e.calculateSkewness(speeds)
+		features.SpeedKurtosis = e.calculateKurtosis(speeds)
+		features.SpeedEntropy = e.calculateEntropy(speeds, 10)
+	}
+
+	accelerations := e.computeAccelerations(traceData)
+	if len(accelerations) > 0 {
+		features.MedianAcceleration = e.medianFloat(accelerations)
+		features.AccelerationVariance = e.varianceFloat(accelerations)
+		features.AccelerationSkewness = e.calculateSkewness(accelerations)
+	}
+
+	jerks := e.computeJerks(traceData)
+	if len(jerks) > 0 {
+		features.JerkMean = e.meanFloat(jerks)
+		features.JerkMax = e.maxAbsFloat(jerks)
+	}
+
+	curvatures := e.computeCurvatures(traceData)
+	if len(curvatures) > 0 {
+		features.CurvatureMedian = e.medianFloat(curvatures)
+		features.CurvatureVariance = e.varianceFloat(curvatures)
+		features.CurvatureMax = e.maxAbsFloat(curvatures)
+	}
+
+	directions := e.computeDirections(traceData)
+	if len(directions) > 1 {
+		features.DirectionChangeRate = e.calculateDirectionChangeRate(directions)
+		features.DirectionEntropy = e.calculateDirectionEntropy(directions)
+	}
+
+	if len(traceData.Points) > 1 {
+		features.Sinuosity = e.calculateSinuosity(traceData)
+		features.StartEndAngle = e.calculateStartEndAngle(traceData)
+		features.AreaUnderCurve = e.calculateAreaUnderCurve(traceData)
+		features.TimeNormalizedDistance = e.calculateTimeNormalizedDistance(traceData)
+	}
+
+	features.VelocityProfileEntropy = e.calculateProfileEntropy(speeds, 5)
+	features.AccelerationProfileEntropy = e.calculateProfileEntropy(accelerations, 5)
+
+	return features, nil
+}
+
+func (e *TraceExtractor) computeAccelerations(traceData *model.TraceData) []float64 {
+	if len(traceData.Points) < 3 {
+		return nil
+	}
+
+	accelerations := make([]float64, 0, len(traceData.Points)-2)
+
+	for i := 2; i < len(traceData.Points); i++ {
+		prev := traceData.Points[i-2]
+		curr := traceData.Points[i-1]
+		next := traceData.Points[i]
+
+		dx1 := float64(curr.X - prev.X)
+		dy1 := float64(curr.Y - prev.Y)
+		v1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+
+		dx2 := float64(next.X - curr.X)
+		dy2 := float64(next.Y - curr.Y)
+		v2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+
+		time := float64(next.Timestamp-prev.Timestamp) / 1000.0
+		if time > 0 && time < 1000 {
+			accel := (v2 - v1) / time
+			accelerations = append(accelerations, accel)
+		}
+	}
+
+	return accelerations
+}
+
+func (e *TraceExtractor) computeJerks(traceData *model.TraceData) []float64 {
+	accelerations := e.computeAccelerations(traceData)
+	if len(accelerations) < 2 || len(traceData.Points) < 4 {
+		return nil
+	}
+
+	jerks := make([]float64, 0, len(accelerations)-1)
+
+	for i := 2; i < len(traceData.Points); i++ {
+		if i >= len(accelerations) {
+			break
+		}
+		time := float64(traceData.Points[i].Timestamp-traceData.Points[i-2].Timestamp) / 1000.0
+		if time > 0 && i-1 >= 0 && i-1 < len(accelerations) {
+			jerk := (accelerations[i] - accelerations[i-1]) / time
+			jerks = append(jerks, jerk)
+		}
+	}
+
+	return jerks
+}
+
+func (e *TraceExtractor) computeCurvatures(traceData *model.TraceData) []float64 {
+	if len(traceData.Points) < 3 {
+		return nil
+	}
+
+	curvatures := make([]float64, 0, len(traceData.Points)-2)
+
+	for i := 1; i < len(traceData.Points)-1; i++ {
+		p1 := traceData.Points[i-1]
+		p2 := traceData.Points[i]
+		p3 := traceData.Points[i+1]
+
+		v1x := float64(p2.X - p1.X)
+		v1y := float64(p2.Y - p1.Y)
+		v2x := float64(p3.X - p2.X)
+		v2y := float64(p3.Y - p2.Y)
+
+		dot := v1x*v2x + v1y*v2y
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			curvatures = append(curvatures, math.Abs(angle))
+		}
+	}
+
+	return curvatures
+}
+
+func (e *TraceExtractor) computeDirections(traceData *model.TraceData) []float64 {
+	if len(traceData.Points) < 2 {
+		return nil
+	}
+
+	directions := make([]float64, 0, len(traceData.Points)-1)
+
+	for i := 1; i < len(traceData.Points); i++ {
+		dx := float64(traceData.Points[i].X - traceData.Points[i-1].X)
+		dy := float64(traceData.Points[i].Y - traceData.Points[i-1].Y)
+		angle := math.Atan2(dy, dx)
+		directions = append(directions, angle)
+	}
+
+	return directions
+}
+
+func (e *TraceExtractor) calculateDirectionChangeRate(directions []float64) float64 {
+	if len(directions) < 2 {
+		return 0
+	}
+
+	changes := 0
+	for i := 1; i < len(directions); i++ {
+		diff := math.Abs(directions[i] - directions[i-1])
+		if diff > math.Pi {
+			diff = 2*math.Pi - diff
+		}
+		if diff > 0.5 {
+			changes++
+		}
+	}
+
+	return float64(changes) / float64(len(directions))
+}
+
+func (e *TraceExtractor) calculateDirectionEntropy(directions []float64) float64 {
+	if len(directions) < 4 {
+		return 0
+	}
+
+	buckets := 8
+	bucketSize := 2 * math.Pi / float64(buckets)
+
+	counts := make([]int, buckets)
+	for _, dir := range directions {
+		normalized := dir
+		if normalized < 0 {
+			normalized += 2 * math.Pi
+		}
+		bucket := int(normalized / bucketSize)
+		if bucket >= buckets {
+			bucket = buckets - 1
+		}
+		counts[bucket]++
+	}
+
+	total := len(directions)
+	entropy := 0.0
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *TraceExtractor) calculateSinuosity(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 1.0
+	}
+
+	totalDistance := e.calculateTotalDistance(traceData)
+	directDistance := e.calculateDirectDistance(traceData)
+
+	if directDistance == 0 {
+		return 1.0
+	}
+
+	return totalDistance / directDistance
+}
+
+func (e *TraceExtractor) calculateStartEndAngle(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 0
+	}
+
+	first := traceData.Points[0]
+	last := traceData.Points[len(traceData.Points)-1]
+
+	dx := float64(last.X - first.X)
+	dy := float64(last.Y - first.Y)
+
+	return math.Atan2(dy, dx)
+}
+
+func (e *TraceExtractor) calculateAreaUnderCurve(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 0
+	}
+
+	area := 0.0
+	for i := 1; i < len(traceData.Points); i++ {
+		y1 := float64(traceData.Points[i-1].Y)
+		y2 := float64(traceData.Points[i].Y)
+		avgY := (y1 + y2) / 2
+
+		dx := float64(traceData.Points[i].X - traceData.Points[i-1].X)
+
+		area += avgY * dx
+	}
+
+	return math.Abs(area)
+}
+
+func (e *TraceExtractor) calculateTimeNormalizedDistance(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 0
+	}
+
+	totalDistance := e.calculateTotalDistance(traceData)
+	totalTime := float64(traceData.Points[len(traceData.Points)-1].Timestamp-traceData.Points[0].Timestamp) / 1000.0
+
+	if totalTime == 0 {
+		return 0
+	}
+
+	return totalDistance / totalTime
+}
+
+func (e *TraceExtractor) calculateEntropy(values []float64, bucketCount int) float64 {
+	if len(values) < 2 || bucketCount < 2 {
+		return 0
+	}
+
+	minVal := values[0]
+	maxVal := values[0]
+	for _, v := range values {
+		if v < minVal {
+			minVal = v
+		}
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+
+	rangeVal := maxVal - minVal
+	if rangeVal < 0.001 {
+		return 0
+	}
+
+	bucketSize := rangeVal / float64(bucketCount)
+	if bucketSize == 0 {
+		return 0
+	}
+
+	counts := make([]int, bucketCount)
+	for _, v := range values {
+		bucket := int((v - minVal) / bucketSize)
+		if bucket >= bucketCount {
+			bucket = bucketCount - 1
+		}
+		if bucket < 0 {
+			bucket = 0
+		}
+		counts[bucket]++
+	}
+
+	total := len(values)
+	entropy := 0.0
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *TraceExtractor) calculateProfileEntropy(values []float64, windowSize int) float64 {
+	if len(values) < windowSize || windowSize < 2 {
+		return 0
+	}
+
+	profiles := make([]int, windowSize)
+	for i := 0; i < len(values); i++ {
+		bucket := (i * windowSize) / len(values)
+		if bucket >= windowSize {
+			bucket = windowSize - 1
+		}
+		profiles[bucket]++
+	}
+
+	total := len(values)
+	entropy := 0.0
+	for _, count := range profiles {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *TraceExtractor) medianFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+	n := len(sorted)
+	if n%2 == 0 {
+		return (sorted[n/2-1] + sorted[n/2]) / 2
+	}
+	return sorted[n/2]
+}
+
+func (e *TraceExtractor) meanFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (e *TraceExtractor) varianceFloat(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := e.meanFloat(values)
+	sum := 0.0
+	for _, v := range values {
+		diff := v - mean
+		sum += diff * diff
+	}
+	return sum / float64(len(values))
+}
+
+func (e *TraceExtractor) maxAbsFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := math.Abs(values[0])
+	for _, v := range values {
+		if math.Abs(v) > max {
+			max = math.Abs(v)
+		}
+	}
+	return max
+}
+
+func (e *TraceExtractor) calculateSkewness(values []float64) float64 {
+	if len(values) < 3 {
+		return 0
+	}
+	mean := e.meanFloat(values)
+	stdDev := math.Sqrt(e.varianceFloat(values))
+	if stdDev == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += math.Pow((v-mean)/stdDev, 3)
+	}
+	return sum / float64(len(values))
+}
+
+func (e *TraceExtractor) calculateKurtosis(values []float64) float64 {
+	if len(values) < 4 {
+		return 0
+	}
+	mean := e.meanFloat(values)
+	stdDev := math.Sqrt(e.varianceFloat(values))
+	if stdDev == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += math.Pow((v-mean)/stdDev, 4)
+	}
+	n := float64(len(values))
+	return (sum / n) - 3.0
 }

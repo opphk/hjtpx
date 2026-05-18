@@ -9,21 +9,27 @@ import (
 )
 
 const (
-	LSTMFeatureDim    = 64
-	LSTMSequenceLen   = 100
-	LSTMHiddenSize    = 128
-	LSTMNumLayers     = 2
+	LSTMFeatureDim     = 64
+	LSTMSequenceLen    = 100
+	LSTMHiddenSize     = 128
+	LSTMNumLayers      = 2
+	AttentionHeadCount = 8
 )
 
 type LSTMFeatureExtractor struct {
-	hiddenWeights [][]float64
-	hiddenBias    []float64
-	cellWeights   [][]float64
-	cellBias      []float64
-	outputWeights []float64
-	featureMean   []float64
-	featureStd    []float64
-	isInitialized bool
+	hiddenWeights    [][][]float64
+	hiddenBias       [][]float64
+	cellWeights      [][][]float64
+	cellBias         [][]float64
+	outputWeights    []float64
+	attentionWeights [][][]float64
+	forwardWeights   [][][]float64
+	backwardWeights  [][][]float64
+	bidirectional    bool
+	useAttention     bool
+	featureMean      []float64
+	featureStd       []float64
+	isInitialized    bool
 }
 
 type TrajectorySequence struct {
@@ -37,48 +43,90 @@ type TrajectorySequence struct {
 
 func NewLSTMFeatureExtractor() *LSTMFeatureExtractor {
 	extractor := &LSTMFeatureExtractor{
-		isInitialized: false,
+		isInitialized:   false,
+		bidirectional:   true,
+		useAttention:    true,
 	}
 	extractor.initializeWeights()
 	return extractor
 }
 
 func (e *LSTMFeatureExtractor) initializeWeights() {
-	e.hiddenWeights = make([][]float64, LSTMFeatureDim)
-	for i := range e.hiddenWeights {
-		e.hiddenWeights[i] = e.initXavier(LSTMFeatureDim)
+	e.hiddenWeights = make([][][]float64, LSTMNumLayers)
+	e.hiddenBias = make([][]float64, LSTMNumLayers)
+	e.cellWeights = make([][][]float64, LSTMNumLayers)
+	e.cellBias = make([][]float64, LSTMNumLayers)
+
+	for layer := 0; layer < LSTMNumLayers; layer++ {
+		e.hiddenWeights[layer] = make([][]float64, LSTMHiddenSize)
+		for i := range e.hiddenWeights[layer] {
+			e.hiddenWeights[layer][i] = e.initXavier(LSTMFeatureDim * 4)
+		}
+
+		e.hiddenBias[layer] = make([]float64, LSTMHiddenSize*4)
+		for i := range e.hiddenBias[layer] {
+			e.hiddenBias[layer][i] = 0.0
+		}
+
+		e.cellWeights[layer] = make([][]float64, LSTMHiddenSize)
+		for i := range e.cellWeights[layer] {
+			e.cellWeights[layer][i] = e.initXavier(LSTMFeatureDim)
+		}
+
+		e.cellBias[layer] = make([]float64, LSTMHiddenSize)
+		for i := range e.cellBias[layer] {
+			e.cellBias[layer][i] = 0.0
+		}
 	}
 
-	e.hiddenBias = make([]float64, LSTMFeatureDim*4)
-	for i := range e.hiddenBias {
-		e.hiddenBias[i] = 0.0
-	}
-
-	e.cellWeights = make([][]float64, LSTMFeatureDim)
-	for i := range e.cellWeights {
-		e.cellWeights[i] = e.initXavier(LSTMFeatureDim)
-	}
-
-	e.cellBias = make([]float64, LSTMFeatureDim)
-	for i := range e.cellBias {
-		e.cellBias[i] = 0.0
-	}
-
-	e.outputWeights = make([]float64, LSTMFeatureDim)
+	e.outputWeights = make([]float64, LSTMHiddenSize*2)
 	for i := range e.outputWeights {
 		e.outputWeights[i] = 0.1
 	}
 
-	e.featureMean = []float64{
-		0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-		0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+	if e.useAttention {
+		e.attentionWeights = make([][][]float64, 3)
+		for i := range e.attentionWeights {
+			e.attentionWeights[i] = e.initLayerWeights(LSTMHiddenSize*2, LSTMHiddenSize*2)
+		}
 	}
-	e.featureStd = []float64{
-		100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
-		50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0,
+
+	if e.bidirectional {
+		e.forwardWeights = make([][][]float64, LSTMNumLayers)
+		e.backwardWeights = make([][][]float64, LSTMNumLayers)
+		for layer := 0; layer < LSTMNumLayers; layer++ {
+			e.forwardWeights[layer] = e.hiddenWeights[layer]
+			e.backwardWeights[layer] = make([][]float64, LSTMHiddenSize)
+			for i := range e.backwardWeights[layer] {
+				e.backwardWeights[layer][i] = e.initXavier(LSTMFeatureDim * 4)
+			}
+		}
+	}
+
+	e.featureMean = make([]float64, 48)
+	e.featureStd = make([]float64, 48)
+	for i := range e.featureMean {
+		e.featureMean[i] = 0.0
+		if i < 24 {
+			e.featureStd[i] = 100.0
+		} else {
+			e.featureStd[i] = 50.0
+		}
 	}
 
 	e.isInitialized = true
+}
+
+func (e *LSTMFeatureExtractor) initLayerWeights(outDim, inDim int) [][]float64 {
+	weights := make([][]float64, outDim)
+	for i := range weights {
+		weights[i] = make([]float64, inDim)
+		scale := math.Sqrt(2.0 / float64(inDim+outDim))
+		for j := range weights[i] {
+			weights[i][j] = (mathrand() - 0.5) * 2 * scale
+		}
+	}
+	return weights
 }
 
 func (e *LSTMFeatureExtractor) initXavier(size int) []float64 {
@@ -245,7 +293,7 @@ func (e *LSTMFeatureExtractor) ExtractFeatures(traceData *model.TraceData) ([]fl
 }
 
 func (e *LSTMFeatureExtractor) extractBasicFeatures(traceData *model.TraceData) []float64 {
-	features := make([]float64, 16)
+	features := make([]float64, 48)
 
 	extractor := NewTraceExtractor()
 	basic, _ := extractor.ExtractFeatures(traceData)
@@ -280,11 +328,35 @@ func (e *LSTMFeatureExtractor) extractBasicFeatures(traceData *model.TraceData) 
 		features[15] = math.Atan2(dy, dx) / math.Pi
 	}
 
+	advanced, _ := extractor.ExtractAdvancedFeatures(traceData)
+	if advanced != nil {
+		features[16] = advanced.MedianSpeed / 100.0
+		features[17] = advanced.SpeedSkewness
+		features[18] = advanced.SpeedKurtosis
+		features[19] = advanced.SpeedEntropy / 3.0
+		features[20] = advanced.MedianAcceleration / 1000.0
+		features[21] = advanced.AccelerationVariance / 10000.0
+		features[22] = advanced.AccelerationSkewness
+		features[23] = advanced.JerkMean / 10000.0
+		features[24] = advanced.JerkMax / 10000.0
+		features[25] = advanced.CurvatureMedian
+		features[26] = advanced.CurvatureVariance
+		features[27] = advanced.CurvatureMax
+		features[28] = advanced.DirectionChangeRate
+		features[29] = advanced.DirectionEntropy / 3.0
+		features[30] = advanced.Sinuosity
+		features[31] = advanced.StartEndAngle / math.Pi
+		features[32] = advanced.AreaUnderCurve / 1000000.0
+		features[33] = advanced.TimeNormalizedDistance / 100.0
+		features[34] = advanced.VelocityProfileEntropy / 2.3
+		features[35] = advanced.AccelerationProfileEntropy / 2.3
+	}
+
 	return features
 }
 
 func (e *LSTMFeatureExtractor) extractSequenceFeatures(seq *TrajectorySequence) []float64 {
-	features := make([]float64, 16)
+	features := make([]float64, 32)
 
 	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
 		var sum, sqSum float64
@@ -312,6 +384,12 @@ func (e *LSTMFeatureExtractor) extractSequenceFeatures(seq *TrajectorySequence) 
 		}
 		features[2] = maxV / 100.0
 		features[3] = minV / 100.0
+
+		percentile25 := seq.VelocitySeq[len(seq.VelocitySeq)/4]
+		percentile75 := seq.VelocitySeq[3*len(seq.VelocitySeq)/4]
+		features[4] = percentile25 / 100.0
+		features[5] = percentile75 / 100.0
+		features[6] = (percentile75 - percentile25) / 100.0
 	}
 
 	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
@@ -319,7 +397,7 @@ func (e *LSTMFeatureExtractor) extractSequenceFeatures(seq *TrajectorySequence) 
 		for _, a := range seq.AccelerationSeq {
 			sum += math.Abs(a)
 		}
-		features[4] = (sum / float64(len(seq.AccelerationSeq))) / 1000.0
+		features[8] = (sum / float64(len(seq.AccelerationSeq))) / 1000.0
 
 		maxA := seq.AccelerationSeq[0]
 		for _, a := range seq.AccelerationSeq {
@@ -327,18 +405,29 @@ func (e *LSTMFeatureExtractor) extractSequenceFeatures(seq *TrajectorySequence) 
 				maxA = a
 			}
 		}
-		features[5] = math.Abs(maxA) / 1000.0
+		features[9] = math.Abs(maxA) / 1000.0
+
+		positiveCount := 0
+		for _, a := range seq.AccelerationSeq {
+			if a > 0 {
+				positiveCount++
+			}
+		}
+		features[10] = float64(positiveCount) / float64(len(seq.AccelerationSeq))
 	}
 
 	if seq.DirectionSeq != nil && len(seq.DirectionSeq) > 1 {
 		directionChanges := 0
 		for i := 1; i < len(seq.DirectionSeq); i++ {
 			diff := math.Abs(seq.DirectionSeq[i] - seq.DirectionSeq[i-1])
+			if diff > math.Pi {
+				diff = 2*math.Pi - diff
+			}
 			if diff > 0.5 {
 				directionChanges++
 			}
 		}
-		features[6] = float64(directionChanges) / float64(len(seq.DirectionSeq))
+		features[12] = float64(directionChanges) / float64(len(seq.DirectionSeq))
 	}
 
 	if seq.NormalizedSeq != nil && len(seq.NormalizedSeq) > 0 {
@@ -366,25 +455,26 @@ func (e *LSTMFeatureExtractor) extractSequenceFeatures(seq *TrajectorySequence) 
 			}
 		}
 		if count > 0 {
-			features[7] = totalCurvature / float64(count)
+			features[16] = totalCurvature / float64(count)
 		}
 	}
 
-	features[8] = float64(len(seq.Points)) / 200.0
+	features[20] = float64(len(seq.Points)) / 200.0
 
-	features[9] = 0.0
-	features[10] = 0.0
-	features[11] = 0.0
-	features[12] = 0.0
-	features[13] = 0.0
-	features[14] = 0.0
-	features[15] = 0.0
+	features[24] = 0.0
+	features[25] = 0.0
+	features[26] = 0.0
+	features[27] = 0.0
+	features[28] = 0.0
+	features[29] = 0.0
+	features[30] = 0.0
+	features[31] = 0.0
 
 	return features
 }
 
 func (e *LSTMFeatureExtractor) extractTemporalFeatures(seq *TrajectorySequence) []float64 {
-	features := make([]float64, 16)
+	features := make([]float64, 32)
 
 	if len(seq.Points) >= 2 {
 		firstTime := seq.Points[0].Timestamp
@@ -431,23 +521,157 @@ func (e *LSTMFeatureExtractor) extractTemporalFeatures(seq *TrajectorySequence) 
 				}
 			}
 			features[4] = float64(pauseCount) / 5.0
+
+			longPauseCount := 0
+			for _, t := range intervals {
+				if t > 500 {
+					longPauseCount++
+				}
+			}
+			features[5] = float64(longPauseCount)
+
+			features[6] = meanInterval / 100.0
+			if maxInterval > minInterval {
+				features[7] = (maxInterval - minInterval) / meanInterval
+			}
 		}
 	}
 
-	features[5] = float64(len(seq.Points)) / 200.0
+	features[8] = float64(len(seq.Points)) / 200.0
 
-	features[6] = 0.0
-	features[7] = 0.0
-	features[8] = 0.0
-	features[9] = 0.0
-	features[10] = 0.0
-	features[11] = 0.0
-	features[12] = 0.0
-	features[13] = 0.0
-	features[14] = 0.0
-	features[15] = 0.0
+	features[16] = 0.0
+	features[17] = 0.0
+	features[18] = 0.0
+	features[19] = 0.0
+	features[20] = 0.0
+	features[21] = 0.0
+	features[22] = 0.0
+	features[23] = 0.0
+	features[24] = 0.0
+	features[25] = 0.0
+	features[26] = 0.0
+	features[27] = 0.0
+	features[28] = 0.0
+	features[29] = 0.0
+	features[30] = 0.0
+	features[31] = 0.0
 
 	return features
+}
+
+func (e *LSTMFeatureExtractor) computeAttention(forwardHidden, backwardHidden [][]float64) []float64 {
+	combined := e.combineBidirectional(forwardHidden, backwardHidden)
+
+	if combined == nil || len(combined) == 0 {
+		return nil
+	}
+
+	if !e.useAttention {
+		if len(combined) == 0 {
+			return nil
+		}
+		return combined[len(combined)/2]
+	}
+
+	seqLen := len(combined)
+
+	attentionScores := make([]float64, seqLen)
+	for i := 0; i < seqLen; i++ {
+		var score float64
+		for j := 0; j < len(combined[0]); j++ {
+			score += combined[i][j] * e.attentionWeights[0][0][j]
+		}
+		attentionScores[i] = math.Tanh(score)
+	}
+
+	sumExp := 0.0
+	for i := range attentionScores {
+		attentionScores[i] = math.Exp(attentionScores[i])
+		sumExp += attentionScores[i]
+	}
+
+	if sumExp > 0 {
+		for i := range attentionScores {
+			attentionScores[i] /= sumExp
+		}
+	}
+
+	attentionOutput := make([]float64, len(combined[0]))
+	for i := range attentionOutput {
+		for j := 0; j < seqLen; j++ {
+			attentionOutput[i] += combined[j][i] * attentionScores[j]
+		}
+	}
+
+	return attentionOutput
+}
+
+func (e *LSTMFeatureExtractor) combineBidirectional(forwardHidden, backwardHidden [][]float64) [][]float64 {
+	if forwardHidden == nil && backwardHidden == nil {
+		return nil
+	}
+
+	if forwardHidden == nil {
+		return backwardHidden
+	}
+	if backwardHidden == nil {
+		return forwardHidden
+	}
+
+	seqLen := len(forwardHidden)
+	hiddenSize := len(forwardHidden[0])
+
+	combined := make([][]float64, seqLen)
+	for i := range combined {
+		combined[i] = make([]float64, hiddenSize*2)
+		for j := 0; j < hiddenSize; j++ {
+			combined[i][j] = forwardHidden[i][j]
+			if j < len(backwardHidden[i]) {
+				combined[i][hiddenSize+j] = backwardHidden[i][j]
+			}
+		}
+	}
+
+	return combined
+}
+
+func (e *LSTMFeatureExtractor) ExtractRiskFeatures(traceData *model.TraceData) (map[string]float64, error) {
+	features, err := e.ExtractFeatures(traceData)
+	if err != nil {
+		return nil, err
+	}
+
+	riskFeatures := make(map[string]float64)
+
+	riskFeatures["velocity_mean"] = features[0]
+	riskFeatures["velocity_variance"] = features[1]
+	riskFeatures["acceleration_mean"] = features[4]
+	riskFeatures["acceleration_max"] = features[5]
+	riskFeatures["direction_change_rate"] = features[12]
+	riskFeatures["curvature_mean"] = features[16]
+	riskFeatures["temporal_interval_mean"] = features[0]
+	riskFeatures["temporal_interval_variance"] = features[1]
+	riskFeatures["pause_ratio"] = features[4]
+
+	riskFeatures["speed_skewness"] = features[17]
+	riskFeatures["speed_kurtosis"] = features[18]
+	riskFeatures["speed_entropy"] = features[19]
+	riskFeatures["acceleration_variance"] = features[21]
+	riskFeatures["acceleration_skewness"] = features[22]
+	riskFeatures["jerk_mean"] = features[23]
+	riskFeatures["jerk_max"] = features[24]
+	riskFeatures["curvature_variance"] = features[26]
+	riskFeatures["curvature_max"] = features[27]
+	riskFeatures["direction_entropy"] = features[29]
+	riskFeatures["sinuosity"] = features[30]
+
+	riskFeatures["embedding_norm"] = 0.0
+	for _, f := range features {
+		riskFeatures["embedding_norm"] += f * f
+	}
+	riskFeatures["embedding_norm"] = math.Sqrt(riskFeatures["embedding_norm"])
+
+	return riskFeatures, nil
 }
 
 func (e *LSTMFeatureExtractor) computeLSTMEmbedding(features []float64) []float64 {
@@ -480,29 +704,12 @@ func (e *LSTMFeatureExtractor) GetFeatureDimension() int {
 	return LSTMFeatureDim
 }
 
-func (e *LSTMFeatureExtractor) ExtractRiskFeatures(traceData *model.TraceData) (map[string]float64, error) {
-	features, err := e.ExtractFeatures(traceData)
-	if err != nil {
-		return nil, err
-	}
+func (e *LSTMFeatureExtractor) SetBidirectional(enabled bool) {
+	e.bidirectional = enabled
+	e.initializeWeights()
+}
 
-	riskFeatures := make(map[string]float64)
-
-	riskFeatures["velocity_mean"] = features[0]
-	riskFeatures["velocity_variance"] = features[1]
-	riskFeatures["acceleration_mean"] = features[4]
-	riskFeatures["acceleration_max"] = features[5]
-	riskFeatures["direction_change_rate"] = features[6]
-	riskFeatures["curvature_mean"] = features[7]
-	riskFeatures["temporal_interval_mean"] = features[16]
-	riskFeatures["temporal_interval_variance"] = features[17]
-	riskFeatures["pause_ratio"] = features[20]
-
-	riskFeatures["embedding_norm"] = 0.0
-	for _, f := range features {
-		riskFeatures["embedding_norm"] += f * f
-	}
-	riskFeatures["embedding_norm"] = math.Sqrt(riskFeatures["embedding_norm"])
-
-	return riskFeatures, nil
+func (e *LSTMFeatureExtractor) SetAttention(enabled bool) {
+	e.useAttention = enabled
+	e.initializeWeights()
 }
