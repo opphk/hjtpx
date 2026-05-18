@@ -160,10 +160,6 @@ func (v *VerifierService) CheckSessionValid(ctx context.Context, sessionID strin
 	return true, ""
 }
 
-func abs(x int) int {
-	return int(math.Abs(float64(x)))
-}
-
 func calculatePartialScore(diffX, diffY int) float64 {
 	distance := math.Sqrt(float64(diffX*diffX + diffY*diffY))
 

@@ -988,3 +988,246 @@ func (s *EnvDetectorService) EnhancedVerifyWithEnv(sessionID string, req *EnvVer
 		CaptchaPass: captchaPass,
 	}, nil
 }
+
+func (d *EnvDetector) DetectVMFeatures(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	vmPatterns := []string{
+		"vmware", "virtualbox", "parallels", "hyperv", "qemu", "kvm", "xen",
+		"virtual", "vbox", "vboxservice", "vboxguest",
+	}
+
+	uaLower := strings.ToLower(info.UserAgent)
+	platformLower := strings.ToLower(info.Platform)
+	rendererLower := strings.ToLower(info.WebGLRenderer)
+	vendorLower := strings.ToLower(info.WebGLVendor)
+
+	for _, pattern := range vmPatterns {
+		if strings.Contains(uaLower, pattern) || strings.Contains(platformLower, pattern) {
+			detected = true
+			score += 35.0
+			evidence = append(evidence, fmt.Sprintf("VM特征-UserAgent/Platform: %s", pattern))
+		}
+		if strings.Contains(rendererLower, pattern) || strings.Contains(vendorLower, pattern) {
+			detected = true
+			score += 40.0
+			evidence = append(evidence, fmt.Sprintf("VM特征-WebGL渲染器: %s", pattern))
+		}
+	}
+
+	if info.HardwareConcurrency == 1 {
+		detected = true
+		score += 20.0
+		evidence = append(evidence, "VM特征-单核CPU")
+	} else if info.HardwareConcurrency == 2 {
+		detected = true
+		score += 10.0
+		evidence = append(evidence, "VM特征-双核CPU")
+	}
+
+	if info.HardwareConcurrency > 0 && info.HardwareConcurrency < 2 {
+		detected = true
+		score += 15.0
+		evidence = append(evidence, fmt.Sprintf("VM特征-低CPU核心数: %d", info.HardwareConcurrency))
+	}
+
+	softwareRenderers := []string{"swiftshader", "llvmpipe", "mesa", "software", "emulated"}
+	for _, renderer := range softwareRenderers {
+		if strings.Contains(rendererLower, renderer) {
+			detected = true
+			score += 35.0
+			evidence = append(evidence, fmt.Sprintf("VM特征-软件渲染器: %s", renderer))
+		}
+	}
+
+	if len(frontendDetections) > 0 {
+		for _, detection := range frontendDetections {
+			if strings.Contains(detection, "vm_") || strings.Contains(detection, "cpu_cores") || strings.Contains(detection, "device_memory") {
+				detected = true
+				score += 25.0
+				evidence = append(evidence, fmt.Sprintf("前端VM检测: %s", detection))
+			}
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+func (d *EnvDetector) DetectSandboxEscape(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	nodeIndicators := []string{
+		"node_env", "require_available", "require_defined", "process_object",
+		"module_exports", "node_path_vars", "global_object",
+	}
+
+	for _, indicator := range nodeIndicators {
+		found := false
+		for _, detection := range frontendDetections {
+			if strings.Contains(strings.ToLower(detection), indicator) {
+				found = true
+				break
+			}
+		}
+		if found {
+			detected = true
+			score += 30.0
+			evidence = append(evidence, fmt.Sprintf("沙箱逃逸-Node环境: %s", indicator))
+		}
+	}
+
+	sandboxFilePatterns := []string{
+		"vboxservice", "vboxguest", "vmware-toolbox", "vboxcontrol",
+		"vmware fusion", "virtualbox", "vboxmouse", "vboxservice",
+	}
+
+	for _, pattern := range sandboxFilePatterns {
+		uaLower := strings.ToLower(info.UserAgent)
+		if strings.Contains(uaLower, pattern) {
+			detected = true
+			score += 35.0
+			evidence = append(evidence, fmt.Sprintf("沙箱逃逸-文件路径: %s", pattern))
+		}
+	}
+
+	sandboxPlugins := []string{"vbox", "vmware", "virtual", "sandbox"}
+	if len(info.Plugins) > 0 {
+		for _, plugin := range info.Plugins {
+			pluginLower := strings.ToLower(plugin)
+			for _, sandbox := range sandboxPlugins {
+				if strings.Contains(pluginLower, sandbox) {
+					detected = true
+					score += 30.0
+					evidence = append(evidence, fmt.Sprintf("沙箱逃逸-插件: %s", plugin))
+					break
+				}
+			}
+		}
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "sandbox_") || strings.Contains(detectionLower, "node_") {
+			if !strings.Contains(detectionLower, "virtualbox") && !strings.Contains(detectionLower, "vmware") {
+				detected = true
+				score += 25.0
+				evidence = append(evidence, fmt.Sprintf("前端沙箱检测: %s", detection))
+			}
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+func (d *EnvDetector) DetectDebuggerEnhanced(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	devtoolsPatterns := []string{
+		"devtools_", "debugger_", "stack_debugger", "console_",
+		"define_property_debugger", "execution_paused", "debugger_prop:",
+		"timing_high_variance", "timing_too_slow", "date_loop_inhibited",
+	}
+
+	for _, pattern := range devtoolsPatterns {
+		for _, detection := range frontendDetections {
+			if strings.Contains(strings.ToLower(detection), pattern) {
+				detected = true
+				score += 25.0
+				evidence = append(evidence, fmt.Sprintf("调试器检测: %s", detection))
+				break
+			}
+		}
+	}
+
+	uaLower := strings.ToLower(info.UserAgent)
+	debuggerIndicators := []string{
+		"debugger", "__webdriver", "__selenium", "__fxdriver",
+		"__driver", "__webdriver_script",
+	}
+
+	for _, indicator := range debuggerIndicators {
+		if strings.Contains(uaLower, indicator) {
+			detected = true
+			score += 30.0
+			evidence = append(evidence, fmt.Sprintf("调试器特征-UserAgent: %s", indicator))
+		}
+	}
+
+	if info.WebGLRenderer == "" && info.WebGLVendor == "" {
+		detected = true
+		score += 20.0
+		evidence = append(evidence, "调试器检测-WebGL信息缺失")
+	}
+
+	if info.CanvasFingerprint == "" {
+		detected = true
+		score += 15.0
+		evidence = append(evidence, "调试器检测-Canvas指纹缺失")
+	}
+
+	if len(info.Languages) == 0 || len(info.Languages) == 1 && info.Language == "" {
+		detected = true
+		score += 10.0
+		evidence = append(evidence, "调试器检测-语言信息异常")
+	}
+
+	if info.ScreenWidth == 0 || info.ScreenHeight == 0 {
+		detected = true
+		score += 15.0
+		evidence = append(evidence, "调试器检测-屏幕尺寸异常")
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+func (d *EnvDetector) EnhancedVMCheck(info *EnvInfo, frontendDetections []string) *EnvDetectionReport {
+	report := d.RunAllChecks(info)
+
+	vmDetected, vmScore, vmEvidence := d.DetectVMFeatures(info, frontendDetections)
+	if vmDetected {
+		report.EnvScore -= vmScore * 0.3
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "vm_features_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(vmScore),
+			Reason:   strings.Join(vmEvidence, "; "),
+		})
+	}
+
+	sandboxDetected, sandboxScore, sandboxEvidence := d.DetectSandboxEscape(info, frontendDetections)
+	if sandboxDetected {
+		report.EnvScore -= sandboxScore * 0.3
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "sandbox_escape_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(sandboxScore),
+			Reason:   strings.Join(sandboxEvidence, "; "),
+		})
+	}
+
+	debuggerDetected, debuggerScore, debuggerEvidence := d.DetectDebuggerEnhanced(info, frontendDetections)
+	if debuggerDetected {
+		report.EnvScore -= debuggerScore * 0.2
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "debugger_detected",
+			Risk:     "medium",
+			Detected: true,
+			Score:    int(debuggerScore),
+			Reason:   strings.Join(debuggerEvidence, "; "),
+		})
+	}
+
+	if report.EnvScore < 0 {
+		report.EnvScore = 0
+	}
+
+	return report
+}

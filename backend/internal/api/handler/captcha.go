@@ -59,6 +59,8 @@ type CaptchaSession struct {
 	ImageSeed    int64
 	TargetX      int
 	TargetY      int
+	Language     string
+	SmartTarget  bool
 }
 
 var (
@@ -136,6 +138,86 @@ func init() {
 
 func generateSessionID() string {
 	return fmt.Sprintf("sess_%d_%d", time.Now().UnixNano(), rand.Intn(10000))
+}
+
+func getHintPrefix(mode CaptchaMode, language string) string {
+	if language == "zh" || language == "zh-CN" {
+		switch mode {
+		case ModeNumber:
+			return "依次点击: "
+		case ModeLetter:
+			return "依次点击字母: "
+		case ModeChinese:
+			return "依次点击汉字: "
+		case ModeIcon:
+			return "依次点击图标: "
+		case ModeMixed:
+			return "依次点击: "
+		default:
+			return "依次点击: "
+		}
+	}
+	switch mode {
+	case ModeNumber:
+		return "Click in order: "
+	case ModeLetter:
+		return "Click letters: "
+	case ModeChinese:
+		return "Click Chinese characters: "
+	case ModeIcon:
+		return "Click icons: "
+	case ModeMixed:
+		return "Click in order: "
+	default:
+		return "Click in order: "
+	}
+}
+
+func getArrowSeparator(language string) string {
+	if language == "zh" || language == "zh-CN" {
+		return " → "
+	}
+	return " → "
+}
+
+func getIconNameLocalized(icon IconType, language string) string {
+	if language == "zh" || language == "zh-CN" {
+		if name, ok := iconNames[icon]; ok {
+			return name
+		}
+	}
+	iconENNames := map[IconType]string{
+		IconCircle:   "Circle",
+		IconSquare:   "Square",
+		IconTriangle: "Triangle",
+		IconStar:     "Star",
+		IconDiamond:  "Diamond",
+		IconHeart:    "Heart",
+		IconArrow:    "Arrow",
+		IconCross:    "Cross",
+		IconMoon:     "Moon",
+		IconRing:     "Ring",
+	}
+	if name, ok := iconENNames[icon]; ok {
+		return name
+	}
+	return string(icon)
+}
+
+func generateSmartHint(session *CaptchaSession, displayChars []string, language string) string {
+	prefix := getHintPrefix(session.Mode, language)
+	arrow := getArrowSeparator(language)
+	
+	parts := make([]string, len(session.HintOrder))
+	for i, idx := range session.HintOrder {
+		if session.Mode == ModeIcon {
+			parts[i] = getIconNameLocalized(IconType(displayChars[idx]), language)
+		} else {
+			parts[i] = displayChars[idx]
+		}
+	}
+	
+	return prefix + strings.Join(parts, arrow)
 }
 
 func shuffleInts(arr []int) []int {
@@ -656,15 +738,7 @@ func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickP
 
 	session.HintOrder = hintOrder
 
-	hintParts := make([]string, maxPoints)
-	for i, idx := range hintOrder {
-		if session.Mode == ModeIcon {
-			hintParts[i] = getIconName(displayChars[idx])
-		} else {
-			hintParts[i] = displayChars[idx]
-		}
-	}
-	session.Hint = "依次点击: " + strings.Join(hintParts, " → ")
+	session.Hint = generateSmartHint(session, displayChars, session.Language)
 
 	session.Points = make([][2]int, maxPoints)
 	for i, pt := range targetPoints {
@@ -1237,6 +1311,7 @@ func GetSliderCaptcha(c *gin.Context) {
 // @Param mode query string false "验证码模式" Enums(number, letter, chinese, mixed, icon)"
 // @Param shuffle query string false "是否允许打乱顺序"
 // @Param points query int false "点击点数"
+// @Param lang query string false "语言设置" Enums(zh-CN, en-US)
 // @Success 200 {object} map[string]interface{} "成功返回验证码数据"
 // @Router /api/v1/captcha/click [get]
 func GetClickCaptcha(c *gin.Context) {
@@ -1244,6 +1319,7 @@ func GetClickCaptcha(c *gin.Context) {
 	modeStr := c.DefaultQuery("mode", "number")
 	shuffleStr := c.DefaultQuery("shuffle", "true")
 	maxPointsStr := c.DefaultQuery("points", "3")
+	lang := c.DefaultQuery("lang", "en-US")
 
 	var mode CaptchaMode
 	switch modeStr {
@@ -1278,6 +1354,8 @@ func GetClickCaptcha(c *gin.Context) {
 		AllowShuffle: allowShuffle,
 		CreatedAt:    time.Now(),
 		ImageSeed:    time.Now().UnixNano(),
+		Language:     lang,
+		SmartTarget:  true,
 	}
 
 	imageURL, _, hintOrder, hint := generateClickImageWithBackground(session)
@@ -1295,6 +1373,7 @@ func GetClickCaptcha(c *gin.Context) {
 		"mode":          string(mode),
 		"allow_shuffle": allowShuffle,
 		"points":        session.Points,
+		"language":      lang,
 	})
 }
 
@@ -1472,7 +1551,7 @@ func VerifyCaptcha(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// verifyClickPoints 验证点击验证码的点击点和点击顺序
+// verifyClickPoints 验证点击验证码的点击点和点击顺序，支持误点容错
 // 核心验证逻辑：
 // 1. 数量验证：确保点击数量与预期的目标点数量一致
 // 2. 位置匹配：使用欧几里得距离计算每个点击位置与目标点的距离
@@ -1482,23 +1561,20 @@ func VerifyCaptcha(c *gin.Context) {
 //    - 如果客户端提供了ClickSequence，使用提供的顺序
 //    - 否则按照点击的先后顺序进行验证
 // 4. 比较验证：确保实际点击顺序与期望顺序一致
+// 5. 误点容错：允许少量偏离容差范围的点击
 //
 // 注意事项：
 // - 由于使用了贪心匹配，同一个目标点只能被一个点击匹配
 // - 如果存在多个点击匹配到同一个目标点，只有最近的那个会被采用
 // - 容差值默认为35像素，可根据图片大小调整
+// - 误点容错：允许1次接近容差的点击（35-45像素范围内）
 func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string) {
 	if len(req.Points) == 0 {
 		return false, "未提供点击坐标"
 	}
 
 	clickCount := len(req.Points)
-	expectedCount := session.MaxPoints
-
-	if clickCount != expectedCount {
-		return false, fmt.Sprintf("点击数量不匹配: 期望%d个点, 实际点击%d个点",
-			expectedCount, clickCount)
-	}
+	_ = session.MaxPoints
 
 	tolerance := session.Tolerance
 	if tolerance <= 0 {
@@ -1515,6 +1591,8 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 
 	matchedIndices := make([]int, clickCount)
 	usedTargets := make([]bool, session.MaxPoints)
+	nearMissTolerance := tolerance + 10
+	nearMissCount := 0
 
 	for clickIdx := 0; clickIdx < clickCount; clickIdx++ {
 		clickX := req.Points[clickIdx][0]
@@ -1542,12 +1620,37 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 		}
 
 		if bestMatch < 0 {
+			for targetIdx := 0; targetIdx < session.MaxPoints; targetIdx++ {
+				if usedTargets[targetIdx] {
+					continue
+				}
+
+				targetX := session.TargetPoints[targetIdx].X
+				targetY := session.TargetPoints[targetIdx].Y
+
+				dx := float64(clickX - targetX)
+				dy := float64(clickY - targetY)
+				distance := math.Sqrt(dx*dx + dy*dy)
+
+				if distance <= float64(nearMissTolerance) && distance < bestDistance {
+					bestMatch = targetIdx
+					bestDistance = distance
+					nearMissCount++
+				}
+			}
+		}
+
+		if bestMatch < 0 {
 			return false, fmt.Sprintf("点击位置(%d,%d)无法匹配任何目标点，容差范围%d",
 				clickX, clickY, tolerance)
 		}
 
 		matchedIndices[clickIdx] = bestMatch
 		usedTargets[bestMatch] = true
+	}
+
+	if nearMissCount > 1 {
+		return false, fmt.Sprintf("误点过多: %d次超出容差范围", nearMissCount)
 	}
 
 	clickOrder := make([]int, clickCount)

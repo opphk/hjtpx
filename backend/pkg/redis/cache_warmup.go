@@ -109,10 +109,42 @@ type WarmupStatistics struct {
 	LastError      atomic.Value
 	PeakMemory     atomic.Int64
 	PeakKeys       atomic.Int64
+	WarmupCoverage float64
+}
+
+type ScheduledWarmupTask struct {
+	Task       *CacheWarmupTask
+	Schedule   time.Duration
+	LastWarmup time.Time
+	NextWarmup time.Time
+	Enabled    bool
+}
+
+type WarmupScheduler struct {
+	mu           sync.RWMutex
+	tasks        map[string]*ScheduledWarmupTask
+	running      bool
+	ctx          context.Context
+	cancel       context.CancelFunc
+	workerPool   chan struct{}
+	maxWorkers   int
+	priorityMode string
 }
 
 func NewWarmupStatistics() *WarmupStatistics {
 	return &WarmupStatistics{}
+}
+
+type WarmupSchedulerConfig struct {
+	MaxWorkers   int
+	PriorityMode string
+	ScheduleEnabled bool
+}
+
+var DefaultWarmupSchedulerConfig = &WarmupSchedulerConfig{
+	MaxWorkers:      10,
+	PriorityMode:    "adaptive",
+	ScheduleEnabled: true,
 }
 
 func NewCacheWarmupManager(config *WarmupConfig) *CacheWarmupManager {
@@ -733,4 +765,152 @@ func AddCacheWarmupTask(task *CacheWarmupTask) {
 
 func WarmupAllCache() error {
 	return GetCacheWarmupManager().WarmupAll(context.Background())
+}
+
+func NewWarmupScheduler(config *WarmupSchedulerConfig) *WarmupScheduler {
+	if config == nil {
+		config = DefaultWarmupSchedulerConfig
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &WarmupScheduler{
+		tasks:        make(map[string]*ScheduledWarmupTask),
+		ctx:          ctx,
+		cancel:       cancel,
+		workerPool:   make(chan struct{}, config.MaxWorkers),
+		maxWorkers:   config.MaxWorkers,
+		priorityMode: config.PriorityMode,
+	}
+}
+
+func (ws *WarmupScheduler) AddScheduledTask(task *CacheWarmupTask, schedule time.Duration) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	ws.tasks[task.Name] = &ScheduledWarmupTask{
+		Task:       task,
+		Schedule:   schedule,
+		LastWarmup: time.Time{},
+		NextWarmup: time.Now(),
+		Enabled:    task.Enabled,
+	}
+
+	if ws.running && task.Enabled {
+		go ws.runScheduledTask(task.Name)
+	}
+}
+
+func (ws *WarmupScheduler) RemoveScheduledTask(name string) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	delete(ws.tasks, name)
+}
+
+func (ws *WarmupScheduler) Start() {
+	ws.mu.Lock()
+	if ws.running {
+		ws.mu.Unlock()
+		return
+	}
+	ws.running = true
+	ws.mu.Unlock()
+
+	ws.mu.RLock()
+	for name := range ws.tasks {
+		go ws.runScheduledTask(name)
+	}
+	ws.mu.RUnlock()
+}
+
+func (ws *WarmupScheduler) Stop() {
+	ws.mu.Lock()
+	if !ws.running {
+		ws.mu.Unlock()
+		return
+	}
+	ws.running = false
+	ws.mu.Unlock()
+
+	ws.cancel()
+}
+
+func (ws *WarmupScheduler) runScheduledTask(name string) {
+	ws.mu.RLock()
+	task, exists := ws.tasks[name]
+	ws.mu.RUnlock()
+
+	if !exists || !task.Enabled {
+		return
+	}
+
+	ticker := time.NewTicker(task.Schedule)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ws.ctx.Done():
+			return
+		case <-ticker.C:
+			ws.executeWithPriority(task.Task)
+		}
+	}
+}
+
+func (ws *WarmupScheduler) executeWithPriority(task *CacheWarmupTask) {
+	ws.workerPool <- struct{}{}
+	defer func() { <-ws.workerPool }()
+
+	cwm := GetCacheWarmupManager()
+	cwm.executeTask(task)
+}
+
+func (ws *WarmupScheduler) GetScheduledTasks() []*ScheduledWarmupTask {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+
+	tasks := make([]*ScheduledWarmupTask, 0, len(ws.tasks))
+	for _, task := range ws.tasks {
+		tasks = append(tasks, task)
+	}
+	return tasks
+}
+
+func (ws *WarmupScheduler) PauseTask(name string) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	if task, ok := ws.tasks[name]; ok {
+		task.Enabled = false
+	}
+}
+
+func (ws *WarmupScheduler) ResumeTask(name string) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	if task, ok := ws.tasks[name]; ok {
+		task.Enabled = true
+		if ws.running {
+			go ws.runScheduledTask(name)
+		}
+	}
+}
+
+var (
+	globalWarmupScheduler *WarmupScheduler
+	globalSchedulerOnce  sync.Once
+)
+
+func InitWarmupScheduler(config *WarmupSchedulerConfig) {
+	globalSchedulerOnce.Do(func() {
+		globalWarmupScheduler = NewWarmupScheduler(config)
+	})
+}
+
+func GetWarmupScheduler() *WarmupScheduler {
+	if globalWarmupScheduler == nil {
+		InitWarmupScheduler(nil)
+	}
+	return globalWarmupScheduler
 }

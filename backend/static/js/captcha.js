@@ -170,6 +170,340 @@ class TrajectoryEncryptor {
     }
 }
 
+class EnhancedTrajectoryEncryptor {
+    constructor(options = {}) {
+        this.options = {
+            useWasm: true,
+            wasmUrl: '/static/js/crypto-wasm.wasm',
+            fallbackToLegacy: true,
+            encryptionMode: 'AES-256-GCM',
+            keyIterations: 100000,
+            ...options
+        };
+        
+        this.secretKey = options.secretKey || 'captcha-trajectory-secret-key-2024';
+        this.saltLength = 16;
+        this.ivLength = 12;
+        this.cryptoWasm = null;
+        this.isInitialized = false;
+        this.useLegacyFallback = false;
+    }
+
+    async initialize() {
+        if (this.isInitialized) {
+            return { status: 'already_initialized' };
+        }
+
+        if (typeof CryptoWasm === 'undefined') {
+            console.warn('EnhancedTrajectoryEncryptor: CryptoWasm not loaded, using legacy encryption');
+            this.useLegacyFallback = true;
+            this.isInitialized = true;
+            return { status: 'legacy_mode' };
+        }
+
+        try {
+            this.cryptoWasm = CryptoWasm;
+            
+            if (this.options.useWasm && CryptoWasm.getStatus().wasmSupported) {
+                const initResult = await CryptoWasm.initialize(this.options.wasmUrl);
+                
+                if (initResult.wasmLoaded) {
+                    console.info('EnhancedTrajectoryEncryptor: Using WASM-enhanced encryption');
+                    this.isInitialized = true;
+                    return { 
+                        status: 'wasm_mode',
+                        details: initResult
+                    };
+                }
+            }
+            
+            if (this.options.fallbackToLegacy) {
+                console.info('EnhancedTrajectoryEncryptor: WASM not available, using Web Crypto API');
+                this.useLegacyFallback = true;
+                this.isInitialized = true;
+                return { status: 'webcrypto_mode' };
+            }
+            
+            throw new Error('WASM and fallback both unavailable');
+        } catch (error) {
+            console.error('EnhancedTrajectoryEncryptor: Initialization failed:', error);
+            
+            if (this.options.fallbackToLegacy) {
+                this.useLegacyFallback = true;
+                this.isInitialized = true;
+                return { status: 'legacy_mode' };
+            }
+            
+            throw error;
+        }
+    }
+
+    generateSalt(length = this.saltLength) {
+        if (this.cryptoWasm && !this.useLegacyFallback) {
+            const saltBytes = this.cryptoWasm.generateRandomBytes(length);
+            return this.arrayBufferToBase64(saltBytes);
+        }
+        
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let salt = '';
+        const randomValues = new Uint8Array(length);
+        crypto.getRandomValues(randomValues);
+        for (let i = 0; i < length; i++) {
+            salt += chars[randomValues[i] % chars.length];
+        }
+        return salt;
+    }
+
+    arrayBufferToBase64(buffer) {
+        const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    base64ToArrayBuffer(base64) {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    async deriveKey(salt, iterations = this.options.keyIterations) {
+        if (this.cryptoWasm && !this.useLegacyFallback) {
+            try {
+                const saltBytes = typeof salt === 'string' ? this.base64ToArrayBuffer(salt) : salt;
+                const derivedKey = await this.cryptoWasm.pbkdf2(
+                    this.secretKey,
+                    saltBytes,
+                    iterations,
+                    256
+                );
+                return derivedKey;
+            } catch (error) {
+                console.warn('EnhancedTrajectoryEncryptor: WASM key derivation failed, falling back');
+                this.useLegacyFallback = true;
+            }
+        }
+
+        const encoder = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(this.secretKey),
+            { name: 'PBKDF2' },
+            false,
+            ['deriveBits', 'deriveKey']
+        );
+
+        const saltBytes = typeof salt === 'string' ? encoder.encode(salt) : salt;
+
+        return crypto.subtle.deriveKey(
+            {
+                name: 'PBKDF2',
+                salt: saltBytes,
+                iterations: iterations,
+                hash: 'SHA-256'
+            },
+            keyMaterial,
+            { name: 'AES-GCM', length: 256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+    }
+
+    async encryptData(data, salt) {
+        const key = await this.deriveKey(salt);
+        const encoder = new TextEncoder();
+        const dataBytes = encoder.encode(JSON.stringify(data));
+
+        let iv;
+        if (this.cryptoWasm && !this.useLegacyFallback) {
+            try {
+                iv = this.cryptoWasm.generateRandomBytes(this.ivLength);
+            } catch (error) {
+                console.warn('EnhancedTrajectoryEncryptor: Failed to generate IV with WASM');
+                iv = crypto.getRandomValues(new Uint8Array(this.ivLength));
+            }
+        } else {
+            iv = crypto.getRandomValues(new Uint8Array(this.ivLength));
+        }
+
+        let encryptedContent;
+        if (this.cryptoWasm && !this.useLegacyFallback) {
+            try {
+                const keyBuffer = key instanceof Uint8Array ? key.buffer : key;
+                const result = await this.cryptoWasm.encrypt(
+                    JSON.stringify(data),
+                    new Uint8Array(keyBuffer),
+                    { iv: iv }
+                );
+                encryptedContent = this.base64ToArrayBuffer(result.ciphertext);
+            } catch (error) {
+                console.warn('EnhancedTrajectoryEncryptor: WASM encryption failed, falling back');
+                this.useLegacyFallback = true;
+                encryptedContent = await this.encryptWithWebCrypto(key, iv, dataBytes);
+            }
+        } else {
+            encryptedContent = await this.encryptWithWebCrypto(key, iv, dataBytes);
+        }
+
+        const combined = new Uint8Array(iv.length + encryptedContent.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(encryptedContent), iv.length);
+
+        return this.arrayBufferToBase64(combined);
+    }
+
+    async encryptWithWebCrypto(key, iv, dataBytes) {
+        const importedKey = await crypto.subtle.importKey(
+            'raw',
+            key instanceof CryptoKey ? await crypto.subtle.exportKey('raw', key) : key,
+            { name: 'AES-GCM' },
+            false,
+            ['encrypt']
+        );
+
+        return crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv },
+            importedKey,
+            dataBytes
+        );
+    }
+
+    generateSignature(timestamp, salt, encryptedData) {
+        const data = `${timestamp}:${salt}:${encryptedData}`;
+        const encoder = new TextEncoder();
+        const key = encoder.encode(this.secretKey);
+
+        const signature = this.hmacSHA256(key, encoder.encode(data));
+        return this.arrayBufferToBase64(signature);
+    }
+
+    async hmacSHA256(key, data) {
+        const cryptoKey = await crypto.subtle.importKey(
+            'raw',
+            key,
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+
+        const signature = await crypto.subtle.sign('HMAC', cryptoKey, data);
+        return new Uint8Array(signature);
+    }
+
+    async decryptData(encryptedDataBase64, salt) {
+        const key = await this.deriveKey(salt);
+        const combined = this.base64ToArrayBuffer(encryptedDataBase64);
+
+        const iv = combined.slice(0, this.ivLength);
+        const ciphertext = combined.slice(this.ivLength);
+
+        const importedKey = await crypto.subtle.importKey(
+            'raw',
+            key instanceof CryptoKey ? await crypto.subtle.exportKey('raw', key) : key,
+            { name: 'AES-GCM' },
+            false,
+            ['decrypt']
+        );
+
+        const decryptedContent = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv },
+            importedKey,
+            ciphertext
+        );
+
+        const decoder = new TextDecoder();
+        return JSON.parse(decoder.decode(decryptedContent));
+    }
+
+    async verifySignature(timestamp, salt, encryptedData, signature) {
+        const expectedSignature = this.generateSignature(timestamp, salt, encryptedData);
+        return this.constantTimeCompare(signature, expectedSignature);
+    }
+
+    constantTimeCompare(a, b) {
+        if (a.length !== b.length) {
+            return false;
+        }
+        let result = 0;
+        for (let i = 0; i < a.length; i++) {
+            result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+        }
+        return result === 0;
+    }
+
+    async encryptTrajectory(trajectory) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+
+        if (!trajectory || trajectory.length === 0) {
+            throw new Error('Empty trajectory data');
+        }
+
+        const timestamp = Date.now();
+        const salt = this.generateSalt();
+
+        const encryptedData = await this.encryptData(trajectory, salt);
+        const signature = this.generateSignature(timestamp, salt, encryptedData);
+
+        return {
+            timestamp: timestamp,
+            salt: salt,
+            encrypted_data: encryptedData,
+            signature: signature,
+            encryption_mode: this.useLegacyFallback ? 'legacy' : 'wasm',
+            algorithm: this.options.encryptionMode
+        };
+    }
+
+    validateTimestamp(timestamp, maxDriftMs = 300000) {
+        const now = Date.now();
+        const drift = Math.abs(now - timestamp);
+        return drift <= maxDriftMs;
+    }
+
+    async decryptTrajectory(encryptedTrajectory) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+
+        if (!this.validateTimestamp(encryptedTrajectory.timestamp)) {
+            throw new Error('Timestamp validation failed');
+        }
+
+        const isValidSignature = await this.verifySignature(
+            encryptedTrajectory.timestamp,
+            encryptedTrajectory.salt,
+            encryptedTrajectory.encrypted_data,
+            encryptedTrajectory.signature
+        );
+
+        if (!isValidSignature) {
+            throw new Error('Signature verification failed');
+        }
+
+        return this.decryptData(encryptedTrajectory.encrypted_data, encryptedTrajectory.salt);
+    }
+
+    generateRequestPayload(trajectory) {
+        return this.encryptTrajectory(trajectory);
+    }
+
+    getStatus() {
+        return {
+            isInitialized: this.isInitialized,
+            useLegacyFallback: this.useLegacyFallback,
+            wasmAvailable: this.cryptoWasm && CryptoWasm.getStatus().wasmLoaded,
+            encryptionMode: this.options.encryptionMode
+        };
+    }
+}
+
 class Captcha {
     constructor(containerId, options = {}) {
         this.container = document.getElementById(containerId);
@@ -783,25 +1117,46 @@ class Captcha {
         const button = this.elements.sliderButton;
         const container = this.elements.sliderContainer;
 
+        this.highFrequencyTracker = {
+            isTracking: false,
+            lastFrameTime: 0,
+            targetFrameInterval: 1000 / 65,
+            velocity: 0,
+            acceleration: 0,
+            lastVelocity: 0,
+            lastTimestamp: 0
+        };
+
         const startDrag = (e) => {
             if (this.sliderState.isDragging || this.isLoading) return;
 
             this.sliderState.isDragging = true;
             const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type === 'mousedown' ? e.clientY : (e.touches[0]?.clientY || 0);
             this.sliderState.startX = clientX;
             this.sliderState.currentX = 0;
             this.sliderState.maxX = container.offsetWidth - button.offsetWidth - 4;
 
             this.speedData = {
                 points: [],
-                startTime: Date.now(),
+                startTime: performance.now(),
                 endTime: 0,
                 distance: 0,
                 maxSpeed: 0
             };
             this.trajectoryData = [];
 
-            this.addTrajectoryPoint(0, this.sliderState.puzzleY, 'start');
+            this.highFrequencyTracker = {
+                isTracking: true,
+                lastFrameTime: performance.now(),
+                targetFrameInterval: 1000 / 65,
+                velocity: 0,
+                acceleration: 0,
+                lastVelocity: 0,
+                lastTimestamp: performance.now()
+            };
+
+            this.addTrajectoryPoint(0, this.sliderState.puzzleY, 'start', 0, 0);
 
             button.classList.add('dragging');
             container.classList.add('is-dragging');
@@ -820,7 +1175,7 @@ class Captcha {
             const prevX = this.sliderState.currentX;
             this.sliderState.currentX = deltaX;
 
-            const currentTime = Date.now();
+            const currentTime = performance.now();
             const dt = currentTime - (this.speedData.points.length > 0 ?
                 this.speedData.points[this.speedData.points.length - 1].time : this.speedData.startTime);
             const dx = deltaX - prevX;
@@ -828,11 +1183,21 @@ class Captcha {
             const distance = Math.sqrt(dx * dx + dy * dy);
             const speed = dt > 0 ? distance / (dt / 1000) : 0;
 
+            const prevVelocity = this.highFrequencyTracker.lastVelocity;
+            const velocityChange = speed - prevVelocity;
+            const acceleration = dt > 0 ? velocityChange / dt * 1000 : 0;
+
+            this.highFrequencyTracker.lastVelocity = speed;
+            this.highFrequencyTracker.lastTimestamp = currentTime;
+
             this.speedData.points.push({
                 x: deltaX,
                 y: this.sliderState.puzzleY,
                 time: currentTime,
-                speed: speed
+                speed: speed,
+                acceleration: acceleration,
+                dx: dx,
+                dy: dy
             });
 
             this.speedData.distance += distance;
@@ -840,7 +1205,7 @@ class Captcha {
                 this.speedData.maxSpeed = speed;
             }
 
-            this.addTrajectoryPoint(deltaX, this.sliderState.puzzleY, 'move');
+            this.addTrajectoryPointWithVelocity(deltaX, this.sliderState.puzzleY, 'move', speed, acceleration);
 
             this.animateSliderPosition(deltaX);
             this.updateSliderAccessibility();
@@ -850,11 +1215,17 @@ class Captcha {
             if (!this.sliderState.isDragging) return;
 
             this.sliderState.isDragging = false;
-            this.speedData.endTime = Date.now();
+            this.highFrequencyTracker.isTracking = false;
+            this.speedData.endTime = performance.now();
             button.classList.remove('dragging');
             this.elements.sliderContainer.classList.remove('is-dragging');
 
-            this.addTrajectoryPoint(this.sliderState.currentX, this.sliderState.puzzleY, 'end');
+            const finalSpeed = this.speedData.points.length > 0 ? 
+                this.speedData.points[this.speedData.points.length - 1].speed : 0;
+            const finalAccel = this.speedData.points.length > 0 ?
+                this.speedData.points[this.speedData.points.length - 1].acceleration : 0;
+
+            this.addTrajectoryPointWithVelocity(this.sliderState.currentX, this.sliderState.puzzleY, 'end', finalSpeed, finalAccel);
 
             if (this.sliderState.currentX > 10) {
                 this.verifySlider();
@@ -878,9 +1249,118 @@ class Captcha {
         this.trajectoryData.push({
             x: Math.round(x),
             y: Math.round(y),
-            timestamp: Date.now(),
+            timestamp: performance.now(),
             event: event
         });
+    }
+
+    addTrajectoryPointWithVelocity(x, y, event, velocity, acceleration) {
+        const point = {
+            x: Math.round(x),
+            y: Math.round(y),
+            timestamp: performance.now(),
+            event: event
+        };
+
+        if (velocity !== undefined) {
+            point.vx = Math.round(velocity * 100) / 100;
+        }
+
+        if (acceleration !== undefined) {
+            point.ax = Math.round(acceleration * 100) / 100;
+        }
+
+        const lastPoint = this.trajectoryData[this.trajectoryData.length - 1];
+        if (lastPoint) {
+            const dt = point.timestamp - lastPoint.timestamp;
+            if (dt > 0) {
+                const dx = point.x - lastPoint.x;
+                const dy = point.y - lastPoint.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const instantSpeed = (distance / dt) * 1000;
+                point.instant_speed = Math.round(instantSpeed * 100) / 100;
+            }
+        }
+
+        this.trajectoryData.push(point);
+    }
+
+    getHighFrequencyTrajectoryReport() {
+        if (this.trajectoryData.length < 2) {
+            return null;
+        }
+
+        const report = {
+            total_points: this.trajectoryData.length,
+            start_time: this.trajectoryData[0]?.timestamp || 0,
+            end_time: this.trajectoryData[this.trajectoryData.length - 1]?.timestamp || 0,
+            duration_ms: 0,
+            avg_sampling_rate_hz: 0,
+            estimated_sampling_rate_hz: 0,
+            min_interval_ms: Infinity,
+            max_interval_ms: 0,
+            interval_variance: 0,
+            dropout_count: 0,
+            quality: 'unknown',
+            is_high_frequency: false
+        };
+
+        if (report.end_time > report.start_time) {
+            report.duration_ms = report.end_time - report.start_time;
+        }
+
+        if (this.speedData.points.length > 0) {
+            report.avg_sampling_rate_hz = Math.round(
+                (this.speedData.points.length / report.duration_ms) * 1000 * 100
+            ) / 100;
+        }
+
+        const intervals = [];
+        for (let i = 1; i < this.trajectoryData.length; i++) {
+            const dt = this.trajectoryData[i].timestamp - this.trajectoryData[i - 1].timestamp;
+            intervals.push(dt);
+
+            if (dt < report.min_interval_ms) {
+                report.min_interval_ms = dt;
+            }
+            if (dt > report.max_interval_ms) {
+                report.max_interval_ms = dt;
+            }
+
+            if (dt > 50) {
+                report.dropout_count++;
+            }
+        }
+
+        if (intervals.length > 0) {
+            const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+            const variance = intervals.reduce((sum, val) => sum + Math.pow(val - avgInterval, 2), 0) / intervals.length;
+            report.interval_variance = Math.round(variance * 100) / 100;
+
+            if (avgInterval > 0) {
+                report.estimated_sampling_rate_hz = Math.round((1000 / avgInterval) * 100) / 100;
+            }
+        }
+
+        if (report.min_interval_ms === Infinity) {
+            report.min_interval_ms = 0;
+        }
+
+        report.is_high_frequency = report.estimated_sampling_rate_hz >= 60;
+
+        if (report.estimated_sampling_rate_hz >= 60) {
+            if (report.interval_variance < 5) {
+                report.quality = 'suspicious_high';
+            } else {
+                report.quality = 'high';
+            }
+        } else if (report.estimated_sampling_rate_hz >= 30) {
+            report.quality = 'medium';
+        } else {
+            report.quality = 'low';
+        }
+
+        return report;
     }
 
     animateSliderPosition(x) {
@@ -1746,6 +2226,7 @@ class Captcha {
         this.playVerificationAnimation();
 
         const speedData = this.calculateSpeedData();
+        const trajectoryReport = this.getHighFrequencyTrajectoryReport();
 
         let payload = {
             session_id: this.sessionId,
@@ -1754,7 +2235,8 @@ class Captcha {
             type: 'slider',
             behavior_data: this.trajectoryData,
             speed_data: speedData,
-            environment_data: this.environmentData
+            environment_data: this.environmentData,
+            trajectory_report: trajectoryReport
         };
 
         if (this.options.enableEncryption && this.trajectoryData.length > 0) {
@@ -1768,21 +2250,23 @@ class Captcha {
         }
 
         try {
-            const response = await fetch(`${this.options.apiBase}/captcha/verify`, {
+            const response = await fetch(`${this.options.apiBase}/captcha/verify-v2`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             let success = false;
+            let analysisResult = null;
             if (response.ok) {
                 const data = await response.json();
-                success = data.success;
+                success = data.success || data.data?.success;
+                analysisResult = data.data?.trajectory_analysis || data.trajectory_analysis;
             }
 
-            this.handleVerificationResult(success);
+            this.handleVerificationResult(success, analysisResult);
         } catch (error) {
-            this.handleVerificationResult(false);
+            this.handleVerificationResult(false, null);
         } finally {
             setTimeout(() => {
                 this.hideLoading('slider');
@@ -1797,7 +2281,7 @@ class Captcha {
         this.elements.sliderText.textContent = this.i18n.t('verifying');
     }
 
-    handleVerificationResult(success) {
+    handleVerificationResult(success, analysisResult = null) {
         if (success) {
             this.elements.sliderButton.classList.remove('verifying');
             this.elements.sliderButton.classList.add('success');
@@ -1807,7 +2291,11 @@ class Captcha {
             this.announceToScreenReader(this.i18n.t('verifySuccess'), 'assertive');
             this.disableSlider();
             if (this.options.onSuccess) {
-                this.options.onSuccess({ type: 'slider', session_id: this.sessionId });
+                this.options.onSuccess({ 
+                    type: 'slider', 
+                    session_id: this.sessionId,
+                    trajectory_analysis: analysisResult
+                });
             }
         } else {
             this.elements.sliderButton.classList.remove('verifying');
@@ -1817,7 +2305,11 @@ class Captcha {
             this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
             setTimeout(() => this.refresh(), 1500);
             if (this.options.onError) {
-                this.options.onError({ type: 'slider', error: this.i18n.t('verifyFailed') });
+                this.options.onError({ 
+                    type: 'slider', 
+                    error: this.i18n.t('verifyFailed'),
+                    trajectory_analysis: analysisResult
+                });
             }
         }
     }
@@ -3296,5 +3788,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.CaptchaI18n = CaptchaI18n;
     window.CaptchaLanguageManager = CaptchaLanguageManager;
     window.TrajectoryEncryptor = TrajectoryEncryptor;
+    window.EnhancedTrajectoryEncryptor = EnhancedTrajectoryEncryptor;
     window.ClickCaptcha = ClickCaptcha;
+    window.CryptoWasm = CryptoWasm;
 });

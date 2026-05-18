@@ -1,8 +1,10 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -1123,4 +1125,341 @@ func CombineEnhancedFeatures(features ...*RuleEngineFeatures) *RuleEngineFeature
 	}
 
 	return combined
+}
+
+type RuleVersion struct {
+	Version     string      `json:"version"`
+	ChangeType  string      `json:"change_type"`
+	Description string      `json:"description"`
+	Operator    string      `json:"operator"`
+	CreatedAt   time.Time   `json:"created_at"`
+	Rules       []EnhancedRule `json:"rules"`
+	IsCurrent   bool        `json:"is_current"`
+}
+
+type RuleEngineConfig struct {
+	Version           string                  `json:"version"`
+	Threshold         float64                 `json:"threshold"`
+	CategoryWeights   map[string]float64      `json:"category_weights"`
+	Rules             []EnhancedRule         `json:"rules"`
+}
+
+func (ere *EnhancedRuleEngine) ExportToConfig() *RuleEngineConfig {
+	ere.mu.RLock()
+	defer ere.mu.RUnlock()
+
+	return &RuleEngineConfig{
+		Version:         fmt.Sprintf("v%d.%d.%d", time.Now().Year(), int(time.Now().Month()), time.Now().Day()),
+		Threshold:       ere.threshold,
+		CategoryWeights: ere.weights,
+		Rules:           append([]EnhancedRule{}, ere.rules...),
+	}
+}
+
+func (ere *EnhancedRuleEngine) LoadFromConfig(config *RuleEngineConfig) error {
+	if config == nil {
+		return fmt.Errorf("配置不能为空")
+	}
+
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	if config.Threshold > 0 {
+		ere.threshold = config.Threshold
+	}
+
+	if config.CategoryWeights != nil {
+		for category, weight := range config.CategoryWeights {
+			ere.weights[category] = weight
+		}
+	}
+
+	if config.Rules != nil {
+		ere.rules = make([]EnhancedRule, 0, len(config.Rules))
+		ere.ruleMap = make(map[string]*EnhancedRule)
+		ere.categories = make(map[string][]string)
+
+		for _, rule := range config.Rules {
+			rule.ruleMapKey = rule.Name
+			ere.rules = append(ere.rules, rule)
+			newRule := &ere.rules[len(ere.rules)-1]
+			ere.ruleMap[rule.Name] = newRule
+			ere.categories[rule.Category] = append(ere.categories[rule.Category], rule.Name)
+		}
+	}
+
+	return nil
+}
+
+func (ere *EnhancedRuleEngine) ReloadFromFile(filePath string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	var config RuleEngineConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
+	return ere.LoadFromConfig(&config)
+}
+
+func (ere *EnhancedRuleEngine) SaveToFile(filePath string) error {
+	config := ere.ExportToConfig()
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化配置失败: %w", err)
+	}
+
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return fmt.Errorf("写入配置文件失败: %w", err)
+	}
+
+	return nil
+}
+
+func (ere *EnhancedRuleEngine) CreateVersionSnapshot() *RuleVersion {
+	ere.mu.RLock()
+	defer ere.mu.RUnlock()
+
+	version := fmt.Sprintf("v%d.%d.%d.%d",
+		time.Now().Year(),
+		int(time.Now().Month()),
+		time.Now().Day(),
+		time.Now().Hour()*100+time.Now().Minute(),
+	)
+
+	return &RuleVersion{
+		Version:     version,
+		ChangeType:  "snapshot",
+		Description: "自动快照",
+		Operator:    "system",
+		CreatedAt:   time.Now(),
+		Rules:       append([]EnhancedRule{}, ere.rules...),
+		IsCurrent:   true,
+	}
+}
+
+func (ere *EnhancedRuleEngine) LoadVersionSnapshot(version *RuleVersion) error {
+	if version == nil || version.Rules == nil {
+		return fmt.Errorf("版本快照无效")
+	}
+
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	ere.rules = append([]EnhancedRule{}, version.Rules...)
+	ere.ruleMap = make(map[string]*EnhancedRule)
+	ere.categories = make(map[string][]string)
+
+	for i := range ere.rules {
+		ere.rules[i].ruleMapKey = ere.rules[i].Name
+		ere.ruleMap[ere.rules[i].Name] = &ere.rules[i]
+		ere.categories[ere.rules[i].Category] = append(
+			ere.categories[ere.rules[i].Category],
+			ere.rules[i].Name,
+		)
+	}
+
+	return nil
+}
+
+func (ere *EnhancedRuleEngine) AddRuleWithValidation(rule EnhancedRule) error {
+	if rule.Name == "" {
+		return fmt.Errorf("规则名称不能为空")
+	}
+
+	if _, exists := ere.ruleMap[rule.Name]; exists {
+		return fmt.Errorf("规则 '%s' 已存在", rule.Name)
+	}
+
+	if rule.Weight < 0 {
+		return fmt.Errorf("规则权重不能为负数")
+	}
+
+	if rule.Priority < 0 {
+		return fmt.Errorf("规则优先级不能为负数")
+	}
+
+	ere.AddRule(rule)
+	return nil
+}
+
+func (ere *EnhancedRuleEngine) UpdateRule(name string, updateFunc func(*EnhancedRule) error) error {
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	rule, exists := ere.ruleMap[name]
+	if !exists {
+		return fmt.Errorf("规则 '%s' 不存在", name)
+	}
+
+	if err := updateFunc(rule); err != nil {
+		return err
+	}
+
+	rule.ruleMapKey = rule.Name
+
+	for i, r := range ere.rules {
+		if r.Name == name {
+			ere.rules[i] = *rule
+			break
+		}
+	}
+
+	return nil
+}
+
+func (ere *EnhancedRuleEngine) ValidateRule(rule EnhancedRule) []string {
+	var errors []string
+
+	if rule.Name == "" {
+		errors = append(errors, "规则名称不能为空")
+	}
+
+	if rule.Category == "" {
+		errors = append(errors, "规则分类不能为空")
+	}
+
+	if rule.Weight < 0 {
+		errors = append(errors, "规则权重不能为负数")
+	}
+
+	if rule.Severity < 0 || rule.Severity > 1 {
+		errors = append(errors, "规则严重度必须在0-1之间")
+	}
+
+	if rule.Condition == nil {
+		errors = append(errors, "规则条件不能为空")
+	}
+
+	return errors
+}
+
+func (ere *EnhancedRuleEngine) GetRuleByName(name string) (*EnhancedRule, bool) {
+	ere.mu.RLock()
+	defer ere.mu.RUnlock()
+
+	rule, exists := ere.ruleMap[name]
+	if !exists {
+		return nil, false
+	}
+
+	return &EnhancedRule{
+		Name:          rule.Name,
+		Category:      rule.Category,
+		Description:   rule.Description,
+		Weight:        rule.Weight,
+		Priority:      rule.Priority,
+		Severity:      rule.Severity,
+		Enabled:       rule.Enabled,
+		LastTriggered: rule.LastTriggered,
+		TriggerCount:  rule.TriggerCount,
+	}, true
+}
+
+func (ere *EnhancedRuleEngine) EnableCategory(category string) {
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	if rules, ok := ere.categories[category]; ok {
+		for _, ruleName := range rules {
+			if rule, exists := ere.ruleMap[ruleName]; exists {
+				rule.Enabled = true
+			}
+		}
+	}
+}
+
+func (ere *EnhancedRuleEngine) DisableCategory(category string) {
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	if rules, ok := ere.categories[category]; ok {
+		for _, ruleName := range rules {
+			if rule, exists := ere.ruleMap[ruleName]; exists {
+				rule.Enabled = false
+			}
+		}
+	}
+}
+
+func (ere *EnhancedRuleEngine) GetEnabledRules() []EnhancedRule {
+	ere.mu.RLock()
+	defer ere.mu.RUnlock()
+
+	var enabledRules []EnhancedRule
+	for _, rule := range ere.rules {
+		if rule.Enabled {
+			enabledRules = append(enabledRules, rule)
+		}
+	}
+
+	return enabledRules
+}
+
+func (ere *EnhancedRuleEngine) GetRuleStats() map[string]interface{} {
+	ere.mu.RLock()
+	defer ere.mu.RUnlock()
+
+	stats := map[string]interface{}{
+		"total_rules":    len(ere.rules),
+		"enabled_rules":  0,
+		"disabled_rules": 0,
+		"categories":     make(map[string]int),
+		"top_triggered":  []map[string]interface{}{},
+	}
+
+	for _, rule := range ere.rules {
+		if rule.Enabled {
+			stats["enabled_rules"] = stats["enabled_rules"].(int) + 1
+		} else {
+			stats["disabled_rules"] = stats["disabled_rules"].(int) + 1
+		}
+		stats["categories"].(map[string]int)[rule.Category]++
+	}
+
+	type triggeredRule struct {
+		Name         string
+		TriggerCount int
+	}
+	var triggeredRules []triggeredRule
+	for _, rule := range ere.rules {
+		if rule.TriggerCount > 0 {
+			triggeredRules = append(triggeredRules, triggeredRule{
+				Name:         rule.Name,
+				TriggerCount: rule.TriggerCount,
+			})
+		}
+	}
+
+	sort.Slice(triggeredRules, func(i, j int) bool {
+		return triggeredRules[i].TriggerCount > triggeredRules[j].TriggerCount
+	})
+
+	var topTriggered []map[string]interface{}
+	minLen := 10
+	if len(triggeredRules) < minLen {
+		minLen = len(triggeredRules)
+	}
+	for i := 0; i < minLen; i++ {
+		topTriggered = append(topTriggered, map[string]interface{}{
+			"name":          triggeredRules[i].Name,
+			"trigger_count": triggeredRules[i].TriggerCount,
+		})
+	}
+	stats["top_triggered"] = topTriggered
+
+	return stats
+}
+
+func (ere *EnhancedRuleEngine) ResetTriggerCounts() {
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	for i := range ere.rules {
+		ere.rules[i].TriggerCount = 0
+		ere.rules[i].LastTriggered = time.Time{}
+	}
 }

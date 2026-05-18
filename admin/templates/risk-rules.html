@@ -7,6 +7,141 @@
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <style>
+        .rule-builder-container {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 16px;
+            background: #fafafa;
+        }
+        .rule-group {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 12px;
+            background: white;
+            margin-bottom: 8px;
+        }
+        .rule-group-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .rule-conditions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .rule-condition-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background: #f3f4f6;
+            border-radius: 4px;
+        }
+        .condition-logic-label {
+            min-width: 40px;
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .rule-expression {
+            display: block;
+            padding: 12px;
+            background: #1f2937;
+            color: #10b981;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+        .rule-hit-card {
+            padding: 16px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .rule-hit-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .rule-hit-card h5 {
+            font-size: 14px;
+            margin: 8px 0 4px;
+            color: #374151;
+        }
+        .hit-count {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .sandbox-textarea {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+        .sandbox-result {
+            min-height: 200px;
+            padding: 16px;
+            background: #1f2937;
+            border-radius: 6px;
+            color: #e5e7eb;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+        .sandbox-result pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .sandbox-result .result-success {
+            color: #10b981;
+        }
+        .sandbox-result .result-danger {
+            color: #ef4444;
+        }
+        .sandbox-result .result-warning {
+            color: #f59e0b;
+        }
+        .test-history-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            padding: 8px;
+            background: #f9fafb;
+        }
+        .test-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 12px;
+        }
+        .test-history-item:last-child {
+            border-bottom: none;
+        }
+        .nested-rule-groups {
+            margin-left: 20px;
+            border-left: 2px solid #d1d5db;
+            padding-left: 12px;
+        }
+        @media (max-width: 768px) {
+            .rule-condition-row {
+                flex-wrap: wrap;
+            }
+            .rule-condition-row > * {
+                flex: 1 1 45%;
+                margin-bottom: 4px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="bg-dark d-flex flex-column">
@@ -254,6 +389,251 @@
                                         <input class="form-check-input" type="checkbox" id="webglFingerprintDetectionEnabled" checked>
                                         <label class="form-check-label small" for="webglFingerprintDetectionEnabled">启用</label>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h6><i class="fas fa-project-diagram me-2" style="color:#6366f1;"></i>规则组合配置</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-lg-8">
+                            <div class="rule-builder-container" id="ruleBuilderContainer">
+                                <div class="rule-group" id="mainRuleGroup" data-logic="AND">
+                                    <div class="rule-group-header">
+                                        <div class="btn-group btn-group-sm me-2">
+                                            <button class="btn btn-outline-primary active" data-logic="AND" onclick="setGroupLogic('mainRuleGroup', 'AND')">AND</button>
+                                            <button class="btn btn-outline-primary" data-logic="OR" onclick="setGroupLogic('mainRuleGroup', 'OR')">OR</button>
+                                            <button class="btn btn-outline-primary" data-logic="NOT" onclick="setGroupLogic('mainRuleGroup', 'NOT')">NOT</button>
+                                        </div>
+                                        <span class="text-muted small">规则组合逻辑</span>
+                                        <button class="btn btn-sm btn-success ms-auto" onclick="addRuleCondition('mainRuleGroup')"><i class="fas fa-plus me-1"></i>添加条件</button>
+                                    </div>
+                                    <div class="rule-conditions" id="mainRuleConditions">
+                                        <div class="rule-condition-row" data-condition-id="cond1">
+                                            <div class="condition-logic-label">条件</div>
+                                            <select class="form-select form-select-sm condition-field">
+                                                <option value="speed">平均速度</option>
+                                                <option value="speed_variance">速度方差</option>
+                                                <option value="path_efficiency">路径效率</option>
+                                                <option value="smoothness">平滑度</option>
+                                                <option value="click_regularity">点击规律性</option>
+                                                <option value="hesitation_time">犹豫时间</option>
+                                                <option value="ml_score">ML分数</option>
+                                                <option value="anomaly_score">异常分数</option>
+                                            </select>
+                                            <select class="form-select form-select-sm condition-operator">
+                                                <option value="gt">></option>
+                                                <option value="gte">>=</option>
+                                                <option value="lt"><</option>
+                                                <option value="lte"><=</option>
+                                                <option value="eq">=</option>
+                                            </select>
+                                            <input type="number" class="form-control form-control-sm condition-value" placeholder="阈值" step="0.01">
+                                            <button class="btn btn-outline-danger btn-sm" onclick="removeCondition('cond1')"><i class="fas fa-times"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="nested-rule-groups mt-2" id="nestedGroups"></div>
+                                </div>
+                            </div>
+                            <div class="rule-preview mt-3">
+                                <h6 class="text-muted mb-2"><i class="fas fa-code me-1"></i>规则表达式预览</h6>
+                                <code class="rule-expression" id="ruleExpression">speed > 1000 AND path_efficiency > 0.95</code>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="card bg-light border">
+                                <div class="card-header"><h6><i class="fas fa-cube me-2"></i>预设规则模板</h6></div>
+                                <div class="card-body p-2">
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-secondary btn-sm text-start" onclick="applyTemplate('extreme_speed')">
+                                            <i class="fas fa-bolt me-2 text-danger"></i>极端速度检测
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm text-start" onclick="applyTemplate('bot_pattern')">
+                                            <i class="fas fa-robot me-2 text-warning"></i>机器人模式检测
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm text-start" onclick="applyTemplate('human_behavior')">
+                                            <i class="fas fa-user me-2 text-success"></i>类人行为验证
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm text-start" onclick="applyTemplate('combined_risk')">
+                                            <i class="fas fa-layer-group me-2 text-info"></i>组合风险评估
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h6><i class="fas fa-flask me-2" style="color:#10b981;"></i>规则测试沙盒</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-lg-6">
+                            <div class="sandbox-input">
+                                <label class="form-label small text-muted">输入测试数据 (JSON格式)</label>
+                                <textarea class="form-control sandbox-textarea" id="sandboxInput" rows="8" placeholder='{
+  "average_speed": 1500,
+  "path_efficiency": 0.98,
+  "click_regularity": 0.99,
+  "hesitation_time": 30,
+  "ml_score": 0.85
+}'></textarea>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button class="btn btn-success btn-sm" onclick="runSandboxTest()"><i class="fas fa-play me-1"></i>运行测试</button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="loadSampleData('bot')"><i class="fas fa-robot me-1"></i>机器人样本</button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="loadSampleData('human')"><i class="fas fa-user me-1"></i>人类样本</button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="clearSandbox()"><i class="fas fa-trash me-1"></i>清空</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="sandbox-output">
+                                <label class="form-label small text-muted">测试结果</label>
+                                <div class="sandbox-result" id="sandboxResult">
+                                    <div class="text-muted text-center py-4">
+                                        <i class="fas fa-arrow-left me-2"></i>输入数据后点击"运行测试"
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="rule-test-history">
+                                <label class="form-label small text-muted">测试历史</label>
+                                <div class="test-history-list" id="testHistoryList">
+                                    <div class="text-muted small text-center py-2">暂无测试记录</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6><i class="fas fa-history me-2" style="color:#f59e0b;"></i>规则版本管理</h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="showVersionHistory()"><i class="fas fa-sync me-1"></i>刷新历史</button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>版本号</th>
+                                    <th>变更类型</th>
+                                    <th>变更描述</th>
+                                    <th>操作人</th>
+                                    <th>变更时间</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="versionHistoryBody">
+                                <tr>
+                                    <td><code>v2.1.3</code></td>
+                                    <td><span class="badge bg-info">修改</span></td>
+                                    <td>调整速度阈值参数</td>
+                                    <td>admin</td>
+                                    <td>2026-05-18 10:30</td>
+                                    <td><span class="badge bg-success">当前</span></td>
+                                    <td><button class="btn btn-sm btn-outline-secondary" onclick="compareVersion('v2.1.3')"><i class="fas fa-code-compare"></i></button></td>
+                                </tr>
+                                <tr>
+                                    <td><code>v2.1.2</code></td>
+                                    <td><span class="badge bg-warning">优化</span></td>
+                                    <td>增加组合规则条件</td>
+                                    <td>admin</td>
+                                    <td>2026-05-17 15:20</td>
+                                    <td><span class="badge bg-secondary">历史</span></td>
+                                    <td><button class="btn btn-sm btn-outline-secondary" onclick="compareVersion('v2.1.2')"><i class="fas fa-code-compare"></i></button> <button class="btn btn-sm btn-outline-success" onclick="rollbackVersion('v2.1.2')"><i class="fas fa-undo"></i></button></td>
+                                </tr>
+                                <tr>
+                                    <td><code>v2.1.1</code></td>
+                                    <td><span class="badge bg-primary">新增</span></td>
+                                    <td>新增ML评分规则</td>
+                                    <td>admin</td>
+                                    <td>2026-05-16 09:15</td>
+                                    <td><span class="badge bg-secondary">历史</span></td>
+                                    <td><button class="btn btn-sm btn-outline-secondary" onclick="compareVersion('v2.1.1')"><i class="fas fa-code-compare"></i></button> <button class="btn btn-sm btn-outline-success" onclick="rollbackVersion('v2.1.1')"><i class="fas fa-undo"></i></button></td>
+                                </tr>
+                                <tr>
+                                    <td><code>v2.1.0</code></td>
+                                    <td><span class="badge bg-danger">回滚</span></td>
+                                    <td>回滚到v2.0.9</td>
+                                    <td>admin</td>
+                                    <td>2026-05-15 14:00</td>
+                                    <td><span class="badge bg-secondary">历史</span></td>
+                                    <td><button class="btn btn-sm btn-outline-secondary" onclick="compareVersion('v2.1.0')"><i class="fas fa-code-compare"></i></button> <button class="btn btn-sm btn-outline-success" onclick="rollbackVersion('v2.1.0')"><i class="fas fa-undo"></i></button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h6><i class="fas fa-chart-pie me-2" style="color:#ec4899;"></i>规则命中统计</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="rule-hit-card" data-rule="extreme_speed">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-danger">速度</span>
+                                    <span class="text-muted small">严重度: 高</span>
+                                </div>
+                                <h5>extreme_speed</h5>
+                                <div class="hit-count text-danger">1,234 <small>次</small></div>
+                                <div class="progress mt-2" style="height:4px;">
+                                    <div class="progress-bar bg-danger" style="width:85%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="rule-hit-card" data-rule="perfect_path">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-warning">轨迹</span>
+                                    <span class="text-muted small">严重度: 高</span>
+                                </div>
+                                <h5>perfect_path</h5>
+                                <div class="hit-count text-warning">892 <small>次</small></div>
+                                <div class="progress mt-2" style="height:4px;">
+                                    <div class="progress-bar bg-warning" style="width:62%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="rule-hit-card" data-rule="high_ml_score">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-info">ML</span>
+                                    <span class="text-muted small">严重度: 高</span>
+                                </div>
+                                <h5>high_ml_score</h5>
+                                <div class="hit-count text-info">567 <small>次</small></div>
+                                <div class="progress mt-2" style="height:4px;">
+                                    <div class="progress-bar bg-info" style="width:39%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="rule-hit-card" data-rule="combined_risk">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-primary">组合</span>
+                                    <span class="text-muted small">严重度: 高</span>
+                                </div>
+                                <h5>combined_risk</h5>
+                                <div class="hit-count text-primary">234 <small>次</small></div>
+                                <div class="progress mt-2" style="height:4px;">
+                                    <div class="progress-bar bg-primary" style="width:16%"></div>
                                 </div>
                             </div>
                         </div>

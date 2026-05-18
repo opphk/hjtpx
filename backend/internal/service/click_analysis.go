@@ -30,16 +30,41 @@ type TargetImage struct {
 }
 
 type ClickAnalysisResult struct {
-	ClickPattern      *ClickPatternAnalysis `json:"click_pattern"`
-	TimingAnalysis    *TimingAnalysis       `json:"timing_analysis"`
-	AccuracyAnalysis  *AccuracyAnalysis     `json:"accuracy_analysis"`
-	AnomalyScore      float64               `json:"anomaly_score"`
-	MLScore           float64               `json:"ml_score"`
-	OverallRiskScore  float64               `json:"overall_risk_score"`
-	IsBot             bool                  `json:"is_bot"`
-	Confidence        float64               `json:"confidence"`
-	RiskIndicators    []string              `json:"risk_indicators"`
-	AnomalyDetections []string              `json:"anomaly_detections"`
+	ClickPattern       *ClickPatternAnalysis `json:"click_pattern"`
+	TimingAnalysis     *TimingAnalysis       `json:"timing_analysis"`
+	AccuracyAnalysis   *AccuracyAnalysis     `json:"accuracy_analysis"`
+	MultiTargetAnalysis *MultiTargetAnalysis `json:"multi_target_analysis"`
+	FaultTolerance     *FaultToleranceResult `json:"fault_tolerance"`
+	AnomalyScore       float64              `json:"anomaly_score"`
+	MLScore            float64              `json:"ml_score"`
+	OverallRiskScore   float64              `json:"overall_risk_score"`
+	IsBot              bool                 `json:"is_bot"`
+	Confidence         float64              `json:"confidence"`
+	RiskIndicators     []string             `json:"risk_indicators"`
+	AnomalyDetections  []string             `json:"anomaly_detections"`
+}
+
+type MultiTargetAnalysis struct {
+	TargetCount           int      `json:"target_count"`
+	ClickCount            int      `json:"click_count"`
+	CorrectTargetSequence []int    `json:"correct_target_sequence"`
+	MissedTargets         []int    `json:"missed_targets"`
+	ExtraClicks           int      `json:"extra_clicks"`
+	SequenceAccuracy      float64  `json:"sequence_accuracy"`
+	TargetHitRate         float64  `json:"target_hit_rate"`
+	ClickOrderCorrect     bool     `json:"click_order_correct"`
+	ErrorPatterns         []string `json:"error_patterns"`
+}
+
+type FaultToleranceResult struct {
+	Enabled           bool     `json:"enabled"`
+	ToleranceRadius   float64  `json:"tolerance_radius"`
+	NearMissClicks    int      `json:"near_miss_clicks"`
+	NearMissTolerance float64  `json:"near_miss_tolerance"`
+	AcceptedAsValid   bool     `json:"accepted_as_valid"`
+	FallThroughCount  int      `json:"fall_through_count"`
+	PartialMatchCount int      `json:"partial_match_count"`
+	MissDetails       []string `json:"miss_details"`
 }
 
 type ClickPatternAnalysis struct {
@@ -121,9 +146,11 @@ func (ca *ClickAnalyzer) AnalyzeClickVerification(verification *ClickVerificatio
 	}
 
 	result := &ClickAnalysisResult{
-		ClickPattern:      ca.analyzeClickPattern(verification),
-		TimingAnalysis:    ca.analyzeTiming(verification),
-		AccuracyAnalysis:  ca.analyzeAccuracy(verification),
+		ClickPattern:       ca.analyzeClickPattern(verification),
+		TimingAnalysis:     ca.analyzeTiming(verification),
+		AccuracyAnalysis:   ca.analyzeAccuracy(verification),
+		MultiTargetAnalysis: ca.analyzeMultiTarget(verification),
+		FaultTolerance:     ca.analyzeFaultTolerance(verification),
 		RiskIndicators:    make([]string, 0),
 		AnomalyDetections: make([]string, 0),
 	}
@@ -481,6 +508,129 @@ func (ca *ClickAnalyzer) analyzeAccuracy(verification *ClickVerification) *Accur
 	accuracy.Precision = math.Min(precision, 1.0)
 
 	return accuracy
+}
+
+func (ca *ClickAnalyzer) analyzeMultiTarget(verification *ClickVerification) *MultiTargetAnalysis {
+	analysis := &MultiTargetAnalysis{}
+
+	if len(verification.Clicks) == 0 || len(verification.TargetImages) == 0 {
+		return analysis
+	}
+
+	analysis.TargetCount = len(verification.TargetImages)
+	analysis.ClickCount = len(verification.Clicks)
+
+	hitTargets := make([]bool, len(verification.TargetImages))
+	correctSequence := make([]int, 0)
+	missedTargets := make([]int, 0)
+	errorPatterns := make([]string, 0)
+
+	for _, click := range verification.Clicks {
+		bestMatch := -1
+		bestDistance := math.MaxFloat64
+
+		for tIdx, target := range verification.TargetImages {
+			if hitTargets[tIdx] {
+				continue
+			}
+
+			targetCenterX := float64(target.X) + float64(target.Width)/2
+			targetCenterY := float64(target.Y) + float64(target.Height)/2
+			dx := float64(click.X) - targetCenterX
+			dy := float64(click.Y) - targetCenterY
+			distance := math.Sqrt(dx*dx + dy*dy)
+
+			hitRadius := float64(target.Width+target.Height) / 4
+
+			if distance <= hitRadius && distance < bestDistance {
+				bestMatch = tIdx
+				bestDistance = distance
+			}
+		}
+
+		if bestMatch >= 0 {
+			hitTargets[bestMatch] = true
+			correctSequence = append(correctSequence, bestMatch)
+		} else {
+			errorPatterns = append(errorPatterns, fmt.Sprintf("点击(%d,%d)未命中任何目标", click.X, click.Y))
+		}
+	}
+
+	for tIdx, hit := range hitTargets {
+		if !hit {
+			missedTargets = append(missedTargets, tIdx)
+		}
+	}
+
+	analysis.CorrectTargetSequence = correctSequence
+	analysis.MissedTargets = missedTargets
+	analysis.ExtraClicks = len(verification.Clicks) - len(correctSequence)
+
+	if analysis.TargetCount > 0 {
+		analysis.TargetHitRate = float64(len(correctSequence)) / float64(analysis.TargetCount)
+	}
+
+	if len(verification.Clicks) > 0 {
+		analysis.SequenceAccuracy = float64(len(correctSequence)) / float64(len(verification.Clicks))
+	}
+
+	analysis.ClickOrderCorrect = len(errorPatterns) == 0 && len(missedTargets) == 0
+	analysis.ErrorPatterns = errorPatterns
+
+	return analysis
+}
+
+func (ca *ClickAnalyzer) analyzeFaultTolerance(verification *ClickVerification) *FaultToleranceResult {
+	result := &FaultToleranceResult{
+		Enabled:           true,
+		ToleranceRadius:   25.0,
+		NearMissTolerance: 35.0,
+		MissDetails:       make([]string, 0),
+	}
+
+	if len(verification.Clicks) == 0 || len(verification.TargetImages) == 0 {
+		result.Enabled = false
+		return result
+	}
+
+	nearMissCount := 0
+	partialMatchCount := 0
+
+	for _, click := range verification.Clicks {
+		_ = -1
+		bestDistance := math.MaxFloat64
+
+		for tIdx, target := range verification.TargetImages {
+			targetCenterX := float64(target.X) + float64(target.Width)/2
+			targetCenterY := float64(target.Y) + float64(target.Height)/2
+			dx := float64(click.X) - targetCenterX
+			dy := float64(click.Y) - targetCenterY
+			distance := math.Sqrt(dx*dx + dy*dy)
+
+			if distance < bestDistance {
+				bestDistance = distance
+				_ = tIdx
+			}
+		}
+
+		if bestDistance <= result.NearMissTolerance && bestDistance > result.ToleranceRadius {
+			nearMissCount++
+			result.MissDetails = append(result.MissDetails,
+				fmt.Sprintf("点击(%d,%d)偏离目标%.1f像素", click.X, click.Y, bestDistance))
+		} else if bestDistance > result.NearMissTolerance {
+			partialMatchCount++
+			result.MissDetails = append(result.MissDetails,
+				fmt.Sprintf("点击(%d,%d)完全偏离所有目标，最近距离%.1f像素", click.X, click.Y, bestDistance))
+		}
+	}
+
+	result.NearMissClicks = nearMissCount
+	result.PartialMatchCount = partialMatchCount
+	result.FallThroughCount = partialMatchCount
+
+	result.AcceptedAsValid = nearMissCount <= 1 && partialMatchCount == 0
+
+	return result
 }
 
 func (cm *ClickMLModel) Predict(result *ClickAnalysisResult) float64 {

@@ -1083,6 +1083,176 @@ func (ec *EnhancedCache) AcquireLock(ctx context.Context, key string, ttl time.D
 	return false, ErrLockTimeout
 }
 
+type MultiLevelCacheConfig struct {
+	L1MaxMemory      int64
+	L1MaxItems       int
+	L1EvictionPolicy string
+	L2MaxMemory      int64
+	L2EvictionPolicy string
+	EnableTiered     bool
+	TierThreshold    int64
+	PromoteOnHit     bool
+	DemoteOnMiss     bool
+}
+
+var DefaultMultiLevelConfig = &MultiLevelCacheConfig{
+	L1MaxMemory:      100 * 1024 * 1024,
+	L1MaxItems:       10000,
+	L1EvictionPolicy: "lru",
+	L2MaxMemory:      1024 * 1024 * 1024,
+	L2EvictionPolicy: "lru",
+	EnableTiered:     true,
+	TierThreshold:    100,
+	PromoteOnHit:     true,
+	DemoteOnMiss:     false,
+}
+
+type TieredCache struct {
+	config   *MultiLevelCacheConfig
+	l1Cache  *EnhancedCache
+	l2Cache  *EnhancedCache
+	l1Stats  *TierStats
+	l2Stats  *TierStats
+	mu       sync.RWMutex
+}
+
+type TierStats struct {
+	Hits              atomic.Int64
+	Misses            atomic.Int64
+	Promotions        atomic.Int64
+	Demotions         atomic.Int64
+	CurrentMemory     atomic.Int64
+	CurrentItems      atomic.Int64
+	Evictions         atomic.Int64
+	LastPromotionTime atomic.Value
+	LastDemotionTime  atomic.Value
+}
+
+func NewTieredCache(config *MultiLevelCacheConfig) *TieredCache {
+	if config == nil {
+		config = DefaultMultiLevelConfig
+	}
+
+	return &TieredCache{
+		config:  config,
+		l1Cache: NewEnhancedCache(&CacheConfig{L1Enabled: true, L2Enabled: false}),
+		l2Cache: NewEnhancedCache(&CacheConfig{L1Enabled: false, L2Enabled: true}),
+		l1Stats: &TierStats{},
+		l2Stats: &TierStats{},
+	}
+}
+
+func (tc *TieredCache) Get(ctx context.Context, key string) ([]byte, error) {
+	if val, err := tc.l1Cache.Get(ctx, key, nil); err == nil {
+		tc.l1Stats.Hits.Add(1)
+		if tc.config.PromoteOnHit && tc.config.EnableTiered {
+			tc.promoteToL1(ctx, key, val)
+		}
+		return val, nil
+	}
+
+	tc.l1Stats.Misses.Add(1)
+
+	if val, err := tc.l2Cache.Get(ctx, key, nil); err == nil {
+		tc.l2Stats.Hits.Add(1)
+		if tc.config.EnableTiered {
+			tc.promoteToL1(ctx, key, val)
+		}
+		return val, nil
+	}
+
+	tc.l2Stats.Misses.Add(1)
+	return nil, ErrCacheMiss
+}
+
+func (tc *TieredCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	if err := tc.l1Cache.Set(ctx, key, value, &SetOptions{TTL: ttl, Level: CacheLevelL1}); err != nil {
+		return err
+	}
+
+	tc.l1Stats.CurrentMemory.Add(int64(len(value)))
+	tc.l1Stats.CurrentItems.Add(1)
+
+	if tc.config.EnableTiered {
+		if err := tc.l2Cache.Set(ctx, key, value, &SetOptions{TTL: ttl, Level: CacheLevelL2}); err != nil {
+			return err
+		}
+		tc.l2Stats.CurrentMemory.Add(int64(len(value)))
+	}
+
+	if tc.l1Stats.CurrentItems.Load() > int64(tc.config.L1MaxItems) {
+		tc.evictFromL1()
+	}
+
+	return nil
+}
+
+func (tc *TieredCache) Delete(ctx context.Context, key string) error {
+	tc.l1Cache.Delete(ctx, key, &DeleteOptions{Level: CacheLevelL1})
+	tc.l2Cache.Delete(ctx, key, &DeleteOptions{Level: CacheLevelL2})
+	return nil
+}
+
+func (tc *TieredCache) promoteToL1(ctx context.Context, key string, value []byte) {
+	tc.l1Stats.Promotions.Add(1)
+	tc.l1Stats.LastPromotionTime.Store(time.Now())
+
+	if tc.l1Stats.CurrentItems.Load() >= int64(tc.config.L1MaxItems) {
+		tc.evictFromL1()
+	}
+
+	tc.l1Cache.Set(ctx, key, value, &SetOptions{Level: CacheLevelL1})
+	tc.l1Stats.CurrentItems.Add(1)
+	tc.l1Stats.CurrentMemory.Add(int64(len(value)))
+}
+
+func (tc *TieredCache) evictFromL1() {
+	tc.l1Stats.Evictions.Add(1)
+}
+
+func (tc *TieredCache) GetStats() map[string]interface{} {
+	return map[string]interface{}{
+		"l1_hits":        tc.l1Stats.Hits.Load(),
+		"l1_misses":      tc.l1Stats.Misses.Load(),
+		"l1_promotions":  tc.l1Stats.Promotions.Load(),
+		"l1_items":       tc.l1Stats.CurrentItems.Load(),
+		"l1_memory":       tc.l1Stats.CurrentMemory.Load(),
+		"l2_hits":        tc.l2Stats.Hits.Load(),
+		"l2_misses":      tc.l2Stats.Misses.Load(),
+		"l2_demotions":   tc.l2Stats.Demotions.Load(),
+		"l2_items":       tc.l2Stats.CurrentItems.Load(),
+		"l2_memory":      tc.l2Stats.CurrentMemory.Load(),
+		"l1_hit_rate":    tc.calculateHitRate(tc.l1Stats),
+		"l2_hit_rate":    tc.calculateHitRate(tc.l2Stats),
+	}
+}
+
+func (tc *TieredCache) calculateHitRate(stats *TierStats) float64 {
+	hits := stats.Hits.Load()
+	misses := stats.Misses.Load()
+	total := hits + misses
+	if total == 0 {
+		return 0
+	}
+	return float64(hits) / float64(total) * 100
+}
+
+var globalTieredCache *TieredCache
+var globalTieredCacheOnce sync.Once
+
+func InitTieredCache(config *MultiLevelCacheConfig) {
+	globalTieredCacheOnce.Do(func() {
+		globalTieredCache = NewTieredCache(config)
+	})
+}
+
+func GetTieredCache() *TieredCache {
+	if globalTieredCache == nil {
+		InitTieredCache(nil)
+	}
+	return globalTieredCache
+}
+
 var globalEnhancedCache *EnhancedCache
 var globalEnhancedCacheOnce sync.Once
 

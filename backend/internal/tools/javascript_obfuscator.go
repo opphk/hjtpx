@@ -3,9 +3,11 @@ package tools
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/rc4"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -48,34 +50,38 @@ type ObfuscatorConfig struct {
 	EnablePolynomialObfuscation  bool
 	EnableArrayShuffle           bool
 	EnableExceptionHandling      bool
+	EnableDynamicLoading        bool
+	EnableAdvancedIntegrity     bool
 }
 
 var defaultObfuscatorConfig = ObfuscatorConfig{
-	EnableVariableObfuscation:   true,
+	EnableVariableObfuscation:    true,
 	EnableStringEncryption:      true,
 	EnableCodeCompression:       true,
 	EnableControlFlowFlattening: true,
 	EnableDeadCodeInjection:     false,
 	EnableFunctionWrapping:      true,
-	StringEncryptionKey:         []byte("hjtpx-obfuscate-key-2024"),
+	StringEncryptionKey:        []byte("hjtpx-obfuscate-key-2024"),
 	CompressWhitespace:          true,
-	RemoveComments:              true,
-	PreserveConsole:             true,
+	RemoveComments:             true,
+	PreserveConsole:            true,
 	EnableAdvancedAntiDebug:     true,
-	EnableSelfDestruct:          false,
-	EnableMemoryProtection:      true,
-	EnableCodeVirtualization:    false,
-	StringEncryptionMethod:      "aes-gcm",
-	EnableNameMangling:          true,
-	EnableScopeTracking:         false,
+	EnableSelfDestruct:         false,
+	EnableMemoryProtection:     true,
+	EnableCodeVirtualization:   false,
+	StringEncryptionMethod:     "aes-gcm",
+	EnableNameMangling:         true,
+	EnableScopeTracking:        false,
 	EnableCodeIntegrity:        true,
 	EnableDynamicAnalysis:      true,
-	EnableTimingProtection:      true,
-	EnableHeapSprayProtection:   false,
-	EnablePolymorphicBlocks:     false,
+	EnableTimingProtection:     true,
+	EnableHeapSprayProtection:  false,
+	EnablePolymorphicBlocks:    false,
 	EnablePolynomialObfuscation: false,
-	EnableArrayShuffle:          false,
-	EnableExceptionHandling:      true,
+	EnableArrayShuffle:         false,
+	EnableExceptionHandling:     true,
+	EnableDynamicLoading:       false,
+	EnableAdvancedIntegrity:    false,
 }
 
 type Obfuscator struct {
@@ -1961,7 +1967,7 @@ func (o *Obfuscator) addIntegrityCheck(code string) string {
 		var _0xH=document.body.innerHTML;
 		if(_0xH.indexOf('__inspect')>-1||_0xH.indexOf('debugger')>-1){
 			document.documentElement.style.display='none';
-			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>完整性检查失败</h1></div>';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>完整性检查失败</h1></div>';
 			clearInterval(_0xCK);
 		}
 	},5000);
@@ -2192,7 +2198,7 @@ func InjectCodeIntegrityVerifier(code string, secret string) string {
 			if(window.__h&&window.__h!==_0xS){
 				clearInterval(_0xCK);
 				document.documentElement.style.display='none';
-				document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1 style="margin:0 0 10px 0;">访问受限</h1><p style="margin:0;">代码完整性验证失败</p></div></div>';
+				document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1 style="margin:0 0 10px 0;">访问受限</h1><p style="margin:0;">代码完整性验证失败</p></div></div>';
 			}
 		}catch(e){}
 	},10000);
@@ -2763,4 +2769,921 @@ func GeneratePolymorphicCodeBlocks() string {
 })();
 `
 }
+
+func GenerateFileHash(code string, method string) (string, error) {
+	switch method {
+	case "sha256":
+		hash := sha256.Sum256([]byte(code))
+		return hex.EncodeToString(hash[:]), nil
+	case "sha384":
+		h := sha512.New384()
+		h.Write([]byte(code))
+		return hex.EncodeToString(h.Sum(nil)), nil
+	case "sha512":
+		h := sha512.New()
+		h.Write([]byte(code))
+		return hex.EncodeToString(h.Sum(nil)), nil
+	case "md5":
+		return GenerateMD5Hash(code), nil
+	default:
+		hash := sha256.Sum256([]byte(code))
+		return hex.EncodeToString(hash[:]), nil
+	}
+}
+
+func GenerateMD5Hash(code string) string {
+	h := md5.New()
+	h.Write([]byte(code))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+type IntegrityHash struct {
+	SHA256    string
+	SHA384    string
+	SHA512    string
+	MD5       string
+	Timestamp time.Time
+}
+
+func GenerateIntegrityHashes(code string) (*IntegrityHash, error) {
+	sha256Hash, err := GenerateFileHash(code, "sha256")
+	if err != nil {
+		return nil, err
+	}
+
+	sha384Hash, err := GenerateFileHash(code, "sha384")
+	if err != nil {
+		return nil, err
+	}
+
+	sha512Hash, err := GenerateFileHash(code, "sha512")
+	if err != nil {
+		return nil, err
+	}
+
+	md5Hash := GenerateMD5Hash(code)
+
+	return &IntegrityHash{
+		SHA256:    sha256Hash,
+		SHA384:    sha384Hash,
+		SHA512:    sha512Hash,
+		MD5:       md5Hash,
+		Timestamp: time.Now(),
+	}, nil
+}
+
+func GenerateCodeIntegrityVerifier(code string, secret string) string {
+	hash := sha256.Sum256([]byte(code + secret))
+	hashStr := hex.EncodeToString(hash[:])
+
+	verifier := fmt.Sprintf(`
+;(function(){
+	var _0xIH={
+		hash:'%s',
+		secret:'%s',
+		verifyInterval:30000,
+		verificationCount:0,
+		maxVerifications:100,
+		timer:null,
+		startTime:Date.now(),
+		hashAlgorithm:'sha256',
+		generateHash:function(data){
+			var hash=0;
+			if(data.length===0)return hash;
+			for(var i=0;i<data.length;i++){
+				var char=data.charCodeAt(i);
+				hash=((hash<<5)-hash)+char;
+				hash=hash&hash;
+			}
+			return Math.abs(hash).toString(16);
+		},
+		verify:function(){
+			if(this.verificationCount>=this.maxVerifications){
+				this.stop();
+				return true;
+			}
+			var currentHash=this.generateHash(document.body.innerHTML);
+			if(currentHash!==this.hash){
+				this.handleIntegrityFailure();
+				return false;
+			}
+			this.verificationCount++;
+			return true;
+		},
+		handleIntegrityFailure:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1 style="margin:0 0 10px 0;">完整性校验失败</h1><p style="margin:0;">代码已被篡改</p></div></div>';
+			throw new Error('Integrity verification failed');
+		},
+		start:function(){
+			var self=this;
+			this.timer=setInterval(function(){
+				self.verify();
+			},this.verifyInterval);
+			window.addEventListener('beforeunload',function(){
+				self.stop();
+			});
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xIH.start();
+	window.__IntegrityHash=_0xIH;
+})();
+`, hashStr, secret)
+
+	return verifier
+}
+
+func GenerateFileHashReport(code string, config ObfuscatorConfig) map[string]interface{} {
+	hashes := make(map[string]string)
+
+	sha256Hash := sha256.Sum256([]byte(code))
+	hashes["sha256"] = hex.EncodeToString(sha256Hash[:])
+
+	h384 := sha512.New384()
+	h384.Write([]byte(code))
+	hashes["sha384"] = hex.EncodeToString(h384.Sum(nil))
+
+	h512 := sha512.New()
+	h512.Write([]byte(code))
+	hashes["sha512"] = hex.EncodeToString(h512.Sum(nil))
+
+	hashes["md5"] = GenerateMD5Hash(code)
+
+	hashes["crc32"] = fmt.Sprintf("%08x", crc32Checksum(code))
+
+	hashes["custom"] = GenerateCustomHash(code, string(config.StringEncryptionKey))
+
+	return map[string]interface{}{
+		"hashes":           hashes,
+		"timestamp":        time.Now().Format(time.RFC3339),
+		"code_length":      len(code),
+		"entropy":          CalculateObfuscationEntropy(code),
+		"hash_algorithm":   "multi-algorithm",
+		"verification_tag": generateVerificationTag(code),
+	}
+}
+
+func crc32Checksum(data string) uint32 {
+	var crc uint32 = 0xFFFFFFFF
+	for _, c := range data {
+		crc ^= uint32(c)
+		for i := 0; i < 8; i++ {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ 0xEDB88320
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+	return ^crc
+}
+
+func GenerateCustomHash(code string, key string) string {
+	h := sha256.New()
+	h.Write([]byte(code))
+	h.Write([]byte(key))
+
+	var result []byte
+	hash := h.Sum(nil)
+
+	for i := 0; i < len(hash); i += 2 {
+		result = append(result, hash[i]^hash[i+1])
+	}
+
+	return hex.EncodeToString(result)
+}
+
+func generateVerificationTag(code string) string {
+	lines := strings.Split(code, "\n")
+	lineCount := len(lines)
+
+	charSum := 0
+	for _, c := range code {
+		charSum += int(c)
+	}
+
+	tag := fmt.Sprintf("VT-%d-%d-%d", lineCount, len(code), charSum%65536)
+	return tag
+}
+
+type DynamicCodeLoader struct {
+	modules    map[string]string
+	cache      map[string]string
+	loadedList []string
+	mu         sync.RWMutex
+}
+
+func NewDynamicCodeLoader() *DynamicCodeLoader {
+	return &DynamicCodeLoader{
+		modules:    make(map[string]string),
+		cache:      make(map[string]string),
+		loadedList: make([]string, 0),
+	}
+}
+
+func (d *DynamicCodeLoader) RegisterModule(name string, code string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.modules[name] = code
+}
+
+func (d *DynamicCodeLoader) GenerateDynamicLoaderCode() string {
+	loader := `
+;(function(){
+	var _0xDCL={
+		modules:{},
+		cache:{},
+		loadingOrder:[],
+		loadCount:0,
+		maxCacheSize:50,
+		registerModule:function(name,code){
+			this.modules[name]=code;
+		},
+		loadModule:function(name,callback){
+			if(this.cache[name]){
+				if(callback)callback(this.cache[name]);
+				return this.cache[name];
+			}
+			var code=this.modules[name];
+			if(!code){
+				console.error('Module not found: '+name);
+				return null;
+			}
+			this.loadingOrder.push(name);
+			this.loadCount++;
+			var self=this;
+			try{
+				if(typeof callback==='function'){
+					callback(code);
+				}
+				this.cacheModule(name,code);
+				this.cleanCache();
+				return code;
+			}catch(e){
+				console.error('Failed to load module: '+name,e);
+				return null;
+			}
+		},
+		cacheModule:function(name,code){
+			if(Object.keys(this.cache).length>=this.maxCacheSize){
+				var oldest=this.loadingOrder.shift();
+				delete this.cache[oldest];
+			}
+			this.cache[name]=code;
+		},
+		cleanCache:function(){
+			if(Object.keys(this.cache).length>this.maxCacheSize){
+				var toRemove=Object.keys(this.cache).length-this.maxCacheSize;
+				for(var i=0;i<toRemove;i++){
+					var oldest=this.loadingOrder.shift();
+					delete this.cache[oldest];
+				}
+			}
+		},
+		evalModule:function(name){
+			var code=this.loadModule(name);
+			if(code){
+				try{
+					return eval(code);
+				}catch(e){
+					console.error('Failed to eval module: '+name,e);
+				}
+			}
+			return null;
+		},
+		isLoaded:function(name){
+			return this.cache.hasOwnProperty(name);
+		},
+		preload:function(names,callback){
+			var loaded=0;
+			var total=names.length;
+			var self=this;
+			names.forEach(function(name){
+				self.loadModule(name,function(){
+					loaded++;
+					if(loaded===total&&callback){
+						callback();
+					}
+				});
+			});
+		},
+		unload:function(name){
+			delete this.cache[name];
+			var idx=this.loadingOrder.indexOf(name);
+			if(idx>-1){
+				this.loadingOrder.splice(idx,1);
+			}
+		},
+		clear:function(){
+			this.cache={};
+			this.loadingOrder=[];
+			this.loadCount=0;
+		}
+	};
+	window.__DCL=_0xDCL;
+	if(typeof module !=='undefined'&&module.exports){
+		module.exports=_0xDCL;
+	}
+})();
+`
+	return loader
+}
+
+func (d *DynamicCodeLoader) GenerateLoaderWithModules(modules map[string]string) (string, error) {
+	var buf strings.Builder
+
+	buf.WriteString(d.GenerateDynamicLoaderCode())
+
+	buf.WriteString("\n;(function(){\n")
+	buf.WriteString("var _0xDCL=window.__DCL;\n")
+
+	for name, code := range modules {
+		encoded := base64.StdEncoding.EncodeToString([]byte(code))
+		buf.WriteString(fmt.Sprintf("_0xDCL.registerModule('%s',atob('%s'));\n", name, encoded))
+	}
+
+	buf.WriteString("})();\n")
+
+	return buf.String(), nil
+}
+
+func GenerateModuleLoader(modules map[string]string, config ObfuscatorConfig) (string, error) {
+	loader := NewDynamicCodeLoader()
+
+	for name, code := range modules {
+		if config.EnableStringEncryption {
+			encrypted, err := EncryptString(code, config.StringEncryptionKey)
+			if err != nil {
+				return "", err
+			}
+			loader.RegisterModule(name, encrypted)
+		} else {
+			loader.RegisterModule(name, code)
+		}
+	}
+
+	loaderCode := loader.GenerateDynamicLoaderCode()
+	return loaderCode, nil
+}
+
+func GenerateEnhancedAntiDebug() string {
+	antiDebug := `
+;(function(){
+	var _0xEAD={
+		version:'3.0',
+		startTime:Date.now(),
+		debugDetections:0,
+		maxDetections:3,
+		isBlocked:false,
+		checks:[],
+		registerCheck:function(name,checkFn){
+			this.checks.push({name:name,fn:checkFn});
+		},
+		detectDevTools:function(){
+			var detections=[];
+			var threshold=160;
+			if(window.outerWidth-window.innerWidth>threshold||window.outerHeight-window.innerHeight>threshold){
+				detections.push('window_size');
+			}
+			var start=performance.now();
+			debugger;
+			var end=performance.now();
+			if(end-start>100){
+				detections.push('debugger');
+			}
+			if(typeof window.webkitDebuggerAPI!=='undefined'){
+				detections.push('webkit');
+			}
+			if(window.firebug){
+				detections.push('firebug');
+			}
+			if(typeof console._commandLineAPI!=='undefined'){
+				detections.push('console_api');
+			}
+			var test=function(){};
+			test.toString=function(){
+				if(window.devtools&&window.devtools.isOpen){
+					detections.push('devtools_open');
+				}
+			};
+			console.log(test);
+			var resultDiv=document.createElement('div');
+			resultDiv.id='_0xEAD_test';
+			resultDiv.style.height='0';
+			resultDiv.style.width='0';
+			resultDiv.style.overflow='hidden';
+			document.body.appendChild(resultDiv);
+			setTimeout(function(){
+				var el=document.getElementById('_0xEAD_test');
+				if(el){
+					var width=el.offsetWidth;
+					var height=el.offsetHeight;
+					if(width>0||height>0){
+						detections.push('element_size');
+					}
+					el.parentNode.removeChild(el);
+				}
+			},100);
+			var errorThrown=false;
+			try{
+				Function('debugger');
+			}catch(e){
+				errorThrown=true;
+			}
+			if(!errorThrown){
+				detections.push('function_debugger');
+			}
+			return detections;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.isBlocked)return;
+				var detections=self.detectDevTools();
+				if(detections.length>0){
+					self.debugDetections++;
+					if(self.debugDetections>=self.maxDetections){
+						self.block();
+					}
+				}
+			},2000);
+			document.addEventListener('keydown',function(e){
+				if(e.key==='F12'||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='I')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='J')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='C')||
+				   (e.ctrlKey&&e.key==='u')){
+					e.preventDefault();
+					if(!self.isBlocked){
+						self.debugDetections++;
+						if(self.debugDetections>=self.maxDetections){
+							self.block();
+						}
+					}
+				}
+			});
+			document.addEventListener('contextmenu',function(e){
+				if(!self.isBlocked){
+					e.preventDefault();
+				}
+			});
+			Object.defineProperty(document,'hidden',{
+				get:function(){
+					self.debugDetections++;
+					return false;
+				}
+			});
+		},
+		block:function(){
+			if(this.isBlocked)return;
+			this.isBlocked=true;
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;z-index:999999;"><div style="text-align:center;"><h1 style="margin:0 0 10px 0;font-size:32px;">访问受限</h1><p style="margin:0;font-size:16px;opacity:0.8;">检测到开发者工具</p></div></div>';
+			throw new Error('Anti-debug protection triggered');
+		},
+		init:function(){
+			var self=this;
+			this.protect();
+			this.checks.forEach(function(check){
+				if(check.fn()){
+					self.debugDetections++;
+				}
+			});
+			if(this.debugDetections>=this.maxDetections){
+				this.block();
+			}
+		}
+	};
+	_0xEAD.init();
+	window.__EAD=_0xEAD;
+	if(document.readyState==='loading'){
+		document.addEventListener('DOMContentLoaded',function(){
+			_0xEAD.init();
+		});
+	}
+})();
+`
+	return antiDebug
+}
+
+func GenerateAdvancedCodeProtection(code string, config ObfuscatorConfig) string {
+	var protection strings.Builder
+
+	protection.WriteString(GenerateEnhancedAntiDebug())
+
+	if config.EnableAdvancedIntegrity {
+		hash, _ := GenerateFileHash(code, "sha256")
+		protection.WriteString(GenerateAdvancedIntegrityCheck(hash, string(config.StringEncryptionKey)))
+	}
+
+	if config.EnableDynamicLoading {
+		protection.WriteString(NewDynamicCodeLoader().GenerateDynamicLoaderCode())
+	}
+
+	return protection.String() + code
+}
+
+func GenerateAdvancedIntegrityCheck(codeHash string, secret string) string {
+	integrity := fmt.Sprintf(`
+;(function(){
+	var _0xAIC={
+		hash:'%s',
+		secret:'%s',
+		checkInterval:15000,
+		maxChecks:50,
+		checkCount:0,
+		timer:null,
+		markers:[],
+		createMarkers:function(){
+			var markerCount=5;
+			for(var i=0;i<markerCount;i++){
+				var marker=document.createElement('div');
+				marker.id='_0xAIC_m_'+i;
+				marker.style.display='none';
+				marker.setAttribute('data-v',this.hash);
+				document.body.appendChild(marker);
+				this.markers.push(marker.id);
+			}
+		},
+		verifyMarkers:function(){
+			for(var i=0;i<this.markers.length;i++){
+				var el=document.getElementById(this.markers[i]);
+				if(!el||el.getAttribute('data-v')!==this.hash){
+					return false;
+				}
+			}
+			return true;
+		},
+		verifyTiming:function(){
+			var start=performance.now();
+			var sum=0;
+			for(var i=0;i<1000;i++){
+				sum+=Math.random()*i;
+			}
+			var end=performance.now();
+			if(end-start>50){
+				return false;
+			}
+			return true;
+		},
+		verify:function(){
+			if(this.checkCount>=this.maxChecks){
+				this.stop();
+				return true;
+			}
+			if(!this.verifyMarkers()){
+				this.block();
+				return false;
+			}
+			if(!this.verifyTiming()){
+				this.block();
+				return false;
+			}
+			this.checkCount++;
+			return true;
+		},
+		block:function(){
+			this.stop();
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1>代码完整性检查失败</h1><p>检测到异常行为</p></div></div>';
+			throw new Error('Advanced integrity check failed');
+		},
+		start:function(){
+			this.createMarkers();
+			var self=this;
+			this.timer=setInterval(function(){
+				self.verify();
+			},this.checkInterval);
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xAIC.start();
+	window.__AIC=_0xAIC;
+})();
+`, codeHash, secret)
+
+	return integrity
+}
+
+func GenerateTimeBasedVerification() string {
+	return `
+;(function(){
+	var _0xTBV={
+		baseTime:Date.now(),
+		lastCheck:Date.now(),
+		threshold:30000,
+		checks:[],
+		registerCheck:function(fn){
+			this.checks.push(fn);
+		},
+		verifyTime:function(){
+			var now=Date.now();
+			var elapsed=now-this.lastCheck;
+			if(elapsed>this.threshold||elapsed<0){
+				return false;
+			}
+			this.lastCheck=now;
+			return true;
+		},
+		verifyAll:function(){
+			if(!this.verifyTime()){
+				return false;
+			}
+			for(var i=0;i<this.checks.length;i++){
+				if(!this.checks[i]()){
+					return false;
+				}
+			}
+			return true;
+		}
+	};
+	window.__TBV=_0xTBV;
+})();
+`
+}
+
+func GenerateMemoryProtection() string {
+	return `
+;(function(){
+	var _0xMP={
+		originalValues:new WeakMap(),
+		protected:[],
+		protect:function(obj,prop){
+			if(typeof obj!=='object'||obj===null)return;
+			var key=prop.toString();
+			if(this.originalValues.has(obj)&&this.originalValues.get(obj).has(key)){
+				return;
+			}
+			var value=obj[prop];
+			if(typeof value!=='function')return;
+			if(!this.originalValues.has(obj)){
+				this.originalValues.set(obj,{});
+			}
+			this.originalValues.get(obj)[key]=value.toString();
+			var self=this;
+			Object.defineProperty(obj,prop,{
+				get:function(){
+					return function(){
+						var currentValue=obj[prop];
+						if(typeof currentValue==='function'){
+							var currentStr=currentValue.toString();
+							var originalStr=self.originalValues.get(obj)[key];
+							if(currentStr!==originalStr&&currentStr.indexOf('[native code]')===-1){
+								throw new Error('Function modified');
+							}
+						}
+						return currentValue.apply(this,arguments);
+					};
+				},
+				set:function(v){
+					if(typeof v==='function'){
+						var originalStr=self.originalValues.get(obj)[key];
+						if(v.toString()!==originalStr&&v.toString().indexOf('[native code]')===-1){
+							throw new Error('Function modification detected');
+						}
+					}
+					obj[prop]=v;
+				},
+				enumerable:false,
+				configurable:false
+			});
+			this.protected.push({obj:obj,prop:prop});
+		},
+		protectWindow:function(){
+			var targets=['console.log','console.error','console.warn','console.info'];
+			var self=this;
+			targets.forEach(function(target){
+				var parts=target.split('.');
+				var obj=window;
+				for(var i=0;i<parts.length-1;i++){
+					obj=obj[parts[i]];
+				}
+				if(obj){
+					self.protect(obj,parts[parts.length-1]);
+				}
+			});
+		},
+		verifyAll:function(){
+			for(var i=0;i<this.protected.length;i++){
+				var p=this.protected[i];
+				if(p.obj&&p.prop){
+					try{
+						var value=p.obj[p.prop];
+						if(typeof value==='function'){
+							var currentStr=value.toString();
+							var originalStr=this.originalValues.get(p.obj)[p.prop.toString()];
+							if(currentStr!==originalStr&&currentStr.indexOf('[native code]')===-1){
+								return false;
+							}
+						}
+					}catch(e){}
+				}
+			}
+			return true;
+		}
+	};
+	_0xMP.protectWindow();
+	window.__MP=_0xMP;
+	setInterval(function(){
+		if(!_0xMP.verifyAll()){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<h1>Memory modification detected</h1>';
+		}
+	},10000);
+})();
+`
+}
+
+func (o *Obfuscator) ApplyFullProtection(code string) (string, error) {
+	if code == "" {
+		return "", errors.New("code cannot be empty")
+	}
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	o.variableMap = make(map[string]string)
+	o.functionMap = make(map[string]string)
+	o.usedNames = make(map[string]bool)
+	o.stringCount = 0
+	o.functionCount = 0
+
+	var result string = code
+
+	if o.config.RemoveComments {
+		result = o.removeComments(result)
+	}
+
+	if o.config.EnableVariableObfuscation {
+		result = o.obfuscateVariablesAdvanced(result)
+	}
+
+	if o.config.EnableNameMangling {
+		result = o.applyNameMangling(result)
+	}
+
+	if o.config.EnableStringEncryption {
+		result = o.encryptStringsDynamic(result)
+	}
+
+	if o.config.EnableFunctionWrapping {
+		result = o.wrapCodeAdvanced(result)
+	}
+
+	if o.config.EnableControlFlowFlattening {
+		result = o.flattenControlFlowAdvanced(result)
+	}
+
+	if o.config.EnableDeadCodeInjection {
+		result = o.injectDeadCodeAdvanced(result)
+	}
+
+	if o.config.EnableCodeCompression {
+		result = o.compressCodeAdvanced(result)
+	}
+
+	result = GenerateEnhancedAntiDebug() + result
+
+	result = result + GenerateMemoryProtection()
+
+	hash, _ := GenerateFileHash(code, "sha256")
+	result = result + GenerateAdvancedIntegrityCheck(hash, string(o.config.StringEncryptionKey))
+
+	result = result + GenerateTimeBasedVerification()
+
+	return result, nil
+}
+
+func GeneratePolymorphicVariant(code string, variant int) string {
+	variants := []string{
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+		"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+		"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+	}
+
+	charset := variants[variant%len(variants)]
+	encoder := make(map[byte]byte)
+	decoder := make(map[byte]byte)
+
+	for i := 0; i < 256; i++ {
+		if i < len(charset) {
+			encoder[byte(i)] = charset[i]
+			decoder[charset[i]] = byte(i)
+		}
+	}
+
+	var encoded strings.Builder
+	for _, c := range code {
+		if c < 256 {
+			encoded.WriteByte(encoder[byte(c)])
+		} else {
+			encoded.WriteRune(c)
+		}
+	}
+
+	return fmt.Sprintf(`
+;(function(){
+	var _0xPV='%s';
+	var _0xC='%s';
+	var _0xD='';
+	var _0xE={};
+	var _0xI=0;
+	for(var _0xJ=0;_0xJ<256;_0xJ++){
+		if(_0xJ<_0xC.length){
+			_0xE[_0xC.charCodeAt(_0xJ)]=_0xC[_0xJ];
+		}
+	}
+	for(var _0xJ=0;_0xJ<_0xPV.length;_0xJ++){
+		var _0xB=_0xPV.charCodeAt(_0xJ);
+		if(_0xE[_0xB]){
+			_0xD+=_0xE[_0xB];
+		}else{
+			_0xD+=_0xPV[_0xJ];
+		}
+	}
+	eval(_0xD);
+})();
+`, base64.StdEncoding.EncodeToString([]byte(code)), charset)
+}
+
+func GenerateCodeObfuscationReport(code string, config ObfuscatorConfig) map[string]interface{} {
+	obfuscated, _ := NewObfuscator(config).ApplyFullProtection(code)
+
+	originalSize := len(code)
+	obfuscatedSize := len(obfuscated)
+
+	originalEntropy := CalculateObfuscationEntropy(code)
+	obfuscatedEntropy := CalculateObfuscationEntropy(obfuscated)
+
+	hashReport := GenerateFileHashReport(code, config)
+
+	return map[string]interface{}{
+		"original_size":      originalSize,
+		"obfuscated_size":    obfuscatedSize,
+		"size_ratio":         float64(obfuscatedSize) / float64(originalSize),
+		"compression":        float64(originalSize-obfuscatedSize) / float64(originalSize) * 100,
+		"original_entropy":   originalEntropy,
+		"obfuscated_entropy": obfuscatedEntropy,
+		"entropy_increase":    obfuscatedEntropy - originalEntropy,
+		"hash_report":        hashReport,
+		"config": map[string]bool{
+			"variable_obfuscation":     config.EnableVariableObfuscation,
+			"string_encryption":       config.EnableStringEncryption,
+			"code_compression":         config.EnableCodeCompression,
+			"control_flow_flattening":  config.EnableControlFlowFlattening,
+			"dead_code_injection":      config.EnableDeadCodeInjection,
+			"function_wrapping":       config.EnableFunctionWrapping,
+			"advanced_anti_debug":     config.EnableAdvancedAntiDebug,
+			"memory_protection":       config.EnableMemoryProtection,
+			"dynamic_loading":         config.EnableDynamicLoading,
+			"advanced_integrity":      config.EnableAdvancedIntegrity,
+		},
+		"timestamp": time.Now().Format(time.RFC3339),
+		"quality_score": calculateQualityScore(originalEntropy, obfuscatedEntropy, originalSize, obfuscatedSize),
+	}
+}
+
+func calculateQualityScore(originalEntropy, obfuscatedEntropy float64, originalSize, obfuscatedSize int) float64 {
+	entropyScore := (obfuscatedEntropy - originalEntropy) * 10
+	sizeScore := float64(obfuscatedSize) / float64(originalSize) * 50
+	totalScore := entropyScore + sizeScore
+	return math.Min(100, math.Max(0, totalScore))
+}
+
+func ValidateObfuscatedJS(code string) (bool, []string) {
+	var errors []string
+
+	if strings.Count(code, "{") != strings.Count(code, "}") {
+		errors = append(errors, "unbalanced braces")
+	}
+
+	if strings.Count(code, "(") != strings.Count(code, ")") {
+		errors = append(errors, "unbalanced parentheses")
+	}
+
+	if strings.Count(code, "[") != strings.Count(code, "]") {
+		errors = append(errors, "unbalanced brackets")
+	}
+
+	keywords := []string{"function", "var", "let", "const", "if", "else", "for", "while", "return"}
+	for _, kw := range keywords {
+		if strings.Count(code, kw) == 0 && kw != "const" && kw != "let" {
+			continue
+		}
+	}
+
+	return len(errors) == 0, errors
+}
+
 

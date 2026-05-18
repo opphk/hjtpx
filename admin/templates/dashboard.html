@@ -12,11 +12,14 @@
         <span class="sr-only">导出</span>
     </button>
     <div class="dropdown-menu" role="menu">
-        <a class="dropdown-item" href="/admin/export?format=csv"><i class="fas fa-file-csv"></i> CSV</a>
-        <a class="dropdown-item" href="/admin/export?format=excel"><i class="fas fa-file-excel"></i> Excel</a>
-        <a class="dropdown-item" href="/admin/export?format=pdf"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a class="dropdown-item" href="#" onclick="exportData('csv'); return false;"><i class="fas fa-file-csv"></i> CSV</a>
+        <a class="dropdown-item" href="#" onclick="exportData('excel'); return false;"><i class="fas fa-file-excel"></i> Excel</a>
+        <a class="dropdown-item" href="#" onclick="exportData('json'); return false;"><i class="fas fa-file-code"></i> JSON</a>
     </div>
 </div>
+<button type="button" class="btn btn-default" id="fullscreenBtn" title="全屏">
+    <i class="fas fa-expand"></i>
+</button>
 {% endblock %}
 
 {% block content %}
@@ -26,6 +29,9 @@
             <div class="inner">
                 <h3 id="totalRequests">0</h3>
                 <p>今日验证</p>
+                <div class="small-chart-container">
+                    <div id="requestsMiniChart" style="height: 40px;"></div>
+                </div>
             </div>
             <div class="icon">
                 <i class="fas fa-shield-alt"></i>
@@ -38,6 +44,9 @@
             <div class="inner">
                 <h3 id="passRate">0%</h3>
                 <p>通过率</p>
+                <div class="progress mt-2">
+                    <div class="progress-bar bg-white" id="passRateProgress" style="width: 0%"></div>
+                </div>
             </div>
             <div class="icon">
                 <i class="fas fa-check-circle"></i>
@@ -50,6 +59,9 @@
             <div class="inner">
                 <h3 id="blockRate">0%</h3>
                 <p>拦截率</p>
+                <div class="progress mt-2">
+                    <div class="progress-bar bg-white" id="blockRateProgress" style="width: 0%"></div>
+                </div>
             </div>
             <div class="icon">
                 <i class="fas fa-ban"></i>
@@ -62,6 +74,7 @@
             <div class="inner">
                 <h3 id="avgResponseTime">0ms</h3>
                 <p>平均响应</p>
+                <small class="text-muted" id="responseTrend"></small>
             </div>
             <div class="icon">
                 <i class="fas fa-clock"></i>
@@ -75,24 +88,26 @@
     <div class="col-md-8">
         <div class="card card-primary">
             <div class="card-header">
-                <h3 class="card-title">24小时趋势</h3>
+                <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>24小时趋势</h3>
                 <div class="card-tools">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-tool btn-sm active" data-period="hour">小时</button>
+                        <button type="button" class="btn btn-tool btn-sm" data-period="day">天</button>
+                    </div>
                     <button type="button" class="btn btn-tool" data-card-widget="collapse">
                         <i class="fas fa-minus"></i>
                     </button>
                 </div>
             </div>
             <div class="card-body">
-                <div class="chart">
-                    <canvas id="trendChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
-                </div>
+                <div id="trendChart" style="min-height: 300px; height: 300px;"></div>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card card-success">
             <div class="card-header">
-                <h3 class="card-title">风险分布</h3>
+                <h3 class="card-title"><i class="fas fa-pie-chart mr-2"></i>风险分布</h3>
                 <div class="card-tools">
                     <button type="button" class="btn btn-tool" data-card-widget="collapse">
                         <i class="fas fa-minus"></i>
@@ -100,7 +115,8 @@
                 </div>
             </div>
             <div class="card-body">
-                <canvas id="pieChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+                <div id="pieChart" style="min-height: 150px; height: 150px;"></div>
+                <div id="riskLegend" class="mt-3"></div>
             </div>
         </div>
     </div>
@@ -110,7 +126,7 @@
     <div class="col-md-6">
         <div class="card card-info">
             <div class="card-header">
-                <h3 class="card-title">验证码类型分布</h3>
+                <h3 class="card-title"><i class="fas fa-bar-chart mr-2"></i>验证码类型分布</h3>
                 <div class="card-tools">
                     <button type="button" class="btn btn-tool" data-card-widget="collapse">
                         <i class="fas fa-minus"></i>
@@ -118,15 +134,16 @@
                 </div>
             </div>
             <div class="card-body">
-                <canvas id="captchaTypeChart" style="min-height: 250px; height: 250px; max-height: 250px; max-width: 100%;"></canvas>
+                <div id="captchaTypeChart" style="min-height: 250px; height: 250px;"></div>
             </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card card-secondary">
             <div class="card-header">
-                <h3 class="card-title">最近验证记录</h3>
+                <h3 class="card-title"><i class="fas fa-history mr-2"></i>最近验证记录</h3>
                 <div class="card-tools">
+                    <span class="badge badge-primary" id="liveIndicator"><i class="fas fa-circle text-success"></i> 实时</span>
                     <button type="button" class="btn btn-tool" data-card-widget="collapse">
                         <i class="fas fa-minus"></i>
                     </button>
@@ -140,11 +157,12 @@
                             <th>应用</th>
                             <th>类型</th>
                             <th>状态</th>
+                            <th>响应</th>
                         </tr>
                     </thead>
                     <tbody id="recentVerifications">
                         <tr>
-                            <td colspan="4" class="text-center text-muted">加载中...</td>
+                            <td colspan="5" class="text-center text-muted">加载中...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -157,8 +175,9 @@
     <div class="col-md-12">
         <div class="card card-danger">
             <div class="card-header">
-                <h3 class="card-title">系统状态</h3>
+                <h3 class="card-title"><i class="fas fa-server mr-2"></i>系统状态</h3>
                 <div class="card-tools">
+                    <span class="badge badge-success" id="wsStatus"><i class="fas fa-wifi mr-1"></i>已连接</span>
                     <button type="button" class="btn btn-tool" data-card-widget="collapse">
                         <i class="fas fa-minus"></i>
                     </button>
@@ -236,139 +255,295 @@
         </div>
     </div>
 </div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card card-dark">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-tachometer-alt mr-2"></i>实时QPS监控</h3>
+                <div class="card-tools">
+                    <span class="text-muted" id="currentQPS">0 QPS</span>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="realtimeChart" style="min-height: 200px; height: 200px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <script>
-let trendChart, pieChart, captchaTypeChart;
-const REFRESH_INTERVAL = 30000;
+let trendChart, pieChart, captchaTypeChart, realtimeChart, miniChart;
+let ws = null;
+let wsConnected = false;
+let realtimeDataPoints = [];
+let previousStats = null;
+const MAX_REALTIME_POINTS = 60;
+const WS_RECONNECT_DELAY = 3000;
 
 document.addEventListener('DOMContentLoaded', function() {
-    initCharts();
+    initECharts();
+    initWebSocket();
     loadDashboardData();
     loadSystemStatus();
     loadRecentVerifications();
-
-    setInterval(loadDashboardData, REFRESH_INTERVAL);
-    setInterval(loadSystemStatus, REFRESH_INTERVAL);
-
+    
     document.getElementById('refreshBtn').addEventListener('click', function() {
         loadDashboardData();
         loadSystemStatus();
         loadRecentVerifications();
     });
+    
+    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    
+    const periodButtons = document.querySelectorAll('[data-period]');
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', async function(e) {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            await loadTrendData(this.dataset.period);
+        });
+    });
 });
 
-function initCharts() {
+function initECharts() {
     initTrendChart();
     initPieChart();
     initCaptchaTypeChart();
+    initRealtimeChart();
+    initMiniChart();
 }
 
 function initTrendChart() {
-    const ctx = document.getElementById('trendChart');
-    if (!ctx) return;
-
-    trendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '验证请求',
-                data: [],
-                borderColor: '#3c8dbc',
-                backgroundColor: 'rgba(60, 140, 188, 0.1)',
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                }
-            },
-            scales: {
-                x: {
-                    grid: {
-                        display: false
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                }
-            }
-        }
-    });
+    const container = document.getElementById('trendChart');
+    if (!container) return;
+    
+    trendChart = echarts.init(container);
+    window.addEventListener('resize', () => trendChart.resize());
 }
 
 function initPieChart() {
-    const ctx = document.getElementById('pieChart');
-    if (!ctx) return;
-
-    pieChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: ['低风险', '中风险', '高风险', '极高风险'],
-            datasets: [{
-                data: [0, 0, 0, 0],
-                backgroundColor: ['#28a745', '#ffc107', '#fd7e14', '#dc3545']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right'
-                }
-            }
-        }
-    });
+    const container = document.getElementById('pieChart');
+    if (!container) return;
+    
+    pieChart = echarts.init(container);
+    window.addEventListener('resize', () => pieChart.resize());
 }
 
 function initCaptchaTypeChart() {
-    const ctx = document.getElementById('captchaTypeChart');
-    if (!ctx) return;
+    const container = document.getElementById('captchaTypeChart');
+    if (!container) return;
+    
+    captchaTypeChart = echarts.init(container);
+    window.addEventListener('resize', () => captchaTypeChart.resize());
+}
 
-    captchaTypeChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '使用次数',
-                data: [],
-                backgroundColor: ['#007bff', '#28a745', '#ffc107', '#dc3545']
-            }]
+function initRealtimeChart() {
+    const container = document.getElementById('realtimeChart');
+    if (!container) return;
+    
+    realtimeChart = echarts.init(container);
+    window.addEventListener('resize', () => realtimeChart.resize());
+}
+
+function initMiniChart() {
+    const container = document.getElementById('requestsMiniChart');
+    if (!container) return;
+    
+    miniChart = echarts.init(container);
+    window.addEventListener('resize', () => miniChart.resize());
+}
+
+function initWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/v1/admin/dashboard/ws`;
+    
+    try {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function() {
+            wsConnected = true;
+            updateWsStatus(true);
+            console.log('WebSocket connected');
+        };
+        
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleRealtimeData(data);
+            } catch (e) {
+                console.error('Parse WebSocket data failed:', e);
+            }
+        };
+        
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            wsConnected = false;
+            updateWsStatus(false);
+        };
+        
+        ws.onclose = function() {
+            wsConnected = false;
+            updateWsStatus(false);
+            console.log('WebSocket disconnected, reconnecting in', WS_RECONNECT_DELAY, 'ms...');
+            setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+        };
+    } catch (e) {
+        console.error('WebSocket init failed:', e);
+        wsConnected = false;
+        updateWsStatus(false);
+        setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+    }
+}
+
+function updateWsStatus(connected) {
+    const statusEl = document.getElementById('wsStatus');
+    if (!statusEl) return;
+    
+    if (connected) {
+        statusEl.className = 'badge badge-success';
+        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已连接';
+    } else {
+        statusEl.className = 'badge badge-danger';
+        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已断开';
+    }
+}
+
+function handleRealtimeData(data) {
+    if (data.type === 'metrics') {
+        updateRealtimeMetrics(data.payload);
+    } else if (data.type === 'verification') {
+        addVerificationRow(data.payload);
+    } else if (data.type === 'stats') {
+        updateDashboard(data.payload);
+    }
+}
+
+function updateRealtimeMetrics(data) {
+    document.getElementById('totalRequests').textContent = formatNumber(data.total_requests || 0);
+    document.getElementById('passRate').textContent = (data.pass_rate || 0).toFixed(1) + '%';
+    document.getElementById('blockRate').textContent = (data.block_rate || 0).toFixed(1) + '%';
+    document.getElementById('avgResponseTime').textContent = (data.avg_response_time || 0) + 'ms';
+    
+    const passRate = data.pass_rate || 0;
+    const blockRate = data.block_rate || 0;
+    
+    document.getElementById('passRateProgress').style.width = passRate + '%';
+    document.getElementById('blockRateProgress').style.width = blockRate + '%';
+    
+    if (data.response_time_trend !== undefined) {
+        const trend = data.response_time_trend;
+        const trendEl = document.getElementById('responseTrend');
+        if (trendEl) {
+            trendEl.textContent = trend > 0 ? '↑ ' + trend.toFixed(1) + '%' : '↓ ' + Math.abs(trend).toFixed(1) + '%';
+            trendEl.className = trend > 0 ? 'text-danger' : 'text-success';
+        }
+    }
+    
+    if (data.qps !== undefined) {
+        document.getElementById('currentQPS').textContent = data.qps.toFixed(0) + ' QPS';
+    }
+    
+    updateRealtimeChart(data.requests_per_second || 0);
+    updateMiniChart(data.recent_requests || []);
+    
+    if (data.system_status) {
+        updateSystemStatus(data.system_status);
+    }
+}
+
+function updateRealtimeChart(value) {
+    if (!realtimeChart) return;
+    
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    realtimeDataPoints.push({ time: timeLabel, value: value });
+    
+    if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
+        realtimeDataPoints.shift();
+    }
+    
+    realtimeChart.setOption({
+        xAxis: {
+            data: realtimeDataPoints.map(p => p.time),
+            axisLabel: { color: '#666', rotate: 45 }
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' }
+        },
+        series: [{
+            data: realtimeDataPoints.map(p => p.value),
+            smooth: true,
+            areaStyle: {
+                color: {
+                    type: 'linear',
+                    x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: 'rgba(0, 123, 255, 0.3)' },
+                        { offset: 1, color: 'rgba(0, 123, 255, 0.05)' }
+                    ]
                 }
             },
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
+            lineStyle: { color: '#007bff', width: 2 },
+            itemStyle: { color: '#007bff' }
+        }],
+        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
+    }, false);
+}
+
+function updateMiniChart(data) {
+    if (!miniChart || !data || data.length === 0) return;
+    
+    miniChart.setOption({
+        xAxis: { show: false, data: data.map((_, i) => i) },
+        yAxis: { show: false },
+        series: [{
+            data: data,
+            smooth: true,
+            lineStyle: { color: 'rgba(255,255,255,0.5)', width: 1 },
+            areaStyle: {
+                color: 'rgba(255,255,255,0.2)'
+            },
+            symbol: 'none'
+        }],
+        grid: { left: 0, right: 0, top: 0, bottom: 0 }
+    }, false);
+}
+
+function addVerificationRow(data) {
+    const tbody = document.getElementById('recentVerifications');
+    if (!tbody) return;
+    
+    const time = new Date(data.timestamp || Date.now()).toLocaleTimeString('zh-CN');
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td><small>${time}</small></td>
+        <td><small>${escapeHtml(data.app || '-')}</small></td>
+        <td><small>${escapeHtml(data.type || '-')}</small></td>
+        <td><span class="badge badge-${data.status === 'success' ? 'success' : 'danger'}">${data.status === 'success' ? '成功' : '失败'}</span></td>
+        <td><small>${data.response_time || 0}ms</small></td>
+    `;
+    
+    tbody.insertBefore(row, tbody.firstChild);
+    
+    while (tbody.children.length > 10) {
+        tbody.removeChild(tbody.lastChild);
+    }
 }
 
 async function loadDashboardData() {
     try {
         const response = await fetch('/admin/api/dashboard');
-        if (!response.ok) throw new Error('Network response was not ok');
-
+        if (!response.ok) throw new Error('Network error');
+        
         const result = await response.json();
         if (result.code === 0) {
             updateDashboard(result.data);
@@ -376,7 +551,7 @@ async function loadDashboardData() {
             loadMockData();
         }
     } catch (error) {
-        console.error('加载仪表盘数据失败:', error);
+        console.error('Dashboard data load failed:', error);
         loadMockData();
     }
 }
@@ -425,36 +600,157 @@ function updateDashboard(data) {
         document.getElementById('passRate').textContent = data.summary.pass_rate + '%';
         document.getElementById('blockRate').textContent = data.summary.block_rate + '%';
         document.getElementById('avgResponseTime').textContent = data.summary.avg_response_time + 'ms';
+        
+        document.getElementById('passRateProgress').style.width = data.summary.pass_rate + '%';
+        document.getElementById('blockRateProgress').style.width = data.summary.block_rate + '%';
     }
-
+    
     if (data.trend && trendChart) {
-        trendChart.data.labels = data.trend.map(t => t.time);
-        trendChart.data.datasets[0].data = data.trend.map(t => t.requests);
-        trendChart.update();
+        const labels = data.trend.map(t => t.time);
+        const values = data.trend.map(t => t.requests);
+        
+        trendChart.setOption({
+            xAxis: {
+                data: labels,
+                axisLabel: { color: '#666' }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: { color: '#666' }
+            },
+            series: [{
+                data: values,
+                smooth: true,
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(0, 123, 255, 0.3)' },
+                            { offset: 1, color: 'rgba(0, 123, 255, 0.05)' }
+                        ]
+                    }
+                },
+                lineStyle: { color: '#3c8dbc', width: 2 },
+                itemStyle: { color: '#3c8dbc' }
+            }],
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(0,0,0,0.8)',
+                textStyle: { color: '#fff' }
+            },
+            grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true }
+        }, false);
     }
-
+    
     if (data.risk_distribution && pieChart) {
-        pieChart.data.datasets[0].data = [
-            data.risk_distribution.low || 0,
-            data.risk_distribution.medium || 0,
-            data.risk_distribution.high || 0,
-            data.risk_distribution.critical || 0
+        const riskData = [
+            { value: data.risk_distribution.low || 0, name: '低风险' },
+            { value: data.risk_distribution.medium || 0, name: '中风险' },
+            { value: data.risk_distribution.high || 0, name: '高风险' },
+            { value: data.risk_distribution.critical || 0, name: '极高风险' }
         ];
-        pieChart.update();
+        
+        pieChart.setOption({
+            series: [{
+                data: riskData,
+                radius: ['40%', '70%'],
+                label: {
+                    show: true,
+                    formatter: '{b}: {c} ({d}%)'
+                }
+            }],
+            color: ['#28a745', '#ffc107', '#fd7e14', '#dc3545'],
+            legend: {
+                orient: 'vertical',
+                left: 'left',
+                data: ['低风险', '中风险', '高风险', '极高风险']
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c} ({d}%)'
+            }
+        }, false);
+        
+        const legendHtml = riskData.map(item => 
+            `<span class="mr-3"><i class="fas fa-circle text-${item.name === '低风险' ? 'success' : item.name === '中风险' ? 'warning' : item.name === '高风险' ? 'orange' : 'danger'}"></i> ${item.name}: ${item.value}</span>`
+        ).join('');
+        document.getElementById('riskLegend').innerHTML = legendHtml;
     }
-
+    
     if (data.captcha_type && captchaTypeChart) {
-        captchaTypeChart.data.labels = data.captcha_type.map(c => c.type);
-        captchaTypeChart.data.datasets[0].data = data.captcha_type.map(c => c.count);
-        captchaTypeChart.update();
+        captchaTypeChart.setOption({
+            xAxis: {
+                data: data.captcha_type.map(c => c.type),
+                axisLabel: { color: '#666' }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: { color: '#666' }
+            },
+            series: [{
+                data: data.captcha_type.map(c => c.count),
+                type: 'bar',
+                itemStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: '#007bff' },
+                            { offset: 1, color: '#0056b3' }
+                        ]
+                    },
+                    borderRadius: [4, 4, 0, 0]
+                }
+            }],
+            tooltip: {
+                trigger: 'axis',
+                backgroundColor: 'rgba(0,0,0,0.8)',
+                textStyle: { color: '#fff' }
+            },
+            grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true }
+        }, false);
     }
+}
+
+async function loadTrendData(period) {
+    try {
+        const response = await fetch(`/admin/api/dashboard/trend?period=${period}`);
+        if (!response.ok) throw new Error('Network error');
+        
+        const result = await response.json();
+        if (result.code === 0) {
+            updateTrendChart(result.data, period);
+        }
+    } catch (error) {
+        console.error('Trend data load failed:', error);
+    }
+}
+
+function updateTrendChart(data, period) {
+    if (!trendChart || !data) return;
+    
+    const labels = period === 'hour' ? 
+        data.map(t => t.time) :
+        data.map(t => t.day || t.date || t.label);
+    const values = data.map(t => t.requests || t.count);
+    
+    trendChart.setOption({
+        xAxis: {
+            data: labels,
+            axisLabel: { color: '#666', rotate: period === 'day' ? 45 : 0 }
+        },
+        series: [{
+            data: values
+        }]
+    }, false);
 }
 
 async function loadSystemStatus() {
     try {
         const response = await fetch('/admin/api/system-status');
-        if (!response.ok) throw new Error('Network response was not ok');
-
+        if (!response.ok) throw new Error('Network error');
+        
         const result = await response.json();
         if (result.code === 0) {
             updateSystemStatus(result.data);
@@ -462,7 +758,7 @@ async function loadSystemStatus() {
             loadMockSystemStatus();
         }
     } catch (error) {
-        console.error('加载系统状态失败:', error);
+        console.error('System status load failed:', error);
         loadMockSystemStatus();
     }
 }
@@ -484,36 +780,36 @@ function updateSystemStatus(data) {
         document.getElementById('dbLatency').textContent = data.database.latency + 'ms';
         document.getElementById('dbStatus').className = 'info-box-icon ' + (data.database.status === 'healthy' ? 'bg-success' : 'bg-danger');
     }
-
+    
     if (data.redis) {
         document.getElementById('redisLatency').textContent = data.redis.latency + 'ms';
         document.getElementById('redisStatus').className = 'info-box-icon ' + (data.redis.status === 'healthy' ? 'bg-success' : 'bg-danger');
     }
-
+    
     if (data.api) {
         document.getElementById('apiLatency').textContent = data.api.latency + 'ms';
         document.getElementById('apiStatus').className = 'info-box-icon ' + (data.api.status === 'healthy' ? 'bg-success' : 'bg-danger');
     }
-
+    
     if (data.storage) {
         document.getElementById('storageLatency').textContent = data.storage.latency + 'ms';
         document.getElementById('storageStatus').className = 'info-box-icon ' + (data.storage.status === 'healthy' ? 'bg-success' : 'bg-danger');
     }
-
+    
     if (data.cpu !== undefined) {
         document.getElementById('cpuUsage').textContent = data.cpu + '%';
         document.getElementById('cpuProgress').style.width = data.cpu + '%';
         const cpuBar = document.getElementById('cpuProgress');
         cpuBar.className = 'progress-bar ' + (data.cpu > 80 ? 'bg-danger' : data.cpu > 60 ? 'bg-warning' : 'bg-primary');
     }
-
+    
     if (data.memory !== undefined) {
         document.getElementById('memUsage').textContent = data.memory + '%';
         document.getElementById('memProgress').style.width = data.memory + '%';
         const memBar = document.getElementById('memProgress');
         memBar.className = 'progress-bar ' + (data.memory > 80 ? 'bg-danger' : data.memory > 60 ? 'bg-warning' : 'bg-success');
     }
-
+    
     if (data.disk !== undefined) {
         document.getElementById('diskUsage').textContent = data.disk + '%';
         document.getElementById('diskProgress').style.width = data.disk + '%';
@@ -523,8 +819,8 @@ function updateSystemStatus(data) {
 async function loadRecentVerifications() {
     try {
         const response = await fetch('/admin/api/recent-verifications');
-        if (!response.ok) throw new Error('Network response was not ok');
-
+        if (!response.ok) throw new Error('Network error');
+        
         const result = await response.json();
         if (result.code === 0) {
             renderRecentVerifications(result.data);
@@ -532,7 +828,7 @@ async function loadRecentVerifications() {
             renderMockRecentVerifications();
         }
     } catch (error) {
-        console.error('加载最近验证记录失败:', error);
+        console.error('Recent verifications load failed:', error);
         renderMockRecentVerifications();
     }
 }
@@ -546,7 +842,8 @@ function renderMockRecentVerifications() {
             time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             app: 'App_' + (Math.floor(Math.random() * 10) + 1),
             type: ['滑动验证', '点选验证', '图片验证'][Math.floor(Math.random() * 3)],
-            status: Math.random() > 0.1 ? 'success' : 'failed'
+            status: Math.random() > 0.1 ? 'success' : 'failed',
+            response_time: Math.floor(Math.random() * 100) + 20
         });
     }
     renderRecentVerifications(mockData);
@@ -555,16 +852,17 @@ function renderMockRecentVerifications() {
 function renderRecentVerifications(data) {
     const tbody = document.getElementById('recentVerifications');
     if (!tbody || !data || data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无数据</td></tr>';
         return;
     }
-
+    
     tbody.innerHTML = data.slice(0, 10).map(item => `
         <tr>
-            <td>${item.time || '-'}</td>
-            <td>${escapeHtml(item.app || '-')}</td>
-            <td>${escapeHtml(item.type || '-')}</td>
+            <td><small>${item.time || '-'}</small></td>
+            <td><small>${escapeHtml(item.app || '-')}</small></td>
+            <td><small>${escapeHtml(item.type || '-')}</small></td>
             <td><span class="badge badge-${item.status === 'success' ? 'success' : 'danger'}">${item.status === 'success' ? '成功' : '失败'}</span></td>
+            <td><small>${item.response_time || 0}ms</small></td>
         </tr>
     `).join('');
 }
@@ -572,21 +870,21 @@ function renderRecentVerifications(data) {
 function animateValue(elementId, start, end, duration) {
     const element = document.getElementById(elementId);
     if (!element) return;
-
+    
     const startTime = performance.now();
-
+    
     function update(currentTime) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const easeProgress = 1 - Math.pow(1 - progress, 4);
         const value = Math.floor(start + (end - start) * easeProgress);
         element.textContent = formatNumber(value);
-
+        
         if (progress < 1) {
             requestAnimationFrame(update);
         }
     }
-
+    
     requestAnimationFrame(update);
 }
 
@@ -604,6 +902,93 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.error('Fullscreen request failed:', err);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+}
+
+function exportData(format) {
+    const data = getExportData();
+    
+    if (format === 'csv') {
+        exportCSV(data);
+    } else if (format === 'excel') {
+        exportExcel(data);
+    } else if (format === 'json') {
+        exportJSON(data);
+    }
+}
+
+function getExportData() {
+    return {
+        summary: {
+            total_requests: document.getElementById('totalRequests').textContent,
+            pass_rate: document.getElementById('passRate').textContent,
+            block_rate: document.getElementById('blockRate').textContent,
+            avg_response_time: document.getElementById('avgResponseTime').textContent
+        },
+        timestamp: new Date().toISOString()
+    };
+}
+
+function exportCSV(data) {
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF';
+    const headers = ['指标', '数值'];
+    const rows = [
+        headers,
+        ['总验证数', data.summary.total_requests],
+        ['通过率', data.summary.pass_rate],
+        ['拦截率', data.summary.block_rate],
+        ['平均响应时间', data.summary.avg_response_time],
+        ['导出时间', data.timestamp]
+    ];
+    
+    const csv = csvContent + rows.map(row => row.join(',')).join('\n');
+    downloadFile(csv, 'dashboard_export.csv', 'text/csv');
+}
+
+function exportExcel(data) {
+    let excelContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    excelContent += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet">\n';
+    excelContent += '<Worksheet ss:Name="Dashboard Data">\n';
+    excelContent += '<Table>\n';
+    
+    excelContent += '<Row><Cell><Data ss:Type="String">指标</Data></Cell><Cell><Data ss:Type="String">数值</Data></Cell></Row>\n';
+    excelContent += `<Row><Cell><Data ss:Type="String">总验证数</Data></Cell><Cell><Data ss:Type="String">${data.summary.total_requests}</Data></Cell></Row>\n`;
+    excelContent += `<Row><Cell><Data ss:Type="String">通过率</Data></Cell><Cell><Data ss:Type="String">${data.summary.pass_rate}</Data></Cell></Row>\n`;
+    excelContent += `<Row><Cell><Data ss:Type="String">拦截率</Data></Cell><Cell><Data ss:Type="String">${data.summary.block_rate}</Data></Cell></Row>\n`;
+    excelContent += `<Row><Cell><Data ss:Type="String">平均响应时间</Data></Cell><Cell><Data ss:Type="String">${data.summary.avg_response_time}</Data></Cell></Row>\n`;
+    excelContent += `<Row><Cell><Data ss:Type="String">导出时间</Data></Cell><Cell><Data ss:Type="String">${data.timestamp}</Data></Cell></Row>\n`;
+    
+    excelContent += '</Table>\n</Worksheet>\n</Workbook>';
+    
+    downloadFile(excelContent, 'dashboard_export.xls', 'application/vnd.ms-excel');
+}
+
+function exportJSON(data) {
+    const jsonContent = JSON.stringify(data, null, 2);
+    downloadFile(jsonContent, 'dashboard_export.json', 'application/json');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 </script>
 {% endblock %}

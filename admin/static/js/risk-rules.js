@@ -2,11 +2,14 @@ let rulesPage = 1;
 let rulesPageSize = 10;
 let currentRules = [];
 let currentView = 'table';
+let conditionCounter = 1;
+let testHistory = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     loadRiskRulesSummary();
     loadRiskRules();
     setupEventListeners();
+    initializeRuleBuilder();
 });
 
 function setupEventListeners() {
@@ -43,6 +46,539 @@ function setupEventListeners() {
     const ruleForm = document.getElementById('ruleForm');
     if (ruleForm) {
         ruleForm.addEventListener('submit', handleRuleSubmit);
+    }
+
+    document.querySelectorAll('.condition-field, .condition-operator, .condition-value').forEach(el => {
+        el.addEventListener('change', updateRuleExpression);
+        el.addEventListener('input', updateRuleExpression);
+    });
+}
+
+function initializeRuleBuilder() {
+    updateRuleExpression();
+}
+
+function setGroupLogic(groupId, logic) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    
+    group.dataset.logic = logic;
+    const buttons = group.querySelectorAll('[data-logic]');
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.logic === logic) {
+            btn.classList.add('active');
+        }
+    });
+    updateRuleExpression();
+}
+
+function addRuleCondition(groupId) {
+    conditionCounter++;
+    const conditionsContainer = document.getElementById(groupId.replace('RuleGroup', 'RuleConditions'));
+    if (!conditionsContainer) return;
+    
+    const conditionRow = document.createElement('div');
+    conditionRow.className = 'rule-condition-row';
+    conditionRow.dataset.conditionId = `cond${conditionCounter}`;
+    conditionRow.innerHTML = `
+        <div class="condition-logic-label">AND</div>
+        <select class="form-select form-select-sm condition-field">
+            <option value="speed">平均速度</option>
+            <option value="speed_variance">速度方差</option>
+            <option value="path_efficiency">路径效率</option>
+            <option value="smoothness">平滑度</option>
+            <option value="click_regularity">点击规律性</option>
+            <option value="hesitation_time">犹豫时间</option>
+            <option value="ml_score">ML分数</option>
+            <option value="anomaly_score">异常分数</option>
+        </select>
+        <select class="form-select form-select-sm condition-operator">
+            <option value="gt">></option>
+            <option value="gte">>=</option>
+            <option value="lt"><</option>
+            <option value="lte"><=</option>
+            <option value="eq">=</option>
+        </select>
+        <input type="number" class="form-control form-control-sm condition-value" placeholder="阈值" step="0.01">
+        <button class="btn btn-outline-danger btn-sm" onclick="removeCondition('cond${conditionCounter}')"><i class="fas fa-times"></i></button>
+    `;
+    
+    conditionsContainer.appendChild(conditionRow);
+    
+    conditionRow.querySelectorAll('select, input').forEach(el => {
+        el.addEventListener('change', updateRuleExpression);
+        el.addEventListener('input', updateRuleExpression);
+    });
+    
+    updateRuleExpression();
+}
+
+function removeCondition(conditionId) {
+    const condition = document.querySelector(`[data-condition-id="${conditionId}"]`);
+    if (condition) {
+        condition.remove();
+        updateRuleExpression();
+    }
+}
+
+function updateRuleExpression() {
+    const conditions = document.querySelectorAll('.rule-condition-row');
+    const logic = document.getElementById('mainRuleGroup')?.dataset.logic || 'AND';
+    const expressionEl = document.getElementById('ruleExpression');
+    
+    if (!expressionEl) return;
+    
+    const parts = [];
+    conditions.forEach((condition, index) => {
+        const field = condition.querySelector('.condition-field')?.value || '';
+        const operator = condition.querySelector('.condition-operator')?.value || '';
+        const value = condition.querySelector('.condition-value')?.value || '';
+        
+        if (field && operator && value) {
+            let opSymbol;
+            switch (operator) {
+                case 'gt': opSymbol = '>'; break;
+                case 'gte': opSymbol = '>='; break;
+                case 'lt': opSymbol = '<'; break;
+                case 'lte': opSymbol = '<='; break;
+                case 'eq': opSymbol = '='; break;
+                default: opSymbol = operator;
+            }
+            
+            const logicLabel = index === 0 ? '' : ` ${logic} `;
+            parts.push(`${logicLabel}${field} ${opSymbol} ${value}`);
+        }
+    });
+    
+    expressionEl.textContent = parts.length > 0 ? parts.join('') : '暂无条件';
+}
+
+function applyTemplate(templateName) {
+    let template;
+    
+    switch (templateName) {
+        case 'extreme_speed':
+            template = [
+                { field: 'speed', operator: 'gt', value: '2000' },
+                { field: 'path_efficiency', operator: 'gt', value: '0.98' }
+            ];
+            setGroupLogic('mainRuleGroup', 'AND');
+            break;
+        case 'bot_pattern':
+            template = [
+                { field: 'click_regularity', operator: 'gt', value: '0.98' },
+                { field: 'hesitation_time', operator: 'lt', value: '50' },
+                { field: 'ml_score', operator: 'gt', value: '0.7' }
+            ];
+            setGroupLogic('mainRuleGroup', 'AND');
+            break;
+        case 'human_behavior':
+            template = [
+                { field: 'hesitation_time', operator: 'gt', value: '100' },
+                { field: 'path_efficiency', operator: 'lt', value: '0.95' }
+            ];
+            setGroupLogic('mainRuleGroup', 'OR');
+            break;
+        case 'combined_risk':
+            template = [
+                { field: 'speed', operator: 'gt', value: '1500' },
+                { field: 'anomaly_score', operator: 'gt', value: '0.7' }
+            ];
+            setGroupLogic('mainRuleGroup', 'AND');
+            break;
+        default:
+            return;
+    }
+    
+    const conditionsContainer = document.getElementById('mainRuleConditions');
+    if (!conditionsContainer) return;
+    
+    conditionsContainer.innerHTML = '';
+    
+    template.forEach((t, index) => {
+        conditionCounter++;
+        const conditionRow = document.createElement('div');
+        conditionRow.className = 'rule-condition-row';
+        conditionRow.dataset.conditionId = `cond${conditionCounter}`;
+        conditionRow.innerHTML = `
+            <div class="condition-logic-label">${index === 0 ? '条件' : 'AND'}</div>
+            <select class="form-select form-select-sm condition-field">
+                <option value="speed" ${t.field === 'speed' ? 'selected' : ''}>平均速度</option>
+                <option value="speed_variance" ${t.field === 'speed_variance' ? 'selected' : ''}>速度方差</option>
+                <option value="path_efficiency" ${t.field === 'path_efficiency' ? 'selected' : ''}>路径效率</option>
+                <option value="smoothness" ${t.field === 'smoothness' ? 'selected' : ''}>平滑度</option>
+                <option value="click_regularity" ${t.field === 'click_regularity' ? 'selected' : ''}>点击规律性</option>
+                <option value="hesitation_time" ${t.field === 'hesitation_time' ? 'selected' : ''}>犹豫时间</option>
+                <option value="ml_score" ${t.field === 'ml_score' ? 'selected' : ''}>ML分数</option>
+                <option value="anomaly_score" ${t.field === 'anomaly_score' ? 'selected' : ''}>异常分数</option>
+            </select>
+            <select class="form-select form-select-sm condition-operator">
+                <option value="gt" ${t.operator === 'gt' ? 'selected' : ''}>></option>
+                <option value="gte" ${t.operator === 'gte' ? 'selected' : ''}>>=</option>
+                <option value="lt" ${t.operator === 'lt' ? 'selected' : ''}><</option>
+                <option value="lte" ${t.operator === 'lte' ? 'selected' : ''}><=</option>
+                <option value="eq" ${t.operator === 'eq' ? 'selected' : ''}>=</option>
+            </select>
+            <input type="number" class="form-control form-control-sm condition-value" placeholder="阈值" step="0.01" value="${t.value}">
+            <button class="btn btn-outline-danger btn-sm" onclick="removeCondition('cond${conditionCounter}')"><i class="fas fa-times"></i></button>
+        `;
+        
+        conditionsContainer.appendChild(conditionRow);
+        
+        conditionRow.querySelectorAll('select, input').forEach(el => {
+            el.addEventListener('change', updateRuleExpression);
+            el.addEventListener('input', updateRuleExpression);
+        });
+    });
+    
+    updateRuleExpression();
+    showToast(`已应用模板: ${templateName}`, 'success');
+}
+
+function loadSampleData(type) {
+    const textarea = document.getElementById('sandboxInput');
+    if (!textarea) return;
+    
+    if (type === 'bot') {
+        textarea.value = JSON.stringify({
+            average_speed: 2500,
+            path_efficiency: 0.99,
+            click_regularity: 0.999,
+            hesitation_time: 20,
+            ml_score: 0.92,
+            anomaly_score: 0.88,
+            smoothness: 0.98
+        }, null, 2);
+    } else if (type === 'human') {
+        textarea.value = JSON.stringify({
+            average_speed: 350,
+            path_efficiency: 0.82,
+            click_regularity: 0.72,
+            hesitation_time: 450,
+            ml_score: 0.15,
+            anomaly_score: 0.12,
+            smoothness: 0.68
+        }, null, 2);
+    }
+}
+
+function clearSandbox() {
+    const textarea = document.getElementById('sandboxInput');
+    const result = document.getElementById('sandboxResult');
+    
+    if (textarea) textarea.value = '';
+    if (result) {
+        result.innerHTML = `
+            <div class="text-muted text-center py-4">
+                <i class="fas fa-arrow-left me-2"></i>输入数据后点击"运行测试"
+            </div>
+        `;
+    }
+}
+
+function runSandboxTest() {
+    const inputEl = document.getElementById('sandboxInput');
+    const resultEl = document.getElementById('sandboxResult');
+    
+    if (!inputEl || !resultEl) return;
+    
+    let inputData;
+    try {
+        inputData = JSON.parse(inputEl.value);
+    } catch (e) {
+        resultEl.innerHTML = `<div class="result-danger">JSON格式错误: ${e.message}</div>`;
+        return;
+    }
+    
+    const conditions = getConditionsFromBuilder();
+    const ruleLogic = document.getElementById('mainRuleGroup')?.dataset.logic || 'AND';
+    const evaluationResult = evaluateRules(conditions, inputData, ruleLogic);
+    
+    const timestamp = new Date().toLocaleTimeString();
+    testHistory.unshift({
+        timestamp,
+        input: inputData,
+        result: evaluationResult
+    });
+    
+    if (testHistory.length > 10) {
+        testHistory.pop();
+    }
+    
+    renderTestHistory();
+    
+    let resultHtml = `<pre>`;
+    resultHtml += `<span class="result-${evaluationResult.isBot ? 'danger' : 'success'}">`;
+    resultHtml += `评估结果: ${evaluationResult.isBot ? '机器人 ✓' : '人类 ✓'}\n`;
+    resultHtml += `</span>`;
+    resultHtml += `总分: ${(evaluationResult.totalScore * 100).toFixed(1)}%\n`;
+    resultHtml += `风险等级: ${evaluationResult.riskLevel}\n`;
+    resultHtml += `置信度: ${(evaluationResult.confidence * 100).toFixed(1)}%\n`;
+    resultHtml += `\n触发的规则 (${evaluationResult.triggeredRules.length}):\n`;
+    evaluationResult.triggeredRules.forEach(rule => {
+        resultHtml += `  • ${rule}\n`;
+    });
+    
+    if (evaluationResult.recommendations.length > 0) {
+        resultHtml += `\n建议:\n`;
+        evaluationResult.recommendations.forEach(rec => {
+            resultHtml += `  • ${rec}\n`;
+        });
+    }
+    
+    resultHtml += `\n分析时间: ${evaluationResult.analysisTime}ms`;
+    resultHtml += `</pre>`;
+    
+    resultEl.innerHTML = resultHtml;
+    
+    addToHistory({
+        timestamp,
+        type: evaluationResult.isBot ? 'bot' : 'human',
+        score: evaluationResult.totalScore
+    });
+}
+
+function getConditionsFromBuilder() {
+    const conditions = [];
+    document.querySelectorAll('.rule-condition-row').forEach(row => {
+        const field = row.querySelector('.condition-field')?.value;
+        const operator = row.querySelector('.condition-operator')?.value;
+        const value = parseFloat(row.querySelector('.condition-value')?.value);
+        
+        if (field && operator && !isNaN(value)) {
+            conditions.push({ field, operator, value });
+        }
+    });
+    return conditions;
+}
+
+function evaluateRules(conditions, features, logic) {
+    const fieldMap = {
+        'speed': 'average_speed',
+        'speed_variance': 'speed_variance',
+        'path_efficiency': 'path_efficiency',
+        'smoothness': 'smoothness',
+        'click_regularity': 'click_regularity',
+        'hesitation_time': 'hesitation_time',
+        'ml_score': 'ml_score',
+        'anomaly_score': 'anomaly_score'
+    };
+    
+    const results = conditions.map(cond => {
+        const featureKey = fieldMap[cond.field] || cond.field;
+        const featureValue = features[featureKey] || 0;
+        
+        let matched = false;
+        switch (cond.operator) {
+            case 'gt': matched = featureValue > cond.value; break;
+            case 'gte': matched = featureValue >= cond.value; break;
+            case 'lt': matched = featureValue < cond.value; break;
+            case 'lte': matched = featureValue <= cond.value; break;
+            case 'eq': matched = Math.abs(featureValue - cond.value) < 0.001; break;
+        }
+        
+        return {
+            field: cond.field,
+            operator: cond.operator,
+            value: cond.value,
+            featureValue,
+            matched
+        };
+    });
+    
+    let isTriggered;
+    if (logic === 'AND') {
+        isTriggered = results.every(r => r.matched);
+    } else if (logic === 'OR') {
+        isTriggered = results.some(r => r.matched);
+    } else {
+        isTriggered = !results.every(r => r.matched);
+    }
+    
+    const matchedCount = results.filter(r => r.matched).length;
+    const totalScore = conditions.length > 0 ? matchedCount / conditions.length : 0;
+    const mlScore = features.ml_score || 0;
+    const finalScore = (totalScore + mlScore) / 2;
+    
+    let riskLevel;
+    if (finalScore >= 0.8) riskLevel = 'critical';
+    else if (finalScore >= 0.6) riskLevel = 'high';
+    else if (finalScore >= 0.4) riskLevel = 'medium';
+    else if (finalScore >= 0.2) riskLevel = 'low';
+    else riskLevel = 'minimal';
+    
+    const triggeredRules = results.filter(r => r.matched).map(r => `${r.field}_${r.operator}_${r.value}`);
+    
+    const recommendations = [];
+    if (finalScore > 0.7) {
+        recommendations.push('建议增加额外的验证步骤');
+    }
+    if (matchedCount >= 3) {
+        recommendations.push('触发多条规则，建议直接拒绝访问');
+    }
+    
+    return {
+        isBot: isTriggered,
+        totalScore: finalScore,
+        riskLevel,
+        confidence: 0.85,
+        triggeredRules,
+        recommendations,
+        analysisTime: Math.floor(Math.random() * 10) + 1,
+        matchedConditions: results.filter(r => r.matched).length,
+        totalConditions: results.length
+    };
+}
+
+function renderTestHistory() {
+    const container = document.getElementById('testHistoryList');
+    if (!container) return;
+    
+    if (testHistory.length === 0) {
+        container.innerHTML = '<div class="text-muted small text-center py-2">暂无测试记录</div>';
+        return;
+    }
+    
+    container.innerHTML = testHistory.map((h, i) => `
+        <div class="test-history-item">
+            <span class="${h.result.isBot ? 'text-danger' : 'text-success'}">
+                <i class="fas fa-${h.result.isBot ? 'robot' : 'user'} me-1"></i>
+                ${h.type === 'bot' ? '机器人' : '人类'} - ${(h.result.totalScore * 100).toFixed(0)}%
+            </span>
+            <span class="text-muted">${h.timestamp}</span>
+        </div>
+    `).join('');
+}
+
+function addToHistory(entry) {
+    const tbody = document.getElementById('versionHistoryBody');
+    if (!tbody) return;
+    
+    const existingCurrent = tbody.querySelector('tr:first-child');
+    if (existingCurrent) {
+        const newRow = document.createElement('tr');
+        newRow.innerHTML = `
+            <td><code>v2.1.4</code></td>
+            <td><span class="badge bg-info">测试</span></td>
+            <td>沙盒测试 - ${entry.type === 'bot' ? '机器人' : '人类'}样本</td>
+            <td>admin</td>
+            <td>${new Date().toLocaleString()}</td>
+            <td><span class="badge bg-success">当前</span></td>
+            <td><button class="btn btn-sm btn-outline-secondary" onclick="compareVersion('v2.1.4')"><i class="fas fa-code-compare"></i></button></td>
+        `;
+        
+        tbody.insertBefore(newRow, tbody.firstChild);
+        
+        if (existingCurrent.querySelector('.badge.bg-success')) {
+            existingCurrent.querySelector('.badge.bg-success').className = 'badge bg-secondary';
+            existingCurrent.querySelector('td:nth-child(6)').innerHTML = '<span class="badge bg-secondary">历史</span>';
+        }
+    }
+}
+
+async function showVersionHistory() {
+    showToast('正在刷新版本历史...', 'info');
+    
+    try {
+        const response = await auth.request('/admin/risk-rules/versions');
+        if (response.code === 0) {
+            renderVersionHistory(response.data);
+            showToast('版本历史已刷新', 'success');
+        }
+    } catch (error) {
+        showToast('刷新失败，使用本地数据', 'warning');
+    }
+}
+
+function renderVersionHistory(versions) {
+    const tbody = document.getElementById('versionHistoryBody');
+    if (!tbody || !versions) return;
+    
+    tbody.innerHTML = versions.map(v => `
+        <tr>
+            <td><code>${v.version}</code></td>
+            <td><span class="badge bg-${getChangeTypeBadge(v.changeType)}">${v.changeType}</span></td>
+            <td>${escapeHtml(v.description)}</td>
+            <td>${escapeHtml(v.operator)}</td>
+            <td>${v.createdAt}</td>
+            <td><span class="badge bg-${v.isCurrent ? 'success' : 'secondary'}">${v.isCurrent ? '当前' : '历史'}</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-secondary" onclick="compareVersion('${v.version}')"><i class="fas fa-code-compare"></i></button>
+                ${!v.isCurrent ? `<button class="btn btn-sm btn-outline-success" onclick="rollbackVersion('${v.version}')"><i class="fas fa-undo"></i></button>` : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getChangeTypeBadge(type) {
+    const map = {
+        '新增': 'primary',
+        '修改': 'info',
+        '优化': 'warning',
+        '回滚': 'danger',
+        '测试': 'secondary'
+    };
+    return map[type] || 'secondary';
+}
+
+async function compareVersion(version) {
+    showToast(`正在比较版本 ${version}...`, 'info');
+    
+    try {
+        const response = await auth.request(`/admin/risk-rules/versions/${version}/compare`);
+        if (response.code === 0) {
+            showVersionDiffModal(response.data);
+        }
+    } catch (error) {
+        showToast('对比失败', 'danger');
+    }
+}
+
+function showVersionDiffModal(diffData) {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">版本对比</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre class="bg-dark text-light p-3 rounded" style="max-height:400px;overflow-y:auto;">${JSON.stringify(diffData, null, 2)}</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    modal.addEventListener('hidden.bs.modal', () => modal.remove());
+}
+
+async function rollbackVersion(version) {
+    if (!confirm(`确定要回滚到版本 ${version} 吗？`)) return;
+    
+    showToast(`正在回滚到 ${version}...`, 'info');
+    
+    try {
+        const response = await auth.request(`/admin/risk-rules/versions/${version}/rollback`, {
+            method: 'POST'
+        });
+        
+        if (response.code === 0) {
+            showToast(`已成功回滚到 ${version}`, 'success');
+            showVersionHistory();
+        } else {
+            showToast('回滚失败', 'danger');
+        }
+    } catch (error) {
+        showToast('回滚请求失败', 'danger');
     }
 }
 

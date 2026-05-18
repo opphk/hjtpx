@@ -281,8 +281,8 @@ func (a *QueryAnalyzer) calculatePerformanceScore(plan string) int {
 	return score
 }
 
-func (a *QueryAnalyzer) GetIndexRecommendations(tableName string) ([]IndexRecommendation, error) {
-	var recommendations []IndexRecommendation
+func (a *QueryAnalyzer) GetIndexRecommendations(tableName string) ([]*IndexRecommendation, error) {
+	var recommendations []*IndexRecommendation
 
 	var missingIndexes []struct {
 		TableName    string
@@ -314,27 +314,18 @@ func (a *QueryAnalyzer) GetIndexRecommendations(tableName string) ([]IndexRecomm
 	}
 
 	for _, idx := range missingIndexes {
-		recommendations = append(recommendations, IndexRecommendation{
-			TableName:       idx.TableName,
-			IndexName:       idx.IndexName,
-			Columns:         idx.Columns,
-			Priority:        "medium",
-			EstimatedSizeKb: idx.EstSizeKb,
-			UsageFrequency:  idx.UsageFreq,
+		recommendations = append(recommendations, &IndexRecommendation{
+			TableName:         idx.TableName,
+			IndexName:         idx.IndexName,
+			Columns:           []string{idx.Columns},
+			Priority:          "medium",
+			EstimatedSize:     fmt.Sprintf("%dKB", idx.EstSizeKb),
+			QueryBenefits:     []string{"性能优化建议"},
+			CreationSQL:       fmt.Sprintf("CREATE INDEX CONCURRENTLY %s ON %s (%s)", idx.IndexName, idx.TableName, idx.Columns),
 		})
 	}
 
 	return recommendations, nil
-}
-
-type IndexRecommendation struct {
-	TableName       string `json:"table_name"`
-	IndexName       string `json:"index_name"`
-	Columns         string `json:"columns"`
-	Priority        string `json:"priority"`
-	EstimatedSizeKb int64  `json:"estimated_size_kb"`
-	UsageFrequency  int64  `json:"usage_frequency"`
-	DDL             string `json:"ddl"`
 }
 
 func (a *QueryAnalyzer) GenerateIndexDDL(rec IndexRecommendation) string {

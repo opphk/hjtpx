@@ -1,18 +1,196 @@
 let requestTrendChart, realtimeChart;
+let ws = null;
+let wsConnected = false;
 let autoRefreshInterval = null;
 let realtimeDataPoints = [];
 let previousStats = null;
 const REALTIME_UPDATE_INTERVAL = 5000;
-const MAX_REALTIME_POINTS = 20;
+const MAX_REALTIME_POINTS = 60;
+const WS_RECONNECT_DELAY = 3000;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    initCharts();
+    initECharts();
+    initWebSocket();
     setupEventListeners();
     await loadDashboardStats();
     await loadSystemStatus();
     loadRecentActivity();
     startAutoRefresh();
 });
+
+function initECharts() {
+    initRequestTrendChart();
+    initRealtimeChart();
+}
+
+function initRequestTrendChart() {
+    const container = document.getElementById('requestTrendChart');
+    if (!container) return;
+
+    requestTrendChart = echarts.init(container);
+    window.addEventListener('resize', () => requestTrendChart.resize());
+}
+
+function initRealtimeChart() {
+    const container = document.getElementById('realtimeChart');
+    if (!container) return;
+
+    realtimeDataPoints = Array(MAX_REALTIME_POINTS).fill(0).map((_, i) => ({
+        time: formatTime(new Date(Date.now() - (MAX_REALTIME_POINTS - i) * 5000)),
+        value: Math.floor(Math.random() * 50) + 30
+    }));
+
+    realtimeChart = echarts.init(container);
+    window.addEventListener('resize', () => realtimeChart.resize());
+
+    updateRealtimeChartInit();
+}
+
+function updateRealtimeChartInit() {
+    if (!realtimeChart) return;
+
+    realtimeChart.setOption({
+        xAxis: {
+            type: 'category',
+            data: realtimeDataPoints.map(p => p.time),
+            axisLabel: { color: '#666', rotate: 45 },
+            boundaryGap: false
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' }
+        },
+        series: [{
+            data: realtimeDataPoints.map(p => p.value),
+            type: 'line',
+            smooth: true,
+            areaStyle: {
+                color: {
+                    type: 'linear',
+                    x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+                        { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+                    ]
+                }
+            },
+            lineStyle: { color: '#10b981', width: 2 },
+            itemStyle: { color: '#10b981' },
+            symbol: 'circle',
+            symbolSize: 4
+        }],
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+        animation: false
+    });
+}
+
+function initWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/v1/admin/dashboard/ws`;
+
+    try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = function() {
+            wsConnected = true;
+            updateWsStatus(true);
+            console.log('WebSocket connected');
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleRealtimeData(data);
+            } catch (e) {
+                console.error('Parse WebSocket data failed:', e);
+            }
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            wsConnected = false;
+            updateWsStatus(false);
+        };
+
+        ws.onclose = function() {
+            wsConnected = false;
+            updateWsStatus(false);
+            console.log('WebSocket disconnected, reconnecting in', WS_RECONNECT_DELAY, 'ms...');
+            setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+        };
+    } catch (e) {
+        console.error('WebSocket init failed:', e);
+        wsConnected = false;
+        updateWsStatus(false);
+        setTimeout(initWebSocket, WS_RECONNECT_DELAY);
+    }
+}
+
+function updateWsStatus(connected) {
+    const statusEl = document.getElementById('wsStatus');
+    if (!statusEl) return;
+
+    if (connected) {
+        statusEl.className = 'badge badge-success';
+        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已连接';
+    } else {
+        statusEl.className = 'badge badge-danger';
+        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已断开';
+    }
+}
+
+function handleRealtimeData(data) {
+    if (data.type === 'metrics') {
+        updateRealtimeMetrics(data.payload);
+    } else if (data.type === 'activity') {
+        addActivityRow(data.payload);
+    } else if (data.type === 'stats') {
+        updateStats(data.payload);
+    }
+}
+
+function updateRealtimeMetrics(data) {
+    if (data.total_requests !== undefined) {
+        animateNumber('totalRequests', data.total_requests);
+    }
+
+    if (data.requests_per_second !== undefined) {
+        document.getElementById('currentQPS').textContent = data.requests_per_second.toFixed(0) + ' QPS';
+        updateRealtimeChart(data.requests_per_second);
+    }
+
+    if (data.system_status) {
+        updateSystemStatus(data.system_status);
+    }
+
+    if (data.resource_usage) {
+        updateResourceUsage(data.resource_usage);
+    }
+}
+
+function addActivityRow(data) {
+    const tbody = document.getElementById('recentActivity');
+    if (!tbody) return;
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td><small class="text-muted">${data.time || formatTime(new Date())}</small></td>
+        <td>${escapeHtml(data.event || '-')}</td>
+        <td><code>${escapeHtml(data.user || '-')}</code></td>
+        <td><span class="badge ${getStatusBadgeClass(data.status)}">${getStatusText(data.status)}</span></td>
+    `;
+
+    tbody.insertBefore(row, tbody.firstChild);
+
+    while (tbody.children.length > 8) {
+        tbody.removeChild(tbody.lastChild);
+    }
+}
 
 function setupEventListeners() {
     const refreshBtn = document.getElementById('refreshBtn');
@@ -240,119 +418,6 @@ async function loadSystemStatus() {
     }
 }
 
-function initCharts() {
-    initRequestTrendChart();
-    initRealtimeChart();
-}
-
-function initRequestTrendChart() {
-    const ctx = document.getElementById('requestTrendChart');
-    if (!ctx) return;
-
-    requestTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '请求量',
-                data: [],
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 3,
-                pointHoverRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    titleFont: { size: 14 },
-                    bodyFont: { size: 13 },
-                    displayColors: false
-                }
-            },
-            scales: {
-                x: {
-                    grid: {
-                        display: false
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-function initRealtimeChart() {
-    const ctx = document.getElementById('realtimeChart');
-    if (!ctx) return;
-
-    realtimeDataPoints = Array(MAX_REALTIME_POINTS).fill(0).map((_, i) => ({
-        x: new Date(Date.now() - (MAX_REALTIME_POINTS - i) * 5000),
-        y: Math.floor(Math.random() * 50) + 30
-    }));
-
-    realtimeChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: realtimeDataPoints.map(p => formatTime(p.x)),
-            datasets: [{
-                label: '请求/秒',
-                data: realtimeDataPoints.map(p => p.y),
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    displayColors: false
-                }
-            },
-            scales: {
-                x: {
-                    display: false
-                },
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    }
-                }
-            },
-            animation: {
-                duration: 300
-            }
-        }
-    });
-}
-
 function formatTime(date) {
     return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
@@ -373,43 +438,87 @@ async function loadRequestTrendData(period) {
 }
 
 function getMockTrendData(period) {
-    let labels, data;
+    let labels, dataValues;
 
     if (period === 'hour') {
         labels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
-        data = Array.from({ length: 24 }, () => Math.floor(Math.random() * 5000) + 1000);
+        dataValues = Array.from({ length: 24 }, () => Math.floor(Math.random() * 5000) + 1000);
     } else if (period === 'day') {
         labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-        data = [12000, 15000, 18000, 16000, 20000, 25000, 22000];
+        dataValues = [12000, 15000, 18000, 16000, 20000, 25000, 22000];
     } else {
         labels = Array.from({ length: 7 }, (_, i) => `第${i + 1}周`);
-        data = [85000, 92000, 105000, 98000, 120000, 135000, 145000];
+        dataValues = [85000, 92000, 105000, 98000, 120000, 135000, 145000];
     }
 
-    return { labels, data };
+    return { labels, data: dataValues };
 }
 
 function updateRequestTrendChart(data) {
     if (!requestTrendChart || !data) return;
 
-    requestTrendChart.data.labels = data.labels;
-    requestTrendChart.data.datasets[0].data = data.data;
-    requestTrendChart.update('none');
+    const labels = data.labels || [];
+    const values = data.data || [];
+
+    requestTrendChart.setOption({
+        xAxis: {
+            type: 'category',
+            data: labels,
+            axisLabel: { color: '#666', rotate: 45 }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' }
+        },
+        series: [{
+            data: values,
+            type: 'line',
+            smooth: true,
+            areaStyle: {
+                color: {
+                    type: 'linear',
+                    x: 0, y: 0, x2: 0, y2: 1,
+                    colorStops: [
+                        { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                        { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+                    ]
+                }
+            },
+            lineStyle: { color: '#3b82f6', width: 2 },
+            itemStyle: { color: '#3b82f6' },
+            symbol: 'circle',
+            symbolSize: 4
+        }],
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' },
+            padding: 12
+        },
+        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
+    }, false);
 }
 
-function updateRealtimeChart(requestsPerMinute) {
+function updateRealtimeChart(value) {
     if (!realtimeChart) return;
 
     const now = new Date();
-    realtimeDataPoints.push({ x: now, y: requestsPerMinute });
+    const timeLabel = formatTime(now);
+
+    realtimeDataPoints.push({ time: timeLabel, value: value });
 
     if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
         realtimeDataPoints.shift();
     }
 
-    realtimeChart.data.labels = realtimeDataPoints.map(p => formatTime(p.x));
-    realtimeChart.data.datasets[0].data = realtimeDataPoints.map(p => p.y);
-    realtimeChart.update('none');
+    realtimeChart.setOption({
+        xAxis: {
+            data: realtimeDataPoints.map(p => p.time)
+        },
+        series: [{
+            data: realtimeDataPoints.map(p => p.value)
+        }]
+    }, false);
 }
 
 async function loadRecentActivity() {

@@ -2,16 +2,19 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/internal/service/captcha"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
 var sliderGeneratorService *captcha.GeneratorService
 var sliderVerifierService *captcha.VerifierService
+var sliderAnalyzer *service.SliderAnalyzer
 
 func InitSliderCaptchaHandler(gen *captcha.GeneratorService, ver *captcha.VerifierService) {
 	sliderGeneratorService = gen
 	sliderVerifierService = ver
+	sliderAnalyzer = service.NewSliderAnalyzer()
 }
 
 // SliderCaptchaRequest 滑动验证码创建请求
@@ -24,12 +27,19 @@ type SliderCaptchaRequest struct {
 
 // SliderVerifyRequest 滑动验证码验证请求
 type SliderVerifyRequest struct {
-	SessionID  string  `json:"session_id" binding:"required"` // 会话 ID
-	PositionX  int     `json:"position_x" binding:"required"` // X 坐标
-	PositionY  int     `json:"position_y" binding:"required"` // Y 坐标
-	RiskScore  float64 `json:"risk_score"`                    // 风险评分
-	TraceScore float64 `json:"trace_score"`                   // 轨迹评分
-	EnvScore   float64 `json:"env_score"`                     // 环境评分
+	SessionID     string          `json:"session_id" binding:"required"` // 会话 ID
+	PositionX     int             `json:"position_x" binding:"required"` // X 坐标
+	PositionY     int             `json:"position_y" binding:"required"` // Y 坐标
+	RiskScore     float64         `json:"risk_score"`                    // 风险评分
+	TraceScore    float64         `json:"trace_score"`                   // 轨迹评分
+	EnvScore      float64         `json:"env_score"`                     // 环境评分
+	Trajectory    []TrajectoryPoint `json:"trajectory"`                  // 轨迹数据
+}
+
+type TrajectoryPoint struct {
+	X         int   `json:"x"`
+	Y         int   `json:"y"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // CreateSliderCaptcha 创建滑动验证码
@@ -85,11 +95,28 @@ func VerifySliderCaptcha(c *gin.Context) {
 		return
 	}
 
+	session, err := sliderVerifierService.GetSessionStatus(c.Request.Context(), req.SessionID)
+	if err != nil {
+		response.Fail(c, response.CodeNotFound, "会话不存在")
+		return
+	}
+
+	analysisResult := analyzeTrajectory(req.Trajectory, req.PositionX)
+
+	adjustedRiskScore := req.RiskScore
+	if analysisResult != nil {
+		if analysisResult.IsBot {
+			adjustedRiskScore = 0.9
+		} else {
+			adjustedRiskScore = 0.1
+		}
+	}
+
 	verifyReq := &captcha.VerifyRequest{
 		SessionID:  req.SessionID,
 		PositionX:  req.PositionX,
 		PositionY:  req.PositionY,
-		RiskScore:  req.RiskScore,
+		RiskScore:  adjustedRiskScore,
 		TraceScore: req.TraceScore,
 		EnvScore:   req.EnvScore,
 	}
@@ -100,7 +127,67 @@ func VerifySliderCaptcha(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, result)
+	resultData := map[string]interface{}{
+		"success":       result.Success,
+		"message":        result.Message,
+		"score":          result.Score,
+		"position_diff":  result.PositionDiff,
+		"trajectory_analysis": nil,
+	}
+
+	if analysisResult != nil {
+		resultData["trajectory_analysis"] = map[string]interface{}{
+			"is_bot":          analysisResult.IsBot,
+			"confidence":      analysisResult.Confidence,
+			"anomaly_score":   analysisResult.AnomalyScore,
+			"risk_indicators": analysisResult.RiskIndicators,
+			"overall_score":   analysisResult.OverallRiskScore,
+			"pattern":         analysisResult.TrajectoryPattern,
+			"speed_profile":  analysisResult.SpeedProfile,
+			"sampling_rate":   nil,
+		}
+	}
+
+	if session.GapX > 0 && analysisResult != nil {
+		resultData["trajectory_analysis"].(map[string]interface{})["sampling_rate"] = calculateSamplingRate(req.Trajectory)
+	}
+
+	response.Success(c, resultData)
+}
+
+func analyzeTrajectory(trajectory []TrajectoryPoint, targetPosition int) *service.SliderAnalysisResult {
+	if len(trajectory) < 3 || sliderAnalyzer == nil {
+		return nil
+	}
+
+	sliderPoints := make([]service.SliderPoint, len(trajectory))
+	for i, p := range trajectory {
+		sliderPoints[i] = service.SliderPoint{
+			X:         p.X,
+			Y:         p.Y,
+			Timestamp: p.Timestamp,
+		}
+	}
+
+	result, err := sliderAnalyzer.AnalyzeWithHighSamplingSupport(sliderPoints, targetPosition)
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+func calculateSamplingRate(trajectory []TrajectoryPoint) float64 {
+	if len(trajectory) < 2 {
+		return 0
+	}
+
+	totalDuration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	if totalDuration <= 0 {
+		return 0
+	}
+
+	return float64(len(trajectory)-1) / totalDuration * 1000
 }
 
 // GetSliderCaptchaStatus 获取验证码会话状态

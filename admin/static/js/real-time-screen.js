@@ -1,15 +1,16 @@
 let ws = null;
+let wsConnected = false;
 let realtimeChart = null;
 let captchaTypeChart = null;
 let riskDistributionChart = null;
 let topAppsChart = null;
 let realtimeData = [];
 const MAX_DATA_POINTS = 60;
-
 let chartsInitialized = false;
+const WS_RECONNECT_DELAY = 3000;
 
 document.addEventListener('DOMContentLoaded', function() {
-    initCharts();
+    initECharts();
     initWebSocket();
     updateTime();
     setInterval(updateTime, 1000);
@@ -35,105 +36,229 @@ function exitScreen() {
     window.location.href = '/admin';
 }
 
-function initCharts() {
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                labels: { color: 'rgba(255,255,255,0.7)', font: { size: 11 } }
-            }
-        }
-    };
-
-    const realtimeCtx = document.getElementById('realtimeChart').getContext('2d');
-    realtimeChart = new Chart(realtimeCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: '请求数',
-                    data: [],
-                    borderColor: '#00d4ff',
-                    backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 0
-                },
-                {
-                    label: '成功数',
-                    data: [],
-                    borderColor: '#28a745',
-                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 0
-                }
-            ]
-        },
-        options: {
-            ...chartOptions,
-            scales: {
-                x: { ticks: { color: 'rgba(255,255,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                y: { ticks: { color: 'rgba(255,255,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.1)' } }
-            }
-        }
-    });
-
-    const captchaTypeCtx = document.getElementById('captchaTypeChart').getContext('2d');
-    captchaTypeChart = new Chart(captchaTypeCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['滑块验证', '点击验证', '手势验证', '拼图验证'],
-            datasets: [{
-                data: [35, 25, 20, 20],
-                backgroundColor: ['#00d4ff', '#28a745', '#ffc107', '#dc3545']
-            }]
-        },
-        options: {
-            ...chartOptions,
-            cutout: '60%'
-        }
-    });
-
-    const riskCtx = document.getElementById('riskDistributionChart').getContext('2d');
-    riskDistributionChart = new Chart(riskCtx, {
-        type: 'pie',
-        data: {
-            labels: ['低风险', '中风险', '高风险'],
-            datasets: [{
-                data: [70, 20, 10],
-                backgroundColor: ['#28a745', '#ffc107', '#dc3545']
-            }]
-        },
-        options: chartOptions
-    });
-
-    const topAppsCtx = document.getElementById('topAppsChart').getContext('2d');
-    topAppsChart = new Chart(topAppsCtx, {
-        type: 'bar',
-        data: {
-            labels: ['应用A', '应用B', '应用C', '应用D', '应用E'],
-            datasets: [{
-                label: '请求数',
-                data: [5000, 4200, 3800, 2900, 2100],
-                backgroundColor: 'rgba(0, 212, 255, 0.6)',
-                borderColor: '#00d4ff',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            ...chartOptions,
-            indexAxis: 'y',
-            scales: {
-                x: { ticks: { color: 'rgba(255,255,255,0.5)' }, grid: { color: 'rgba(255,255,255,0.1)' } },
-                y: { ticks: { color: 'rgba(255,255,255,0.5)' }, grid: { display: false } }
-            }
-        }
-    });
-
+function initECharts() {
+    initRealtimeChart();
+    initCaptchaTypeChart();
+    initRiskDistributionChart();
+    initTopAppsChart();
     chartsInitialized = true;
+}
+
+function initRealtimeChart() {
+    const container = document.getElementById('realtimeChart');
+    if (!container) return;
+
+    realtimeChart = echarts.init(container);
+    window.addEventListener('resize', () => realtimeChart.resize());
+
+    realtimeData = Array(MAX_DATA_POINTS).fill(0).map((_, i) => ({
+        time: formatTime(new Date(Date.now() - (MAX_DATA_POINTS - i) * 1000)),
+        requests: Math.floor(Math.random() * 100) + 50,
+        success: Math.floor(Math.random() * 90) + 45
+    }));
+
+    updateRealtimeChartInit();
+}
+
+function updateRealtimeChartInit() {
+    if (!realtimeChart) return;
+
+    realtimeChart.setOption({
+        xAxis: {
+            type: 'category',
+            data: realtimeData.map(p => p.time),
+            axisLabel: { color: 'rgba(255,255,255,0.5)', rotate: 45 },
+            boundaryGap: false
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: 'rgba(255,255,255,0.5)' },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+        },
+        series: [
+            {
+                name: '请求数',
+                data: realtimeData.map(p => p.requests),
+                type: 'line',
+                smooth: true,
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(0, 212, 255, 0.3)' },
+                            { offset: 1, color: 'rgba(0, 212, 255, 0.05)' }
+                        ]
+                    }
+                },
+                lineStyle: { color: '#00d4ff', width: 2 },
+                itemStyle: { color: '#00d4ff' },
+                symbol: 'circle',
+                symbolSize: 4
+            },
+            {
+                name: '成功数',
+                data: realtimeData.map(p => p.success),
+                type: 'line',
+                smooth: true,
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(40, 167, 69, 0.3)' },
+                            { offset: 1, color: 'rgba(40, 167, 69, 0.05)' }
+                        ]
+                    }
+                },
+                lineStyle: { color: '#28a745', width: 2 },
+                itemStyle: { color: '#28a745' },
+                symbol: 'circle',
+                symbolSize: 4
+            }
+        ],
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        legend: {
+            data: ['请求数', '成功数'],
+            textStyle: { color: 'rgba(255,255,255,0.7)' }
+        },
+        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+        animation: false
+    });
+}
+
+function initCaptchaTypeChart() {
+    const container = document.getElementById('captchaTypeChart');
+    if (!container) return;
+
+    captchaTypeChart = echarts.init(container);
+    window.addEventListener('resize', () => captchaTypeChart.resize());
+
+    captchaTypeChart.setOption({
+        series: [{
+            type: 'pie',
+            radius: ['45%', '70%'],
+            data: [
+                { value: 35, name: '滑块验证' },
+                { value: 25, name: '点击验证' },
+                { value: 20, name: '手势验证' },
+                { value: 20, name: '拼图验证' }
+            ],
+            label: {
+                show: true,
+                formatter: '{b}: {c}%',
+                color: 'rgba(255,255,255,0.7)'
+            },
+            emphasis: {
+                label: {
+                    show: true,
+                    fontSize: 14,
+                    fontWeight: 'bold'
+                }
+            }
+        }],
+        color: ['#00d4ff', '#28a745', '#ffc107', '#dc3545'],
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c}% ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            textStyle: { color: 'rgba(255,255,255,0.7)' }
+        }
+    });
+}
+
+function initRiskDistributionChart() {
+    const container = document.getElementById('riskDistributionChart');
+    if (!container) return;
+
+    riskDistributionChart = echarts.init(container);
+    window.addEventListener('resize', () => riskDistributionChart.resize());
+
+    riskDistributionChart.setOption({
+        series: [{
+            type: 'pie',
+            radius: '65%',
+            data: [
+                { value: 70, name: '低风险' },
+                { value: 20, name: '中风险' },
+                { value: 10, name: '高风险' }
+            ],
+            label: {
+                show: true,
+                formatter: '{b}: {c}%',
+                color: 'rgba(255,255,255,0.7)'
+            },
+            emphasis: {
+                label: {
+                    show: true,
+                    fontSize: 14,
+                    fontWeight: 'bold'
+                }
+            }
+        }],
+        color: ['#28a745', '#ffc107', '#dc3545'],
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c}% ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            right: 'right',
+            textStyle: { color: 'rgba(255,255,255,0.7)' }
+        }
+    });
+}
+
+function initTopAppsChart() {
+    const container = document.getElementById('topAppsChart');
+    if (!container) return;
+
+    topAppsChart = echarts.init(container);
+    window.addEventListener('resize', () => topAppsChart.resize());
+
+    topAppsChart.setOption({
+        xAxis: {
+            type: 'value',
+            axisLabel: { color: 'rgba(255,255,255,0.5)' },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+        },
+        yAxis: {
+            type: 'category',
+            data: ['应用A', '应用B', '应用C', '应用D', '应用E'],
+            axisLabel: { color: 'rgba(255,255,255,0.5)' },
+            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+        },
+        series: [{
+            type: 'bar',
+            data: [5000, 4200, 3800, 2900, 2100],
+            itemStyle: {
+                color: {
+                    type: 'linear',
+                    x: 0, y: 0, x2: 1, y2: 0,
+                    colorStops: [
+                        { offset: 0, color: '#00d4ff' },
+                        { offset: 1, color: '#007bff' }
+                    ]
+                },
+                borderRadius: [0, 4, 4, 0]
+            },
+            barWidth: '60%'
+        }],
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        grid: { left: '3%', right: '8%', bottom: '3%', containLabel: true }
+    });
 }
 
 function initWebSocket() {
@@ -144,6 +269,7 @@ function initWebSocket() {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = function() {
+            wsConnected = true;
             updateConnectionStatus(true);
             console.log('WebSocket connected');
         };
@@ -159,25 +285,28 @@ function initWebSocket() {
 
         ws.onerror = function(error) {
             console.error('WebSocket error:', error);
+            wsConnected = false;
             updateConnectionStatus(false);
         };
 
         ws.onclose = function() {
+            wsConnected = false;
             updateConnectionStatus(false);
-            console.log('WebSocket disconnected, reconnecting in 3s...');
-            setTimeout(initWebSocket, 3000);
+            console.log('WebSocket disconnected, reconnecting in', WS_RECONNECT_DELAY, 'ms...');
+            setTimeout(initWebSocket, WS_RECONNECT_DELAY);
         };
     } catch (e) {
         console.error('Failed to initialize WebSocket:', e);
+        wsConnected = false;
         updateConnectionStatus(false);
-        setTimeout(initWebSocket, 3000);
+        setTimeout(initWebSocket, WS_RECONNECT_DELAY);
     }
 }
 
 function updateConnectionStatus(connected) {
     const statusEl = document.getElementById('connectionStatus');
     const textEl = document.getElementById('connectionText');
-    
+
     if (connected) {
         statusEl.classList.remove('disconnected');
         statusEl.classList.add('connected');
@@ -214,7 +343,7 @@ function updateMetrics(data) {
     updateGauge('memory', data.memory_usage || 0);
     updateGauge('disk', data.disk_usage || 0);
 
-    updateRealtimeChart(data);
+    updateRealtimeChartData(data);
 
     if (data.captcha_types) {
         updateCaptchaTypeChart(data.captcha_types);
@@ -236,63 +365,89 @@ function updateMetrics(data) {
 function updateGauge(type, value) {
     const circle = document.getElementById(type + 'Circle');
     const valueEl = document.getElementById(type + 'Value');
+    if (!circle || !valueEl) return;
+
     const circumference = 251.2;
     const offset = circumference - (value / 100) * circumference;
     circle.style.strokeDashoffset = offset;
     valueEl.textContent = value.toFixed(1) + '%';
 }
 
-function updateRealtimeChart(data) {
+function updateRealtimeChartData(data) {
     if (!realtimeChart) return;
 
     const now = new Date();
-    const timeLabel = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const timeLabel = formatTime(now);
 
-    realtimeChart.data.labels.push(timeLabel);
-    realtimeChart.data.datasets[0].data.push(data.requests || 0);
-    realtimeChart.data.datasets[1].data.push(data.success_count || 0);
+    realtimeData.push({
+        time: timeLabel,
+        requests: data.requests || 0,
+        success: data.success_count || 0
+    });
 
-    if (realtimeChart.data.labels.length > MAX_DATA_POINTS) {
-        realtimeChart.data.labels.shift();
-        realtimeChart.data.datasets[0].data.shift();
-        realtimeChart.data.datasets[1].data.shift();
+    if (realtimeData.length > MAX_DATA_POINTS) {
+        realtimeData.shift();
     }
 
-    realtimeChart.update('none');
+    realtimeChart.setOption({
+        xAxis: {
+            data: realtimeData.map(p => p.time)
+        },
+        series: [
+            { data: realtimeData.map(p => p.requests) },
+            { data: realtimeData.map(p => p.success) }
+        ]
+    }, false);
 }
 
 function updateCaptchaTypeChart(data) {
     if (!captchaTypeChart) return;
-    captchaTypeChart.data.datasets[0].data = [
-        data.slider || 0,
-        data.click || 0,
-        data.gesture || 0,
-        data.jigsaw || 0
-    ];
-    captchaTypeChart.update('none');
+    captchaTypeChart.setOption({
+        series: [{
+            data: [
+                { value: data.slider || 0, name: '滑块验证' },
+                { value: data.click || 0, name: '点击验证' },
+                { value: data.gesture || 0, name: '手势验证' },
+                { value: data.jigsaw || 0, name: '拼图验证' }
+            ]
+        }]
+    }, false);
 }
 
 function updateRiskDistributionChart(data) {
     if (!riskDistributionChart) return;
-    riskDistributionChart.data.datasets[0].data = [
-        data.low || 0,
-        data.medium || 0,
-        data.high || 0
-    ];
-    riskDistributionChart.update('none');
+    riskDistributionChart.setOption({
+        series: [{
+            data: [
+                { value: data.low || 0, name: '低风险' },
+                { value: data.medium || 0, name: '中风险' },
+                { value: data.high || 0, name: '高风险' }
+            ]
+        }]
+    }, false);
 }
 
 function updateTopAppsChart(data) {
     if (!topAppsChart) return;
-    topAppsChart.data.labels = data.map(item => item.name);
-    topAppsChart.data.datasets[0].data = data.map(item => item.requests);
-    topAppsChart.update('none');
+
+    const labels = data.map(item => item.name);
+    const values = data.map(item => item.requests);
+
+    topAppsChart.setOption({
+        yAxis: {
+            data: labels
+        },
+        series: [{
+            data: values
+        }]
+    }, false);
 }
 
 function updateDeviceList(devices) {
     const container = document.getElementById('deviceList');
+    if (!container) return;
     container.innerHTML = '';
-    
+
     devices.forEach(device => {
         const deviceEl = document.createElement('div');
         deviceEl.className = 'device-item';
@@ -315,17 +470,19 @@ function updateDeviceList(devices) {
 
 function addAlert(alert) {
     const container = document.getElementById('alertsContainer');
+    if (!container) return;
+
     const alertEl = document.createElement('div');
     alertEl.className = `alert-item ${alert.severity}`;
-    
+
     const time = new Date(alert.timestamp * 1000);
     alertEl.innerHTML = `
         <div class="alert-time">${time.toLocaleTimeString('zh-CN')}</div>
         <div class="alert-message"><i class="fas fa-${alert.icon || 'exclamation-triangle'} me-2"></i>${alert.message}</div>
     `;
-    
+
     container.insertBefore(alertEl, container.firstChild);
-    
+
     while (container.children.length > 20) {
         container.removeChild(container.lastChild);
     }
@@ -424,7 +581,7 @@ function loadInitialData() {
 let mockInterval = null;
 function startMockDataGeneration() {
     if (mockInterval) return;
-    
+
     mockInterval = setInterval(() => {
         const mockData = {
             total_requests: Math.floor(Math.random() * 100000) + 100000,
@@ -492,4 +649,8 @@ function formatNumber(num) {
         return (num / 1000).toFixed(1) + 'K';
     }
     return num.toString();
+}
+
+function formatTime(date) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }

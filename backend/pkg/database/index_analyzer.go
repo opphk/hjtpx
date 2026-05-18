@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -270,3 +271,242 @@ type TableBloat struct {
 	TableSize   string
 	BloatRatio  float64
 }
+
+type IndexRecommendation struct {
+	TableName         string
+	IndexName         string
+	Columns           []string
+	IndexType         string
+	Priority          string
+	EstimatedSize     string
+	QueryBenefits     []string
+	CreationSQL       string
+	EstimatedImpact   string
+}
+
+type IndexOptimizer struct {
+	db                  *gorm.DB
+	recommendations    []*IndexRecommendation
+	lastAnalysis       time.Time
+	enableAutoCreate   bool
+	enableAutoAnalyze  bool
+	analysisInterval   time.Duration
+}
+
+func NewIndexOptimizer(db *gorm.DB) *IndexOptimizer {
+	return &IndexOptimizer{
+		db:                 db,
+		recommendations:   make([]*IndexRecommendation, 0),
+		lastAnalysis:      time.Time{},
+		enableAutoCreate:   true,
+		enableAutoAnalyze:  true,
+		analysisInterval:   24 * time.Hour,
+	}
+}
+
+func (io *IndexOptimizer) AnalyzeIndexes() error {
+	if time.Since(io.lastAnalysis) < io.analysisInterval {
+		return nil
+	}
+
+	io.recommendations = io.generateRecommendations()
+
+	io.lastAnalysis = time.Now()
+	return nil
+}
+
+func (io *IndexOptimizer) generateRecommendations() []*IndexRecommendation {
+	var recs []*IndexRecommendation
+
+	recs = append(recs,
+		&IndexRecommendation{
+			TableName:     "behavior_data",
+			IndexName:    "idx_behavior_user_time",
+			Columns:      []string{"user_id", "created_at"},
+			IndexType:    "btree",
+			Priority:     "high",
+			EstimatedSize: "50MB",
+			QueryBenefits: []string{"用户行为查询加速", "轨迹分析加速"},
+			CreationSQL:   "CREATE INDEX CONCURRENTLY idx_behavior_user_time ON behavior_data (user_id, created_at)",
+		},
+		&IndexRecommendation{
+			TableName:     "trace_records",
+			IndexName:    "idx_trace_session_created",
+			Columns:      []string{"session_id", "created_at"},
+			IndexType:    "btree",
+			Priority:     "high",
+			EstimatedSize: "100MB",
+			QueryBenefits: []string{"轨迹查询加速", "会话分析加速"},
+			CreationSQL:   "CREATE INDEX CONCURRENTLY idx_trace_session_created ON trace_records (session_id, created_at)",
+		},
+		&IndexRecommendation{
+			TableName:     "verification_logs",
+			IndexName:    "idx_verification_app_created",
+			Columns:      []string{"application_id", "created_at", "status"},
+			IndexType:    "btree",
+			Priority:     "high",
+			EstimatedSize: "200MB",
+			QueryBenefits: []string{"应用验证统计加速", "日志查询加速"},
+			CreationSQL:   "CREATE INDEX CONCURRENTLY idx_verification_app_created ON verification_logs (application_id, created_at, status)",
+		},
+		&IndexRecommendation{
+			TableName:     "device_fingerprints",
+			IndexName:    "idx_device_fingerprint_hash",
+			Columns:      []string{"fingerprint_hash", "created_at"},
+			IndexType:    "btree",
+			Priority:     "medium",
+			EstimatedSize: "80MB",
+			QueryBenefits: []string{"设备查询加速", "指纹匹配加速"},
+			CreationSQL:   "CREATE INDEX CONCURRENTLY idx_device_fingerprint_hash ON device_fingerprints (fingerprint_hash, created_at)",
+		},
+	)
+
+	return recs
+}
+
+func (io *IndexOptimizer) GetRecommendations() []*IndexRecommendation {
+	return io.recommendations
+}
+
+func (io *IndexOptimizer) ApplyRecommendation(rec *IndexRecommendation) error {
+	if io.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	var count int64
+	err := io.db.Raw(`
+		SELECT COUNT(*)
+		FROM pg_indexes
+		WHERE indexname = ?
+	`, rec.IndexName).Scan(&count).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to check index existence: %w", err)
+	}
+
+	if count > 0 {
+		return fmt.Errorf("index %s already exists", rec.IndexName)
+	}
+
+	return io.db.Exec(rec.CreationSQL).Error
+}
+
+func (io *IndexOptimizer) GetIndexHealth() (map[string]interface{}, error) {
+	if io.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var healthStats []struct {
+		IndexName    string
+		IndexSize    string
+		Scans        int64
+		TuplesRead   int64
+		HealthScore  float64
+	}
+
+	err := io.db.Raw(`
+		SELECT
+			idxrelname AS index_name,
+			pg_size_pretty(pg_relation_size(i.indexrelid)) AS index_size,
+			COALESCE(idx_scan, 0) AS number_of_scans,
+			COALESCE(idx_tup_read, 0) AS tuples_read,
+			CASE
+				WHEN COALESCE(idx_scan, 0) = 0 THEN 0.0
+				ELSE LEAST(100.0, (idx_tup_read::float / NULLIF(idx_scan, 0)) * 10)
+			END AS health_score
+		FROM pg_stat_user_indexes ui
+		JOIN pg_index i ON ui.indexrelid = i.indexrelid
+		WHERE schemaname = 'public'
+		ORDER BY health_score DESC
+		LIMIT 50
+	`).Scan(&healthStats).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]interface{})
+	result["total_indexes"] = len(healthStats)
+
+	healthy := 0
+	unhealthy := 0
+	for _, stat := range healthStats {
+		if stat.HealthScore >= 50.0 {
+			healthy++
+		} else {
+			unhealthy++
+		}
+	}
+
+	result["healthy_indexes"] = healthy
+	result["unhealthy_indexes"] = unhealthy
+	result["indexes"] = healthStats
+
+	return result, nil
+}
+
+func (io *IndexOptimizer) AnalyzeTableFragmentation() ([]map[string]interface{}, error) {
+	if io.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var fragmentation []map[string]interface{}
+
+	err := io.db.Raw(`
+		SELECT
+			schemaname || '.' || tablename AS table_name,
+			pg_size_pretty(pg_total_relation_size(schemaname::regnamespace::oid, tablename::regclass)) AS total_size,
+			pg_size_pretty(pg_relation_size(schemaname::regnamespace::oid, tablename::regclass)) AS table_size,
+			pg_size_pretty(pg_indexes_size(schemaname::regnamespace::oid, tablename::regclass)) AS index_size,
+			ROUND(100 * pg_indexes_size(schemaname::regnamespace::oid, tablename::regclass) /
+				NULLIF(pg_total_relation_size(schemaname::regnamespace::oid, tablename::regclass), 0), 2) AS index_ratio
+		FROM pg_tables
+		WHERE schemaname = 'public'
+		ORDER BY pg_total_relation_size(schemaname::regnamespace::oid, tablename::regclass) DESC
+		LIMIT 20
+	`).Scan(&fragmentation).Error
+
+	return fragmentation, err
+}
+
+func (io *IndexOptimizer) AutoOptimize() error {
+	if err := io.AnalyzeIndexes(); err != nil {
+		return err
+	}
+
+	if !io.enableAutoCreate {
+		return nil
+	}
+
+	for _, rec := range io.recommendations {
+		if rec.Priority == "high" {
+			if err := io.ApplyRecommendation(rec); err != nil {
+				continue
+			}
+		}
+	}
+
+	return nil
+}
+
+func (io *IndexOptimizer) SetAutoCreate(enabled bool) {
+	io.enableAutoCreate = enabled
+}
+
+func (io *IndexOptimizer) SetAutoAnalyze(enabled bool) {
+	io.enableAutoAnalyze = enabled
+}
+
+var globalIndexOptimizer *IndexOptimizer
+var globalIndexOptimizerOnce sync.Once
+
+func InitIndexOptimizer(db *gorm.DB) {
+	globalIndexOptimizerOnce.Do(func() {
+		globalIndexOptimizer = NewIndexOptimizer(db)
+	})
+}
+
+func GetIndexOptimizer() *IndexOptimizer {
+	return globalIndexOptimizer
+}
+

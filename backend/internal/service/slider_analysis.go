@@ -45,6 +45,29 @@ type SliderPoint struct {
 	Timestamp int64 `json:"timestamp"`
 }
 
+type EnhancedSliderPoint struct {
+	X              int     `json:"x"`
+	Y              int     `json:"y"`
+	Timestamp      int64   `json:"timestamp"`
+	VelocityX      float64 `json:"velocity_x"`
+	VelocityY      float64 `json:"velocity_y"`
+	Acceleration   float64 `json:"acceleration"`
+	Curvature      float64 `json:"curvature"`
+	IsSmoothed     bool    `json:"is_smoothed"`
+	MicroMovement  bool    `json:"micro_movement"`
+}
+
+type TrajectorySamplingInfo struct {
+	SamplingRateHz      float64 `json:"sampling_rate_hz"`
+	TotalPoints         int     `json:"total_points"`
+	TotalDurationMs     int64   `json:"total_duration_ms"`
+	AvgIntervalMs       float64 `json:"avg_interval_ms"`
+	IsHighFrequency     bool    `json:"is_high_frequency"`
+	SamplingQuality     string  `json:"sampling_quality"`
+	IntervalVariance    float64 `json:"interval_variance"`
+	DropoutCount        int     `json:"dropout_count"`
+}
+
 type SliderAnalysisResult struct {
 	Trajectory        *SliderTrajectory `json:"trajectory"`
 	Features          *SliderFeatures   `json:"features"`
@@ -2988,4 +3011,438 @@ func (sa *SliderAnalyzer) CalculateAdvancedBotScore(trajectory []SliderPoint, ta
 	indicators = append(indicators, patternIndicators...)
 
 	return math.Min(botScore, 1.0), indicators
+}
+
+type HighSamplingRateAnalyzer struct {
+	highFrequencyThreshold float64
+	interpolationWindow    int
+}
+
+func NewHighSamplingRateAnalyzer() *HighSamplingRateAnalyzer {
+	return &HighSamplingRateAnalyzer{
+		highFrequencyThreshold: 60.0,
+		interpolationWindow:    3,
+	}
+}
+
+func (hsra *HighSamplingRateAnalyzer) AnalyzeHighSamplingRate(trajectory []SliderPoint) *TrajectorySamplingInfo {
+	info := &TrajectorySamplingInfo{}
+	
+	if len(trajectory) < 2 {
+		return info
+	}
+	
+	info.TotalPoints = len(trajectory)
+	info.TotalDurationMs = trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp
+	
+	if info.TotalDurationMs > 0 {
+		info.SamplingRateHz = float64(len(trajectory)-1) / float64(info.TotalDurationMs) * 1000
+	}
+	
+	intervals := hsra.calculateIntervals(trajectory)
+	if len(intervals) > 0 {
+		info.AvgIntervalMs = hsra.mean(intervals)
+		info.IntervalVariance = hsra.variance(intervals)
+	}
+	
+	info.IsHighFrequency = info.SamplingRateHz > hsra.highFrequencyThreshold
+	info.SamplingQuality = hsra.evaluateSamplingQuality(info)
+	info.DropoutCount = hsra.detectDropouts(trajectory)
+	
+	return info
+}
+
+func (hsra *HighSamplingRateAnalyzer) calculateIntervals(trajectory []SliderPoint) []float64 {
+	intervals := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			intervals = append(intervals, dt)
+		}
+	}
+	return intervals
+}
+
+func (hsra *HighSamplingRateAnalyzer) evaluateSamplingQuality(info *TrajectorySamplingInfo) string {
+	if info.SamplingRateHz < 30 {
+		return "low"
+	}
+	if info.SamplingRateHz < 60 {
+		return "medium"
+	}
+	if info.IntervalVariance > 50 {
+		return "unstable_high"
+	}
+	return "high"
+}
+
+func (hsra *HighSamplingRateAnalyzer) detectDropouts(trajectory []SliderPoint) int {
+	dropouts := 0
+	threshold := 50.0
+	
+	for i := 1; i < len(trajectory); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > threshold {
+			dropouts++
+		}
+	}
+	
+	return dropouts
+}
+
+func (hsra *HighSamplingRateAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (hsra *HighSamplingRateAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := hsra.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+func (hsra *HighSamplingRateAnalyzer) InterpolateTrajectory(trajectory []SliderPoint, targetRateHz float64) []SliderPoint {
+	if len(trajectory) < 2 {
+		return trajectory
+	}
+	
+	currentRate := hsra.estimateSamplingRate(trajectory)
+	if currentRate >= targetRateHz {
+		return trajectory
+	}
+	
+	interpolated := make([]SliderPoint, 0)
+	for i := 0; i < len(trajectory)-1; i++ {
+		p1 := trajectory[i]
+		p2 := trajectory[i+1]
+		
+		interpolated = append(interpolated, p1)
+		
+		interval := float64(p2.Timestamp - p1.Timestamp)
+		targetInterval := 1000.0 / targetRateHz
+		
+		if interval > targetInterval {
+			numInsert := int(interval/targetInterval) - 1
+			for j := 1; j <= numInsert; j++ {
+				t := float64(j) / float64(numInsert+1)
+				interpolated = append(interpolated, SliderPoint{
+					X:         int(float64(p1.X)*(1-t) + float64(p2.X)*t),
+					Y:         int(float64(p1.Y)*(1-t) + float64(p2.Y)*t),
+					Timestamp: p1.Timestamp + int64(float64(interval)*t),
+				})
+			}
+		}
+	}
+	
+	interpolated = append(interpolated, trajectory[len(trajectory)-1])
+	return interpolated
+}
+
+func (hsra *HighSamplingRateAnalyzer) estimateSamplingRate(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 2 {
+		return 0
+	}
+	
+	totalDuration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	if totalDuration <= 0 {
+		return 0
+	}
+	
+	return float64(len(trajectory)-1) / totalDuration * 1000
+}
+
+func (hsra *HighSamplingRateAnalyzer) DetectUnnaturalSampling(trajectory []SliderPoint) (bool, string) {
+	info := hsra.AnalyzeHighSamplingRate(trajectory)
+	
+	if info.IsHighFrequency && info.SamplingQuality == "high" {
+		variance := info.IntervalVariance
+		if variance < 1.0 {
+			return true, "检测到异常规律的高采样率，疑似自动化操作"
+		}
+	}
+	
+	if info.DropoutCount == 0 && info.TotalPoints > 50 {
+		intervals := hsra.calculateIntervals(trajectory)
+		variance := hsra.variance(intervals)
+		if variance < 0.5 {
+			return true, "采样间隔过于规律，缺少自然抖动"
+		}
+	}
+	
+	return false, ""
+}
+
+func (sa *SliderAnalyzer) AnalyzeWithHighSamplingSupport(trajectory []SliderPoint, targetPosition int) (*SliderAnalysisResult, error) {
+	hsra := NewHighSamplingRateAnalyzer()
+	samplingInfo := hsra.AnalyzeHighSamplingRate(trajectory)
+	
+	var processedTrajectory []SliderPoint
+	if samplingInfo.IsHighFrequency {
+		processedTrajectory = hsra.InterpolateTrajectory(trajectory, 60.0)
+	} else {
+		processedTrajectory = trajectory
+	}
+	
+	result, _ := sa.AnalyzeSliderTrajectory(processedTrajectory, targetPosition)
+	
+	return result, nil
+}
+
+func (sa *SliderAnalyzer) ValidateTrajectoryQuality(trajectory []SliderPoint) (bool, string, map[string]interface{}) {
+	qualityReport := make(map[string]interface{})
+	
+	if len(trajectory) < 10 {
+		qualityReport["sufficient_points"] = false
+		qualityReport["point_count"] = len(trajectory)
+		return false, "轨迹数据点不足", qualityReport
+	}
+	
+	hsra := NewHighSamplingRateAnalyzer()
+	samplingInfo := hsra.AnalyzeHighSamplingRate(trajectory)
+	
+	qualityReport["sampling_rate"] = samplingInfo.SamplingRateHz
+	qualityReport["sampling_quality"] = samplingInfo.SamplingQuality
+	qualityReport["is_high_frequency"] = samplingInfo.IsHighFrequency
+	qualityReport["dropout_count"] = samplingInfo.DropoutCount
+	
+	if samplingInfo.SamplingRateHz < 30 {
+		qualityReport["sufficient_sampling"] = false
+		return false, "采样率过低，无法准确分析", qualityReport
+	}
+	
+	dt := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	if dt < 300 {
+		qualityReport["sufficient_duration"] = false
+		return false, "轨迹持续时间过短", qualityReport
+	}
+	
+	qualityReport["sufficient_points"] = true
+	qualityReport["sufficient_sampling"] = true
+	qualityReport["sufficient_duration"] = true
+	
+	return true, "轨迹质量良好", qualityReport
+}
+
+func (sa *SliderAnalyzer) ExtractMicroMovements(trajectory []SliderPoint) []SliderPoint {
+	microMovements := make([]SliderPoint, 0)
+	
+	if len(trajectory) < 2 {
+		return microMovements
+	}
+	
+	threshold := 2.0
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		
+		if distance > 0 && distance <= threshold {
+			microMovements = append(microMovements, trajectory[i])
+		}
+	}
+	
+	return microMovements
+}
+
+func (sa *SliderAnalyzer) AnalyzeTrajectorySmoothness(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+	
+	if len(trajectory) < 3 {
+		result["smoothness_score"] = 0
+		result["has_micro_corrections"] = false
+		return result
+	}
+	
+	smoothed := sa.smoothTrajectoryAdvanced(trajectory, 3)
+	deviations := make([]float64, 0)
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - smoothed[i].X)
+		dy := float64(trajectory[i].Y - smoothed[i].Y)
+		deviation := math.Sqrt(dx*dx + dy*dy)
+		deviations = append(deviations, deviation)
+	}
+	
+	if len(deviations) > 0 {
+		meanDeviation := 0.0
+		for _, d := range deviations {
+			meanDeviation += d
+		}
+		meanDeviation /= float64(len(deviations))
+		
+		varianceDeviation := 0.0
+		for _, d := range deviations {
+			varianceDeviation += (d - meanDeviation) * (d - meanDeviation)
+		}
+		varianceDeviation /= float64(len(deviations))
+		
+		result["smoothness_score"] = 1.0 - math.Min(meanDeviation/5.0, 1.0)
+		result["deviation_mean"] = meanDeviation
+		result["deviation_variance"] = varianceDeviation
+		
+		microCorrections := sa.ExtractMicroMovements(trajectory)
+		result["has_micro_corrections"] = len(microCorrections) > 0
+		result["micro_correction_count"] = len(microCorrections)
+	} else {
+		result["smoothness_score"] = 1.0
+		result["has_micro_corrections"] = false
+		result["micro_correction_count"] = 0
+	}
+	
+	return result
+}
+
+func (sfe *SliderFeatureExtractor) CalculateHumanLikenessWithHighFreq(trajectory []SliderPoint, features *SliderFeatures) float64 {
+	baseScore := sfe.calculateHumanLikeness(features)
+	
+	hsra := NewHighSamplingRateAnalyzer()
+	samplingInfo := hsra.AnalyzeHighSamplingRate(trajectory)
+	
+	adjustedScore := baseScore
+	
+	if samplingInfo.IsHighFrequency {
+		if samplingInfo.SamplingQuality == "high" && samplingInfo.IntervalVariance < 10 {
+			adjustedScore *= 0.7
+		}
+	}
+	
+	if samplingInfo.DropoutCount == 0 && samplingInfo.TotalPoints > 30 {
+		variance := samplingInfo.IntervalVariance
+		if variance < 1.0 {
+			adjustedScore *= 0.6
+		}
+	}
+	
+	smoothness := AnalyzeTrajectorySmoothnessStatic(trajectory)
+	if smoothnessScore, ok := smoothness["smoothness_score"].(float64); ok {
+		if smoothnessScore > 0.95 {
+			adjustedScore *= 0.8
+		}
+	}
+	
+	return math.Max(0, math.Min(1, adjustedScore))
+}
+
+func AnalyzeTrajectorySmoothnessStatic(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+	
+	if len(trajectory) < 3 {
+		result["smoothness_score"] = 0
+		result["has_micro_corrections"] = false
+		return result
+	}
+	
+	smoothed := smoothTrajectoryStatic(trajectory, 3)
+	deviations := make([]float64, 0)
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - smoothed[i].X)
+		dy := float64(trajectory[i].Y - smoothed[i].Y)
+		deviation := math.Sqrt(dx*dx + dy*dy)
+		deviations = append(deviations, deviation)
+	}
+	
+	if len(deviations) > 0 {
+		meanDeviation := 0.0
+		for _, d := range deviations {
+			meanDeviation += d
+		}
+		meanDeviation /= float64(len(deviations))
+		
+		varianceDeviation := 0.0
+		for _, d := range deviations {
+			varianceDeviation += (d - meanDeviation) * (d - meanDeviation)
+		}
+		varianceDeviation /= float64(len(deviations))
+		
+		result["smoothness_score"] = 1.0 - math.Min(meanDeviation/5.0, 1.0)
+		result["deviation_mean"] = meanDeviation
+		result["deviation_variance"] = varianceDeviation
+		
+		microCorrections := ExtractMicroMovementsStatic(trajectory)
+		result["has_micro_corrections"] = len(microCorrections) > 0
+		result["micro_correction_count"] = len(microCorrections)
+	} else {
+		result["smoothness_score"] = 1.0
+		result["has_micro_corrections"] = false
+		result["micro_correction_count"] = 0
+	}
+	
+	return result
+}
+
+func smoothTrajectoryStatic(trajectory []SliderPoint, windowSize int) []SliderPoint {
+	if len(trajectory) < windowSize {
+		return trajectory
+	}
+
+	if windowSize%2 == 0 {
+		windowSize++
+	}
+
+	halfWindow := windowSize / 2
+	smoothed := make([]SliderPoint, len(trajectory))
+
+	for i := range trajectory {
+		start := i - halfWindow
+		end := i + halfWindow
+
+		if start < 0 {
+			start = 0
+		}
+		if end >= len(trajectory) {
+			end = len(trajectory) - 1
+		}
+
+		sumX := 0
+		sumY := 0
+		count := 0
+
+		for j := start; j <= end; j++ {
+			sumX += trajectory[j].X
+			sumY += trajectory[j].Y
+			count++
+		}
+
+		smoothed[i] = trajectory[i]
+		smoothed[i].X = sumX / count
+		smoothed[i].Y = sumY / count
+	}
+
+	return smoothed
+}
+
+func ExtractMicroMovementsStatic(trajectory []SliderPoint) []SliderPoint {
+	microMovements := make([]SliderPoint, 0)
+	
+	if len(trajectory) < 2 {
+		return microMovements
+	}
+	
+	threshold := 2.0
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		
+		if distance > 0 && distance <= threshold {
+			microMovements = append(microMovements, trajectory[i])
+		}
+	}
+	
+	return microMovements
 }

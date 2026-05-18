@@ -75,6 +75,10 @@ func (g *ImageGenerator) GenerateSliderCaptcha() (*CaptchaResult, error) {
 
 	bgImage = g.applyEdgeFeather(bgImage, gap)
 
+	bgImage = g.applyAdvancedEdgeDetection(bgImage, gap)
+
+	bgImage = g.applyEnhancedShadowDetection(bgImage, gap)
+
 	bgImage = g.addInterference(bgImage)
 
 	bgData := g.encodePNG(bgImage)
@@ -101,7 +105,7 @@ func (g *ImageGenerator) generateBackground() *image.RGBA {
 		}
 	}
 
-	bgType := rand.Intn(5)
+	bgType := rand.Intn(8)
 	switch bgType {
 	case 0:
 		g.drawGradientBackground(img)
@@ -113,6 +117,12 @@ func (g *ImageGenerator) generateBackground() *image.RGBA {
 		g.drawNoiseBackground(img)
 	case 4:
 		g.drawGeometricBackground(img)
+	case 5:
+		g.drawComplexTextureBackground(img)
+	case 6:
+		g.drawPerlinLikeNoise(img, uint8(80+rand.Intn(60)), uint8(100+rand.Intn(50)), uint8(120+rand.Intn(40)))
+	case 7:
+		g.drawMarbleTexture(img, uint8(70+rand.Intn(70)), uint8(90+rand.Intn(50)), uint8(110+rand.Intn(50)))
 	default:
 		g.drawGradientBackground(img)
 	}
@@ -231,6 +241,423 @@ func (g *ImageGenerator) drawGeometricBackground(img *image.RGBA) {
 				rand.Intn(g.width), rand.Intn(g.height), c)
 		}
 	}
+}
+
+func (g *ImageGenerator) drawComplexTextureBackground(img *image.RGBA) {
+	baseR := uint8(60 + rand.Intn(80))
+	baseG := uint8(80 + rand.Intn(60))
+	baseB := uint8(100 + rand.Intn(60))
+
+	textureType := rand.Intn(4)
+	switch textureType {
+	case 0:
+		g.drawPerlinLikeNoise(img, baseR, baseG, baseB)
+	case 1:
+		g.drawWaveTexture(img, baseR, baseG, baseB)
+	case 2:
+		g.drawCellularTexture(img, baseR, baseG, baseB)
+	case 3:
+		g.drawMarbleTexture(img, baseR, baseG, baseB)
+	default:
+		g.drawPerlinLikeNoise(img, baseR, baseG, baseB)
+	}
+
+	g.applySubtleVignette(img)
+}
+
+func (g *ImageGenerator) drawPerlinLikeNoise(img *image.RGBA, baseR, baseG, baseB uint8) {
+	octaves := 3
+	persistence := 0.5
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			noise := 0.0
+			amplitude := 1.0
+			frequency := 0.05
+			maxValue := 0.0
+
+			for o := 0; o < octaves; o++ {
+				noiseValue := g.simplexNoise2D(float64(x)*frequency, float64(y)*frequency)
+				noise += noiseValue * amplitude
+				maxValue += amplitude
+				amplitude *= persistence
+				frequency *= 2.0
+			}
+
+			noise = noise / maxValue
+			noise = (noise + 1) / 2
+
+			adjustment := int(noise * 60 - 30)
+
+			r := g.clampUint8(int(baseR) + adjustment)
+			gc := g.clampUint8(int(baseG) + adjustment)
+			b := g.clampUint8(int(baseB) + adjustment)
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+}
+
+func (g *ImageGenerator) simplexNoise2D(x, y float64) float64 {
+	s := (x + y) * 0.5 * (1.414213562 - 1)
+	i := int(math.Floor(x + s))
+	j := int(math.Floor(y + s))
+
+	t := float64(i+j) * (3.0 - 1.414213562) / 2.0
+	X0 := float64(i) - t
+	Y0 := float64(j) - t
+	x0 := x - X0
+	y0 := y - Y0
+
+	var i1, j1 int
+	if x0 > y0 {
+		i1 = 1
+		j1 = 0
+	} else {
+		i1 = 0
+		j1 = 1
+	}
+
+	x1 := x0 - float64(i1) + (3.0-1.414213562)/2.0
+	y1 := y0 - float64(j1) + (3.0-1.414213562)/2.0
+	x2 := x0 - 1.0 + 2.0*(3.0-1.414213562)/2.0
+	y2 := y0 - 1.0 + 2.0*(3.0-1.414213562)/2.0
+
+	gi0 := g.hashIJ(i, j) % 8
+	gi1 := g.hashIJ(i+i1, j+j1) % 8
+	gi2 := g.hashIJ(i+1, j+1) % 8
+
+	grad3 := [][]float64{
+		{1, 1, 0}, {-1, 1, 0}, {1, -1, 0}, {-1, -1, 0},
+		{1, 0, 1}, {-1, 0, 1}, {1, 0, -1}, {-1, 0, -1},
+		{0, 1, 1}, {0, -1, 1}, {0, 1, -1}, {0, -1, -1},
+	}
+
+	n0 := 0.0
+	t0 := 0.5 - x0*x0 - y0*y0
+	if t0 >= 0 {
+		t0 *= t0
+		n0 = t0 * t0 * g.dot2(grad3[gi0], x0, y0)
+	}
+
+	n1 := 0.0
+	t1 := 0.5 - x1*x1 - y1*y1
+	if t1 >= 0 {
+		t1 *= t1
+		n1 = t1 * t1 * g.dot2(grad3[gi1], x1, y1)
+	}
+
+	n2 := 0.0
+	t2 := 0.5 - x2*x2 - y2*y2
+	if t2 >= 0 {
+		t2 *= t2
+		n2 = t2 * t2 * g.dot2(grad3[gi2], x2, y2)
+	}
+
+	return 70.0 * (n0 + n1 + n2)
+}
+
+func (g *ImageGenerator) hashIJ(i, j int) int {
+	return (i*374761393 + j*668265263) ^ (i*1274126177)
+}
+
+func (g *ImageGenerator) dot2(grad []float64, x, y float64) float64 {
+	return grad[0]*x + grad[1]*y
+}
+
+func (g *ImageGenerator) drawWaveTexture(img *image.RGBA, baseR, baseG, baseB uint8) {
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			wave1 := math.Sin(float64(x)*0.02 + float64(y)*0.01)
+			wave2 := math.Cos(float64(x)*0.015 - float64(y)*0.02)
+			wave3 := math.Sin(float64(x)*0.01 + float64(y)*0.03)
+
+			combined := (wave1 + wave2*0.7 + wave3*0.5) / 2.2
+			adjustment := int(combined * 40)
+
+			r := g.clampUint8(int(baseR) + adjustment)
+			gc := g.clampUint8(int(baseG) + adjustment)
+			b := g.clampUint8(int(baseB) + adjustment)
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+}
+
+func (g *ImageGenerator) drawCellularTexture(img *image.RGBA, baseR, baseG, baseB uint8) {
+	cells := make([]struct{ x, y float64 }, 15)
+	for i := range cells {
+		cells[i].x = float64(rand.Intn(g.width))
+		cells[i].y = float64(rand.Intn(g.height))
+	}
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			minDist1 := float64(g.width + g.height)
+			minDist2 := float64(g.width + g.height)
+
+			for _, cell := range cells {
+				dx := float64(x) - cell.x
+				dy := float64(y) - cell.y
+				dist := math.Sqrt(dx*dx + dy*dy)
+
+				if dist < minDist1 {
+					minDist2 = minDist1
+					minDist1 = dist
+				} else if dist < minDist2 {
+					minDist2 = dist
+				}
+			}
+
+			cellValue := minDist2 - minDist1
+			normalized := cellValue / 30.0
+			if normalized > 1 {
+				normalized = 1
+			}
+			if normalized < 0 {
+				normalized = 0
+			}
+
+			adjustment := int(normalized * 50 - 25)
+
+			r := g.clampUint8(int(baseR) + adjustment)
+			gc := g.clampUint8(int(baseG) + adjustment)
+			b := g.clampUint8(int(baseB) + adjustment)
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+}
+
+func (g *ImageGenerator) drawMarbleTexture(img *image.RGBA, baseR, baseG, baseB uint8) {
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			turbulence := 0.0
+			for i := 0; i < 5; i++ {
+				scale := math.Pow(2, float64(i))
+				turbulence += g.simplexNoise2D(float64(x)/scale, float64(y)/scale) / scale
+			}
+
+			marble := math.Sin(float64(x)*0.05 + turbulence*2)
+
+			normalized := (marble + 1) / 2
+			adjustment := int(normalized*60 - 30)
+
+			r := g.clampUint8(int(baseR) + adjustment)
+			gc := g.clampUint8(int(baseG) + adjustment)
+			b := g.clampUint8(int(baseB) + adjustment)
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+}
+
+func (g *ImageGenerator) applySubtleVignette(img *image.RGBA) {
+	centerX := float64(g.width) / 2
+	centerY := float64(g.height) / 2
+	maxDist := math.Sqrt(centerX*centerX + centerY*centerY)
+
+	vignetteStrength := 0.3
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			dx := float64(x) - centerX
+			dy := float64(y) - centerY
+			dist := math.Sqrt(dx*dx + dy*dy)
+
+			vignetteFactor := 1.0 - (dist/maxDist)*vignetteStrength
+			if vignetteFactor < 0.7 {
+				vignetteFactor = 0.7
+			}
+
+			p := img.RGBAAt(x, y)
+			r := g.clampUint8(int(float64(p.R) * vignetteFactor))
+			gc := g.clampUint8(int(float64(p.G) * vignetteFactor))
+			b := g.clampUint8(int(float64(p.B) * vignetteFactor))
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+}
+
+func (g *ImageGenerator) applyEnhancedShadowDetection(img *image.RGBA, gap image.Rectangle) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	shadowBlur := 6
+	shadowOffsetX := 3
+	shadowOffsetY := 3
+
+	for y := gap.Min.Y - shadowBlur; y <= gap.Max.Y+shadowBlur; y++ {
+		for x := gap.Min.X - shadowBlur; x <= gap.Max.X+shadowBlur; x++ {
+			if x < 0 || x >= g.width || y < 0 || y >= g.height {
+				continue
+			}
+
+			isInsideGap := x >= gap.Min.X && x < gap.Max.X && y >= gap.Min.Y && y < gap.Max.Y
+			if isInsideGap {
+				continue
+			}
+
+			distToGap := g.getMinDistanceToRect(x, y, gap)
+			if distToGap <= float64(shadowBlur) {
+				blurFactor := 1.0 - distToGap/float64(shadowBlur)
+
+				shadowX := float64(x) + float64(shadowOffsetX)
+				shadowY := float64(y) + float64(shadowOffsetY)
+
+				if shadowX >= float64(gap.Min.X) && shadowX < float64(gap.Max.X) &&
+					shadowY >= float64(gap.Min.Y) && shadowY < float64(gap.Max.Y) {
+
+					p := result.RGBAAt(x, y)
+					darkness := blurFactor * 0.4
+
+					r := g.clampUint8(int(float64(p.R) * (1 - darkness)))
+					gc := g.clampUint8(int(float64(p.G) * (1 - darkness)))
+					b := g.clampUint8(int(float64(p.B) * (1 - darkness)))
+
+					result.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) getMinDistanceToRect(x, y int, rect image.Rectangle) float64 {
+	dx := 0
+	dy := 0
+
+	if x < rect.Min.X {
+		dx = rect.Min.X - x
+	} else if x >= rect.Max.X {
+		dx = x - rect.Max.X + 1
+	}
+
+	if y < rect.Min.Y {
+		dy = rect.Min.Y - y
+	} else if y >= rect.Max.Y {
+		dy = y - rect.Max.Y + 1
+	}
+
+	if dx == 0 && dy == 0 {
+		insideX := x >= rect.Min.X && x < rect.Max.X
+		insideY := y >= rect.Min.Y && y < rect.Max.Y
+
+		if insideX {
+			return float64(min(y-rect.Min.Y, rect.Max.Y-1-y))
+		}
+		if insideY {
+			return float64(min(x-rect.Min.X, rect.Max.X-1-x))
+		}
+		return 0
+	}
+
+	return math.Sqrt(float64(dx*dx + dy*dy))
+}
+
+func (g *ImageGenerator) applyAdvancedEdgeDetection(img *image.RGBA, gap image.Rectangle) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	edgeWidth := 2
+
+	for y := gap.Min.Y; y < gap.Max.Y; y++ {
+		for offset := 0; offset < edgeWidth; offset++ {
+			if gap.Min.X-offset >= 0 {
+				g.applyEdgePixel(result, gap.Min.X-offset, y, gap, -1, 0)
+			}
+			if gap.Max.X+offset < g.width {
+				g.applyEdgePixel(result, gap.Max.X+offset, y, gap, 1, 0)
+			}
+		}
+	}
+
+	for x := gap.Min.X; x < gap.Max.X; x++ {
+		for offset := 0; offset < edgeWidth; offset++ {
+			if gap.Min.Y-offset >= 0 {
+				g.applyEdgePixel(result, x, gap.Min.Y-offset, gap, 0, -1)
+			}
+			if gap.Max.Y+offset < g.height {
+				g.applyEdgePixel(result, x, gap.Max.Y+offset, gap, 0, 1)
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) applyEdgePixel(img *image.RGBA, x, y int, gap image.Rectangle, dirX, dirY int) {
+	if x < 0 || x >= g.width || y < 0 || y >= g.height {
+		return
+	}
+
+	centerX := (gap.Min.X + gap.Max.X) / 2
+	centerY := (gap.Min.Y + gap.Max.Y) / 2
+	dx := x - centerX
+	dy := y - centerY
+
+	var gradientMagnitude float64
+	for ny := -1; ny <= 1; ny++ {
+		for nx := -1; nx <= 1; nx++ {
+			px, py := x+nx, y+ny
+			if px < 0 || px >= g.width || py < 0 || py >= g.height {
+				continue
+			}
+
+			p1 := img.RGBAAt(x, y)
+			p2 := img.RGBAAt(px, py)
+
+			edgeDiff := float64(abs(int(p1.R)-int(p2.R))) +
+				float64(abs(int(p1.G)-int(p2.G))) +
+				float64(abs(int(p1.B)-int(p2.B)))
+
+			gradientMagnitude = math.Max(gradientMagnitude, edgeDiff)
+		}
+	}
+
+	if gradientMagnitude < 20 {
+		highlight := 0.15
+		p := img.RGBAAt(x, y)
+		r := g.clampUint8(int(float64(p.R)*(1+highlight)) - 10)
+		gc := g.clampUint8(int(float64(p.G)*(1+highlight)) - 10)
+		b := g.clampUint8(int(float64(p.B)*(1+highlight)) - 10)
+
+		img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+	}
+
+	lightDir := 0.6
+	effectiveLight := lightDir - float64(dy)/float64(g.height)*0.3 + float64(dx)/float64(g.width)*0.1
+	if effectiveLight > 1 {
+		effectiveLight = 1
+	}
+	if effectiveLight < 0.3 {
+		effectiveLight = 0.3
+	}
+
+	lightAdjustment := (effectiveLight - 0.5) * 20
+
+	if (dirX > 0 || dirY > 0) && lightAdjustment > 0 {
+		p := img.RGBAAt(x, y)
+		r := g.clampUint8(int(p.R) + int(lightAdjustment))
+		gc := g.clampUint8(int(p.G) + int(lightAdjustment))
+		b := g.clampUint8(int(p.B) + int(lightAdjustment))
+		img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+	} else if (dirX < 0 || dirY < 0) && lightAdjustment < 0 {
+		p := img.RGBAAt(x, y)
+		r := g.clampUint8(int(p.R) + int(lightAdjustment))
+		gc := g.clampUint8(int(p.G) + int(lightAdjustment))
+		b := g.clampUint8(int(p.B) + int(lightAdjustment))
+		img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+	}
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 func (g *ImageGenerator) applyGap(background *image.RGBA, gap image.Rectangle) *image.RGBA {
