@@ -151,6 +151,10 @@ func setupHTMLRoutes(r *gin.Engine) {
 	r.GET("/websocket-demo", func(c *gin.Context) {
 		c.HTML(200, "captcha.html", gin.H{"title": "WebSocket 实时验证演示"})
 	})
+
+	r.GET("/emoji-captcha", func(c *gin.Context) {
+		c.HTML(200, "emoji.html", gin.H{"title": "表情验证码"})
+	})
 }
 
 func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, dbHandler *handler.DatabaseMetricsHandler) {
@@ -182,6 +186,9 @@ func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, 
 	})
 	adminRouter.GET("/rate-limit", func(c *gin.Context) {
 		c.HTML(200, "rate-limit.html", gin.H{"title": "限流配置"})
+	})
+	adminRouter.GET("/ab-test", func(c *gin.Context) {
+		c.HTML(200, "ab-test.html", gin.H{"title": "A/B 测试管理"})
 	})
 
 	adminRouter.GET("/api/dashboard", handler.GetDashboardData)
@@ -293,6 +300,10 @@ func setupCaptchaRoutes(api *gin.RouterGroup) {
 	captcha.POST("/3d/verify", handler.VerifyThreeDCaptcha)
 	captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
 	captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
+
+	// 表情验证码
+	captcha.POST("/emoji/create", handler.CreateEmojiCaptcha)
+	captcha.POST("/emoji/verify", handler.VerifyEmojiCaptcha)
 
 	// 多因素滑块验证
 	captcha.POST("/verify-multi-factor", handler.VerifySliderWithMultiFactor)
@@ -462,4 +473,14 @@ func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHa
 
 	arHandler := handler.GetAdvancedRateLimitHandler()
 	arHandler.RegisterRoutes(admin)
+
+	admin.GET("/ab-tests", handler.ListABTests)
+	admin.GET("/ab-tests/summary", handler.GetABTestSummary)
+	admin.GET("/ab-tests/:id", handler.GetABTest)
+	admin.POST("/ab-tests", handler.CreateABTest)
+	admin.PUT("/ab-tests/:id", handler.UpdateABTest)
+	admin.DELETE("/ab-tests/:id", handler.DeleteABTest)
+	admin.POST("/ab-tests/:id/start", handler.StartABTest)
+	admin.POST("/ab-tests/:id/stop", handler.StopABTest)
+	admin.GET("/ab-tests/:id/report", handler.GetTestReport)
 }

@@ -387,24 +387,26 @@ func (TraceRecord) TableName() string {
 }
 
 type CaptchaSession struct {
-	ID            int64      `gorm:"primaryKey;autoIncrement" json:"id"`
-	SessionID     string     `gorm:"size:100;uniqueIndex;not null" json:"session_id"`
-	BackgroundURL string     `gorm:"size:500" json:"background_url"`
-	SliderURL     string     `gorm:"size:500" json:"slider_url"`
-	GapX          int        `json:"gap_x"`
-	GapY          int        `json:"gap_y"`
-	Status        string     `gorm:"size:50;default:pending" json:"status"`
-	VerifyCount   int        `gorm:"default:0" json:"verify_count"`
-	MaxAttempts   int        `gorm:"default:3" json:"max_attempts"`
-	RiskScore     float64    `gorm:"default:0" json:"risk_score"`
-	TraceScore    float64    `gorm:"default:0" json:"trace_score"`
-	EnvScore      float64    `gorm:"default:0" json:"env_score"`
-	CreatedAt     time.Time  `json:"created_at"`
-	ExpiredAt     time.Time  `json:"expired_at"`
-	VerifiedAt    *time.Time `json:"verified_at"`
-	ClientIP      string     `gorm:"size:50" json:"client_ip"`
-	UserAgent     string     `gorm:"size:500" json:"user_agent"`
-	Fingerprint   string     `gorm:"size:255" json:"fingerprint"`
+	ID             int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	SessionID      string     `gorm:"size:100;uniqueIndex;not null" json:"session_id"`
+	BackgroundURL  string     `gorm:"size:500" json:"background_url"`
+	SliderURL      string     `gorm:"size:500" json:"slider_url"`
+	GapX           int        `json:"gap_x"`
+	GapY           int        `json:"gap_y"`
+	TargetEmojis   string     `gorm:"type:text" json:"-"` // JSON字段，不直接存入数据库
+	ShuffledEmojis string     `gorm:"type:text" json:"-"` // JSON字段，不直接存入数据库
+	Status         string     `gorm:"size:50;default:pending" json:"status"`
+	VerifyCount    int        `gorm:"default:0" json:"verify_count"`
+	MaxAttempts    int        `gorm:"default:3" json:"max_attempts"`
+	RiskScore      float64    `gorm:"default:0" json:"risk_score"`
+	TraceScore     float64    `gorm:"default:0" json:"trace_score"`
+	EnvScore       float64    `gorm:"default:0" json:"env_score"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExpiredAt      time.Time  `json:"expired_at"`
+	VerifiedAt     *time.Time `json:"verified_at"`
+	ClientIP       string     `gorm:"size:50" json:"client_ip"`
+	UserAgent      string     `gorm:"size:500" json:"user_agent"`
+	Fingerprint    string     `gorm:"size:255" json:"fingerprint"`
 }
 
 func (CaptchaSession) TableName() string {

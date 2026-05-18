@@ -1,4 +1,436 @@
-# API 接口文档 v14.0
+# API 接口文档 v15.0
+
+## 目录
+
+1. [概述](#概述)
+2. [认证](#认证)
+3. [用户端 API](#用户端-api)
+   - [滑块验证码](#滑块验证码)
+   - [点选验证码](#点选验证码)
+   - [旋转验证码](#旋转验证码)
+   - [手势验证码](#手势验证码)
+   - [拼图验证码](#拼图验证码)
+   - [图形验证码](#图形验证码)
+   - [连连看验证码](#连连看验证码)
+   - [3D验证码](#3d验证码)
+   - [语音验证码](#语音验证码)
+   - [无感验证](#无感验证)
+   - [环境检测](#环境检测)
+4. [v15.0 新增接口](#v150-新增接口)
+5. [管理端 API](#管理端-api)
+6. [错误码](#错误码)
+7. [示例](#示例)
+
+---
+
+## v15.0 新增接口
+
+### 增强行为分析接口
+#### 获取高级行为分析报告
+```
+POST /api/v1/behavior/advanced-analyze
+Content-Type: application/json
+
+{
+  "session_id": "sess_1715000000000_1234",
+  "trajectory_data": [...],
+  "context": {
+    "captcha_type": "slider",
+    "device_id": "device_123456"
+  }
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "human_probability": 0.95,
+    "risk_score": 12.5,
+    "anomaly_patterns": [
+      {
+        "type": "linear_movement",
+        "severity": "low",
+        "description": "轨迹过于线性"
+      }
+    ],
+    "features": {
+      "dtw_distance": 15.2,
+      "entropy": 0.87,
+      "velocity_variance": 3.2
+    }
+  }
+}
+```
+
+---
+
+### 增强环境检测接口
+#### 高级环境检测
+```
+POST /api/v1/detect/enhanced
+Content-Type: application/json
+
+{
+  "fingerprint": {
+    "canvas": "canvas_hash",
+    "webgl": "webgl_hash",
+    "audio": "audio_hash",
+    "fonts": [...],
+    "plugins": [...],
+    "navigator": {...},
+    "webrtc": {...}
+  },
+  "behavior_signals": {
+    "mouse_movements": [...],
+    "keyboard_events": [...]
+  }
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "is_human": true,
+    "is_proxy": false,
+    "is_vpn": false,
+    "is_tor": false,
+    "is_emulator": false,
+    "is_headless": false,
+    "is_real_browser": true,
+    "fingerprint_id": "fp_1234567890",
+    "risk_score": 8.5,
+    "trust_level": "high",
+    "details": {
+      "canvas_modified": false,
+      "webgl_renderer_valid": true,
+      "timezone_consistent": true,
+      "webrtc_no_leak": true
+    }
+  }
+}
+```
+
+---
+
+### 多级缓存接口
+#### 缓存预热
+```
+POST /api/v1/cache/warmup
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "type": "all",
+  "scope": "application:12345"
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "status": "in_progress",
+    "total_items": 1000,
+    "processed": 250,
+    "estimated_time": 30
+  }
+}
+```
+
+#### 获取缓存状态
+```
+GET /api/v1/cache/status
+Authorization: Bearer <admin_token>
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "l1": {
+      "size": 950,
+      "max_size": 1000,
+      "hit_rate": 0.95,
+      "misses": 50
+    },
+    "l2": {
+      "size": 9500,
+      "max_size": 10000,
+      "hit_rate": 0.88,
+      "misses": 1200
+    },
+    "redis": {
+      "connected": true,
+      "memory_usage": 256,
+      "memory_max": 512,
+      "hit_rate": 0.92
+    }
+  }
+}
+```
+
+---
+
+### 自适应难度接口
+#### 获取自适应难度配置
+```
+GET /api/v1/adaptive-difficulty/config?app_id=12345
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "enabled": true,
+    "mode": "auto",
+    "current_level": "medium",
+    "history": [
+      { "level": "easy", "timestamp": "2026-05-17T10:00:00Z" },
+      { "level": "medium", "timestamp": "2026-05-17T10:05:00Z" }
+    ]
+  }
+}
+```
+
+#### 更新自适应难度配置
+```
+PUT /api/v1/adaptive-difficulty/config
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "app_id": "12345",
+  "enabled": true,
+  "mode": "auto",
+  "min_level": "easy",
+  "max_level": "expert",
+  "thresholds": {
+    "easy": 10,
+    "medium": 25,
+    "hard": 50,
+    "expert": 75
+  }
+}
+```
+
+---
+
+### A/B测试接口
+#### 创建A/B测试
+```
+POST /api/v1/ab-test/create
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "name": "验证码样式优化测试",
+  "description": "测试新滑块样式的验证效果",
+  "variants": [
+    { "name": "control", "weight": 50, "config": {} },
+    { "name": "variant_a", "weight": 50, "config": { "style": "modern" } }
+  ],
+  "start_time": "2026-05-18T00:00:00Z",
+  "end_time": "2026-05-25T00:00:00Z"
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "test_id": "ab_test_123",
+    "status": "created"
+  }
+}
+```
+
+#### 获取A/B测试结果
+```
+GET /api/v1/ab-test/result?test_id=ab_test_123
+Authorization: Bearer <admin_token>
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "test_id": "ab_test_123",
+    "status": "running",
+    "variants": {
+      "control": {
+        "impressions": 1000,
+        "success_rate": 0.85,
+        "avg_time": 3.5,
+        "risk_score_avg": 12.3
+      },
+      "variant_a": {
+        "impressions": 1000,
+        "success_rate": 0.88,
+        "avg_time": 3.2,
+        "risk_score_avg": 11.8
+      }
+    },
+    "winning": "variant_a",
+    "confidence": 0.95
+  }
+}
+```
+
+---
+
+### 系统指标接口
+#### 获取实时系统指标
+```
+GET /api/v1/system/metrics
+Authorization: Bearer <admin_token>
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "qps": { "current": 1250, "avg_5m": 1180, "peak": 1500 },
+    "latency": { "p50": 25, "p95": 45, "p99": 78 },
+    "cpu": { "usage": 45.2, "cores": 8 },
+    "memory": { "used": 2048, "total": 4096, "percent": 50 },
+    "database": { "connections": 45, "max_connections": 100, "query_latency": 12 },
+    "redis": { "memory": 256, "clients": 120, "hit_rate": 0.95 },
+    "errors": { "rate_5m": 0.001, "total_5m": 15 }
+  }
+}
+```
+
+---
+
+### 风险规则接口
+#### 获取风险规则列表
+```
+GET /api/v1/risk-rules
+Authorization: Bearer <admin_token>
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "rules": [
+      {
+        "id": 1,
+        "name": "快速连续点击",
+        "type": "click_pattern",
+        "enabled": true,
+        "threshold": 5,
+        "action": "challenge",
+        "description": "1秒内点击超过5次"
+      },
+      {
+        "id": 2,
+        "name": "异常轨迹",
+        "type": "trajectory",
+        "enabled": true,
+        "threshold": 3.5,
+        "action": "reject",
+        "description": "DTW距离超过阈值"
+      }
+    ],
+    "total": 15
+  }
+}
+```
+
+#### 添加风险规则
+```
+POST /api/v1/risk-rules
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "name": "新风险规则",
+  "type": "custom",
+  "enabled": true,
+  "threshold": 50,
+  "action": "challenge",
+  "conditions": [
+    { "field": "risk_score", "operator": ">", "value": 50 }
+  ]
+}
+```
+
+---
+
+### 备份与恢复接口
+#### 创建数据备份
+```
+POST /api/v1/backup/create
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "type": "full",
+  "include_logs": true,
+  "compress": true
+}
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "backup_id": "backup_123456",
+    "status": "in_progress",
+    "size_estimate": 2048
+  }
+}
+```
+
+#### 获取备份列表
+```
+GET /api/v1/backup/list
+Authorization: Bearer <admin_token>
+```
+
+**响应示例**:
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "backups": [
+      {
+        "id": "backup_123456",
+        "type": "full",
+        "size": 2048,
+        "created_at": "2026-05-18T00:00:00Z",
+        "status": "completed"
+      }
+    ]
+  }
+}
+```
+
+---
 
 ## 目录
 
@@ -1320,6 +1752,13 @@ GET /health
 | 50006 | 配置错误 | 500 | 检查系统配置 |
 | 50007 | 文件上传失败 | 500 | 检查文件大小和格式 |
 | 50008 | 任务执行失败 | 500 | 重试或联系技术支持 |
+| **v15.0 新增错误码** |
+| 10011 | A/B测试无效 | 400 | 检查A/B测试配置 |
+| 10012 | 备份任务不存在 | 404 | 检查备份ID |
+| 10013 | 缓存预热失败 | 500 | 检查缓存服务状态 |
+| 10014 | 规则冲突 | 409 | 检查规则配置是否冲突 |
+| 40007 | 多级缓存错误 | 500 | 检查缓存层状态 |
+| 50009 | 高级分析失败 | 500 | 重试或联系技术支持 |
 
 ### 错误码详细说明
 
@@ -2343,3 +2782,8 @@ class SensitiveOperationHandler {
   }
 }
 ```
+
+---
+
+**最后更新**: 2026-05-18
+**当前版本**: v15.0

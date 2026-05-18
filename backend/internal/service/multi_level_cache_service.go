@@ -1,16 +1,17 @@
 package service
 
 import (
+	"container/list"
 	"context"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/hjtpx/hjtpx/backend/pkg/redis"
+	"github.com/hjtpx/hjtpx/pkg/redis"
 )
 
 type MultiLevelCacheService struct {
-	l1Cache         *LocalCache
+	l1Cache         *OptimizedLocalCache
 	l2Cache         *redis.EnhancedCache
 	config          *MultiLevelConfig
 	stats           *MultiLevelStats
@@ -24,13 +25,15 @@ type MultiLevelCacheService struct {
 	wg              sync.WaitGroup
 }
 
-type LocalCache struct {
-	mu         sync.RWMutex
-	data       map[string]*CacheItem
-	maxSize    int
-	evictor    *EvictionHelper
-	hitCount   atomic.Int64
-	missCount  atomic.Int64
+type OptimizedLocalCache struct {
+	mu          sync.RWMutex
+	data        map[string]*list.Element
+	lruList     *list.List
+	maxSize     int
+	maxMemory   int64
+	currentSize int64
+	hitCount    atomic.Int64
+	missCount   atomic.Int64
 }
 
 type CacheItem struct {
@@ -46,6 +49,7 @@ type MultiLevelConfig struct {
 	L1Enabled        bool
 	L2Enabled        bool
 	L1MaxSize        int
+	L1MaxMemory      int64
 	L1TTL            time.Duration
 	L2TTL            time.Duration
 	PromotionEnabled bool
@@ -61,6 +65,7 @@ var DefaultMultiLevelConfig = &MultiLevelConfig{
 	L1Enabled:        true,
 	L2Enabled:        true,
 	L1MaxSize:        10000,
+	L1MaxMemory:      100 * 1024 * 1024,
 	L1TTL:            5 * time.Minute,
 	L2TTL:            30 * time.Minute,
 	PromotionEnabled: true,
@@ -73,36 +78,36 @@ var DefaultMultiLevelConfig = &MultiLevelConfig{
 }
 
 type MultiLevelStats struct {
-	L1Hits          atomic.Int64
-	L1Misses        atomic.Int64
-	L2Hits          atomic.Int64
-	L2Misses        atomic.Int64
-	Promotions      atomic.Int64
-	Demotions       atomic.Int64
-	TotalGets       atomic.Int64
-	TotalSets       atomic.Int64
-	TotalDeletes    atomic.Int64
-	L1HitRate       atomic.Value
-	L2HitRate       atomic.Value
-	OverallHitRate  atomic.Value
-	AvgLatency      atomic.Value
-	LastUpdateTime  atomic.Value
+	L1Hits         atomic.Int64
+	L1Misses       atomic.Int64
+	L2Hits         atomic.Int64
+	L2Misses       atomic.Int64
+	Promotions     atomic.Int64
+	Demotions      atomic.Int64
+	TotalGets      atomic.Int64
+	TotalSets      atomic.Int64
+	TotalDeletes   atomic.Int64
+	L1HitRate      atomic.Value
+	L2HitRate      atomic.Value
+	OverallHitRate atomic.Value
+	AvgLatency     atomic.Value
+	LastUpdateTime atomic.Value
 }
 
 type PromotionPolicy struct {
-	mu               sync.RWMutex
-	hotKeys          map[string]*HotKeyInfo
-	promotionCount   int64
-	demotionCount    int64
-	threshold        int64
-	windowSize       time.Duration
+	mu             sync.RWMutex
+	hotKeys        map[string]*HotKeyInfo
+	promotionCount int64
+	demotionCount  int64
+	threshold      int64
+	windowSize     time.Duration
 }
 
 type HotKeyInfo struct {
-	Key           string
-	AccessCount   int64
-	LastAccess    time.Time
-	AvgLatency    time.Duration
+	Key            string
+	AccessCount    int64
+	LastAccess     time.Time
+	AvgLatency     time.Duration
 	PromotionScore float64
 }
 
@@ -114,16 +119,16 @@ func NewMultiLevelCacheService(config *MultiLevelConfig) *MultiLevelCacheService
 	ctx, cancel := context.WithCancel(context.Background())
 
 	mlcs := &MultiLevelCacheService{
-		l1Cache:        NewLocalCache(config.L1MaxSize, config.L1TTL),
-		l2Cache:        redis.GetEnhancedCache(),
-		config:         config,
-		stats:          &MultiLevelStats{},
-		evictionPolicy: redis.GetCacheEvictor(),
-		consistency:    redis.GetEnhancedCacheConsistency(),
+		l1Cache:         NewOptimizedLocalCache(config.L1MaxSize, config.L1MaxMemory, config.L1TTL),
+		l2Cache:         redis.GetEnhancedCache(),
+		config:          config,
+		stats:           &MultiLevelStats{},
+		evictionPolicy:  redis.GetCacheEvictor(),
+		consistency:     redis.GetEnhancedCacheConsistency(),
 		promotionPolicy: NewPromotionPolicy(),
-		enabled:        true,
-		ctx:            ctx,
-		cancel:         cancel,
+		enabled:         true,
+		ctx:             ctx,
+		cancel:          cancel,
 	}
 
 	mlcs.startBackgroundTasks()
@@ -131,23 +136,33 @@ func NewMultiLevelCacheService(config *MultiLevelConfig) *MultiLevelCacheService
 	return mlcs
 }
 
-func NewLocalCache(maxSize int, ttl time.Duration) *LocalCache {
-	return &LocalCache{
-		data:     make(map[string]*CacheItem),
-		maxSize:  maxSize,
-		evictor:  NewEvictionHelper(),
+func NewOptimizedLocalCache(maxSize int, maxMemory int64, ttl time.Duration) *OptimizedLocalCache {
+	if maxMemory <= 0 {
+		maxMemory = 100 * 1024 * 1024
+	}
+	if maxSize <= 0 {
+		maxSize = 10000
+	}
+
+	return &OptimizedLocalCache{
+		data:      make(map[string]*list.Element),
+		lruList:   list.New(),
+		maxSize:   maxSize,
+		maxMemory: maxMemory,
 	}
 }
 
-func (lc *LocalCache) Get(key string) ([]byte, bool) {
+func (lc *OptimizedLocalCache) Get(key string) ([]byte, bool) {
 	lc.mu.RLock()
-	item, exists := lc.data[key]
+	elem, exists := lc.data[key]
 	lc.mu.RUnlock()
 
 	if !exists {
 		lc.missCount.Add(1)
 		return nil, false
 	}
+
+	item := elem.Value.(*CacheItem)
 
 	if !item.ExpiresAt.IsZero() && time.Now().After(item.ExpiresAt) {
 		lc.Delete(key)
@@ -158,77 +173,103 @@ func (lc *LocalCache) Get(key string) ([]byte, bool) {
 	lc.mu.Lock()
 	item.AccessedAt = time.Now()
 	item.Frequency++
+	lc.lruList.MoveToFront(elem)
 	lc.mu.Unlock()
 
 	lc.hitCount.Add(1)
 	return item.Value, true
 }
 
-func (lc *LocalCache) Set(key string, value []byte, ttl time.Duration) {
+func (lc *OptimizedLocalCache) Set(key string, value []byte, ttl time.Duration) {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
-	item := &CacheItem{
-		Key:        key,
-		Value:      value,
-		AccessedAt: time.Now(),
-		Frequency:  1,
-		Size:       len(value),
-	}
+	itemSize := len(value)
 
-	if ttl > 0 {
-		item.ExpiresAt = time.Now().Add(ttl)
-	}
+	if elem, exists := lc.data[key]; exists {
+		oldItem := elem.Value.(*CacheItem)
+		lc.currentSize -= int64(oldItem.Size)
 
-	lc.data[key] = item
-
-	if len(lc.data) > lc.maxSize {
-		lc.evict()
-	}
-}
-
-func (lc *LocalCache) Delete(key string) {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
-	delete(lc.data, key)
-}
-
-func (lc *LocalCache) Clear() {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
-	lc.data = make(map[string]*CacheItem)
-}
-
-func (lc *LocalCache) evict() {
-	if len(lc.data) <= lc.maxSize {
-		return
-	}
-
-	evictCount := len(lc.data) - lc.maxSize
-
-	var candidates []string
-	for key, item := range lc.data {
-		candidates = append(candidates, key)
-		if len(candidates) >= evictCount {
-			break
+		oldItem.Value = value
+		oldItem.Size = itemSize
+		oldItem.AccessedAt = time.Now()
+		oldItem.Frequency++
+		if ttl > 0 {
+			oldItem.ExpiresAt = time.Now().Add(ttl)
 		}
+
+		lc.currentSize += int64(itemSize)
+		lc.lruList.MoveToFront(elem)
+	} else {
+		item := &CacheItem{
+			Key:        key,
+			Value:      value,
+			AccessedAt: time.Now(),
+			Frequency:  1,
+			Size:       itemSize,
+		}
+
+		if ttl > 0 {
+			item.ExpiresAt = time.Now().Add(ttl)
+		}
+
+		elem = lc.lruList.PushFront(item)
+		lc.data[key] = elem
+		lc.currentSize += int64(itemSize)
 	}
 
-	for _, key := range candidates {
+	lc.evict()
+}
+
+func (lc *OptimizedLocalCache) Delete(key string) {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+
+	if elem, exists := lc.data[key]; exists {
+		item := elem.Value.(*CacheItem)
+		lc.currentSize -= int64(item.Size)
+		lc.lruList.Remove(elem)
 		delete(lc.data, key)
 	}
 }
 
-func (lc *LocalCache) EvictExpired() int {
+func (lc *OptimizedLocalCache) Clear() {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+
+	lc.data = make(map[string]*list.Element)
+	lc.lruList = list.New()
+	lc.currentSize = 0
+}
+
+func (lc *OptimizedLocalCache) evict() {
+	for (lc.maxSize > 0 && lc.lruList.Len() > lc.maxSize) || 
+		(lc.maxMemory > 0 && lc.currentSize > lc.maxMemory) {
+		back := lc.lruList.Back()
+		if back == nil {
+			break
+		}
+
+		item := back.Value.(*CacheItem)
+		lc.currentSize -= int64(item.Size)
+		delete(lc.data, item.Key)
+		lc.lruList.Remove(back)
+	}
+}
+
+func (lc *OptimizedLocalCache) EvictExpired() int {
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	now := time.Now()
 	evicted := 0
 
-	for key, item := range lc.data {
+	for elem := lc.lruList.Back(); elem != nil; elem = elem.Prev() {
+		item := elem.Value.(*CacheItem)
 		if !item.ExpiresAt.IsZero() && now.After(item.ExpiresAt) {
-			delete(lc.data, key)
+			lc.currentSize -= int64(item.Size)
+			delete(lc.data, item.Key)
+			lc.lruList.Remove(elem)
 			evicted++
 		}
 	}
@@ -236,7 +277,7 @@ func (lc *LocalCache) EvictExpired() int {
 	return evicted
 }
 
-func (lc *LocalCache) GetStats() (hits, misses int64, hitRate float64) {
+func (lc *OptimizedLocalCache) GetStats() (hits, misses int64, hitRate float64) {
 	hits = lc.hitCount.Load()
 	misses = lc.missCount.Load()
 	total := hits + misses
@@ -269,7 +310,11 @@ func (pp *PromotionPolicy) RecordAccess(key string, latency time.Duration) {
 
 	info.AccessCount++
 	info.LastAccess = time.Now()
-	info.AvgLatency = (info.AvgLatency*time.Duration(info.AccessCount-1) + latency) / time.Duration(info.AccessCount)
+	if info.AccessCount == 1 {
+		info.AvgLatency = latency
+	} else {
+		info.AvgLatency = (info.AvgLatency*time.Duration(info.AccessCount-1) + latency) / time.Duration(info.AccessCount)
+	}
 	info.PromotionScore = pp.calculateScore(info)
 }
 
@@ -338,47 +383,6 @@ func (pp *PromotionPolicy) GetHotKeys(count int) []string {
 	}
 
 	return result
-}
-
-type EvictionHelper struct{}
-
-func NewEvictionHelper() *EvictionHelper {
-	return &EvictionHelper{}
-}
-
-func (eh *EvictionHelper) SelectEvictionCandidate(items map[string]*CacheItem) string {
-	var bestKey string
-	var bestScore float64
-
-	for key, item := range items {
-		score := eh.calculateEvictionScore(item)
-		if bestKey == "" || score < bestScore {
-			bestKey = key
-			bestScore = score
-		}
-	}
-
-	return bestKey
-}
-
-func (eh *EvictionHelper) calculateEvictionScore(item *CacheItem) float64 {
-	recencyWeight := 0.5
-	frequencyWeight := 0.3
-	sizeWeight := 0.2
-
-	recencyScore := float64(time.Since(item.AccessedAt).Seconds()) / 3600.0
-	if recencyScore > 1.0 {
-		recencyScore = 1.0
-	}
-
-	frequencyScore := 1.0 - float64(item.Frequency)/1000.0
-	if frequencyScore < 0 {
-		frequencyScore = 0
-	}
-
-	sizeScore := float64(item.Size) / (1024 * 1024)
-
-	return recencyWeight*recencyScore + frequencyWeight*frequencyScore + sizeWeight*sizeScore
 }
 
 func (mlcs *MultiLevelCacheService) Get(ctx context.Context, key string) ([]byte, error) {
@@ -479,6 +483,59 @@ func (mlcs *MultiLevelCacheService) Delete(ctx context.Context, keys ...string) 
 	return nil
 }
 
+func (mlcs *MultiLevelCacheService) MGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+	if !mlcs.enabled {
+		return nil, redis.ErrCacheDisabled
+	}
+
+	result := make(map[string][]byte)
+	missingKeys := make([]string, 0)
+
+	if mlcs.config.L1Enabled {
+		for _, key := range keys {
+			if val, found := mlcs.l1Cache.Get(key); found {
+				result[key] = val
+			} else {
+				missingKeys = append(missingKeys, key)
+			}
+		}
+	} else {
+		missingKeys = keys
+	}
+
+	if len(missingKeys) > 0 && mlcs.config.L2Enabled {
+		l2Results, err := mlcs.l2Cache.MGet(ctx, missingKeys, nil)
+		if err == nil {
+			for k, v := range l2Results {
+				result[k] = v
+				if mlcs.config.L1Enabled {
+					mlcs.l1Cache.Set(k, v, mlcs.config.L1TTL)
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (mlcs *MultiLevelCacheService) MSet(ctx context.Context, items map[string][]byte, ttl time.Duration) error {
+	if !mlcs.enabled {
+		return redis.ErrCacheDisabled
+	}
+
+	if mlcs.config.L1Enabled {
+		for k, v := range items {
+			mlcs.l1Cache.Set(k, v, mlcs.config.L1TTL)
+		}
+	}
+
+	if mlcs.config.L2Enabled {
+		return mlcs.l2Cache.MSet(ctx, items, &redis.SetOptions{TTL: ttl})
+	}
+
+	return nil
+}
+
 func (mlcs *MultiLevelCacheService) maybePromote(key string) {
 	if !mlcs.promotionPolicy.ShouldPromote(key) {
 		return
@@ -489,13 +546,6 @@ func (mlcs *MultiLevelCacheService) maybePromote(key string) {
 	mlcs.promotionPolicy.mu.Unlock()
 
 	mlcs.stats.Promotions.Add(1)
-
-	mlcs.l1Cache.mu.Lock()
-	defer mlcs.l1Cache.mu.Unlock()
-
-	if _, exists := mlcs.l1Cache.data[key]; !exists {
-		mlcs.l1Cache.Set(key, nil, mlcs.config.L1TTL)
-	}
 }
 
 func (mlcs *MultiLevelCacheService) updateHitRates() {
@@ -532,6 +582,9 @@ func (mlcs *MultiLevelCacheService) startBackgroundTasks() {
 
 	mlcs.wg.Add(1)
 	go mlcs.consistencyWorker()
+
+	mlcs.wg.Add(1)
+	go mlcs.hotKeyCleanupWorker()
 }
 
 func (mlcs *MultiLevelCacheService) evictionWorker() {
@@ -565,6 +618,29 @@ func (mlcs *MultiLevelCacheService) consistencyWorker() {
 		case <-ticker.C:
 			if mlcs.config.ConsistencyMode != "" && mlcs.consistency != nil {
 			}
+		}
+	}
+}
+
+func (mlcs *MultiLevelCacheService) hotKeyCleanupWorker() {
+	defer mlcs.wg.Done()
+
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-mlcs.ctx.Done():
+			return
+		case <-ticker.C:
+			mlcs.promotionPolicy.mu.Lock()
+			now := time.Now()
+			for key, info := range mlcs.promotionPolicy.hotKeys {
+				if now.Sub(info.LastAccess) > mlcs.promotionPolicy.windowSize*2 {
+					delete(mlcs.promotionPolicy.hotKeys, key)
+				}
+			}
+			mlcs.promotionPolicy.mu.Unlock()
 		}
 	}
 }

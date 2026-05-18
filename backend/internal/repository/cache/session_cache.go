@@ -281,3 +281,28 @@ func (s *SessionCache) MarkVoiceAsVerified(ctx context.Context, sessionID string
 	session.Status = "verified"
 	return s.SetVoice(ctx, session)
 }
+
+// SetRaw 存储原始JSON数据到缓存
+func (s *SessionCache) SetRaw(ctx context.Context, key string, value string, ttl time.Duration) error {
+	if s.client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+	fullKey := CaptchaSessionPrefix + key
+	return s.client.Set(ctx, fullKey, value, ttl).Err()
+}
+
+// GetRaw 从缓存获取原始JSON数据
+func (s *SessionCache) GetRaw(ctx context.Context, key string) (string, error) {
+	if s.client == nil {
+		return "", fmt.Errorf("redis client not initialized")
+	}
+	fullKey := CaptchaSessionPrefix + key
+	data, err := s.client.Get(ctx, fullKey).Result()
+	if err != nil {
+		if err == goredis.Nil {
+			return "", nil
+		}
+		return "", err
+	}
+	return data, nil
+}

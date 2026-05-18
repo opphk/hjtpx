@@ -31,10 +31,11 @@ type AlertChannel interface {
 type ChannelType string
 
 const (
-	ChannelTypeSlack    ChannelType = "slack"
-	ChannelTypeWebhook  ChannelType = "webhook"
-	ChannelTypeEmail   ChannelType = "email"
-	ChannelTypeDingTalk ChannelType = "dingtalk"
+	ChannelTypeSlack      ChannelType = "slack"
+	ChannelTypeWebhook    ChannelType = "webhook"
+	ChannelTypeEmail      ChannelType = "email"
+	ChannelTypeDingTalk   ChannelType = "dingtalk"
+	ChannelTypeWeChatWork ChannelType = "wechat_work"
 )
 
 // SlackConfig Slack 配置
@@ -318,6 +319,8 @@ func CreateChannel(channelType string, config map[string]interface{}) (AlertChan
 		return NewEmailChannel(config)
 	case ChannelTypeDingTalk:
 		return NewDingTalkChannel(config)
+	case ChannelTypeWeChatWork:
+		return NewWeChatWorkChannel(config)
 	default:
 		return nil, fmt.Errorf("unsupported channel type: %s", channelType)
 	}

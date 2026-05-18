@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A/B 测试管理 - HJTPX</title>
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <style>
+        :root {
+            --primary: #0d6efd;
+            --secondary: #6c757d;
+            --success: #198754;
+            --info: #0dcaf0;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light: #f8f9fa;
+            --dark: #212529;
+        }
+        [data-bs-theme="dark"] {
+            --light: #1a1a2e;
+            --dark: #f8f9fa;
+        }
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+            background: var(--light);
+        }
+        .theme-toggle {
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: var(--primary);
+            transition: all 0.3s ease;
+        }
+        .theme-toggle:hover {
+            background: rgba(13,110,253,0.2);
+            transform: scale(1.1);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .status-draft { background: var(--secondary); }
+        .status-running { background: var(--primary); }
+        .status-stopped { background: var(--dark); }
+        .variant-card {
+            border-left: 4px solid var(--primary);
+            transition: all 0.2s ease;
+        }
+        .variant-card:hover {
+            border-left-color: var(--success);
+        }
+        .progress-bar-conversion {
+            background: linear-gradient(90deg, var(--primary), var(--success));
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, rgba(13,110,253,0.05), rgba(25,135,84,0.05));
+        }
+        .modal-overlay {
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="fade-in">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+                <i class="fas fa-shield-alt text-primary"></i>
+                <span class="fw-bold">HJTPX</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="adminNavbar">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="/admin/dashboard"><i class="fas fa-tachometer-alt me-1"></i> 仪表盘</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/admin/ab-test"><i class="fas fa-flask me-1"></i> A/B 测试</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/admin/stats"><i class="fas fa-chart-bar me-1"></i> 统计</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/admin/logs"><i class="fas fa-list-alt me-1"></i> 日志</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/admin/config"><i class="fas fa-cog me-1"></i> 配置</a></li>
+                </ul>
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="theme-toggle" id="themeToggle" aria-label="切换主题">
+                        <i class="fas fa-moon" id="themeIcon"></i>
+                    </button>
+                    <button class="btn btn-outline-light btn-sm" onclick="window.location.href='/';"><i class="fas fa-sign-out-alt me-1"></i> 返回首页</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-5" style="margin-top: 60px;">
+        <div class="container-fluid">
+            <div class="row mb-4">
+                <div class="col">
+                    <h1 class="h2 fw-bold"><i class="fas fa-flask text-primary me-2"></i>A/B 测试管理</h1>
+                    <p class="text-muted">创建、管理和分析您的 A/B 测试实验</p>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary btn-lg" onclick="openCreateModal()">
+                        <i class="fas fa-plus me-2"></i>创建新实验
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="card stat-card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1 small">总实验数</p>
+                                    <h3 class="fw-bold text-primary" id="statTotal">0</h3>
+                                </div>
+                                <div class="rounded-circle bg-primary bg-opacity-10 p-3">
+                                    <i class="fas fa-flask text-primary fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1 small">进行中</p>
+                                    <h3 class="fw-bold text-success" id="statRunning">0</h3>
+                                </div>
+                                <div class="rounded-circle bg-success bg-opacity-10 p-3">
+                                    <i class="fas fa-play text-success fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1 small">已停止</p>
+                                    <h3 class="fw-bold text-secondary" id="statStopped">0</h3>
+                                </div>
+                                <div class="rounded-circle bg-secondary bg-opacity-10 p-3">
+                                    <i class="fas fa-stop text-secondary fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card stat-card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <p class="text-muted mb-1 small">草稿</p>
+                                    <h3 class="fw-bold text-warning" id="statDraft">0</h3>
+                                </div>
+                                <div class="rounded-circle bg-warning bg-opacity-10 p-3">
+                                    <i class="fas fa-edit text-warning fs-4"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control" id="searchInput" placeholder="搜索实验名称..." oninput="filterExperiments()">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="statusFilter" onchange="filterExperiments()">
+                                <option value="">所有状态</option>
+                                <option value="draft">草稿</option>
+                                <option value="running">进行中</option>
+                                <option value="stopped">已停止</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="appFilter" onchange="filterExperiments()">
+                                <option value="">所有应用</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary w-100" onclick="refreshData()">
+                                <i class="fas fa-sync-alt me-1"></i>刷新
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4" id="experimentsContainer"></div>
+
+            <div class="d-flex justify-content-center mt-4" id="paginationContainer"></div>
+        </div>
+    </main>
+
+    <div class="modal fade" id="createModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus me-2"></i>创建新实验</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createForm">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">实验名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="expName" required placeholder="输入实验名称">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">描述</label>
+                            <textarea class="form-control" id="expDescription" rows="3" placeholder="描述实验的目的和内容"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">关联应用 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="expApp" required></select>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0"><i class="fas fa-layer-group me-2"></i>变体配置</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addVariant()">
+                                <i class="fas fa-plus me-1"></i>添加变体
+                            </button>
+                        </div>
+                        <div id="variantsContainer"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveExperiment()">
+                        <i class="fas fa-save me-2"></i>保存实验
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="viewModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewModalTitle"><i class="fas fa-info-circle me-2"></i>实验详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="viewModalBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmModalTitle"><i class="fas fa-exclamation-triangle me-2"></i>确认操作</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="confirmModalBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmBtn">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+        <div id="toastContainer"></div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/ab-test.js"></script>
+</body>
+</html>
