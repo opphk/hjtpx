@@ -3,16 +3,13 @@ package captcha
 import (
 	"bytes"
 	"encoding/base64"
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
 	"math"
 	"math/rand"
-	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -27,18 +24,6 @@ var (
 			return image.NewRGBA(image.Rect(0, 0, 320, 160))
 		},
 	}
-	encoderPool = sync.Pool{
-		New: func() interface{} {
-			return &png.Encoder{
-				CompressionLevel: png.BestCompression,
-				BufferPool:       newBufferPool(64 * 1024),
-			}
-		},
-	}
-	activeGenerations int64
-	maxConcurrentGen = int64(runtime.NumCPU() * 2)
-	maxMemoryMB       = int64(512)
-	currentMemoryMB   int64
 )
 
 type ImageGenerator struct {
@@ -1329,95 +1314,6 @@ func newBufferPool(size int) *bufferPool {
 	}
 }
 
-func (bp *bufferPool) Get() []byte {
-	return bp.pool.Get().([]byte)[:cap(bp.pool.Get().([]byte))]
-}
-
-func (bp *bufferPool) Put(b []byte) {
-	if cap(b) == bp.size {
-		bp.pool.Put(b)
-	}
-}
-
-func acquireMemory(size int64) bool {
-	for {
-		current := atomic.LoadInt64(&currentMemoryMB)
-		if current+size > maxMemoryMB {
-			runtime.Gosched()
-			continue
-		}
-		if atomic.CompareAndSwapInt64(&currentMemoryMB, current, current+size) {
-			return true
-		}
-	}
-}
-
-func releaseMemory(size int64) {
-	atomic.AddInt64(&currentMemoryMB, -size)
-}
-
-func waitForMemory(size int64) bool {
-	maxWait := time.After(5 * time.Second)
-	for {
-		select {
-		case <-maxWait:
-			return false
-		default:
-			current := atomic.LoadInt64(&currentMemoryMB)
-			if current+size <= maxMemoryMB {
-				if atomic.CompareAndSwapInt64(&currentMemoryMB, current, current+size) {
-					return true
-				}
-			}
-			runtime.Gosched()
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
-}
-
-func acquireGenerationSlot() bool {
-	for {
-		active := atomic.LoadInt64(&activeGenerations)
-		if active >= maxConcurrentGen {
-			runtime.Gosched()
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-		if atomic.CompareAndSwapInt64(&activeGenerations, active, active+1) {
-			return true
-		}
-	}
-}
-
-func releaseGenerationSlot() {
-	atomic.AddInt64(&activeGenerations, -1)
-}
-
-func (g *ImageGenerator) encodePNG(img *image.RGBA) []byte {
-	estimatedSize := int64(img.Bounds().Dx() * img.Bounds().Dy() * 4 / 1024)
-	if !waitForMemory(estimatedSize) {
-		return nil
-	}
-	defer releaseMemory(estimatedSize)
-
-	buf := imagePool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		imagePool.Put(buf)
-	}()
-
-	enc := encoderPool.Get().(*png.Encoder)
-	defer encoderPool.Put(enc)
-
-	if err := enc.Encode(buf, img); err != nil {
-		return nil
-	}
-
-	result := make([]byte, buf.Len())
-	copy(result, buf.Bytes())
-	return result
-}
-
 func (g *ImageGenerator) EncodeToBase64(img *image.RGBA) string {
 	data := g.encodePNG(img)
 	if len(data) == 0 {
@@ -1426,40 +1322,23 @@ func (g *ImageGenerator) EncodeToBase64(img *image.RGBA) string {
 	return base64.StdEncoding.EncodeToString(data)
 }
 
-func (g *ImageGenerator) GenerateImageWithPool(ctx context.Context, captchaType string) (*ImageResult, error) {
-	if !acquireGenerationSlot() {
-		return nil, fmt.Errorf("generation capacity exceeded")
+func (g *ImageGenerator) encodePNG(img *image.RGBA) []byte {
+	buf := imagePool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		imagePool.Put(buf)
+	}()
+
+	enc := &png.Encoder{
+		CompressionLevel: png.BestCompression,
 	}
-	defer releaseGenerationSlot()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	var result *CaptchaResult
-	var err error
-
-	switch captchaType {
-	case "slider":
-		result, err = g.GenerateSliderCaptcha()
-	default:
-		result, err = g.GenerateSliderCaptcha()
+	if err := enc.Encode(buf, img); err != nil {
+		return nil
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
-	return &ImageResult{
-		Background: result.Background,
-		Slider:     result.Slider,
-		GapX:       result.GapX,
-		GapY:       result.GapY,
-		Type:       captchaType,
-		CreatedAt:  time.Now(),
-	}, nil
+	result := make([]byte, buf.Len())
+	copy(result, buf.Bytes())
+	return result
 }
 
 type ImageResult struct {

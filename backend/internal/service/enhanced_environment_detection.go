@@ -12,7 +12,7 @@ type EnhancedEnvironmentDetection struct {
 
 type EnhancedEnvDetector struct{}
 
-type AutomationDetectionResult struct {
+type EnhancedAutomationResult struct {
 	Detected    bool
 	ToolName    string
 	Confidence  float64
@@ -535,8 +535,8 @@ func (d *EnhancedEnvDetector) detectCyberVillains(ctx context.Context, data map[
 	return score >= 40
 }
 
-func (d *EnhancedEnvDetector) GetAutomationDetectionResult(ctx context.Context, data map[string]interface{}) *AutomationDetectionResult {
-	result := &AutomationDetectionResult{
+func (d *EnhancedEnvDetector) GetAutomationDetectionResult(ctx context.Context, data map[string]interface{}) *EnhancedAutomationResult {
+	result := &EnhancedAutomationResult{
 		Detected:   false,
 		Confidence: 0,
 		Evidence:   []string{},
@@ -692,7 +692,7 @@ func (s *EnhancedEnvironmentDetection) DetectAutomationTools(ctx context.Context
 	return s.detector.DetectAutomationTools(ctx, data)
 }
 
-func (s *EnhancedEnvironmentDetection) GetDetectionResult(ctx context.Context, data map[string]interface{}) *AutomationDetectionResult {
+func (s *EnhancedEnvironmentDetection) GetDetectionResult(ctx context.Context, data map[string]interface{}) *EnhancedAutomationResult {
 	return s.detector.GetAutomationDetectionResult(ctx, data)
 }
 

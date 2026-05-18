@@ -1633,7 +1633,7 @@ func (ere *EnhancedRuleEngine) GetMLFeatureStatistics() map[string]*FeatureStats
 	}
 
 	generator := NewMLRuleGenerator()
-	generator.GenerateRules(ctx.Background(), historicalData)
+	generator.GenerateRules(context.Background(), historicalData)
 
 	return generator.GetAllFeatureStatistics()
 }
