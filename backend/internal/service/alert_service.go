@@ -61,6 +61,16 @@ type AlertSummary struct {
 	UniqueMessages map[string]int
 }
 
+// AlertEscalation 告警升级
+type AlertEscalation struct {
+	RuleID       uint
+	Level        int
+	Conditions   string
+	Action       string
+	NotifyRoles  []uint
+	CreatedAt    time.Time
+}
+
 // 保持向后兼容的别名
 type alertCountItem = AlertCountItem
 
@@ -149,6 +159,33 @@ func (as *AlertService) parseCondition(condition string, context map[string]inte
 	if condition == "" {
 		return true
 	}
+	
+	condition = strings.TrimSpace(condition)
+	
+	if strings.Contains(condition, "&&") {
+		parts := strings.Split(condition, "&&")
+		for _, part := range parts {
+			if !as.parseSingleCondition(strings.TrimSpace(part), context) {
+				return false
+			}
+		}
+		return true
+	}
+	
+	if strings.Contains(condition, "||") {
+		parts := strings.Split(condition, "||")
+		for _, part := range parts {
+			if as.parseSingleCondition(strings.TrimSpace(part), context) {
+				return true
+			}
+		}
+		return false
+	}
+	
+	return as.parseSingleCondition(condition, context)
+}
+
+func (as *AlertService) parseSingleCondition(condition string, context map[string]interface{}) bool {
 	if strings.Contains(condition, "==") {
 		parts := strings.SplitN(condition, "==", 2)
 		key := strings.TrimSpace(parts[0])
@@ -163,8 +200,74 @@ func (as *AlertService) parseCondition(condition string, context map[string]inte
 		if ctxVal, ok := context[key]; ok {
 			return fmt.Sprintf("%v", ctxVal) != value
 		}
+	} else if strings.Contains(condition, ">") {
+		parts := strings.SplitN(condition, ">", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if ctxVal, ok := context[key]; ok {
+			numVal := as.parseNumber(ctxVal)
+			compareVal := as.parseNumberString(value)
+			return numVal > compareVal
+		}
+	} else if strings.Contains(condition, "<") {
+		parts := strings.SplitN(condition, "<", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if ctxVal, ok := context[key]; ok {
+			numVal := as.parseNumber(ctxVal)
+			compareVal := as.parseNumberString(value)
+			return numVal < compareVal
+		}
+	} else if strings.Contains(condition, ">=") {
+		parts := strings.SplitN(condition, ">=", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if ctxVal, ok := context[key]; ok {
+			numVal := as.parseNumber(ctxVal)
+			compareVal := as.parseNumberString(value)
+			return numVal >= compareVal
+		}
+	} else if strings.Contains(condition, "<=") {
+		parts := strings.SplitN(condition, "<=", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if ctxVal, ok := context[key]; ok {
+			numVal := as.parseNumber(ctxVal)
+			compareVal := as.parseNumberString(value)
+			return numVal <= compareVal
+		}
+	} else if strings.Contains(condition, "contains") {
+		parts := strings.SplitN(condition, "contains", 2)
+		key := strings.TrimSpace(parts[0])
+		value := strings.Trim(strings.TrimSpace(parts[1]), "\"'")
+		if ctxVal, ok := context[key]; ok {
+			return strings.Contains(fmt.Sprintf("%v", ctxVal), value)
+		}
 	}
 	return true
+}
+
+func (as *AlertService) parseNumber(val interface{}) float64 {
+	switch v := val.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case string:
+		return as.parseNumberString(v)
+	default:
+		return 0
+	}
+}
+
+func (as *AlertService) parseNumberString(s string) float64 {
+	var num float64
+	fmt.Sscanf(s, "%f", &num)
+	return num
 }
 
 func (as *AlertService) triggerAlert(rule models.AlertRule, event AlertEvent) error {
@@ -532,4 +635,288 @@ func (as *AlertService) GetAlertHistory(alertID uint) ([]models.AlertHistory, er
 		return nil, err
 	}
 	return histories, nil
+}
+
+// GetAlertStatistics 获取告警统计
+func (as *AlertService) GetAlertStatistics(startTime, endTime time.Time) (map[string]interface{}, error) {
+	var totalAlerts int64
+	var criticalAlerts int64
+	var warningAlerts int64
+	var resolvedAlerts int64
+	
+	if as.db == nil {
+		return map[string]interface{}{
+			"total":       0,
+			"critical":    0,
+			"warning":     0,
+			"resolved":    0,
+			"resolution_rate": 0,
+		}, nil
+	}
+	
+	as.db.Model(&models.AlertRecord{}).
+		Where("created_at BETWEEN ? AND ?", startTime, endTime).
+		Count(&totalAlerts)
+	
+	as.db.Model(&models.AlertRecord{}).
+		Where("created_at BETWEEN ? AND ? AND severity = ?", startTime, endTime, "critical").
+		Count(&criticalAlerts)
+	
+	as.db.Model(&models.AlertRecord{}).
+		Where("created_at BETWEEN ? AND ? AND severity = ?", startTime, endTime, "warning").
+		Count(&warningAlerts)
+	
+	as.db.Model(&models.AlertRecord{}).
+		Where("created_at BETWEEN ? AND ? AND status = ?", startTime, endTime, "resolved").
+		Count(&resolvedAlerts)
+	
+	resolutionRate := 0.0
+	if totalAlerts > 0 {
+		resolutionRate = float64(resolvedAlerts) / float64(totalAlerts) * 100
+	}
+	
+	return map[string]interface{}{
+		"total":           totalAlerts,
+		"critical":        criticalAlerts,
+		"warning":         warningAlerts,
+		"resolved":        resolvedAlerts,
+		"resolution_rate": resolutionRate,
+	}, nil
+}
+
+// GetAlertTrend 获取告警趋势
+func (as *AlertService) GetAlertTrend(period string) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	
+	if as.db == nil {
+		return results, nil
+	}
+	
+	groupBy := "DATE(created_at)"
+	dateFormat := "%Y-%m-%d"
+	
+	switch period {
+	case "hour":
+		groupBy = "HOUR(created_at)"
+		dateFormat = "%Y-%m-%d %H:00"
+	case "day":
+		groupBy = "DATE(created_at)"
+		dateFormat = "%Y-%m-%d"
+	case "week":
+		groupBy = "YEARWEEK(created_at)"
+		dateFormat = "%Y-W%v"
+	case "month":
+		groupBy = "DATE_FORMAT(created_at, '%Y-%m')"
+		dateFormat = "%Y-%m"
+	}
+	
+	rows, err := as.db.Raw(`
+		SELECT 
+			DATE_FORMAT(created_at, ?) as time,
+			COUNT(*) as count,
+			SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) as critical,
+			SUM(CASE WHEN severity = 'warning' THEN 1 ELSE 0 END) as warning,
+			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved
+		FROM alert_records
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+		GROUP BY `+groupBy+`
+		ORDER BY time ASC
+	`, dateFormat).Rows()
+	
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	for rows.Next() {
+		var timeStr string
+		var count, critical, warning, resolved int64
+		
+		if err := rows.Scan(&timeStr, &count, &critical, &warning, &resolved); err != nil {
+			continue
+		}
+		
+		results = append(results, map[string]interface{}{
+			"time":      timeStr,
+			"count":     count,
+			"critical":  critical,
+			"warning":   warning,
+			"resolved":  resolved,
+		})
+	}
+	
+	return results, nil
+}
+
+// GetTopAlertRules 获取触发最多的告警规则
+func (as *AlertService) GetTopAlertRules(limit int) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	
+	if as.db == nil {
+		return results, nil
+	}
+	
+	rows, err := as.db.Raw(`
+		SELECT 
+			rule_id,
+			rule_name,
+			COUNT(*) as count,
+			MAX(severity) as max_severity,
+			MAX(created_at) as last_triggered
+		FROM alert_records
+		WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+		GROUP BY rule_id, rule_name
+		ORDER BY count DESC
+		LIMIT ?
+	`, limit).Rows()
+	
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	for rows.Next() {
+		var ruleID uint
+		var ruleName string
+		var count int64
+		var maxSeverity string
+		var lastTriggered time.Time
+		
+		if err := rows.Scan(&ruleID, &ruleName, &count, &maxSeverity, &lastTriggered); err != nil {
+			continue
+		}
+		
+		results = append(results, map[string]interface{}{
+			"rule_id":        ruleID,
+			"rule_name":      ruleName,
+			"count":          count,
+			"max_severity":   maxSeverity,
+			"last_triggered": lastTriggered,
+		})
+	}
+	
+	return results, nil
+}
+
+// CheckEscalation 检查是否需要告警升级
+func (as *AlertService) CheckEscalation(alertID uint) error {
+	var alert models.AlertRecord
+	if as.db == nil {
+		return nil
+	}
+	
+	if err := as.db.First(&alert, alertID).Error; err != nil {
+		return err
+	}
+	
+	if alert.Status == "resolved" {
+		return nil
+	}
+	
+	var escalations []AlertEscalation
+	if err := as.db.Where("rule_id = ?", alert.RuleID).Find(&escalations).Error; err != nil {
+		return err
+	}
+	
+	for _, esc := range escalations {
+		if as.evaluateEscalationCondition(esc, alert) {
+			as.executeEscalation(esc, alert)
+		}
+	}
+	
+	return nil
+}
+
+func (as *AlertService) evaluateEscalationCondition(esc AlertEscalation, alert models.AlertRecord) bool {
+	if esc.Conditions == "" {
+		return false
+	}
+	
+	conditions := strings.Split(esc.Conditions, ";")
+	for _, cond := range conditions {
+		parts := strings.SplitN(strings.TrimSpace(cond), "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		
+		switch key {
+		case "duration":
+			duration, err := time.ParseDuration(value)
+			if err != nil {
+				continue
+			}
+			if alert.CreatedAt.Add(duration).Before(time.Now()) {
+				return true
+			}
+		case "count":
+			var count int64
+			as.db.Model(&models.AlertRecord{}).
+				Where("rule_id = ? AND status != ?", alert.RuleID, "resolved").
+				Count(&count)
+			
+			expectedCount := int64(0)
+			fmt.Sscanf(value, "%d", &expectedCount)
+			
+			if int64(count) >= expectedCount {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
+func (as *AlertService) executeEscalation(esc AlertEscalation, alert models.AlertRecord) error {
+	as.mu.RLock()
+	channels := as.channels
+	as.mu.RUnlock()
+	
+	msg := AlertMessage{
+		Title:     fmt.Sprintf("[升级 L%d] %s", esc.Level, alert.RuleName),
+		Message:   fmt.Sprintf("告警已升级到Level %d，需要人工介入处理", esc.Level),
+		Severity:  "critical",
+		EventID:   fmt.Sprintf("%d", alert.ID),
+		Timestamp: time.Now(),
+		Context: map[string]interface{}{
+			"original_severity": alert.Severity,
+			"escalation_level":  esc.Level,
+			"alert_id":          alert.ID,
+		},
+	}
+	
+	for _, channelID := range esc.NotifyRoles {
+		if channel, ok := channels[uint(channelID)]; ok {
+			go func(ch AlertChannel) {
+				ch.Send(msg)
+			}(channel)
+		}
+	}
+	
+	return nil
+}
+
+// BatchResolveAlerts 批量解决告警
+func (as *AlertService) BatchResolveAlerts(ids []uint, note string, performedBy uint) error {
+	if as.db == nil {
+		return nil
+	}
+	
+	now := time.Now()
+	for _, id := range ids {
+		if err := as.db.Model(&models.AlertRecord{}).
+			Where("id = ?", id).
+			Updates(map[string]interface{}{
+				"status":      "resolved",
+				"resolved_at": now,
+			}).Error; err != nil {
+			continue
+		}
+		
+		as.addHistory(id, "batch_resolved", "triggered", "resolved", note, performedBy)
+	}
+	
+	return nil
 }

@@ -507,6 +507,17 @@
     </div>
 </div>
 
+<!-- 数据缓存状态指示器 -->
+<div class="row" id="cacheStatusRow" style="display: none;">
+    <div class="col-md-12">
+        <div class="alert alert-info alert-dismissible">
+            <h5><i class="icon fas fa-info"></i> 数据缓存状态</h5>
+            <div id="cacheInfo"></div>
+            <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+        </div>
+    </div>
+</div>
+
 <!-- 通知面板 -->
 <div class="modal fade" id="notificationsModal" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
@@ -581,6 +592,29 @@
         </div>
     </div>
 </div>
+
+<!-- 图表详情模态框 -->
+<div class="modal fade" id="chartDetailModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="chartDetailTitle"><i class="fas fa-chart-bar"></i> 图表详情</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="chartDetailContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="exportChartDetail()">
+                    <i class="fas fa-download"></i> 导出数据
+                </button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -596,6 +630,10 @@ let realtimeDataPoints = [];
 let previousStats = null;
 const MAX_REALTIME_POINTS = 60;
 const WS_RECONNECT_DELAY = 3000;
+const DATA_CACHE_DURATION = 10000;
+const PREFETCH_INTERVAL = 30000;
+let dataCache = new Map();
+let prefetchTimer = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     initECharts();
@@ -633,6 +671,58 @@ function initECharts() {
     initHeatmapChart();
     initStackChart();
     initAppUsageChart();
+    initDataCache();
+    initPrefetch();
+}
+
+function initDataCache() {
+    dataCache.set = function(key, value) {
+        const item = {
+            data: value,
+            timestamp: Date.now()
+        };
+        Map.prototype.set.call(this, key, item);
+    };
+    
+    dataCache.get = function(key) {
+        const item = Map.prototype.get.call(this, key);
+        if (!item) return null;
+        
+        if (Date.now() - item.timestamp > DATA_CACHE_DURATION) {
+            this.delete(key);
+            return null;
+        }
+        return item.data;
+    };
+}
+
+function initPrefetch() {
+    prefetchTimer = setInterval(() => {
+        prefetchDashboardData();
+    }, PREFETCH_INTERVAL);
+}
+
+async function prefetchDashboardData() {
+    try {
+        const endpoints = [
+            { url: '/admin/api/dashboard', key: 'dashboard' },
+            { url: '/admin/api/dashboard/extended', key: 'extended' },
+            { url: '/admin/api/system-status', key: 'system-status' }
+        ];
+        
+        for (const endpoint of endpoints) {
+            const cached = dataCache.get(endpoint.key);
+            if (!cached) {
+                const response = await fetch(endpoint.url);
+                if (response.ok) {
+                    const result = await response.json();
+                    dataCache.set(endpoint.key, result);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('预加载数据失败:', error);
+    }
 }
 
 function initTrendChart() {
@@ -641,6 +731,10 @@ function initTrendChart() {
     
     trendChart = echarts.init(container);
     window.addEventListener('resize', () => trendChart.resize());
+    
+    trendChart.on('datazoom', function(params) {
+        console.log('Trend chart zoom:', params);
+    });
 }
 
 function initPieChart() {
@@ -649,6 +743,11 @@ function initPieChart() {
     
     pieChart = echarts.init(container);
     window.addEventListener('resize', () => pieChart.resize());
+    
+    pieChart.on('click', function(params) {
+        console.log('Pie chart clicked:', params);
+        showDetailModal('风险分布详情', params.name, params.value);
+    });
 }
 
 function initCaptchaTypeChart() {
@@ -1159,12 +1258,19 @@ function addVerificationRow(data) {
 }
 
 async function loadDashboardData() {
+    const cached = dataCache.get('dashboard');
+    if (cached) {
+        updateDashboard(cached.data);
+        return;
+    }
+    
     try {
         const response = await fetch('/admin/api/dashboard');
         if (!response.ok) throw new Error('Network error');
         
         const result = await response.json();
         if (result.code === 0) {
+            dataCache.set('dashboard', result);
             updateDashboard(result.data);
         } else {
             loadMockData();
@@ -1457,12 +1563,19 @@ function updateTrendChart(data, period) {
 }
 
 async function loadSystemStatus() {
+    const cached = dataCache.get('system-status');
+    if (cached) {
+        updateSystemStatus(cached.data);
+        return;
+    }
+    
     try {
         const response = await fetch('/admin/api/system-status');
         if (!response.ok) throw new Error('Network error');
         
         const result = await response.json();
         if (result.code === 0) {
+            dataCache.set('system-status', result.data);
             updateSystemStatus(result.data);
         } else {
             loadMockSystemStatus();
@@ -1699,6 +1812,75 @@ function downloadFile(content, filename, mimeType) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+let currentChartDetail = { title: '', name: '', value: 0 };
+
+function showDetailModal(title, name, value) {
+    currentChartDetail = { title, name, value };
+    document.getElementById('chartDetailTitle').textContent = title;
+    document.getElementById('chartDetailContent').innerHTML = `
+        <div class="text-center">
+            <h3 class="text-primary">${name}</h3>
+            <p class="text-muted">数量: <strong>${formatNumber(value)}</strong></p>
+            <p class="text-muted">更新时间: ${new Date().toLocaleString('zh-CN')}</p>
+        </div>
+    `;
+    $('#chartDetailModal').modal('show');
+}
+
+function exportChartDetail() {
+    const data = {
+        title: currentChartDetail.title,
+        name: currentChartDetail.name,
+        value: currentChartDetail.value,
+        exportTime: new Date().toISOString()
+    };
+    
+    const jsonContent = JSON.stringify(data, null, 2);
+    downloadFile(jsonContent, `chart_detail_${Date.now()}.json`, 'application/json');
+    showToast('数据导出成功', 'success');
+}
+
+function exportChartAsImage(chart, filename) {
+    if (!chart) return;
+    
+    try {
+        const url = chart.getDataURL({
+            type: 'png',
+            pixelRatio: 2,
+            backgroundColor: '#fff'
+        });
+        
+        const link = document.createElement('a');
+        link.download = filename + '.png';
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('图表导出成功', 'success');
+    } catch (error) {
+        console.error('图表导出失败:', error);
+        showToast('图表导出失败', 'error');
+    }
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
 }
 </script>
 {% endblock %}

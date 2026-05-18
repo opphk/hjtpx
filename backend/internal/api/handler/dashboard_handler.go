@@ -16,7 +16,7 @@ import (
 var (
 	dashboardUpgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
+		WriteBufferSize: 1024 * 4,
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
@@ -24,6 +24,15 @@ var (
 
 	dashboardClients   = make(map[*websocket.Conn]bool)
 	dashboardClientsMu sync.RWMutex
+	broadcastQueue     = make(chan interface{}, 100)
+	metricsBuffer      = make([]interface{}, 0, 50)
+	metricsBufferMu    sync.Mutex
+)
+
+const (
+	MetricsBufferSize   = 50
+	BroadcastInterval   = 1 * time.Second
+	MetricsFlushInterval = 5 * time.Second
 )
 
 type DashboardHandler struct {
@@ -272,29 +281,55 @@ func DashboardWebSocketHandler(c *gin.Context) {
 	dashboardClients[conn] = true
 	dashboardClientsMu.Unlock()
 
-	defer func() {
-		dashboardClientsMu.Lock()
-		delete(dashboardClients, conn)
-		dashboardClientsMu.Unlock()
-		conn.Close()
-	}()
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
 
 	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case event := <-service.SubscribeToVerificationEvents():
-				data, _ := json.Marshal(map[string]interface{}{
-					"type":         "verification",
-					"timestamp":    event.Timestamp.Unix(),
-					"session_id":   event.SessionID,
-					"captcha_type": event.CaptchaType,
-					"status":       event.Status,
-					"risk_score":   event.RiskScore,
-					"ip_address":   event.IPAddress,
-				})
-				conn.WriteMessage(websocket.TextMessage, data)
-			case <-time.After(5 * time.Second):
+				data := prepareVerificationEvent(event)
+				if data != nil {
+					conn.WriteJSON(data)
+				}
+			case <-ticker.C:
 				conn.WriteMessage(websocket.PingMessage, nil)
+			case <-time.After(5 * time.Second):
+				metrics := collectAndFlushMetrics()
+				if len(metrics) > 0 {
+					broadcastData := map[string]interface{}{
+						"type":      "batch_metrics",
+						"timestamp": time.Now().Unix(),
+						"data":      metrics,
+					}
+					conn.WriteJSON(broadcastData)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(BroadcastInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				stats := collectDashboardStats()
+				if stats != nil {
+					data := map[string]interface{}{
+						"type":      "stats",
+						"timestamp": time.Now().Unix(),
+						"payload":   stats,
+					}
+					conn.WriteJSON(data)
+				}
 			}
 		}
 	}()
@@ -307,17 +342,153 @@ func DashboardWebSocketHandler(c *gin.Context) {
 	}
 }
 
-func BroadcastDashboardUpdate(data interface{}) {
+func prepareVerificationEvent(event interface{}) map[string]interface{} {
+	if event == nil {
+		return nil
+	}
+	
+	return map[string]interface{}{
+		"type":         "verification",
+		"timestamp":    time.Now().Unix(),
+		"payload":      event,
+	}
+}
+
+func collectAndFlushMetrics() []interface{} {
+	metricsBufferMu.Lock()
+	defer metricsBufferMu.Unlock()
+
+	if len(metricsBuffer) == 0 {
+		return nil
+	}
+
+	metrics := make([]interface{}, len(metricsBuffer))
+	copy(metrics, metricsBuffer)
+	metricsBuffer = metricsBuffer[:0]
+
+	return metrics
+}
+
+func collectDashboardStats() map[string]interface{} {
+	stats := map[string]interface{}{
+		"total_requests":      getTotalRequests(),
+		"pass_rate":            getPassRate(),
+		"block_rate":           getBlockRate(),
+		"avg_response_time":    getAvgResponseTime(),
+		"requests_per_second": getRequestsPerSecond(),
+		"active_connections":  getActiveConnections(),
+	}
+	return stats
+}
+
+func getTotalRequests() int64 {
+	return 0
+}
+
+func getPassRate() float64 {
+	return 0.0
+}
+
+func getBlockRate() float64 {
+	return 0.0
+}
+
+func getAvgResponseTime() float64 {
+	return 0.0
+}
+
+func getRequestsPerSecond() float64 {
+	return 0.0
+}
+
+func getActiveConnections() int {
 	dashboardClientsMu.RLock()
 	defer dashboardClientsMu.RUnlock()
+	return len(dashboardClients)
+}
 
-	msg, _ := json.Marshal(map[string]interface{}{
+func BroadcastDashboardUpdate(data interface{}) {
+	dashboardClientsMu.RLock()
+	clients := make([]*websocket.Conn, 0, len(dashboardClients))
+	for client := range dashboardClients {
+		clients = append(clients, client)
+	}
+	dashboardClientsMu.RUnlock()
+
+	msg, err := json.Marshal(map[string]interface{}{
 		"type":      "update",
 		"data":      data,
 		"timestamp": time.Now().Unix(),
 	})
+	if err != nil {
+		return
+	}
 
+	var wg sync.WaitGroup
+	for _, client := range clients {
+		wg.Add(1)
+		go func(conn *websocket.Conn) {
+			defer wg.Done()
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			conn.WriteMessage(websocket.TextMessage, msg)
+		}(client)
+	}
+	wg.Wait()
+}
+
+func BroadcastMetricsUpdate(metrics interface{}) {
+	dashboardClientsMu.RLock()
+	clients := make([]*websocket.Conn, 0, len(dashboardClients))
 	for client := range dashboardClients {
-		client.WriteMessage(websocket.TextMessage, msg)
+		clients = append(clients, client)
+	}
+	dashboardClientsMu.RUnlock()
+
+	msg, err := json.Marshal(map[string]interface{}{
+		"type":      "metrics",
+		"data":      metrics,
+		"timestamp": time.Now().Unix(),
+	})
+	if err != nil {
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, client := range clients {
+		wg.Add(1)
+		go func(conn *websocket.Conn) {
+			defer wg.Done()
+			conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			conn.WriteMessage(websocket.TextMessage, msg)
+		}(client)
+	}
+	wg.Wait()
+}
+
+func AddMetricsToBuffer(metrics interface{}) {
+	metricsBufferMu.Lock()
+	defer metricsBufferMu.Unlock()
+
+	if len(metricsBuffer) >= MetricsBufferSize {
+		metricsBuffer = metricsBuffer[1:]
+	}
+	metricsBuffer = append(metricsBuffer, metrics)
+}
+
+func GetConnectedClientsCount() int {
+	dashboardClientsMu.RLock()
+	defer dashboardClientsMu.RUnlock()
+	return len(dashboardClients)
+}
+
+func CleanupDisconnectedClients() {
+	dashboardClientsMu.Lock()
+	defer dashboardClientsMu.Unlock()
+
+	for conn := range dashboardClients {
+		if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(5*time.Second)); err != nil {
+			conn.Close()
+			delete(dashboardClients, conn)
+		}
 	}
 }
