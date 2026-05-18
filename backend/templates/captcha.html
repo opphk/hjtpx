@@ -57,6 +57,11 @@
             transform: scale(1.05);
         }
 
+        .theme-toggle:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+
         .captcha-demo-area {
             position: relative;
             min-height: 180px;
@@ -135,6 +140,11 @@
             box-shadow: 0 12px 40px rgba(201,169,110,0.15) !important;
         }
 
+        .demo-card:focus-within {
+            border-color: var(--captcha-primary);
+            box-shadow: 0 0 0 3px rgba(201,169,110,0.2);
+        }
+
         .demo-card.captcha-active {
             border-color: var(--captcha-primary);
             box-shadow: 0 0 0 3px rgba(201,169,110,0.2);
@@ -200,6 +210,11 @@
         .nav-link:hover {
             background: rgba(201,169,110,0.1);
             border-color: rgba(201,169,110,0.2);
+        }
+
+        .nav-link:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
         }
 
         .nav-link.active {
@@ -336,6 +351,11 @@
             transform: scale(0.95);
         }
 
+        .rotation-slider-button:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+
         .rotation-slider-text {
             position: absolute;
             width: 100%;
@@ -365,6 +385,11 @@
 
         .btn:active {
             transform: translateY(0);
+        }
+
+        .btn:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
         }
 
         .btn-danger {
@@ -490,6 +515,56 @@
             .captcha-demo-area {
                 min-height: 160px;
             }
+
+            .navbar-brand .font-serif {
+                font-size: 1.2rem !important;
+            }
+
+            .page-hero-particle {
+                display: none;
+            }
+
+            .captcha-lang-switch {
+                display: none;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .feature-cards .col-md-4 {
+                margin-bottom: 1rem;
+            }
+        }
+
+        @media (max-width: 575.98px) {
+            .display-4 {
+                font-size: 1.75rem;
+            }
+
+            .page-hero {
+                padding: 5rem 0 2rem;
+            }
+
+            .navbar {
+                padding: 0.75rem 1rem;
+            }
+
+            .captcha-demo-area {
+                min-height: 140px;
+                padding: 0.75rem;
+            }
+
+            .btn-danger, .btn-dark {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+
+            .result-banner {
+                width: 100%;
+                justify-content: center;
+            }
         }
 
         .captcha-lang-switch {
@@ -522,6 +597,11 @@
             color: white;
         }
 
+        .captcha-lang-btn:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+
         [role="button"] {
             cursor: pointer;
         }
@@ -543,7 +623,6 @@
             outline-offset: 2px;
         }
 
-        /* 高对比度模式支持 */
         @media (prefers-contrast: high) {
             :root {
                 --captcha-primary: #ffd700;
@@ -558,7 +637,6 @@
             }
         }
 
-        /* 减少动画模式 */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation-duration: 0.01ms !important;
@@ -595,7 +673,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* 进度指示器样式 */
         .captcha-progress-container {
             display: flex;
             flex-direction: column;
@@ -624,7 +701,6 @@
             text-align: center;
         }
 
-        /* 重试按钮样式 */
         .captcha-retry-btn {
             display: inline-flex;
             align-items: center;
@@ -645,7 +721,11 @@
             box-shadow: 0 4px 12px rgba(201, 169, 110, 0.4);
         }
 
-        /* 错误提示优化 */
+        .captcha-retry-btn:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+
         .captcha-error-hint {
             background: rgba(220, 53, 69, 0.1);
             border: 1px solid rgba(220, 53, 69, 0.3);
@@ -679,7 +759,6 @@
             line-height: 1.5;
         }
 
-        /* 性能指标显示 */
         .performance-metrics {
             position: fixed;
             bottom: 1rem;
@@ -725,7 +804,6 @@
             color: #dc3545;
         }
 
-        /* 无障碍辅助功能 */
         .captcha-audio-btn {
             background: rgba(201, 169, 110, 0.1);
             border: 1px solid rgba(201, 169, 110, 0.3);
@@ -743,6 +821,11 @@
         .captcha-audio-btn:hover {
             background: rgba(201, 169, 110, 0.2);
             transform: scale(1.05);
+        }
+
+        .captcha-audio-btn:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
         }
 
         .captcha-contrast-toggle {
@@ -769,7 +852,11 @@
             color: white;
         }
 
-        /* 难度指示器 */
+        .captcha-contrast-toggle:focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+
         .difficulty-indicator {
             display: flex;
             align-items: center;
@@ -795,7 +882,6 @@
             background: var(--captcha-primary);
         }
 
-        /* WebSocket 验证样式 */
         .ws-verification-container {
             width: 100%;
             max-width: 400px;
@@ -982,11 +1068,115 @@
             cursor: crosshair;
             margin: 1rem 0;
         }
+
+        @media (max-width: 991.98px) {
+            .ws-verification-container {
+                max-width: 100%;
+            }
+            
+            .ws-challenge-area {
+                min-height: 180px;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .ws-btn {
+                padding: 0.6rem 1rem;
+            }
+            
+            .ws-challenge-area {
+                padding: 1rem;
+                min-height: 160px;
+            }
+            
+            .ws-result-icon {
+                font-size: 2rem;
+            }
+        }
+
+        .captcha-toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(26, 26, 46, 0.95);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            max-width: 90%;
+        }
+
+        .captcha-toast.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 767.98px) {
+            .captcha-toast {
+                bottom: 1rem;
+                width: 90%;
+                left: 5%;
+                transform: none;
+            }
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .loading-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(201, 169, 110, 0.2);
+            border-top-color: var(--captcha-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--captcha-primary);
+            color: white;
+            padding: 8px 16px;
+            z-index: 10001;
+            transition: top 0.3s ease;
+            text-decoration: none;
+        }
+
+        .skip-link:focus {
+            top: 0;
+        }
     </style>
     
 </head>
 <body>
-    <a href="#main-content" class="sr-only sr-only-focusable">跳转到主要内容</a>
+    <a href="#main-content" class="skip-link sr-only sr-only-focusable">跳转到主要内容</a>
+    <div class="loading-overlay" id="pageLoadingOverlay" aria-hidden="true">
+        <div class="loading-spinner" role="status">
+            <span class="sr-only">页面加载中...</span>
+        </div>
+    </div>
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);">
         <div class="container">
             <a class="navbar-brand d-flex align-items-center gap-2" href="/">
@@ -1495,6 +1685,7 @@
 
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js"></script>
+    <script src="/static/js/mobile-optimization.js"></script>
     <script src="/static/js/captcha.js"></script>
     <script>
         (function() {
@@ -2155,6 +2346,30 @@
             switchLanguage: switchLanguage
         };
         
+        function showToast(message, type = 'info') {
+            const toastId = 'toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="captcha-toast" role="alert" aria-live="polite">
+                    <i class="fas ${type === 'success' ? 'fa-check-circle text-success' : type === 'error' ? 'fa-times-circle text-danger' : 'fa-info-circle text-info'}" aria-hidden="true"></i>
+                    ${message}
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', toastHtml);
+            const toastEl = document.getElementById(toastId);
+            
+            requestAnimationFrame(function() {
+                toastEl.classList.add('show');
+            });
+            
+            setTimeout(function() {
+                toastEl.classList.remove('show');
+                setTimeout(function() {
+                    toastEl.remove();
+                }, 300);
+            }, 3000);
+        }
+
         function initPerformanceMonitoring() {
             if (!window.PerformanceObserver) return;
             
@@ -2165,6 +2380,12 @@
                             const loadTime = Math.round(entry.loadEventEnd - entry.startTime);
                             console.log('验证码页面加载时间:', loadTime + 'ms');
                             
+                            const metricsEl = document.getElementById('pageLoadTime');
+                            if (metricsEl) {
+                                metricsEl.textContent = loadTime + 'ms';
+                                metricsEl.className = 'metric-value ' + (loadTime < 2000 ? 'good' : loadTime < 4000 ? 'warning' : 'bad');
+                            }
+                            
                             if (loadTime > 3000) {
                                 console.warn('页面加载时间较长');
                             }
@@ -2172,6 +2393,29 @@
                     });
                 });
                 observer.observe({ entryTypes: ['navigation'] });
+                
+                let frameCount = 0;
+                let lastTime = performance.now();
+                let fps = 0;
+                
+                function countFrame() {
+                    frameCount++;
+                    const currentTime = performance.now();
+                    if (currentTime - lastTime >= 1000) {
+                        fps = Math.round(frameCount * 1000 / (currentTime - lastTime));
+                        frameCount = 0;
+                        lastTime = currentTime;
+                        
+                        const fpsEl = document.getElementById('fpsMetric');
+                        if (fpsEl) {
+                            fpsEl.textContent = fps + ' FPS';
+                            fpsEl.className = 'metric-value ' + (fps >= 50 ? 'good' : fps >= 30 ? 'warning' : 'bad');
+                        }
+                    }
+                    requestAnimationFrame(countFrame);
+                }
+                
+                countFrame();
             } catch (e) {
                 console.log('性能监控不可用');
             }

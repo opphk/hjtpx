@@ -1,24 +1,77 @@
 // 国际化支持 - 前端语言切换
 const I18n = {
     currentLang: 'zh-CN',
+    currentTimezone: 'Asia/Shanghai',
     translations: {},
     
-    // 支持的语言列表
     supportedLangs: [
-        { code: 'zh-CN', name: '简体中文', flag: '🇨🇳' },
-        { code: 'en-US', name: 'English', flag: '🇺🇸' },
-        { code: 'ja-JP', name: '日本語', flag: '🇯🇵' },
-        { code: 'ko-KR', name: '한국어', flag: '🇰🇷' },
-        { code: 'fr-FR', name: 'Français', flag: '🇫🇷' },
-        { code: 'de-DE', name: 'Deutsch', flag: '🇩🇪' },
-        { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
-        { code: 'pt-BR', name: 'Português', flag: '🇧🇷' },
-        { code: 'it-IT', name: 'Italiano', flag: '🇮🇹' },
-        { code: 'ru-RU', name: 'Русский', flag: '🇷🇺' },
-        { code: 'ar-SA', name: 'العربية', flag: '🇸🇦' }
+        { code: 'zh-CN', name: '简体中文', flag: '🇨🇳', rtl: false, dateFormat: 'YYYY-MM-DD', currency: 'CNY' },
+        { code: 'en-US', name: 'English', flag: '🇺🇸', rtl: false, dateFormat: 'MM/DD/YYYY', currency: 'USD' },
+        { code: 'ja-JP', name: '日本語', flag: '🇯🇵', rtl: false, dateFormat: 'YYYY/MM/DD', currency: 'JPY' },
+        { code: 'ko-KR', name: '한국어', flag: '🇰🇷', rtl: false, dateFormat: 'YYYY. MM. DD.', currency: 'KRW' },
+        { code: 'fr-FR', name: 'Français', flag: '🇫🇷', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'EUR' },
+        { code: 'de-DE', name: 'Deutsch', flag: '🇩🇪', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'EUR' },
+        { code: 'es-ES', name: 'Español', flag: '🇪🇸', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'EUR' },
+        { code: 'pt-BR', name: 'Português', flag: '🇧🇷', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'BRL' },
+        { code: 'it-IT', name: 'Italiano', flag: '🇮🇹', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'EUR' },
+        { code: 'ru-RU', name: 'Русский', flag: '🇷🇺', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'RUB' },
+        { code: 'ar-SA', name: 'العربية', flag: '🇸🇦', rtl: true, dateFormat: 'DD/MM/YYYY', currency: 'SAR' },
+        { code: 'hi-IN', name: 'हिन्दी', flag: '🇮🇳', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'INR' },
+        { code: 'vi-VN', name: 'Tiếng Việt', flag: '🇻🇳', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'VND' },
+        { code: 'th-TH', name: 'ไทย', flag: '🇹🇭', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'THB' },
+        { code: 'id-ID', name: 'Bahasa Indonesia', flag: '🇮🇩', rtl: false, dateFormat: 'DD/MM/YYYY', currency: 'IDR' },
+        { code: 'tr-TR', name: 'Türkçe', flag: '🇹🇷', rtl: false, dateFormat: 'DD.MM.YYYY', currency: 'TRY' }
     ],
     
-    // 从浏览器获取语言
+    supportedTimezones: [
+        'Asia/Shanghai', 'America/New_York', 'America/Los_Angeles', 'Europe/London',
+        'Europe/Paris', 'Europe/Berlin', 'Asia/Tokyo', 'Asia/Seoul', 'Australia/Sydney',
+        'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Bangkok',
+        'Asia/Jakarta', 'Asia/Manila', 'Asia/Ho_Chi_Minh', 'Asia/Taipei', 'Europe/Madrid',
+        'Europe/Rome', 'Europe/Moscow', 'Europe/Istanbul', 'America/Toronto', 'America/Vancouver',
+        'America/Chicago', 'America/Denver', 'America/Mexico_City', 'America/Sao_Paulo',
+        'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi',
+        'Asia/Riyadh', 'Asia/Tehran', 'Asia/Karachi', 'Asia/Dhaka', 'Pacific/Auckland'
+    ],
+    
+    numberFormats: {
+        'zh-CN': { decimalSep: '.', thousandSep: ',', decimalDigits: 2 },
+        'en-US': { decimalSep: '.', thousandSep: ',', decimalDigits: 2 },
+        'ja-JP': { decimalSep: '.', thousandSep: ',', decimalDigits: 0 },
+        'ko-KR': { decimalSep: '.', thousandSep: ',', decimalDigits: 0 },
+        'fr-FR': { decimalSep: ',', thousandSep: '\u00A0', decimalDigits: 2 },
+        'de-DE': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'es-ES': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'pt-BR': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'it-IT': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'ru-RU': { decimalSep: ',', thousandSep: ' ', decimalDigits: 2 },
+        'ar-SA': { decimalSep: '٫', thousandSep: '٬', decimalDigits: 3 },
+        'hi-IN': { decimalSep: '.', thousandSep: ',', decimalDigits: 2 },
+        'vi-VN': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'th-TH': { decimalSep: '.', thousandSep: ',', decimalDigits: 2 },
+        'id-ID': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 },
+        'tr-TR': { decimalSep: ',', thousandSep: '.', decimalDigits: 2 }
+    },
+    
+    currencyFormats: {
+        'zh-CN': { symbol: '¥', position: 'before' },
+        'en-US': { symbol: '$', position: 'before' },
+        'ja-JP': { symbol: '¥', position: 'before' },
+        'ko-KR': { symbol: '₩', position: 'before' },
+        'fr-FR': { symbol: '€', position: 'after' },
+        'de-DE': { symbol: '€', position: 'after' },
+        'es-ES': { symbol: '€', position: 'after' },
+        'pt-BR': { symbol: 'R$', position: 'before' },
+        'it-IT': { symbol: '€', position: 'after' },
+        'ru-RU': { symbol: '₽', position: 'after' },
+        'ar-SA': { symbol: 'ر.س', position: 'after' },
+        'hi-IN': { symbol: '₹', position: 'before' },
+        'vi-VN': { symbol: '₫', position: 'after' },
+        'th-TH': { symbol: '฿', position: 'before' },
+        'id-ID': { symbol: 'Rp', position: 'before' },
+        'tr-TR': { symbol: '₺', position: 'before' }
+    },
+    
     getBrowserLang: function() {
         const navLang = navigator.language || navigator.userLanguage;
         for (let lang of this.supportedLangs) {
@@ -29,42 +82,46 @@ const I18n = {
         return 'zh-CN';
     },
     
-    // 从本地存储获取语言
     getStoredLang: function() {
         return localStorage.getItem('preferredLang');
     },
     
-    // 设置语言到本地存储
+    getStoredTimezone: function() {
+        return localStorage.getItem('preferredTimezone');
+    },
+    
+    getBrowserTimezone: function() {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch (e) {
+            return 'Asia/Shanghai';
+        }
+    },
+    
     setStoredLang: function(lang) {
         localStorage.setItem('preferredLang', lang);
     },
     
-    // 初始化
+    setStoredTimezone: function(tz) {
+        localStorage.setItem('preferredTimezone', tz);
+    },
+    
     init: async function() {
-        // 获取语言
         this.currentLang = this.getStoredLang() || this.getBrowserLang();
-        
-        // 加载翻译
+        this.currentTimezone = this.getStoredTimezone() || this.getBrowserTimezone();
         await this.loadTranslations();
-        
-        // 渲染语言选择器
         this.renderLangSelector();
-        
-        // 应用翻译
+        this.renderTimezoneSelector();
         this.applyTranslations();
-        
-        // 设置HTML lang属性
+        this.applyRTL();
         document.documentElement.lang = this.currentLang;
     },
     
-    // 加载翻译文件
     loadTranslations: async function() {
         try {
-            // 先加载中文作为默认
             const zhCN = await fetch('/translations/zh-CN.json');
             this.translations['zh-CN'] = await zhCN.json();
             
-            // 加载其他需要的语言
             if (this.currentLang !== 'zh-CN') {
                 try {
                     const target = await fetch(`/translations/${this.currentLang}.json`);
@@ -78,12 +135,10 @@ const I18n = {
         }
     },
     
-    // 翻译函数
     t: function(key, params = {}) {
         let text = this.translations[this.currentLang]?.[key] || 
                    this.translations['zh-CN']?.[key] || key;
         
-        // 替换参数
         Object.keys(params).forEach(paramKey => {
             text = text.replace(`{${paramKey}}`, params[paramKey]);
         });
@@ -91,55 +146,43 @@ const I18n = {
         return text;
     },
     
-    // 应用翻译到DOM
     applyTranslations: function() {
-        // 查找所有带有data-i18n属性的元素
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.getAttribute('data-i18n');
             el.textContent = this.t(key);
         });
         
-        // 查找所有带有data-i18n-placeholder属性的元素
         document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
             const key = el.getAttribute('data-i18n-placeholder');
             el.placeholder = this.t(key);
         });
         
-        // 查找所有带有data-i18n-title属性的元素
         document.querySelectorAll('[data-i18n-title]').forEach(el => {
             const key = el.getAttribute('data-i18n-title');
             el.title = this.t(key);
         });
         
-        // 更新页面标题
         const titleKey = document.documentElement.getAttribute('data-i18n-title');
         if (titleKey) {
             document.title = this.t(titleKey);
         }
     },
     
-    // 渲染语言选择器
     renderLangSelector: function() {
-        // 查找或创建语言选择器容器
         let container = document.getElementById('lang-selector-container');
         if (!container) {
             container = document.createElement('div');
             container.id = 'lang-selector-container';
             container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
-            
-            // 添加到页面
             document.body.appendChild(container);
         }
         
-        // 清空容器
         container.innerHTML = '';
         
-        // 创建选择器
         const select = document.createElement('select');
         select.id = 'lang-selector';
         select.style.cssText = 'padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; background: white; font-size: 14px; cursor: pointer;';
         
-        // 添加选项
         this.supportedLangs.forEach(lang => {
             const option = document.createElement('option');
             option.value = lang.code;
@@ -150,7 +193,6 @@ const I18n = {
             select.appendChild(option);
         });
         
-        // 添加事件监听
         select.addEventListener('change', (e) => {
             this.setLang(e.target.value);
         });
@@ -158,14 +200,12 @@ const I18n = {
         container.appendChild(select);
     },
     
-    // 设置语言
     setLang: async function(lang) {
         if (lang === this.currentLang) return;
         
         this.currentLang = lang;
         this.setStoredLang(lang);
         
-        // 加载新语言（如果尚未加载）
         if (!this.translations[lang]) {
             try {
                 const response = await fetch(`/translations/${lang}.json`);
@@ -175,18 +215,172 @@ const I18n = {
             }
         }
         
-        // 应用翻译
         this.applyTranslations();
-        
-        // 更新HTML lang属性
         document.documentElement.lang = lang;
-        
-        // 触发自定义事件
         document.dispatchEvent(new CustomEvent('languageChange', { detail: { lang } }));
+    },
+    
+    renderTimezoneSelector: function() {
+        let container = document.getElementById('timezone-selector-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'timezone-selector-container';
+            container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+            document.body.appendChild(container);
+        }
+        
+        container.innerHTML = '';
+        
+        const select = document.createElement('select');
+        select.id = 'timezone-selector';
+        select.style.cssText = 'padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; background: white; font-size: 14px; cursor: pointer;';
+        
+        this.supportedTimezones.forEach(tz => {
+            const option = document.createElement('option');
+            option.value = tz;
+            option.textContent = tz;
+            if (tz === this.currentTimezone) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        select.addEventListener('change', (e) => {
+            this.setTimezone(e.target.value);
+        });
+        
+        container.appendChild(select);
+    },
+    
+    setTimezone: function(tz) {
+        if (tz === this.currentTimezone) return;
+        
+        this.currentTimezone = tz;
+        this.setStoredTimezone(tz);
+        
+        document.dispatchEvent(new CustomEvent('timezoneChange', { detail: { timezone: tz } }));
+    },
+    
+    applyRTL: function() {
+        const langInfo = this.supportedLangs.find(l => l.code === this.currentLang);
+        const isRTL = langInfo && langInfo.rtl;
+        
+        document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+        
+        if (isRTL) {
+            document.body.classList.add('rtl');
+            document.body.classList.remove('ltr');
+        } else {
+            document.body.classList.add('ltr');
+            document.body.classList.remove('rtl');
+        }
+    },
+    
+    formatNumber: function(value, decimalDigits = null) {
+        const format = this.numberFormats[this.currentLang] || this.numberFormats['en-US'];
+        const digits = decimalDigits !== null ? decimalDigits : format.decimalDigits;
+        
+        const parts = value.toFixed(digits).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, format.thousandSep);
+        
+        if (digits === 0) {
+            return parts[0];
+        }
+        return parts.join(format.decimalSep);
+    },
+    
+    formatCurrency: function(value) {
+        const currencyFormat = this.currencyFormats[this.currentLang] || this.currencyFormats['en-US'];
+        const numberFormat = this.numberFormats[this.currentLang] || this.numberFormats['en-US'];
+        
+        const parts = value.toFixed(numberFormat.decimalDigits).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, numberFormat.thousandSep);
+        const formattedNumber = parts.join(numberFormat.decimalSep);
+        
+        if (currencyFormat.position === 'before') {
+            return currencyFormat.symbol + formattedNumber;
+        } else {
+            return formattedNumber + ' ' + currencyFormat.symbol;
+        }
+    },
+    
+    formatPercent: function(value) {
+        const percent = (value * 100).toFixed(2);
+        return this.formatNumber(parseFloat(percent), 2) + '%';
+    },
+    
+    formatDate: function(date, format = 'medium') {
+        const langInfo = this.supportedLangs.find(l => l.code === this.currentLang);
+        const dateFormat = langInfo ? langInfo.dateFormat : 'MM/DD/YYYY';
+        
+        const d = new Date(date);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        
+        return dateFormat
+            .replace('DD', day)
+            .replace('MM', month)
+            .replace('YYYY', year);
+    },
+    
+    formatTime: function(date, includeSeconds = false) {
+        const d = new Date(date);
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+        
+        if (includeSeconds) {
+            return `${hours}:${minutes}:${seconds}`;
+        }
+        return `${hours}:${minutes}`;
+    },
+    
+    formatDateTime: function(date, includeSeconds = false) {
+        return this.formatDate(date) + ' ' + this.formatTime(date, includeSeconds);
+    },
+    
+    formatRelativeTime: function(date) {
+        const now = new Date();
+        const target = new Date(date);
+        const diffMs = now - target;
+        const diffSecs = Math.floor(diffMs / 1000);
+        const diffMins = Math.floor(diffSecs / 60);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        const diffWeeks = Math.floor(diffDays / 7);
+        const diffMonths = Math.floor(diffDays / 30);
+        const diffYears = Math.floor(diffDays / 365);
+        
+        const translations = this.translations[this.currentLang] || this.translations['zh-CN'];
+        
+        if (diffSecs < 60) {
+            return translations.just_now || 'just now';
+        } else if (diffMins < 60) {
+            return translations.minutes_ago?.replace('{0}', diffMins) || `${diffMins}m ago`;
+        } else if (diffHours < 24) {
+            return translations.hours_ago?.replace('{0}', diffHours) || `${diffHours}h ago`;
+        } else if (diffDays < 7) {
+            return translations.days_ago?.replace('{0}', diffDays) || `${diffDays}d ago`;
+        } else if (diffWeeks < 4) {
+            return translations.weeks_ago?.replace('{0}', diffWeeks) || `${diffWeeks}w ago`;
+        } else if (diffMonths < 12) {
+            return translations.months_ago?.replace('{0}', diffMonths) || `${diffMonths}mo ago`;
+        } else {
+            return translations.years_ago?.replace('{0}', diffYears) || `${diffYears}y ago`;
+        }
+    },
+    
+    getLangInfo: function(lang) {
+        return this.supportedLangs.find(l => l.code === lang) || this.supportedLangs[0];
+    },
+    
+    isRTL: function(lang) {
+        const langInfo = this.getLangInfo(lang);
+        return langInfo.rtl || false;
     }
 };
 
-// 自动初始化
 document.addEventListener('DOMContentLoaded', function() {
     I18n.init();
 });

@@ -1,4 +1,8 @@
-const CACHE_NAME = 'hjtpx-v1.0.0';
+const CACHE_NAME = 'hjtpx-v2.0.0';
+const CAPTCHA_CACHE = 'hjtpx-captcha-v2';
+const OFFLINE_VERIFICATION = 'hjtpx-offline-v2';
+const IMAGE_CACHE = 'hjtpx-images-v1';
+
 const ASSETS_TO_CACHE = [
   '/',
   '/captcha',
@@ -7,7 +11,10 @@ const ASSETS_TO_CACHE = [
   '/static/js/i18n.js',
   '/static/js/theme.js',
   '/static/js/captcha.js',
-  '/static/js/environment-detector.js'
+  '/static/js/main.js',
+  '/static/js/mobile-optimization.js',
+  '/static/js/performance-optimization.js',
+  '/static/js/gesture-handler.js'
 ];
 
 const CDN_ASSETS = [
@@ -16,59 +23,75 @@ const CDN_ASSETS = [
   'https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js'
 ];
 
-const CAPTCHA_CACHE = 'hjtpx-captcha-v1';
-const OFFLINE_VERIFICATION = 'hjtpx-offline-verification-v1';
+const API_CACHE_RULES = [
+  { pattern: /\/api\/v1\/captcha\/(slider|click|rotation)/, maxAge: 3600 },
+  { pattern: /\/api\/v1\/health/, maxAge: 300 },
+  { pattern: /\/api\/v1\/captcha\/verify/, maxAge: 0 }
+];
 
 self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] 安装 Service Worker');
+  console.log('[ServiceWorker] 安装 Service Worker v2');
   event.waitUntil(
     Promise.all([
       caches.open(CACHE_NAME).then((cache) => {
-        console.log('[ServiceWorker] 缓存应用资源');
+        console.log('[ServiceWorker] 缓存核心资源');
         return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-          console.warn('[ServiceWorker] 部分资源缓存失败，但继续安装:', err);
+          console.warn('[ServiceWorker] 核心资源缓存失败，继续安装:', err);
         });
       }),
-      caches.open(CAPTCHA_CACHE).then((cache) => {
-        console.log('[ServiceWorker] 准备验证码缓存空间');
+      caches.open(CAPTCHA_CACHE).then(() => {
+        console.log('[ServiceWorker] 验证码缓存就绪');
         return Promise.resolve();
       }),
-      caches.open(OFFLINE_VERIFICATION).then((cache) => {
-        console.log('[ServiceWorker] 准备离线验证缓存空间');
+      caches.open(OFFLINE_VERIFICATION).then(() => {
+        console.log('[ServiceWorker] 离线验证缓存就绪');
+        return Promise.resolve();
+      }),
+      caches.open(IMAGE_CACHE).then(() => {
+        console.log('[ServiceWorker] 图片缓存就绪');
         return Promise.resolve();
       })
     ]).then(() => {
-      console.log('[ServiceWorker] 所有缓存初始化完成');
+      console.log('[ServiceWorker] 缓存初始化完成');
       return self.skipWaiting();
     })
   );
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] 激活 Service Worker');
+  console.log('[ServiceWorker] 激活 Service Worker v2');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME && cacheName !== CAPTCHA_CACHE && cacheName !== OFFLINE_VERIFICATION) {
-            console.log('[ServiceWorker] 删除旧缓存:', cacheName);
+          const validCaches = [CACHE_NAME, CAPTCHA_CACHE, OFFLINE_VERIFICATION, IMAGE_CACHE];
+          if (!validCaches.includes(cacheName)) {
+            console.log('[ServiceWorker] 清理旧缓存:', cacheName);
             return caches.delete(cacheName);
           }
-        })
+        }).filter(Boolean)
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      console.log('[ServiceWorker] 缓存清理完成');
+      return self.clients.claim();
+    })
   );
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  
+
   if (request.method !== 'GET') {
     return;
   }
 
-  if (request.url.includes('/api/captcha') || request.url.includes('/api/verify')) {
-    event.respondWith(handleCaptchaRequest(request));
+  if (isApiRequest(request.url)) {
+    event.respondWith(handleApiRequest(request));
+    return;
+  }
+
+  if (isImageRequest(request.url)) {
+    event.respondWith(handleImageRequest(request));
     return;
   }
 
@@ -77,35 +100,102 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(handleDefaultRequest(request));
+  if (request.url.startsWith('http')) {
+    event.respondWith(handleDefaultRequest(request));
+  }
 });
 
-async function handleCaptchaRequest(request) {
+function isApiRequest(url) {
+  return url.includes('/api/');
+}
+
+function isImageRequest(url) {
+  return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(url);
+}
+
+async function handleApiRequest(request) {
+  const cacheRule = API_CACHE_RULES.find(rule => rule.pattern.test(request.url));
+
+  if (request.url.includes('/api/v1/captcha/verify')) {
+    return handleVerificationRequest(request);
+  }
+
   try {
     const networkResponse = await fetch(request);
-    if (networkResponse.ok && request.url.includes('/api/captcha')) {
+
+    if (networkResponse.ok) {
       const cache = await caches.open(CAPTCHA_CACHE);
       cache.put(request, networkResponse.clone());
+
+      if (cacheRule && cacheRule.maxAge > 0) {
+        const headers = new Headers(networkResponse.headers);
+        headers.set('Cache-Timestamp', Date.now().toString());
+        headers.set('Cache-MaxAge', cacheRule.maxAge.toString());
+
+        const responseWithHeaders = new Response(await networkResponse.clone().blob(), {
+          status: networkResponse.status,
+          statusText: networkResponse.statusText,
+          headers: headers
+        });
+        cache.put(request, responseWithHeaders);
+      }
     }
+
     return networkResponse;
   } catch (error) {
-    console.log('[ServiceWorker] 网络请求失败，尝试使用缓存:', error);
-    
-    if (request.url.includes('/api/verify')) {
-      return handleOfflineVerification(request);
-    }
-    
+    console.log('[ServiceWorker] API请求失败，尝试缓存:', error);
     const cache = await caches.open(CAPTCHA_CACHE);
     const cachedResponse = await cache.match(request);
+
+    if (cachedResponse) {
+      const cacheTimestamp = parseInt(cachedResponse.headers.get('Cache-Timestamp') || '0');
+      const maxAge = parseInt(cachedResponse.headers.get('Cache-MaxAge') || '3600') * 1000;
+
+      if (Date.now() - cacheTimestamp < maxAge) {
+        console.log('[ServiceWorker] 使用缓存的API响应');
+        return cachedResponse;
+      }
+    }
+
+    return new Response(JSON.stringify({
+      success: false,
+      error: '网络请求失败'
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 503
+    });
+  }
+}
+
+async function handleVerificationRequest(request) {
+  try {
+    const networkResponse = await fetch(request);
+    return networkResponse;
+  } catch (error) {
+    console.log('[ServiceWorker] 验证请求失败:', error);
+    return handleOfflineVerification(request);
+  }
+}
+
+async function handleImageRequest(request) {
+  try {
+    const networkResponse = await fetch(request);
+
+    if (networkResponse.ok) {
+      const cache = await caches.open(IMAGE_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+
+    return networkResponse;
+  } catch (error) {
+    const cache = await caches.open(IMAGE_CACHE);
+    const cachedResponse = await cache.match(request);
+
     if (cachedResponse) {
       return cachedResponse;
     }
-    
-    return new Response(JSON.stringify({
-      success: false,
-      error: '无法连接到服务器，且无离线验证码可用'
-    }), {
-      headers: { 'Content-Type': 'application/json' },
+
+    return new Response('', {
       status: 503
     });
   }
@@ -120,7 +210,6 @@ async function handleCDNRequest(request) {
     }
     return networkResponse;
   } catch (error) {
-    console.log('[ServiceWorker] CDN 请求失败，使用缓存:', error);
     const cache = await caches.open(CACHE_NAME);
     const cachedResponse = await cache.match(request);
     if (cachedResponse) {
@@ -141,13 +230,12 @@ async function handleDefaultRequest(request) {
     }
     return networkResponse;
   } catch (error) {
-    console.log('[ServiceWorker] 请求失败，使用缓存:', error);
     const cache = await caches.open(CACHE_NAME);
     const cachedResponse = await cache.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
-    return new Response('您当前离线，且页面未缓存', {
+    return new Response('您当前离线', {
       status: 503,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     });
@@ -158,19 +246,19 @@ async function handleOfflineVerification(request) {
   try {
     const cache = await caches.open(OFFLINE_VERIFICATION);
     const storedData = await cache.match('offline-verification-data');
-    
+
     if (storedData) {
       const verificationData = await storedData.json();
-      
       const requestClone = request.clone();
       const requestBody = await requestClone.json().catch(() => null);
-      
+
       if (requestBody && verificationData.expected) {
         const isValid = verifyOffline(requestBody, verificationData.expected);
         return new Response(JSON.stringify({
           success: isValid,
           message: isValid ? '离线验证成功' : '离线验证失败',
-          offline: true
+          offline: true,
+          verification_id: verificationData.verification_id
         }), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -179,7 +267,7 @@ async function handleOfflineVerification(request) {
   } catch (e) {
     console.error('[ServiceWorker] 离线验证错误:', e);
   }
-  
+
   return new Response(JSON.stringify({
     success: false,
     error: '离线验证不可用',
@@ -195,7 +283,7 @@ function verifyOffline(userInput, expected) {
     const tolerance = expected.tolerance || 5;
     return Math.abs(userInput.x - expected.x) <= tolerance;
   }
-  
+
   if (expected.type === 'click') {
     if (!Array.isArray(userInput.clicks) || !Array.isArray(expected.points)) {
       return false;
@@ -203,7 +291,7 @@ function verifyOffline(userInput, expected) {
     if (userInput.clicks.length !== expected.points.length) {
       return false;
     }
-    
+
     const tolerance = expected.tolerance || 15;
     for (let i = 0; i < expected.points.length; i++) {
       const dx = Math.abs(userInput.clicks[i].x - expected.points[i].x);
@@ -214,7 +302,12 @@ function verifyOffline(userInput, expected) {
     }
     return true;
   }
-  
+
+  if (expected.type === 'rotation') {
+    const tolerance = expected.tolerance || 10;
+    return Math.abs(userInput.angle - expected.angle) <= tolerance;
+  }
+
   return false;
 }
 
@@ -224,14 +317,120 @@ self.addEventListener('message', (event) => {
     caches.open(OFFLINE_VERIFICATION).then((cache) => {
       cache.put('offline-verification-data', new Response(JSON.stringify({
         expected: event.data.expected,
+        verification_id: event.data.verification_id || generateVerificationId(),
         timestamp: Date.now()
       }), {
         headers: { 'Content-Type': 'application/json' }
       }));
     });
   }
-  
+
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    console.log('[ServiceWorker] 清理缓存');
+    caches.keys().then((cacheNames) => {
+      return Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    });
+  }
+
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+
+  if (event.data && event.data.type === 'GET_CACHE_STATUS') {
+    caches.keys().then((cacheNames) => {
+      event.source.postMessage({
+        type: 'CACHE_STATUS',
+        caches: cacheNames
+      });
+    });
+  }
 });
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-verification') {
+    event.waitUntil(syncOfflineVerifications());
+  }
+});
+
+async function syncOfflineVerifications() {
+  try {
+    console.log('[ServiceWorker] 同步离线验证数据');
+    const cache = await caches.open(OFFLINE_VERIFICATION);
+    const storedData = await cache.match('offline-verification-data');
+
+    if (storedData) {
+      const data = await storedData.json();
+      const response = await fetch('/api/v1/captcha/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        console.log('[ServiceWorker] 离线数据同步成功');
+      }
+    }
+  } catch (error) {
+    console.error('[ServiceWorker] 离线数据同步失败:', error);
+  }
+}
+
+self.addEventListener('push', (event) => {
+  if (!event.data) {
+    return;
+  }
+
+  try {
+    const data = event.data.json();
+    const options = {
+      body: data.body || '验证码相关通知',
+      icon: '/static/icons/icon-192x192.png',
+      badge: '/static/icons/badge-72x72.png',
+      vibrate: [100, 50, 100],
+      data: {
+        url: data.url || '/'
+      },
+      actions: [
+        { action: 'open', title: '查看' },
+        { action: 'close', title: '关闭' }
+      ]
+    };
+
+    event.waitUntil(
+      self.registration.showNotification(data.title || '墨盾验证', options)
+    );
+  } catch (error) {
+    console.error('[ServiceWorker] 推送通知解析失败:', error);
+  }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'close') {
+    return;
+  }
+
+  const url = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+    })
+  );
+});
+
+self.addEventListener('notificationclose', (event) => {
+  console.log('[ServiceWorker] 通知被关闭');
+});
+
+function generateVerificationId() {
+  return 'offline_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}

@@ -2,7 +2,9 @@
 <html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="description" content="HJTPX 管理后台 - 行为验证系统管理平台">
+    <meta name="format-detection" content="telephone=no">
     <title>{% block title %}HJTPX 管理后台{% endblock %}</title>
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css" as="style">
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style">
@@ -10,7 +12,6 @@
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- 白标主题CSS -->
     <link rel="stylesheet" href="/admin/api/whitelabel/css">
     <style>
         :root {
@@ -18,6 +19,7 @@
             --success: #28a745;
             --warning: #ffc107;
             --danger: #dc3545;
+            --transition-speed: 0.3s;
         }
         [data-theme="dark"] {
             --bg-color: #1f2937;
@@ -28,10 +30,14 @@
             cursor: pointer;
             padding: 8px 12px;
             border-radius: 4px;
-            transition: all 0.3s ease;
+            transition: all var(--transition-speed) ease;
         }
         .theme-toggle:hover {
             background: rgba(0,0,0,0.1);
+        }
+        .theme-toggle:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
         @media (prefers-reduced-motion: reduce) {
             * {
@@ -45,11 +51,347 @@
             right: 20px;
             z-index: 9999;
         }
+        @media (max-width: 767.98px) {
+            .toast-container {
+                top: 60px;
+                right: 10px;
+                left: 10px;
+            }
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity var(--transition-speed) ease, visibility var(--transition-speed) ease;
+        }
+        .loading-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(0, 123, 255, 0.2);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .success-message {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            animation: slideIn var(--transition-speed) ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .success-message-icon {
+            color: var(--success);
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+        .success-message-content {
+            flex: 1;
+        }
+        .success-message-title {
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 0.25rem;
+        }
+        [data-theme="dark"] .success-message-title {
+            color: #f3f4f6;
+        }
+        .success-message-desc {
+            font-size: 0.875rem;
+            color: #6c757d;
+            line-height: 1.5;
+        }
+        .error-message {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            animation: slideIn var(--transition-speed) ease;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .error-message-icon {
+            color: var(--danger);
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+        .error-message-content {
+            flex: 1;
+        }
+        .error-message-title {
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 0.25rem;
+        }
+        [data-theme="dark"] .error-message-title {
+            color: #f3f4f6;
+        }
+        .error-message-desc {
+            font-size: 0.875rem;
+            color: #6c757d;
+            line-height: 1.5;
+        }
+        .error-message-suggestion {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(220, 53, 69, 0.2);
+        }
+        .retry-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all var(--transition-speed) ease;
+        }
+        .retry-btn:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        .retry-btn:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        .page-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        @media (max-width: 991.98px) {
+            .main-sidebar {
+                transform: translateX(-250px);
+                transition: transform var(--transition-speed) ease;
+            }
+            .main-sidebar.sidebar-open {
+                transform: translateX(0);
+            }
+            .content-wrapper {
+                margin-left: 0 !important;
+                transition: margin-left var(--transition-speed) ease;
+            }
+        }
+        @media (max-width: 575.98px) {
+            .main-header .navbar {
+                padding: 0.5rem 1rem;
+            }
+            .content-header h1 {
+                font-size: 1.25rem;
+            }
+            .card-body {
+                padding: 1rem;
+            }
+            .table-responsive {
+                font-size: 0.875rem;
+            }
+        }
+        .focus-visible-outline:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        [role="button"] {
+            cursor: pointer;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--primary);
+            color: white;
+            padding: 8px 16px;
+            z-index: 10001;
+            transition: top var(--transition-speed) ease;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+        @media (prefers-contrast: high) {
+            :root {
+                --primary: #0044cc;
+                --danger: #cc0000;
+            }
+            .card {
+                border: 2px solid #000;
+            }
+        }
+        .card {
+            transition: box-shadow var(--transition-speed) ease, transform var(--transition-speed) ease;
+        }
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .btn {
+            transition: all var(--transition-speed) ease;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .small-box {
+            transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+        }
+        .small-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        .nav-link {
+            transition: all var(--transition-speed) ease;
+        }
+        .nav-item:hover .nav-link {
+            background: rgba(0, 123, 255, 0.1);
+        }
+        .table-hover tbody tr {
+            transition: background-color var(--transition-speed) ease;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+        .info-box {
+            transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+        }
+        .info-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .progress-bar {
+            transition: width 0.6s ease;
+        }
+        .badge {
+            transition: all var(--transition-speed) ease;
+        }
+        .badge:hover {
+            transform: scale(1.05);
+        }
+        .dropdown-item {
+            transition: background-color var(--transition-speed) ease, padding-left var(--transition-speed) ease;
+        }
+        .dropdown-item:hover {
+            padding-left: 1.5rem;
+        }
+        .modal {
+            transition: opacity var(--transition-speed) ease;
+        }
+        .modal.fade {
+            opacity: 0;
+        }
+        .modal.show {
+            opacity: 1;
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .slide-in-left {
+            animation: slideInLeft 0.4s ease-out;
+        }
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .loading-pulse {
+            animation: loadingPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes loadingPulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
     </style>
     {% block styles %}{% endblock %}
 </head>
 <body class="hold-transition sidebar-mini layout-fixed layout-navbar-fixed">
-    <a href="#main-content" class="sr-only sr-only-focusable">跳转到主要内容</a>
+    <a href="#main-content" class="skip-link sr-only sr-only-focusable">跳转到主要内容</a>
+    <div class="loading-overlay" id="pageLoadingOverlay" aria-hidden="true">
+        <div class="loading-spinner" role="status">
+            <span class="sr-only">页面加载中...</span>
+        </div>
+    </div>
     <div class="wrapper">
         <nav class="main-header navbar navbar-expand navbar-white navbar-light" role="navigation">
             <ul class="navbar-nav">
@@ -219,7 +561,68 @@
             initWhitelabelTheme();
             initAdminPageLoadProgress();
             initAdminLoadingStates();
+            initAdminAccessibility();
+            initMobileSidebar();
+            initAdminLanguageSwitcher();
         });
+
+        function initMobileSidebar() {
+            const pushMenuBtn = $('[data-widget="pushmenu"]');
+            const sidebar = $('.main-sidebar');
+            
+            pushMenuBtn.on('click', function() {
+                sidebar.toggleClass('sidebar-open');
+            });
+            
+            $(document).on('click', function(e) {
+                if ($(window).width() <= 991.98) {
+                    if (!$(e.target).closest('.main-sidebar').length && 
+                        !$(e.target).closest(pushMenuBtn).length && 
+                        sidebar.hasClass('sidebar-open')) {
+                        sidebar.removeClass('sidebar-open');
+                    }
+                }
+            });
+            
+            $(window).on('resize', function() {
+                if ($(window).width() > 991.98) {
+                    sidebar.removeClass('sidebar-open');
+                }
+            });
+        }
+
+        function initAdminAccessibility() {
+            $('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])').each(function() {
+                if (!$(this).attr('tabindex')) {
+                    $(this).attr('tabindex', '0');
+                }
+            });
+            
+            $('a, button').each(function() {
+                if (!$(this).attr('role')) {
+                    if ($(this).is('a')) {
+                        $(this).attr('role', 'link');
+                    } else if ($(this).is('button')) {
+                        $(this).attr('role', 'button');
+                    }
+                }
+            });
+            
+            $('[aria-label]').each(function() {
+                if (!$(this).attr('tabindex')) {
+                    $(this).attr('tabindex', '0');
+                }
+            });
+            
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                $('*').each(function() {
+                    $(this).css({
+                        'animation-duration': '0.01ms !important',
+                        'transition-duration': '0.01ms !important'
+                    });
+                });
+            }
+        }
 
         function initWhitelabelTheme() {
             // 加载白标配置并应用
@@ -294,15 +697,152 @@
 
         function initAdminErrorHandling() {
             window.onerror = function(message, source, lineno, colno, error) {
-                showAdminToast('页面发生错误，请刷新重试', 'error');
+                showAdminErrorMessage('页面发生错误', message, '请刷新页面重试。如果问题持续存在，请联系技术支持。', true);
                 console.error('Global error:', message, source, lineno, colno, error);
                 return false;
             };
 
             $(document).ajaxError(function(event, jqxhr, settings, thrownError) {
-                showAdminToast('请求失败，请重试', 'error');
+                if (jqxhr.status === 0) return;
+                
+                let errorTitle = '请求失败';
+                let errorMessage = '服务器未能处理您的请求';
+                let errorSuggestion = '请检查网络连接后重试，或稍后再试';
+                let canRetry = true;
+                
+                switch(jqxhr.status) {
+                    case 400:
+                        errorTitle = '请求参数错误';
+                        errorMessage = '您提交的数据格式不正确';
+                        errorSuggestion = '请检查输入内容后重试';
+                        break;
+                    case 401:
+                        errorTitle = '未授权访问';
+                        errorMessage = '请先登录后再继续操作';
+                        errorSuggestion = '页面将跳转到登录页面';
+                        canRetry = false;
+                        setTimeout(function() { window.location.href = '/admin/login'; }, 2000);
+                        break;
+                    case 403:
+                        errorTitle = '权限不足';
+                        errorMessage = '您没有执行此操作的权限';
+                        errorSuggestion = '请联系管理员获取相应权限';
+                        canRetry = false;
+                        break;
+                    case 404:
+                        errorTitle = '资源不存在';
+                        errorMessage = '请求的资源未找到';
+                        errorSuggestion = '请检查URL是否正确';
+                        canRetry = false;
+                        break;
+                    case 408:
+                        errorTitle = '请求超时';
+                        errorMessage = '服务器响应时间过长';
+                        errorSuggestion = '请检查网络连接后重试';
+                        break;
+                    case 429:
+                        errorTitle = '请求过于频繁';
+                        errorMessage = '您的操作频率过高';
+                        errorSuggestion = '请稍后再试';
+                        break;
+                    case 500:
+                        errorTitle = '服务器内部错误';
+                        errorMessage = '服务器遇到问题无法完成请求';
+                        errorSuggestion = '请稍后重试，或联系技术支持';
+                        break;
+                    case 502:
+                    case 503:
+                    case 504:
+                        errorTitle = '服务暂不可用';
+                        errorMessage = '服务器正在维护或负载过高';
+                        errorSuggestion = '请稍后再试';
+                        break;
+                }
+                
+                showAdminErrorMessage(errorTitle, errorMessage, errorSuggestion, canRetry);
             });
         }
+
+        function showAdminErrorMessage(title, message, suggestion, canRetry = true) {
+             const errorId = 'error-' + Date.now();
+             const currentLang = localStorage.getItem('admin-lang') || 'zh-CN';
+             
+             const translations = {
+                 'zh-CN': {
+                     retry: '刷新重试',
+                     close: '关闭',
+                     suggestion: '建议'
+                 },
+                 'en-US': {
+                     retry: 'Retry',
+                     close: 'Close',
+                     suggestion: 'Suggestion'
+                 }
+             };
+             
+             const trans = translations[currentLang] || translations['zh-CN'];
+             
+             const retryBtn = canRetry ? 
+                 '<button class="retry-btn" onclick="location.reload()" aria-label="' + trans.retry + '">' +
+                     '<i class="fas fa-sync" aria-hidden="true"></i>' + trans.retry +
+                 '</button>' : '';
+             
+             const errorHtml = `
+                 <div id="${errorId}" class="error-message" role="alert" aria-live="assertive">
+                     <div class="error-message-icon">
+                         <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                     </div>
+                     <div class="error-message-content">
+                         <div class="error-message-title">${title}</div>
+                         <div class="error-message-desc">${message}</div>
+                         ${suggestion ? '<div class="error-message-suggestion"><i class="fas fa-lightbulb" aria-hidden="true"></i> ' + suggestion + '</div>' : ''}
+                         ${retryBtn}
+                     </div>
+                 </div>
+             `;
+             
+             const container = $('.error-message-container');
+             if (container.length) {
+                 container.html(errorHtml);
+             } else {
+                 $('#main-content').prepend('<div class="error-message-container container-fluid"></div>');
+                 $('.error-message-container').html(errorHtml);
+             }
+             
+             setTimeout(function() {
+                 $('#' + errorId).fadeOut(300, function() {
+                     $(this).remove();
+                 });
+             }, 10000);
+         }
+
+         function initAdminLanguageSwitcher() {
+             const langBtns = document.querySelectorAll('.admin-lang-btn');
+             const savedLang = localStorage.getItem('admin-lang') || 'zh-CN';
+             
+             langBtns.forEach(function(btn) {
+                 if (btn.getAttribute('data-lang') === savedLang) {
+                     btn.classList.add('active');
+                     btn.setAttribute('aria-pressed', 'true');
+                 } else {
+                     btn.classList.remove('active');
+                     btn.setAttribute('aria-pressed', 'false');
+                 }
+                 
+                 btn.addEventListener('click', function() {
+                     const lang = this.getAttribute('data-lang');
+                     langBtns.forEach(function(b) {
+                         b.classList.remove('active');
+                         b.setAttribute('aria-pressed', 'false');
+                     });
+                     this.classList.add('active');
+                     this.setAttribute('aria-pressed', 'true');
+                     localStorage.setItem('admin-lang', lang);
+                     document.documentElement.lang = lang;
+                     showAdminToast(lang === 'zh-CN' ? '语言已切换为中文' : 'Language switched to English', 'info');
+                 });
+             });
+         }
 
         function initAdminKeyboardNav() {
             const focusable = $('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');

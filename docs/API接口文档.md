@@ -1084,118 +1084,1017 @@ GET /health
 
 ## 错误码
 
-| 错误码 | 说明 |
-|--------|------|
-| 0 | 成功 |
-| 1001 | 参数错误 |
-| 1002 | 认证失败 |
-| 1003 | 权限不足 |
-| 2001 | 验证码生成失败 |
-| 2002 | 验证码验证失败 |
-| 2003 | 验证码已过期 |
-| 2004 | 验证码类型不支持 |
-| 3001 | 服务器内部错误 |
+### 错误码总览
+
+系统采用分层错误码设计，错误码格式为 `XXYYY`：
+- `XX`：错误类别（01-99）
+- `YYY`：具体错误编号（001-999）
+
+| 错误码 | 说明 | HTTP状态码 | 处理建议 |
+|--------|------|-----------|----------|
+| **成功** |
+| 0 | 成功 | 200 | - |
+| **验证错误 (10xxx)** |
+| 10001 | 验证失败 | 200 | 检查验证参数是否正确 |
+| 10002 | Session过期 | 200 | 重新获取验证码 |
+| 10003 | 参数错误 | 400 | 检查请求参数格式 |
+| 10004 | 验证码类型不支持 | 400 | 使用支持的验证码类型 |
+| 10005 | 验证码已过期 | 200 | 重新获取验证码 |
+| 10006 | 验证过于频繁 | 200 | 稍后重试 |
+| 10007 | 验证次数超限 | 200 | 超过最大验证次数 |
+| 10008 | 行为风险过高 | 200 | 触发风控规则 |
+| 10009 | 环境检测异常 | 200 | 环境可能被修改 |
+| 10010 | Token无效 | 200 | 重新获取验证Token |
+| **认证错误 (20xxx)** |
+| 20001 | 认证失败 | 401 | 检查认证信息 |
+| 20002 | Token无效 | 401 | 重新登录获取Token |
+| 20003 | Token过期 | 401 | 刷新Token或重新登录 |
+| 20004 | 签名无效 | 401 | 检查签名算法和密钥 |
+| 20005 | 签名过期 | 401 | 重新生成签名 |
+| 20006 | 权限不足 | 403 | 联系管理员授权 |
+| 20007 | 账户被禁用 | 403 | 联系管理员启用账户 |
+| 20008 | 账户被锁定 | 403 | 等待解锁或联系管理员 |
+| 20009 | 登录失败次数超限 | 403 | 稍后重试 |
+| 20010 | MFA验证失败 | 401 | 检查MFA验证码 |
+| **资源错误 (30xxx)** |
+| 30001 | 资源不存在 | 404 | 检查请求的资源ID |
+| 30002 | 资源已存在 | 409 | 避免重复创建 |
+| 30003 | 资源已过期 | 410 | 重新创建资源 |
+| 30004 | 资源被占用 | 409 | 等待资源释放 |
+| **限流错误 (40xxx)** |
+| 40001 | 接口限流 | 429 | 降低请求频率 |
+| 40002 | 全局限流 | 429 | 全局请求过多，稍后重试 |
+| 40003 | IP限流 | 429 | 当前IP请求过于频繁 |
+| 40004 | 用户限流 | 429 | 当前用户请求过于频繁 |
+| 40005 | 应用限流 | 429 | 当前应用请求过于频繁 |
+| 40006 | 并发限制 | 429 | 等待并发请求完成 |
+| **服务器错误 (50xxx)** |
+| 50001 | 服务器内部错误 | 500 | 联系技术支持 |
+| 50002 | 服务暂不可用 | 503 | 服务维护中，稍后重试 |
+| 50003 | 数据库错误 | 500 | 检查数据库连接 |
+| 50004 | 缓存错误 | 500 | 检查Redis连接 |
+| 50005 | 验证码生成失败 | 500 | 重试获取验证码 |
+| 50006 | 配置错误 | 500 | 检查系统配置 |
+| 50007 | 文件上传失败 | 500 | 检查文件大小和格式 |
+| 50008 | 任务执行失败 | 500 | 重试或联系技术支持 |
+
+### 错误码详细说明
+
+#### 10001 - 验证失败
+
+**原因分析**：
+- 用户输入的验证答案不正确
+- 轨迹数据被判定为机器人行为
+- 环境检测发现异常
+
+**处理建议**：
+```javascript
+// 前端处理示例
+if (error.code === 10001) {
+    // 提示用户重新验证
+    showToast('验证失败，请重试');
+    // 重新获取验证码
+    refreshCaptcha();
+}
+```
+
+#### 10002 - Session过期
+
+**原因分析**：
+- 验证码Session超时（默认5分钟）
+- Session被服务端清除
+- 并发验证导致Session失效
+
+**处理建议**：
+```javascript
+if (error.code === 10002) {
+    // 重新获取验证码
+    getNewCaptcha();
+}
+```
+
+#### 20003 - Token过期
+
+**原因分析**：
+- JWT Token超过有效期
+- Token被刷新导致旧Token失效
+
+**处理建议**：
+```javascript
+if (error.code === 20003) {
+    // 尝试刷新Token
+    refreshToken().then(() => {
+        // 重试原请求
+        retryOriginalRequest();
+    }).catch(() => {
+        // 刷新失败，重新登录
+        redirectToLogin();
+    });
+}
+```
+
+#### 40001 - 接口限流
+
+**原因分析**：
+- 单个接口请求频率过高
+- 触发了服务端速率限制
+
+**处理建议**：
+```javascript
+if (error.code === 40001) {
+    // 从响应头获取重试时间
+    const retryAfter = response.headers['retry-after'] || 60;
+    // 延迟后重试
+    setTimeout(retryRequest, retryAfter * 1000);
+}
+```
+
+### 错误响应格式
+
+#### 标准错误响应
+```json
+{
+  "code": 10001,
+  "message": "验证失败",
+  "data": null
+}
+```
+
+#### 详细错误响应
+```json
+{
+  "code": 10003,
+  "message": "参数错误",
+  "data": {
+    "field": "session_id",
+    "reason": "会话ID不能为空",
+    "expected": "string",
+    "received": "null"
+  }
+}
+```
+
+#### 限流错误响应
+```json
+{
+  "code": 40001,
+  "message": "请求过于频繁",
+  "data": {
+    "retry_after": 60,
+    "limit": 100,
+    "window": "1 minute",
+    "remaining": 0
+  }
+}
+```
+
+#### 认证错误响应
+```json
+{
+  "code": 20003,
+  "message": "Token已过期",
+  "data": {
+    "token_type": "access_token",
+    "expired_at": "2026-05-18T12:00:00Z",
+    "refresh_token": "your-refresh-token"
+  }
+}
+```
+
+### 错误日志级别
+
+| 错误码范围 | 日志级别 | 说明 |
+|-----------|---------|------|
+| 10xxx | WARN | 业务验证错误，需要关注但非紧急 |
+| 20xxx | WARN | 认证错误，可能存在安全风险 |
+| 30xxx | INFO | 资源相关错误 |
+| 40xxx | WARN | 限流触发，正常的流量控制 |
+| 50xxx | ERROR | 服务器错误，需要立即处理 |
 
 ---
 
 ## 示例
 
-### Go SDK 示例
+### Java SDK 示例
 
-```go
-package main
+```java
+package com.example;
 
-import (
-    "fmt"
-    "log"
-    "time"
+import com.hjtpx.captcha.client.CaptchaClient;
+import com.hjtpx.captcha.client.CaptchaClientConfig;
+import com.hjtpx.captcha.model.*;
+import java.util.Arrays;
+import java.util.List;
 
-    "github.com/opphk/hjtpx/sdk/go/captcha"
-)
+public class CaptchaIntegration {
+    public static void main(String[] args) {
+        // 配置客户端
+        CaptchaClientConfig config = new CaptchaClientConfig();
+        config.setBaseUrl("http://localhost:8080");
+        config.setApiKey("your-api-key");
+        config.setSecretKey("your-secret-key");
+        config.setTimeout(30000);
 
-func main() {
-    // 创建客户端
-    client := captcha.NewClient(
-        captcha.WithEndpoint("http://localhost:8080"),
-        captcha.WithTimeout(30*time.Second),
-    )
-
-    // 生成滑块验证码
-    sliderResp, err := client.GetSliderCaptcha(&captcha.SliderCaptchaRequest{
-        Width:  360,
-        Height: 220,
-    })
-    if err != nil {
-        log.Fatal(err)
+        try (CaptchaClient client = new CaptchaClient(config)) {
+            // 1. 获取滑块验证码
+            SliderCaptchaResponse captcha = client.getSliderCaptcha(320, 160, 5);
+            System.out.println("Session ID: " + captcha.getSessionId());
+            
+            // 2. 验证滑块位置
+            List<TrajectoryPoint> trajectory = generateTrajectory(160);
+            VerifyCaptchaResponse verifyResp = client.verifySliderCaptcha(
+                captcha.getSessionId(),
+                160,  // X坐标
+                160,  // Y坐标
+                trajectory  // 轨迹数据
+            );
+            
+            if (verifyResp.isSuccess()) {
+                System.out.println("验证通过！Token: " + verifyResp.getToken());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
-    fmt.Printf("SessionID: %s\n", sliderResp.ChallengeID)
-
-    // 验证
-    verifyResp, err := client.VerifyCaptcha(&captcha.VerifyCaptchaRequest{
-        ChallengeID: sliderResp.ChallengeID,
-        Action:      "slider",
-        Data: map[string]interface{}{
-            "x": 185,
-            "y": 120,
-        },
-    })
-    if err != nil {
-        log.Fatal(err)
+    
+    private static List<TrajectoryPoint> generateTrajectory(int targetY) {
+        long baseTime = System.currentTimeMillis();
+        return Arrays.asList(
+            new TrajectoryPoint(0, targetY, baseTime - 1000),
+            new TrajectoryPoint(30, targetY + 2, baseTime - 800),
+            new TrajectoryPoint(60, targetY - 1, baseTime - 600),
+            new TrajectoryPoint(100, targetY + 3, baseTime - 400),
+            new TrajectoryPoint(140, targetY - 2, baseTime - 200),
+            new TrajectoryPoint(160, targetY, baseTime)
+        );
     }
-    fmt.Printf("验证结果: %v\n", verifyResp.Success)
 }
-```
-
-### JavaScript SDK 示例
-
-```javascript
-const { CaptchaClient } = require('hjtpx-sdk');
-
-const client = new CaptchaClient({
-    endpoint: 'http://localhost:8080',
-    timeout: 30000,
-});
-
-async function demo() {
-    // 生成滑块验证码
-    const slider = await client.generateSlider();
-    console.log('Captcha ID:', slider.captcha_id);
-
-    // 验证
-    const result = await client.verify(slider.captcha_id, {
-        type: 'slider',
-        x: 185,
-        y: 120,
-    });
-    console.log('验证结果:', result.success);
-}
-
-demo().catch(console.error);
 ```
 
 ### Python SDK 示例
 
 ```python
 from hjtpx import CaptchaClient
+from hjtpx.exceptions import CaptchaError, NetworkError
 
-client = CaptchaClient(endpoint="http://localhost:8080")
+def main():
+    client = CaptchaClient(
+        endpoint="http://localhost:8080",
+        api_key="your-api-key",
+        timeout=30
+    )
+    
+    try:
+        # 获取滑块验证码
+        captcha = client.get_slider_captcha(
+            width=320,
+            height=160,
+            tolerance=5
+        )
+        print(f"Session ID: {captcha['session_id']}")
+        
+        # 生成模拟轨迹
+        trajectory = generate_trajectory(captcha['secret_y'])
+        
+        # 验证
+        result = client.verify_slider_captcha(
+            session_id=captcha['session_id'],
+            x=160,
+            y=captcha['secret_y'],
+            trajectory=trajectory
+        )
+        
+        if result['success']:
+            print(f"验证通过！风险分数: {result.get('risk_score', 0)}")
+            
+    except CaptchaError as e:
+        print(f"验证码错误: {e.code} - {e.message}")
+    except NetworkError as e:
+        print(f"网络错误: {e}")
+    finally:
+        client.close()
 
-# 生成滑块验证码
-slider = client.generate_slider()
-print(f"Session ID: {slider['captcha_id']}")
+def generate_trajectory(target_y):
+    import time
+    base_time = int(time.time() * 1000)
+    trajectory = []
+    for i in range(6):
+        x = i * 30
+        y = target_y + (i % 3 - 1) * 2
+        trajectory.append({
+            'x': x,
+            'y': y,
+            'timestamp': base_time + i * 200 - 1000
+        })
+    return trajectory
 
-# 验证
-result = client.verify(slider['captcha_id'], {
-    "type": "slider",
-    "x": 185,
-    "y": 120
-})
-print(f"验证结果: {result['success']}")
+if __name__ == "__main__":
+    main()
+```
+
+### PHP SDK 示例
+
+```php
+<?php
+require_once 'vendor/autoload.php';
+
+use Hjtpx\CaptchaClient;
+use Hjtpx\Exception\CaptchaException;
+
+$client = new CaptchaClient([
+    'base_url' => 'http://localhost:8080',
+    'api_key' => 'your-api-key',
+    'api_secret' => 'your-api-secret',
+    'timeout' => 30
+]);
+
+try {
+    // 获取点选验证码
+    $captcha = $client->getClickCaptcha([
+        'mode' => 'number',
+        'shuffle' => true,
+        'points' => 3
+    ]);
+    
+    echo "Session ID: " . $captcha['session_id'] . "\n";
+    echo "提示: " . $captcha['hint'] . "\n";
+    
+    // 用户按顺序点击
+    $points = [
+        [100, 100],
+        [200, 150],
+        [150, 200]
+    ];
+    $clickSequence = [0, 1, 2];
+    
+    // 验证
+    $result = $client->verifyClickCaptcha(
+        $captcha['session_id'],
+        $points,
+        $clickSequence
+    );
+    
+    if ($result['success']) {
+        echo "验证通过！\n";
+    }
+    
+} catch (CaptchaException $e) {
+    echo "验证码错误: " . $e->getMessage() . "\n";
+    echo "错误码: " . $e->getCode() . "\n";
+} finally {
+    $client->close();
+}
+```
+
+### C# SDK 示例
+
+```csharp
+using Hjtpx.Captcha.Sdk;
+using Hjtpx.Captcha.Sdk.Models;
+using Hjtpx.Captcha.Sdk.Exceptions;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        var config = new CaptchaClientConfig
+        {
+            BaseUrl = "http://localhost:8080",
+            ApiKey = "your-api-key",
+            ApiSecret = "your-api-secret",
+            Timeout = 30000
+        };
+
+        using var client = new CaptchaClient(config);
+        
+        try
+        {
+            // 获取滑块验证码
+            var sliderCaptcha = await client.GetSliderCaptchaAsync(320, 160, 5);
+            Console.WriteLine($"Session ID: {sliderCaptcha.SessionId}");
+            
+            // 生成轨迹
+            var trajectory = GenerateTrajectory(160);
+            
+            // 验证
+            var result = await client.VerifySliderCaptchaAsync(
+                sliderCaptcha.SessionId,
+                160,  // X坐标
+                160,  // Y坐标
+                trajectory
+            );
+            
+            if (result.Success)
+            {
+                Console.WriteLine($"验证通过！Token: {result.Token}");
+            }
+        }
+        catch (ApiException ex)
+        {
+            Console.WriteLine($"API错误: {ex.Code} - {ex.Message}");
+        }
+        catch (NetworkException ex)
+        {
+            Console.WriteLine($"网络错误: {ex.Message}");
+        }
+    }
+    
+    private static List<TrajectoryPoint> GenerateTrajectory(int targetY)
+    {
+        var points = new List<TrajectoryPoint>();
+        long baseTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        
+        for (int i = 0; i < 6; i++)
+        {
+            points.Add(new TrajectoryPoint
+            {
+                X = i * 30,
+                Y = targetY + (i % 3 - 1) * 2,
+                Timestamp = baseTime + i * 200 - 1000
+            });
+        }
+        
+        return points;
+    }
+}
+```
+
+### Ruby SDK 示例
+
+```ruby
+require 'hjtpx'
+
+client = Hjtpx::CaptchaClient.new(
+  base_url: 'http://localhost:8080',
+  api_key: 'your-api-key',
+  timeout: 30
+)
+
+begin
+  # 获取滑块验证码
+  captcha = client.get_slider_captcha(
+    width: 320,
+    height: 160,
+    tolerance: 5
+  )
+  
+  puts "Session ID: #{captcha[:session_id]}"
+  
+  # 生成轨迹
+  trajectory = generate_trajectory(captcha[:secret_y])
+  
+  # 验证
+  result = client.verify_slider_captcha(
+    session_id: captcha[:session_id],
+    x: 160,
+    y: captcha[:secret_y],
+    trajectory: trajectory
+  )
+  
+  if result[:success]
+    puts "验证通过！Token: #{result[:token]}"
+  end
+  
+rescue Hjtpx::CaptchaError => e
+  puts "验证码错误: #{e.code} - #{e.message}"
+ensure
+  client.close
+end
+
+def generate_trajectory(target_y)
+  base_time = Time.now.to_i * 1000
+  trajectory = []
+  
+  6.times do |i|
+    trajectory << {
+      x: i * 30,
+      y: target_y + (i % 3 - 1) * 2,
+      timestamp: base_time + i * 200 - 1000
+    }
+  end
+  
+  trajectory
+end
+```
+
+### Go SDK 完整集成示例
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func main() {
+    // 创建高级客户端（推荐生产环境使用）
+    cfg := &captcha.Config{
+        BaseURL:        "http://localhost:8080",
+        MaxRetries:     3,
+        HTTPTimeout:    10 * time.Second,
+        MaxIdleConns:   10,
+        MaxOpenConns:   100,
+        RetryDelay:     100 * time.Millisecond,
+    }
+
+    client := captcha.NewCaptchaClient("your-app-id", "your-app-secret", cfg)
+    defer client.Close()
+
+    ctx := context.Background()
+
+    // 1. 获取滑块验证码
+    slider, err := client.GenerateSliderCaptcha()
+    if err != nil {
+        log.Fatalf("获取滑块验证码失败: %v", err)
+    }
+    fmt.Printf("滑块验证码 SessionID: %s\n", slider.ChallengeID)
+    fmt.Printf("背景图: %s...\n", slider.BackgroundImage[:50])
+
+    // 2. 模拟用户滑动轨迹
+    trajectory := generateTrajectory(160)
+
+    // 3. 验证滑块
+    verifyResult, err := client.VerifySliderCaptcha(slider.ChallengeID, "160")
+    if err != nil {
+        log.Fatalf("验证失败: %v", err)
+    }
+    
+    fmt.Printf("验证结果: %v\n", verifyResult.Success)
+    fmt.Printf("风险分数: %.2f\n", verifyResult.Score)
+    fmt.Printf("风险等级: %s\n", verifyResult.RiskLevel)
+
+    // 4. 获取统计数据
+    stats := client.GetStats()
+    fmt.Printf("总请求数: %d\n", stats.TotalRequests)
+    fmt.Printf("成功率: %.2f%%\n", stats.SuccessRate)
+    fmt.Printf("重试次数: %d\n", stats.RetriedRequests)
+}
+
+func generateTrajectory(targetY int) []captcha.TrajectoryPoint {
+    baseTime := time.Now().UnixMilli()
+    points := make([]captcha.TrajectoryPoint, 0, 10)
+    
+    for i := 0; i < 10; i++ {
+        x := float64(i * 16)
+        y := float64(targetY) + float64(i%3-1) * 2
+        timestamp := baseTime + int64(i*50)
+        
+        points = append(points, captcha.TrajectoryPoint{
+            X:        x,
+            Y:        y,
+            Timestamp: timestamp,
+        })
+    }
+    
+    return points
+}
 ```
 
 ---
 
-## 速率限制
+## 使用场景示例
+
+### 场景1：用户注册集成
+
+#### 前端实现
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>用户注册</title>
+    <script src="http://localhost:8080/static/js/captcha.js"></script>
+</head>
+<body>
+    <form id="registerForm">
+        <input type="text" name="username" placeholder="用户名" required>
+        <input type="email" name="email" placeholder="邮箱" required>
+        <input type="password" name="password" placeholder="密码" required>
+        <div id="captchaContainer"></div>
+        <input type="hidden" id="captchaToken">
+        <button type="submit">注册</button>
+    </form>
+
+    <script>
+        // 初始化验证码
+        HJTPXCaptcha.init({
+            container: '#captchaContainer',
+            apiServer: 'http://localhost:8080',
+            captchaType: 'slider',
+            onVerify: function(result) {
+                if (result.success) {
+                    document.getElementById('captchaToken').value = result.token;
+                    console.log('验证成功，Token:', result.token);
+                }
+            },
+            onError: function(error) {
+                console.error('验证错误:', error);
+            }
+        });
+
+        // 表单提交
+        document.getElementById('registerForm').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const token = document.getElementById('captchaToken').value;
+            if (!token) {
+                alert('请先完成验证码');
+                return;
+            }
+
+            const formData = new FormData(this);
+            formData.append('captcha_token', token);
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('注册成功！');
+                    window.location.href = '/login';
+                } else {
+                    alert('注册失败: ' + result.message);
+                }
+            } catch (error) {
+                console.error('注册错误:', error);
+            }
+        };
+    </script>
+</body>
+</html>
+```
+
+#### 后端验证
+```go
+package main
+
+import (
+    "encoding/json"
+    "net/http"
+)
+
+type RegisterRequest struct {
+    Username    string `json:"username"`
+    Email      string `json:"email"`
+    Password   string `json:"password"`
+    CaptchaToken string `json:"captcha_token"`
+}
+
+func handleRegister(w http.ResponseWriter, r *http.Request) {
+    var req RegisterRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    // 1. 验证验证码Token
+    verifyURL := "http://localhost:8080/api/v1/captcha/verify-token"
+    resp, err := http.Post(verifyURL, "application/json", 
+        strings.NewReader(fmt.Sprintf(`{"token":"%s"}`, req.CaptchaToken)))
+    
+    if err != nil || resp.StatusCode != 200 {
+        http.Error(w, "验证码验证失败", http.StatusBadRequest)
+        return
+    }
+
+    var verifyResult map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&verifyResult)
+
+    if verifyResult["success"] != true {
+        http.Error(w, "验证码验证失败", http.StatusBadRequest)
+        return
+    }
+
+    // 2. 创建用户
+    // ... 用户创建逻辑
+}
+```
+
+### 场景2：登录保护集成
+
+```javascript
+// 登录失败重试限制
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15分钟
+
+class LoginManager {
+    constructor() {
+        this.attempts = new Map();
+    }
+
+    async login(username, password) {
+        // 检查是否被锁定
+        if (this.isLocked(username)) {
+            const remainingTime = this.getRemainingLockoutTime(username);
+            throw new Error(`账户已被锁定，请在 ${Math.ceil(remainingTime / 60000)} 分钟后重试`);
+        }
+
+        try {
+            // 获取验证码
+            const captcha = await HJTPXCaptcha.getCaptcha();
+            
+            // 执行登录
+            const result = await this.executeLogin(username, password, captcha.token);
+            
+            // 登录成功，清除记录
+            this.attempts.delete(username);
+            return result;
+            
+        } catch (error) {
+            // 登录失败，记录次数
+            this.recordFailedAttempt(username);
+            
+            if (this.attempts.get(username) >= MAX_LOGIN_ATTEMPTS) {
+                throw new Error('登录失败次数过多，账户已被临时锁定');
+            }
+            
+            throw error;
+        }
+    }
+
+    recordFailedAttempt(username) {
+        const attempts = this.attempts.get(username) || 0;
+        this.attempts.set(username, attempts + 1);
+        
+        if (attempts === 0) {
+            // 首次失败，设置锁定时间
+            setTimeout(() => this.attempts.delete(username), LOCKOUT_DURATION);
+        }
+    }
+
+    isLocked(username) {
+        const attempts = this.attempts.get(username) || 0;
+        return attempts >= MAX_LOGIN_ATTEMPTS;
+    }
+
+    getRemainingLockoutTime(username) {
+        // 返回剩余锁定时间
+        return LOCKOUT_DURATION;
+    }
+}
+```
+
+### 场景3：无感验证集成
+
+```javascript
+// 无感验证集成示例
+class SeamlessVerification {
+    constructor() {
+        this.trustLevel = null;
+        this.deviceFingerprint = null;
+    }
+
+    async init() {
+        // 收集设备指纹
+        this.deviceFingerprint = await this.collectFingerprint();
+        
+        // 收集行为数据
+        this.behaviorData = await this.collectBehaviorData();
+        
+        // 检查信任级别
+        await this.checkTrustLevel();
+    }
+
+    async collectFingerprint() {
+        const data = {
+            canvas: await this.getCanvasFingerprint(),
+            webgl: this.getWebGLFingerprint(),
+            fonts: await this.detectFonts(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            language: navigator.language,
+            platform: navigator.platform,
+            screen: `${screen.width}x${screen.height}`,
+            colorDepth: screen.colorDepth
+        };
+
+        return await this.hashFingerprint(JSON.stringify(data));
+    }
+
+    async collectBehaviorData() {
+        const data = {
+            mouseMovements: this.trackMouseMovements(),
+            keystrokeDynamics: this.trackKeystrokes(),
+            scrollBehavior: this.trackScroll(),
+            clickPatterns: this.trackClicks()
+        };
+
+        return data;
+    }
+
+    async checkTrustLevel() {
+        const response = await fetch('http://localhost:8080/api/v1/seamless/check', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                device_fingerprint: this.deviceFingerprint,
+                behavior_sequence: this.behaviorData.mouseMovements.slice(0, 10)
+            })
+        });
+
+        const result = await response.json();
+        this.trustLevel = result.data.trust_level;
+        
+        return {
+            requiresCaptcha: result.data.requires_captcha,
+            trustLevel: result.data.trust_level,
+            riskScore: result.data.risk_score
+        };
+    }
+
+    shouldRequireCaptcha() {
+        // 高信任级别不需要验证码
+        if (this.trustLevel === 'high') {
+            return false;
+        }
+        
+        // 中信任级别需要验证码
+        if (this.trustLevel === 'medium') {
+            return true;
+        }
+        
+        // 低信任级别强制验证码
+        return true;
+    }
+}
+```
+
+### 场景4：批量操作保护
+
+```go
+// 批量操作速率限制示例
+package main
+
+import (
+    "sync"
+    "time"
+)
+
+type RateLimiter struct {
+    mu       sync.Mutex
+    requests map[string][]time.Time
+    limit    int
+    window   time.Duration
+}
+
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+    return &RateLimiter{
+        requests: make(map[string][]time.Time),
+        limit:    limit,
+        window:   window,
+    }
+}
+
+func (r *RateLimiter) Allow(key string) bool {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+
+    now := time.Now()
+    cutoff := now.Add(-r.window)
+
+    // 清理过期记录
+    var validRequests []time.Time
+    for _, t := range r.requests[key] {
+        if t.After(cutoff) {
+            validRequests = append(validRequests, t)
+        }
+    }
+
+    if len(validRequests) >= r.limit {
+        r.requests[key] = validRequests
+        return false
+    }
+
+    r.requests[key] = append(validRequests, now)
+    return true
+}
+
+func (r *RateLimiter) GetRemaining(key string) int {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+
+    now := time.Now()
+    cutoff := now.Add(-r.window)
+
+    count := 0
+    for _, t := range r.requests[key] {
+        if t.After(cutoff) {
+            count++
+        }
+    }
+
+    return r.limit - count
+}
+
+func (r *RateLimiter) GetResetTime(key string) time.Duration {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+
+    if len(r.requests[key]) == 0 {
+        return 0
+    }
+
+    oldest := r.requests[key][0]
+    return time.Until(oldest.Add(r.window))
+}
+
+// 使用示例
+func handleBatchOperation(w http.ResponseWriter, r *http.Request) {
+    limiter := NewRateLimiter(100, time.Minute)
+    
+    clientIP := getClientIP(r)
+    
+    if !limiter.Allow(clientIP) {
+        remaining := limiter.GetRemaining(clientIP)
+        resetTime := limiter.GetResetTime(clientIP)
+        
+        w.Header().Set("X-RateLimit-Limit", "100")
+        w.Header().Set("X-RateLimit-Remaining", string(rune(remaining)))
+        w.Header().Set("X-RateLimit-Reset", resetTime.String())
+        
+        http.Error(w, "请求过于频繁", http.StatusTooManyRequests)
+        return
+    }
+
+    // 处理批量操作
+    // ...
+}
+```
+
+### 场景5：敏感操作二次验证
+
+```javascript
+// 敏感操作需要MFA二次验证
+class SensitiveOperationHandler {
+    constructor() {
+        this.sensitiveOperations = [
+            'password_change',
+            'email_change',
+            'phone_change',
+            'withdrawal',
+            'transfer'
+        ];
+    }
+
+    async execute(operation, data) {
+        // 检查是否需要MFA
+        if (this.requiresMFA(operation)) {
+            // 获取MFA验证码
+            const mfaToken = await this.getMFAToken();
+            
+            // 验证MFA
+            const mfaValid = await this.verifyMFA(mfaToken);
+            
+            if (!mfaValid) {
+                throw new Error('MFA验证失败');
+            }
+        }
+
+        // 执行操作
+        return await this.performOperation(operation, data);
+    }
+
+    requiresMFA(operation) {
+        return this.sensitiveOperations.includes(operation);
+    }
+
+    async getMFAToken() {
+        // 弹出MFA验证界面
+        return new Promise((resolve) => {
+            HJTPXMFA.show({
+                method: 'totp', // TOTP、短信、邮箱
+                onVerify: (token) => {
+                    resolve(token);
+                },
+                onCancel: () => {
+                    resolve(null);
+                }
+            });
+        });
+    }
+
+    async verifyMFA(token) {
+        const response = await fetch('/api/v1/mfa/verify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAccessToken()}`
+            },
+            body: JSON.stringify({
+                token: token,
+                action: 'sensitive_operation'
+            })
+        });
+
+        return response.ok;
+    }
+}
+```
 
 系统对 API 接口实施了速率限制：
 

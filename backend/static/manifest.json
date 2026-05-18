@@ -1,35 +1,72 @@
 {
-  "name": "hjtpx - 智能行为验证系统",
-  "short_name": "hjtpx",
-  "description": "新一代智能行为验证系统，超越极验、易盾、五秒盾的全新一代行为验证解决方案",
+  "name": "墨盾验证 - 智能行为验证系统",
+  "short_name": "墨盾验证",
+  "description": "新一代智能行为验证系统，提供滑块、点选、无感等多种验证方式",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0d6efd",
-  "theme_color": "#0d6efd",
-  "orientation": "any",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#1a1a2e",
+  "theme_color": "#c9a96e",
+  "orientation": "portrait-primary",
+  "orientation_lock": "portrait",
+  "categories": ["utilities", "security", "productivity"],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230d6efd' rx='10'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>h</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231a1a2e' rx='10'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='%23c9a96e'>墨</text></svg>",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%230d6efd' rx='20'/><text x='96' y='120' font-size='90' text-anchor='middle' fill='white'>h</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%231a1a2e' rx='20'/><text x='96' y='120' font-size='90' text-anchor='middle' fill='%23c9a96e'>墨</text></svg>",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%230d6efd' rx='50'/><text x='256' y='320' font-size='240' text-anchor='middle' fill='white'>h</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231a1a2e' rx='50'/><text x='256' y='320' font-size='240' text-anchor='middle' fill='%23c9a96e'>墨</text></svg>",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
-  "categories": [
-    "utilities",
-    "security"
-  ],
   "screenshots": [],
-  "iarc_rating_id": "",
   "related_applications": [],
-  "prefer_related_applications": false
+  "prefer_related_applications": false,
+  "handfulness": "optimal",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "iarc_rating_id": "",
+  "shortcuts": [
+    {
+      "name": "滑块验证",
+      "short_name": "滑块",
+      "description": "体验滑块拼图验证",
+      "url": "/captcha?type=slider",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' fill='%23c9a96e' rx='10'/><text x='48' y='65' font-size='40' text-anchor='middle' fill='white'>▶</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "点选验证",
+      "short_name": "点选",
+      "description": "体验点选图片验证",
+      "url": "/captcha?type=click",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' fill='%23c9a96e' rx='10'/><text x='48' y='65' font-size='40' text-anchor='middle' fill='white'>⊙</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
 }
