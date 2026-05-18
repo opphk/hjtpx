@@ -2,6 +2,7 @@ package redis
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,7 @@ const (
 	PrefixCaptcha       CacheKeyPrefix = "captcha"
 	PrefixSession       CacheKeyPrefix = "session"
 	PrefixBlacklist     CacheKeyPrefix = "blacklist"
-	PrefixApplication   CacheKeyPrefix = "application"
+	PrefixApplication   CacheKeyPrefix = "app"
 	PrefixStats         CacheKeyPrefix = "stats"
 	PrefixRateLimit     CacheKeyPrefix = "ratelimit"
 	PrefixBehavior      CacheKeyPrefix = "behavior"
@@ -29,6 +30,12 @@ const (
 	PrefixAnalytics     CacheKeyPrefix = "analytics"
 	PrefixWhitelist     CacheKeyPrefix = "whitelist"
 	PrefixAlert         CacheKeyPrefix = "alert"
+	PrefixCaptchaVerify CacheKeyPrefix = "captcha_verify"
+	PrefixCaptchaAnswer CacheKeyPrefix = "captcha_answer"
+	PrefixUserSession   CacheKeyPrefix = "user_session"
+	PrefixRateLimitCnt  CacheKeyPrefix = "ratelimit_cnt"
+	PrefixHotKey        CacheKeyPrefix = "hotkey"
+	PrefixLRU           CacheKeyPrefix = "lru"
 )
 
 type CacheKeyNamespace string
@@ -277,6 +284,36 @@ func (ckm *CacheKeyManager) BuildMetricsKey(metricType string) string {
 	return ckm.BuildKey(PrefixMetrics, metricType)
 }
 
+func (ckm *CacheKeyManager) BuildCaptchaVerifyKey(captchaID string, verifyType string) string {
+	return ckm.BuildKey(PrefixCaptchaVerify, verifyType, captchaID)
+}
+
+func (ckm *CacheKeyManager) BuildCaptchaAnswerKey(captchaID string) string {
+	return ckm.BuildKey(PrefixCaptchaAnswer, captchaID)
+}
+
+func (ckm *CacheKeyManager) BuildUserSessionKey(userID string) string {
+	return ckm.BuildKey(PrefixUserSession, userID)
+}
+
+func (ckm *CacheKeyManager) BuildRateLimitCountKey(identifier string) string {
+	return ckm.BuildKey(PrefixRateLimitCnt, identifier)
+}
+
+func (ckm *CacheKeyManager) BuildHotKeyKey(key string) string {
+	return ckm.BuildKey(PrefixHotKey, ckm.hashKey(key))
+}
+
+func (ckm *CacheKeyManager) BuildLRUKey(key string) string {
+	return ckm.BuildKey(PrefixLRU, ckm.hashKey(key))
+}
+
+func (ckm *CacheKeyManager) hashKey(key string) string {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return fmt.Sprintf("%x", h.Sum32())
+}
+
 func (ckm *CacheKeyManager) GetPattern(prefix CacheKeyPrefix) string {
 	return ckm.BuildKey(prefix) + ":*"
 }
@@ -394,4 +431,28 @@ func BuildWhitelistKey(whitelistType, target string) string {
 
 func BuildAlertKey(alertType, identifier string) string {
 	return GetCacheKeyManager().BuildAlertKey(alertType, identifier)
+}
+
+func BuildCaptchaVerifyKey(captchaID string, verifyType string) string {
+	return GetCacheKeyManager().BuildCaptchaVerifyKey(captchaID, verifyType)
+}
+
+func BuildCaptchaAnswerKey(captchaID string) string {
+	return GetCacheKeyManager().BuildCaptchaAnswerKey(captchaID)
+}
+
+func BuildUserSessionKey(userID string) string {
+	return GetCacheKeyManager().BuildUserSessionKey(userID)
+}
+
+func BuildRateLimitCountKey(identifier string) string {
+	return GetCacheKeyManager().BuildRateLimitCountKey(identifier)
+}
+
+func BuildHotKeyKey(key string) string {
+	return GetCacheKeyManager().BuildHotKeyKey(key)
+}
+
+func BuildLRUKey(key string) string {
+	return GetCacheKeyManager().BuildLRUKey(key)
 }

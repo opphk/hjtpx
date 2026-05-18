@@ -550,6 +550,7 @@ type AdaptiveExpirationPolicy struct {
 	maxTTL       time.Duration
 	windowSize   time.Duration
 	refreshRatio float64
+	ttlStrategy  map[string]time.Duration
 }
 
 func NewAdaptiveExpirationPolicy(baseTTL, minTTL, maxTTL time.Duration) *AdaptiveExpirationPolicy {
@@ -560,6 +561,7 @@ func NewAdaptiveExpirationPolicy(baseTTL, minTTL, maxTTL time.Duration) *Adaptiv
 		maxTTL:       maxTTL,
 		windowSize:   5 * time.Minute,
 		refreshRatio: 0.8,
+		ttlStrategy:  make(map[string]time.Duration),
 	}
 }
 
@@ -594,9 +596,43 @@ func (aep *AdaptiveExpirationPolicy) CalculateTTL(key string) time.Duration {
 	return ttl
 }
 
+func (aep *AdaptiveExpirationPolicy) GetOptimizedTTL(key string, accessPattern string) time.Duration {
+	baseTTL := aep.CalculateTTL(key)
+
+	switch accessPattern {
+	case "frequent":
+		return baseTTL * 2
+	case "moderate":
+		return baseTTL
+	case "rare":
+		return baseTTL / 2
+	default:
+		return baseTTL
+	}
+}
+
+func (aep *AdaptiveExpirationPolicy) SetTTLStrategy(keyPattern string, ttl time.Duration) {
+	aep.mu.Lock()
+	defer aep.mu.Unlock()
+	aep.ttlStrategy[keyPattern] = ttl
+}
+
+func (aep *AdaptiveExpirationPolicy) GetTTLStrategy(keyPattern string) time.Duration {
+	aep.mu.RLock()
+	defer aep.mu.RUnlock()
+
+	if ttl, ok := aep.ttlStrategy[keyPattern]; ok {
+		return ttl
+	}
+	return aep.baseTTL
+}
+
 func (aep *AdaptiveExpirationPolicy) ShouldRefresh(key string, remainingTTL time.Duration) bool {
-	ttl := aep.CalculateTTL(key)
-	return remainingTTL < time.Duration(float64(ttl)*aep.refreshRatio)
+	if remainingTTL <= 0 {
+		return false
+	}
+	threshold := time.Duration(float64(aep.baseTTL) * aep.refreshRatio)
+	return remainingTTL < threshold
 }
 
 func (aep *AdaptiveExpirationPolicy) cleanup() {
@@ -614,6 +650,74 @@ func (aep *AdaptiveExpirationPolicy) Cleanup() {
 	aep.mu.Lock()
 	defer aep.mu.Unlock()
 	aep.accessCounts = make(map[string]int64)
+}
+
+type TTLOption struct {
+	BaseTTL      time.Duration
+	MinTTL       time.Duration
+	MaxTTL       time.Duration
+	RefreshRatio float64
+	Strategy     string
+}
+
+var DefaultTTLOption = &TTLOption{
+	BaseTTL:      10 * time.Minute,
+	MinTTL:       1 * time.Minute,
+	MaxTTL:       1 * time.Hour,
+	RefreshRatio: 0.8,
+	Strategy:     "sliding",
+}
+
+func (aep *AdaptiveExpirationPolicy) ApplyOption(opt *TTLOption) {
+	aep.mu.Lock()
+	defer aep.mu.Unlock()
+
+	if opt.BaseTTL > 0 {
+		aep.baseTTL = opt.BaseTTL
+	}
+	if opt.MinTTL > 0 {
+		aep.minTTL = opt.MinTTL
+	}
+	if opt.MaxTTL > 0 {
+		aep.maxTTL = opt.MaxTTL
+	}
+	if opt.RefreshRatio > 0 {
+		aep.refreshRatio = opt.RefreshRatio
+	}
+}
+
+type CacheExpirationOptimizer struct {
+	policies map[string]*AdaptiveExpirationPolicy
+	mu       sync.RWMutex
+}
+
+func NewCacheExpirationOptimizer() *CacheExpirationOptimizer {
+	return &CacheExpirationOptimizer{
+		policies: make(map[string]*AdaptiveExpirationPolicy),
+	}
+}
+
+func (ceo *CacheExpirationOptimizer) AddPolicy(name string, baseTTL, minTTL, maxTTL time.Duration) {
+	ceo.mu.Lock()
+	defer ceo.mu.Unlock()
+
+	ceo.policies[name] = NewAdaptiveExpirationPolicy(baseTTL, minTTL, maxTTL)
+}
+
+func (ceo *CacheExpirationOptimizer) GetPolicy(name string) *AdaptiveExpirationPolicy {
+	ceo.mu.RLock()
+	defer ceo.mu.RUnlock()
+
+	return ceo.policies[name]
+}
+
+func (ceo *CacheExpirationOptimizer) OptimizeTTL(key string, policyName string) time.Duration {
+	policy := ceo.GetPolicy(policyName)
+	if policy == nil {
+		policy = NewAdaptiveExpirationPolicy(DefaultTTLOption.BaseTTL, DefaultTTLOption.MinTTL, DefaultTTLOption.MaxTTL)
+	}
+
+	return policy.CalculateTTL(key)
 }
 
 var (

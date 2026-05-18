@@ -386,13 +386,6 @@ func NewBatchWarmer(cache *EnhancedCache, batchSize, concurrency int) *BatchWarm
 	}
 }
 
-type WarmupItem struct {
-	Key    string
-	Value  []byte
-	TTL    time.Duration
-	Loader func(ctx context.Context) ([]byte, error)
-}
-
 func (bw *BatchWarmer) Warmup(ctx context.Context, items []*WarmupItem) error {
 	semaphore := make(chan struct{}, bw.concurrency)
 	var wg sync.WaitGroup
