@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -28,8 +29,13 @@ func TestAdaptiveRateLimitMiddleware_DefaultOptions(t *testing.T) {
 func TestAdaptiveRateLimitMiddleware_CustomOptions(t *testing.T) {
 	r := setupTestRouter()
 	config := service.AdaptiveRateLimitConfig{
-		BaseRate:    100,
-		BaseCapacity: 1000,
+		BaseLimit:      100,
+		PeakLimit:      200,
+		OffPeakLimit:   500,
+		OffPeakStart:   0,
+		OffPeakEnd:     6,
+		EnableDynamic:  true,
+		CooldownPeriod: 60 * time.Second,
 	}
 	r.Use(AdaptiveRateLimitMiddleware(&config))
 	r.GET("/test", func(c *gin.Context) {

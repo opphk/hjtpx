@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hjtpx/hjtpx/backend/internal/service"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/models"
 )
 

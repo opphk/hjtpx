@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -34,12 +35,11 @@ func TestRegisterBiometricProfile_Success(t *testing.T) {
 	router.POST("/api/v1/biometrics/register", RegisterBiometricProfile)
 
 	keyboardSample := &service.KeyboardSample{
-		TotalKeystrokes:    100,
-		AverageSpeed:       5.5,
-		AverageDwellTime:   150.0,
-		FlightTimeStats:    &service.KeyboardStats{Avg: 120.0, Std: 50.0},
-		ErrorRate:          0.02,
-		TypingPatternHash:  "hash123",
+		KeyEvents: []service.KeyEvent{
+			{Key: "a", Type: "keydown", Timestamp: time.Now().UnixMilli(), KeyCode: 65},
+			{Key: "b", Type: "keyup", Timestamp: time.Now().UnixMilli(), KeyCode: 66},
+		},
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	reqBody := RegisterBiometricProfileRequest{
@@ -108,12 +108,11 @@ func TestVerifyBiometrics_Success(t *testing.T) {
 	router.POST("/api/v1/biometrics/verify", VerifyBiometrics)
 
 	keyboardSample := &service.KeyboardSample{
-		TotalKeystrokes:    100,
-		AverageSpeed:       5.5,
-		AverageDwellTime:   150.0,
-		FlightTimeStats:    &service.KeyboardStats{Avg: 120.0, Std: 50.0},
-		ErrorRate:          0.02,
-		TypingPatternHash:  "hash123",
+		KeyEvents: []service.KeyEvent{
+			{Key: "a", Type: "keydown", Timestamp: time.Now().UnixMilli(), KeyCode: 65},
+			{Key: "b", Type: "keyup", Timestamp: time.Now().UnixMilli(), KeyCode: 66},
+		},
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	reqBody := VerifyBiometricsRequest{
