@@ -204,7 +204,14 @@ class Captcha {
             targetX: 0,
             targetY: 0,
             puzzleStyle: 0,
-            tolerance: 10
+            tolerance: 10,
+            touchStartY: 0,
+            touchOffsetY: 0,
+            lastTouchTime: 0,
+            touchVelocity: 0,
+            isMobile: false,
+            rafId: null,
+            smoothPosition: 0
         };
 
         this.rotationState = {
@@ -376,18 +383,37 @@ class Captcha {
                              aria-label="${this.i18n.t('sliderAriaLabel')}"
                              aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
                              tabindex="0">
+                            <div class="captcha-slider-progress" id="slider-progress-container">
+                                <div class="captcha-slider-progress-bar" id="slider-progress-bar">
+                                    <div class="captcha-slider-progress-fill" id="slider-progress-fill-value"></div>
+                                </div>
+                                <div class="captcha-slider-progress-text" id="slider-progress-text">0%</div>
+                            </div>
                             <div class="captcha-slider-track" id="slider-track"></div>
                             <div class="captcha-slider-text" id="slider-text" aria-hidden="true">${this.i18n.t('dragToVerify')}</div>
                             <div class="captcha-slider-button" id="slider-button" role="button" 
                                  aria-label="${this.i18n.t('sliderButtonAria')}"
                                  tabindex="-1">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
-                                </svg>
+                                <div class="slider-button-inner">
+                                    <svg class="slider-icon-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                    <svg class="slider-icon-success" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <svg class="slider-icon-error" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </div>
+                                <div class="slider-button-ripple"></div>
                             </div>
                             <div class="captcha-slider-hint" aria-hidden="true">
                                 <span class="hint-icon"><i class="fas fa-info-circle"></i></span>
                                 <span class="hint-text">${this.i18n.t('sliderHint')}</span>
+                            </div>
+                            <div class="captcha-slider-target-indicator" id="slider-target-indicator" aria-hidden="true">
+                                <span class="target-arrow"><i class="fas fa-chevron-left"></i></span>
                             </div>
                         </div>
                     </div>
@@ -611,6 +637,11 @@ class Captcha {
             sliderLoadingMessage: this.container.querySelector('#slider-loading-message'),
             sliderImageWrapper: this.container.querySelector('#slider-image-wrapper'),
             sliderSkeleton: this.container.querySelector('#slider-skeleton'),
+            sliderProgressContainer: this.container.querySelector('#slider-progress-container'),
+            sliderProgressBar: this.container.querySelector('#slider-progress-bar'),
+            sliderProgressFillValue: this.container.querySelector('#slider-progress-fill-value'),
+            sliderProgressText: this.container.querySelector('#slider-progress-text'),
+            sliderTargetIndicator: this.container.querySelector('#slider-target-indicator'),
             clickHint: this.container.querySelector('#click-hint'),
             clickGrid: this.container.querySelector('#click-grid'),
             clickImage: this.container.querySelector('#click-image'),
@@ -787,10 +818,19 @@ class Captcha {
             if (this.sliderState.isDragging || this.isLoading) return;
 
             this.sliderState.isDragging = true;
-            const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            
+            const isTouchEvent = e.type.startsWith('touch');
+            const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            
             this.sliderState.startX = clientX;
+            this.sliderState.touchStartY = clientY;
             this.sliderState.currentX = 0;
+            this.sliderState.smoothPosition = 0;
             this.sliderState.maxX = container.offsetWidth - button.offsetWidth - 4;
+            this.sliderState.isMobile = isTouchEvent;
+            this.sliderState.lastTouchTime = Date.now();
+            this.sliderState.touchVelocity = 0;
 
             this.speedData = {
                 points: [],
@@ -806,19 +846,56 @@ class Captcha {
             button.classList.add('dragging');
             container.classList.add('is-dragging');
             this.elements.sliderText.textContent = this.i18n.t('sliding');
+            
+            if (this.elements.sliderProgressContainer) {
+                this.elements.sliderProgressContainer.style.opacity = '1';
+            }
+            
             this.announceToScreenReader(this.i18n.t('sliderDragStarted'), 'assertive');
+            
+            if (isTouchEvent) {
+                this.startTouchFeedback(e.touches[0]);
+            }
         };
 
         const drag = (e) => {
             if (!this.sliderState.isDragging) return;
 
             e.preventDefault();
-            const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+            
+            const isTouchEvent = e.type.startsWith('touch');
+            const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            
             let deltaX = clientX - this.sliderState.startX;
+            
+            if (isTouchEvent) {
+                const deltaY = clientY - this.sliderState.touchStartY;
+                const currentTime = Date.now();
+                const dt = currentTime - this.sliderState.lastTouchTime;
+                
+                if (dt > 0) {
+                    this.sliderState.touchVelocity = Math.abs(deltaY) / dt * 1000;
+                }
+                
+                this.sliderState.touchOffsetY = deltaY;
+                this.sliderState.lastTouchTime = currentTime;
+                
+                const maxVerticalDrift = 50;
+                const verticalPenalty = Math.min(Math.abs(deltaY) / maxVerticalDrift, 1) * 30;
+                deltaX = deltaX - verticalPenalty * Math.sign(deltaY);
+                
+                this.updateTouchFeedback(deltaY);
+            }
 
             deltaX = Math.max(0, Math.min(deltaX, this.sliderState.maxX));
             const prevX = this.sliderState.currentX;
-            this.sliderState.currentX = deltaX;
+            
+            const smoothingFactor = this.sliderState.isMobile ? 0.3 : 0.6;
+            this.sliderState.smoothPosition = this.sliderState.smoothPosition + 
+                (deltaX - this.sliderState.smoothPosition) * smoothingFactor;
+            
+            this.sliderState.currentX = this.sliderState.smoothPosition;
 
             const currentTime = Date.now();
             const dt = currentTime - (this.speedData.points.length > 0 ?
@@ -842,8 +919,9 @@ class Captcha {
 
             this.addTrajectoryPoint(deltaX, this.sliderState.puzzleY, 'move');
 
-            this.animateSliderPosition(deltaX);
+            this.animateSliderPosition(this.sliderState.currentX);
             this.updateSliderAccessibility();
+            this.updateProgressIndicator();
         };
 
         const endDrag = (e) => {
@@ -853,6 +931,8 @@ class Captcha {
             this.speedData.endTime = Date.now();
             button.classList.remove('dragging');
             this.elements.sliderContainer.classList.remove('is-dragging');
+            
+            this.endTouchFeedback();
 
             this.addTrajectoryPoint(this.sliderState.currentX, this.sliderState.puzzleY, 'end');
 
@@ -872,6 +952,55 @@ class Captcha {
         
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
+        document.addEventListener('touchcancel', endDrag);
+    }
+    
+    startTouchFeedback(touch) {
+        const button = this.elements.sliderButton;
+        if (!button) return;
+        
+        button.classList.add('touch-active');
+    }
+    
+    updateTouchFeedback(deltaY) {
+        const button = this.elements.sliderButton;
+        const container = this.elements.sliderContainer;
+        
+        if (!button || !container) return;
+        
+        const maxDrift = 30;
+        const clampedDrift = Math.max(-maxDrift, Math.min(maxDrift, deltaY * 0.3));
+        
+        button.style.transform = `translateY(${clampedDrift}px)`;
+        
+        if (this.sliderState.touchVelocity > 500) {
+            button.classList.add('touch-fast');
+        } else {
+            button.classList.remove('touch-fast');
+        }
+    }
+    
+    endTouchFeedback() {
+        const button = this.elements.sliderButton;
+        if (!button) return;
+        
+        button.classList.remove('touch-active', 'touch-fast');
+        button.style.transform = '';
+    }
+    
+    updateProgressIndicator() {
+        if (!this.elements.sliderProgressFillValue || !this.elements.sliderProgressText) return;
+        
+        const progress = Math.min(100, Math.round((this.sliderState.currentX / this.sliderState.maxX) * 100));
+        
+        this.elements.sliderProgressFillValue.style.width = progress + '%';
+        this.elements.sliderProgressText.textContent = progress + '%';
+        
+        if (progress >= 80) {
+            this.elements.sliderProgressFillValue.classList.add('near-complete');
+        } else {
+            this.elements.sliderProgressFillValue.classList.remove('near-complete');
+        }
     }
 
     addTrajectoryPoint(x, y, event) {
@@ -1795,12 +1924,19 @@ class Captcha {
         
         this.elements.sliderButton.classList.add('verifying');
         this.elements.sliderText.textContent = this.i18n.t('verifying');
+        
+        const innerIcon = this.elements.sliderButton.querySelector('.slider-button-inner');
+        if (innerIcon) {
+            innerIcon.querySelector('.slider-icon-default').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-success').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-error').style.display = 'none';
+        }
     }
 
     handleVerificationResult(success) {
+        this.elements.sliderButton.classList.remove('verifying');
+        
         if (success) {
-            this.elements.sliderButton.classList.remove('verifying');
-            this.elements.sliderButton.classList.add('success');
             this.playSuccessAnimation();
             this.elements.sliderText.textContent = this.i18n.t('verifySuccess');
             this.showResult(this.i18n.t('verifySuccess'), 'success');
@@ -1810,8 +1946,6 @@ class Captcha {
                 this.options.onSuccess({ type: 'slider', session_id: this.sessionId });
             }
         } else {
-            this.elements.sliderButton.classList.remove('verifying');
-            this.elements.sliderButton.classList.add('error');
             this.playErrorAnimation();
             this.showResult(this.i18n.t('verifyFailed'), 'error');
             this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
@@ -1837,16 +1971,24 @@ class Captcha {
             return;
         }
 
+        button.classList.add('success');
+        const innerIcon = button.querySelector('.slider-button-inner');
+        if (innerIcon) {
+            innerIcon.querySelector('.slider-icon-default').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-success').style.display = 'block';
+            innerIcon.querySelector('.slider-icon-error').style.display = 'none';
+        }
+
         let progress = 0;
         const animate = () => {
-            progress += 0.05;
+            progress += 0.04;
             if (progress >= 1) {
                 button.style.left = (finalX + 2) + 'px';
                 this.updatePuzzlePosition(finalX);
                 return;
             }
 
-            const overshoot = Math.sin(progress * Math.PI) * 10;
+            const overshoot = Math.sin(progress * Math.PI) * 15;
             const easeOut = 1 - Math.pow(1 - progress, 3);
             const currentX = finalX * easeOut - overshoot * (1 - easeOut);
 
@@ -1858,40 +2000,61 @@ class Captcha {
 
         requestAnimationFrame(animate);
         this.playSuccessParticles();
+        this.playSuccessRipple();
+    }
+    
+    playSuccessRipple() {
+        const button = this.elements.sliderButton;
+        const ripple = button.querySelector('.slider-button-ripple');
+        if (!ripple) return;
+        
+        ripple.classList.add('ripple-success');
+        setTimeout(() => {
+            ripple.classList.remove('ripple-success');
+        }, 600);
     }
 
     playSuccessParticles() {
         const container = this.elements.sliderContainer;
         const rect = container.getBoundingClientRect();
+        const particleColors = ['#52c41a', '#73d13d', '#95de64', '#f6ffed'];
         
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 12; i++) {
             const particle = document.createElement('div');
             particle.className = 'success-particle';
+            const size = 4 + Math.random() * 8;
+            const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+            
             particle.style.cssText = `
                 position: absolute;
                 left: ${rect.left + this.sliderState.currentX}px;
                 top: ${rect.top + 20}px;
-                width: 8px;
-                height: 8px;
-                background: #52c41a;
+                width: ${size}px;
+                height: ${size}px;
+                background: ${color};
                 border-radius: 50%;
                 pointer-events: none;
                 z-index: 100;
             `;
             document.body.appendChild(particle);
             
-            const angle = (i / 8) * Math.PI * 2;
-            const velocity = 50 + Math.random() * 50;
+            const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.5;
+            const velocity = 80 + Math.random() * 80;
             const vx = Math.cos(angle) * velocity;
-            const vy = Math.sin(angle) * velocity;
+            const vy = Math.sin(angle) * velocity - 30;
             
-            let x = 0, y = 0, opacity = 1;
+            let x = 0, y = 0, opacity = 1, scale = 1;
+            const gravity = 2;
+            let vyActual = vy;
+            
             const animate = () => {
-                x += vx * 0.02;
-                y += vy * 0.02;
-                opacity -= 0.03;
+                x += vx * 0.016;
+                vyActual += gravity * 0.016;
+                y += vyActual * 0.016;
+                opacity -= 0.025;
+                scale = opacity;
                 
-                particle.style.transform = `translate(${x}px, ${y}px)`;
+                particle.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
                 particle.style.opacity = opacity;
                 
                 if (opacity > 0) {
@@ -1915,6 +2078,16 @@ class Captcha {
             this.resetSlider();
             return;
         }
+
+        button.classList.add('error');
+        const innerIcon = button.querySelector('.slider-button-inner');
+        if (innerIcon) {
+            innerIcon.querySelector('.slider-icon-default').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-success').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-error').style.display = 'block';
+        }
+        
+        this.playErrorRipple();
 
         let shakeCount = 0;
         const maxShakes = 6;
@@ -1941,6 +2114,17 @@ class Captcha {
 
         shake();
         this.playErrorFlash();
+    }
+    
+    playErrorRipple() {
+        const button = this.elements.sliderButton;
+        const ripple = button.querySelector('.slider-button-ripple');
+        if (!ripple) return;
+        
+        ripple.classList.add('ripple-error');
+        setTimeout(() => {
+            ripple.classList.remove('ripple-error');
+        }, 600);
     }
 
     playErrorFlash() {
@@ -2059,14 +2243,27 @@ class Captcha {
     resetSlider() {
         this.sliderState.isDragging = false;
         this.sliderState.currentX = 0;
+        this.sliderState.smoothPosition = 0;
         this.elements.sliderButton.style.left = '2px';
         this.elements.sliderButton.style.pointerEvents = 'auto';
+        this.elements.sliderButton.style.transform = '';
         this.elements.sliderContainer.style.cursor = 'pointer';
-        this.elements.sliderButton.classList.remove('success', 'error', 'dragging', 'verifying');
+        this.elements.sliderButton.classList.remove('success', 'error', 'dragging', 'verifying', 'touch-active', 'touch-fast');
         this.elements.sliderTrack.style.width = '0px';
         this.elements.sliderText.textContent = this.i18n.t('dragToVerify');
         this.elements.sliderPuzzle.style.left = '0px';
         this.updateSliderAccessibility();
+        
+        if (this.elements.sliderProgressFillValue) {
+            this.elements.sliderProgressFillValue.style.width = '0%';
+            this.elements.sliderProgressFillValue.classList.remove('near-complete');
+        }
+        if (this.elements.sliderProgressText) {
+            this.elements.sliderProgressText.textContent = '0%';
+        }
+        if (this.elements.sliderProgressContainer) {
+            this.elements.sliderProgressContainer.style.opacity = '0.6';
+        }
 
         this.trajectoryData = [];
         this.speedData = {
@@ -2601,6 +2798,8 @@ class CaptchaI18n {
                 sliderButtonAria: '拖动滑块',
                 dragToVerify: '向右滑动完成验证',
                 sliderHint: '按住滑块拖动到最右侧',
+                sliderNearComplete: '即将完成',
+                sliderTouchHint: '触摸并向右滑动',
                 clickHint: '请依次点击图中的文字',
                 clickGridLabel: '点选验证码图片',
                 clickImageAlt: '点选验证码图片，请按顺序点击指定位置',
@@ -2667,6 +2866,8 @@ class CaptchaI18n {
                 sliderButtonAria: 'Drag slider',
                 dragToVerify: 'Slide right to verify',
                 sliderHint: 'Hold and drag slider to the right',
+                sliderNearComplete: 'Almost there',
+                sliderTouchHint: 'Touch and drag to the right',
                 clickHint: 'Click the specified areas in order',
                 clickGridLabel: 'Click captcha image',
                 clickImageAlt: 'Click captcha image, click specified positions in order',
@@ -2827,6 +3028,509 @@ class CaptchaLanguageManager {
     }
 }
 
+class ClickCaptchaStyles {
+    static injected = false;
+    
+    static inject() {
+        if (this.injected) return;
+        
+        const styles = `
+            .click-captcha-container {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background: white;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+                max-width: 440px;
+            }
+            
+            .click-captcha-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #e9ecef;
+            }
+            
+            .click-captcha-header h4 {
+                margin: 0;
+                font-size: 1.1rem;
+                color: #333;
+                font-weight: 600;
+            }
+            
+            .difficulty-badge {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 0.75rem;
+                font-weight: 500;
+            }
+            
+            .click-captcha-body {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .challenge-image-wrapper {
+                position: relative;
+                background: #f8f9fa;
+                border-radius: 8px;
+                overflow: hidden;
+                touch-action: none;
+            }
+            
+            .challenge-image-wrapper canvas {
+                display: block;
+                width: 100%;
+                height: auto;
+                cursor: pointer;
+                transition: box-shadow 0.3s ease;
+            }
+            
+            .click-markers-layer {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 10;
+            }
+            
+            .ripple-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 5;
+                overflow: hidden;
+            }
+            
+            .click-feedback {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 15;
+                overflow: hidden;
+            }
+            
+            .click-ripple {
+                position: absolute;
+                border-radius: 50%;
+                background: radial-gradient(circle, rgba(102, 126, 234, 0.6) 0%, transparent 70%);
+                pointer-events: none;
+                transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            }
+            
+            .click-highlight {
+                position: absolute;
+                border: 2px solid rgba(102, 126, 234, 0.8);
+                border-radius: 50%;
+                pointer-events: none;
+                animation: highlight-pulse 0.4s ease-out forwards;
+            }
+            
+            @keyframes highlight-pulse {
+                0% {
+                    transform: scale(0.5);
+                    opacity: 1;
+                }
+                100% {
+                    transform: scale(1.5);
+                    opacity: 0;
+                }
+            }
+            
+            .click-feedback-item {
+                position: absolute;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 4px 10px;
+                border-radius: 12px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                pointer-events: none;
+                transition: all 0.5s ease-out;
+                white-space: nowrap;
+            }
+            
+            .click-marker {
+                position: absolute;
+                width: 28px;
+                height: 28px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.85rem;
+                font-weight: 700;
+                pointer-events: auto;
+                cursor: pointer;
+                transform: translate(-50%, -50%);
+                box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+                transition: transform 0.2s ease, background 0.2s ease;
+                z-index: 20;
+            }
+            
+            .click-marker:hover {
+                transform: translate(-50%, -50%) scale(1.15);
+            }
+            
+            .click-marker.success {
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                box-shadow: 0 2px 12px rgba(40, 167, 69, 0.5);
+            }
+            
+            .click-marker.error {
+                background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
+                box-shadow: 0 2px 12px rgba(220, 53, 69, 0.5);
+            }
+            
+            @keyframes marker-pop {
+                0% {
+                    transform: translate(-50%, -50%) scale(0);
+                    opacity: 0;
+                }
+                50% {
+                    transform: translate(-50%, -50%) scale(1.2);
+                }
+                100% {
+                    transform: translate(-50%, -50%) scale(1);
+                    opacity: 1;
+                }
+            }
+            
+            @keyframes marker-success {
+                0% {
+                    transform: translate(-50%, -50%) scale(1);
+                }
+                25% {
+                    transform: translate(-50%, -50%) scale(1.3);
+                }
+                50% {
+                    transform: translate(-50%, -50%) scale(0.9);
+                }
+                75% {
+                    transform: translate(-50%, -50%) scale(1.1);
+                }
+                100% {
+                    transform: translate(-50%, -50%) scale(1);
+                }
+            }
+            
+            @keyframes marker-error {
+                0%, 100% {
+                    transform: translate(-50%, -50%) rotate(0deg);
+                }
+                25% {
+                    transform: translate(-50%, -50%) rotate(-15deg);
+                }
+                75% {
+                    transform: translate(-50%, -50%) rotate(15deg);
+                }
+            }
+            
+            @keyframes shake-animation {
+                0%, 100% {
+                    transform: translateX(0);
+                }
+                20%, 60% {
+                    transform: translateX(-5px);
+                }
+                40%, 80% {
+                    transform: translateX(5px);
+                }
+            }
+            
+            .click-captcha-loading {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(255, 255, 255, 0.9);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                z-index: 25;
+            }
+            
+            .spinner {
+                width: 36px;
+                height: 36px;
+                border: 3px solid #e9ecef;
+                border-top-color: #667eea;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            
+            .captcha-refresh-btn {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: rgba(255, 255, 255, 0.9);
+                border: none;
+                border-radius: 50%;
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                z-index: 20;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            }
+            
+            .captcha-refresh-btn:hover {
+                background: #667eea;
+                color: white;
+                transform: scale(1.1);
+            }
+            
+            .click-hint-panel {
+                background: #f8f9fa;
+                padding: 12px 15px;
+                border-radius: 8px;
+            }
+            
+            .hint-text {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: #495057;
+                font-size: 0.9rem;
+            }
+            
+            .hint-text i {
+                color: #667eea;
+            }
+            
+            .click-progress {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-top: 10px;
+            }
+            
+            .progress-label {
+                font-size: 0.8rem;
+                color: #6c757d;
+                white-space: nowrap;
+            }
+            
+            .progress-bar {
+                flex: 1;
+                height: 6px;
+                background: #e9ecef;
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            
+            .progress-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+                border-radius: 3px;
+                transition: width 0.3s ease;
+            }
+            
+            .progress-count {
+                font-size: 0.8rem;
+                color: #6c757d;
+                min-width: 40px;
+                text-align: right;
+            }
+            
+            .click-instruction {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .instruction-text {
+                font-size: 0.9rem;
+                color: #495057;
+            }
+            
+            .sequence-display {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+            }
+            
+            .seq-item {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-size: 1rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .seq-item:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            }
+            
+            .seq-arrow {
+                color: #adb5bd;
+                font-size: 0.9rem;
+            }
+            
+            .click-history-panel {
+                background: #fff;
+                border: 1px solid #e9ecef;
+                padding: 10px 15px;
+                border-radius: 8px;
+            }
+            
+            .history-label {
+                font-size: 0.8rem;
+                color: #6c757d;
+                margin-bottom: 6px;
+            }
+            
+            .history-sequence {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+                min-height: 32px;
+            }
+            
+            .history-item {
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 4px 10px;
+                border-radius: 4px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            
+            .history-item:hover {
+                transform: scale(1.05);
+                box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+            }
+            
+            .history-arrow {
+                color: #adb5bd;
+                font-size: 0.8rem;
+            }
+            
+            .click-actions {
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            }
+            
+            .click-actions .btn {
+                padding: 8px 20px;
+                border-radius: 6px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                border: none;
+            }
+            
+            .click-actions .btn-primary {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+            
+            .click-actions .btn-primary:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            }
+            
+            .click-actions .btn-primary:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            
+            .click-actions .btn-secondary {
+                background: #e9ecef;
+                color: #495057;
+            }
+            
+            .click-actions .btn-secondary:hover {
+                background: #dee2e6;
+            }
+            
+            .click-captcha-result {
+                padding: 12px 15px;
+                border-radius: 8px;
+                text-align: center;
+                font-weight: 500;
+                margin-top: 10px;
+                opacity: 0;
+                transform: translateY(-10px);
+                transition: all 0.3s ease;
+            }
+            
+            .click-captcha-result.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            
+            .click-captcha-result.success {
+                background: rgba(40, 167, 69, 0.1);
+                color: #28a745;
+                border: 1px solid rgba(40, 167, 69, 0.2);
+            }
+            
+            .click-captcha-result.error {
+                background: rgba(220, 53, 69, 0.1);
+                color: #dc3545;
+                border: 1px solid rgba(220, 53, 69, 0.2);
+            }
+            
+            @media (max-width: 480px) {
+                .click-captcha-container {
+                    padding: 15px;
+                }
+                
+                .click-marker {
+                    width: 32px;
+                    height: 32px;
+                    font-size: 0.9rem;
+                }
+                
+                .seq-item {
+                    padding: 5px 10px;
+                    font-size: 0.95rem;
+                }
+            }
+        `;
+        
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = styles;
+        document.head.appendChild(styleSheet);
+        this.injected = true;
+    }
+}
+
 class ClickCaptcha {
     constructor(containerId, options = {}) {
         this.container = typeof containerId === 'string' 
@@ -2847,6 +3551,9 @@ class ClickCaptcha {
             minClickInterval: 100,
             maxClickInterval: 3000,
             enableSound: false,
+            enableRipple: true,
+            enableHighlight: true,
+            enableMobileOptimization: true,
             onSuccess: null,
             onError: null,
             onRefresh: null,
@@ -2862,7 +3569,12 @@ class ClickCaptcha {
         this.isVerified = false;
         this.startTime = 0;
         this.clickSequence = [];
+        this.clickHistory = [];
+        this.touchStartTime = 0;
+        this.lastClickTime = 0;
+        this.ripples = [];
         
+        ClickCaptchaStyles.inject();
         this.init();
     }
 
@@ -2880,9 +3592,10 @@ class ClickCaptcha {
                     <div class="difficulty-badge" id="difficulty-badge">${this.options.difficulty}</div>
                 </div>
                 <div class="click-captcha-body">
-                    <div class="challenge-image-wrapper">
+                    <div class="challenge-image-wrapper" id="challenge-wrapper">
                         <canvas id="challenge-canvas" width="400" height="300" role="img" aria-label="Click verification image"></canvas>
                         <div class="click-markers-layer" id="click-markers"></div>
+                        <div class="ripple-container" id="ripple-container"></div>
                         <button class="captcha-refresh-btn" id="refresh-btn" aria-label="Refresh">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -2890,6 +3603,7 @@ class ClickCaptcha {
                             <div class="spinner"></div>
                             <span>Loading...</span>
                         </div>
+                        <div class="click-feedback" id="click-feedback"></div>
                     </div>
                     <div class="click-hint-panel">
                         <div class="hint-text" id="hint-text">
@@ -2908,6 +3622,10 @@ class ClickCaptcha {
                         <div class="instruction-text">请依次点击以下字符:</div>
                         <div class="sequence-display" id="sequence-display"></div>
                     </div>
+                    <div class="click-history-panel" id="click-history-panel">
+                        <div class="history-label">点击顺序:</div>
+                        <div class="history-sequence" id="history-sequence"></div>
+                    </div>
                     <div class="click-actions">
                         <button class="btn btn-secondary" id="clear-btn">
                             <i class="fas fa-eraser"></i> Clear
@@ -2924,24 +3642,66 @@ class ClickCaptcha {
         this.canvas = this.container.querySelector('#challenge-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.markersLayer = this.container.querySelector('#click-markers');
+        this.rippleContainer = this.container.querySelector('#ripple-container');
+        this.clickFeedback = this.container.querySelector('#click-feedback');
         this.hintText = this.container.querySelector('#hint-text span');
         this.progressFill = this.container.querySelector('#progress-fill');
         this.progressCount = this.container.querySelector('#progress-count');
         this.sequenceDisplay = this.container.querySelector('#sequence-display');
+        this.historySequence = this.container.querySelector('#history-sequence');
         this.verifyBtn = this.container.querySelector('#verify-btn');
         this.clearBtn = this.container.querySelector('#clear-btn');
         this.refreshBtn = this.container.querySelector('#refresh-btn');
         this.loadingOverlay = this.container.querySelector('#captcha-loading');
         this.resultPanel = this.container.querySelector('#result-panel');
+        this.challengeWrapper = this.container.querySelector('#challenge-wrapper');
     }
 
     bindEvents() {
         this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         
+        if (this.options.enableMobileOptimization) {
+            this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+            this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+            this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        }
+        
         this.clearBtn.addEventListener('click', () => this.clearClicks());
         this.verifyBtn.addEventListener('click', () => this.verifyClicks());
         this.refreshBtn.addEventListener('click', () => this.loadChallenge());
+    }
+
+    handleTouchStart(e) {
+        e.preventDefault();
+        this.touchStartTime = Date.now();
+        
+        const touch = e.touches[0];
+        const rect = this.canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        
+        if (this.options.enableRipple) {
+            this.createRipple(x, y);
+        }
+    }
+
+    handleTouchMove(e) {
+        e.preventDefault();
+    }
+
+    handleTouchEnd(e) {
+        e.preventDefault();
+        
+        const touchDuration = Date.now() - this.touchStartTime;
+        if (touchDuration > 50 && touchDuration < 1000) {
+            const touch = e.changedTouches[0];
+            const rect = this.canvas.getBoundingClientRect();
+            const x = Math.round(touch.clientX - rect.left);
+            const y = Math.round(touch.clientY - rect.top);
+            
+            this.processClick(x, y);
+        }
     }
 
     handleCanvasClick(e) {
@@ -2951,21 +3711,51 @@ class ClickCaptcha {
         const rect = this.canvas.getBoundingClientRect();
         const x = Math.round(e.clientX - rect.left);
         const y = Math.round(e.clientY - rect.top);
-        const timestamp = Date.now();
+        
+        if (this.options.enableRipple) {
+            this.createRipple(x, y);
+        }
+        
+        this.processClick(x, y);
+    }
+    
+    processClick(x, y) {
+        const now = Date.now();
+        const timeSinceLastClick = now - this.lastClickTime;
+        
+        if (timeSinceLastClick < this.options.minClickInterval) {
+            return;
+        }
+        
+        this.lastClickTime = now;
+        
+        const timestamp = now;
 
         const clickData = {
             x: x,
             y: y,
             timestamp: timestamp,
-            targetId: -1
+            targetId: -1,
+            clickNumber: this.clicks.length + 1
         };
 
         this.clicks.push(clickData);
         this.clickSequence.push(this.clicks.length - 1);
+        this.clickHistory.push({
+            char: this.getExpectedChar(this.clicks.length),
+            position: { x, y },
+            timestamp: timestamp
+        });
 
+        if (this.options.enableHighlight) {
+            this.createClickHighlight(x, y);
+        }
+        
         this.addClickMarker(x, y, this.clicks.length);
         this.updateProgress();
+        this.updateClickHistory();
         this.addBehaviorPoint(x, y, timestamp, 'click');
+        this.showClickFeedback(x, y, this.clicks.length);
 
         if (this.clicks.length === this.targets.length) {
             this.verifyBtn.disabled = false;
@@ -2978,6 +3768,95 @@ class ClickCaptcha {
                 clicks: this.clicks
             });
         }
+    }
+
+    getExpectedChar(clickNumber) {
+        const index = clickNumber - 1;
+        if (index >= 0 && index < this.correctOrder.length) {
+            const targetIndex = this.correctOrder[index];
+            if (targetIndex >= 0 && targetIndex < this.targets.length) {
+                return this.targets[targetIndex].char || this.targets[targetIndex].Char || '?';
+            }
+        }
+        return '?';
+    }
+
+    createRipple(x, y) {
+        if (!this.rippleContainer) return;
+        
+        const ripple = document.createElement('div');
+        ripple.className = 'click-ripple';
+        ripple.style.left = `${x}px`;
+        ripple.style.top = `${y}px`;
+        ripple.style.width = '0px';
+        ripple.style.height = '0px';
+        
+        this.rippleContainer.appendChild(ripple);
+        
+        requestAnimationFrame(() => {
+            ripple.style.width = '80px';
+            ripple.style.height = '80px';
+            ripple.style.marginLeft = '-40px';
+            ripple.style.marginTop = '-40px';
+            ripple.style.opacity = '0';
+        });
+        
+        setTimeout(() => {
+            ripple.remove();
+        }, 600);
+    }
+
+    createClickHighlight(x, y) {
+        const highlight = document.createElement('div');
+        highlight.className = 'click-highlight';
+        highlight.style.left = `${x}px`;
+        highlight.style.top = `${y}px`;
+        highlight.style.width = '50px';
+        highlight.style.height = '50px';
+        highlight.style.marginLeft = '-25px';
+        highlight.style.marginTop = '-25px';
+        
+        this.markersLayer.appendChild(highlight);
+        
+        setTimeout(() => {
+            highlight.remove();
+        }, 400);
+    }
+
+    showClickFeedback(x, y, number) {
+        if (!this.clickFeedback) return;
+        
+        const feedback = document.createElement('div');
+        feedback.className = 'click-feedback-item';
+        feedback.textContent = number;
+        feedback.style.left = `${x}px`;
+        feedback.style.top = `${y - 20}px`;
+        
+        this.clickFeedback.appendChild(feedback);
+        
+        requestAnimationFrame(() => {
+            feedback.style.transform = 'translateY(-30px)';
+            feedback.style.opacity = '0';
+        });
+        
+        setTimeout(() => {
+            feedback.remove();
+        }, 600);
+    }
+
+    updateClickHistory() {
+        if (!this.historySequence) return;
+        
+        this.historySequence.innerHTML = this.clickHistory
+            .map((item, idx) => `<span class="history-item" data-index="${idx}">${item.char}</span>`)
+            .join('<span class="history-arrow">→</span>');
+        
+        const items = this.historySequence.querySelectorAll('.history-item');
+        items.forEach((item, idx) => {
+            item.addEventListener('click', () => {
+                this.removeClick(idx);
+            });
+        });
     }
 
     handleMouseMove(e) {
@@ -3018,8 +3897,15 @@ class ClickCaptcha {
         if (index >= 0 && index < this.clicks.length) {
             this.clicks.splice(index, 1);
             this.clickSequence.splice(index, 1);
+            this.clickHistory.splice(index, 1);
+            
+            for (let i = index; i < this.clicks.length; i++) {
+                this.clicks[i].clickNumber = i + 1;
+            }
+            
             this.updateMarkers();
             this.updateProgress();
+            this.updateClickHistory();
             this.verifyBtn.disabled = true;
         }
     }
@@ -3142,8 +4028,10 @@ class ClickCaptcha {
     clearClicks() {
         this.clicks = [];
         this.clickSequence = [];
+        this.clickHistory = [];
         this.markersLayer.innerHTML = '';
         this.updateProgress();
+        this.updateClickHistory();
         this.verifyBtn.disabled = true;
         this.startTime = Date.now();
     }
@@ -3222,15 +4110,43 @@ class ClickCaptcha {
         markers.forEach((marker, idx) => {
             setTimeout(() => {
                 marker.classList.add('success');
+                this.playSuccessAnimation(marker);
             }, idx * 150);
         });
+        
+        this.canvas.style.boxShadow = '0 0 20px rgba(40, 167, 69, 0.5)';
+        setTimeout(() => {
+            this.canvas.style.boxShadow = '';
+        }, 1000);
+    }
+
+    playSuccessAnimation(marker) {
+        marker.style.animation = 'marker-success 0.6s ease-out';
+        setTimeout(() => {
+            marker.style.animation = '';
+        }, 600);
     }
 
     markErrorMarkers() {
         const markers = this.markersLayer.querySelectorAll('.click-marker');
-        markers.forEach(marker => {
-            marker.classList.add('error');
+        markers.forEach((marker, idx) => {
+            setTimeout(() => {
+                marker.classList.add('error');
+                this.playErrorAnimation(marker);
+            }, idx * 100);
         });
+        
+        this.canvas.classList.add('shake-animation');
+        setTimeout(() => {
+            this.canvas.classList.remove('shake-animation');
+        }, 500);
+    }
+
+    playErrorAnimation(marker) {
+        marker.style.animation = 'marker-error 0.4s ease-out';
+        setTimeout(() => {
+            marker.style.animation = '';
+        }, 400);
     }
 
     showLoading(show) {
@@ -3297,4 +4213,5 @@ document.addEventListener('DOMContentLoaded', function() {
     window.CaptchaLanguageManager = CaptchaLanguageManager;
     window.TrajectoryEncryptor = TrajectoryEncryptor;
     window.ClickCaptcha = ClickCaptcha;
+    window.ClickCaptchaStyles = ClickCaptchaStyles;
 });
