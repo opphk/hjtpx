@@ -25,6 +25,15 @@ type HealthStatus struct {
 	System    map[string]interface{} `json:"system"`
 }
 
+// HealthCheck 健康检查
+// @Summary 健康检查
+// @Description 检查系统整体健康状态，包括数据库、Redis连接状态和系统指标
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Success 200 {object} HealthStatus "系统健康状态良好"
+// @Failure 503 {object} HealthStatus "系统状态不健康"
+// @Router /health [get]
 func HealthCheck(c *gin.Context) {
 	status := HealthStatus{
 		Timestamp: time.Now().Format(time.RFC3339),
@@ -128,6 +137,15 @@ func (r *ReadinessCheck) IsReady() bool {
 	return true
 }
 
+// Readiness 就绪检查
+// @Summary 就绪检查
+// @Description 检查服务依赖是否就绪，用于Kubernetes等容器编排系统的就绪探针
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "服务已就绪"
+// @Failure 503 {object} map[string]interface{} "服务未就绪"
+// @Router /ready [get]
 func Readiness(c *gin.Context) {
 	if !NewReadinessCheck().IsReady() {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -151,6 +169,15 @@ func (l *LivenessCheck) IsAlive() bool {
 	return true
 }
 
+// Liveness 存活检查
+// @Summary 存活检查
+// @Description 检查服务是否存活，用于Kubernetes等容器编排系统的存活探针
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "服务存活"
+// @Failure 503 {object} map[string]interface{} "服务已停止"
+// @Router /live [get]
 func Liveness(c *gin.Context) {
 	if !NewLivenessCheck().IsAlive() {
 		c.JSON(http.StatusServiceUnavailable, gin.H{

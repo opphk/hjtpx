@@ -308,6 +308,19 @@ func ExportLogs(c *gin.Context) {
 	c.Data(200, "text/csv", data)
 }
 
+// DeleteOldLogs 删除旧日志
+// @Summary 删除旧日志
+// @Description 删除指定天数之前的验证日志
+// @Tags 验证日志
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param days query int false "天数，默认30天" default(30)
+// @Success 200 {object} map[string]interface{} "删除结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/logs/delete-old [delete]
 func DeleteOldLogs(c *gin.Context) {
 	handler := GetLogHandler()
 	daysStr := c.DefaultQuery("days", "30")

@@ -1200,6 +1200,21 @@ func generateSliderCaptchaImages() (string, string, int, int) {
 // @Success 200 {object} map[string]interface{} "成功返回验证码数据"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/captcha/slider [get]
+// @Example 响应示例
+// {
+//   "code": 0,
+//   "message": "success",
+//   "data": {
+//     "session_id": "sess_1234567890_9999",
+//     "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+//     "puzzle_image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+//     "target_x": 150,
+//     "target_y": 50,
+//     "puzzle_y": 50,
+//     "puzzle_style": 0,
+//     "tolerance": 10
+//   }
+// }
 func GetSliderCaptcha(c *gin.Context) {
 	sessionID := generateSessionID()
 	imageURL, puzzleImage, targetX, targetY := generateSliderCaptchaImages()
@@ -1324,6 +1339,41 @@ type VerifyRequest struct {
 // @Failure 400 {object} map[string]interface{} "请求参数无效"
 // @Failure 404 {object} map[string]interface{} "会话不存在或已过期"
 // @Router /api/v1/captcha/verify [post]
+// @Example 滑动验证请求示例
+// {
+//   "session_id": "sess_1234567890_9999",
+//   "type": "slider",
+//   "x": 150,
+//   "y": 50,
+//   "behavior_data": [
+//     {"event": "mousedown", "x": 10, "y": 150, "timestamp": 1234567890001},
+//     {"event": "mousemove", "x": 50, "y": 150, "timestamp": 1234567890010},
+//     {"event": "mouseup", "x": 150, "y": 150, "timestamp": 1234567890500}
+//   ]
+// }
+// @Example 点击验证请求示例
+// {
+//   "session_id": "sess_1234567890_8888",
+//   "type": "click",
+//   "points": [[100, 150], [200, 100], [150, 200]],
+//   "click_sequence": [0, 1, 2],
+//   "behavior_data": [
+//     {"event": "click", "x": 100, "y": 150, "timestamp": 1234567890001},
+//     {"event": "click", "x": 200, "y": 100, "timestamp": 1234567891500},
+//     {"event": "click", "x": 150, "y": 200, "timestamp": 1234567892000}
+//   ]
+// }
+// @Example 响应示例
+// {
+//   "code": 0,
+//   "message": "success",
+//   "data": {
+//     "success": true,
+//     "message": "验证成功",
+//     "risk_score": 15.5,
+//     "captcha_pass": true
+//   }
+// }
 func VerifyCaptcha(c *gin.Context) {
 	startTime := time.Now()
 	var req VerifyRequest

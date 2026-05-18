@@ -29,6 +29,17 @@ type ResourceUsage struct {
 	Disk   int `json:"disk"`
 }
 
+// GetSystemStatus 获取系统状态
+// @Summary 获取系统状态
+// @Description 获取系统的整体状态，包括各服务（数据库、Redis、API、存储）的健康状态和资源使用情况
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} SystemStatusResponse "系统状态信息"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/system-status [get]
 func GetSystemStatus(c *gin.Context) {
 	status := map[string]ServiceStatus{
 		"db":      {Status: "healthy", Latency: 5},
@@ -54,6 +65,18 @@ type RequestTrendResponse struct {
 	Data   []int64  `json:"data"`
 }
 
+// GetRequestTrend 获取请求趋势
+// @Summary 获取请求趋势
+// @Description 获取验证请求的趋势数据，支持小时、天、周级别
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param period query string false "时间周期" Enums(hour, day, week) default(hour)
+// @Success 200 {object} RequestTrendResponse "请求趋势数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/request-trend [get]
 func GetRequestTrend(c *gin.Context) {
 	period := c.DefaultQuery("period", "hour")
 
@@ -105,6 +128,17 @@ type ApplicationsSummaryResponse struct {
 	TotalUsers    int64   `json:"totalUsers"`
 }
 
+// GetApplicationsSummary 获取应用概览
+// @Summary 获取应用概览
+// @Description 获取所有应用的统计概览信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} ApplicationsSummaryResponse "应用统计概览"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications-summary [get]
 func GetApplicationsSummary(c *gin.Context) {
 	var totalApps int64
 	var activeApps int64
@@ -143,6 +177,17 @@ type LogsSummaryResponse struct {
 	Today    int64 `json:"today"`
 }
 
+// GetLogsSummary 获取日志摘要
+// @Summary 获取日志摘要
+// @Description 获取验证日志的统计摘要信息
+// @Tags 日志
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} LogsSummaryResponse "日志摘要信息"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/logs-summary [get]
 func GetLogsSummary(c *gin.Context) {
 	var total int64
 	var errors int64
@@ -168,6 +213,19 @@ type ClearLogsRequest struct {
 	Range string `json:"range"`
 }
 
+// ClearLogs 清理日志
+// @Summary 清理日志
+// @Description 清理指定时间范围之前的日志记录
+// @Tags 日志
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body ClearLogsRequest true "清理参数"
+// @Success 200 {object} map[string]interface{} "清理结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/logs/clear [post]
 func ClearLogs(c *gin.Context) {
 	var req ClearLogsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -236,6 +294,17 @@ var mockRiskRules = []RiskRule{
 	{ID: 8, Name: "暴力破解防护", Type: "rate_limit", Description: "防止暴力破解密码", Condition: "失败次数 > 5/10分钟", Action: "block", Priority: 10, Enabled: true, HitCount: 234, Apps: []string{"1"}},
 }
 
+// GetRiskRulesSummary 获取风险规则摘要
+// @Summary 获取风险规则摘要
+// @Description 获取风险规则的统计摘要信息
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} RiskRulesSummaryResponse "风险规则摘要"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules/summary [get]
 func GetRiskRulesSummary(c *gin.Context) {
 	activeCount := 0
 	for _, rule := range mockRiskRules {
@@ -261,6 +330,23 @@ type ListRiskRulesQuery struct {
 	Keyword string `form:"keyword"`
 }
 
+// ListRiskRules 获取风险规则列表
+// @Summary 获取风险规则列表
+// @Description 分页获取风险规则列表
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码，默认1"
+// @Param size query int false "每页数量，默认10"
+// @Param type query string false "规则类型"
+// @Param status query string false "状态：enabled, disabled"
+// @Param keyword query string false "关键词搜索"
+// @Success 200 {object} map[string]interface{} "风险规则列表"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules [get]
 func ListRiskRules(c *gin.Context) {
 	var query ListRiskRulesQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -312,6 +398,19 @@ type CreateRiskRuleRequest struct {
 	Apps        []string               `json:"apps"`
 }
 
+// CreateRiskRule 创建风险规则
+// @Summary 创建风险规则
+// @Description 创建新的风险规则
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body CreateRiskRuleRequest true "创建风险规则请求"
+// @Success 200 {object} map[string]interface{} "创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules [post]
 func CreateRiskRule(c *gin.Context) {
 	var req CreateRiskRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -328,6 +427,20 @@ func CreateRiskRule(c *gin.Context) {
 	})
 }
 
+// GetRiskRule 获取风险规则详情
+// @Summary 获取风险规则详情
+// @Description 根据ID获取风险规则详细信息
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Success 200 {object} RiskRule "风险规则详情"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "规则不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules/{id} [get]
 func GetRiskRule(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -357,6 +470,20 @@ type UpdateRiskRuleRequest struct {
 	Apps        []string               `json:"apps"`
 }
 
+// UpdateRiskRule 更新风险规则
+// @Summary 更新风险规则
+// @Description 更新指定的风险规则
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Param body body UpdateRiskRuleRequest true "更新风险规则请求"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules/{id} [put]
 func UpdateRiskRule(c *gin.Context) {
 	idStr := c.Param("id")
 	_, err := strconv.ParseUint(idStr, 10, 32)
@@ -374,6 +501,19 @@ func UpdateRiskRule(c *gin.Context) {
 	response.Success(c, gin.H{"message": "规则更新成功"})
 }
 
+// DeleteRiskRule 删除风险规则
+// @Summary 删除风险规则
+// @Description 删除指定的风险规则
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Success 200 {object} map[string]interface{} "删除成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules/{id} [delete]
 func DeleteRiskRule(c *gin.Context) {
 	idStr := c.Param("id")
 	_, err := strconv.ParseUint(idStr, 10, 32)
@@ -389,6 +529,20 @@ type ToggleRiskRuleRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
+// ToggleRiskRule 切换风险规则状态
+// @Summary 切换风险规则状态
+// @Description 启用或禁用指定的风险规则
+// @Tags 风控
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "规则ID"
+// @Param body body ToggleRiskRuleRequest true "切换状态请求"
+// @Success 200 {object} map[string]interface{} "切换成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/risk-rules/{id}/toggle [post]
 func ToggleRiskRule(c *gin.Context) {
 	idStr := c.Param("id")
 	_, err := strconv.ParseUint(idStr, 10, 32)

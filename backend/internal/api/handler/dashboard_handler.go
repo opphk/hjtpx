@@ -23,6 +23,18 @@ func GetDashboardHandler() *DashboardHandler {
 	return NewDashboardHandler()
 }
 
+// GetDashboardData 获取仪表盘数据
+// @Summary 获取仪表盘数据
+// @Description 获取仪表盘展示所需的数据，包括统计概览和趋势信息
+// @Tags 仪表盘
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param period query string false "时间周期" Enums(hour, day, week, month) default(hour)
+// @Success 200 {object} map[string]interface{} "仪表盘数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/dashboard [get]
 func GetDashboardData(c *gin.Context) {
 	handler := GetDashboardHandler()
 	period := c.DefaultQuery("period", "hour")
@@ -36,6 +48,19 @@ func GetDashboardData(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// ExportDashboardData 导出仪表盘数据
+// @Summary 导出仪表盘数据
+// @Description 导出仪表盘数据为CSV、JSON或Excel格式
+// @Tags 仪表盘
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param format query string false "导出格式" Enums(csv, json, excel) default(csv)
+// @Param period query string false "时间周期" Enums(hour, day, week, month) default(month)
+// @Success 200 {file} file "导出的数据文件"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/dashboard/export [get]
 func ExportDashboardData(c *gin.Context) {
 	handler := GetDashboardHandler()
 
@@ -68,6 +93,17 @@ func ExportDashboardData(c *gin.Context) {
 	c.Data(http.StatusOK, "text/csv", data)
 }
 
+// GetRecentVerifications 获取最近验证记录
+// @Summary 获取最近验证记录
+// @Description 获取最近的验证记录列表
+// @Tags 仪表盘
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} []map[string]interface{} "最近验证记录列表"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/dashboard/recent-verifications [get]
 func GetRecentVerifications(c *gin.Context) {
 	handler := GetDashboardHandler()
 
@@ -126,6 +162,17 @@ func (h *DashboardHandler) getRecentVerifications(limit int) ([]map[string]inter
 	return verifications, nil
 }
 
+// GetDashboardAlerts 获取仪表盘告警
+// @Summary 获取仪表盘告警
+// @Description 获取当前系统的告警信息
+// @Tags 仪表盘
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "告警列表"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/dashboard/alerts [get]
 func GetDashboardAlerts(c *gin.Context) {
 	handler := GetDashboardHandler()
 

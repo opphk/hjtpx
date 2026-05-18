@@ -132,6 +132,25 @@ type ResendVerificationRequest struct {
 // @Failure 409 {object} map[string]interface{} "用户名或邮箱已存在"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/auth/register [post]
+// @Example 请求示例
+// {
+//   "username": "newuser",
+//   "email": "user@example.com",
+//   "password": "password123",
+//   "behavior_data": "[{\"event\":\"mousemove\",\"timestamp\":1234567890}]"
+// }
+// @Example 响应示例
+// {
+//   "code": 0,
+//   "message": "success",
+//   "data": {
+//     "user_id": 123,
+//     "username": "newuser",
+//     "email": "user@example.com",
+//     "verification_link": "/api/v1/auth/verify-email?token=xxx",
+//     "message": "registration successful, please verify your email"
+//   }
+// }
 func (h *UserHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -203,6 +222,29 @@ func (h *UserHandler) Register(c *gin.Context) {
 // @Failure 403 {object} map[string]interface{} "账户被禁用"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/auth/login [post]
+// @Example 请求示例
+// {
+//   "username": "user1",
+//   "password": "password123",
+//   "captcha_token": "xxx",
+//   "behavior_data": "[{\"event\":\"mousemove\",\"timestamp\":1234567890}]"
+// }
+// @Example 响应示例
+// {
+//   "code": 0,
+//   "message": "success",
+//   "data": {
+//     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+//     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+//     "expires_in": 900,
+//     "user": {
+//       "id": 123,
+//       "username": "user1",
+//       "email": "user@example.com",
+//       "status": "active"
+//     }
+//   }
+// }
 func (h *UserHandler) Login(c *gin.Context) {
 	var req UserLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

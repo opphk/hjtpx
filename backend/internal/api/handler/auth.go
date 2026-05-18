@@ -110,6 +110,28 @@ func updateAdminLogin(db *gorm.DB, adminID uint, ip string) {
 // @Failure 403 {object} map[string]interface{} "账户被禁用"
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/auth/login [post]
+// @Example 请求示例
+// {
+//   "username": "admin",
+//   "password": "password123"
+// }
+// @Example 响应示例
+// {
+//   "code": 0,
+//   "message": "success",
+//   "data": {
+//     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+//     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+//     "expires_in": 86400,
+//     "user": {
+//       "id": 1,
+//       "username": "admin",
+//       "email": "admin@example.com",
+//       "role": "admin",
+//       "is_super_admin": true
+//     }
+//   }
+// }
 func Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

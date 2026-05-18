@@ -1,10 +1,965 @@
 basePath: /
 definitions:
-  github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery:
+  captcha.VoiceVerifyRequest:
+    properties:
+      code:
+        type: string
+      session_id:
+        type: string
+    required:
+    - code
+    - session_id
+    type: object
+  handler.APIMetrics:
+    properties:
+      avg_response_time:
+        type: number
+      error_rate:
+        type: number
+      failed_requests:
+        type: integer
+      max_response_time:
+        type: number
+      min_response_time:
+        type: number
+      requests_per_second:
+        type: number
+      status_codes:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      success_rate:
+        type: number
+      success_requests:
+        type: integer
+      timestamp:
+        type: integer
+      top_endpoints:
+        items:
+          $ref: '#/definitions/handler.EndpointMetric'
+        type: array
+      total_requests:
+        type: integer
+    type: object
+  handler.ActivityItem:
+    properties:
+      event:
+        type: string
+      status:
+        type: string
+      time:
+        type: string
+      user:
+        type: string
+    type: object
+  handler.AdminInfo:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      is_super_admin:
+        type: boolean
+      last_login_at:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+    type: object
+  handler.AlertInfo:
+    properties:
+      acknowledged:
+        type: boolean
+      icon:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      severity:
+        type: string
+      timestamp:
+        type: integer
+      type:
+        type: string
+    type: object
+  handler.ApplicationsSummaryResponse:
+    properties:
+      active:
+        type: integer
+      successRate:
+        type: number
+      total:
+        type: integer
+      totalApiCalls:
+        type: integer
+      totalUsers:
+        type: integer
+    type: object
+  handler.BatchDeleteRequest:
+    description: 批量删除的请求参数
+    properties:
+      ids:
+        description: 应用ID列表
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
+  handler.BatchUpdateRequest:
+    description: 批量更新的请求参数
+    properties:
+      config:
+        additionalProperties: true
+        description: 应用配置
+        type: object
+      ids:
+        description: 应用ID列表
+        items:
+          type: integer
+        minItems: 1
+        type: array
+      is_active:
+        description: 是否启用
+        type: boolean
+    required:
+    - ids
+    type: object
+  handler.BehaviorDataPoint:
+    properties:
+      event:
+        type: string
+      timestamp:
+        type: integer
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  handler.ChangePasswordRequest:
+    description: 修改密码请求参数
+    properties:
+      new_password:
+        description: 新密码
+        maxLength: 128
+        minLength: 6
+        type: string
+      old_password:
+        description: 原密码
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  handler.ChartData:
+    properties:
+      failed:
+        items:
+          $ref: '#/definitions/handler.ChartDataPoint'
+        type: array
+      success:
+        items:
+          $ref: '#/definitions/handler.ChartDataPoint'
+        type: array
+      total:
+        items:
+          $ref: '#/definitions/handler.ChartDataPoint'
+        type: array
+    type: object
+  handler.ChartDataPoint:
+    properties:
+      count:
+        type: integer
+      date:
+        type: string
+    type: object
+  handler.ClearLogsRequest:
+    properties:
+      range:
+        type: string
+    type: object
+  handler.CloneApplicationRequest:
+    description: 克隆应用的请求参数
+    properties:
+      new_name:
+        description: 新应用名称
+        type: string
+    required:
+    - new_name
+    type: object
+  handler.CreateApplicationRequest:
+    description: 创建新应用的请求参数
+    properties:
+      description:
+        description: 应用描述
+        maxLength: 1000
+        type: string
+      domain:
+        description: 域名
+        maxLength: 255
+        type: string
+      name:
+        description: 应用名称
+        maxLength: 255
+        minLength: 1
+        type: string
+      user_id:
+        description: 用户ID
+        type: integer
+      website:
+        description: 网站URL
+        maxLength: 255
+        type: string
+    required:
+    - name
+    - user_id
+    type: object
+  handler.CreateRiskRuleRequest:
+    properties:
+      action:
+        type: string
+      apps:
+        items:
+          type: string
+        type: array
+      condition:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      enabled:
+        type: boolean
+      name:
+        type: string
+      priority:
+        type: integer
+      type:
+        type: string
+    required:
+    - action
+    - name
+    - type
+    type: object
+  handler.CreateVoiceCaptchaRequest:
+    description: 语音验证码创建请求参数
+    properties:
+      language:
+        description: '语言: "zh-CN" 或 "en-US"'
+        type: string
+      length:
+        description: 验证码位数，默认4位
+        type: integer
+    type: object
+  handler.DashboardStats:
+    properties:
+      totalApps:
+        type: integer
+      totalErrors:
+        type: integer
+      totalRequests:
+        type: integer
+      totalUsers:
+        type: integer
+    type: object
+  handler.DataDeletionRequest:
+    properties:
+      reason:
+        type: string
+    type: object
+  handler.DataExportRequest:
+    properties:
+      format:
+        description: 必须是json或csv
+        enum:
+        - json
+        - csv
+        type: string
+    required:
+    - format
+    type: object
+  handler.DeletionRequestResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      reason:
+        type: string
+      status:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  handler.EnableMFARequest:
+    properties:
+      email:
+        type: string
+      mfa_type:
+        enum:
+        - totp
+        - sms
+        - email
+        type: string
+      phone:
+        type: string
+    required:
+    - mfa_type
+    type: object
+  handler.EnableTOTPRequest:
+    properties:
+      secret:
+        type: string
+    required:
+    - secret
+    type: object
+  handler.EndpointMetric:
+    properties:
+      avg_time:
+        type: number
+      error_rate:
+        type: number
+      max_time:
+        type: number
+      method:
+        type: string
+      path:
+        type: string
+      requests:
+        type: integer
+      requests_per_second:
+        type: number
+    type: object
+  handler.ExportRequestResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      file_path:
+        type: string
+      format:
+        type: string
+      id:
+        type: integer
+      status:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  handler.GenerateTOTPRequest:
+    properties:
+      account_name:
+        type: string
+      issuer:
+        type: string
+    required:
+    - account_name
+    - issuer
+    type: object
+  handler.HealthStatus:
+    properties:
+      metrics:
+        additionalProperties: true
+        type: object
+      services:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+      system:
+        additionalProperties: true
+        type: object
+      timestamp:
+        type: string
+      uptime:
+        type: string
+    type: object
+  handler.ImportApplicationRequest:
+    description: 导入应用配置的请求参数
+    properties:
+      config:
+        additionalProperties: true
+        description: 应用配置
+        type: object
+      description:
+        description: 应用描述
+        type: string
+      domain:
+        description: 域名
+        type: string
+      name:
+        description: 应用名称
+        type: string
+      user_id:
+        description: 用户ID
+        type: integer
+      website:
+        description: 网站URL
+        type: string
+    required:
+    - name
+    type: object
+  handler.LogListMapResponse:
+    properties:
+      logs:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  handler.LoginRequest:
+    properties:
+      password:
+        description: 密码
+        type: string
+      username:
+        description: 用户名
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  handler.LoginResponse:
+    properties:
+      expires_in:
+        description: 过期时间(秒)
+        type: integer
+      refresh_token:
+        description: 刷新令牌
+        type: string
+      token:
+        description: 访问令牌
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/handler.AdminInfo'
+        description: 用户信息
+    type: object
+  handler.LogsSummaryResponse:
+    properties:
+      errors:
+        type: integer
+      today:
+        type: integer
+      total:
+        type: integer
+      warnings:
+        type: integer
+    type: object
+  handler.RegisterBiometricProfileRequest:
+    properties:
+      keyboard_sample:
+        $ref: '#/definitions/service.KeyboardSample'
+      mouse_sample:
+        $ref: '#/definitions/service.MouseSample'
+      user_id:
+        type: string
+    required:
+    - user_id
+    type: object
+  handler.RegisterRequest:
+    description: 用户注册请求参数
+    properties:
+      behavior_data:
+        description: 行为数据（可选）
+        type: string
+      email:
+        description: 邮箱
+        type: string
+      password:
+        description: 密码
+        maxLength: 128
+        minLength: 6
+        type: string
+      username:
+        description: 用户名
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  handler.RegisterResponse:
+    description: 用户注册响应数据
+    properties:
+      email:
+        description: 邮箱
+        type: string
+      message:
+        description: 消息
+        type: string
+      user_id:
+        description: 用户ID
+        type: integer
+      username:
+        description: 用户名
+        type: string
+      verification_link:
+        description: 验证链接
+        type: string
+    type: object
+  handler.RequestTrendResponse:
+    properties:
+      data:
+        items:
+          type: integer
+        type: array
+      labels:
+        items:
+          type: string
+        type: array
+    type: object
+  handler.ResendVerificationRequest:
+    description: 重新发送验证邮件请求参数
+    properties:
+      email:
+        description: 邮箱
+        type: string
+    required:
+    - email
+    type: object
+  handler.ResetPasswordRequest:
+    description: 重置密码请求参数
+    properties:
+      new_password:
+        description: 新密码
+        maxLength: 128
+        minLength: 6
+        type: string
+      token:
+        description: 重置令牌
+        type: string
+    required:
+    - new_password
+    - token
+    type: object
+  handler.ResourceUsage:
+    properties:
+      cpu:
+        type: integer
+      disk:
+        type: integer
+      memory:
+        type: integer
+    type: object
+  handler.RiskRule:
+    properties:
+      action:
+        type: string
+      apps:
+        items:
+          type: string
+        type: array
+      condition:
+        type: string
+      description:
+        type: string
+      enabled:
+        type: boolean
+      hitCount:
+        type: integer
+      id:
+        type: integer
+      name:
+        type: string
+      priority:
+        type: integer
+      type:
+        type: string
+    type: object
+  handler.RiskRulesSummaryResponse:
+    properties:
+      activeRules:
+        type: integer
+      blockRate:
+        type: number
+      blockedToday:
+        type: integer
+      riskAlerts:
+        type: integer
+      totalRules:
+        type: integer
+    type: object
+  handler.SaveSearchRequest:
+    description: 保存搜索的请求参数
+    properties:
+      description:
+        description: 搜索描述
+        type: string
+      name:
+        description: 搜索名称
+        type: string
+      query:
+        allOf:
+        - $ref: '#/definitions/service.AdvancedSearchQuery'
+        description: 搜索查询条件
+    required:
+    - name
+    - query
+    type: object
+  handler.SendEmailCodeRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  handler.ServiceStatus:
+    properties:
+      latency:
+        type: integer
+      status:
+        type: string
+    type: object
+  handler.SliderCaptchaRequest:
+    properties:
+      height:
+        description: 验证码图片高度
+        type: integer
+      slider_height:
+        description: 滑动块高度
+        type: integer
+      slider_width:
+        description: 滑动块宽度
+        type: integer
+      width:
+        description: 验证码图片宽度
+        type: integer
+    type: object
+  handler.SliderVerifyRequest:
+    properties:
+      env_score:
+        description: 环境评分
+        type: number
+      position_x:
+        description: X 坐标
+        type: integer
+      position_y:
+        description: Y 坐标
+        type: integer
+      risk_score:
+        description: 风险评分
+        type: number
+      session_id:
+        description: 会话 ID
+        type: string
+      trace_score:
+        description: 轨迹评分
+        type: number
+    required:
+    - position_x
+    - position_y
+    - session_id
+    type: object
+  handler.SystemMetrics:
+    properties:
+      cpu:
+        properties:
+          count:
+            type: integer
+          per_core:
+            items:
+              type: number
+            type: array
+          temperature:
+            type: number
+          usage:
+            type: number
+        type: object
+      disk:
+        properties:
+          free:
+            type: integer
+          mount_point:
+            type: string
+          total:
+            type: integer
+          usage_percent:
+            type: number
+          used:
+            type: integer
+        type: object
+      load_avg:
+        type: number
+      memory:
+        properties:
+          available:
+            type: integer
+          total:
+            type: integer
+          usage_percent:
+            type: number
+          used:
+            type: integer
+        type: object
+      network:
+        properties:
+          bytes_recv:
+            type: integer
+          bytes_sent:
+            type: integer
+          packets_recv:
+            type: integer
+          packets_sent:
+            type: integer
+        type: object
+      procs:
+        type: integer
+      timestamp:
+        type: integer
+      uptime:
+        type: integer
+    type: object
+  handler.SystemStatusResponse:
+    properties:
+      resourceUsage:
+        $ref: '#/definitions/handler.ResourceUsage'
+      status:
+        additionalProperties:
+          $ref: '#/definitions/handler.ServiceStatus'
+        type: object
+    type: object
+  handler.ToggleRiskRuleRequest:
+    properties:
+      enabled:
+        type: boolean
+    type: object
+  handler.UpdateBlacklistRequest:
+    description: 更新黑名单请求参数
+    properties:
+      action:
+        description: 操作
+        type: string
+      application_ids:
+        description: 应用ID列表
+        items:
+          type: string
+        type: array
+      expiration:
+        description: 过期时间
+        type: string
+      note:
+        description: 备注
+        type: string
+      reason:
+        description: 原因
+        type: string
+      type:
+        description: 类型
+        type: string
+    type: object
+  handler.UpdateConfigRequest:
+    description: 更新应用配置的请求参数
+    properties:
+      allowed_ips:
+        description: 允许的IP地址列表
+        items:
+          type: string
+        type: array
+      block_refused_requests:
+        description: 阻止被拒绝的请求
+        type: boolean
+      captcha_types:
+        description: 验证码类型列表
+        items:
+          type: string
+        type: array
+      custom_settings:
+        additionalProperties: true
+        description: 自定义设置
+        type: object
+      max_verify_per_day:
+        description: 每天最大验证次数
+        type: integer
+      max_verify_per_minute:
+        description: 每分钟最大验证次数
+        type: integer
+    type: object
+  handler.UpdateConsentRequest:
+    properties:
+      consent_analytics:
+        type: boolean
+      consent_data_sharing:
+        type: boolean
+      consent_marketing:
+        type: boolean
+      consent_personalization:
+        type: boolean
+    type: object
+  handler.UpdateRiskRuleRequest:
+    properties:
+      action:
+        type: string
+      apps:
+        items:
+          type: string
+        type: array
+      condition:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      enabled:
+        type: boolean
+      name:
+        type: string
+      priority:
+        type: integer
+      type:
+        type: string
+    type: object
+  handler.UserConsentResponse:
+    properties:
+      consent_analytics:
+        type: boolean
+      consent_data_sharing:
+        type: boolean
+      consent_marketing:
+        type: boolean
+      consent_personalization:
+        type: boolean
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  handler.UserLoginRequest:
+    description: 用户登录请求参数
+    properties:
+      behavior_data:
+        description: 行为数据
+        type: string
+      captcha_token:
+        description: 验证码令牌
+        type: string
+      password:
+        description: 密码
+        type: string
+      username:
+        description: 用户名
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  handler.UserLoginResponse:
+    description: 用户登录响应数据
+    properties:
+      access_token:
+        description: 访问令牌
+        type: string
+      expires_in:
+        description: 过期时间（秒）
+        type: integer
+      refresh_token:
+        description: 刷新令牌
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/service.UserResponse'
+        description: 用户信息
+    type: object
+  handler.VerifyBiometricsRequest:
+    properties:
+      keyboard_sample:
+        $ref: '#/definitions/service.KeyboardSample'
+      mouse_sample:
+        $ref: '#/definitions/service.MouseSample'
+      user_id:
+        type: string
+    required:
+    - user_id
+    type: object
+  handler.VerifyCodeRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  handler.VerifyGestureCaptchaRequest:
+    description: 手势验证码验证请求参数
+    properties:
+      id:
+        description: 验证码ID
+        type: string
+      pattern:
+        description: 手势模式
+        type: string
+    required:
+    - id
+    - pattern
+    type: object
+  handler.VerifyRequest:
+    description: 验证验证码时发送的请求结构，支持滑动验证码和点击验证码
+    properties:
+      application_id:
+        description: 应用 ID
+        type: integer
+      behavior_data:
+        description: 行为分析数据
+        items:
+          $ref: '#/definitions/handler.BehaviorDataPoint'
+        type: array
+      click_sequence:
+        description: 点击顺序
+        items:
+          type: integer
+        type: array
+      points:
+        description: 点击验证码坐标数组
+        items:
+          items:
+            type: integer
+          type: array
+        type: array
+      session_id:
+        description: 会话 ID
+        type: string
+      type:
+        description: '验证码类型: slider 或 click'
+        type: string
+      x:
+        description: 滑动验证码 X 坐标
+        type: integer
+      "y":
+        description: 滑动验证码 Y 坐标
+        type: integer
+    required:
+    - session_id
+    - type
+    type: object
+  response.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  service.AdvancedSearchQuery:
     properties:
       conditions:
         items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.SearchCondition'
+          $ref: '#/definitions/service.SearchCondition'
         type: array
       page:
         type: integer
@@ -12,10 +967,10 @@ definitions:
         type: integer
       sort:
         items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.SortOption'
+          $ref: '#/definitions/service.SortOption'
         type: array
     type: object
-  github_com_hjtpx_hjtpx_internal_service.KeyEvent:
+  service.KeyEvent:
     properties:
       key:
         type: string
@@ -27,16 +982,16 @@ definitions:
         description: keydown, keyup
         type: string
     type: object
-  github_com_hjtpx_hjtpx_internal_service.KeyboardSample:
+  service.KeyboardSample:
     properties:
       key_events:
         items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyEvent'
+          $ref: '#/definitions/service.KeyEvent'
         type: array
       timestamp:
         type: integer
     type: object
-  github_com_hjtpx_hjtpx_internal_service.MouseEvent:
+  service.MouseEvent:
     properties:
       button:
         type: integer
@@ -50,24 +1005,24 @@ definitions:
       "y":
         type: integer
     type: object
-  github_com_hjtpx_hjtpx_internal_service.MouseSample:
+  service.MouseSample:
     properties:
       mouse_events:
         items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseEvent'
+          $ref: '#/definitions/service.MouseEvent'
         type: array
       timestamp:
         type: integer
     type: object
-  github_com_hjtpx_hjtpx_internal_service.SearchCondition:
+  service.SearchCondition:
     properties:
       field:
         type: string
       operator:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.SearchOperator'
+        $ref: '#/definitions/service.SearchOperator'
       value: {}
     type: object
-  github_com_hjtpx_hjtpx_internal_service.SearchOperator:
+  service.SearchOperator:
     enum:
     - eq
     - ne
@@ -99,7 +1054,7 @@ definitions:
     - OpIsNull
     - OpIsNotNull
     - OpBetween
-  github_com_hjtpx_hjtpx_internal_service.SortOption:
+  service.SortOption:
     properties:
       field:
         type: string
@@ -107,7 +1062,7 @@ definitions:
         description: asc 或 desc
         type: string
     type: object
-  github_com_hjtpx_hjtpx_internal_service.UserResponse:
+  service.UserResponse:
     properties:
       avatar:
         type: string
@@ -137,779 +1092,6 @@ definitions:
         type: string
       verified_at:
         type: string
-    type: object
-  github_com_hjtpx_hjtpx_internal_service_captcha.VoiceVerifyRequest:
-    properties:
-      code:
-        type: string
-      session_id:
-        type: string
-    required:
-    - code
-    - session_id
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory:
-    properties:
-      application:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application'
-      application_id:
-        type: integer
-      changed_at:
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      id:
-        type: integer
-      new_api_key:
-        type: string
-      old_api_key:
-        type: string
-      updatedAt:
-        type: string
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.Application:
-    properties:
-      api_key:
-        type: string
-      api_key_histories:
-        items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory'
-        type: array
-      config:
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      description:
-        type: string
-      domain:
-        type: string
-      id:
-        type: integer
-      is_active:
-        type: boolean
-      name:
-        type: string
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
-      user_id:
-        type: integer
-      verifications:
-        items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification'
-        type: array
-      website:
-        type: string
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.BehaviorData:
-    properties:
-      createdAt:
-        type: string
-      data:
-        type: string
-      data_type:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      id:
-        type: integer
-      timestamp:
-        type: string
-      updatedAt:
-        type: string
-      verification:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification'
-      verification_id:
-        type: integer
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.DataDeletionRequest:
-    properties:
-      audit_log:
-        description: 审计日志
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      id:
-        type: integer
-      processed_at:
-        description: 处理时间
-        type: string
-      processed_by:
-        description: 处理人ID
-        type: integer
-      reason:
-        description: 删除原因
-        type: string
-      requested_at:
-        description: 请求时间
-        type: string
-      status:
-        description: pending, processing, completed, rejected
-        type: string
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
-      user_id:
-        type: integer
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.DataExportRequest:
-    properties:
-      completed_at:
-        description: 完成时间
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      error:
-        description: 错误信息
-        type: string
-      export_format:
-        description: json, csv
-        type: string
-      file_path:
-        description: 导出文件路径
-        type: string
-      id:
-        type: integer
-      requested_at:
-        description: 请求时间
-        type: string
-      status:
-        description: pending, processing, completed, failed
-        type: string
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
-      user_id:
-        type: integer
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.User:
-    properties:
-      applications:
-        items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application'
-        type: array
-      avatar:
-        type: string
-      bio:
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      email:
-        type: string
-      id:
-        type: integer
-      is_verified:
-        type: boolean
-      last_login_at:
-        type: string
-      last_login_ip:
-        type: string
-      login_count:
-        type: integer
-      nickname:
-        type: string
-      password_reset_at:
-        type: string
-      phone:
-        type: string
-      status:
-        type: string
-      updatedAt:
-        type: string
-      username:
-        type: string
-      verifications:
-        items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification'
-        type: array
-      verified_at:
-        type: string
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.UserConsent:
-    properties:
-      consent_analytics:
-        description: 分析数据收集同意
-        type: boolean
-      consent_data_sharing:
-        description: 数据共享同意
-        type: boolean
-      consent_ip:
-        description: 同意时的IP地址
-        type: string
-      consent_marketing:
-        description: 营销信息同意
-        type: boolean
-      consent_personalization:
-        description: 个性化同意
-        type: boolean
-      consent_updated_at:
-        description: 同意更新时间
-        type: string
-      consent_user_agent:
-        description: 同意时的User Agent
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      id:
-        type: integer
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
-      user_id:
-        type: integer
-    type: object
-  github_com_hjtpx_hjtpx_pkg_models.Verification:
-    properties:
-      application:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application'
-      application_id:
-        type: integer
-      behavior_data:
-        items:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.BehaviorData'
-        type: array
-      captcha_type:
-        type: string
-      created_at:
-        type: string
-      createdAt:
-        type: string
-      deletedAt:
-        $ref: '#/definitions/gorm.DeletedAt'
-      duration:
-        type: integer
-      id:
-        type: integer
-      ip_address:
-        type: string
-      risk_score:
-        type: number
-      session_id:
-        type: string
-      status:
-        type: string
-      updatedAt:
-        type: string
-      user:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
-      user_agent:
-        type: string
-      user_id:
-        type: integer
-    type: object
-  github_com_hjtpx_hjtpx_pkg_response.Response:
-    properties:
-      code:
-        type: integer
-      data: {}
-      message:
-        type: string
-    type: object
-  gorm.DeletedAt:
-    properties:
-      time:
-        type: string
-      valid:
-        description: Valid is true if Time is not NULL
-        type: boolean
-    type: object
-  internal_api_handler.AdminInfo:
-    properties:
-      email:
-        type: string
-      id:
-        type: integer
-      is_super_admin:
-        type: boolean
-      last_login_at:
-        type: string
-      role:
-        type: string
-      status:
-        type: string
-      username:
-        type: string
-    type: object
-  internal_api_handler.BehaviorDataPoint:
-    properties:
-      event:
-        type: string
-      timestamp:
-        type: integer
-      x:
-        type: integer
-      "y":
-        type: integer
-    type: object
-  internal_api_handler.ChangePasswordRequest:
-    description: 修改密码请求参数
-    properties:
-      new_password:
-        description: 新密码
-        maxLength: 128
-        minLength: 6
-        type: string
-      old_password:
-        description: 原密码
-        type: string
-    required:
-    - new_password
-    - old_password
-    type: object
-  internal_api_handler.CreateApplicationRequest:
-    description: 创建新应用的请求参数
-    properties:
-      description:
-        description: 应用描述
-        maxLength: 1000
-        type: string
-      domain:
-        description: 域名
-        maxLength: 255
-        type: string
-      name:
-        description: 应用名称
-        maxLength: 255
-        minLength: 1
-        type: string
-      user_id:
-        description: 用户ID
-        type: integer
-      website:
-        description: 网站URL
-        maxLength: 255
-        type: string
-    required:
-    - name
-    - user_id
-    type: object
-  internal_api_handler.CreateVoiceCaptchaRequest:
-    description: 语音验证码创建请求参数
-    properties:
-      language:
-        description: '语言: "zh-CN" 或 "en-US"'
-        type: string
-      length:
-        description: 验证码位数，默认4位
-        type: integer
-    type: object
-  internal_api_handler.DataDeletionRequest:
-    properties:
-      reason:
-        type: string
-    type: object
-  internal_api_handler.DataExportRequest:
-    properties:
-      format:
-        description: 必须是json或csv
-        enum:
-        - json
-        - csv
-        type: string
-    required:
-    - format
-    type: object
-  internal_api_handler.EnableMFARequest:
-    properties:
-      email:
-        type: string
-      mfa_type:
-        enum:
-        - totp
-        - sms
-        - email
-        type: string
-      phone:
-        type: string
-    required:
-    - mfa_type
-    type: object
-  internal_api_handler.EnableTOTPRequest:
-    properties:
-      secret:
-        type: string
-    required:
-    - secret
-    type: object
-  internal_api_handler.GenerateTOTPRequest:
-    properties:
-      account_name:
-        type: string
-      issuer:
-        type: string
-    required:
-    - account_name
-    - issuer
-    type: object
-  internal_api_handler.LogListMapResponse:
-    properties:
-      logs:
-        items:
-          additionalProperties: true
-          type: object
-        type: array
-      page:
-        type: integer
-      page_size:
-        type: integer
-      total:
-        type: integer
-      total_pages:
-        type: integer
-    type: object
-  internal_api_handler.LoginRequest:
-    properties:
-      password:
-        description: 密码
-        type: string
-      username:
-        description: 用户名
-        type: string
-    required:
-    - password
-    - username
-    type: object
-  internal_api_handler.LoginResponse:
-    properties:
-      expires_in:
-        description: 过期时间(秒)
-        type: integer
-      refresh_token:
-        description: 刷新令牌
-        type: string
-      token:
-        description: 访问令牌
-        type: string
-      user:
-        allOf:
-        - $ref: '#/definitions/internal_api_handler.AdminInfo'
-        description: 用户信息
-    type: object
-  internal_api_handler.RegisterBiometricProfileRequest:
-    properties:
-      keyboard_sample:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyboardSample'
-      mouse_sample:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseSample'
-      user_id:
-        type: string
-    required:
-    - user_id
-    type: object
-  internal_api_handler.RegisterRequest:
-    description: 用户注册请求参数
-    properties:
-      behavior_data:
-        description: 行为数据（可选）
-        type: string
-      email:
-        description: 邮箱
-        type: string
-      password:
-        description: 密码
-        maxLength: 128
-        minLength: 6
-        type: string
-      username:
-        description: 用户名
-        maxLength: 50
-        minLength: 3
-        type: string
-    required:
-    - email
-    - password
-    - username
-    type: object
-  internal_api_handler.RegisterResponse:
-    description: 用户注册响应数据
-    properties:
-      email:
-        description: 邮箱
-        type: string
-      message:
-        description: 消息
-        type: string
-      user_id:
-        description: 用户ID
-        type: integer
-      username:
-        description: 用户名
-        type: string
-      verification_link:
-        description: 验证链接
-        type: string
-    type: object
-  internal_api_handler.ResendVerificationRequest:
-    description: 重新发送验证邮件请求参数
-    properties:
-      email:
-        description: 邮箱
-        type: string
-    required:
-    - email
-    type: object
-  internal_api_handler.ResetPasswordRequest:
-    description: 重置密码请求参数
-    properties:
-      new_password:
-        description: 新密码
-        maxLength: 128
-        minLength: 6
-        type: string
-      token:
-        description: 重置令牌
-        type: string
-    required:
-    - new_password
-    - token
-    type: object
-  internal_api_handler.SaveSearchRequest:
-    description: 保存搜索的请求参数
-    properties:
-      description:
-        description: 搜索描述
-        type: string
-      name:
-        description: 搜索名称
-        type: string
-      query:
-        allOf:
-        - $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery'
-        description: 搜索查询条件
-    required:
-    - name
-    - query
-    type: object
-  internal_api_handler.SendEmailCodeRequest:
-    properties:
-      email:
-        type: string
-    required:
-    - email
-    type: object
-  internal_api_handler.SliderCaptchaRequest:
-    properties:
-      height:
-        description: 验证码图片高度
-        type: integer
-      slider_height:
-        description: 滑动块高度
-        type: integer
-      slider_width:
-        description: 滑动块宽度
-        type: integer
-      width:
-        description: 验证码图片宽度
-        type: integer
-    type: object
-  internal_api_handler.SliderVerifyRequest:
-    properties:
-      env_score:
-        description: 环境评分
-        type: number
-      position_x:
-        description: X 坐标
-        type: integer
-      position_y:
-        description: Y 坐标
-        type: integer
-      risk_score:
-        description: 风险评分
-        type: number
-      session_id:
-        description: 会话 ID
-        type: string
-      trace_score:
-        description: 轨迹评分
-        type: number
-    required:
-    - position_x
-    - position_y
-    - session_id
-    type: object
-  internal_api_handler.UpdateBlacklistRequest:
-    description: 更新黑名单请求参数
-    properties:
-      action:
-        description: 操作
-        type: string
-      application_ids:
-        description: 应用ID列表
-        items:
-          type: string
-        type: array
-      expiration:
-        description: 过期时间
-        type: string
-      note:
-        description: 备注
-        type: string
-      reason:
-        description: 原因
-        type: string
-      type:
-        description: 类型
-        type: string
-    type: object
-  internal_api_handler.UpdateConfigRequest:
-    description: 更新应用配置的请求参数
-    properties:
-      allowed_ips:
-        description: 允许的IP地址列表
-        items:
-          type: string
-        type: array
-      block_refused_requests:
-        description: 阻止被拒绝的请求
-        type: boolean
-      captcha_types:
-        description: 验证码类型列表
-        items:
-          type: string
-        type: array
-      custom_settings:
-        additionalProperties: true
-        description: 自定义设置
-        type: object
-      max_verify_per_day:
-        description: 每天最大验证次数
-        type: integer
-      max_verify_per_minute:
-        description: 每分钟最大验证次数
-        type: integer
-    type: object
-  internal_api_handler.UpdateConsentRequest:
-    properties:
-      consent_analytics:
-        type: boolean
-      consent_data_sharing:
-        type: boolean
-      consent_marketing:
-        type: boolean
-      consent_personalization:
-        type: boolean
-    type: object
-  internal_api_handler.UserLoginRequest:
-    description: 用户登录请求参数
-    properties:
-      behavior_data:
-        description: 行为数据
-        type: string
-      captcha_token:
-        description: 验证码令牌
-        type: string
-      password:
-        description: 密码
-        type: string
-      username:
-        description: 用户名
-        type: string
-    required:
-    - password
-    - username
-    type: object
-  internal_api_handler.UserLoginResponse:
-    description: 用户登录响应数据
-    properties:
-      access_token:
-        description: 访问令牌
-        type: string
-      expires_in:
-        description: 过期时间（秒）
-        type: integer
-      refresh_token:
-        description: 刷新令牌
-        type: string
-      user:
-        allOf:
-        - $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.UserResponse'
-        description: 用户信息
-    type: object
-  internal_api_handler.VerifyBiometricsRequest:
-    properties:
-      keyboard_sample:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyboardSample'
-      mouse_sample:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseSample'
-      user_id:
-        type: string
-    required:
-    - user_id
-    type: object
-  internal_api_handler.VerifyCodeRequest:
-    properties:
-      code:
-        type: string
-    required:
-    - code
-    type: object
-  internal_api_handler.VerifyGestureCaptchaRequest:
-    description: 手势验证码验证请求参数
-    properties:
-      id:
-        description: 验证码ID
-        type: string
-      pattern:
-        description: 手势模式
-        type: string
-    required:
-    - id
-    - pattern
-    type: object
-  internal_api_handler.VerifyRequest:
-    description: 验证验证码时发送的请求结构，支持滑动验证码和点击验证码
-    properties:
-      application_id:
-        description: 应用 ID
-        type: integer
-      behavior_data:
-        description: 行为分析数据
-        items:
-          $ref: '#/definitions/internal_api_handler.BehaviorDataPoint'
-        type: array
-      click_sequence:
-        description: 点击顺序
-        items:
-          type: integer
-        type: array
-      points:
-        description: 点击验证码坐标数组
-        items:
-          items:
-            type: integer
-          type: array
-        type: array
-      session_id:
-        description: 会话 ID
-        type: string
-      type:
-        description: '验证码类型: slider 或 click'
-        type: string
-      x:
-        description: 滑动验证码 X 坐标
-        type: integer
-      "y":
-        description: 滑动验证码 Y 坐标
-        type: integer
-    required:
-    - session_id
-    - type
     type: object
 host: localhost:8080
 info:
@@ -996,7 +1178,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.CreateApplicationRequest'
+          $ref: '#/definitions/handler.CreateApplicationRequest'
       produces:
       - application/json
       responses:
@@ -1028,6 +1210,33 @@ paths:
       security:
       - BearerAuth: []
       summary: 创建应用
+      tags:
+      - 应用管理
+  /api/v1/admin/applications-summary:
+    get:
+      consumes:
+      - application/json
+      description: 获取所有应用的统计概览信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 应用统计概览
+          schema:
+            $ref: '#/definitions/handler.ApplicationsSummaryResponse'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取应用概览
       tags:
       - 应用管理
   /api/v1/admin/applications/{id}:
@@ -1117,6 +1326,56 @@ paths:
       summary: 获取应用详情
       tags:
       - 应用管理
+  /api/v1/admin/applications/{id}/clone:
+    post:
+      consumes:
+      - application/json
+      description: 克隆指定应用创建一个新应用
+      parameters:
+      - description: 源应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 克隆请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CloneApplicationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 克隆结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 应用不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 克隆应用
+      tags:
+      - 应用管理
   /api/v1/admin/applications/{id}/config:
     get:
       consumes:
@@ -1176,7 +1435,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.UpdateConfigRequest'
+          $ref: '#/definitions/handler.UpdateConfigRequest'
       produces:
       - application/json
       responses:
@@ -1210,6 +1469,170 @@ paths:
       summary: 更新应用配置
       tags:
       - 应用管理
+  /api/v1/admin/applications/{id}/export:
+    get:
+      consumes:
+      - application/json
+      description: 导出指定应用的配置信息为JSON格式
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 应用配置JSON
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 应用不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 导出应用配置
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/batch-delete:
+    post:
+      consumes:
+      - application/json
+      description: 批量删除指定的应用
+      parameters:
+      - description: 批量删除请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BatchDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量删除应用
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/batch-update:
+    post:
+      consumes:
+      - application/json
+      description: 批量更新应用的配置信息
+      parameters:
+      - description: 批量更新请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BatchUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量更新应用
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/import:
+    post:
+      consumes:
+      - application/json
+      description: 从JSON配置导入创建新应用
+      parameters:
+      - description: 导入应用请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ImportApplicationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 导入结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 导入应用配置
+      tags:
+      - 应用管理
   /api/v1/admin/applications/save-search:
     post:
       consumes:
@@ -1221,7 +1644,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.SaveSearchRequest'
+          $ref: '#/definitions/handler.SaveSearchRequest'
       produces:
       - application/json
       responses:
@@ -1414,7 +1837,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.UpdateBlacklistRequest'
+          $ref: '#/definitions/handler.UpdateBlacklistRequest'
       produces:
       - application/json
       responses:
@@ -1495,7 +1918,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery'
+          $ref: '#/definitions/service.AdvancedSearchQuery'
       produces:
       - application/json
       responses:
@@ -1584,7 +2007,7 @@ paths:
         "200":
           description: 日志列表
           schema:
-            $ref: '#/definitions/internal_api_handler.LogListMapResponse'
+            $ref: '#/definitions/handler.LogListMapResponse'
         "400":
           description: 请求参数错误
           schema:
@@ -1605,6 +2028,33 @@ paths:
       summary: 获取验证日志列表
       tags:
       - 验证日志
+  /api/v1/admin/logs-summary:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证日志的统计摘要信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志摘要信息
+          schema:
+            $ref: '#/definitions/handler.LogsSummaryResponse'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取日志摘要
+      tags:
+      - 日志
   /api/v1/admin/logs/{id}:
     get:
       consumes:
@@ -1647,6 +2097,85 @@ paths:
       security:
       - BearerAuth: []
       summary: 获取日志详情
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/clear:
+    post:
+      consumes:
+      - application/json
+      description: 清理指定时间范围之前的日志记录
+      parameters:
+      - description: 清理参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ClearLogsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 清理结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 清理日志
+      tags:
+      - 日志
+  /api/v1/admin/logs/delete-old:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定天数之前的验证日志
+      parameters:
+      - default: 30
+        description: 天数，默认30天
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除旧日志
       tags:
       - 验证日志
   /api/v1/admin/logs/export:
@@ -1721,7 +2250,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.SaveSearchRequest'
+          $ref: '#/definitions/handler.SaveSearchRequest'
       produces:
       - application/json
       responses:
@@ -1828,7 +2357,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery'
+          $ref: '#/definitions/service.AdvancedSearchQuery'
       produces:
       - application/json
       responses:
@@ -1924,6 +2453,360 @@ paths:
       summary: 获取日志统计
       tags:
       - 验证日志
+  /api/v1/admin/request-trend:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证请求的趋势数据，支持小时、天、周级别
+      parameters:
+      - default: hour
+        description: 时间周期
+        enum:
+        - hour
+        - day
+        - week
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 请求趋势数据
+          schema:
+            $ref: '#/definitions/handler.RequestTrendResponse'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取请求趋势
+      tags:
+      - 系统
+  /api/v1/admin/risk-rules:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取风险规则列表
+      parameters:
+      - description: 页码，默认1
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认10
+        in: query
+        name: size
+        type: integer
+      - description: 规则类型
+        in: query
+        name: type
+        type: string
+      - description: 状态：enabled, disabled
+        in: query
+        name: status
+        type: string
+      - description: 关键词搜索
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 风险规则列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取风险规则列表
+      tags:
+      - 风控
+    post:
+      consumes:
+      - application/json
+      description: 创建新的风险规则
+      parameters:
+      - description: 创建风险规则请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateRiskRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建风险规则
+      tags:
+      - 风控
+  /api/v1/admin/risk-rules/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的风险规则
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除风险规则
+      tags:
+      - 风控
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取风险规则详细信息
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 风险规则详情
+          schema:
+            $ref: '#/definitions/handler.RiskRule'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 规则不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取风险规则详情
+      tags:
+      - 风控
+    put:
+      consumes:
+      - application/json
+      description: 更新指定的风险规则
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新风险规则请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateRiskRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新风险规则
+      tags:
+      - 风控
+  /api/v1/admin/risk-rules/{id}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: 启用或禁用指定的风险规则
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 切换状态请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ToggleRiskRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 切换成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 切换风险规则状态
+      tags:
+      - 风控
+  /api/v1/admin/risk-rules/summary:
+    get:
+      consumes:
+      - application/json
+      description: 获取风险规则的统计摘要信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 风险规则摘要
+          schema:
+            $ref: '#/definitions/handler.RiskRulesSummaryResponse'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取风险规则摘要
+      tags:
+      - 风控
+  /api/v1/admin/system-status:
+    get:
+      consumes:
+      - application/json
+      description: 获取系统的整体状态，包括各服务（数据库、Redis、API、存储）的健康状态和资源使用情况
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统状态信息
+          schema:
+            $ref: '#/definitions/handler.SystemStatusResponse'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取系统状态
+      tags:
+      - 系统
   /api/v1/auth/change-password:
     post:
       consumes:
@@ -1935,7 +2818,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.ChangePasswordRequest'
+          $ref: '#/definitions/handler.ChangePasswordRequest'
       produces:
       - application/json
       responses:
@@ -1980,14 +2863,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.UserLoginRequest'
+          $ref: '#/definitions/handler.UserLoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 登录成功
           schema:
-            $ref: '#/definitions/internal_api_handler.UserLoginResponse'
+            $ref: '#/definitions/handler.UserLoginResponse'
         "400":
           description: 请求参数错误
           schema:
@@ -2055,14 +2938,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.RegisterRequest'
+          $ref: '#/definitions/handler.RegisterRequest'
       produces:
       - application/json
       responses:
         "200":
           description: 注册成功
           schema:
-            $ref: '#/definitions/internal_api_handler.RegisterResponse'
+            $ref: '#/definitions/handler.RegisterResponse'
         "400":
           description: 请求参数错误
           schema:
@@ -2092,7 +2975,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.ResendVerificationRequest'
+          $ref: '#/definitions/handler.ResendVerificationRequest'
       produces:
       - application/json
       responses:
@@ -2125,7 +3008,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.ResetPasswordRequest'
+          $ref: '#/definitions/handler.ResetPasswordRequest'
       produces:
       - application/json
       responses:
@@ -2190,7 +3073,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.RegisterBiometricProfileRequest'
+          $ref: '#/definitions/handler.RegisterBiometricProfileRequest'
       produces:
       - application/json
       responses:
@@ -2223,7 +3106,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.VerifyBiometricsRequest'
+          $ref: '#/definitions/handler.VerifyBiometricsRequest'
       produces:
       - application/json
       responses:
@@ -2317,7 +3200,7 @@ paths:
         in: body
         name: body
         schema:
-          $ref: '#/definitions/internal_api_handler.SliderCaptchaRequest'
+          $ref: '#/definitions/handler.SliderCaptchaRequest'
       produces:
       - application/json
       responses:
@@ -2366,7 +3249,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.VerifyGestureCaptchaRequest'
+          $ref: '#/definitions/handler.VerifyGestureCaptchaRequest'
       produces:
       - application/json
       responses:
@@ -2452,7 +3335,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.VerifyRequest'
+          $ref: '#/definitions/handler.VerifyRequest'
       produces:
       - application/json
       responses:
@@ -2485,7 +3368,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.SliderVerifyRequest'
+          $ref: '#/definitions/handler.SliderVerifyRequest'
       produces:
       - application/json
       responses:
@@ -2517,7 +3400,7 @@ paths:
         in: body
         name: body
         schema:
-          $ref: '#/definitions/internal_api_handler.CreateVoiceCaptchaRequest'
+          $ref: '#/definitions/handler.CreateVoiceCaptchaRequest'
       produces:
       - application/json
       responses:
@@ -2545,7 +3428,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service_captcha.VoiceVerifyRequest'
+          $ref: '#/definitions/captcha.VoiceVerifyRequest'
       produces:
       - application/json
       responses:
@@ -2567,6 +3450,150 @@ paths:
       summary: 验证语音验证码
       tags:
       - 验证码
+  /api/v1/dashboard:
+    get:
+      consumes:
+      - application/json
+      description: 获取仪表盘展示所需的数据，包括统计概览和趋势信息
+      parameters:
+      - default: hour
+        description: 时间周期
+        enum:
+        - hour
+        - day
+        - week
+        - month
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 仪表盘数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取仪表盘数据
+      tags:
+      - 仪表盘
+  /api/v1/dashboard/alerts:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前系统的告警信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 告警列表
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取仪表盘告警
+      tags:
+      - 仪表盘
+  /api/v1/dashboard/export:
+    get:
+      consumes:
+      - application/json
+      description: 导出仪表盘数据为CSV、JSON或Excel格式
+      parameters:
+      - default: csv
+        description: 导出格式
+        enum:
+        - csv
+        - json
+        - excel
+        in: query
+        name: format
+        type: string
+      - default: month
+        description: 时间周期
+        enum:
+        - hour
+        - day
+        - week
+        - month
+        in: query
+        name: period
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 导出的数据文件
+          schema:
+            type: file
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 导出仪表盘数据
+      tags:
+      - 仪表盘
+  /api/v1/dashboard/recent-verifications:
+    get:
+      consumes:
+      - application/json
+      description: 获取最近的验证记录列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 最近验证记录列表
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取最近验证记录
+      tags:
+      - 仪表盘
   /api/v1/gdpr/consent:
     get:
       consumes:
@@ -2578,11 +3605,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.UserConsent'
+            $ref: '#/definitions/handler.UserConsentResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - ApiKeyAuth: []
       summary: 获取用户同意设置
@@ -2598,22 +3625,22 @@ paths:
         name: consent
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.UpdateConsentRequest'
+          $ref: '#/definitions/handler.UpdateConsentRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.UserConsent'
+            $ref: '#/definitions/handler.UserConsentResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - ApiKeyAuth: []
       summary: 更新用户同意设置
@@ -2630,25 +3657,60 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.DataDeletionRequest'
+          $ref: '#/definitions/handler.DataDeletionRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.DataDeletionRequest'
+            $ref: '#/definitions/handler.DeletionRequestResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - ApiKeyAuth: []
       summary: 请求数据删除
+      tags:
+      - GDPR
+  /api/v1/gdpr/data-deletion/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 获取数据删除请求的处理状态
+      parameters:
+      - description: 删除请求ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.DeletionRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 获取删除请求状态
       tags:
       - GDPR
   /api/v1/gdpr/data-export:
@@ -2662,27 +3724,236 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.DataExportRequest'
+          $ref: '#/definitions/handler.DataExportRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.DataExportRequest'
+            $ref: '#/definitions/handler.ExportRequestResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - ApiKeyAuth: []
       summary: 请求数据导出
       tags:
       - GDPR
+  /api/v1/gdpr/data-export/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 获取数据导出请求的处理状态
+      parameters:
+      - description: 导出请求ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ExportRequestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 获取导出状态
+      tags:
+      - GDPR
+  /api/v1/gdpr/data-export/{id}/download:
+    get:
+      consumes:
+      - application/json
+      description: 下载已完成的数据导出文件
+      parameters:
+      - description: 导出请求ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 导出文件
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 下载导出文件
+      tags:
+      - GDPR
+  /api/v1/metrics/alerts:
+    get:
+      consumes:
+      - application/json
+      description: 获取系统的告警信息，包括CPU、内存、磁盘使用率过高等告警
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 告警列表
+          schema:
+            items:
+              $ref: '#/definitions/handler.AlertInfo'
+            type: array
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取告警
+      tags:
+      - 系统
+  /api/v1/metrics/api:
+    get:
+      consumes:
+      - application/json
+      description: 获取API请求的统计数据，包括请求数、响应时间、错误率等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: API指标数据
+          schema:
+            $ref: '#/definitions/handler.APIMetrics'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取API指标
+      tags:
+      - 系统
+  /api/v1/metrics/realtime:
+    get:
+      consumes:
+      - application/json
+      description: 获取实时系统指标和API指标数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 实时数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取实时数据
+      tags:
+      - 系统
+  /api/v1/metrics/system:
+    get:
+      consumes:
+      - application/json
+      description: 获取服务器的CPU、内存、磁盘、网络等系统指标
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统指标数据
+          schema:
+            $ref: '#/definitions/handler.SystemMetrics'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取系统指标
+      tags:
+      - 系统
+  /api/v1/metrics/system-status:
+    get:
+      consumes:
+      - application/json
+      description: 获取系统的整体状态，包括CPU、内存、磁盘的使用状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统状态数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取系统状态
+      tags:
+      - 系统
   /api/v1/mfa/backup-codes/verify:
     post:
       consumes:
@@ -2694,7 +3965,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.VerifyCodeRequest'
+          $ref: '#/definitions/handler.VerifyCodeRequest'
       produces:
       - application/json
       responses:
@@ -2762,7 +4033,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.SendEmailCodeRequest'
+          $ref: '#/definitions/handler.SendEmailCodeRequest'
       produces:
       - application/json
       responses:
@@ -2802,7 +4073,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.EnableMFARequest'
+          $ref: '#/definitions/handler.EnableMFARequest'
       produces:
       - application/json
       responses:
@@ -2842,7 +4113,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.EnableTOTPRequest'
+          $ref: '#/definitions/handler.EnableTOTPRequest'
       produces:
       - application/json
       responses:
@@ -2882,7 +4153,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_api_handler.GenerateTOTPRequest'
+          $ref: '#/definitions/handler.GenerateTOTPRequest'
       produces:
       - application/json
       responses:
@@ -2904,6 +4175,430 @@ paths:
       summary: 生成TOTP密钥
       tags:
       - MFA
+  /api/v1/stats/application-stats:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证请求最多的应用列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 应用统计数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取应用统计
+      tags:
+      - 统计
+  /api/v1/stats/captcha-type:
+    get:
+      consumes:
+      - application/json
+      description: 获取各类型验证码的使用统计
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证码类型统计数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取验证码类型统计
+      tags:
+      - 统计
+  /api/v1/stats/chart:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证趋势图表数据，包括成功、失败和总数
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 图表数据
+          schema:
+            $ref: '#/definitions/handler.ChartData'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取图表数据
+      tags:
+      - 统计
+  /api/v1/stats/dashboard:
+    get:
+      consumes:
+      - application/json
+      description: 获取仪表盘展示所需的统计数据，包括用户数、应用数、请求数和错误数
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 仪表盘统计数据
+          schema:
+            $ref: '#/definitions/handler.DashboardStats'
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取仪表盘统计
+      tags:
+      - 统计
+  /api/v1/stats/hourly:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定日期的小时级验证统计数据
+      parameters:
+      - description: 日期，格式YYYY-MM-DD，默认当天
+        in: query
+        name: date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 小时统计数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取小时统计
+      tags:
+      - 统计
+  /api/v1/stats/realtime:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前实时验证统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 实时统计数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取实时统计
+      tags:
+      - 统计
+  /api/v1/stats/recent-activity:
+    get:
+      consumes:
+      - application/json
+      description: 获取最近的系统活动和验证记录
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 最近活动列表
+          schema:
+            items:
+              $ref: '#/definitions/handler.ActivityItem'
+            type: array
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取最近活动
+      tags:
+      - 统计
+  /api/v1/stats/report:
+    get:
+      consumes:
+      - application/json
+      description: 根据指定日期范围和报告类型生成验证报告
+      parameters:
+      - description: 报告类型
+        enum:
+        - daily
+        - weekly
+        - monthly
+        in: query
+        name: report_type
+        required: true
+        type: string
+      - description: 开始日期，格式YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期，格式YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 生成的报告
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 生成报告
+      tags:
+      - 统计
+  /api/v1/stats/risk-distribution:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证请求的风险评分分布情况
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 风险分布数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取风险分布
+      tags:
+      - 统计
+  /api/v1/stats/top-ips:
+    get:
+      consumes:
+      - application/json
+      description: 获取发起验证请求最多的IP地址列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Top IP列表
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取Top IP
+      tags:
+      - 统计
+  /api/v1/stats/trend:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定天数内的验证趋势数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 趋势数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取趋势数据
+      tags:
+      - 统计
+  /api/v1/stats/verification:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证系统的整体统计数据，包括成功率、风险评分等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证统计数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取验证统计
+      tags:
+      - 统计
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: 检查系统整体健康状态，包括数据库、Redis连接状态和系统指标
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系统健康状态良好
+          schema:
+            $ref: '#/definitions/handler.HealthStatus'
+        "503":
+          description: 系统状态不健康
+          schema:
+            $ref: '#/definitions/handler.HealthStatus'
+      summary: 健康检查
+      tags:
+      - 系统
+  /live:
+    get:
+      consumes:
+      - application/json
+      description: 检查服务是否存活，用于Kubernetes等容器编排系统的存活探针
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服务存活
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: 服务已停止
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 存活检查
+      tags:
+      - 系统
+  /ready:
+    get:
+      consumes:
+      - application/json
+      description: 检查服务依赖是否就绪，用于Kubernetes等容器编排系统的就绪探针
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服务已就绪
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: 服务未就绪
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 就绪检查
+      tags:
+      - 系统
 schemes:
 - http
 - https

@@ -43,10 +43,10 @@ type SystemMetrics struct {
 		PacketsSent uint64 `json:"packets_sent"`
 		PacketsRecv uint64 `json:"packets_recv"`
 	} `json:"network"`
-	Uptime  time.Duration `json:"uptime"`
-	LoadAvg float64       `json:"load_avg"`
-	Procs   int           `json:"procs"`
-	Time    int64         `json:"timestamp"`
+	Uptime  int64   `json:"uptime"`
+	LoadAvg float64 `json:"load_avg"`
+	Procs   int     `json:"procs"`
+	Time    int64   `json:"timestamp"`
 }
 
 type APIMetrics struct {
@@ -136,7 +136,7 @@ func (m *MetricsCollector) CollectSystemMetrics() {
 
 	var sysMetrics SystemMetrics
 	sysMetrics.Time = time.Now().Unix()
-	sysMetrics.Uptime = time.Since(m.startTime)
+	sysMetrics.Uptime = int64(time.Since(m.startTime))
 
 	if cpuInfo, err := cpu.Percent(time.Second, false); err == nil && len(cpuInfo) > 0 {
 		sysMetrics.CPU.Usage = cpuInfo[0]
@@ -579,26 +579,81 @@ func NewSystemMetricsHandler() *SystemMetricsHandler {
 	return &SystemMetricsHandler{}
 }
 
+// GetSystemMetrics 系统指标
+// @Summary 获取系统指标
+// @Description 获取服务器的CPU、内存、磁盘、网络等系统指标
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} SystemMetrics "系统指标数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/metrics/system [get]
 func (h *SystemMetricsHandler) GetSystemMetrics(c *gin.Context) {
 	data := GetSystemMetricsData()
 	response.Success(c, data)
 }
 
+// GetAPIMetrics API指标
+// @Summary 获取API指标
+// @Description 获取API请求的统计数据，包括请求数、响应时间、错误率等
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} APIMetrics "API指标数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/metrics/api [get]
 func (h *SystemMetricsHandler) GetAPIMetrics(c *gin.Context) {
 	data := GetAPIMetricsData()
 	response.Success(c, data)
 }
 
+// GetSystemStatus 系统状态
+// @Summary 获取系统状态
+// @Description 获取系统的整体状态，包括CPU、内存、磁盘的使用状态
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "系统状态数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/metrics/system-status [get]
 func (h *SystemMetricsHandler) GetSystemStatus(c *gin.Context) {
 	data := GetSystemStatusData()
 	response.Success(c, data)
 }
 
+// GetRealtimeData 实时数据
+// @Summary 获取实时数据
+// @Description 获取实时系统指标和API指标数据
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "实时数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/metrics/realtime [get]
 func (h *SystemMetricsHandler) GetRealtimeData(c *gin.Context) {
 	data := GetRealtimeData()
 	response.Success(c, data)
 }
 
+// GetAlerts 获取告警
+// @Summary 获取告警
+// @Description 获取系统的告警信息，包括CPU、内存、磁盘使用率过高等告警
+// @Tags 系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} []AlertInfo "告警列表"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/metrics/alerts [get]
 func (h *SystemMetricsHandler) GetAlerts(c *gin.Context) {
 	data := GetAlertData()
 	response.Success(c, data)
