@@ -4911,17 +4911,27 @@ func GenerateCodeTamperDetection(code string, secret string) string {
 	hash := sha256.Sum256([]byte(code + secret))
 	hashStr := hex.EncodeToString(hash[:])
 
+	var protection strings.Builder
+
 	segments := make([]string, 4)
-	for i := 0; i < 4; i++ {
-		start := i * 16
-		end := start + 16
-		if end > len(hashStr) {
-			end = len(hashStr)
-		}
-		segments[i] = hashStr[start:end]
+	segLen := (len(hashStr) + 3) / 4
+	if segLen < 1 {
+		segLen = 1
 	}
 
-	return fmt.Sprintf(`
+	for i := 0; i < 4; i++ {
+		start := i * segLen
+		end := start + segLen
+		if start >= len(hashStr) {
+			segments[i] = hashStr[len(hashStr)-1:]
+		} else if end > len(hashStr) {
+			segments[i] = hashStr[start:]
+		} else {
+			segments[i] = hashStr[start:end]
+		}
+	}
+
+	protection.WriteString(fmt.Sprintf(`
 ;(function(){
 	var _0xCTD={
 		segments:['%s','%s','%s','%s'],
@@ -4979,7 +4989,10 @@ func GenerateCodeTamperDetection(code string, secret string) string {
 	_0xCTD.start();
 	window.__CTD=_0xCTD;
 })();
-`, segments[0], segments[1], segments[2], segments[3])
+`, segments[0], segments[1], segments[2], segments[3]))
+
+	protection.WriteString(code)
+	return protection.String()
 }
 
 func ApplyEnhancedObfuscation(code string, opts *ObfuscatorOptions) (string, error) {
