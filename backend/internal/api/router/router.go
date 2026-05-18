@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
+	"github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/i18n"
 	swaggerFiles "github.com/swaggo/files"
@@ -269,6 +270,32 @@ func SetupRouter() *gin.Engine {
 			adaptive.GET("/profiles", handler.GetAllAdaptiveProfiles)
 			adaptive.POST("/flag", handler.AddBehaviorFlag)
 			adaptive.GET("/captcha-difficulty", handler.GetDifficultyForCaptcha)
+		}
+
+		// 风险评分路由
+		scoring := api.Group("/scoring")
+		{
+			scoring.GET("/config", handler.GetRiskScoringConfig)
+			scoring.PUT("/config", handler.UpdateRiskScoringConfig)
+			scoring.GET("/weights", handler.GetRiskScoringWeights)
+			scoring.PUT("/weights", handler.UpdateRiskScoringWeights)
+			scoring.GET("/thresholds", handler.GetRiskScoringThresholds)
+			scoring.PUT("/thresholds", handler.UpdateRiskScoringThresholds)
+			scoring.POST("/evaluate", handler.EvaluateRisk)
+			scoring.POST("/breakdown", handler.GetRiskScoreBreakdown)
+			scoring.POST("/history", handler.RecordRiskScoringHistory)
+			scoring.GET("/history", handler.GetRiskScoringHistory)
+			scoring.GET("/history/list", handler.GetRiskScoringHistoryList)
+			scoring.GET("/distribution", handler.GetRiskScoringDistribution)
+			scoring.POST("/thresholds/adjust", handler.AdjustRiskScoringThresholds)
+			scoring.GET("/visualization", handler.GetRiskScoringVisualization)
+			scoring.GET("/stats", handler.GetRiskScoringStats)
+			scoring.GET("/bands", func(c *gin.Context) {
+				c.JSON(200, gin.H{
+					"code": 0,
+					"data": model.DefaultScoreBands,
+				})
+			})
 		}
 
 		behavior := api.Group("/behavior")

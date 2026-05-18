@@ -228,3 +228,130 @@ func NewRiskContext() *RiskContext {
 		DeviceInfo:     make(map[string]string),
 	}
 }
+
+type MultiDimensionalScore struct {
+	TraceScore      float64 `json:"trace_score"`
+	EnvScore        float64 `json:"env_score"`
+	BehaviorScore   float64 `json:"behavior_score"`
+	DeviceScore     float64 `json:"device_score"`
+	HistoryScore    float64 `json:"history_score"`
+	TotalScore      float64 `json:"total_score"`
+	RiskLevel       RiskLevel `json:"risk_level"`
+	Confidence      float64 `json:"confidence"`
+	Timestamp       int64   `json:"timestamp"`
+}
+
+type RiskScoringWeights struct {
+	TraceWeight     float64 `json:"trace_weight"`
+	EnvWeight       float64 `json:"env_weight"`
+	BehaviorWeight  float64 `json:"behavior_weight"`
+	DeviceWeight    float64 `json:"device_weight"`
+	HistoryWeight   float64 `json:"history_weight"`
+}
+
+func (w *RiskScoringWeights) Validate() bool {
+	total := w.TraceWeight + w.EnvWeight + w.BehaviorWeight + w.DeviceWeight + w.HistoryWeight
+	return total > 0.99 && total < 1.01
+}
+
+func (w *RiskScoringWeights) Normalize() {
+	total := w.TraceWeight + w.EnvWeight + w.BehaviorWeight + w.DeviceWeight + w.HistoryWeight
+	if total > 0 {
+		w.TraceWeight /= total
+		w.EnvWeight /= total
+		w.BehaviorWeight /= total
+		w.DeviceWeight /= total
+		w.HistoryWeight /= total
+	}
+}
+
+type RiskThresholds struct {
+	LowMax      float64 `json:"low_max"`
+	MediumMax   float64 `json:"medium_max"`
+	HighMax     float64 `json:"high_max"`
+	CriticalMax float64 `json:"critical_max"`
+	VerifyMin   float64 `json:"verify_min"`
+	BlockMin    float64 `json:"block_min"`
+}
+
+type RiskScoreDistribution struct {
+	TotalCount     int64   `json:"total_count"`
+	LowCount       int64   `json:"low_count"`
+	MediumCount    int64   `json:"medium_count"`
+	HighCount      int64   `json:"high_count"`
+	CriticalCount  int64   `json:"critical_count"`
+	LowPercent     float64 `json:"low_percent"`
+	MediumPercent  float64 `json:"medium_percent"`
+	HighPercent    float64 `json:"high_percent"`
+	CriticalPercent float64 `json:"critical_percent"`
+	AvgScore       float64 `json:"avg_score"`
+	MedianScore    float64 `json:"median_score"`
+	MinScore       float64 `json:"min_score"`
+	MaxScore       float64 `json:"max_score"`
+	StdDev         float64 `json:"std_dev"`
+}
+
+type RiskScoringHistory struct {
+	ID             uint    `gorm:"primaryKey" json:"id"`
+	SessionID      string  `gorm:"size:100;index:idx_risk_history_session" json:"session_id"`
+	IPAddress      string  `gorm:"size:50;index:idx_risk_history_ip" json:"ip_address"`
+	Fingerprint    string  `gorm:"size:64;index:idx_risk_history_fingerprint" json:"fingerprint"`
+	TraceScore     float64 `json:"trace_score"`
+	EnvScore       float64 `json:"env_score"`
+	BehaviorScore  float64 `json:"behavior_score"`
+	DeviceScore    float64 `json:"device_score"`
+	HistoryScore   float64 `json:"history_score"`
+	TotalScore     float64 `json:"total_score" gorm:"index:idx_risk_history_score"`
+	RiskLevel      string  `json:"risk_level" gorm:"index:idx_risk_history_level"`
+	Action         string  `gorm:"size:50" json:"action"`
+	Verified       bool    `json:"verified"`
+	Success        bool    `json:"success"`
+	CreatedAt      int64   `json:"created_at" gorm:"index:idx_risk_history_created"`
+}
+
+func (RiskScoringHistory) TableName() string {
+	return "risk_scoring_history"
+}
+
+type RiskScoringConfig struct {
+	Weights     RiskScoringWeights `json:"weights"`
+	Thresholds  RiskThresholds     `json:"thresholds"`
+	IsEnabled  bool               `json:"is_enabled"`
+	AutoAdjust bool               `json:"auto_adjust"`
+}
+
+func DefaultRiskScoringConfig() *RiskScoringConfig {
+	return &RiskScoringConfig{
+		Weights: RiskScoringWeights{
+			TraceWeight:    0.25,
+			EnvWeight:      0.20,
+			BehaviorWeight: 0.25,
+			DeviceWeight:   0.15,
+			HistoryWeight:  0.15,
+		},
+		Thresholds: RiskThresholds{
+			LowMax:      30,
+			MediumMax:   50,
+			HighMax:     70,
+			CriticalMax: 100,
+			VerifyMin:   40,
+			BlockMin:    80,
+		},
+		IsEnabled:  true,
+		AutoAdjust: true,
+	}
+}
+
+type ScoreBand struct {
+	MinScore    float64 `json:"min_score"`
+	MaxScore    float64 `json:"max_score"`
+	Label       string  `json:"label"`
+	Description string  `json:"description"`
+}
+
+var DefaultScoreBands = []ScoreBand{
+	{MinScore: 0, MaxScore: 30, Label: "low", Description: "低风险 - 正常用户"},
+	{MinScore: 30, MaxScore: 50, Label: "medium", Description: "中风险 - 建议验证"},
+	{MinScore: 50, MaxScore: 70, Label: "high", Description: "高风险 - 强制验证"},
+	{MinScore: 70, MaxScore: 100, Label: "critical", Description: "极高风险 - 阻止访问"},
+}
