@@ -1,0 +1,194 @@
+name: Notifications
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - CD
+      - E2E Tests
+      - Code Quality
+      - Security Scan
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  slack-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+
+    steps:
+      - name: Download workflow run artifacts
+        uses: actions/download-artifact@v4
+        if: ${{ github.event.workflow_run.conclusion != 'skipped' }}
+
+      - name: Set up Slack SDK
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*GitHub Actions Workflow: ${{ github.event.workflow_run.name }}*",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "GitHub Actions: ${{ github.event.workflow_run.name }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ github.event.workflow_run.conclusion }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Run"
+                      },
+                      "url": "${{ github.event.workflow_run.html_url }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  github-status-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event.workflow_run.conclusion != 'skipped' }}
+
+    steps:
+      - name: Update commit status
+        uses: myrotvorets/report-action@latest
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          status: ${{ github.event.workflow_run.conclusion }}
+          workflow: ${{ github.event.workflow_run.name }}
+
+  email-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.name == 'CD'
+    steps:
+      - name: Send failure email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[CI/CD] Deployment Failed - ${{ github.repository }}"
+          body: |
+            Deployment to production has failed.
+
+            Workflow: ${{ github.event.workflow_run.name }}
+            Run URL: ${{ github.event.workflow_run.html_url }}
+            Branch: ${{ github.ref_name }}
+            Triggered by: ${{ github.actor }}
+
+            Please check the logs and fix the issues.
+          to: ${{ secrets.DEVOPS_EMAIL }}
+          from: ${{ secrets.SMTP_FROM }}
+          charset: utf-8
+
+  teams-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event.workflow_run.conclusion != 'skipped' }}
+    steps:
+      - name: Send to Microsoft Teams
+        uses: sectionsix/msteams-message@v2
+        with:
+          webhook_uri: ${{ secrets.MSTEAMS_WEBHOOK_URL }}
+          message: |
+            **GitHub Actions: ${{ github.event.workflow_run.name }}**
+
+            **Status:** ${{ github.event.workflow_run.conclusion }}
+            **Repository:** ${{ github.repository }}
+            **Branch:** ${{ github.ref_name }}
+            **Actor:** ${{ github.actor }}
+
+            [View Run](${{ github.event.workflow_run.html_url }})
+
+  success-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Success notification
+        run: |
+          echo "Workflow ${{ github.event.workflow_run.name }} completed successfully!"
+          echo "Run URL: ${{ github.event.workflow_run.html_url }}"
+        shell: bash
+
+  pr-status-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+    steps:
+      - name: Get PR number
+        run: |
+          PR_NUMBER=$(echo "${{ github.event.workflow_run.html_url }}" | grep -oP '\d+$')
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
+      - name: Update PR status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: '${{ github.event.workflow_run.conclusion }}' === 'success' ? 'success' : 'failure',
+              target_url: '${{ github.event.workflow_run.html_url }}',
+              description: 'Workflow ${{ github.event.workflow_run.name }}: ${{ github.event.workflow_run.conclusion }}',
+              context: 'ci/${{ github.event.workflow_run.name }}'
+            })
+
+  deployment-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.name == 'CD'
+    steps:
+      - name: Deployment success notification
+        uses: rt Buttie/wecom-notification-action@master
+        if: env.WECOM_WEBHOOK_URL != ''
+        with:
+          webhook_url: ${{ secrets.WECOM_WEBHOOK_URL }}
+          msg: |
+            🎉 **Deployment Successful**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Deployed by: ${{ github.actor }}
+
+            [View Deployment](${{ github.event.workflow_run.html_url }})

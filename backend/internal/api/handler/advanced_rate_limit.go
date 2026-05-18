@@ -1,506 +1,352 @@
 package handler
 
 import (
-	"net/http"
-	"strconv"
-	"sync"
-
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
-var (
-	tokenBucketService     *service.TokenBucketRateLimitService
-	quotaManagementService *service.QuotaManagementService
-	advancedRateLimitOnce  sync.Once
-)
-
-func initAdvancedRateLimitServices() {
-	tokenBucketService = service.NewTokenBucketRateLimitService()
-	quotaManagementService = service.NewQuotaManagementService()
+type AdvancedRateLimitHandler struct {
+	adaptiveService     *service.AdaptiveRateLimitService
+	distributedService *service.DistributedRateLimitService
+	tokenBucketService *service.TokenBucketRateLimitService
+	smartRateService   *service.SmartRateLimitService
 }
 
-// AdvancedRateLimitHandler 高级限流处理器结构
-type AdvancedRateLimitHandler struct{}
-
-// NewAdvancedRateLimitHandler 创建新的高级限流处理器
 func NewAdvancedRateLimitHandler() *AdvancedRateLimitHandler {
-	advancedRateLimitOnce.Do(initAdvancedRateLimitServices)
-	return &AdvancedRateLimitHandler{}
+	return &AdvancedRateLimitHandler{
+		adaptiveService:     service.NewAdaptiveRateLimitService(),
+		distributedService: service.NewDistributedRateLimitService(),
+		tokenBucketService: service.NewTokenBucketRateLimitService(),
+		smartRateService:   service.NewSmartRateLimitService(),
+	}
 }
 
-// ---------------------------- 令牌桶限流相关 API ----------------------------
-
-// CheckTokenBucketRequest 检查令牌桶请求
-type CheckTokenBucketRequest struct {
-	Key    string                     `json:"key" binding:"required"`
-	Config *service.TokenBucketConfig `json:"config"`
+type AdaptiveRateLimitConfigRequest struct {
+	BaseRate              float64 `json:"base_rate"`
+	BaseCapacity          float64 `json:"base_capacity"`
+	MinCapacity           float64 `json:"min_capacity"`
+	MaxCapacity           float64 `json:"max_capacity"`
+	LoadCheckInterval     int     `json:"load_check_interval"`
+	AdjustmentInterval    int     `json:"adjustment_interval"`
+	HighLoadThreshold     float64 `json:"high_load_threshold"`
+	CriticalLoadThreshold float64 `json:"critical_load_threshold"`
 }
 
-// CheckTokenBucketResponse 检查令牌桶响应
-type CheckTokenBucketResponse struct {
-	Allowed    bool    `json:"allowed"`
-	Tokens     float64 `json:"tokens"`
-	Capacity   float64 `json:"capacity"`
-	RetryAfter float64 `json:"retry_after_seconds"`
-	WaitTime   float64 `json:"wait_time_seconds"`
-	IsBurst    bool    `json:"is_burst"`
+func (h *AdvancedRateLimitHandler) GetAdaptiveConfig(c *gin.Context) {
+	stats := h.adaptiveService.GetStats()
+	
+	config := map[string]interface{}{
+		"base_rate":                stats["base_rate"],
+		"base_capacity":            stats["base_capacity"],
+		"load_level":               stats["load_level"],
+		"load_factor":              stats["load_factor"],
+		"current_load":             stats["current_load"],
+		"bucket_count":             stats["bucket_count"],
+		"total_tokens":             stats["total_tokens"],
+	}
+
+	response.Success(c, config)
 }
 
-// CheckTokenBucket 检查令牌桶限流
-// @Summary 检查令牌桶限流
-// @Description 检查指定键的令牌桶限流状态
-// @Tags 高级限流
-// @Accept json
-// @Produce json
-// @Param request body CheckTokenBucketRequest true "请求参数"
-// @Success 200 {object} CheckTokenBucketResponse
-// @Router /api/v1/advanced-rate-limit/token-bucket/check [post]
-func (h *AdvancedRateLimitHandler) CheckTokenBucket(c *gin.Context) {
-	var req CheckTokenBucketRequest
+func (h *AdvancedRateLimitHandler) UpdateAdaptiveConfig(c *gin.Context) {
+	var req AdaptiveRateLimitConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
-	result, err := tokenBucketService.CheckTokenBucketRateLimitRedis(c.Request.Context(), req.Key, req.Config)
+	config := service.AdaptiveRateLimitConfig{
+		BaseRate:               req.BaseRate,
+		BaseCapacity:           req.BaseCapacity,
+		MinCapacity:            req.MinCapacity,
+		MaxCapacity:           req.MaxCapacity,
+		HighLoadThreshold:      req.HighLoadThreshold,
+		CriticalLoadThreshold: req.CriticalLoadThreshold,
+	}
+
+	if req.LoadCheckInterval > 0 {
+		config.LoadCheckInterval = service.ParseDuration(req.LoadCheckInterval)
+	}
+	if req.AdjustmentInterval > 0 {
+		config.AdjustmentInterval = service.ParseDuration(req.AdjustmentInterval)
+	}
+
+	h.adaptiveService.UpdateConfig(config)
+	response.Success(c, gin.H{"message": "adaptive config updated"})
+}
+
+func (h *AdvancedRateLimitHandler) GetAdaptiveStats(c *gin.Context) {
+	stats := h.adaptiveService.GetStats()
+	response.Success(c, stats)
+}
+
+type DistributedRateLimitConfigRequest struct {
+	Type            string `json:"type"`
+	MaxRequests     int    `json:"max_requests"`
+	WindowSecs      int    `json:"window_secs"`
+	SyncInterval    int    `json:"sync_interval"`
+	ConsistencyMode bool   `json:"consistency_mode"`
+}
+
+func (h *AdvancedRateLimitHandler) GetDistributedConfig(c *gin.Context) {
+	stats := h.distributedService.GetStats()
+	
+	config := map[string]interface{}{
+		"type":              stats["type"],
+		"max_requests":      stats["max_requests"],
+		"window_secs":       stats["window_secs"],
+		"node_id":           stats["node_id"],
+		"redis_enabled":     stats["redis_enabled"],
+		"sync_interval":     stats["sync_interval"],
+		"consistency_mode":  stats["consistency_mode"],
+	}
+
+	response.Success(c, config)
+}
+
+func (h *AdvancedRateLimitHandler) UpdateDistributedConfig(c *gin.Context) {
+	var req DistributedRateLimitConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	var limitType service.DistributedRateLimitType
+	switch req.Type {
+	case "fixed_window":
+		limitType = service.DistributedFixedWindow
+	case "sliding_window":
+		limitType = service.DistributedSlidingWindow
+	case "token_bucket":
+		limitType = service.DistributedTokenBucket
+	case "leaky_bucket":
+		limitType = service.DistributedLeakyBucket
+	default:
+		limitType = service.DistributedTokenBucket
+	}
+
+	syncInterval := 5
+	if req.SyncInterval > 0 {
+		syncInterval = req.SyncInterval
+	}
+
+	config := service.DistributedRateLimitConfig{
+		Type:            limitType,
+		MaxRequests:     req.MaxRequests,
+		WindowSecs:      req.WindowSecs,
+		SyncInterval:    service.ParseDuration(syncInterval),
+		ConsistencyMode: req.ConsistencyMode,
+	}
+
+	h.distributedService.UpdateConfig(config)
+	response.Success(c, gin.H{"message": "distributed config updated"})
+}
+
+func (h *AdvancedRateLimitHandler) GetDistributedStats(c *gin.Context) {
+	stats := h.distributedService.GetStats()
+	response.Success(c, stats)
+}
+
+func (h *AdvancedRateLimitHandler) ResetDistributedKey(c *gin.Context) {
+	key := c.Query("key")
+	if key == "" {
+		response.BadRequest(c, "key is required")
+		return
+	}
+
+	err := h.distributedService.ResetKey(c.Request.Context(), key)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, "Failed to reset key")
 		return
 	}
 
-	c.JSON(http.StatusOK, CheckTokenBucketResponse{
-		Allowed:    result.Allowed,
-		Tokens:     result.Tokens,
-		Capacity:   result.Capacity,
-		RetryAfter: result.RetryAfter.Seconds(),
-		WaitTime:   result.WaitTime.Seconds(),
-		IsBurst:    result.IsBurst,
-	})
+	response.Success(c, gin.H{"message": "key reset successfully"})
 }
 
-// ResetTokenBucketRequest 重置令牌桶请求
-type ResetTokenBucketRequest struct {
-	Key string `json:"key" binding:"required"`
+type TokenBucketConfigRequest struct {
+	Rate          float64 `json:"rate"`
+	Capacity      float64 `json:"capacity"`
+	BurstSize     float64 `json:"burst_size"`
+	InitialTokens float64 `json:"initial_tokens"`
 }
 
-// ResetTokenBucket 重置令牌桶
-// @Summary 重置令牌桶
-// @Description 重置指定键的令牌桶
-// @Tags 高级限流
-// @Accept json
-// @Produce json
-// @Param request body ResetTokenBucketRequest true "请求参数"
-// @Success 200 {object} map[string]string
-// @Router /api/v1/advanced-rate-limit/token-bucket/reset [post]
+func (h *AdvancedRateLimitHandler) GetTokenBucketStats(c *gin.Context) {
+	key := c.Query("key")
+	if key == "" {
+		stats := h.tokenBucketService.GetBucketStats("")
+		response.Success(c, gin.H{"stats": stats})
+		return
+	}
+
+	stats := h.tokenBucketService.GetBucketStats(key)
+	response.Success(c, gin.H{"key": key, "stats": stats})
+}
+
 func (h *AdvancedRateLimitHandler) ResetTokenBucket(c *gin.Context) {
-	var req ResetTokenBucketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	err := tokenBucketService.ResetBucket(c.Request.Context(), req.Key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "令牌桶已重置"})
-}
-
-// GetBucketStatsResponse 获取桶统计响应
-type GetBucketStatsResponse struct {
-	Key        string  `json:"key"`
-	Tokens     float64 `json:"tokens"`
-	Capacity   float64 `json:"capacity"`
-	Rate       float64 `json:"rate"`
-	BurstSize  float64 `json:"burst_size"`
-	LastRefill string  `json:"last_refill"`
-}
-
-// GetBucketStats 获取桶统计
-// @Summary 获取令牌桶统计
-// @Description 获取指定键的令牌桶统计信息
-// @Tags 高级限流
-// @Accept json
-// @Produce json
-// @Param key query string true "令牌桶键"
-// @Success 200 {object} GetBucketStatsResponse
-// @Router /api/v1/advanced-rate-limit/token-bucket/stats [get]
-func (h *AdvancedRateLimitHandler) GetBucketStats(c *gin.Context) {
 	key := c.Query("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "key不能为空"})
+		response.BadRequest(c, "key is required")
 		return
 	}
 
-	stats := tokenBucketService.GetBucketStats(key)
+	err := h.tokenBucketService.ResetBucket(c.Request.Context(), key)
+	if err != nil {
+		response.InternalServerError(c, "Failed to reset bucket")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "bucket reset successfully"})
+}
+
+type SmartRateLimitConfigRequest struct {
+	DefaultRequestsPerMin int      `json:"default_requests_per_min"`
+	DefaultBurstLimit    int      `json:"default_burst_limit"`
+	EnableAdaptiveLimit  bool     `json:"enable_adaptive_limit"`
+	EnableRiskBasedLimit bool     `json:"enable_risk_based_limit"`
+	Tiers                []string `json:"tiers"`
+}
+
+func (h *AdvancedRateLimitHandler) GetSmartRateLimitStats(c *gin.Context) {
+	stats := h.smartRateService.GetStats()
+	response.Success(c, stats)
+}
+
+func (h *AdvancedRateLimitHandler) GetClientStats(c *gin.Context) {
+	clientID := c.Query("client_id")
+	if clientID == "" {
+		response.BadRequest(c, "client_id is required")
+		return
+	}
+
+	stats := h.smartRateService.GetClientStats(clientID)
 	if stats == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "令牌桶不存在"})
+		response.NotFound(c, "client not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, GetBucketStatsResponse{
-		Key:        stats["key"].(string),
-		Tokens:     stats["tokens"].(float64),
-		Capacity:   stats["capacity"].(float64),
-		Rate:       stats["rate"].(float64),
-		BurstSize:  stats["burst_size"].(float64),
-		LastRefill: stats["last_refill"].(string),
-	})
+	response.Success(c, stats)
 }
 
-// ---------------------------- 配额管理相关 API ----------------------------
+func (h *AdvancedRateLimitHandler) SetClientTier(c *gin.Context) {
+	var req struct {
+		ClientID string `json:"client_id" binding:"required"`
+		Tier     string `json:"tier" binding:"required"`
+	}
 
-// CreateQuotaRequest 创建配额请求
-type CreateQuotaRequest struct {
-	Key    string               `json:"key" binding:"required"`
-	Config *service.QuotaConfig `json:"config" binding:"required"`
-}
-
-// CreateQuota 创建配额
-// @Summary 创建配额
-// @Description 创建新的配额
-// @Tags 高级限流-配额
-// @Accept json
-// @Produce json
-// @Param request body CreateQuotaRequest true "请求参数"
-// @Success 200 {object} map[string]string
-// @Router /api/v1/advanced-rate-limit/quota/create [post]
-func (h *AdvancedRateLimitHandler) CreateQuota(c *gin.Context) {
-	var req CreateQuotaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
-	err := quotaManagementService.CreateOrUpdateQuota(c.Request.Context(), req.Key, req.Config)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "配额创建成功"})
+	h.smartRateService.SetClientTier(req.ClientID, req.Tier)
+	response.Success(c, gin.H{"message": "client tier updated"})
 }
 
-// GetQuotaStatusResponse 获取配额状态响应
-type GetQuotaStatusResponse struct {
-	Used       int64   `json:"used"`
-	Limit      int64   `json:"limit"`
-	Remaining  int64   `json:"remaining"`
-	ResetAt    string  `json:"reset_at"`
-	Type       string  `json:"type"`
-	Percentage float64 `json:"percentage"`
+type RateLimitCheckRequest struct {
+	Type  string `json:"type" binding:"required"`
+	Key   string `json:"key" binding:"required"`
+	Count int    `json:"count"`
 }
 
-// GetQuotaStatus 获取配额状态
-// @Summary 获取配额状态
-// @Description 获取指定键的配额状态
-// @Tags 高级限流-配额
-// @Accept json
-// @Produce json
-// @Param key query string true "配额键"
-// @Success 200 {object} GetQuotaStatusResponse
-// @Router /api/v1/advanced-rate-limit/quota/status [get]
-func (h *AdvancedRateLimitHandler) GetQuotaStatus(c *gin.Context) {
-	key := c.Query("key")
-	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "key不能为空"})
-		return
-	}
-
-	status, err := quotaManagementService.GetQuotaStatus(c.Request.Context(), key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, GetQuotaStatusResponse{
-		Used:       status.Used,
-		Limit:      status.Limit,
-		Remaining:  status.Remaining,
-		ResetAt:    status.ResetAt.Format("2006-01-02 15:04:05"),
-		Type:       string(status.Type),
-		Percentage: status.Percentage,
-	})
-}
-
-// ConsumeQuotaRequest 消费配额请求
-type ConsumeQuotaRequest struct {
-	Key    string `json:"key" binding:"required"`
-	Amount int64  `json:"amount"`
-}
-
-// ConsumeQuotaResponse 消费配额响应
-type ConsumeQuotaResponse struct {
-	Allowed bool                    `json:"allowed"`
-	Status  *GetQuotaStatusResponse `json:"status"`
-}
-
-// ConsumeQuota 消费配额
-// @Summary 消费配额
-// @Description 消费指定键的配额
-// @Tags 高级限流-配额
-// @Accept json
-// @Produce json
-// @Param request body ConsumeQuotaRequest true "请求参数"
-// @Success 200 {object} ConsumeQuotaResponse
-// @Router /api/v1/advanced-rate-limit/quota/consume [post]
-func (h *AdvancedRateLimitHandler) ConsumeQuota(c *gin.Context) {
-	var req ConsumeQuotaRequest
+func (h *AdvancedRateLimitHandler) CheckRateLimit(c *gin.Context) {
+	var req RateLimitCheckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
-	if req.Amount <= 0 {
-		req.Amount = 1
+	if req.Count <= 0 {
+		req.Count = 1
 	}
 
-	status, allowed, err := quotaManagementService.ConsumeQuota(c.Request.Context(), req.Key, req.Amount)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	ctx := c.Request.Context()
+	var result interface{}
+	var err error
 
-	statusResp := GetQuotaStatusResponse{
-		Used:       status.Used,
-		Limit:      status.Limit,
-		Remaining:  status.Remaining,
-		ResetAt:    status.ResetAt.Format("2006-01-02 15:04:05"),
-		Type:       string(status.Type),
-		Percentage: status.Percentage,
-	}
-
-	c.JSON(http.StatusOK, ConsumeQuotaResponse{
-		Allowed: allowed,
-		Status:  &statusResp,
-	})
-}
-
-// ResetQuotaRequest 重置配额请求
-type ResetQuotaRequest struct {
-	Key string `json:"key" binding:"required"`
-}
-
-// ResetQuota 重置配额
-// @Summary 重置配额
-// @Description 重置指定键的配额
-// @Tags 高级限流-配额
-// @Accept json
-// @Produce json
-// @Param request body ResetQuotaRequest true "请求参数"
-// @Success 200 {object} map[string]string
-// @Router /api/v1/advanced-rate-limit/quota/reset [post]
-func (h *AdvancedRateLimitHandler) ResetQuota(c *gin.Context) {
-	var req ResetQuotaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	err := quotaManagementService.ResetQuota(c.Request.Context(), req.Key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "配额已重置"})
-}
-
-// DeleteQuotaRequest 删除配额请求
-type DeleteQuotaRequest struct {
-	Key string `json:"key" binding:"required"`
-}
-
-// DeleteQuota 删除配额
-// @Summary 删除配额
-// @Description 删除指定键的配额
-// @Tags 高级限流-配额
-// @Accept json
-// @Produce json
-// @Param request body DeleteQuotaRequest true "请求参数"
-// @Success 200 {object} map[string]string
-// @Router /api/v1/advanced-rate-limit/quota/delete [delete]
-func (h *AdvancedRateLimitHandler) DeleteQuota(c *gin.Context) {
-	var req DeleteQuotaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	err := quotaManagementService.DeleteQuota(c.Request.Context(), req.Key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "配额已删除"})
-}
-
-// ListQuotasResponse 列出配额响应
-type ListQuotasResponse struct {
-	Quotas []*QuotaInfo `json:"quotas"`
-}
-
-// QuotaInfo 配额信息
-type QuotaInfo struct {
-	Key        string  `json:"key"`
-	Type       string  `json:"type"`
-	Limit      int64   `json:"limit"`
-	Used       int64   `json:"used"`
-	Remaining  int64   `json:"remaining"`
-	ResetAt    string  `json:"reset_at"`
-	Percentage float64 `json:"percentage"`
-}
-
-// ListQuotas 列出所有配额
-// @Summary 列出所有配额
-// @Description 列出所有配额
-// @Tags 高级限流-配额
-// @Accept json
-// @Produce json
-// @Success 200 {object} ListQuotasResponse
-// @Router /api/v1/advanced-rate-limit/quota/list [get]
-func (h *AdvancedRateLimitHandler) ListQuotas(c *gin.Context) {
-	quotas, err := quotaManagementService.ListQuotas(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	quotaInfos := make([]*QuotaInfo, 0, len(quotas))
-	for _, q := range quotas {
-		remaining := q.Limit - q.Used
-		if remaining < 0 {
-			remaining = 0
+	switch req.Type {
+	case "adaptive":
+		var adaptiveResult *service.AdaptiveRateLimitResult
+		adaptiveResult, err = h.adaptiveService.CheckRateLimitWithTokens(ctx, req.Key, float64(req.Count))
+		if adaptiveResult != nil {
+			result = adaptiveResult
 		}
-		percentage := 0.0
-		if q.Limit > 0 {
-			percentage = (float64(q.Used) / float64(q.Limit)) * 100
+	case "distributed":
+		var distResult *service.DistributedRateLimitResult
+		distResult, err = h.distributedService.CheckRateLimitWithCount(ctx, req.Key, req.Count)
+		if distResult != nil {
+			result = gin.H{
+				"allowed":     distResult.Allowed,
+				"remaining":   distResult.Remaining,
+				"reset_at":    distResult.ResetAt,
+				"total_count": distResult.TotalCount,
+				"node_id":     distResult.NodeID,
+			}
 		}
-		quotaInfos = append(quotaInfos, &QuotaInfo{
-			Key:        q.Key,
-			Type:       string(q.Type),
-			Limit:      q.Limit,
-			Used:       q.Used,
-			Remaining:  remaining,
-			ResetAt:    q.ResetAt.Format("2006-01-02 15:04:05"),
-			Percentage: percentage,
+	case "token_bucket":
+		var tbResult *service.TokenBucketResult
+		tbResult, err = h.tokenBucketService.CheckTokenBucketRateLimit(ctx, req.Key, &service.TokenBucketConfig{
+			Rate:     10,
+			Capacity: 100,
 		})
-	}
-
-	c.JSON(http.StatusOK, ListQuotasResponse{Quotas: quotaInfos})
-}
-
-// ---------------------------- 综合限流 API ----------------------------
-
-// CombinedCheckRequest 综合检查请求
-type CombinedCheckRequest struct {
-	IP                string                     `json:"ip"`
-	UserID            uint                       `json:"user_id"`
-	AppID             uint                       `json:"app_id"`
-	TokenBucketKey    string                     `json:"token_bucket_key"`
-	QuotaKey          string                     `json:"quota_key"`
-	TokenBucketConfig *service.TokenBucketConfig `json:"token_bucket_config"`
-}
-
-// CombinedCheckResponse 综合检查响应
-type CombinedCheckResponse struct {
-	Allowed           bool                      `json:"allowed"`
-	TokenBucketResult *CheckTokenBucketResponse `json:"token_bucket_result"`
-	QuotaResult       *ConsumeQuotaResponse     `json:"quota_result"`
-	Reason            string                    `json:"reason"`
-}
-
-// CombinedCheck 综合限流检查
-// @Summary 综合限流检查
-// @Description 同时检查令牌桶和配额
-// @Tags 高级限流
-// @Accept json
-// @Produce json
-// @Param request body CombinedCheckRequest true "请求参数"
-// @Success 200 {object} CombinedCheckResponse
-// @Router /api/v1/advanced-rate-limit/combined-check [post]
-func (h *AdvancedRateLimitHandler) CombinedCheck(c *gin.Context) {
-	var req CombinedCheckRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if tbResult != nil {
+			result = tbResult
+		}
+	default:
+		response.BadRequest(c, "invalid type, must be: adaptive, distributed, or token_bucket")
 		return
 	}
 
-	allowed := true
-	var reason string
-	var tokenBucketResult *CheckTokenBucketResponse
-	var quotaResult *ConsumeQuotaResponse
-
-	// 检查令牌桶
-	if req.TokenBucketKey != "" {
-		var tbKey string
-		if req.IP != "" {
-			tbKey = "ip:" + req.IP
-		} else if req.UserID > 0 {
-			tbKey = "user:" + strconv.FormatUint(uint64(req.UserID), 10)
-		} else if req.AppID > 0 {
-			tbKey = "app:" + strconv.FormatUint(uint64(req.AppID), 10)
-		} else {
-			tbKey = req.TokenBucketKey
-		}
-
-		tbResult, err := tokenBucketService.CheckTokenBucketRateLimitRedis(c.Request.Context(), tbKey, req.TokenBucketConfig)
-		if err == nil {
-			tokenBucketResult = &CheckTokenBucketResponse{
-				Allowed:    tbResult.Allowed,
-				Tokens:     tbResult.Tokens,
-				Capacity:   tbResult.Capacity,
-				RetryAfter: tbResult.RetryAfter.Seconds(),
-				WaitTime:   tbResult.WaitTime.Seconds(),
-				IsBurst:    tbResult.IsBurst,
-			}
-			if !tbResult.Allowed {
-				allowed = false
-				reason = "令牌桶限流"
-			}
-		}
+	if err != nil {
+		response.InternalServerError(c, "Failed to check rate limit")
+		return
 	}
 
-	// 检查配额
-	if allowed && req.QuotaKey != "" {
-		var qKey string
-		if req.UserID > 0 {
-			qKey = service.UserQuotaKey(req.UserID, "api", service.QuotaTypeDaily)
-		} else if req.AppID > 0 {
-			qKey = service.AppQuotaKey(req.AppID, "api", service.QuotaTypeDaily)
-		} else {
-			qKey = req.QuotaKey
-		}
+	response.Success(c, result)
+}
 
-		status, qAllowed, err := quotaManagementService.ConsumeQuota(c.Request.Context(), qKey, 1)
-		if err == nil {
-			statusResp := GetQuotaStatusResponse{
-				Used:       status.Used,
-				Limit:      status.Limit,
-				Remaining:  status.Remaining,
-				ResetAt:    status.ResetAt.Format("2006-01-02 15:04:05"),
-				Type:       string(status.Type),
-				Percentage: status.Percentage,
-			}
-			quotaResult = &ConsumeQuotaResponse{
-				Allowed: qAllowed,
-				Status:  &statusResp,
-			}
-			if !qAllowed {
-				allowed = false
-				reason = "配额不足"
-			}
-		}
+type OverallRateLimitStatus struct {
+	Adaptive     map[string]interface{} `json:"adaptive"`
+	Distributed  map[string]interface{} `json:"distributed"`
+	Smart        map[string]interface{} `json:"smart"`
+	LoadLevel    string                 `json:"load_level"`
+}
+
+func (h *AdvancedRateLimitHandler) GetOverallStatus(c *gin.Context) {
+	status := OverallRateLimitStatus{
+		Adaptive:    h.adaptiveService.GetStats(),
+		Distributed: h.distributedService.GetStats(),
+		Smart:       h.smartRateService.GetStats(),
+		LoadLevel:   h.adaptiveService.GetLoadLevel().String(),
 	}
 
-	c.JSON(http.StatusOK, CombinedCheckResponse{
-		Allowed:           allowed,
-		TokenBucketResult: tokenBucketResult,
-		QuotaResult:       quotaResult,
-		Reason:            reason,
-	})
+	response.Success(c, status)
+}
+
+func (h *AdvancedRateLimitHandler) RegisterRoutes(r *gin.RouterGroup) {
+	rateLimit := r.Group("/rate-limit")
+	{
+		rateLimit.GET("/status", h.GetOverallStatus)
+		rateLimit.POST("/check", h.CheckRateLimit)
+
+		rateLimit.GET("/adaptive/config", h.GetAdaptiveConfig)
+		rateLimit.PUT("/adaptive/config", h.UpdateAdaptiveConfig)
+		rateLimit.GET("/adaptive/stats", h.GetAdaptiveStats)
+
+		rateLimit.GET("/distributed/config", h.GetDistributedConfig)
+		rateLimit.PUT("/distributed/config", h.UpdateDistributedConfig)
+		rateLimit.GET("/distributed/stats", h.GetDistributedStats)
+		rateLimit.POST("/distributed/reset", h.ResetDistributedKey)
+
+		rateLimit.GET("/token-bucket/stats", h.GetTokenBucketStats)
+		rateLimit.POST("/token-bucket/reset", h.ResetTokenBucket)
+
+		rateLimit.GET("/smart/stats", h.GetSmartRateLimitStats)
+		rateLimit.GET("/smart/client", h.GetClientStats)
+		rateLimit.PUT("/smart/client/tier", h.SetClientTier)
+	}
+}
+
+func GetAdvancedRateLimitHandler() *AdvancedRateLimitHandler {
+	return NewAdvancedRateLimitHandler()
 }

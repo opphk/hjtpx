@@ -18,45 +18,80 @@ func NewApplicationHandler() *ApplicationHandler {
 	}
 }
 
+// CreateApplicationRequest 创建应用请求
+// @Description 创建新应用的请求参数
 type CreateApplicationRequest struct {
-	Name        string `json:"name" binding:"required,min=1,max=255"`
-	UserID      uint   `json:"user_id" binding:"required"`
-	Description string `json:"description" binding:"max=1000"`
-	Domain      string `json:"domain" binding:"max=255"`
-	Website     string `json:"website" binding:"max=255"`
+	Name        string `json:"name" binding:"required,min=1,max=255"`    // 应用名称
+	UserID      uint   `json:"user_id" binding:"required"`                // 用户ID
+	Description string `json:"description" binding:"max=1000"`           // 应用描述
+	Domain      string `json:"domain" binding:"max=255"`                 // 域名
+	Website     string `json:"website" binding:"max=255"`                // 网站URL
 }
 
+// UpdateApplicationRequest 更新应用请求
+// @Description 更新应用的请求参数
 type UpdateApplicationRequest struct {
-	Name        *string `json:"name" binding:"omitempty,max=255"`
-	Description *string `json:"description" binding:"omitempty,max=1000"`
-	IsActive    *bool   `json:"is_active"`
-	Domain      *string `json:"domain" binding:"omitempty,max=255"`
-	Website     *string `json:"website" binding:"omitempty,max=255"`
+	Name        *string `json:"name" binding:"omitempty,max=255"`            // 应用名称
+	Description *string `json:"description" binding:"omitempty,max=1000"`     // 应用描述
+	IsActive    *bool   `json:"is_active"`                                   // 是否启用
+	Domain      *string `json:"domain" binding:"omitempty,max=255"`           // 域名
+	Website     *string `json:"website" binding:"omitempty,max=255"`          // 网站URL
 }
 
+// ListApplicationsQuery 应用列表查询参数
+// @Description 应用列表查询参数
 type ListApplicationsQuery struct {
-	Page      int    `form:"page,default=1"`
-	PageSize  int    `form:"page_size,default=10"`
-	Keyword   string `form:"keyword"`
-	UserID    uint   `form:"user_id"`
-	IsActive  *bool  `form:"is_active"`
-	SortField string `form:"sort_field"`
-	SortOrder string `form:"sort_order"`
+	Page      int    `form:"page,default=1"`       // 页码
+	PageSize  int    `form:"page_size,default=10"` // 每页数量
+	Keyword   string `form:"keyword"`               // 关键词
+	UserID    uint   `form:"user_id"`               // 用户ID
+	IsActive  *bool  `form:"is_active"`             // 是否启用
+	SortField string `form:"sort_field"`           // 排序字段
+	SortOrder string `form:"sort_order"`           // 排序方式
 }
 
+// UpdateConfigRequest 更新配置请求
+// @Description 更新应用配置的请求参数
 type UpdateConfigRequest struct {
-	CaptchaTypes         []string               `json:"captcha_types"`
-	MaxVerifyPerMinute   int                    `json:"max_verify_per_minute"`
-	MaxVerifyPerDay      int                    `json:"max_verify_per_day"`
-	AllowedIPs           []string               `json:"allowed_ips"`
-	BlockRefusedRequests bool                   `json:"block_refused_requests"`
-	CustomSettings       map[string]interface{} `json:"custom_settings"`
+	CaptchaTypes         []string               `json:"captcha_types"`           // 验证码类型列表
+	MaxVerifyPerMinute   int                    `json:"max_verify_per_minute"`   // 每分钟最大验证次数
+	MaxVerifyPerDay      int                    `json:"max_verify_per_day"`      // 每天最大验证次数
+	AllowedIPs           []string               `json:"allowed_ips"`             // 允许的IP地址列表
+	BlockRefusedRequests bool                   `json:"block_refused_requests"`  // 阻止被拒绝的请求
+	CustomSettings       map[string]interface{} `json:"custom_settings"`         // 自定义设置
+}
+
+// SaveSearchRequest 保存搜索请求
+// @Description 保存搜索的请求参数
+type SaveSearchRequest struct {
+	Name        string                      `json:"name" binding:"required"`           // 搜索名称
+	Description string                      `json:"description"`                       // 搜索描述
+	Query       service.AdvancedSearchQuery `json:"query" binding:"required"`          // 搜索查询条件
 }
 
 func GetApplicationHandler() *ApplicationHandler {
 	return NewApplicationHandler()
 }
 
+// ListApplications 获取应用列表
+// @Summary 获取应用列表
+// @Description 分页获取应用列表
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码，默认1"
+// @Param page_size query int false "每页数量，默认10"
+// @Param keyword query string false "关键词搜索"
+// @Param user_id query int false "用户ID"
+// @Param is_active query bool false "是否启用"
+// @Param sort_field query string false "排序字段：name, created_at"
+// @Param sort_order query string false "排序方式：asc, desc"
+// @Success 200 {object} map[string]interface{} "应用列表"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications [get]
 func ListApplications(c *gin.Context) {
 	var query ListApplicationsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -83,6 +118,20 @@ func ListApplications(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// CreateApplication 创建应用
+// @Summary 创建应用
+// @Description 创建新的应用
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body CreateApplicationRequest true "创建应用请求"
+// @Success 200 {object} map[string]interface{} "创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "用户不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications [post]
 func CreateApplication(c *gin.Context) {
 	var req CreateApplicationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -150,6 +199,20 @@ func UpdateApplication(c *gin.Context) {
 	response.Success(c, service.ToApplicationResponse(app))
 }
 
+// DeleteApplication 删除应用
+// @Summary 删除应用
+// @Description 删除指定的应用
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Success 200 {object} map[string]interface{} "删除成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id} [delete]
 func DeleteApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -196,6 +259,20 @@ func RegenerateApplicationKey(c *gin.Context) {
 	})
 }
 
+// GetApplicationConfig 获取应用配置
+// @Summary 获取应用配置
+// @Description 获取指定应用的配置信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Success 200 {object} map[string]interface{} "应用配置"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id}/config [get]
 func GetApplicationConfig(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -220,6 +297,21 @@ func GetApplicationConfig(c *gin.Context) {
 	})
 }
 
+// UpdateApplicationConfig 更新应用配置
+// @Summary 更新应用配置
+// @Description 更新指定应用的配置信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Param body body UpdateConfigRequest true "更新配置请求"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id}/config [put]
 func UpdateApplicationConfig(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -280,6 +372,20 @@ func GetApplicationStatistics(c *gin.Context) {
 	response.Success(c, stats)
 }
 
+// GetApplication 获取应用详情
+// @Summary 获取应用详情
+// @Description 获取指定应用的详细信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Success 200 {object} map[string]interface{} "应用详情"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id} [get]
 func GetApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -320,12 +426,20 @@ func AdvancedSearchApplications(c *gin.Context) {
 }
 
 // SaveApplicationSearch 保存应用搜索
+// @Summary 保存应用搜索
+// @Description 保存当前的搜索条件以便后续使用
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body SaveSearchRequest true "保存搜索请求"
+// @Success 200 {object} map[string]interface{} "保存结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/save-search [post]
 func SaveApplicationSearch(c *gin.Context) {
-	var req struct {
-		Name        string                      `json:"name" binding:"required"`
-		Description string                      `json:"description"`
-		Query       service.AdvancedSearchQuery `json:"query" binding:"required"`
-	}
+	var req SaveSearchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "无效的请求参数")
 		return
@@ -366,6 +480,18 @@ func GetSavedApplicationSearches(c *gin.Context) {
 }
 
 // DeleteSavedApplicationSearch 删除保存的应用搜索
+// @Summary 删除保存的应用搜索
+// @Description 删除指定保存的搜索条件
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "搜索ID"
+// @Success 200 {object} map[string]interface{} "删除结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/saved-searches/{id} [delete]
 func DeleteSavedApplicationSearch(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

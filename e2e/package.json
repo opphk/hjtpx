@@ -10,6 +10,8 @@
     "test:firefox": "playwright test --project=firefox",
     "test:webkit": "playwright test --project=webkit",
     "test:headed": "playwright test --headed",
+    "test:report": "npx ts-node utils/report-generator.ts",
+    "test:all": "playwright test && npx ts-node utils/report-generator.ts",
     "report": "playwright show-report",
     "install:browsers": "playwright install --with-deps"
   },

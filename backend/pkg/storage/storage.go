@@ -229,12 +229,6 @@ func (s *Storage) UploadFromBytes(ctx context.Context, data []byte, filename str
 		}, nil
 	}
 
-	file := &multipart.FileHeader{
-		Filename: filename,
-		Size:     int64(len(data)),
-	}
-	_ = file
-
 	processedData := data
 	imgInfo := &ImageInfo{Size: int64(len(data))}
 

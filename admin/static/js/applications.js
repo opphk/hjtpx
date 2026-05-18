@@ -3,6 +3,8 @@ let pageSize = 10;
 let currentApps = [];
 let currentView = 'table';
 let appStatsChart = null;
+let selectedApps = new Set();
+let batchMode = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadApplicationsSummary();
@@ -32,6 +34,26 @@ function setupEventListeners() {
             switchView(e.target.dataset.view);
         });
     });
+
+    const exportAppsBtn = document.getElementById('exportAppsBtn');
+    if (exportAppsBtn) {
+        exportAppsBtn.addEventListener('click', () => exportSelectedApps());
+    }
+
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', () => batchDeleteApps());
+    }
+
+    const batchStatusBtn = document.getElementById('batchStatusBtn');
+    if (batchStatusBtn) {
+        batchStatusBtn.addEventListener('click', () => showBatchStatusModal());
+    }
+
+    const selectAllCheckbox = document.getElementById('selectAllApps');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => toggleSelectAll(e.target.checked));
+    }
 
     const appForm = document.getElementById('appForm');
     if (appForm) {
@@ -238,7 +260,12 @@ function renderApplicationsTable() {
     document.getElementById('appsCardView')?.classList.add('d-none');
 
     tbody.innerHTML = currentApps.map(app => `
-        <tr>
+        <tr class="${selectedApps.has(app.id) ? 'table-primary' : ''}">
+            <td>
+                <input type="checkbox" class="form-check-input app-checkbox" 
+                    data-id="${app.id}" ${selectedApps.has(app.id) ? 'checked' : ''}
+                    onchange="toggleAppSelection(${app.id})">
+            </td>
             <td>${app.id}</td>
             <td>
                 <strong>${escapeHtml(app.name)}</strong>
@@ -252,6 +279,7 @@ function renderApplicationsTable() {
             </td>
             <td><span class="badge ${getStatusBadgeClass(app.status)}">${getStatusText(app.status)}</span></td>
             <td>${formatNumber(app.requestsPerDay)}</td>
+            <td><small class="text-muted">${app.keyStatus || '有效'}</small></td>
             <td><small class="text-muted">${app.createdAt}</small></td>
             <td>
                 <div class="btn-group btn-group-sm">
@@ -263,6 +291,8 @@ function renderApplicationsTable() {
             </td>
         </tr>
     `).join('');
+
+    updateBatchToolbar();
 }
 
 function renderApplicationsCards() {
@@ -604,4 +634,156 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+function toggleAppSelection(appId) {
+    if (selectedApps.has(appId)) {
+        selectedApps.delete(appId);
+    } else {
+        selectedApps.add(appId);
+    }
+    updateBatchToolbar();
+    updateTableRowStyles();
+}
+
+function toggleSelectAll(selectAll) {
+    if (selectAll) {
+        currentApps.forEach(app => selectedApps.add(app.id));
+    } else {
+        selectedApps.clear();
+    }
+    updateBatchToolbar();
+    updateTableRowStyles();
+}
+
+function updateTableRowStyles() {
+    document.querySelectorAll('.app-checkbox').forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        const appId = parseInt(checkbox.dataset.id);
+        if (selectedApps.has(appId)) {
+            row.classList.add('table-primary');
+        } else {
+            row.classList.remove('table-primary');
+        }
+        checkbox.checked = selectedApps.has(appId);
+    });
+}
+
+function updateBatchToolbar() {
+    const batchToolbar = document.getElementById('batchToolbar');
+    const selectedCount = document.getElementById('selectedAppCount');
+    
+    if (batchToolbar) {
+        if (selectedApps.size > 0) {
+            batchToolbar.classList.remove('d-none');
+        } else {
+            batchToolbar.classList.add('d-none');
+        }
+    }
+    
+    if (selectedCount) {
+        selectedCount.textContent = selectedApps.size;
+    }
+}
+
+async function exportSelectedApps() {
+    const exportApps = selectedApps.size > 0 ? 
+        currentApps.filter(app => selectedApps.has(app.id)) : 
+        currentApps;
+    
+    if (exportApps.length === 0) {
+        showToast('没有可导出的应用', 'warning');
+        return;
+    }
+    
+    const csvContent = [
+        ['应用ID', '应用名称', '描述', '状态', '日请求量', '创建时间', '密钥状态'].join(','),
+        ...exportApps.map(app => [
+            app.id,
+            `"${escapeHtml(app.name)}"`,
+            `"${escapeHtml(app.description || '')}"`,
+            app.status,
+            app.requestsPerDay,
+            app.createdAt,
+            app.keyStatus || '有效'
+        ].join(','))
+    ].join('\n');
+    
+    downloadFile(csvContent, `applications_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+    showToast(`已导出 ${exportApps.length} 个应用`, 'success');
+}
+
+async function batchDeleteApps() {
+    if (selectedApps.size === 0) {
+        showToast('请先选择要删除的应用', 'warning');
+        return;
+    }
+    
+    if (!confirm(`确定要删除选中的 ${selectedApps.size} 个应用吗？此操作不可恢复。`)) {
+        return;
+    }
+    
+    try {
+        const deletePromises = Array.from(selectedApps).map(appId => 
+            auth.request(`/admin/applications/${appId}`, { method: 'DELETE' })
+        );
+        
+        await Promise.all(deletePromises);
+        showToast(`成功删除 ${selectedApps.size} 个应用`, 'success');
+        selectedApps.clear();
+        loadApplications();
+        loadApplicationsSummary();
+    } catch (error) {
+        showToast('批量删除失败', 'danger');
+    }
+}
+
+function showBatchStatusModal() {
+    if (selectedApps.size === 0) {
+        showToast('请先选择要修改的应用', 'warning');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('batchStatusModal'));
+    modal.show();
+}
+
+async function applyBatchStatus() {
+    const newStatus = document.getElementById('batchNewStatus')?.value;
+    if (!newStatus) {
+        showToast('请选择新状态', 'warning');
+        return;
+    }
+    
+    try {
+        const updatePromises = Array.from(selectedApps).map(appId => 
+            auth.request(`/admin/applications/${appId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: newStatus })
+            })
+        );
+        
+        await Promise.all(updatePromises);
+        showToast(`成功更新 ${selectedApps.size} 个应用的状态`, 'success');
+        
+        bootstrap.Modal.getInstance(document.getElementById('batchStatusModal'))?.hide();
+        selectedApps.clear();
+        loadApplications();
+        loadApplicationsSummary();
+    } catch (error) {
+        showToast('批量更新失败', 'danger');
+    }
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob(['\ufeff' + content], { type: mimeType });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }

@@ -127,6 +127,24 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 				log.Println("Database optimization completed successfully")
 			}
 		}
+
+		indexAnalyzer := NewIndexAnalyzer(DB)
+		if err := indexAnalyzer.AnalyzeAndCreateMissingIndexes(); err != nil {
+			log.Printf("Warning: Index analysis failed: %v", err)
+		}
+
+		queryOptimizer := NewQueryOptimizer(DB)
+		if err := queryOptimizer.OptimizeAll(); err != nil {
+			log.Printf("Warning: Query optimization failed: %v", err)
+		} else {
+			log.Println("Query optimization completed successfully")
+		}
+
+		enhancedPoolOptimizer := NewEnhancedConnectionPoolOptimizer(DB, cfg)
+		enhancedPoolOptimizer.Start()
+		if err := enhancedPoolOptimizer.WarmUpConnections(); err != nil {
+			log.Printf("Warning: Connection pool warmup failed: %v", err)
+		}
 	}
 
 	log.Println("Database performance optimization features initialized")

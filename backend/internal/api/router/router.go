@@ -201,32 +201,32 @@ func SetupRouter() *gin.Engine {
 		}
 
 		// 高级限流 API
-		advancedRateLimit := api.Group("/advanced-rate-limit")
-		{
-			arHandler := handler.NewAdvancedRateLimitHandler()
-
-			// 令牌桶限流
-			tokenBucket := advancedRateLimit.Group("/token-bucket")
-			{
-				tokenBucket.POST("/check", arHandler.CheckTokenBucket)
-				tokenBucket.POST("/reset", arHandler.ResetTokenBucket)
-				tokenBucket.GET("/stats", arHandler.GetBucketStats)
-			}
-
-			// 配额管理
-			quota := advancedRateLimit.Group("/quota")
-			{
-				quota.POST("/create", arHandler.CreateQuota)
-				quota.GET("/status", arHandler.GetQuotaStatus)
-				quota.POST("/consume", arHandler.ConsumeQuota)
-				quota.POST("/reset", arHandler.ResetQuota)
-				quota.DELETE("/delete", arHandler.DeleteQuota)
-				quota.GET("/list", arHandler.ListQuotas)
-			}
-
-			// 综合限流
-			advancedRateLimit.POST("/combined-check", arHandler.CombinedCheck)
-		}
+		// advancedRateLimit := api.Group("/advanced-rate-limit")
+		// {
+		// 	// arHandler := handler.NewAdvancedRateLimitHandler()
+		//
+		// 	// 令牌桶限流
+		// 	tokenBucket := advancedRateLimit.Group("/token-bucket")
+		// 	{
+		// 		// tokenBucket.POST("/check", arHandler.CheckTokenBucket)
+		// 		// tokenBucket.POST("/reset", arHandler.ResetTokenBucket)
+		// 		// tokenBucket.GET("/stats", arHandler.GetBucketStats)
+		// 	}
+		//
+		// 	// 配额管理
+		// 	quota := advancedRateLimit.Group("/quota")
+		// 	{
+		// 		quota.POST("/create", arHandler.CreateQuota)
+		// 		quota.GET("/status", arHandler.GetQuotaStatus)
+		// 		quota.POST("/consume", arHandler.ConsumeQuota)
+		// 		quota.POST("/reset", arHandler.ResetQuota)
+		// 		quota.DELETE("/delete", arHandler.DeleteQuota)
+		// 		quota.GET("/list", arHandler.ListQuotas)
+		// 	}
+		//
+		// 	// 综合限流
+		// 	advancedRateLimit.POST("/combined-check", arHandler.CombinedCheck)
+		// }
 
 		// WebSocket 验证路由
 		websocket := api.Group("/websocket")

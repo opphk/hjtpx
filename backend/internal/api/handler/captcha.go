@@ -481,6 +481,15 @@ func isOverlapping(x, y, size int, placed []image.Rectangle) bool {
 	return false
 }
 
+// generateClickImageWithBackground 生成带背景的点击验证码图片
+// 该函数生成一个包含多个随机字符/图标的验证码图片，用户需要按照提示顺序点击
+// 主要流程：
+// 1. 绘制渐变背景并添加干扰元素（噪点、线条、网格）
+// 2. 生成目标字符（需要点击的）和干扰字符（不需要点击的）
+// 3. 使用Fisher-Yates算法打乱字符位置
+// 4. 使用碰撞检测算法确保字符不重叠
+// 5. 渲染字符并应用随机旋转
+// 6. 计算目标点的精确坐标用于后续验证
 func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickPoint, []int, string) {
 	session.ImageWidth = 300
 	session.ImageHeight = 300
@@ -1463,6 +1472,21 @@ func VerifyCaptcha(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// verifyClickPoints 验证点击验证码的点击点和点击顺序
+// 核心验证逻辑：
+// 1. 数量验证：确保点击数量与预期的目标点数量一致
+// 2. 位置匹配：使用欧几里得距离计算每个点击位置与目标点的距离
+//    - 采用贪心匹配策略，为每个点击找到最近且未被匹配的目标点
+//    - 考虑容差值(tolerance)，允许一定的点击偏差
+// 3. 顺序验证：将点击顺序转换为对应的目标点顺序
+//    - 如果客户端提供了ClickSequence，使用提供的顺序
+//    - 否则按照点击的先后顺序进行验证
+// 4. 比较验证：确保实际点击顺序与期望顺序一致
+//
+// 注意事项：
+// - 由于使用了贪心匹配，同一个目标点只能被一个点击匹配
+// - 如果存在多个点击匹配到同一个目标点，只有最近的那个会被采用
+// - 容差值默认为35像素，可根据图片大小调整
 func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string) {
 	if len(req.Points) == 0 {
 		return false, "未提供点击坐标"

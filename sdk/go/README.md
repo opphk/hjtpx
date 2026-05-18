@@ -1,11 +1,12 @@
 # hjtpx Go SDK
 
-A comprehensive Go SDK for hjtpx captcha services, providing support for image captcha, slider captcha, and click captcha with advanced features like connection pooling, automatic retries, and detailed error handling.
+A comprehensive Go SDK for hjtpx captcha services, providing support for image captcha, slider captcha, click captcha with advanced features like connection pooling, automatic retries, and detailed error handling.
 
 ## Features
 
 - **Multiple Captcha Types**: Support for image captcha, slider captcha, and click captcha
-- **Connection Pool Management**: Configurable HTTP connection pooling for optimal performance
+- **Two Client Modes**: Simple client for basic use and advanced client with connection pooling for production
+- **Connection Pool Management**: Configurable HTTP connection pooling for optimal performance (advanced client)
 - **Automatic Retries**: Built-in retry mechanism with exponential backoff for failed requests
 - **Comprehensive Error Handling**: Detailed error types and error code extraction utilities
 - **Statistics & Monitoring**: Track request statistics including success rate, retry count, and error tracking
@@ -20,6 +21,8 @@ go get github.com/hjtpx/hjtpx/sdk/go
 
 ## Quick Start
 
+### Simple Client (Recommended for Basic Use)
+
 ```go
 package main
 
@@ -29,10 +32,53 @@ import (
 )
 
 func main() {
+    client := sdk.NewClient(
+        sdk.WithAPIKey("your-api-key"),
+        sdk.WithAPISecret("your-api-secret"),
+        sdk.WithEndpoint("http://localhost:8080"),
+        sdk.WithTimeout(30*time.Second),
+    )
+    defer client.Close()
+
+    captcha, err := client.GenerateImageCaptcha(nil)
+    if err != nil {
+        fmt.Printf("Error: %v\n", err)
+        return
+    }
+
+    fmt.Printf("Captcha ID: %s\n", captcha.ChallengeID)
+
+    verifyResult, err := client.VerifyImageCaptcha(&sdk.VerifyImageCaptchaRequest{
+        ChallengeID: captcha.ChallengeID,
+        Answer:     "user-input-answer",
+    })
+    if err != nil {
+        fmt.Printf("Verification error: %v\n", err)
+        return
+    }
+
+    fmt.Printf("Verification success: %v\n", verifyResult.Success)
+}
+```
+
+### Advanced Client with Connection Pooling
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func main() {
     cfg := &sdk.Config{
-        BaseURL:   "http://localhost:8080",
-        MaxRetries: 3,
-        HTTPTimeout: 10 * time.Second,
+        BaseURL:        "http://localhost:8080",
+        MaxRetries:     3,
+        HTTPTimeout:    10 * time.Second,
+        MaxIdleConns:   10,
+        MaxOpenConns:   100,
     }
 
     client := sdk.NewCaptchaClient("your-app-id", "your-app-secret", cfg)
@@ -56,7 +102,39 @@ func main() {
 }
 ```
 
-## Configuration Options
+## Client Comparison
+
+| Feature | Simple Client | Advanced Client |
+|---------|--------------|-----------------|
+| Connection Pool | No | Yes |
+| Automatic Retries | No | Yes |
+| Statistics Tracking | No | Yes |
+| Custom HTTP Client | No | Yes |
+| Best For | Low traffic, testing | Production, high traffic |
+
+## Simple Client Options
+
+```go
+// WithAPIKey sets the API key for authentication
+func WithAPIKey(apiKey string) Option
+
+// WithAPISecret sets the API secret for authentication
+func WithAPISecret(apiSecret string) Option
+
+// WithEndpoint sets the base URL for API requests
+func WithEndpoint(endpoint string) Option
+
+// WithTimeout sets the request timeout
+func WithTimeout(timeout time.Duration) Option
+
+// WithDebugMode enables debug logging
+func WithDebugMode(debug bool) Option
+
+// WithHTTPClient sets a custom HTTP client
+func WithHTTPClient(client *http.Client) Option
+```
+
+## Advanced Client Configuration
 
 The `Config` struct provides extensive customization options:
 
@@ -88,9 +166,82 @@ type Config struct {
 
 ## API Reference
 
-### CaptchaClient
+### Simple Client Methods
 
-The main client for interacting with the captcha service.
+#### GenerateImageCaptcha
+
+```go
+func (c *Client) GenerateImageCaptcha(req *ImageCaptchaRequest) (*ImageCaptchaResponse, error)
+```
+
+Generates a new image captcha challenge.
+
+```go
+type ImageCaptchaRequest struct {
+    Type  CaptchaType // number, letter, or mixed
+    Count int         // Number of characters (default: 4)
+}
+```
+
+Returns:
+- `ImageCaptchaResponse`: Contains challenge_id and base64-encoded image
+
+#### GetSliderCaptcha
+
+```go
+func (c *Client) GetSliderCaptcha(req *SliderCaptchaRequest) (*SliderCaptchaResponse, error)
+```
+
+```go
+type SliderCaptchaRequest struct {
+    Width      int // Image width (default: 300)
+    Height     int // Image height (default: 150)
+    Tolerance  int // Sliding tolerance (default: 8)
+}
+```
+
+#### GetClickCaptcha
+
+```go
+func (c *Client) GetClickCaptcha(req *ClickCaptchaRequest) (*ClickCaptchaResponse, error)
+```
+
+```go
+type ClickCaptchaRequest struct {
+    Width     int // Image width (default: 400)
+    Height    int // Image height (default: 300)
+    IconCount int // Number of click targets (default: 9)
+}
+```
+
+#### VerifyImageCaptcha
+
+```go
+func (c *Client) VerifyImageCaptcha(req *VerifyImageCaptchaRequest) (*VerifyImageCaptchaResponse, error)
+```
+
+```go
+type VerifyImageCaptchaRequest struct {
+    ChallengeID string // The challenge ID
+    Answer     string // User's answer
+}
+```
+
+#### VerifyCaptcha
+
+```go
+func (c *Client) VerifyCaptcha(req *VerifyCaptchaRequest) (*VerifyCaptchaResponse, error)
+```
+
+```go
+type VerifyCaptchaRequest struct {
+    ChallengeID string
+    Action     string // "click", "slide", etc.
+    Data       map[string]interface{}
+}
+```
+
+### Advanced Client Methods
 
 #### Constructor
 
@@ -245,7 +396,7 @@ Returns:
 #### ExtractBase64Image
 
 ```go
-func (c *CaptchaClient) ExtractBase64Image(dataURI string) ([]byte, error)
+func ExtractBase64Image(dataURI string) ([]byte, error)
 ```
 
 Extracts raw image bytes from a base64 data URI.
@@ -283,6 +434,31 @@ func GetSDKErrorCode(err error) int
 ### Example
 
 ```go
+// Using simple client
+client := sdk.NewClient(sdk.WithAPIKey("app-id"), sdk.WithAPISecret("app-secret"))
+defer client.Close()
+
+result, err := client.GenerateImageCaptcha(nil)
+if err != nil {
+    if sdk.IsSDKError(err) {
+        code := sdk.GetSDKErrorCode(err)
+        switch code {
+        case 401:
+            fmt.Println("Unauthorized - check credentials")
+        case 429:
+            fmt.Println("Rate limited - wait before retry")
+        case 500:
+            fmt.Println("Server error - try again later")
+        default:
+            fmt.Printf("SDK Error %d: %v\n", code, err)
+        }
+    } else {
+        fmt.Printf("Network error: %v\n", err)
+    }
+    return
+}
+
+// Using advanced client
 client := sdk.NewCaptchaClient("app-id", "app-secret", cfg)
 defer client.Close()
 
@@ -307,9 +483,9 @@ if err != nil {
 }
 ```
 
-## Connection Pool Management
+## Connection Pool Management (Advanced Client)
 
-The SDK manages HTTP connections efficiently with configurable pool settings:
+The advanced SDK manages HTTP connections efficiently with configurable pool settings:
 
 ### Default Configuration
 
@@ -346,9 +522,9 @@ newCfg := &sdk.Config{
 err := client.SetPoolConfig(newCfg)
 ```
 
-## Automatic Retries
+## Automatic Retries (Advanced Client)
 
-The SDK automatically retries failed requests with configurable behavior:
+The advanced SDK automatically retries failed requests with configurable behavior:
 
 ### Retry Conditions
 
@@ -376,7 +552,52 @@ cfg := &sdk.Config{
 }
 ```
 
-## Complete Example
+## Complete Examples
+
+### Example 1: Simple Image Captcha Workflow
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func main() {
+    client := sdk.NewClient(
+        sdk.WithAPIKey("your-api-key"),
+        sdk.WithAPISecret("your-api-secret"),
+        sdk.WithEndpoint("http://localhost:8080"),
+        sdk.WithTimeout(30*time.Second),
+    )
+    defer client.Close()
+
+    captcha, err := client.GenerateImageCaptcha(&sdk.ImageCaptchaRequest{
+        Type:  sdk.CaptchaTypeMixed,
+        Count: 4,
+    })
+    if err != nil {
+        fmt.Printf("Generation failed: %v\n", err)
+        return
+    }
+    fmt.Printf("Image Captcha: %s\n", captcha.ChallengeID)
+
+    verifyResp, err := client.VerifyImageCaptcha(&sdk.VerifyImageCaptchaRequest{
+        ChallengeID: captcha.ChallengeID,
+        Answer:     "user-input",
+    })
+    if err != nil {
+        fmt.Printf("Verification failed: %v\n", err)
+        return
+    }
+    fmt.Printf("Verification: %v\n", verifyResp.Success)
+}
+```
+
+### Example 2: Slider Captcha with Advanced Client
 
 ```go
 package main
@@ -402,7 +623,6 @@ func main() {
     client := sdk.NewCaptchaClient("your-app-id", "your-app-secret", cfg)
     defer client.Close()
 
-    // Generate and verify slider captcha
     slider, err := client.GenerateSliderCaptcha()
     if err != nil {
         fmt.Printf("Slider generation failed: %v\n", err)
@@ -410,7 +630,35 @@ func main() {
     }
     fmt.Printf("Slider Captcha: %s\n", slider.ChallengeID)
 
-    // Generate and verify click captcha
+    verifyResult, err := client.VerifySliderCaptcha(slider.ChallengeID, "120")
+    if err != nil {
+        fmt.Printf("Slider verification failed: %v\n", err)
+        return
+    }
+    fmt.Printf("Slider verification: %v\n", verifyResult.Success)
+
+    stats := client.GetStats()
+    fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
+    fmt.Printf("Success Rate: %.2f%%\n", stats.SuccessRate)
+}
+```
+
+### Example 3: Click Captcha
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func main() {
+    client := sdk.NewCaptchaClient("your-app-id", "your-app-secret", nil)
+    defer client.Close()
+
     click, err := client.GenerateClickCaptcha()
     if err != nil {
         fmt.Printf("Click generation failed: %v\n", err)
@@ -428,11 +676,6 @@ func main() {
         return
     }
     fmt.Printf("Click verification: %v\n", verifyResult.Success)
-
-    // Print statistics
-    stats := client.GetStats()
-    fmt.Printf("Total Requests: %d\n", stats.TotalRequests)
-    fmt.Printf("Success Rate: %.2f%%\n", stats.SuccessRate)
 }
 ```
 

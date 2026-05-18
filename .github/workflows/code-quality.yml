@@ -1,0 +1,143 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * 1'  # 每周一凌晨2点运行
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run Go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=10m
+
+      - name: Check code formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not formatted correctly:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Check for TODO comments without assignee
+        run: |
+          TODOS=$(grep -r "TODO" --include="*.go" . | grep -v "TODO:" | grep -v "// " || true)
+          if [ -n "$TODOS" ]; then
+            echo "Found TODO comments without description:"
+            echo "$TODOS"
+          fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run Go vulnerability scan
+        uses: trailofbits/go-sec-commit-check@v1
+        with:
+          package-path: .
+
+      - name: Run gosec security scanner
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -no-fail -fmt json -out gosec-report.json ./...
+
+      - name: Upload gosec report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gosec-report
+          path: gosec-report.json
+          retention-days: 30
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_COMMENTS: true
+          GITLEAKS_LOG_LEVEL: debug
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Check for go.sum integrity
+        run: |
+          go mod tidy
+          git diff --exit-code go.sum
+
+      - name: Run go mod why
+        run: |
+          go list -m all | while read mod; do
+            go mod why "$mod" > /dev/null 2>&1 || echo "Unused dependency: $mod"
+          done
+
+  code-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count Go files
+        run: |
+          GO_FILES=$(find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*" | wc -l)
+          echo "Go source files: $GO_FILES"
+
+      - name: Count lines of code
+        uses: coffeesheep/go-count-lines@v1
+        with:
+          path: .
+          extensions: go
+          exclude-dirs: vendor,node_modules,.git,e2e
+
+      - name: Check for large files
+        run: |
+          find . -type f -size +5M -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./.git/*" | while read f; do
+            echo "Large file: $f ($(du -h "$f" | cut -f1))"
+          done

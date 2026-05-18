@@ -60,6 +60,17 @@ func GetMFAStatusHandler(c *gin.Context) {
 	})
 }
 
+// GenerateTOTPHandler 生成TOTP密钥
+// @Summary 生成TOTP密钥
+// @Description 为用户生成新的TOTP认证密钥
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Param body body GenerateTOTPRequest true "TOTP生成请求"
+// @Success 200 {object} map[string]interface{} "TOTP密钥信息"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/totp/generate [post]
 func GenerateTOTPHandler(c *gin.Context) {
 	var req GenerateTOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -98,6 +109,19 @@ func VerifyTOTPHandler(c *gin.Context) {
 	})
 }
 
+// EnableTOTPHandler 启用TOTP
+// @Summary 启用TOTP
+// @Description 为当前用户启用基于时间的一次性密码(TOTP)认证
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body EnableTOTPRequest true "启用TOTP请求"
+// @Success 200 {object} map[string]interface{} "启用成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/totp/enable [post]
 func EnableTOTPHandler(c *gin.Context) {
 	var req EnableTOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -149,6 +173,19 @@ func SendSMSCodeHandler(c *gin.Context) {
 	})
 }
 
+// SendEmailCodeHandler 发送邮箱验证码
+// @Summary 发送邮箱验证码
+// @Description 向用户邮箱发送验证码
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body SendEmailCodeRequest true "邮箱验证码请求"
+// @Success 200 {object} map[string]interface{} "发送成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/email/send [post]
 func SendEmailCodeHandler(c *gin.Context) {
 	var req SendEmailCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -188,6 +225,19 @@ func VerifyCodeHandler(c *gin.Context) {
 	})
 }
 
+// EnableMFAHandler 启用MFA
+// @Summary 启用多因素认证
+// @Description 为当前用户启用多因素认证
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body EnableMFARequest true "启用MFA请求"
+// @Success 200 {object} map[string]interface{} "启用成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/enable [post]
 func EnableMFAHandler(c *gin.Context) {
 	var req EnableMFARequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -213,6 +263,17 @@ func EnableMFAHandler(c *gin.Context) {
 	})
 }
 
+// DisableMFAHandler 禁用MFA
+// @Summary 禁用多因素认证
+// @Description 禁用当前用户的多因素认证
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "禁用成功"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/disable [post]
 func DisableMFAHandler(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	if userID == 0 {
@@ -253,6 +314,19 @@ func GenerateBackupCodesHandler(c *gin.Context) {
 	})
 }
 
+// VerifyBackupCodeHandler 验证备用码
+// @Summary 验证备用验证码
+// @Description 使用备用验证码进行身份验证
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body VerifyCodeRequest true "备用码验证请求"
+// @Success 200 {object} map[string]interface{} "验证成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/backup-codes/verify [post]
 func VerifyBackupCodeHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

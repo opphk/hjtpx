@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -217,7 +218,9 @@ func RecordViolationAndAutoBanMiddleware(violationType string, threshold int, ba
 
 		shouldBan, _ := blacklistService.ShouldAutoBan(c.Request.Context(), identifier, banType, threshold)
 		if shouldBan {
-			_ = blacklistService.AutoBan(c.Request.Context(), identifier, banType)
+			if err := blacklistService.AutoBan(c.Request.Context(), identifier, banType); err != nil {
+				log.Printf("自动封禁失败: %v", err)
+			}
 			response.Forbidden(c)
 			c.Abort()
 			return

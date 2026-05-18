@@ -2154,6 +2154,109 @@
             getTranslation: getTranslation,
             switchLanguage: switchLanguage
         };
+        
+        function initPerformanceMonitoring() {
+            if (!window.PerformanceObserver) return;
+            
+            try {
+                const observer = new PerformanceObserver((list) => {
+                    list.getEntries().forEach((entry) => {
+                        if (entry.entryType === 'navigation') {
+                            const loadTime = Math.round(entry.loadEventEnd - entry.startTime);
+                            console.log('验证码页面加载时间:', loadTime + 'ms');
+                            
+                            if (loadTime > 3000) {
+                                console.warn('页面加载时间较长');
+                            }
+                        }
+                    });
+                });
+                observer.observe({ entryTypes: ['navigation'] });
+            } catch (e) {
+                console.log('性能监控不可用');
+            }
+        }
+
+        function initProgressiveDifficulty() {
+            const difficultyDots = document.querySelectorAll('.difficulty-dot');
+            difficultyDots.forEach(function(dot) {
+                dot.style.transition = 'all 0.3s ease';
+            });
+            
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                difficultyDots.forEach(function(dot) {
+                    dot.style.animation = 'none';
+                });
+            }
+        }
+
+        function initPreloading() {
+            const preloadImages = [
+                '/api/v1/captcha/slider',
+                '/api/v1/captcha/click'
+            ];
+            
+            preloadImages.forEach(function(url) {
+                const link = document.createElement('link');
+                link.rel = 'preload';
+                link.as = 'fetch';
+                link.href = url;
+                document.head.appendChild(link);
+            });
+        }
+
+        function initAccessibilityFeatures() {
+            const focusableElements = document.querySelectorAll(
+                'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            
+            focusableElements.forEach(function(el) {
+                el.addEventListener('focus', function() {
+                    this.style.outline = '2px solid var(--captcha-primary)';
+                    this.style.outlineOffset = '2px';
+                });
+                el.addEventListener('blur', function() {
+                    this.style.outline = '';
+                    this.style.outlineOffset = '';
+                });
+            });
+            
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelectorAll('*').forEach(function(el) {
+                    el.style.animationDuration = '0.01ms !important';
+                    el.style.transitionDuration = '0.01ms !important';
+                });
+            }
+            
+            const highContrastBtn = document.getElementById('contrastToggle');
+            if (highContrastBtn) {
+                highContrastBtn.addEventListener('click', function() {
+                    document.body.classList.toggle('high-contrast');
+                    const isActive = this.classList.toggle('active');
+                    this.setAttribute('aria-pressed', isActive);
+                });
+            }
+            
+            const audioBtn = document.getElementById('audioBtn');
+            if (audioBtn) {
+                audioBtn.addEventListener('click', function() {
+                    const isActive = this.classList.toggle('active');
+                    this.setAttribute('aria-pressed', isActive);
+                    showToast(isActive ? '音频提示已开启' : '音频提示已关闭', 'info');
+                });
+            }
+            
+            const perfMetricsBtn = document.getElementById('perfMetricsBtn');
+            if (perfMetricsBtn) {
+                perfMetricsBtn.addEventListener('click', function() {
+                    const metricsEl = document.getElementById('performanceMetrics');
+                    if (metricsEl) {
+                        const isVisible = metricsEl.classList.toggle('show');
+                        this.setAttribute('aria-pressed', isVisible);
+                    }
+                });
+            }
+        }
     </script>
 </body>
 </html>

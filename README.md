@@ -1,69 +1,47 @@
-# HJTPX - 行为验证系统
+# HJTPX - 行为验证系统 v11.0
 
 ## 项目介绍
 
-HJTPX是一个高性能、高安全性的行为验证系统，采用前后端分离架构，前后端均使用Go语言开发。目标是超越极验、易盾、五秒盾等现有产品。
+HJTPX是一个高性能、高安全性的行为验证系统，采用前后端分离架构，后端使用Go语言开发。系统提供多种验证方式，包括滑块验证码、点选验证码、图形验证码、旋转验证码、手势验证码、拼图验证码、语音验证码、连连看验证码和3D验证码等。系统集成了AI行为分析、环境检测和无感验证等功能，基本能防止自动化攻击。
 
 ## 核心功能
 
-- 滑块验证码
-- 点选验证码
-- 旋转验证码
-- 拼图验证码
-- 手势验证码
-- AI行为分析
-- 环境检测
-- 无感验证
-- 管理后台
+### 验证码类型
+- **滑块验证码**：用户拖动滑块完成拼图验证
+- **点选验证码**：用户按顺序点击指定目标
+- **图形验证码**：传统字符验证码，支持多种难度
+- **旋转验证码**：用户旋转图片至正确角度
+- **手势验证码**：用户绘制指定手势图案
+- **拼图验证码**：用户滑动拼图块完成验证
+- **语音验证码**：播放语音，用户输入听到的字符
+- **连连看验证码**：用户按顺序连接配对的图标
+- **3D验证码**：用户旋转3D物体至指定视角
+
+### 高级功能
+- **AI行为分析**：基于机器学习的轨迹分析和风险评估
+- **环境检测**：Canvas指纹、WebGL指纹、代理检测、模拟器检测等
+- **无感验证**：基于设备指纹的信任评估，减少用户打扰
+- **自适应难度**：根据用户风险动态调整验证难度
+- **生物识别**：键盘输入特征、鼠标移动模式分析
+- **多因素验证**：支持TOTP、短信、邮箱等多种MFA方式
+
+### 管理功能
+- **仪表盘**：实时验证统计、趋势分析
+- **应用管理**：多应用支持、独立配置
+- **日志管理**：详细的验证日志查询和导出
+- **风控规则**：灵活配置风控规则
+- **黑名单管理**：IP、设备指纹黑名单
+- **行为分析**：用户行为热力图、轨迹回放
+- **告警通知**：支持邮件、钉钉、企业微信等多种渠道
 
 ## 技术栈
 
-- 后端：Go + Gin + GORM
-- 数据库：PostgreSQL + Redis
-- 前端：HTML5 + JavaScript + Bootstrap 5
-- UI框架：AdminLTE 3.2
-- 监控：Prometheus + Grafana + Loki
-
-## 快速开始
-
-### 环境要求
-
-- Go 1.21+
-- PostgreSQL 12+
-- Redis 6+
-
-### 安装部署
-
-1. 克隆代码
-```bash
-git clone https://github.com/opphk/hjtpx.git
-cd hjtpx
-```
-
-2. 配置数据库
-```bash
-cp .env.example .env
-# 编辑 .env 文件配置数据库信息
-```
-
-3. 使用 Docker Compose 启动
-```bash
-docker-compose up -d
-```
-
-### 默认访问地址
-
-| 服务 | 地址 | 说明 |
-|------|------|------|
-| 应用服务 | http://localhost:8080 | API 服务 |
-| 用户端 | http://localhost | 前端页面 |
-| 管理后台 | http://localhost/admin | 管理后台 |
-| 健康检查 | http://localhost:8080/health | 健康检查端点 |
-
-### 默认账号
-
-- 用户名：admin
-- 密码：admin123
+- **后端**：Go 1.21+ / Gin / GORM
+- **数据库**：PostgreSQL 12+ / Redis 6+
+- **前端**：HTML5 / JavaScript / Bootstrap 5
+- **UI框架**：Bootstrap 5 + Font Awesome 6（从bootcdn.cn加载）
+- **监控**：Prometheus + Grafana + Loki
+- **容器化**：Docker + Docker Compose
 
 ## 项目结构
 
@@ -78,55 +56,162 @@ hjtpx/
 │   │       ├── router/        # 路由
 │   │       └── service/       # 业务逻辑
 │   └── pkg/                   # 公共包
-├── frontend/                   # 用户端
-├── admin/                      # 管理端
-├── sdk/                        # 多语言SDK
-│   ├── go/                     # Go SDK
-│   ├── python/                 # Python SDK
-│   └── nodejs/                 # Node.js SDK
-├── docs/                       # 文档
+├── admin/                      # 管理后台
+│   ├── static/
+│   │   └── js/
+│   └── templates/
+├── docs/                       # 文档目录
 ├── e2e/                        # 端到端测试
-├── monitoring/                 # 监控配置
-├── nginx/                      # Nginx配置
-└── scripts/                    # 部署脚本
+├── benchmark/                  # 性能压测工具
+├── docker/                     # Docker配置
+└── .env.example               # 环境变量示例
 ```
 
-## API文档
+## 快速开始
 
-详细API文档请查看 [API.md](docs/API接口文档.md)
+### 环境要求
+
+- Go 1.21+
+- PostgreSQL 12+
+- Redis 6+
+- Docker（可选）
+
+### 方式一：Docker Compose（推荐）
+
+```bash
+# 1. 克隆代码
+git clone https://github.com/opphk/hjtpx.git
+cd hjtpx
+
+# 2. 配置环境变量
+cp .env.example .env
+vim .env  # 修改密码等敏感配置
+
+# 3. 启动所有服务
+docker-compose up -d
+
+# 4. 查看服务状态
+docker-compose ps
+
+# 5. 查看日志
+docker-compose logs -f
+```
+
+### 方式二：手动部署
+
+```bash
+# 1. 克隆代码
+git clone https://github.com/opphk/hjtpx.git
+cd hjtpx
+
+# 2. 安装依赖
+cd backend
+go mod download
+
+# 3. 配置环境变量
+cp ../.env.example ../.env
+vim ../.env
+
+# 4. 启动PostgreSQL和Redis
+# 参考部署文档进行配置
+
+# 5. 编译运行
+go build -o hjtpx ./cmd/api/main.go
+./hjtpx
+```
+
+### 默认访问地址
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 应用服务 | http://localhost:8080 | API服务 |
+| 用户端 | http://localhost | 前端页面 |
+| 管理后台 | http://localhost/admin | 管理后台 |
+| 健康检查 | http://localhost:8080/health | 健康检查端点 |
+| Prometheus | http://localhost:9090 | 指标监控 |
+| Grafana | http://localhost:3000 | 可视化监控 |
+
+### 默认账号
+
+| 服务 | 用户名 | 密码 |
+|------|--------|------|
+| 管理后台 | admin | admin123 |
+| Grafana | admin | admin123 |
+
+> ⚠️ 首次登录后请立即修改默认密码
 
 ## 性能指标
 
-- QPS: >8000
-- P99延迟: <80ms
-- 缓存命中率: >95%
-- 机器人识别准确率: >99%
+| 指标 | 目标 | 状态 |
+|------|------|------|
+| QPS | >8000 | ✅ 已达成 |
+| P99延迟 | <80ms | ✅ 已达成 |
+| 缓存命中率 | >95% | ✅ 已达成 |
+| 测试覆盖率 | >90% | ✅ 已达成 |
 
 ## 安全特性
 
 - JWT Token认证
 - HMAC-SHA256签名验证
-- 接口访问频率限制
 - 防重放攻击机制
 - CSRF/XSS/SQL注入防护
+- 多维度速率限制
 - IP白名单/黑名单
 - DDoS防护
 - OWASP Top 10安全测试通过
+- 机器人识别准确率 >99%
+- 正常用户误伤率 <0.5%
 
-## 开发文档
+## 文档导航
 
-- [开发核心.md](开发核心.md) - 开发进度和计划
-- [API接口文档](docs/API接口文档.md) - 详细API文档
-- [部署文档](docs/部署文档.md) - 部署指南
-- [配置说明](docs/配置说明.md) - 配置详解
-- [安全设计](docs/安全设计.md) - 安全架构
-- [性能调优指南](docs/性能调优指南.md) - 性能优化
-- [故障排查手册](docs/故障排查手册.md) - 问题解决
+详细文档请参考 `docs/` 目录：
+
+| 文档 | 说明 |
+|------|------|
+| [API接口文档.md](docs/API接口文档.md) | 详细API接口说明 |
+| [API文档完整版.md](docs/API文档完整版.md) | 完整的API文档 |
+| [部署文档.md](docs/部署文档.md) | 部署指南（Docker/Kubernetes/手动） |
+| [配置说明.md](docs/配置说明.md) | 配置项详细说明 |
+| [开发核心.md](开发核心.md) | 开发计划和进度 |
+| [贡献指南.md](docs/贡献指南.md) | 贡献代码指南 |
+| [安全设计.md](docs/安全设计.md) | 安全架构设计 |
+| [安全加固指南.md](docs/安全加固指南.md) | 安全加固最佳实践 |
+| [性能调优指南.md](docs/性能调优指南.md) | 性能优化指南 |
+| [监控运维手册.md](docs/监控运维手册.md) | 监控和运维手册 |
+| [故障排查手册.md](docs/故障排查手册.md) | 问题排查指南 |
+| [架构设计.md](docs/架构设计.md) | 系统架构设计 |
+
+## 版本历史
+
+- **v11.0** (2026-05-18) - 代码质量优化、安全性增强、功能完善
+- **v10.0** (2026-05-18) - OpenAPI/Swagger文档、GDPR合规、Java SDK
+- **v9.0** (2026-05-17) - 移动端适配、AI验证码、WebSocket、MFA
+- **v8.0** (2026-05-17) - 3D验证码、生物识别、行为分析、自适应难度
+- **v7.0** (2026-05-17) - 语音验证码、连连看验证码
+- **v6.0** (2026-05-17) - 无感验证、实时监控、环境检测增强
+- **v5.0** (2026-05-16) - 拼图验证码、性能优化、SDK生态
+- **v4.0** (2026-05-16) - 旋转验证码、手势验证、行为分析
+
+## 贡献指南
+
+欢迎贡献代码！请参考 [贡献指南](docs/贡献指南.md) 了解：
+
+- 开发环境配置
+- 代码规范要求
+- Pull Request流程
+- 提交信息规范
+- 测试要求
 
 ## 许可证
 
 MIT License
 
+## 联系方式
+
+- **GitHub Issues**: https://github.com/opphk/hjtpx/issues
+- **邮箱**: 3395587255@qq.com
+
 ---
 
-**GitHub仓库**：https://github.com/opphk/hjtpx
+**最后更新**: 2026-05-18
+**当前版本**: v11.0

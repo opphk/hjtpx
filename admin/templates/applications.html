@@ -166,41 +166,60 @@
                 </div>
             </div>
 
-            <div class="card shadow-sm mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>搜索筛选</span>
-                    <button id="toggleAdvancedSearch" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-filter"></i> 高级搜索
-                    </button>
-                </div>
-                <div class="card-body">
-                    <!-- 基本搜索 -->
-                    <div class="row g-3 align-items-end mb-3">
-                        <div class="col-md-3">
-                            <label class="form-label"><i class="fas fa-search me-1 text-warning"></i>搜索应用</label>
-                            <input type="text" class="form-control" id="searchApp" placeholder="输入应用名称或ID">
+            <div class="row g-4 mb-4">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <span class="d-flex align-items-center">
+                                <i class="fas fa-filter me-2 text-warning"></i>搜索筛选
+                            </span>
+                            <button id="toggleAdvancedSearch" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-sliders-h"></i> 高级搜索
+                            </button>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">状态</label>
-                            <select class="form-select" id="appStatus">
-                                <option value="">全部</option>
-                                <option value="active">活跃</option>
-                                <option value="inactive">停用</option>
-                                <option value="suspended">暂停</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">排序</label>
-                            <select class="form-select" id="appSort">
-                                <option value="created">创建时间</option>
-                                <option value="requests">请求量</option>
-                                <option value="name">名称</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <button id="searchBtn" class="btn-ink w-100"><i class="fas fa-search me-1"></i>搜索</button>
-                        </div>
-                    </div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-12 col-md-6 col-lg-3">
+                                    <label class="form-label d-flex align-items-center">
+                                        <i class="fas fa-search me-1 text-warning"></i>搜索应用
+                                    </label>
+                                    <input type="text" class="form-control" id="searchApp" placeholder="输入应用名称或ID">
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label class="form-label">状态</label>
+                                    <select class="form-select" id="appStatus">
+                                        <option value="">全部</option>
+                                        <option value="active">活跃</option>
+                                        <option value="inactive">停用</option>
+                                        <option value="suspended">暂停</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 col-md-3 col-lg-2">
+                                    <label class="form-label">排序</label>
+                                    <select class="form-select" id="appSort">
+                                        <option value="created">创建时间</option>
+                                        <option value="requests">请求量</option>
+                                        <option value="name">名称</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-3 col-lg-2">
+                                    <button id="searchBtn" class="btn-ink w-100">
+                                        <i class="fas fa-search me-1"></i>搜索
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 mt-2">
+                                <div class="col-12">
+                                    <span class="text-muted small me-2">快速筛选:</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary active" data-quick-filter="">全部</button>
+                                        <button class="btn btn-outline-success" data-quick-filter="active"><i class="fas fa-check-circle me-1"></i>活跃</button>
+                                        <button class="btn btn-outline-warning" data-quick-filter="suspended"><i class="fas fa-pause me-1"></i>暂停</button>
+                                        <button class="btn btn-outline-secondary" data-quick-filter="inactive"><i class="fas fa-ban me-1"></i>停用</button>
+                                    </div>
+                                </div>
+                            </div>
                     
                     <!-- 高级搜索区域 -->
                     <div id="advancedSearchSection" class="border-top pt-3" style="display: none;">
@@ -256,10 +275,32 @@
                     </div>
                 </div>
                 <div class="card-body p-0">
+                    <div id="batchToolbar" class="d-none bg-light p-2 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="selectAllApps">
+                                <label class="form-check-label" for="selectAllApps">
+                                    已选择 <span id="selectedAppCount">0</span> 个应用
+                                </label>
+                            </div>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" id="batchStatusBtn">
+                                    <i class="fas fa-toggle-on me-1"></i>批量修改状态
+                                </button>
+                                <button class="btn btn-outline-danger" id="batchDeleteBtn">
+                                    <i class="fas fa-trash me-1"></i>批量删除
+                                </button>
+                                <button class="btn btn-outline-success" onclick="selectedApps.clear(); updateBatchToolbar(); updateTableRowStyles();">
+                                    <i class="fas fa-times me-1"></i>取消选择
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="table-responsive" id="appsTableView">
                         <table class="table table-hover mb-0">
                             <thead>
                                 <tr>
+                                    <th>选择</th>
                                     <th>应用ID</th>
                                     <th>应用名称</th>
                                     <th>应用密钥</th>
@@ -558,6 +599,37 @@
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
                     <button type="button" class="btn-ink" onclick="saveCurrentSearch()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量修改状态模态框 -->
+    <div class="modal fade" id="batchStatusModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-toggle-on me-2"></i>批量修改状态</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-1"></i>
+                        将同时修改 <strong id="batchStatusCount">0</strong> 个应用的状态
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新状态</label>
+                        <select class="form-select" id="batchNewStatus">
+                            <option value="">请选择</option>
+                            <option value="active">活跃</option>
+                            <option value="inactive">停用</option>
+                            <option value="suspended">暂停</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-ink" onclick="applyBatchStatus()">确认修改</button>
                 </div>
             </div>
         </div>

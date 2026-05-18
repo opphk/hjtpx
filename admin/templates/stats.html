@@ -48,68 +48,72 @@
             </div>
         </header>
         <hr style="height:4px;background:linear-gradient(to right,#c9a96e,transparent);border:none;margin:0 0 24px;opacity:0.6;border-radius:2px;">
-        <main class="p-4">
+        <main class="p-2 p-md-4">
             <div class="card shadow-sm mb-4">
                 <div class="card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
+                    <div class="row g-2 g-md-3 align-items-end">
+                        <div class="col-6 col-md-3">
                             <label class="form-label"><i class="fas fa-calendar me-1" style="color:#b8924e;"></i>时间范围</label>
-                            <select class="form-select" id="dateRange">
+                            <select class="form-select form-select-sm" id="dateRange">
                                 <option value="7d">最近7天</option>
                                 <option value="30d" selected>最近30天</option>
                                 <option value="90d">最近90天</option>
                                 <option value="1y">最近1年</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-6 col-md-3">
                             <label class="form-label"><i class="fas fa-chart-simple me-1" style="color:#b8924e;"></i>对比周期</label>
-                            <select class="form-select" id="comparePeriod">
+                            <select class="form-select form-select-sm" id="comparePeriod">
                                 <option value="">不对比</option>
                                 <option value="prev">上一周期</option>
                                 <option value="prev_year">去年同期</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <button id="applyFilterBtn" class="btn btn-dark w-100"><i class="fas fa-filter me-1"></i>应用筛选</button>
+                        <div class="col-12 col-md-3 col-lg-2">
+                            <button id="applyFilterBtn" class="btn btn-dark w-100 btn-sm"><i class="fas fa-filter me-1"></i>应用筛选</button>
+                        </div>
+                        <div class="col-12 col-md-3 col-lg-4 d-flex justify-content-between justify-content-md-end gap-2">
+                            <button id="exportStatsBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出报表</button>
+                            <button id="refreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row g-4 mb-4">
-                <div class="col-md-3">
+            <div class="row g-2 g-md-4 mb-4">
+                <div class="col-6 col-md-3">
                     <div class="card shadow-sm border text-center">
-                        <div class="card-body">
-                            <div class="text-muted mb-1" style="font-size:12px;letter-spacing:0.5px;">总请求量</div>
-                            <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statTotalRequests">0</div>
-                            <div class="text-success" style="font-size:12px;font-weight:500;" id="statRequestsChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
+                        <div class="card-body py-2 py-md-3">
+                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">总请求量</div>
+                            <div style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statTotalRequests">0</div>
+                            <div class="text-success" style="font-size:11px;font-size:12px;font-weight:500;" id="statRequestsChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-6 col-md-3">
                     <div class="card shadow-sm border text-center">
-                        <div class="card-body">
-                            <div class="text-muted mb-1" style="font-size:12px;letter-spacing:0.5px;">平均响应时间</div>
-                            <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statAvgResponse">0ms</div>
-                            <div class="text-danger" style="font-size:12px;font-weight:500;" id="statResponseChange"><i class="fas fa-arrow-down me-1"></i>-0%</div>
+                        <div class="card-body py-2 py-md-3">
+                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">平均响应</div>
+                            <div style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statAvgResponse">0ms</div>
+                            <div class="text-danger" style="font-size:11px;font-size:12px;font-weight:500;" id="statResponseChange"><i class="fas fa-arrow-down me-1"></i>-0%</div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-6 col-md-3">
                     <div class="card shadow-sm border text-center">
-                        <div class="card-body">
-                            <div class="text-muted mb-1" style="font-size:12px;letter-spacing:0.5px;">成功率</div>
-                            <div class="text-success" style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statSuccessRate">0%</div>
-                            <div class="text-success" style="font-size:12px;font-weight:500;" id="statSuccessChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
+                        <div class="card-body py-2 py-md-3">
+                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">成功率</div>
+                            <div class="text-success" style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statSuccessRate">0%</div>
+                            <div class="text-success" style="font-size:11px;font-size:12px;font-weight:500;" id="statSuccessChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-6 col-md-3">
                     <div class="card shadow-sm border text-center">
-                        <div class="card-body">
-                            <div class="text-muted mb-1" style="font-size:12px;letter-spacing:0.5px;">活跃用户</div>
-                            <div style="font-weight:700;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statActiveUsers">0</div>
-                            <div class="text-success" style="font-size:12px;font-weight:500;" id="statUsersChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
+                        <div class="card-body py-2 py-md-3">
+                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">活跃用户</div>
+                            <div style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statActiveUsers">0</div>
+                            <div class="text-success" style="font-size:11px;font-size:12px;font-weight:500;" id="statUsersChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
                         </div>
                     </div>
                 </div>

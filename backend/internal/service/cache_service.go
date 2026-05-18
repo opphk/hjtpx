@@ -28,8 +28,12 @@ const (
 )
 
 type CacheService struct {
-	defaultTTL time.Duration
-	luaScripts map[string]*goredis.Script
+	defaultTTL          time.Duration
+	luaScripts          map[string]*goredis.Script
+	keyManager          *redis.CacheKeyManager
+	monitoringCollector *redis.CacheMonitoringCollector
+	expirationManager  *redis.CacheExpirationManager
+	invalidationManager *redis.CacheInvalidationManager
 }
 
 type CacheServiceOption func(*CacheService)
@@ -42,8 +46,12 @@ func WithDefaultTTL(ttl time.Duration) CacheServiceOption {
 
 func NewCacheService(opts ...CacheServiceOption) *CacheService {
 	cs := &CacheService{
-		defaultTTL: 5 * time.Minute,
-		luaScripts: make(map[string]*goredis.Script),
+		defaultTTL:          5 * time.Minute,
+		luaScripts:          make(map[string]*goredis.Script),
+		keyManager:          redis.NewCacheKeyManager(redis.NamespaceGlobal),
+		monitoringCollector: redis.GetCacheMonitoringCollector(),
+		expirationManager:  redis.GetExpirationManager(),
+		invalidationManager: redis.GetInvalidationManager(),
 	}
 
 	for _, opt := range opts {
@@ -58,11 +66,23 @@ func (cs *CacheService) Get(ctx context.Context, key string) (string, error) {
 		return "", ErrCacheMiss
 	}
 
+	start := time.Now()
 	val, err := redis.Client.Get(ctx, key).Result()
+	cs.monitoringCollector.RecordLatency(time.Since(start))
+
 	if err == goredis.Nil {
+		cs.monitoringCollector.RecordMiss()
 		return "", ErrCacheMiss
 	}
-	return val, err
+
+	if err != nil {
+		cs.monitoringCollector.RecordError()
+		return "", err
+	}
+
+	cs.monitoringCollector.RecordHit()
+	cs.monitoringCollector.RecordKeyAccess(key)
+	return val, nil
 }
 
 func (cs *CacheService) GetBytes(ctx context.Context, key string) ([]byte, error) {
@@ -70,11 +90,23 @@ func (cs *CacheService) GetBytes(ctx context.Context, key string) ([]byte, error
 		return nil, ErrCacheMiss
 	}
 
+	start := time.Now()
 	val, err := redis.Client.Get(ctx, key).Bytes()
+	cs.monitoringCollector.RecordLatency(time.Since(start))
+
 	if err == goredis.Nil {
+		cs.monitoringCollector.RecordMiss()
 		return nil, ErrCacheMiss
 	}
-	return val, err
+
+	if err != nil {
+		cs.monitoringCollector.RecordError()
+		return nil, err
+	}
+
+	cs.monitoringCollector.RecordHit()
+	cs.monitoringCollector.RecordKeyAccess(key)
+	return val, nil
 }
 
 func (cs *CacheService) GetJSON(ctx context.Context, key string, dest interface{}) error {
@@ -82,14 +114,22 @@ func (cs *CacheService) GetJSON(ctx context.Context, key string, dest interface{
 		return ErrCacheMiss
 	}
 
+	start := time.Now()
 	val, err := redis.Client.Get(ctx, key).Bytes()
+	cs.monitoringCollector.RecordLatency(time.Since(start))
+
 	if err == goredis.Nil {
+		cs.monitoringCollector.RecordMiss()
 		return ErrCacheMiss
 	}
+
 	if err != nil {
+		cs.monitoringCollector.RecordError()
 		return err
 	}
 
+	cs.monitoringCollector.RecordHit()
+	cs.monitoringCollector.RecordKeyAccess(key)
 	return json.Unmarshal(val, dest)
 }
 
@@ -101,6 +141,8 @@ func (cs *CacheService) SetWithTTL(ctx context.Context, key string, value interf
 	if redis.Client == nil {
 		return nil
 	}
+
+	adaptiveTTL := cs.expirationManager.CalculateTTL(key, ttl)
 
 	var data []byte
 	var err error
@@ -117,7 +159,15 @@ func (cs *CacheService) SetWithTTL(ctx context.Context, key string, value interf
 		}
 	}
 
-	return redis.Client.Set(ctx, key, data, ttl).Err()
+	err = redis.Client.Set(ctx, key, data, adaptiveTTL).Err()
+	if err != nil {
+		cs.monitoringCollector.RecordError()
+		return err
+	}
+
+	cs.monitoringCollector.RecordSet()
+	cs.monitoringCollector.RecordKeyAccess(key)
+	return nil
 }
 
 func (cs *CacheService) Delete(ctx context.Context, keys ...string) error {
@@ -129,7 +179,13 @@ func (cs *CacheService) Delete(ctx context.Context, keys ...string) error {
 		return nil
 	}
 
-	return redis.Client.Del(ctx, keys...).Err()
+	err := cs.invalidationManager.Invalidate(ctx, keys[0])
+	if err != nil {
+		return redis.Client.Del(ctx, keys...).Err()
+	}
+
+	cs.monitoringCollector.RecordDelete()
+	return nil
 }
 
 func (cs *CacheService) Exists(ctx context.Context, key string) (bool, error) {
@@ -146,7 +202,8 @@ func (cs *CacheService) Expire(ctx context.Context, key string, ttl time.Duratio
 		return nil
 	}
 
-	return redis.Client.Expire(ctx, key, ttl).Err()
+	adaptiveTTL := cs.expirationManager.CalculateTTL(key, ttl)
+	return redis.Client.Expire(ctx, key, adaptiveTTL).Err()
 }
 
 func (cs *CacheService) TTL(ctx context.Context, key string) (time.Duration, error) {
@@ -162,7 +219,11 @@ func (cs *CacheService) Increment(ctx context.Context, key string) (int64, error
 		return 0, nil
 	}
 
-	return redis.Client.Incr(ctx, key).Result()
+	result, err := redis.Client.Incr(ctx, key).Result()
+	if err == nil {
+		cs.monitoringCollector.RecordKeyAccess(key)
+	}
+	return result, err
 }
 
 func (cs *CacheService) Decrement(ctx context.Context, key string) (int64, error) {
@@ -178,7 +239,11 @@ func (cs *CacheService) IncrementBy(ctx context.Context, key string, value int64
 		return 0, nil
 	}
 
-	return redis.Client.IncrBy(ctx, key, value).Result()
+	result, err := redis.Client.IncrBy(ctx, key, value).Result()
+	if err == nil {
+		cs.monitoringCollector.RecordKeyAccess(key)
+	}
+	return result, err
 }
 
 type DistributedLock struct {
@@ -210,7 +275,7 @@ func (cs *CacheService) AcquireLock(ctx context.Context, key string, opts *LockO
 		opts = defaultLockOptions
 	}
 
-	lockKey := fmt.Sprintf("lock:%s", key)
+	lockKey := cs.keyManager.BuildLockKey(key)
 	lockValue := fmt.Sprintf("%d", time.Now().UnixNano())
 
 	lock := &DistributedLock{
@@ -301,6 +366,8 @@ func (cs *CacheService) GetStats(ctx context.Context) (*CacheStats, error) {
 		return &CacheStats{}, nil
 	}
 
+	enhancedStats := cs.monitoringCollector.GetDetailedMetrics()
+
 	var keys int64
 	iter := redis.Client.Scan(ctx, 0, "*", 0).Iterator()
 	for iter.Next(ctx) {
@@ -310,14 +377,19 @@ func (cs *CacheService) GetStats(ctx context.Context) (*CacheStats, error) {
 		return nil, scanErr
 	}
 
-	_, infoErr := redis.Client.Info(ctx, "memory").Result()
-	if infoErr != nil {
-		return &CacheStats{Keys: keys}, nil
-	}
-
 	return &CacheStats{
+		Hits: int64(enhancedStats["hits"].(int64)),
+		Misses: int64(enhancedStats["misses"].(int64)),
 		Keys: keys,
 	}, nil
+}
+
+func (cs *CacheService) GetMonitoringStats() map[string]interface{} {
+	return cs.monitoringCollector.GetDetailedMetrics()
+}
+
+func (cs *CacheService) GetHealthStatus() *redis.CacheHealthStatus {
+	return cs.monitoringCollector.GetHealthStatus()
 }
 
 func (cs *CacheService) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
@@ -370,10 +442,14 @@ func (cs *CacheService) SetMultiple(ctx context.Context, items map[string]interf
 			}
 		}
 
-		pipe.Set(ctx, key, data, ttl)
+		adaptiveTTL := cs.expirationManager.CalculateTTL(key, ttl)
+		pipe.Set(ctx, key, data, adaptiveTTL)
 	}
 
 	_, err := pipe.Exec(ctx)
+	if err == nil {
+		cs.monitoringCollector.RecordSet()
+	}
 	return err
 }
 
@@ -584,7 +660,7 @@ func (cs *CacheService) SetCaptchaCache(ctx context.Context, captchaID string, d
 		return nil
 	}
 
-	key := fmt.Sprintf("captcha:%s", captchaID)
+	key := cs.keyManager.BuildCaptchaKey(captchaID)
 	return cs.SetWithTTL(ctx, key, data, CaptchaSessionTTL)
 }
 
@@ -593,7 +669,7 @@ func (cs *CacheService) GetCaptchaCache(ctx context.Context, captchaID string) (
 		return nil, ErrCacheMiss
 	}
 
-	key := fmt.Sprintf("captcha:%s", captchaID)
+	key := cs.keyManager.BuildCaptchaKey(captchaID)
 	var cache CaptchaCache
 	if err := cs.GetJSON(ctx, key, &cache); err != nil {
 		return nil, err
@@ -612,7 +688,7 @@ func (cs *CacheService) DeleteCaptchaCache(ctx context.Context, captchaID string
 		return nil
 	}
 
-	key := fmt.Sprintf("captcha:%s", captchaID)
+	key := cs.keyManager.BuildCaptchaKey(captchaID)
 	return cs.Delete(ctx, key)
 }
 
@@ -628,7 +704,7 @@ func (cs *CacheService) SetBehaviorCache(ctx context.Context, sessionID string, 
 		return nil
 	}
 
-	key := fmt.Sprintf("behavior:%s", sessionID)
+	key := cs.keyManager.BuildBehaviorKey(sessionID)
 	return cs.SetWithTTL(ctx, key, data, BehaviorCacheTTL)
 }
 
@@ -637,7 +713,7 @@ func (cs *CacheService) GetBehaviorCache(ctx context.Context, sessionID string) 
 		return nil, ErrCacheMiss
 	}
 
-	key := fmt.Sprintf("behavior:%s", sessionID)
+	key := cs.keyManager.BuildBehaviorKey(sessionID)
 	var cache BehaviorCache
 	if err := cs.GetJSON(ctx, key, &cache); err != nil {
 		return nil, err
@@ -651,7 +727,7 @@ func (cs *CacheService) DeleteBehaviorCache(ctx context.Context, sessionID strin
 		return nil
 	}
 
-	key := fmt.Sprintf("behavior:%s", sessionID)
+	key := cs.keyManager.BuildBehaviorKey(sessionID)
 	return cs.Delete(ctx, key)
 }
 
@@ -668,7 +744,7 @@ func (cs *CacheService) SetSessionCache(ctx context.Context, token string, data 
 		return nil
 	}
 
-	key := fmt.Sprintf("session:%s", token)
+	key := cs.keyManager.BuildSessionKey(token)
 	return cs.SetWithTTL(ctx, key, data, UserSessionTTL)
 }
 
@@ -677,7 +753,7 @@ func (cs *CacheService) GetSessionCache(ctx context.Context, token string) (*Ses
 		return nil, ErrCacheMiss
 	}
 
-	key := fmt.Sprintf("session:%s", token)
+	key := cs.keyManager.BuildSessionKey(token)
 	var cache SessionCache
 	if err := cs.GetJSON(ctx, key, &cache); err != nil {
 		return nil, err
@@ -696,7 +772,7 @@ func (cs *CacheService) DeleteSessionCache(ctx context.Context, token string) er
 		return nil
 	}
 
-	key := fmt.Sprintf("session:%s", token)
+	key := cs.keyManager.BuildSessionKey(token)
 	return cs.Delete(ctx, key)
 }
 
@@ -725,7 +801,7 @@ func (cs *CacheService) IncrementRateLimit(ctx context.Context, identifier strin
 		return 0, nil
 	}
 
-	key := fmt.Sprintf("ratelimit:%s", identifier)
+	key := cs.keyManager.BuildRateLimitKey(identifier, int(window.Seconds()))
 
 	pipe := redis.Client.Pipeline()
 	incrCmd := pipe.Incr(ctx, key)
@@ -753,7 +829,7 @@ func (cs *CacheService) GetRateLimitCount(ctx context.Context, identifier string
 		return 0, nil
 	}
 
-	key := fmt.Sprintf("ratelimit:%s", identifier)
+	key := cs.keyManager.BuildRateLimitKey(identifier, int(window.Seconds()))
 	val, err := redis.Client.Get(ctx, key).Int()
 	if err == goredis.Nil {
 		return 0, nil
@@ -766,13 +842,12 @@ func (cs *CacheService) ResetRateLimit(ctx context.Context, identifier string) e
 		return nil
 	}
 
-	key := fmt.Sprintf("ratelimit:%s", identifier)
+	key := cs.keyManager.BuildRateLimitKey(identifier, 0)
 	return cs.Delete(ctx, key)
 }
 
 type CacheWarmer struct {
-	cacheService *CacheService
-	warmupTasks  []WarmupTask
+	cacheService *redis.CacheWarmupManager
 	stopCh       chan struct{}
 	running      bool
 	mu           sync.Mutex
@@ -786,17 +861,16 @@ type WarmupTask struct {
 
 func NewCacheWarmer() *CacheWarmer {
 	return &CacheWarmer{
-		cacheService: NewCacheService(),
-		warmupTasks:  make([]WarmupTask, 0),
+		cacheService: redis.GetCacheWarmupManager(),
 		stopCh:       make(chan struct{}),
 		running:      false,
 	}
 }
 
-func (cw *CacheWarmer) AddTask(task WarmupTask) {
+func (cw *CacheWarmer) AddTask(task *redis.CacheWarmupTask) {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
-	cw.warmupTasks = append(cw.warmupTasks, task)
+	cw.cacheService.AddTask(task)
 }
 
 func (cw *CacheWarmer) Start(ctx context.Context) {
@@ -808,29 +882,7 @@ func (cw *CacheWarmer) Start(ctx context.Context) {
 	cw.running = true
 	cw.mu.Unlock()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-cw.stopCh:
-				return
-			default:
-				for _, task := range cw.warmupTasks {
-					if err := task.Handler(); err != nil {
-						continue
-					}
-				}
-
-				if len(cw.warmupTasks) > 0 {
-					interval := cw.warmupTasks[0].Interval
-					if interval > 0 {
-						time.Sleep(interval)
-					}
-				}
-			}
-		}
-	}()
+	cw.cacheService.Start()
 }
 
 func (cw *CacheWarmer) Stop() {
@@ -838,10 +890,13 @@ func (cw *CacheWarmer) Stop() {
 	defer cw.mu.Unlock()
 
 	if cw.running {
-		close(cw.stopCh)
+		cw.cacheService.Stop()
 		cw.running = false
-		cw.stopCh = make(chan struct{})
 	}
+}
+
+func (cw *CacheWarmer) WarmupAll() error {
+	return cw.cacheService.WarmupAll(context.Background())
 }
 
 func (cs *CacheService) StartCleanupTask(ctx context.Context, interval time.Duration) {
@@ -854,12 +909,7 @@ func (cs *CacheService) StartCleanupTask(ctx context.Context, interval time.Dura
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				patterns := []string{
-					"captcha:*",
-					"behavior:*",
-					"session:*",
-					"ratelimit:*",
-				}
+				patterns := cs.keyManager.BuildAllPatterns()
 
 				for _, pattern := range patterns {
 					cs.CleanupExpiredKeys(ctx, pattern)
@@ -890,13 +940,14 @@ func (cs *CacheService) CleanupExpiredKeys(ctx context.Context, pattern string) 
 }
 
 type CacheMetrics struct {
-	Hits    int64
-	Misses  int64
-	Sets    int64
-	Deletes int64
-	Expired int64
-	Evicted int64
-	mu      sync.RWMutex
+	Hits       int64
+	Misses     int64
+	Sets       int64
+	Deletes    int64
+	Expired    int64
+	Evicted    int64
+	HitRate    float64
+	mu         sync.RWMutex
 }
 
 var globalMetrics = &CacheMetrics{}
@@ -911,6 +962,7 @@ func (cs *CacheService) GetMetrics() *CacheMetrics {
 		Deletes: globalMetrics.Deletes,
 		Expired: globalMetrics.Expired,
 		Evicted: globalMetrics.Evicted,
+		HitRate: globalMetrics.HitRate,
 	}
 }
 
@@ -918,12 +970,14 @@ func (cs *CacheService) RecordHit() {
 	globalMetrics.mu.Lock()
 	defer globalMetrics.mu.Unlock()
 	globalMetrics.Hits++
+	cs.updateHitRate()
 }
 
 func (cs *CacheService) RecordMiss() {
 	globalMetrics.mu.Lock()
 	defer globalMetrics.mu.Unlock()
 	globalMetrics.Misses++
+	cs.updateHitRate()
 }
 
 func (cs *CacheService) RecordSet() {
@@ -950,6 +1004,13 @@ func (cs *CacheService) RecordEvicted() {
 	globalMetrics.Evicted++
 }
 
+func (cs *CacheService) updateHitRate() {
+	total := globalMetrics.Hits + globalMetrics.Misses
+	if total > 0 {
+		globalMetrics.HitRate = float64(globalMetrics.Hits) / float64(total) * 100
+	}
+}
+
 func ResetMetrics() {
 	globalMetrics.mu.Lock()
 	defer globalMetrics.mu.Unlock()
@@ -959,4 +1020,22 @@ func ResetMetrics() {
 	globalMetrics.Deletes = 0
 	globalMetrics.Expired = 0
 	globalMetrics.Evicted = 0
+	globalMetrics.HitRate = 0
+}
+
+func (cs *CacheService) InvalidateByTag(ctx context.Context, tag string) error {
+	return cs.invalidationManager.InvalidateByTag(ctx, tag)
+}
+
+func (cs *CacheService) InvalidateByKeyPrefix(ctx context.Context, prefix string) (int, error) {
+	pattern := cs.keyManager.BuildKey(redis.CacheKeyPrefix(prefix)) + ":*"
+	return cs.invalidationManager.InvalidateByPattern(ctx, pattern)
+}
+
+func (cs *CacheService) GetVersion(key string) int64 {
+	return cs.expirationManager.GetVersion(key)
+}
+
+func (cs *CacheService) IncrementVersion(key string) int64 {
+	return cs.expirationManager.IncrementVersion(key)
 }

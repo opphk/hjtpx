@@ -247,3 +247,209 @@ func TestSlackChannel_getSeverityColor(t *testing.T) {
 		})
 	}
 }
+
+func TestParseEmailConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantErr bool
+	}{
+		{
+			name: "valid email config",
+			config: map[string]interface{}{
+				"smtp_host":    "smtp.gmail.com",
+				"smtp_port":    587,
+				"username":     "test@example.com",
+				"password":     "password",
+				"from_address": "alerts@example.com",
+				"to_addresses": []string{"admin@example.com"},
+				"use_tls":      true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing smtp host",
+			config: map[string]interface{}{
+				"username":     "test@example.com",
+				"from_address": "alerts@example.com",
+				"to_addresses": []string{"admin@example.com"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing username",
+			config: map[string]interface{}{
+				"smtp_host":    "smtp.gmail.com",
+				"from_address": "alerts@example.com",
+				"to_addresses": []string{"admin@example.com"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing from address",
+			config: map[string]interface{}{
+				"smtp_host":    "smtp.gmail.com",
+				"username":     "test@example.com",
+				"to_addresses": []string{"admin@example.com"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing to addresses",
+			config: map[string]interface{}{
+				"smtp_host":    "smtp.gmail.com",
+				"username":     "test@example.com",
+				"from_address": "alerts@example.com",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseEmailConfig(tt.config)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestParseDingTalkConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantErr bool
+	}{
+		{
+			name: "valid dingtalk config",
+			config: map[string]interface{}{
+				"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=test",
+				"secret":      "secret123",
+				"at_mobiles":  []string{"13800138000"},
+				"is_at_all":   false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing webhook url",
+			config: map[string]interface{}{
+				"secret": "secret123",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseDingTalkConfig(tt.config)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateEmailChannel(t *testing.T) {
+	config := map[string]interface{}{
+		"smtp_host":    "smtp.gmail.com",
+		"smtp_port":    587,
+		"username":     "test@example.com",
+		"password":     "password",
+		"from_address": "alerts@example.com",
+		"to_addresses": []string{"admin@example.com"},
+		"use_tls":      true,
+	}
+
+	channel, err := CreateChannel("email", config)
+	assert.NoError(t, err)
+	assert.NotNil(t, channel)
+	assert.Equal(t, "email", channel.Name())
+}
+
+func TestCreateDingTalkChannel(t *testing.T) {
+	config := map[string]interface{}{
+		"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=test",
+		"secret":     "secret123",
+	}
+
+	channel, err := CreateChannel("dingtalk", config)
+	assert.NoError(t, err)
+	assert.NotNil(t, channel)
+	assert.Equal(t, "dingtalk", channel.Name())
+}
+
+func TestEmailChannel_ValidateConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			config: map[string]interface{}{
+				"smtp_host":    "smtp.gmail.com",
+				"smtp_port":    587,
+				"username":     "test@example.com",
+				"password":     "password",
+				"from_address": "alerts@example.com",
+				"to_addresses": []string{"admin@example.com"},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid config",
+			config:  map[string]interface{}{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			channel, _ := NewEmailChannel(tt.config)
+			err := channel.ValidateConfig()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestDingTalkChannel_ValidateConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			config: map[string]interface{}{
+				"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=test",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid config",
+			config:  map[string]interface{}{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			channel, _ := NewDingTalkChannel(tt.config)
+			err := channel.ValidateConfig()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

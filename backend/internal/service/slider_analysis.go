@@ -20,6 +20,25 @@ type SliderTrajectory struct {
 	Confidence     float64       `json:"confidence"`
 }
 
+type SpeedSegment struct {
+	StartIndex     int     `json:"start_index"`
+	EndIndex       int     `json:"end_index"`
+	AverageSpeed   float64 `json:"average_speed"`
+	MaxSpeed       float64 `json:"max_speed"`
+	Duration       int64   `json:"duration"`
+	Trend          string  `json:"trend"`
+	IsAccelerating bool   `json:"is_accelerating"`
+}
+
+type BacktrackPattern struct {
+	StartIndex     int     `json:"start_index"`
+	EndIndex       int     `json:"end_index"`
+	Distance       float64 `json:"distance"`
+	Duration       int64   `json:"duration"`
+	MaxDepth       float64 `json:"max_depth"`
+	PatternType    string  `json:"pattern_type"`
+}
+
 type SliderPoint struct {
 	X         int   `json:"x"`
 	Y         int   `json:"y"`
@@ -38,6 +57,14 @@ type SliderAnalysisResult struct {
 	TrajectoryPattern string            `json:"trajectory_pattern"`
 	SpeedProfile      string            `json:"speed_profile"`
 	OverallRiskScore  float64           `json:"overall_risk_score"`
+	AnalysisLogs      []AnalysisLog     `json:"analysis_logs"`
+}
+
+type AnalysisLog struct {
+	Level       string `json:"level"`
+	Timestamp   int64  `json:"timestamp"`
+	Message     string `json:"message"`
+	Description string `json:"description"`
 }
 
 type SliderFeatures struct {
@@ -76,6 +103,24 @@ type SliderFeatures struct {
 	FourierEnergy        float64   `json:"fourier_energy"`
 	FractalDimension     float64   `json:"fractal_dimension"`
 	HumanLikenessScore   float64   `json:"human_likeness_score"`
+	
+	SpeedChangeRate      float64   `json:"speed_change_rate"`
+	SpeedSkewness        float64   `json:"speed_skewness"`
+	SpeedKurtosis        float64   `json:"speed_kurtosis"`
+	SpeedSegments        []SpeedSegment `json:"speed_segments"`
+	SpeedAnomalies       int       `json:"speed_anomalies"`
+	SpeedPeriodicity     float64   `json:"speed_periodicity"`
+	AccelerationPeak     float64   `json:"acceleration_peak"`
+	AccelerationChange   float64   `json:"acceleration_change"`
+	
+	CurvatureChangeRate  float64   `json:"curvature_change_rate"`
+	CurvaturePeaks       int       `json:"curvature_peaks"`
+	CurvaturePattern     string    `json:"curvature_pattern"`
+	
+	BacktrackDepth       float64   `json:"backtrack_depth"`
+	BacktrackSpeed       float64   `json:"backtrack_speed"`
+	BacktrackIntent      float64   `json:"backtrack_intent"`
+	BacktrackPatterns    []BacktrackPattern `json:"backtrack_patterns"`
 }
 
 type SliderAnalyzer struct {
@@ -118,6 +163,9 @@ func (sa *SliderAnalyzer) AnalyzeSliderTrajectory(trajectory []SliderPoint, targ
 			IsBot:          true,
 			Confidence:     0.9,
 			RiskIndicators: []string{"轨迹数据点不足"},
+			AnalysisLogs: []AnalysisLog{
+				{Level: "ERROR", Timestamp: trajectory[0].Timestamp, Message: "insufficient_data_points", Description: fmt.Sprintf("需要至少3个数据点，实际获取: %d", len(trajectory))},
+			},
 		}, nil
 	}
 
@@ -125,23 +173,66 @@ func (sa *SliderAnalyzer) AnalyzeSliderTrajectory(trajectory []SliderPoint, targ
 		Trajectory:        sa.analyzeTrajectoryBasic(trajectory, targetPosition),
 		RiskIndicators:    make([]string, 0),
 		AnomalyDetections: make([]string, 0),
+		AnalysisLogs:      make([]AnalysisLog, 0),
 	}
+	
+	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
+		Level:       "INFO",
+		Timestamp:   trajectory[0].Timestamp,
+		Message:     "analysis_started",
+		Description: fmt.Sprintf("开始分析轨迹，数据点数量: %d", len(trajectory)),
+	})
 
 	featureExtractor := NewSliderFeatureExtractor()
 	result.Features = featureExtractor.ExtractFeatures(trajectory, targetPosition, result.Trajectory)
+	
+	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
+		Level:       "DEBUG",
+		Timestamp:   trajectory[0].Timestamp,
+		Message:     "features_extracted",
+		Description: fmt.Sprintf("特征提取完成，路径效率: %.4f, 平均速度: %.2f", result.Features.PathEfficiency, result.Features.AverageSpeed),
+	})
 
 	result.AnomalyScore = sa.detectAnomalies(result.Features)
+	
+	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
+		Level:       "DEBUG",
+		Timestamp:   trajectory[0].Timestamp,
+		Message:     "anomaly_detection_complete",
+		Description: fmt.Sprintf("异常检测完成，异常分数: %.4f", result.AnomalyScore),
+	})
 
 	result.TrajectoryPattern = sa.classifyTrajectoryPattern(result.Features)
 
 	result.SpeedProfile = sa.classifySpeedProfile(result.Features)
 
 	result.MLScore = sa.model.Predict(result.Features)
+	
+	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
+		Level:       "DEBUG",
+		Timestamp:   trajectory[0].Timestamp,
+		Message:     "ml_prediction_complete",
+		Description: fmt.Sprintf("机器学习预测完成，ML分数: %.4f", result.MLScore),
+	})
 
 	result.OverallRiskScore = sa.calculateOverallRiskScore(result)
+	
+	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
+		Level:       "INFO",
+		Timestamp:   trajectory[0].Timestamp,
+		Message:     "risk_assessment_complete",
+		Description: fmt.Sprintf("综合风险评估完成，风险分数: %.4f", result.OverallRiskScore),
+	})
 
 	result.IsBot = result.OverallRiskScore > 0.5
 	result.Confidence = sa.calculateConfidence(result)
+	
+	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
+		Level:       "INFO",
+		Timestamp:   trajectory[0].Timestamp,
+		Message:     "analysis_complete",
+		Description: fmt.Sprintf("分析完成，判定为机器人: %v, 置信度: %.4f", result.IsBot, result.Confidence),
+	})
 
 	return result, nil
 }
@@ -366,6 +457,37 @@ func (sfe *SliderFeatureExtractor) ExtractFeatures(trajectory []SliderPoint, tar
 	features.FractalDimension = sfe.calculateFractalDimension(trajectory)
 
 	features.HumanLikenessScore = sfe.calculateHumanLikeness(features)
+	
+	enhancedSpeed := sfe.extractEnhancedSpeedFeatures(trajectory)
+	features.SpeedChangeRate = enhancedSpeed["speed_change_rate"]
+	features.SpeedSkewness = enhancedSpeed["speed_skewness"]
+	features.SpeedKurtosis = enhancedSpeed["speed_kurtosis"]
+	features.SpeedAnomalies = int(enhancedSpeed["speed_anomalies"])
+	features.SpeedPeriodicity = enhancedSpeed["speed_periodicity"]
+	features.AccelerationPeak = enhancedSpeed["acceleration_peak"]
+	features.AccelerationChange = enhancedSpeed["acceleration_change"]
+	features.SpeedSegments = sfe.extractSpeedSegments(trajectory)
+	
+	enhancedCurvature := sfe.extractEnhancedCurvatureFeatures(trajectory)
+	features.CurvatureChangeRate = enhancedCurvature["curvature_change_rate"].(float64)
+	features.CurvaturePeaks = int(enhancedCurvature["curvature_peaks"].(float64))
+	if pattern, ok := enhancedCurvature["curvature_pattern"].(string); ok {
+		features.CurvaturePattern = pattern
+	}
+	
+	enhancedBacktrack := sfe.extractEnhancedBacktrackFeatures(trajectory)
+	if depth, ok := enhancedBacktrack["backtrack_depth"].(float64); ok {
+		features.BacktrackDepth = depth
+	}
+	if speed, ok := enhancedBacktrack["backtrack_speed"].(float64); ok {
+		features.BacktrackSpeed = speed
+	}
+	if intent, ok := enhancedBacktrack["backtrack_intent"].(float64); ok {
+		features.BacktrackIntent = intent
+	}
+	if patterns, ok := enhancedBacktrack["patterns"].([]BacktrackPattern); ok {
+		features.BacktrackPatterns = patterns
+	}
 
 	return features
 }
@@ -1124,6 +1246,402 @@ func (sfe *SliderFeatureExtractor) calculateHumanLikeness(features *SliderFeatur
 	return math.Max(0, math.Min(1, score))
 }
 
+func (sfe *SliderFeatureExtractor) extractEnhancedSpeedFeatures(trajectory []SliderPoint) map[string]float64 {
+	features := make(map[string]float64)
+	
+	if len(trajectory) < 3 {
+		return features
+	}
+	
+	speeds := sfe.extractSpeeds(trajectory)
+	if len(speeds) < 3 {
+		return features
+	}
+	
+	features["speed_change_rate"] = sfe.calculateSpeedChangeRate(speeds, trajectory)
+	features["speed_skewness"] = sfe.calculateSpeedSkewness(speeds)
+	features["speed_kurtosis"] = sfe.calculateSpeedKurtosisEnhanced(speeds)
+	features["speed_anomalies"] = float64(sfe.detectSpeedAnomalies(speeds))
+	features["speed_periodicity"] = sfe.calculateSpeedPeriodicity(speeds)
+	
+	accelerations := sfe.extractAccelerations(trajectory)
+	if len(accelerations) > 0 {
+		features["acceleration_peak"] = sfe.calculateAccelerationPeak(accelerations)
+		features["acceleration_change"] = sfe.calculateAccelerationChange(accelerations)
+	}
+	
+	return features
+}
+
+func (sfe *SliderFeatureExtractor) calculateSpeedChangeRate(speeds []float64, trajectory []SliderPoint) float64 {
+	if len(speeds) < 2 || len(trajectory) < 2 {
+		return 0
+	}
+	
+	totalChange := 0.0
+	validChanges := 0
+	
+	for i := 1; i < len(speeds); i++ {
+		dt := float64(trajectory[i+1].Timestamp - trajectory[i].Timestamp)
+		if dt > 0 {
+			changeRate := math.Abs(speeds[i] - speeds[i-1]) / dt * 1000
+			totalChange += changeRate
+			validChanges++
+		}
+	}
+	
+	if validChanges > 0 {
+		return totalChange / float64(validChanges)
+	}
+	return 0
+}
+
+func (sfe *SliderFeatureExtractor) calculateSpeedSkewness(speeds []float64) float64 {
+	if len(speeds) < 3 {
+		return 0
+	}
+	
+	mean := sfe.mean(speeds)
+	stdDev := math.Sqrt(sfe.variance(speeds))
+	if stdDev == 0 {
+		return 0
+	}
+	
+	sum := 0.0
+	for _, v := range speeds {
+		sum += math.Pow((v-mean)/stdDev, 3)
+	}
+	return sum / float64(len(speeds))
+}
+
+func (sfe *SliderFeatureExtractor) calculateSpeedKurtosisEnhanced(speeds []float64) float64 {
+	if len(speeds) < 4 {
+		return 0
+	}
+	
+	mean := sfe.mean(speeds)
+	stdDev := math.Sqrt(sfe.variance(speeds))
+	if stdDev == 0 {
+		return 0
+	}
+	
+	sum := 0.0
+	for _, v := range speeds {
+		sum += math.Pow((v-mean)/stdDev, 4)
+	}
+	return (sum / float64(len(speeds))) - 3
+}
+
+func (sfe *SliderFeatureExtractor) detectSpeedAnomalies(speeds []float64) int {
+	if len(speeds) < 3 {
+		return 0
+	}
+	
+	mean := sfe.mean(speeds)
+	stdDev := math.Sqrt(sfe.variance(speeds))
+	threshold := 3.0 * stdDev
+	
+	anomalies := 0
+	for _, speed := range speeds {
+		if math.Abs(speed-mean) > threshold {
+			anomalies++
+		}
+	}
+	
+	return anomalies
+}
+
+func (sfe *SliderFeatureExtractor) calculateSpeedPeriodicity(speeds []float64) float64 {
+	if len(speeds) < 8 {
+		return 0
+	}
+	
+	fft := sfe.fft(speeds)
+	maxEnergy := 0.0
+	totalEnergy := 0.0
+	
+	for i := 1; i < len(fft)/2; i++ {
+		mag := math.Sqrt(real(fft[i])*real(fft[i]) + imag(fft[i])*imag(fft[i]))
+		totalEnergy += mag * mag
+		if mag > maxEnergy {
+			maxEnergy = mag
+		}
+	}
+	
+	if totalEnergy > 0 {
+		return maxEnergy * maxEnergy / totalEnergy
+	}
+	return 0
+}
+
+func (sfe *SliderFeatureExtractor) calculateAccelerationPeak(accelerations []float64) float64 {
+	if len(accelerations) == 0 {
+		return 0
+	}
+	
+	maxPeak := 0.0
+	for _, acc := range accelerations {
+		if math.Abs(acc) > maxPeak {
+			maxPeak = math.Abs(acc)
+		}
+	}
+	return maxPeak
+}
+
+func (sfe *SliderFeatureExtractor) calculateAccelerationChange(accelerations []float64) float64 {
+	if len(accelerations) < 2 {
+		return 0
+	}
+	
+	totalChange := 0.0
+	for i := 1; i < len(accelerations); i++ {
+		totalChange += math.Abs(accelerations[i] - accelerations[i-1])
+	}
+	
+	return totalChange / float64(len(accelerations)-1)
+}
+
+func (sfe *SliderFeatureExtractor) extractSpeedSegments(trajectory []SliderPoint) []SpeedSegment {
+	if len(trajectory) < 5 {
+		return []SpeedSegment{}
+	}
+	
+	segments := make([]SpeedSegment, 0)
+	numSegments := 5
+	segmentSize := len(trajectory) / numSegments
+	
+	for i := 0; i < numSegments; i++ {
+		start := i * segmentSize
+		end := start + segmentSize
+		if i == numSegments-1 {
+			end = len(trajectory)
+		}
+		
+		if end <= start || end > len(trajectory) {
+			continue
+		}
+		
+		segmentTraj := trajectory[start:end]
+		speeds := sfe.extractSpeeds(segmentTraj)
+		
+		if len(speeds) == 0 {
+			continue
+		}
+		
+		trend := "stable"
+		isAccelerating := false
+		if len(speeds) >= 3 {
+			firstThird := sfe.mean(speeds[:len(speeds)/3])
+			lastThird := sfe.mean(speeds[2*len(speeds)/3:])
+			if lastThird > firstThird*1.2 {
+				trend = "accelerating"
+				isAccelerating = true
+			} else if lastThird < firstThird*0.8 {
+				trend = "decelerating"
+			}
+		}
+		
+		segment := SpeedSegment{
+			StartIndex:     start,
+			EndIndex:       end,
+			AverageSpeed:   sfe.mean(speeds),
+			MaxSpeed:       sfe.max(speeds),
+			Duration:       trajectory[end-1].Timestamp - trajectory[start].Timestamp,
+			Trend:          trend,
+			IsAccelerating: isAccelerating,
+		}
+		segments = append(segments, segment)
+	}
+	
+	return segments
+}
+
+func (sfe *SliderFeatureExtractor) extractEnhancedCurvatureFeatures(trajectory []SliderPoint) map[string]interface{} {
+	features := make(map[string]interface{})
+	
+	if len(trajectory) < 3 {
+		return features
+	}
+	
+	curvatures := sfe.extractCurvatures(trajectory)
+	if len(curvatures) < 3 {
+		return features
+	}
+	
+	features["curvature_change_rate"] = sfe.calculateCurvatureChangeRate(curvatures)
+	features["curvature_peaks"] = float64(sfe.countCurvaturePeaks(curvatures))
+	features["curvature_pattern"] = sfe.classifyCurvaturePattern(curvatures)
+	
+	return features
+}
+
+func (sfe *SliderFeatureExtractor) calculateCurvatureChangeRate(curvatures []float64) float64 {
+	if len(curvatures) < 3 {
+		return 0
+	}
+	
+	totalChange := 0.0
+	for i := 2; i < len(curvatures); i++ {
+		change := math.Abs(curvatures[i] - curvatures[i-1])
+		totalChange += change
+	}
+	
+	return totalChange / float64(len(curvatures)-2)
+}
+
+func (sfe *SliderFeatureExtractor) countCurvaturePeaks(curvatures []float64) int {
+	if len(curvatures) < 3 {
+		return 0
+	}
+	
+	mean := sfe.mean(curvatures)
+	stdDev := math.Sqrt(sfe.variance(curvatures))
+	threshold := mean + stdDev
+	
+	peaks := 0
+	for i := 1; i < len(curvatures)-1; i++ {
+		if curvatures[i] > threshold && curvatures[i] > curvatures[i-1] && curvatures[i] > curvatures[i+1] {
+			peaks++
+		}
+	}
+	
+	return peaks
+}
+
+func (sfe *SliderFeatureExtractor) classifyCurvaturePattern(curvatures []float64) string {
+	if len(curvatures) < 3 {
+		return "unknown"
+	}
+	
+	variance := sfe.variance(curvatures)
+	mean := sfe.mean(curvatures)
+	
+	if variance < 0.001 {
+		return "uniform"
+	}
+	
+	if mean > 0.5 {
+		return "highly_curved"
+	}
+	
+	if mean > 0.2 {
+		return "moderately_curved"
+	}
+	
+	return "slightly_curved"
+}
+
+func (sfe *SliderFeatureExtractor) extractEnhancedBacktrackFeatures(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+	
+	if len(trajectory) < 2 {
+		result["backtrack_depth"] = float64(0)
+		result["backtrack_speed"] = float64(0)
+		result["backtrack_intent"] = float64(0)
+		result["patterns"] = []BacktrackPattern{}
+		return result
+	}
+	
+	backtrackPatterns := sfe.detectBacktrackPatterns(trajectory)
+	result["patterns"] = backtrackPatterns
+	
+	maxDepth := 0.0
+	totalBacktrackDist := 0.0
+	avgBacktrackSpeed := 0.0
+	backtrackCount := 0
+	
+	for _, pattern := range backtrackPatterns {
+		if pattern.MaxDepth > maxDepth {
+			maxDepth = pattern.MaxDepth
+		}
+		totalBacktrackDist += pattern.Distance
+		backtrackCount++
+	}
+	
+	if len(trajectory) > 1 {
+		totalDuration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+		if totalDuration > 0 && totalBacktrackDist > 0 {
+			avgBacktrackSpeed = totalBacktrackDist / totalDuration * 1000
+		}
+	}
+	
+	result["backtrack_depth"] = maxDepth
+	result["backtrack_speed"] = avgBacktrackSpeed
+	
+	intent := 0.0
+	if backtrackCount > 0 {
+		intent = math.Min(1.0, float64(backtrackCount)/5.0)
+	}
+	result["backtrack_intent"] = intent
+	
+	return result
+}
+
+func (sfe *SliderFeatureExtractor) detectBacktrackPatterns(trajectory []SliderPoint) []BacktrackPattern {
+	if len(trajectory) < 2 {
+		return []BacktrackPattern{}
+	}
+	
+	patterns := make([]BacktrackPattern, 0)
+	maxX := trajectory[0].X
+	backtrackStart := -1
+	backtrackMaxDepth := 0.0
+	
+	for i := 1; i < len(trajectory); i++ {
+		if trajectory[i].X > maxX {
+			if backtrackStart != -1 {
+				pattern := BacktrackPattern{
+					StartIndex:  backtrackStart,
+					EndIndex:    i - 1,
+					Distance:    float64(maxX - trajectory[i-1].X),
+					Duration:    trajectory[i-1].Timestamp - trajectory[backtrackStart].Timestamp,
+					MaxDepth:    backtrackMaxDepth,
+					PatternType: classifyBacktrackType(backtrackMaxDepth, trajectory[i-1].Timestamp-trajectory[backtrackStart].Timestamp),
+				}
+				patterns = append(patterns, pattern)
+				backtrackStart = -1
+				backtrackMaxDepth = 0
+			}
+			maxX = trajectory[i].X
+		} else {
+			if backtrackStart == -1 {
+				backtrackStart = i - 1
+			}
+			depth := float64(maxX - trajectory[i].X)
+			if depth > backtrackMaxDepth {
+				backtrackMaxDepth = depth
+			}
+		}
+	}
+	
+	if backtrackStart != -1 && backtrackMaxDepth > 5 {
+		pattern := BacktrackPattern{
+			StartIndex:  backtrackStart,
+			EndIndex:    len(trajectory) - 1,
+			Distance:    float64(maxX - trajectory[len(trajectory)-1].X),
+			Duration:    trajectory[len(trajectory)-1].Timestamp - trajectory[backtrackStart].Timestamp,
+			MaxDepth:    backtrackMaxDepth,
+			PatternType: classifyBacktrackType(backtrackMaxDepth, trajectory[len(trajectory)-1].Timestamp-trajectory[backtrackStart].Timestamp),
+		}
+		patterns = append(patterns, pattern)
+	}
+	
+	return patterns
+}
+
+func classifyBacktrackType(depth float64, duration int64) string {
+	if depth < 10 {
+		return "micro"
+	} else if depth < 30 {
+		return "small"
+	} else if duration < 100 {
+		return "quick"
+	} else if duration > 500 {
+		return "hesitant"
+	}
+	return "normal"
+}
+
 func (sm *SliderMLModel) Predict(features *SliderFeatures) float64 {
 	if features == nil {
 		return 0.5
@@ -1266,6 +1784,60 @@ func (sa *SliderAnalyzer) detectAnomalies(features *SliderFeatures) float64 {
 	if features.FractalDimension < 1.1 {
 		anomalyScore += 0.1
 		anomalyCount++
+	}
+	
+	if features.SpeedSkewness > -0.5 && features.SpeedSkewness < 0.5 && features.SpeedVariance < 0.1 {
+		anomalyScore += 0.08
+		anomalyCount++
+	}
+	
+	if features.SpeedAnomalies > 0 {
+		anomalyScore += 0.05 * math.Min(float64(features.SpeedAnomalies), 3.0)
+		anomalyCount++
+	}
+	
+	if features.SpeedPeriodicity > 0.8 {
+		anomalyScore += 0.1
+		anomalyCount++
+	}
+	
+	if features.AccelerationPeak < 0.05 {
+		anomalyScore += 0.08
+		anomalyCount++
+	}
+	
+	if features.AccelerationChange < 0.01 {
+		anomalyScore += 0.07
+		anomalyCount++
+	}
+	
+	if features.CurvatureChangeRate < 0.01 {
+		anomalyScore += 0.06
+		anomalyCount++
+	}
+	
+	if features.BacktrackDepth > 50 {
+		anomalyScore += 0.05
+		anomalyCount++
+	}
+	
+	if features.BacktrackIntent > 0.8 {
+		anomalyScore += 0.07
+		anomalyCount++
+	}
+	
+	if len(features.SpeedSegments) > 0 {
+		consistentTrend := true
+		for i := 1; i < len(features.SpeedSegments); i++ {
+			if features.SpeedSegments[i].Trend != features.SpeedSegments[i-1].Trend {
+				consistentTrend = false
+				break
+			}
+		}
+		if consistentTrend && features.SpeedSegments[0].Trend != "stable" {
+			anomalyScore += 0.08
+			anomalyCount++
+		}
 	}
 
 	if anomalyCount > 0 {
@@ -1554,6 +2126,13 @@ func (sa *SliderAnalyzer) GenerateReport(result *SliderAnalysisResult) string {
 		sb.WriteString("\n异常检测:\n")
 		for _, detection := range result.AnomalyDetections {
 			sb.WriteString(fmt.Sprintf("  - %s\n", detection))
+		}
+	}
+	
+	if len(result.AnalysisLogs) > 0 {
+		sb.WriteString("\n分析日志:\n")
+		for _, log := range result.AnalysisLogs {
+			sb.WriteString(fmt.Sprintf("  [%s] %s: %s\n", log.Level, log.Message, log.Description))
 		}
 	}
 
@@ -2181,10 +2760,8 @@ func (sa *SliderAnalyzer) calculateWaveletFeatures(trajectory []SliderPoint) map
 	for level := 0; level < levels && len(trajectory) > 1; level++ {
 		coeffs := make([]float64, 0)
 		for i := 0; i < len(trajectory)-1; i += 2 {
-			avg := float64(trajectory[i].X+trajectory[i+1].X) / 2
 			detail := float64(trajectory[i].X-trajectory[i+1].X) / 2
 			coeffs = append(coeffs, detail)
-			_ = avg
 		}
 		coefficients[level] = coeffs
 
@@ -2365,10 +2942,6 @@ func (sa *SliderAnalyzer) CalculateAdvancedBotScore(trajectory []SliderPoint, ta
 		return 1.0, []string{"轨迹数据点不足"}
 	}
 
-	dtwAnalyzer := NewDTWAnalyzer()
-	botPatternLibrary := NewBotPatternLibrary()
-	_ = dtwAnalyzer
-
 	botScore := 0.0
 	indicators := make([]string, 0)
 
@@ -2408,8 +2981,9 @@ func (sa *SliderAnalyzer) CalculateAdvancedBotScore(trajectory []SliderPoint, ta
 		botScore += 0.1
 		indicators = append(indicators, "末端行为异常")
 	}
-
-	patternScore, patternIndicators := botPatternLibrary.DetectPatterns(trajectory)
+	
+	patternLibrary := NewBotPatternLibrary()
+	patternScore, patternIndicators := patternLibrary.DetectPatterns(trajectory)
 	botScore += patternScore * 0.3
 	indicators = append(indicators, patternIndicators...)
 

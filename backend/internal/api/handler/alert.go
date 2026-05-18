@@ -23,7 +23,7 @@ func InitAlertService(db *gorm.DB) {
 
 type CreateAlertChannelRequest struct {
 	Name        string                 `json:"name" binding:"required,min=1,max=255"`
-	Type        string                 `json:"type" binding:"required,oneof=slack webhook"`
+	Type        string                 `json:"type" binding:"required,oneof=slack webhook email dingtalk"`
 	Config      map[string]interface{} `json:"config" binding:"required"`
 	Description string                 `json:"description" binding:"max=1000"`
 	IsEnabled   bool                   `json:"is_enabled"`
@@ -31,7 +31,7 @@ type CreateAlertChannelRequest struct {
 
 type UpdateAlertChannelRequest struct {
 	Name        *string                `json:"name" binding:"omitempty,min=1,max=255"`
-	Type        *string                `json:"type" binding:"omitempty,oneof=slack webhook"`
+	Type        *string                `json:"type" binding:"omitempty,oneof=slack webhook email dingtalk"`
 	Config      map[string]interface{} `json:"config"`
 	Description *string                `json:"description" binding:"omitempty,max=1000"`
 	IsEnabled   *bool                  `json:"is_enabled"`

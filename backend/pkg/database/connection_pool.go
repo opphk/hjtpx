@@ -271,12 +271,14 @@ func (o *ConnectionPoolOptimizer) checkAndOptimize() {
 	if metrics.WaitCount > 100 {
 		ratio := float64(metrics.ActiveConnections) / float64(metrics.TotalConnections)
 		o.currentConfig.Optimize(ratio)
-		_ = UpdateConnectionPool(
+		if err := UpdateConnectionPool(
 			o.currentConfig.MaxOpenConns,
 			o.currentConfig.MaxIdleConns,
 			o.currentConfig.ConnMaxLifetime,
 			o.currentConfig.ConnMaxIdleTime,
-		)
+		); err != nil {
+			log.Printf("更新连接池配置失败: %v", err)
+		}
 	}
 
 	if metrics.ReuseRate > 95 {

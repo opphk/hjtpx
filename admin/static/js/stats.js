@@ -491,6 +491,8 @@ function updateGeoDistributionChart(data) {
 
 function exportStatsReport() {
     const dateRange = document.getElementById('dateRange')?.value || '30d';
+    const format = prompt('请选择导出格式 (1: CSV, 2: JSON, 3: Excel):', '1');
+    
     const reportData = {
         exportTime: new Date().toLocaleString('zh-CN'),
         dateRange: dateRange,
@@ -499,23 +501,119 @@ function exportStatsReport() {
             avgResponse: document.getElementById('statAvgResponse')?.textContent || '0ms',
             successRate: document.getElementById('statSuccessRate')?.textContent || '0%',
             activeUsers: document.getElementById('statActiveUsers')?.textContent || '0'
+        },
+        changes: {
+            requests: parseFloat(document.getElementById('statRequestsChange')?.textContent.replace(/[^0-9.-]/g, '')) || 0,
+            responseTime: parseFloat(document.getElementById('statResponseChange')?.textContent.replace(/[^0-9.-]/g, '')) || 0,
+            successRate: parseFloat(document.getElementById('statSuccessChange')?.textContent.replace(/[^0-9.-]/g, '')) || 0,
+            activeUsers: parseFloat(document.getElementById('statUsersChange')?.textContent.replace(/[^0-9.-]/g, '')) || 0
         }
     };
 
+    if (format === '2' || format === 'json') {
+        exportAsJSON(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}`);
+    } else if (format === '3' || format === 'excel') {
+        exportAsCSVEnhanced(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`);
+    } else {
+        exportAsCSV(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`);
+    }
+}
+
+function exportAsCSV(reportData, filename) {
     const csvContent = [
         ['统计分析报表'].join(','),
         [''].join(','),
         ['导出时间', reportData.exportTime].join(','),
         ['时间范围', reportData.dateRange].join(','),
         [''].join(','),
-        ['指标', '数值'].join(','),
-        ['总请求量', reportData.summary.totalRequests].join(','),
-        ['平均响应时间', reportData.summary.avgResponse].join(','),
-        ['成功率', reportData.summary.successRate].join(','),
-        ['活跃用户', reportData.summary.activeUsers].join(',')
+        ['指标', '数值', '变化'].join(','),
+        ['总请求量', reportData.summary.totalRequests, formatChange(reportData.changes.requests)].join(','),
+        ['平均响应时间', reportData.summary.avgResponse, formatChange(reportData.changes.responseTime, true)].join(','),
+        ['成功率', reportData.summary.successRate, formatChange(reportData.changes.successRate)].join(','),
+        ['活跃用户', reportData.summary.activeUsers, formatChange(reportData.changes.activeUsers)].join(',')
     ].join('\n');
 
-    downloadFile(csvContent, `stats_report_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8');
+    downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
+    showToast('CSV报表导出成功', 'success');
+}
+
+function exportAsCSVEnhanced(reportData, filename) {
+    const csvContent = [
+        ['墨盾验证 - 统计分析报表'].join(','),
+        [''].join(','),
+        ['报表信息'].join(','),
+        ['导出时间', reportData.exportTime].join(','),
+        ['时间范围', reportData.dateRange].join(','),
+        ['生成版本', 'v11.0'].join(','),
+        [''].join(','),
+        ['核心指标汇总'].join(','),
+        ['指标名称', '当前值', '环比变化', '变化率', '评估'].join(','),
+        ['总请求量', reportData.summary.totalRequests, formatChange(reportData.changes.requests), `${Math.abs(reportData.changes.requests).toFixed(1)}%`, reportData.changes.requests >= 0 ? '正向' : '负向'].join(','),
+        ['平均响应时间', reportData.summary.avgResponse, formatChange(reportData.changes.responseTime, true), `${Math.abs(reportData.changes.responseTime).toFixed(1)}%`, reportData.changes.responseTime <= 0 ? '正向' : '负向'].join(','),
+        ['成功率', reportData.summary.successRate, formatChange(reportData.changes.successRate), `${Math.abs(reportData.changes.successRate).toFixed(1)}%`, reportData.changes.successRate >= 0 ? '正向' : '负向'].join(','),
+        ['活跃用户', reportData.summary.activeUsers, formatChange(reportData.changes.activeUsers), `${Math.abs(reportData.changes.activeUsers).toFixed(1)}%`, reportData.changes.activeUsers >= 0 ? '正向' : '负向'].join(','),
+        [''].join(','),
+        ['图表数据（请求量趋势）'].join(','),
+        ...generateChartCSVData(),
+        [''].join(','),
+        ['详细说明'].join(','),
+        ['1. 总请求量反映系统整体负载情况'].join(','),
+        ['2. 平均响应时间越低，用户体验越好'].join(','),
+        ['3. 成功率是服务质量的核心指标'].join(','),
+        ['4. 活跃用户数体现产品用户规模'].join(',')
+    ].join('\n');
+
+    downloadFile(csvContent, filename, 'text/csv;charset=utf-8');
+    showToast('增强报表导出成功', 'success');
+}
+
+function exportAsJSON(reportData, filename) {
+    const jsonData = {
+        report: {
+            title: '墨盾验证 - 统计分析报表',
+            version: 'v11.0',
+            exportTime: reportData.exportTime,
+            dateRange: reportData.dateRange,
+            summary: reportData.summary,
+            changes: reportData.changes,
+            chartData: {
+                requestTrend: requestTrendChart?.data ? {
+                    labels: requestTrendChart.data.labels,
+                    values: requestTrendChart.data.datasets[0]?.data
+                } : null,
+                requestType: requestTypeChart?.data ? {
+                    labels: requestTypeChart.data.labels,
+                    values: requestTypeChart.data.datasets[0]?.data
+                } : null
+            },
+            metadata: {
+                generatedBy: '墨盾验证管理后台',
+                environment: window.location.hostname
+            }
+        }
+    };
+
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    downloadFile(jsonString, `${filename}.json`, 'application/json;charset=utf-8');
+    showToast('JSON报表导出成功', 'success');
+}
+
+function generateChartCSVData() {
+    const rows = [];
+    if (requestTrendChart?.data) {
+        rows.push(['日期', '请求量']);
+        requestTrendChart.data.labels.forEach((label, i) => {
+            const value = requestTrendChart.data.datasets[0]?.data[i] || 0;
+            rows.push([label, value]);
+        });
+    }
+    return rows;
+}
+
+function formatChange(value, isInverse = false) {
+    const prefix = value > 0 ? '+' : '';
+    const isPositive = isInverse ? value < 0 : value > 0;
+    return prefix + value.toFixed(1) + '%';
 }
 
 function downloadFile(content, filename, mimeType) {
@@ -529,4 +627,37 @@ function downloadFile(content, filename, mimeType) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer') || createToastContainer();
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${escapeHtml(message)}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    container.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.id = 'toastContainer';
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
 }

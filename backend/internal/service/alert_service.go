@@ -31,8 +31,10 @@ type AlertEvent struct {
 
 // AlertAggregator 告警聚合器
 type AlertAggregator struct {
-	AlertCounts map[string]*AlertCountItem
-	mu          sync.RWMutex
+	AlertCounts     map[string]*AlertCountItem
+	AlertSummaries  map[string]*AlertSummary
+	mu              sync.RWMutex
+	CleanupInterval time.Duration
 }
 
 // AlertCountItem 告警计数项
@@ -42,6 +44,21 @@ type AlertCountItem struct {
 	Count          int
 	FirstSeen      time.Time
 	LastSeen       time.Time
+	Severity       string
+	Messages       []string
+}
+
+// AlertSummary 告警摘要
+type AlertSummary struct {
+	RuleID         uint
+	AggregationKey string
+	TotalCount     int
+	CriticalCount  int
+	WarningCount   int
+	InfoCount      int
+	FirstSeen      time.Time
+	LastSeen       time.Time
+	UniqueMessages map[string]int
 }
 
 // 保持向后兼容的别名
@@ -60,7 +77,9 @@ func NewAlertService(db *gorm.DB) *AlertService {
 // NewAlertAggregator 创建告警聚合器
 func NewAlertAggregator() *AlertAggregator {
 	return &AlertAggregator{
-		AlertCounts: make(map[string]*AlertCountItem),
+		AlertCounts:     make(map[string]*AlertCountItem),
+		AlertSummaries:  make(map[string]*AlertSummary),
+		CleanupInterval: 5 * time.Minute,
 	}
 }
 
@@ -150,7 +169,7 @@ func (as *AlertService) parseCondition(condition string, context map[string]inte
 
 func (as *AlertService) triggerAlert(rule models.AlertRule, event AlertEvent) error {
 	aggKey := as.buildAggregationKey(rule, event)
-	shouldSend, count := as.aggregator.ShouldTriggerAlert(rule.ID, aggKey, rule.AggregationWindow, rule.Threshold)
+	shouldSend, count := as.aggregator.ShouldTriggerAlert(rule.ID, aggKey, rule.AggregationWindow, rule.Threshold, rule.Severity, event.Message)
 	now := time.Now()
 	alert := &models.AlertRecord{
 		RuleID:         rule.ID,
@@ -239,7 +258,7 @@ func (as *AlertService) addHistory(alertID uint, action, oldStatus, newStatus, n
 }
 
 // ShouldTriggerAlert 判断是否应该触发告警
-func (aa *AlertAggregator) ShouldTriggerAlert(ruleID uint, aggKey string, windowSecs, threshold int) (bool, int) {
+func (aa *AlertAggregator) ShouldTriggerAlert(ruleID uint, aggKey string, windowSecs, threshold int, severity, message string) (bool, int) {
 	aa.mu.Lock()
 	defer aa.mu.Unlock()
 	now := time.Now()
@@ -252,8 +271,11 @@ func (aa *AlertAggregator) ShouldTriggerAlert(ruleID uint, aggKey string, window
 			Count:          1,
 			FirstSeen:      now,
 			LastSeen:       now,
+			Severity:       severity,
+			Messages:       []string{message},
 		}
 		aa.AlertCounts[key] = item
+		aa.updateSummary(key, ruleID, aggKey, severity, message)
 		return true, 1
 	}
 	window := time.Duration(windowSecs) * time.Second
@@ -261,10 +283,17 @@ func (aa *AlertAggregator) ShouldTriggerAlert(ruleID uint, aggKey string, window
 		item.Count = 1
 		item.FirstSeen = now
 		item.LastSeen = now
+		item.Severity = severity
+		item.Messages = []string{message}
+		aa.updateSummary(key, ruleID, aggKey, severity, message)
 		return true, 1
 	}
 	item.Count++
 	item.LastSeen = now
+	if !aa.containsMessage(item.Messages, message) && len(item.Messages) < 10 {
+		item.Messages = append(item.Messages, message)
+	}
+	aa.updateSummary(key, ruleID, aggKey, severity, message)
 	if item.Count == threshold || threshold == 1 {
 		return true, item.Count
 	}
@@ -272,6 +301,45 @@ func (aa *AlertAggregator) ShouldTriggerAlert(ruleID uint, aggKey string, window
 		return true, item.Count
 	}
 	return false, item.Count
+}
+
+func (aa *AlertAggregator) containsMessage(messages []string, message string) bool {
+	for _, msg := range messages {
+		if msg == message {
+			return true
+		}
+	}
+	return false
+}
+
+func (aa *AlertAggregator) updateSummary(key string, ruleID uint, aggKey, severity, message string) {
+	summary, exists := aa.AlertSummaries[key]
+	now := time.Now()
+	if !exists {
+		summary = &AlertSummary{
+			RuleID:         ruleID,
+			AggregationKey: aggKey,
+			TotalCount:     0,
+			CriticalCount:  0,
+			WarningCount:   0,
+			InfoCount:      0,
+			FirstSeen:      now,
+			LastSeen:       now,
+			UniqueMessages: make(map[string]int),
+		}
+		aa.AlertSummaries[key] = summary
+	}
+	summary.TotalCount++
+	summary.LastSeen = now
+	switch severity {
+	case "critical":
+		summary.CriticalCount++
+	case "warning":
+		summary.WarningCount++
+	case "info":
+		summary.InfoCount++
+	}
+	summary.UniqueMessages[message]++
 }
 
 // Cleanup 清理过期的聚合数据

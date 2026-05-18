@@ -35,6 +35,16 @@ type VerifyBiometricsRequest struct {
 }
 
 // RegisterBiometricProfile 注册生物特征档案
+// @Summary 注册生物特征档案
+// @Description 注册用户键盘和鼠标操作特征，用于后续生物特征验证
+// @Tags 生物特征
+// @Accept json
+// @Produce json
+// @Param body body RegisterBiometricProfileRequest true "生物特征注册请求"
+// @Success 200 {object} map[string]interface{} "注册成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/biometrics/register [post]
 func RegisterBiometricProfile(c *gin.Context) {
 	var req RegisterBiometricProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,6 +66,16 @@ func RegisterBiometricProfile(c *gin.Context) {
 }
 
 // VerifyBiometrics 生物特征验证
+// @Summary 生物特征验证
+// @Description 使用已注册的生物特征进行身份验证
+// @Tags 生物特征
+// @Accept json
+// @Produce json
+// @Param body body VerifyBiometricsRequest true "生物特征验证请求"
+// @Success 200 {object} map[string]interface{} "验证结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/biometrics/verify [post]
 func VerifyBiometrics(c *gin.Context) {
 	var req VerifyBiometricsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -77,6 +97,16 @@ func VerifyBiometrics(c *gin.Context) {
 }
 
 // GetBiometricProfile 获取生物特征档案
+// @Summary 获取生物特征档案
+// @Description 获取用户的生物特征档案信息
+// @Tags 生物特征
+// @Accept json
+// @Produce json
+// @Param user_id query string true "用户ID"
+// @Success 200 {object} map[string]interface{} "档案信息"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/biometrics/profile [get]
 func GetBiometricProfile(c *gin.Context) {
 	userID := c.Query("user_id")
 	if userID == "" {

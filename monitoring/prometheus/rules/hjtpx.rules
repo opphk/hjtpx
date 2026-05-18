@@ -1,5 +1,6 @@
 groups:
   - name: hjtpx-app
+    interval: 30s
     rules:
       - alert: HJTXPAppDown
         expr: up{job="hjtpx-app"} == 0
@@ -11,22 +12,40 @@ groups:
           description: "HJTPX application instance {{ $labels.instance }} has been down for more than 1 minute"
 
       - alert: HJTXPHighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        expr: rate(http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "HJTPX high error rate"
-          description: "HJTPX application error rate is above 5% for more than 5 minutes"
+          description: "HJTPX application error rate is above 5% for more than 5 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPTooManyErrors
+        expr: rate(http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.15
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical error rate"
+          description: "HJTPX application error rate is above 15% for more than 3 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
 
       - alert: HJTXPHighLatency
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 1
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "HJTPX high latency"
-          description: "HJTPX 95th percentile latency is above 1 second for more than 5 minutes"
+          description: "HJTPX 95th percentile latency is above 1 second for more than 5 minutes. Current p95: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: HJTXPTooHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 3
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical latency"
+          description: "HJTPX 95th percentile latency is above 3 seconds for more than 3 minutes. Current p95: {{ $value | printf \"%.2f\" }}s"
 
       - alert: HJTXPHighMemoryUsage
         expr: process_resident_memory_bytes{job="hjtpx-app"} / process_memory_limit_bytes > 0.85
@@ -35,7 +54,16 @@ groups:
           severity: warning
         annotations:
           summary: "HJTPX high memory usage"
-          description: "HJTPX memory usage is above 85% for more than 10 minutes"
+          description: "HJTPX memory usage is above 85% for more than 10 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPTooHighMemoryUsage
+        expr: process_resident_memory_bytes{job="hjtpx-app"} / process_memory_limit_bytes > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical memory usage"
+          description: "HJTPX memory usage is above 95% for more than 5 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
 
       - alert: HJTXPHighCPUUsage
         expr: rate(process_cpu_seconds_total{job="hjtpx-app"}[5m]) * 100 > 80
@@ -44,10 +72,19 @@ groups:
           severity: warning
         annotations:
           summary: "HJTPX high CPU usage"
-          description: "HJTPX CPU usage is above 80% for more than 10 minutes"
+          description: "HJTPX CPU usage is above 80% for more than 10 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPTooHighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="hjtpx-app"}[5m]) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical CPU usage"
+          description: "HJTPX CPU usage is above 95% for more than 5 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
 
       - alert: HJTXPHighRequestRate
-        expr: rate(http_requests_total[5m]) > 1000
+        expr: rate(http_requests_total{job="hjtpx-app"}[5m]) > 1000
         for: 5m
         labels:
           severity: info
@@ -56,7 +93,7 @@ groups:
           description: "HJTPX request rate is above 1000 req/s for more than 5 minutes"
 
       - alert: HJTXPBlockedRequests
-        expr: rate(captcha_blocked_total[5m]) > 10
+        expr: rate(captcha_blocked_total{job="hjtpx-app"}[5m]) > 10
         for: 5m
         labels:
           severity: warning
@@ -64,7 +101,35 @@ groups:
           summary: "HJTPX high blocked request rate"
           description: "HJTPX blocked request rate is above 10/s for more than 5 minutes"
 
+      - alert: HJTXPTooManyBlockedRequests
+        expr: rate(captcha_blocked_total{job="hjtpx-app"}[5m]) > 100
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical blocked request rate"
+          description: "HJTPX blocked request rate is above 100/s for more than 3 minutes"
+
+      - alert: HJTXPHighSlowQueryRate
+        expr: rate(http_request_duration_seconds_count{job="hjtpx-app-slow"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "HJTPX high slow query rate"
+          description: "HJTPX slow query rate is above 10/s for more than 5 minutes"
+
+      - alert: HJTXPHealthCheckFailure
+        expr: up{job="hjtpx-health"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX health check failure"
+          description: "HJTPX health check endpoint is not responding for more than 2 minutes"
+
   - name: database
+    interval: 30s
     rules:
       - alert: PostgreSQLDown
         expr: up{job="postgres-exporter"} == 0
@@ -82,18 +147,46 @@ groups:
           severity: warning
         annotations:
           summary: "PostgreSQL high connection usage"
-          description: "PostgreSQL connection usage is above 80%"
+          description: "PostgreSQL connection usage is above 80%. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL critical connection usage"
+          description: "PostgreSQL connection usage is above 95%. Current usage: {{ $value | printf \"%.2f\" }}%"
 
       - alert: PostgreSQLSlowQueries
-        expr: rate(pg_stat_statements_mean_exec_time[5m]) > 1000
+        expr: rate(pg_stat_statements_mean_exec_time{job="postgres-exporter"}[5m]) > 1000
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "PostgreSQL slow queries"
-          description: "PostgreSQL average query time is above 1 second"
+          description: "PostgreSQL average query time is above 1 second. Current avg: {{ $value | printf \"%.2f\" }}ms"
+
+      - alert: PostgreSQLLongRunningTransactions
+        expr: rate(pg_stat_database_blocked{job="postgres-exporter"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL long running transactions"
+          description: "PostgreSQL has high number of blocked transactions"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication lag"
+          description: "PostgreSQL replication lag is above 30 seconds. Current lag: {{ $value | printf \"%.2f\" }}s"
 
   - name: redis
+    interval: 30s
     rules:
       - alert: RedisDown
         expr: up{job="redis-exporter"} == 0
@@ -111,18 +204,55 @@ groups:
           severity: warning
         annotations:
           summary: "Redis high memory usage"
-          description: "Redis memory usage is above 85%"
+          description: "Redis memory usage is above 85%. Current usage: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: RedisTooHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis critical memory usage"
+          description: "Redis memory usage is above 95%. Current usage: {{ $value | printf \"%.2f\" }}%"
 
       - alert: RedisHighEvictionRate
-        expr: rate(redis_evicted_keys_total[5m]) > 100
+        expr: rate(redis_evicted_keys_total{job="redis-exporter"}[5m]) > 100
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Redis high eviction rate"
-          description: "Redis is evicting keys at a high rate"
+          description: "Redis is evicting keys at a high rate (>100/s)"
+
+      - alert: RedisTooManyEvictions
+        expr: rate(redis_evicted_keys_total{job="redis-exporter"}[5m]) > 1000
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis critical eviction rate"
+          description: "Redis is evicting keys at a critical rate (>1000/s)"
+
+      - alert: RedisHighConnectionUsage
+        expr: redis_connected_clients / redis_config_maxclients > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high connection usage"
+          description: "Redis connection usage is above 80%"
+
+      - alert: RedisKeyspaceMissRate
+        expr: rate(redis_keyspace_hits_total{job="redis-exporter"}[5m]) / (rate(redis_keyspace_hits_total{job="redis-exporter"}[5m]) + rate(redis_keyspace_misses_total{job="redis-exporter"}[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Redis high cache miss rate"
+          description: "Redis cache hit ratio is below 50%"
 
   - name: nginx
+    interval: 30s
     rules:
       - alert: NginxDown
         expr: up{job="nginx"} == 0
@@ -142,6 +272,15 @@ groups:
           summary: "Nginx high error rate"
           description: "Nginx error rate is above 5%"
 
+      - alert: NginxTooHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.15
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx critical error rate"
+          description: "Nginx error rate is above 15%"
+
       - alert: NginxHighLatency
         expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 2
         for: 5m
@@ -150,3 +289,117 @@ groups:
         annotations:
           summary: "Nginx high latency"
           description: "Nginx 95th percentile latency is above 2 seconds"
+
+      - alert: NginxTooHighLatency
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nginx critical latency"
+          description: "Nginx 95th percentile latency is above 5 seconds"
+
+      - alert: NginxHighConnectionUsage
+        expr: nginx_connections_active > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx high connection usage"
+          description: "Nginx has more than 10000 active connections"
+
+  - name: node
+    interval: 30s
+    rules:
+      - alert: NodeHighCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node high CPU usage"
+          description: "Node CPU usage is above 80%"
+
+      - alert: NodeCriticalCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node critical CPU usage"
+          description: "Node CPU usage is above 95%"
+
+      - alert: NodeHighMemory
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node high memory usage"
+          description: "Node memory usage is above 85%"
+
+      - alert: NodeCriticalMemory
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node critical memory usage"
+          description: "Node memory usage is above 95%"
+
+      - alert: NodeHighDiskUsage
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node high disk usage"
+          description: "Node disk usage is above 85%"
+
+      - alert: NodeCriticalDiskUsage
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"}) * 100 < 5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node critical disk usage"
+          description: "Node disk usage is above 95%"
+
+      - alert: NodeDiskIOHigh
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node high disk I/O"
+          description: "Node disk I/O utilization is above 80%"
+
+      - alert: NodeNetworkIssues
+        expr: rate(node_network_receive_errors_total[5m]) + rate(node_network_transmit_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node network errors"
+          description: "Node has high network error rate"
+
+  - name: loki
+    interval: 60s
+    rules:
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki is down"
+          description: "Loki instance is not responding"
+
+      - alert: LokiHighIngesterErrors
+        expr: rate(loki_ingester_client_failed_reconnects_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki high ingester errors"
+          description: "Loki ingester is experiencing high reconnection errors"
