@@ -88,7 +88,7 @@ var defaultEnhancedCSPConfig = EnhancedCSPConfig{
 	Enabled:    true,
 	DefaultSrc: []string{"'self'"},
 	ScriptSrc:  []string{"'self'"},
-	StyleSrc:   []string{"'self'", "'unsafe-inline'"},
+	StyleSrc:   []string{"'self'"},
 	ImgSrc:     []string{"'self'", "data:", "https:"},
 	FontSrc:    []string{"'self'"},
 	ConnectSrc: []string{"'self'"},
@@ -96,6 +96,7 @@ var defaultEnhancedCSPConfig = EnhancedCSPConfig{
 	ObjectSrc:  []string{"'none'"},
 	EnableNonce: true,
 	ExcludePaths: []string{"/health", "/metrics", "/api/health"},
+	ReportURI:  "/csp-report",
 }
 
 var (
@@ -136,6 +137,10 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 		cfg = configs[0]
 	}
 
+	if cfg.TokenLength < 32 {
+		cfg.TokenLength = 32
+	}
+
 	return func(c *gin.Context) {
 		if !cfg.Enabled {
 			c.Next()
@@ -163,7 +168,7 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 			if method == "GET" || method == "HEAD" {
 				sessionID := enhancedGenerateCSRFCSID(c)
 
-				token, err := csrfSecurity.GenerateToken()
+				token, err := csrfSecurity.GenerateTokenWithEntropy(cfg.TokenLength)
 				if err == nil {
 					enhancedCSRFStoreMu.Lock()
 					enhancedCSRFTokenStore[sessionID] = &sessionCSRFData{
@@ -213,6 +218,15 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 				"error":   "csrf_token_missing",
 				"code":    "CSRF_TOKEN_MISSING",
 				"message": "CSRF token is required for this request",
+			})
+			return
+		}
+
+		if len(token) < 32 {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":   "csrf_token_invalid",
+				"code":    "CSRF_TOKEN_TOO_SHORT",
+				"message": "Invalid CSRF token length",
 			})
 			return
 		}
@@ -314,6 +328,17 @@ func EnhancedXSSProtectionMiddleware(configs ...EnhancedXSSConfig) gin.HandlerFu
 		}
 
 		c.Request.Header.Set("X-XSS-Protection", "1; mode=block")
+		c.Request.Header.Set("X-Content-Type-Options", "nosniff")
+
+		if cfg.LogViolations {
+			userAgent := c.GetHeader("User-Agent")
+			if userAgent != "" {
+				isXSS, pattern := DetectXSS(userAgent)
+				if isXSS {
+					fmt.Printf("[XSS_DETECTED] User-Agent contains XSS pattern: %s, IP: %s\n", pattern, c.ClientIP())
+				}
+			}
+		}
 
 		c.Next()
 	}
@@ -353,10 +378,18 @@ func buildCSPPolicy(cfg EnhancedCSPConfig) string {
 	directives := []string{"default-src 'self'"}
 
 	if len(cfg.ScriptSrc) > 0 {
-		directives = append(directives, "script-src "+strings.Join(cfg.ScriptSrc, " "))
+		scriptSrc := "script-src " + strings.Join(cfg.ScriptSrc, " ")
+		if cfg.EnableNonce {
+			scriptSrc += " 'nonce'"
+		}
+		directives = append(directives, scriptSrc)
 	}
 	if len(cfg.StyleSrc) > 0 {
-		directives = append(directives, "style-src "+strings.Join(cfg.StyleSrc, " "))
+		styleSrc := "style-src " + strings.Join(cfg.StyleSrc, " ")
+		if cfg.EnableNonce {
+			styleSrc += " 'nonce'"
+		}
+		directives = append(directives, styleSrc)
 	}
 	if len(cfg.ImgSrc) > 0 {
 		directives = append(directives, "img-src "+strings.Join(cfg.ImgSrc, " "))
@@ -373,6 +406,11 @@ func buildCSPPolicy(cfg EnhancedCSPConfig) string {
 	if len(cfg.ObjectSrc) > 0 {
 		directives = append(directives, "object-src "+strings.Join(cfg.ObjectSrc, " "))
 	}
+
+	directives = append(directives, "base-uri 'self'")
+	directives = append(directives, "form-action 'self'")
+	directives = append(directives, "frame-ancestors 'none'")
+	directives = append(directives, "upgrade-insecure-requests")
 
 	if cfg.ReportURI != "" {
 		directives = append(directives, "report-uri "+cfg.ReportURI)
@@ -502,6 +540,17 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 			return
 		}
 
+		if c.Request.ContentLength == 0 && (c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH") {
+			contentType := c.GetHeader("Content-Type")
+			if strings.Contains(contentType, "application/json") {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+					"error":   "empty_body",
+					"message": "Request body cannot be empty for JSON content type",
+				})
+				return
+			}
+		}
+
 		if cfg.ValidateQuery {
 			query := c.Request.URL.Query()
 			if len(query) > cfg.MaxQueryParams {
@@ -513,6 +562,14 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 			}
 
 			for key, values := range query {
+				if len(key) > 256 {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+						"error":   "query_param_too_long",
+						"message": fmt.Sprintf("Query parameter key too long: %s", key[:50]),
+					})
+					return
+				}
+
 				sanitizedKey := SanitizeInput(key)
 				if sanitizedKey != key {
 					delete(query, key)
@@ -520,6 +577,14 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 				}
 
 				for i, value := range values {
+					if len(value) > 10000 {
+						c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+							"error":   "query_value_too_long",
+							"message": "Query parameter value too long",
+						})
+						return
+					}
+
 					sanitized := SanitizeInput(value)
 					if sanitized != value {
 						isXSS, pattern := DetectXSS(value)
@@ -537,6 +602,14 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 		if cfg.ValidateForm && (c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH") {
 			if err := c.Request.ParseForm(); err == nil {
 				for key, values := range c.Request.PostForm {
+					if len(key) > 256 {
+						c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+							"error":   "form_field_too_long",
+							"message": fmt.Sprintf("Form field key too long: %s", key[:50]),
+						})
+						return
+					}
+
 					sanitizedKey := SanitizeInput(key)
 					if sanitizedKey != key {
 						delete(c.Request.PostForm, key)
@@ -545,6 +618,14 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 					}
 
 					for i, value := range values {
+						if len(value) > 10000 {
+							c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+								"error":   "form_value_too_long",
+								"message": "Form field value too long",
+							})
+							return
+						}
+
 						sanitized := SanitizeHTML(value)
 						if sanitized != value {
 							isXSS, pattern := DetectXSS(value)
@@ -613,5 +694,49 @@ func SSRFProtectionMiddleware(configs ...SSRFProtectionConfig) gin.HandlerFunc {
 }
 
 func isSSRFAttack(urlStr string, cfg SSRFProtectionConfig) bool {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return true
+	}
+
+	if parsedURL.Host == "" {
+		return true
+	}
+
+	host := parsedURL.Hostname()
+
+	if cfg.CheckLoopback {
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+			return true
+		}
+	}
+
+	if cfg.CheckPrivate {
+		privateRanges := []string{
+			"10.", "172.16.", "172.17.", "172.18.", "172.19.",
+			"172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+			"172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+			"172.30.", "172.31.", "192.168.",
+		}
+		for _, prefix := range privateRanges {
+			if strings.HasPrefix(host, prefix) {
+				return true
+			}
+		}
+	}
+
+	if len(cfg.AllowedDomains) > 0 {
+		allowed := false
+		for _, domain := range cfg.AllowedDomains {
+			if strings.HasSuffix(host, domain) || host == domain {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return true
+		}
+	}
+
 	return false
 }

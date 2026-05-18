@@ -33,19 +33,21 @@ type NonceEntry struct {
 }
 
 type ReplayProtectionService struct {
-	nonceCache map[string]*NonceEntry
-	cacheMutex sync.RWMutex
-	config     ReplayProtectionConfig
-	usedNonces map[string]time.Time
-	nonceMutex sync.RWMutex
+	nonceCache       map[string]*NonceEntry
+	cacheMutex       sync.RWMutex
+	config           ReplayProtectionConfig
+	usedNonces       map[string]time.Time
+	nonceMutex       sync.RWMutex
+	sequenceNumbers  map[string]int64
+	sequenceMutex    sync.RWMutex
 }
 
 var defaultReplayConfig = ReplayProtectionConfig{
-	TimestampTolerance: 5 * time.Minute,
-	NonceCacheTTL:      24 * time.Hour,
+	TimestampTolerance: 3 * time.Minute,
+	NonceCacheTTL:      48 * time.Hour,
 	EnableBodyHash:     true,
 	RequireSignature:   true,
-	MaxClockSkew:       30 * time.Second,
+	MaxClockSkew:       15 * time.Second,
 }
 
 func NewReplayProtectionService(config ...ReplayProtectionConfig) *ReplayProtectionService {
@@ -55,9 +57,10 @@ func NewReplayProtectionService(config ...ReplayProtectionConfig) *ReplayProtect
 	}
 
 	service := &ReplayProtectionService{
-		nonceCache: make(map[string]*NonceEntry),
-		usedNonces: make(map[string]time.Time),
-		config:     cfg,
+		nonceCache:      make(map[string]*NonceEntry),
+		usedNonces:      make(map[string]time.Time),
+		sequenceNumbers: make(map[string]int64),
+		config:         cfg,
 	}
 
 	go service.cleanupRoutine()
@@ -170,11 +173,19 @@ func (s *ReplayProtectionService) VerifyTimestamp(timestamp int64) error {
 	diff := math.Abs(float64(now - timestamp))
 
 	if diff > s.config.TimestampTolerance.Seconds() {
-		return fmt.Errorf("timestamp out of tolerance: %v seconds", diff)
+		return fmt.Errorf("timestamp out of tolerance: %v seconds (max allowed: %v)", diff, s.config.TimestampTolerance.Seconds())
 	}
 
 	if math.Abs(float64(now-timestamp)) > s.config.MaxClockSkew.Seconds() {
-		return fmt.Errorf("clock skew too large: %v seconds", diff)
+		return fmt.Errorf("clock skew too large: %v seconds (max allowed: %v)", diff, s.config.MaxClockSkew.Seconds())
+	}
+
+	if timestamp > now+60 {
+		return fmt.Errorf("timestamp in the future: %v seconds ahead", timestamp-now)
+	}
+
+	if timestamp < now-31536000 {
+		return fmt.Errorf("timestamp too old: %v seconds ago", now-timestamp)
 	}
 
 	return nil
@@ -185,14 +196,18 @@ func (s *ReplayProtectionService) VerifyNonce(nonce string) error {
 		return fmt.Errorf("nonce is required")
 	}
 
-	if len(nonce) < 16 || len(nonce) > 128 {
-		return fmt.Errorf("invalid nonce length: %d", len(nonce))
+	if len(nonce) < 32 || len(nonce) > 128 {
+		return fmt.Errorf("invalid nonce length: %d, expected 32-128", len(nonce))
+	}
+
+	if !s.validateNonceFormat(nonce) {
+		return fmt.Errorf("nonce format validation failed")
 	}
 
 	s.nonceMutex.RLock()
 	if _, exists := s.usedNonces[nonce]; exists {
 		s.nonceMutex.RUnlock()
-		return fmt.Errorf("nonce already used: potential replay attack")
+		return fmt.Errorf("nonce already used: potential replay attack detected at %s", time.Now().Format(time.RFC3339))
 	}
 	s.nonceMutex.RUnlock()
 
@@ -200,6 +215,75 @@ func (s *ReplayProtectionService) VerifyNonce(nonce string) error {
 	s.usedNonces[nonce] = time.Now()
 	s.nonceMutex.Unlock()
 
+	return nil
+}
+
+func (s *ReplayProtectionService) validateNonceFormat(nonce string) bool {
+	var hasUpper, hasLower, hasDigit bool
+	var hasSpecial bool
+
+	for _, char := range nonce {
+		switch {
+		case char >= 'A' && char <= 'Z':
+			hasUpper = true
+		case char >= 'a' && char <= 'z':
+			hasLower = true
+		case char >= '0' && char <= '9':
+			hasDigit = true
+		case (char >= 33 && char <= 47) || (char >= 58 && char <= 64) || (char >= 91 && char <= 96) || (char >= 123 && char <= 126):
+			hasSpecial = true
+		default:
+			if char >= 0x80 {
+				return true
+			}
+		}
+	}
+
+	charsetSize := 0
+	if hasUpper {
+		charsetSize += 26
+	}
+	if hasLower {
+		charsetSize += 26
+	}
+	if hasDigit {
+		charsetSize += 10
+	}
+	if hasSpecial {
+		charsetSize += 32
+	}
+
+	if charsetSize < 3 {
+		return false
+	}
+
+	entropyBits := math.Log(float64(charsetSize)) * float64(len(nonce)) / math.Log(2)
+	if entropyBits < 128 {
+		return false
+	}
+
+	return true
+}
+
+func (s *ReplayProtectionService) VerifySequence(clientID string, sequence int64) error {
+	s.sequenceMutex.Lock()
+	defer s.sequenceMutex.Unlock()
+
+	expectedSeq, exists := s.sequenceNumbers[clientID]
+	if !exists {
+		s.sequenceNumbers[clientID] = sequence
+		return nil
+	}
+
+	if sequence <= expectedSeq {
+		return fmt.Errorf("sequence number %d is not greater than expected %d for client %s", sequence, expectedSeq, clientID)
+	}
+
+	if sequence > expectedSeq+1000 {
+		return fmt.Errorf("sequence jump too large: %d to %d for client %s", expectedSeq, sequence, clientID)
+	}
+
+	s.sequenceNumbers[clientID] = sequence
 	return nil
 }
 
@@ -224,6 +308,11 @@ func (s *ReplayProtectionService) VerifyRequest(r *http.Request, secretKey strin
 		return result
 	}
 	result.Signature = signature
+
+	if len(signature) < 64 || len(signature) > 256 {
+		result.Reason = "invalid signature length"
+		return result
+	}
 
 	timestampStr := r.Header.Get("X-Timestamp")
 	if timestampStr == "" {

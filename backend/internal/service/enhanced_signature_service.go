@@ -16,12 +16,15 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"math"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/scrypt"
 )
 
 type RequestSignatureConfig struct {
@@ -100,14 +103,14 @@ var defaultSignatureConfig = RequestSignatureConfig{
 	EnableBodyHash:        true,
 	EnableQuerySorting:    true,
 	EnableDoubleSignature: false,
-	EnableSequenceNumber:  false,
+	EnableSequenceNumber:  true,
 	SignatureHeader:       "X-Signature",
 	TimestampHeader:       "X-Timestamp",
 	NonceHeader:           "X-Nonce",
 	SequenceHeader:        "X-Sequence",
 	ExcludePaths:          []string{"/health", "/metrics", "/api/health", "/docs", "/swagger"},
-	MinNonceLength:        16,
-	MaxNonceLength:        64,
+	MinNonceLength:        32,
+	MaxNonceLength:        128,
 	EnableRateLimit:       true,
 	RateLimitPerIPLimit:   100,
 	RateLimitWindow:       1 * time.Minute,
@@ -369,6 +372,10 @@ func (v *SignatureValidator) validateNonce(nonce string) bool {
 		return false
 	}
 
+	if !v.validateNonceEntropy(nonce) {
+		return false
+	}
+
 	v.nonceMutex.Lock()
 	defer v.nonceMutex.Unlock()
 
@@ -385,6 +392,50 @@ func (v *SignatureValidator) validateNonce(nonce string) bool {
 
 	if len(v.nonceCache) > 100000 {
 		v.cleanupNonceCache()
+	}
+
+	return true
+}
+
+func (v *SignatureValidator) validateNonceEntropy(nonce string) bool {
+	var hasUpper, hasLower, hasDigit, hasSpecial bool
+
+	for _, char := range nonce {
+		switch {
+		case char >= 'A' && char <= 'Z':
+			hasUpper = true
+		case char >= 'a' && char <= 'z':
+			hasLower = true
+		case char >= '0' && char <= '9':
+			hasDigit = true
+		case char >= 0x80:
+			return true
+		default:
+			hasSpecial = true
+		}
+	}
+
+	charsetSize := 0
+	if hasUpper {
+		charsetSize += 26
+	}
+	if hasLower {
+		charsetSize += 26
+	}
+	if hasDigit {
+		charsetSize += 10
+	}
+	if hasSpecial {
+		charsetSize += 32
+	}
+
+	if charsetSize < 3 {
+		return false
+	}
+
+	entropyBits := math.Log(float64(charsetSize)) * float64(len(nonce)) / math.Log(2)
+	if entropyBits < 128 {
+		return false
 	}
 
 	return true
@@ -569,6 +620,10 @@ func (v *RSASignatureValidator) Sign(message []byte) (string, error) {
 		return "", errors.New("private key not available")
 	}
 
+	if v.privateKey.N.BitLen() < 2048 {
+		return "", errors.New("RSA key size must be at least 2048 bits")
+	}
+
 	var hashType crypto.Hash
 	switch v.config.Algorithm {
 	case "SHA256":
@@ -583,7 +638,9 @@ func (v *RSASignatureValidator) Sign(message []byte) (string, error) {
 	hash.Write([]byte(message))
 	hashed := hash.Sum(nil)
 
-	signature, err := rsa.SignPKCS1v15(rand.Reader, v.privateKey, hashType, hashed)
+	signature, err := rsa.SignPSS(rand.Reader, v.privateKey, hashType, hashed, &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthAuto,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -594,6 +651,10 @@ func (v *RSASignatureValidator) Sign(message []byte) (string, error) {
 func (v *RSASignatureValidator) Verify(message, signatureBase64 string) error {
 	if v.publicKey == nil {
 		return errors.New("public key not available")
+	}
+
+	if v.publicKey.N.BitLen() < 2048 {
+		return errors.New("RSA key size must be at least 2048 bits")
 	}
 
 	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
@@ -615,7 +676,9 @@ func (v *RSASignatureValidator) Verify(message, signatureBase64 string) error {
 	hash.Write([]byte(message))
 	hashed := hash.Sum(nil)
 
-	return rsa.VerifyPKCS1v15(v.publicKey, hashType, hashed, signature)
+	return rsa.VerifyPSS(v.publicKey, hashType, hashed, signature, &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthAuto,
+	})
 }
 
 func (v *RSASignatureValidator) ValidateNonce(nonce string) bool {
@@ -663,8 +726,33 @@ func (v *DoubleSignatureValidator) ValidateRequest(method, path, query string, h
 		return primaryResult
 	}
 
+	secondarySignature := headers["X-Signature-Secondary"]
+	if secondarySignature == "" {
+		primaryResult.Valid = false
+		primaryResult.Reason = "missing_secondary_signature"
+		primaryResult.ErrorCode = "MISSING_SECONDARY_SIGNATURE"
+		return primaryResult
+	}
+
+	secondaryTimestampStr := headers["X-Timestamp-Secondary"]
+	var secondaryTimestamp int64
+	if secondaryTimestampStr != "" {
+		var err error
+		secondaryTimestamp, err = strconv.ParseInt(secondaryTimestampStr, 10, 64)
+		if err != nil {
+			primaryResult.Valid = false
+			primaryResult.Reason = "invalid_secondary_timestamp"
+			primaryResult.ErrorCode = "INVALID_SECONDARY_TIMESTAMP"
+			return primaryResult
+		}
+	}
+
+	nonce2, _ := GenerateSignatureNonce(16)
 	secondaryHeaders := map[string]string{
-		v.secondaryValidator.config.SignatureHeader: headers["X-Signature-Secondary"],
+		v.secondaryValidator.config.SignatureHeader: secondarySignature,
+	}
+	if secondaryTimestampStr != "" {
+		secondaryHeaders[v.secondaryValidator.config.TimestampHeader] = secondaryTimestampStr
 	}
 
 	secondaryResult := v.secondaryValidator.ValidateRequest(method, path, query, secondaryHeaders, body, clientIP)
@@ -673,6 +761,12 @@ func (v *DoubleSignatureValidator) ValidateRequest(method, path, query string, h
 		primaryResult.Valid = false
 		primaryResult.Reason = "secondary_signature_invalid"
 		primaryResult.ErrorCode = "SECONDARY_SIGNATURE_INVALID"
+	}
+
+	if v.primaryAlgorithm == v.secondaryAlgorithm {
+		primaryResult.Valid = false
+		primaryResult.Reason = "duplicate_algorithms"
+		primaryResult.ErrorCode = "DUPLICATE_ALGORITHMS"
 	}
 
 	return primaryResult

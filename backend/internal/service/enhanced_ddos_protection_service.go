@@ -143,7 +143,7 @@ var defaultEnhancedDDoSConfig = EnhancedDDoSProtectionConfig{
 	RequestsPerSecond:         10,
 	RequestsPerMinute:         100,
 	RequestsPerHour:           1000,
-	BurstSize:                20,
+	BurstSize:                15,
 	ConnectionLimitPerIP:      10,
 	ConnectionTimeout:        30 * time.Second,
 	BlacklistDuration:        1 * time.Hour,
@@ -154,7 +154,7 @@ var defaultEnhancedDDoSConfig = EnhancedDDoSProtectionConfig{
 	MaxIPsInMemory:           100000,
 	CleanupInterval:          10 * time.Minute,
 	EnableBehavioralAnalysis: true,
-	MinRequestInterval:       50 * time.Millisecond,
+	MinRequestInterval:       100 * time.Millisecond,
 }
 
 func NewEnhancedDDoSProtectionService(config ...EnhancedDDoSProtectionConfig) *EnhancedDDoSProtectionService {
@@ -325,37 +325,58 @@ func NewAttackPatternMatcher() *AttackPatternMatcher {
 
 	matcher.patterns = append(matcher.patterns, &AttackPattern{
 		Name:        "SQL Injection",
-		Pattern:     regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|exec|execute|script|--|;|/\*|\*/)`),
+		Pattern:     regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|exec|execute|script|--|;|/\*|\*/|declare|convert|xp_)`),
 		Severity:    0.8,
 		Description: "SQL injection attack pattern detected",
 	})
 
 	matcher.patterns = append(matcher.patterns, &AttackPattern{
 		Name:        "XSS Attack",
-		Pattern:     regexp.MustCompile(`(?i)(<script|javascript:|onerror|onload|onclick|alert\(|eval\(|document\.|window\.)`),
+		Pattern:     regexp.MustCompile(`(?i)(<script|javascript:|onerror|onload|onclick|alert\(|eval\(|document\.|window\.|<img|<svg|<iframe|<embed|<object)`),
 		Severity:    0.7,
 		Description: "XSS attack pattern detected",
 	})
 
 	matcher.patterns = append(matcher.patterns, &AttackPattern{
 		Name:        "Path Traversal",
-		Pattern:     regexp.MustCompile(`(?i)(\.\./|\.\.\\|%2e%2e|/etc/passwd|c:\\windows)`),
+		Pattern:     regexp.MustCompile(`(?i)(\.\./|\.\.\\|%2e%2e|/etc/passwd|c:\\windows|root:|/etc/shadow|\.\.%2f)`),
 		Severity:    0.75,
 		Description: "Path traversal attack pattern detected",
 	})
 
 	matcher.patterns = append(matcher.patterns, &AttackPattern{
 		Name:        "Command Injection",
-		Pattern:     regexp.MustCompile(`(?i)(;|\|\||&&|` + "`" + `|\$\(|\\x)`),
+		Pattern:     regexp.MustCompile(`(?i)(;|\|\||&&|` + "`" + `|\$\(|\\x|;.*(cat|ls|wget|curl|nc|bash|sh))`),
 		Severity:    0.9,
 		Description: "Command injection pattern detected",
 	})
 
 	matcher.patterns = append(matcher.patterns, &AttackPattern{
 		Name:        "Scanner Activity",
-		Pattern:     regexp.MustCompile(`(?i)(nikto|nmap|gobuster|dirbuster|sqlmap|burp|hydra|wpscan)`),
+		Pattern:     regexp.MustCompile(`(?i)(nikto|nmap|gobuster|dirbuster|sqlmap|burp|hydra|wpscan|acunetix|appscan|metasploit)`),
 		Severity:    0.6,
 		Description: "Security scanner activity detected",
+	})
+
+	matcher.patterns = append(matcher.patterns, &AttackPattern{
+		Name:        "LDAP Injection",
+		Pattern:     regexp.MustCompile(`(?i)(\(|\)|\*|%|,|;|&|\||=|\+|\\/)`),
+		Severity:    0.75,
+		Description: "LDAP injection pattern detected",
+	})
+
+	matcher.patterns = append(matcher.patterns, &AttackPattern{
+		Name:        "XML Injection",
+		Pattern:     regexp.MustCompile(`(?i)(<!DOCTYPE|<!ENTITY|<!ATTLIST|<!ELEMENT|<!NOTATION|<!%|<%|\%3c|\%3e)`),
+		Severity:    0.8,
+		Description: "XML injection pattern detected",
+	})
+
+	matcher.patterns = append(matcher.patterns, &AttackPattern{
+		Name:        "Template Injection",
+		Pattern:     regexp.MustCompile(`(?i)(\{\{|\}\}|\{%|%7b%7d|\$\{)`),
+		Severity:    0.85,
+		Description: "Template injection pattern detected",
 	})
 
 	return matcher
@@ -403,6 +424,22 @@ func (s *EnhancedDDoSProtectionService) CheckRequest(r *http.Request) *EnhancedD
 	}
 
 	stats := s.getOrCreateStatsLocked(ip)
+
+	if s.isRequestRateAnomalous(stats) {
+		s.blacklist[ip] = now.Add(s.config.BlacklistDuration)
+		stats.BlockedCount++
+		stats.ThreatScore = 1.0
+		return &EnhancedDDoSCheckResult{
+			Allowed:           false,
+			Reason:            "rate_anomaly_detected",
+			Severity:          "critical",
+			IPStats:           stats,
+			ThreatLevel:       stats.ThreatScore,
+			RetryAfter:        int(s.config.BlacklistDuration.Seconds()),
+			RecommendedAction: "block",
+		}
+	}
+
 	s.recordTrafficLocked(ip, r, now)
 
 	if s.connectionCounts[ip] >= s.config.ConnectionLimitPerIP {
@@ -493,6 +530,21 @@ func (s *EnhancedDDoSProtectionService) CheckRequest(r *http.Request) *EnhancedD
 		ThreatLevel:       stats.ThreatScore,
 		RecommendedAction: "allow",
 	}
+}
+
+func (s *EnhancedDDoSProtectionService) isRequestRateAnomalous(stats *EnhancedIPStatistics) bool {
+	if stats.RequestCountMinute > int64(s.config.RequestsPerMinute)*5 {
+		return true
+	}
+
+	if stats.RequestCount > 0 && stats.BlockedCount > 0 {
+		blockRatio := float64(stats.BlockedCount) / float64(stats.RequestCount)
+		if blockRatio > 0.5 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *EnhancedDDoSProtectionService) getClientIP(r *http.Request) string {
@@ -675,6 +727,14 @@ func (s *EnhancedDDoSProtectionService) analyzeBehaviorLocked(ip string, now tim
 		}
 	}
 
+	if mean < 100 && stdDev < 20 {
+		return anomalyResult{
+			detected: true,
+			score:    0.8,
+			reason:   "mechanical_request_pattern",
+		}
+	}
+
 	stats := s.ipStats[ip]
 	if stats != nil {
 		currentRate := stats.RequestRate
@@ -684,6 +744,14 @@ func (s *EnhancedDDoSProtectionService) analyzeBehaviorLocked(ip string, now tim
 				detected: true,
 				score:    anomalyScore,
 				reason:   "baseline_deviation",
+			}
+		}
+
+		if stats.ErrorRate > 0.5 && stats.TotalErrors > 10 {
+			return anomalyResult{
+				detected: true,
+				score:    0.6,
+				reason:   "high_error_rate",
 			}
 		}
 	}
