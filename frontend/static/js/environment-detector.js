@@ -42,7 +42,66 @@ class EnvironmentDetector {
             adblock: 4,
             math: 3,
             gpu: 6,
-            speech: 3
+            speech: 3,
+            proxy_vpn: 20,
+            tor_network: 25,
+            datacenter_ip: 18,
+            timezone_mismatch: 15,
+            webrtc_leak: 20
+        };
+        this.vpnASNPatterns = [
+            'AS45090', 'AS42366', 'AS9009', 'AS50611', 'AS48275',
+            'AS400052', 'AS400053', 'AS400054', 'AS212883', 'AS212884', 'AS212885',
+            'AS400065', 'AS400066', 'AS400067', 'AS62951',
+            'AS393398', 'AS393399', 'AS36554', 'AS17451',
+            'AS42385', 'AS42386', 'AS42387', 'AS42388',
+            'AS157413', 'AS124309', 'AS207243',
+            'AS16663', 'AS46844', 'AS202990',
+            'AS63040', 'AS63041',
+            'AS11426', 'AS11427',
+            'AS51659', 'AS62263',
+            'AS42073', 'AS212117',
+            'AS393125', 'AS393126', 'AS201641',
+            'AS51852', 'AS60113',
+            'AS397980', 'AS397981',
+            'AS209085', 'AS209086',
+            'AS45078', 'AS58753',
+            'AS51823', 'AS51824',
+            'AS51430', 'AS51431',
+            'AS61317', 'AS61318',
+            'AS49673', 'AS49674',
+            'AS47869', 'AS47870'
+        ];
+        this.datacenterIPRanges = {
+            AWS: ['3.', '18.', '23.', '34.', '35.', '44.', '47.', '52.', '54.', '63.', '64.', '65.', '66.', '67.', '68.', '69.', '70.', '71.', '72.', '73.', '74.', '75.', '76.', '77.', '78.', '79.', '80.', '81.', '82.', '83.', '84.', '85.', '86.', '87.', '88.', '89.', '90.', '91.', '92.', '93.', '94.', '95.', '96.', '97.', '98.', '99.', '100.', '104.', '107.', '108.', '130.', '132.', '136.', '142.', '143.', '144.', '146.', '147.', '150.', '152.', '154.', '155.', '157.', '158.', '159.', '160.', '162.', '172.', '174.', '175.', '176.', '177.', '178.', '179.', '180.', '181.', '182.', '183.', '184.', '185.', '186.', '187.', '188.', '189.', '190.', '191.', '192.', '193.', '194.', '195.', '196.', '197.', '198.', '199.', '200.', '201.', '202.', '203.', '204.', '205.', '206.', '207.', '208.', '209.', '210.', '211.', '212.', '213.', '214.', '215.', '216.', '217.', '218.', '219.', '220.', '221.', '222.', '223.'],
+            Azure: ['13.64.', '13.65.', '13.66.', '13.67.', '13.68.', '13.69.', '13.70.', '13.71.', '13.72.', '13.73.', '13.74.', '13.75.', '20.', '23.96.', '40.', '51.', '104.208.', '137.116.', '138.91.', '139.217.', '143.161.', '157.56.', '168.'],
+            GCP: ['8.', '23.', '34.', '35.192.', '35.196.', '35.200.', '35.208.', '35.224.', '35.240.', '64.15.', '64.233.', '66.22.', '66.102.', '66.249.', '70.32.', '72.14.', '104.154.', '104.196.', '107.167.', '107.178.', '108.59.', '109.107.', '130.211.', '142.', '146.148.', '162.216.', '162.222.', '173.194.', '173.255.', '185.148.', '185.196.', '185.234.', '188.', '192.158.', '199.', '199.192.', '199.223.', '199.232.', '204.', '206.', '207.', '208.', '209.', '210.', '211.', '212.', '213.', '214.', '215.', '216.', '217.', '218.', '219.', '220.', '221.', '222.', '223.'],
+            DigitalOcean: ['5.', '10.', '45.', '64.', '67.', '69.', '104.', '107.', '108.', '138.', '143.', '159.', '165.', '167.', '170.', '172.', '185.', '192.', '198.', '199.', '203.', '204.', '205.', '206.', '207.', '208.', '209.', '210.', '211.', '212.', '213.', '214.', '215.', '216.', '217.', '218.', '219.', '220.', '221.', '222.', '223.'],
+            Oracle: ['140.', '141.', '144.', '147.', '152.', '157.', '158.', '159.', '160.', '161.', '162.', '164.', '165.', '166.', '167.', '168.', '169.', '170.', '172.', '173.', '192.', '193.', '194.', '195.', '196.', '197.', '198.', '199.', '200.', '201.', '202.', '203.', '204.', '205.', '206.', '207.', '208.', '209.', '210.', '211.'],
+            Cloudflare: ['104.16.', '104.17.', '104.18.', '104.19.', '104.20.', '104.21.', '104.22.', '104.23.', '104.24.', '104.25.', '104.26.', '104.27.', '108.162.', '162.158.', '172.64.', '173.245.', '185.45.', '188.114.', '190.93.', '197.234.', '198.41.'],
+            Hetzner: ['5.', '13.', '21.', '78.', '81.', '82.', '83.', '84.', '85.', '86.', '87.', '88.', '89.', '90.', '91.', '92.', '93.', '94.', '95.', '96.', '97.', '98.', '99.', '103.', '104.', '106.', '108.', '109.', '116.', '117.', '118.', '119.', '120.', '121.', '122.', '123.', '124.', '125.', '126.', '127.'],
+            Linode: ['8.', '12.', '45.', '50.', '64.', '65.', '66.', '67.', '68.', '69.', '70.', '71.', '72.', '73.', '74.', '75.', '76.', '77.', '78.', '79.', '80.', '81.', '82.', '83.', '84.', '85.', '86.', '87.', '88.', '89.', '90.', '91.', '92.', '93.', '94.', '95.', '96.', '97.', '98.', '99.', '104.', '107.', '108.', '109.', '139.', '143.', '144.', '148.', '151.', '158.', '162.', '163.', '164.', '165.', '166.', '167.', '168.', '169.', '170.', '171.', '172.', '173.', '174.', '175.', '176.', '177.', '178.', '179.', '180.', '181.', '182.', '183.', '184.', '185.', '186.', '187.', '188.', '189.', '190.', '191.', '192.', '193.', '194.', '195.', '196.', '197.', '198.', '199.', '200.', '201.', '202.', '203.', '204.', '205.', '206.', '207.', '208.', '209.', '210.', '211.', '212.', '213.', '214.', '215.', '216.', '217.', '218.', '219.', '220.', '221.', '222.', '223.'],
+            Vultr: ['45.', '104.', '108.61.', '108.171.', '149.', '155.', '162.', '167.', '172.', '173.', '174.', '175.', '176.', '177.', '178.', '179.', '180.', '181.', '182.', '183.', '184.', '185.', '186.', '187.', '188.', '189.', '190.', '191.', '192.', '193.', '194.', '195.', '196.', '197.', '198.', '199.', '200.', '201.', '202.', '203.', '204.', '205.', '206.', '207.', '208.', '209.', '210.', '211.']
+        };
+        this.countryTimezones = {
+            'CN': 'Asia/Shanghai',
+            'JP': 'Asia/Tokyo',
+            'KR': 'Asia/Seoul',
+            'IN': 'Asia/Kolkata',
+            'AU': 'Australia/Sydney',
+            'GB': 'Europe/London',
+            'DE': 'Europe/Berlin',
+            'FR': 'Europe/Paris',
+            'IT': 'Europe/Rome',
+            'ES': 'Europe/Rome',
+            'RU': 'Europe/Moscow',
+            'US': 'America/New_York',
+            'CA': 'America/New_York',
+            'BR': 'America/Sao_Paulo',
+            'SA': 'Asia/Dubai',
+            'SG': 'Asia/Singapore',
+            'HK': 'Asia/Hong_Kong',
+            'TW': 'Asia/Taipei'
         };
     }
 
@@ -78,7 +137,13 @@ class EnvironmentDetector {
             'detectAdBlock',
             'detectMathFingerprint',
             'detectGPUFingerprint',
-            'detectSpeech'
+            'detectSpeech',
+            'detectVPNConnection',
+            'detectTorNetwork',
+            'detectProxyVPN',
+            'detectDatacenterIP',
+            'detectTimezoneMismatch',
+            'detectWebRTCLeak'
         ];
     }
 
@@ -155,7 +220,7 @@ class EnvironmentDetector {
             baseScore = Math.min(baseScore * 1.3 + 10, 100);
         }
 
-        const proxyIndicators = ['detectWebRTCIP', 'detectConnection'];
+        const proxyIndicators = ['detectWebRTCIP', 'detectConnection', 'detectVPNConnection', 'detectProxyVPN'];
         const proxyAnomalies = proxyIndicators.filter(m => {
             const r = this.results[m];
             return r && r.score > 30;
@@ -166,6 +231,262 @@ class EnvironmentDetector {
         }
 
         return Math.round(Math.min(Math.max(baseScore, 0), 100));
+    }
+
+    async detectProxyVPN() {
+        let score = 0;
+        const detections = [];
+        const ipInfo = await this.getClientIPInfo();
+
+        if (ipInfo) {
+            if (ipInfo.headers) {
+                if (ipInfo.headers['X-Forwarded-For'] || ipInfo.headers['x-forwarded-for']) {
+                    score += 35;
+                    detections.push('x_forwarded_for_header');
+                }
+                if (ipInfo.headers['X-Real-IP'] || ipInfo.headers['x-real-ip']) {
+                    score += 30;
+                    detections.push('x_real_ip_header');
+                }
+                if (ipInfo.headers['Via'] || ipInfo.headers['via']) {
+                    const viaLower = (ipInfo.headers['Via'] || ipInfo.headers['via'] || '').toLowerCase();
+                    if (/proxy|vpn|squid|nginx|haproxy|varnish/i.test(viaLower)) {
+                        score += 45;
+                        detections.push('via_proxy_header');
+                    }
+                }
+                if (ipInfo.headers['X-ProxyChain'] || ipInfo.headers['x-proxychain']) {
+                    score += 50;
+                    detections.push('proxy_chain_header');
+                }
+                if (ipInfo.headers['Forwarded'] || ipInfo.headers['forwarded']) {
+                    score += 25;
+                    detections.push('forwarded_header');
+                }
+            }
+
+            if (ipInfo.asn) {
+                for (const asnPattern of this.vpnASNPatterns) {
+                    if (ipInfo.asn.includes(asnPattern)) {
+                        score += 50;
+                        detections.push('vpn_asn_match:' + asnPattern);
+                        break;
+                    }
+                }
+            }
+
+            if (ipInfo.isp) {
+                const ispLower = ipInfo.isp.toLowerCase();
+                if (/vpn|proxy|tor|hosting|cloud|datacenter/i.test(ispLower)) {
+                    score += 40;
+                    detections.push('vpn_isp_keyword');
+                }
+            }
+        }
+
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectDatacenterIP() {
+        let score = 0;
+        const detections = [];
+        const ipInfo = await this.getClientIPInfo();
+
+        if (ipInfo && ipInfo.ip) {
+            for (const [provider, prefixes] of Object.entries(this.datacenterIPRanges)) {
+                for (const prefix of prefixes) {
+                    if (ipInfo.ip.startsWith(prefix)) {
+                        score += 55;
+                        detections.push('datacenter_ip:' + provider);
+                        break;
+                    }
+                }
+            }
+
+            if (ipInfo.hosting === true || ipInfo.hosting === 'true') {
+                score += 40;
+                detections.push('hosting_provider');
+            }
+        }
+
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectTimezoneMismatch() {
+        let score = 0;
+        const detections = [];
+
+        try {
+            const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const ipInfo = await this.getClientIPInfo();
+
+            if (ipInfo && ipInfo.country) {
+                const expectedTimezone = this.countryTimezones[ipInfo.country.toUpperCase()];
+                if (expectedTimezone && clientTimezone !== expectedTimezone) {
+                    const expectedOffsets = {
+                        'Asia/Shanghai': [480],
+                        'Asia/Tokyo': [540],
+                        'Asia/Seoul': [540],
+                        'Asia/Kolkata': [330],
+                        'Asia/Dubai': [240],
+                        'Asia/Singapore': [480],
+                        'Asia/Hong_Kong': [480],
+                        'Asia/Taipei': [480],
+                        'Europe/London': [0],
+                        'Europe/Paris': [60],
+                        'Europe/Berlin': [60],
+                        'Europe/Moscow': [180],
+                        'Europe/Rome': [60],
+                        'America/New_York': [-300, -240],
+                        'America/Los_Angeles': [-480, -420],
+                        'America/Chicago': [-360, -300],
+                        'America/Sao_Paulo': [-180],
+                        'Australia/Sydney': [600]
+                    };
+
+                    const clientOffset = new Date().getTimezoneOffset();
+                    const expectedMismatches = expectedOffsets[expectedTimezone] || [];
+
+                    if (!expectedMismatches.includes(clientOffset)) {
+                        score += 45;
+                        detections.push('timezone_mismatch:' + clientTimezone + '!=' + expectedTimezone);
+                    }
+                }
+            }
+
+            const ua = navigator.userAgent || '';
+            if (/headless|phantom|puppeteer|playwright|selenium/i.test(ua)) {
+                const year = new Date().getFullYear();
+                if (year < 2000 || year > 2100) {
+                    score += 25;
+                    detections.push('unrealistic_year');
+                }
+            }
+        } catch (e) {
+            score += 15;
+            detections.push('timezone_check_error');
+        }
+
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebRTCLeak() {
+        let score = 0;
+        const detections = [];
+
+        try {
+            const RTCPeerConnection = window.RTCPeerConnection ||
+                window.webkitRTCPeerConnection ||
+                window.mozRTCPeerConnection;
+
+            if (!RTCPeerConnection) {
+                score += 20;
+                detections.push('webrtc_not_available');
+                return { detected: true, score: Math.min(score, 100), detections };
+            }
+
+            const ips = new Set();
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
+                ]
+            });
+
+            pc.createDataChannel('');
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            const sdp = pc.localDescription.sdp;
+            const lines = sdp.split('\n');
+
+            for (const line of lines) {
+                if (line.indexOf('candidate') > -1) {
+                    const parts = line.split(' ');
+                    if (parts[4] && parts[4] !== '0.0.0.0') {
+                        ips.add(parts[4]);
+                        if (parts[7] !== 'host') {
+                            detections.push('relay_candidate:' + parts[4]);
+                            score += 35;
+                        }
+                    }
+                }
+            }
+
+            pc.close();
+
+            const ipsArr = Array.from(ips);
+            const publicIPs = ipsArr.filter(ip =>
+                !ip.startsWith('10.') &&
+                !ip.startsWith('172.16.') && !ip.startsWith('172.17.') && !ip.startsWith('172.18.') &&
+                !ip.startsWith('172.19.') && !ip.startsWith('172.20.') && !ip.startsWith('172.21.') &&
+                !ip.startsWith('172.22.') && !ip.startsWith('172.23.') && !ip.startsWith('172.24.') &&
+                !ip.startsWith('172.25.') && !ip.startsWith('172.26.') && !ip.startsWith('172.27.') &&
+                !ip.startsWith('172.28.') && !ip.startsWith('172.29.') && !ip.startsWith('172.30.') &&
+                !ip.startsWith('172.31.') &&
+                !ip.startsWith('192.168.')
+            );
+
+            if (publicIPs.length > 0) {
+                score += 40;
+                detections.push('public_ip_leak');
+            }
+
+            if (ipsArr.length > 3) {
+                score += 25;
+                detections.push('multiple_ips');
+            }
+
+            for (const provider in this.datacenterIPRanges) {
+                for (const ip of publicIPs) {
+                    for (const prefix of this.datacenterIPRanges[provider]) {
+                        if (ip.startsWith(prefix.replace('/16', '.').replace('/24', '.'))) {
+                            score += 45;
+                            detections.push('datacenter_webrtc:' + provider);
+                            break;
+                        }
+                    }
+                }
+            }
+
+        } catch (e) {
+            score += 15;
+            detections.push('webrtc_leak_error');
+        }
+
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async getClientIPInfo() {
+        try {
+            const response = await fetch('/api/v1/ip-info', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (e) {}
+
+        try {
+            const response = await fetch('https://api.ipapi.co/?format=json', {
+                method: 'GET',
+                mode: 'cors'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    ip: data.ip,
+                    country: data.country_code,
+                    isp: data.connection && data.connection.isp,
+                    asn: data.connection && data.connection.asn,
+                    hosting: data.hosting || data.colo
+                };
+            }
+        } catch (e) {}
+
+        return { ip: '', headers: {} };
     }
 
     async detectHeadless() {
@@ -689,10 +1010,10 @@ class EnvironmentDetector {
             ctx.fillRect(125, 1, 62, 20);
             ctx.fillStyle = '#069';
             ctx.font = '11pt Arial';
-            ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 2, 15);
+            ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 2, 15);
             ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
             ctx.font = '18pt Arial';
-            ctx.fillText('Cwm fjordbank glyphs vext quiz, \ud83d\ude03', 4, 45);
+            ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 4, 45);
 
             ctx.globalCompositeOperation = 'multiply';
             ctx.fillStyle = 'rgb(255,0,255)';
@@ -1346,173 +1667,6 @@ class EnvironmentDetector {
         return { detected: score > 10, score: Math.min(score, 100), detections };
     }
 
-    async detectVirtualization() {
-        let score = 0;
-        const detections = [];
-        try {
-            const ua = navigator.userAgent || '';
-            const vmPatterns = [
-                { pattern: /vmware|virtualbox|parallels|qemu|kvm/i, name: 'vm_detected' },
-                { pattern: /xen/i, name: 'xen_vm' },
-                { pattern: /hyperv/i, name: 'hyperv_vm' }
-            ];
-            for (const vm of vmPatterns) {
-                if (vm.pattern.test(ua)) {
-                    score += 35;
-                    detections.push(vm.name);
-                }
-            }
-
-            try {
-                const canvas = document.createElement('canvas');
-                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                if (gl) {
-                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                    if (debugInfo) {
-                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
-                        const vmRendererPatterns = [
-                            { pattern: /vmware|virtualbox|parallels/i, name: 'vm_renderer' },
-                            { pattern: /swiftshader|llvmpipe|mesa/i, name: 'software_renderer_vm' }
-                        ];
-                        for (const r of vmRendererPatterns) {
-                            if (r.pattern.test(renderer)) {
-                                score += 40;
-                                detections.push(r.name);
-                            }
-                        }
-                    }
-                }
-            } catch (e) {}
-
-            if (navigator.hardwareConcurrency) {
-                if (navigator.hardwareConcurrency === 1) {
-                    score += 20;
-                    detections.push('single_core_vm');
-                } else if (navigator.hardwareConcurrency > 16) {
-                    score += 15;
-                    detections.push('high_cores_vm');
-                }
-            }
-        } catch (e) {
-            score += 25;
-            detections.push('virtualization_error');
-        }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
-    }
-
-    async detectEmulator() {
-        let score = 0;
-        const detections = [];
-        try {
-            const ua = navigator.userAgent || '';
-            const emulatorPatterns = [
-                { pattern: /android.*emulator/i, name: 'android_emulator' },
-                { pattern: /iphone.*simulator|ipad.*simulator/i, name: 'ios_simulator' },
-                { pattern: /bluestacks/i, name: 'bluestacks' },
-                { pattern: /nox|genymotion/i, name: 'android_genymotion' }
-            ];
-            for (const emu of emulatorPatterns) {
-                if (emu.pattern.test(ua)) {
-                    score += 45;
-                    detections.push(emu.name);
-                }
-            }
-
-            if (navigator.maxTouchPoints === 0 && /mobile|android|iphone/i.test(ua)) {
-                score += 30;
-                detections.push('mobile_no_touch');
-            }
-
-            if (navigator.platform) {
-                const platform = navigator.platform.toLowerCase();
-                if (platform.includes('linux') && /mobile|android/i.test(ua)) {
-                    score += 35;
-                    detections.push('linux_android_emulator');
-                }
-            }
-        } catch (e) {
-            score += 20;
-            detections.push('emulator_error');
-        }
-        return { detected: score > 35, score: Math.min(score, 100), detections };
-    }
-
-    async detectContainer() {
-        let score = 0;
-        const detections = [];
-        try {
-            const ua = navigator.userAgent || '';
-            const containerPatterns = [
-                { pattern: /docker/i, name: 'docker' },
-                { pattern: /kubernetes|k8s/i, name: 'kubernetes' },
-                { pattern: /lxc/i, name: 'lxc_container' }
-            ];
-            for (const container of containerPatterns) {
-                if (container.pattern.test(ua)) {
-                    score += 50;
-                    detections.push(container.name);
-                }
-            }
-
-            try {
-                const response = await fetch('/.dockerenv', { method: 'HEAD' }).catch(() => null);
-                if (response && response.ok) {
-                    score += 60;
-                    detections.push('dockerenv_file');
-                }
-            } catch (e) {}
-
-            try {
-                if (navigator.storage && navigator.storage.estimate) {
-                    const estimate = await navigator.storage.estimate();
-                    if (estimate.quota === 0) {
-                        score += 35;
-                        detections.push('zero_quota_container');
-                    }
-                }
-            } catch (e) {}
-        } catch (e) {
-            score += 25;
-            detections.push('container_error');
-        }
-        return { detected: score > 40, score: Math.min(score, 100), detections };
-    }
-
-    async detectMultiBoxing() {
-        let score = 0;
-        const detections = [];
-        try {
-            if (navigator.connection) {
-                const conn = navigator.connection;
-                if (conn.type === 'wifi' && conn.rtt === 0 && conn.downlink === 0) {
-                    score += 40;
-                    detections.push('suspicious_connection');
-                }
-            }
-
-            if (screen.width === 0 || screen.height === 0) {
-                score += 30;
-                detections.push('zero_screen');
-            }
-
-            if (navigator.deviceMemory === 0.25 || navigator.deviceMemory === 0.5) {
-                score += 25;
-                detections.push('minimal_memory_multi');
-            }
-
-            const now = Date.now();
-            if (this.lastDetection && (now - this.lastDetection) < 1000) {
-                score += 35;
-                detections.push('rapid_detection');
-            }
-            this.lastDetection = now;
-        } catch (e) {
-            score += 20;
-            detections.push('multibox_error');
-        }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
-    }
-
     async detectVPNConnection() {
         let score = 0;
         const detections = [];
@@ -1671,6 +1825,11 @@ class EnvironmentDetector {
         } catch (e) {
             data.connection = {};
         }
+        try {
+            data.ipInfo = await this.getClientIPInfo();
+        } catch (e) {
+            data.ipInfo = {};
+        }
         return data;
     }
 
@@ -1768,44 +1927,6 @@ class EnvironmentDetector {
         } catch (e) {
             return '';
         }
-    }
-
-    async detectFonts() {
-        const baseFonts = ['monospace', 'sans-serif', 'serif'];
-        const testFonts = [
-            'Arial', 'Helvetica', 'Times New Roman', 'Courier New',
-            'Verdana', 'Georgia', 'Palatino', 'Garamond',
-            'Impact', 'Comic Sans MS', 'Trebuchet MS', 'Lucida Console',
-            'Tahoma', 'Segoe UI', 'Roboto', 'Open Sans'
-        ];
-        const detected = [];
-
-        try {
-            const el = document.createElement('div');
-            el.style.cssText = 'position:absolute;left:-9999px;font-size:72px;visibility:hidden;white-space:nowrap';
-            el.textContent = 'mmmmmmmmmmlli';
-            document.body.appendChild(el);
-
-            const baseWidths = {};
-            for (const base of baseFonts) {
-                el.style.fontFamily = base;
-                baseWidths[base] = el.offsetWidth;
-            }
-
-            for (const font of testFonts) {
-                for (const base of baseFonts) {
-                    el.style.fontFamily = `"${font}", ${base}`;
-                    if (el.offsetWidth !== baseWidths[base]) {
-                        detected.push(font);
-                        break;
-                    }
-                }
-            }
-
-            document.body.removeChild(el);
-        } catch (e) {}
-
-        return detected;
     }
 
     hashString(str) {
