@@ -12,6 +12,17 @@
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://cdn.bootcdn.net">
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    <link rel="preconnect" href="https://cdn.bootcdn.net" crossorigin>
+    
+    <!-- 资源预加载优化 -->
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
+    <link rel="preload" href="/static/js/main.js" as="script">
+    
+    <!-- DNS预取优化 -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" crossorigin>
+    
     <style id="theme-styles">
         :root {
             --primary: #0d6efd;

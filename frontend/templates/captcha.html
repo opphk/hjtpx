@@ -791,11 +791,328 @@
         .difficulty-dot.active {
             background: var(--captcha-primary);
         }
+        
+        /* 增强的错误提示样式 */
+        .captcha-error-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            display: none;
+        }
+        
+        .captcha-error-hint {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .captcha-error-hint i {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+        
+        .captcha-error-error {
+            background: rgba(220, 53, 69, 0.1);
+            border-color: rgba(220, 53, 69, 0.3);
+        }
+        
+        .captcha-error-error i {
+            color: var(--captcha-danger);
+        }
+        
+        .captcha-error-warning {
+            background: rgba(255, 193, 7, 0.1);
+            border-color: rgba(255, 193, 7, 0.3);
+        }
+        
+        .captcha-error-warning i {
+            color: #ffc107;
+        }
+        
+        .captcha-error-info {
+            background: rgba(13, 202, 240, 0.1);
+            border-color: rgba(13, 202, 240, 0.3);
+        }
+        
+        .captcha-error-info i {
+            color: #0dcaf0;
+        }
+        
+        .captcha-error-retry-btn {
+            margin-top: 0.5rem;
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+        
+        /* 增强的进度指示器 */
+        .captcha-progress-container {
+            position: relative;
+            padding: 1rem;
+            background: rgba(201, 169, 110, 0.05);
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        
+        .captcha-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        
+        .captcha-progress-steps {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        
+        .captcha-progress-step {
+            flex: 1;
+            height: 4px;
+            background: rgba(201, 169, 110, 0.2);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .captcha-progress-step.completed {
+            background: rgba(40, 167, 69, 0.3);
+        }
+        
+        .captcha-progress-step.current {
+            background: rgba(201, 169, 110, 0.3);
+        }
+        
+        .captcha-progress-step-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--captcha-primary);
+            transition: width 0.3s ease;
+        }
+        
+        .captcha-progress-step.completed .captcha-progress-step-fill {
+            background: var(--captcha-success);
+            width: 100%;
+        }
+        
+        .captcha-progress-step.current .captcha-progress-step-fill {
+            width: 50%;
+        }
+        
+        /* 骨架屏增强 */
+        .captcha-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        .captcha-skeleton-text {
+            height: 1rem;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .captcha-skeleton-image {
+            width: 100%;
+            max-width: 360px;
+            height: 220px;
+            border-radius: 8px;
+        }
+        
+        .captcha-skeleton-button {
+            width: 100%;
+            max-width: 360px;
+            height: 44px;
+            border-radius: 22px;
+        }
+        
+        /* 触摸优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .captcha-slider-button {
+                width: 48px;
+                height: 48px;
+            }
+            
+            .captcha-btn {
+                min-height: 44px;
+            }
+            
+            .captcha-refresh {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .demo-card-body {
+                padding: 1.25rem;
+            }
+        }
+        
+        /* 网络状态指示器 */
+        .captcha-network-status {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            z-index: 10000;
+            transform: translateY(-100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .captcha-network-status.online {
+            background: rgba(40, 167, 69, 0.95);
+            color: white;
+            transform: translateY(0);
+        }
+        
+        .captcha-network-status.offline {
+            background: rgba(220, 53, 69, 0.95);
+            color: white;
+            transform: translateY(0);
+        }
+        
+        /* 无障碍增强样式 */
+        .captcha-focus-indicator {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+        
+        .captcha-keyboard-nav :focus-visible {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+            box-shadow: 0 0 0 4px rgba(201, 169, 110, 0.3);
+        }
+        
+        .captcha-skip-link {
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--captcha-primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0 0 8px 8px;
+            z-index: 10001;
+            transition: top 0.3s ease;
+            font-weight: 500;
+            text-decoration: none;
+        }
+        
+        .captcha-skip-link:focus {
+            top: 0;
+            outline: none;
+        }
+        
+        .captcha-announcement {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        /* 增强的ARIA实时区域 */
+        [aria-live="polite"]:not(.visually-hidden) {
+            position: relative;
+        }
+        
+        /* 高对比度模式增强 */
+        @media (prefers-contrast: high) {
+            .captcha-slider-container {
+                border-width: 3px;
+                border-color: #000;
+            }
+            
+            .captcha-slider-button {
+                border: 3px solid #000;
+            }
+            
+            .captcha-btn {
+                border-width: 2px;
+                border-color: #000;
+            }
+            
+            .captcha-refresh {
+                border: 2px solid #000;
+            }
+            
+            .demo-card {
+                border-width: 2px;
+                border-color: #000;
+            }
+        }
+        
+        /* 打印样式优化 */
+        @media print {
+            .captcha-demo-area,
+            .captcha-loading-overlay,
+            .captcha-refresh,
+            .captcha-retry-btn,
+            .theme-toggle,
+            .captcha-lang-switch,
+            .captcha-audio-btn,
+            .captcha-contrast-toggle,
+            .performance-metrics {
+                display: none !important;
+            }
+            
+            .page-hero {
+                min-height: auto;
+                padding: 2rem 0;
+            }
+            
+            .demo-card {
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
+        }
+        
+        /* 减少动画偏好 */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            
+            .captcha-skeleton {
+                animation: none;
+                background: #f0f0f0;
+            }
+        }
     </style>
     
 </head>
 <body>
-    <a href="#main-content" class="sr-only sr-only-focusable">跳转到主要内容</a>
+    <a href="#main-content" class="captcha-skip-link">跳转到主要内容</a>
+    <div id="captcha-announcement" class="captcha-announcement" aria-live="polite" aria-atomic="true"></div>
+    <div id="captcha-network-status" class="captcha-network-status" role="status" aria-live="polite"></div>
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);">
         <div class="container">
             <a class="navbar-brand d-flex align-items-center gap-2" href="/">
@@ -1601,6 +1918,7 @@
             initPerformanceMonitoring();
             initProgressiveDifficulty();
             initPreloading();
+            initNetworkStatusMonitoring();
         });
 
         var translations = {
@@ -1862,6 +2180,178 @@
             getTranslation: getTranslation,
             switchLanguage: switchLanguage
         };
+
+        function initAccessibilityFeatures() {
+            initScreenReaderAnnouncements();
+            initKeyboardEnhancements();
+            initFocusManagement();
+        }
+
+        function initScreenReaderAnnouncements() {
+            const announcement = document.getElementById('captcha-announcement');
+            if (!announcement) return;
+
+            window.announceToScreenReader = function(message, priority = 'polite') {
+                announcement.setAttribute('aria-live', priority);
+                announcement.textContent = '';
+                setTimeout(() => {
+                    announcement.textContent = message;
+                }, 50);
+            };
+        }
+
+        function initKeyboardEnhancements() {
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const activeModal = document.querySelector('.modal.show');
+                    if (activeModal) {
+                        bootstrap.Modal.getInstance(activeModal)?.hide();
+                    }
+                }
+                
+                if (e.key === 'Tab') {
+                    document.body.classList.add('captcha-keyboard-nav');
+                }
+            });
+
+            document.addEventListener('mousedown', function() {
+                document.body.classList.remove('captcha-keyboard-nav');
+            });
+        }
+
+        function initFocusManagement() {
+            const focusableSelectors = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+            
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && e.target.matches('.captcha-slider-container, .rotation-slider-container')) {
+                    e.preventDefault();
+                    const button = e.target.querySelector('[role="button"], .captcha-slider-button');
+                    if (button) button.click();
+                }
+            });
+        }
+
+        function initProgressiveDifficulty() {
+            window.captchaDifficulty = {
+                level: 1,
+                maxLevel: 3,
+                adjustLevel: function(success, time) {
+                    if (success && time < 2000) {
+                        this.level = Math.min(this.level + 1, this.maxLevel);
+                    } else if (!success) {
+                        this.level = Math.max(this.level - 1, 1);
+                    }
+                    this.updateUI();
+                },
+                updateUI: function() {
+                    const indicator = document.getElementById('sliderDifficultyIndicator');
+                    if (!indicator) return;
+                    
+                    const dots = indicator.querySelectorAll('.difficulty-dot');
+                    dots.forEach((dot, index) => {
+                        if (index < this.level) {
+                            dot.classList.add('active');
+                        } else {
+                            dot.classList.remove('active');
+                        }
+                    });
+                }
+            };
+        }
+
+        function initPreloading() {
+            const preloadImages = [
+                '/static/js/captcha.js',
+                '/static/js/trace.js'
+            ];
+
+            preloadImages.forEach(src => {
+                const link = document.createElement('link');
+                link.rel = 'preload';
+                link.as = 'script';
+                link.href = src;
+                document.head.appendChild(link);
+            });
+
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/service-worker.js').catch(function(error) {
+                        console.log('Service Worker registration failed:', error);
+                    });
+                });
+            }
+        }
+
+        function initNetworkStatusMonitoring() {
+            const networkStatus = document.getElementById('captcha-network-status');
+            if (!networkStatus) return;
+
+            function updateNetworkStatus() {
+                if (navigator.onLine) {
+                    networkStatus.className = 'captcha-network-status online';
+                    networkStatus.textContent = '网络连接已恢复';
+                    setTimeout(() => {
+                        networkStatus.className = 'captcha-network-status';
+                    }, 3000);
+                } else {
+                    networkStatus.className = 'captcha-network-status offline';
+                    networkStatus.textContent = '网络连接已断开，请检查您的网络';
+                }
+            }
+
+            window.addEventListener('online', updateNetworkStatus);
+            window.addEventListener('offline', updateNetworkStatus);
+            
+            if (!navigator.onLine) {
+                updateNetworkStatus();
+            }
+        }
+
+        function showSkeletonLoader(container) {
+            const skeleton = document.createElement('div');
+            skeleton.className = 'captcha-skeleton';
+            skeleton.innerHTML = `
+                <div class="captcha-skeleton-image"></div>
+                <div style="margin-top: 1rem;">
+                    <div class="captcha-skeleton-text" style="width: 80%;"></div>
+                    <div class="captcha-skeleton-text" style="width: 60%;"></div>
+                    <div class="captcha-skeleton-button"></div>
+                </div>
+            `;
+            container.innerHTML = '';
+            container.appendChild(skeleton);
+        }
+
+        function updateProgressBar(elementId, progress, message) {
+            const progressFill = document.getElementById(elementId);
+            const progressText = document.getElementById(elementId.replace('Fill', 'Text'));
+            
+            if (progressFill) {
+                progressFill.style.width = progress + '%';
+            }
+            
+            if (progressText && message) {
+                progressText.textContent = message;
+            }
+        }
+
+        function showRetryButton(errorType, retryFn) {
+            return `
+                <button class="btn btn-sm btn-outline-primary captcha-error-retry-btn" onclick="${retryFn}">
+                    <i class="fas fa-redo me-1"></i>重试
+                </button>
+            `;
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                console.log('Page is visible');
+                if (typeof refreshCaptcha === 'function' && currentType === 'slider') {
+                }
+            } else {
+                console.log('Page is hidden');
+            }
+        });
     </script>
 </body>
 </html>

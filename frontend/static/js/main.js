@@ -19,8 +19,254 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    initErrorHandling();
+    initRetryMechanism();
+    initImageOptimization();
+    initPerformanceMetrics();
+    
     injectCaptchaStyles();
 });
+
+window.addEventListener('error', function(e) {
+    console.error('Page error:', e.error);
+    showErrorHint('页面发生错误，请刷新重试', 'error');
+});
+
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled promise rejection:', e.reason);
+    showErrorHint('网络请求失败，请检查网络连接', 'warning');
+});
+
+function initErrorHandling() {
+    const originalFetch = window.fetch;
+    window.fetch = async function(url, options) {
+        try {
+            const response = await originalFetch.apply(this, arguments);
+            if (!response.ok && response.status >= 400) {
+                handleFetchError(url, response.status);
+            }
+            return response;
+        } catch (error) {
+            handleNetworkError(url, error);
+            throw error;
+        }
+    };
+}
+
+function handleFetchError(url, status) {
+    let errorMsg = '请求失败';
+    let errorType = 'warning';
+    
+    switch(status) {
+        case 400:
+            errorMsg = '请求参数错误';
+            errorType = 'error';
+            break;
+        case 401:
+            errorMsg = '未授权，请重新登录';
+            errorType = 'error';
+            break;
+        case 403:
+            errorMsg = '无权限访问';
+            errorType = 'error';
+            break;
+        case 404:
+            errorMsg = '请求的资源不存在';
+            errorType = 'warning';
+            break;
+        case 429:
+            errorMsg = '请求过于频繁，请稍后再试';
+            errorType = 'warning';
+            break;
+        case 500:
+            errorMsg = '服务器内部错误';
+            errorType = 'error';
+            break;
+        case 502:
+        case 503:
+            errorMsg = '服务暂时不可用';
+            errorType = 'error';
+            break;
+        default:
+            errorMsg = `请求失败 (${status})`;
+    }
+    
+    showErrorHint(errorMsg, errorType);
+}
+
+function handleNetworkError(url, error) {
+    if (!navigator.onLine) {
+        showErrorHint('网络连接已断开，请检查网络', 'error');
+    } else {
+        showErrorHint('网络连接失败，请稍后重试', 'error');
+    }
+}
+
+function showErrorHint(message, type) {
+    const errorContainer = document.getElementById('captcha-error-container') || createErrorContainer();
+    
+    const errorHtml = `
+        <div class="captcha-error-hint captcha-error-${type}" role="alert" aria-live="assertive">
+            <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}" aria-hidden="true"></i>
+            <div class="captcha-error-hint-text">
+                <div class="captcha-error-hint-title">${type === 'error' ? '错误' : type === 'warning' ? '警告' : '提示'}</div>
+                <div class="captcha-error-hint-desc">${message}</div>
+            </div>
+        </div>
+    `;
+    
+    errorContainer.innerHTML = errorHtml;
+    errorContainer.style.display = 'block';
+    
+    setTimeout(() => {
+        errorContainer.style.display = 'none';
+    }, 5000);
+}
+
+function createErrorContainer() {
+    const container = document.createElement('div');
+    container.id = 'captcha-error-container';
+    container.className = 'captcha-error-container';
+    container.style.cssText = 'position: fixed; top: 80px; right: 20px; z-index: 9999; max-width: 400px;';
+    document.body.appendChild(container);
+    return container;
+}
+
+function initRetryMechanism() {
+    window.captchaRetryConfig = {
+        maxRetries: 3,
+        retryDelay: 1000,
+        backoffMultiplier: 2,
+        retryCount: {},
+        lastRetryTime: {}
+    };
+}
+
+window.retryWithBackoff = async function(asyncFn, context, customOptions = {}) {
+    const config = window.captchaRetryConfig;
+    const options = { ...config, ...customOptions };
+    const contextKey = context || 'default';
+    
+    if (!options.retryCount[contextKey]) {
+        options.retryCount[contextKey] = 0;
+    }
+    
+    while (options.retryCount[contextKey] < options.maxRetries) {
+        try {
+            const result = await asyncFn();
+            options.retryCount[contextKey] = 0;
+            return result;
+        } catch (error) {
+            options.retryCount[contextKey]++;
+            
+            if (options.retryCount[contextKey] >= options.maxRetries) {
+                options.retryCount[contextKey] = 0;
+                throw error;
+            }
+            
+            const delay = options.retryDelay * Math.pow(options.backoffMultiplier, options.retryCount[contextKey] - 1);
+            options.lastRetryTime[contextKey] = Date.now();
+            
+            console.log(`重试 ${options.retryCount[contextKey]}/${options.maxRetries}，等待 ${delay}ms`);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+};
+
+window.safeRequest = async function(url, options = {}) {
+    const defaultOptions = {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 10000,
+        ...options
+    };
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), defaultOptions.timeout);
+    
+    try {
+        const response = await window.retryWithBackoff(
+            () => fetch(url, { ...defaultOptions, signal: controller.signal }),
+            url,
+            { maxRetries: 2 }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+            showErrorHint('请求超时，请稍后重试', 'warning');
+        }
+        
+        throw error;
+    }
+};
+
+function initImageOptimization() {
+    const images = document.querySelectorAll('img[loading="lazy"]');
+    images.forEach(img => {
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries, obs) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const target = entry.target;
+                        if (target.dataset.src) {
+                            target.src = target.dataset.src;
+                            target.removeAttribute('data-src');
+                        }
+                        obs.unobserve(target);
+                    }
+                });
+            }, { rootMargin: '50px 0px', threshold: 0.1 });
+            
+            observer.observe(img);
+        }
+    });
+}
+
+function initPerformanceMetrics() {
+    if (!window.PerformanceObserver) return;
+    
+    try {
+        const perfObserver = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                if (entry.entryType === 'navigation') {
+                    const timing = entry;
+                    console.log('页面加载时间:', timing.loadEventEnd - timing.fetchStart, 'ms');
+                    console.log('DOM加载时间:', timing.domContentLoadedEventEnd - timing.fetchStart, 'ms');
+                    console.log('完整加载时间:', timing.loadEventEnd - timing.navigationStart, 'ms');
+                }
+            }
+        });
+        
+        perfObserver.observe({ entryTypes: ['navigation'] });
+    } catch (e) {
+        console.log('Performance metrics not available');
+    }
+}
+
+function preloadCriticalResources() {
+    const criticalResources = [
+        'https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css',
+        'https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css'
+    ];
+    
+    criticalResources.forEach(href => {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'style';
+        link.href = href;
+        document.head.appendChild(link);
+    });
+}
 
 function injectCaptchaStyles() {
     if (document.getElementById('captcha-dynamic-styles')) {
@@ -659,6 +905,87 @@ function injectCaptchaStyles() {
                 animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
             }
+        }
+        
+        .gpu-accelerated {
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            -moz-transform: translateZ(0);
+            -ms-transform: translateZ(0);
+            -o-transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            -moz-backface-visibility: hidden;
+            -ms-backface-visibility: hidden;
+            perspective: 1000px;
+            -webkit-perspective: 1000px;
+            will-change: transform, opacity;
+            -webkit-will-change: transform, opacity;
+        }
+        
+        .captcha-loading-overlay {
+            will-change: opacity;
+        }
+        
+        .captcha-slider-container {
+            will-change: transform;
+        }
+        
+        .captcha-slider-button {
+            will-change: left, transform;
+        }
+        
+        .captcha-click-marker {
+            will-change: transform, opacity;
+        }
+        
+        .loading-dots span {
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+        }
+        
+        @keyframes loading-bounce {
+            0%, 80%, 100% { 
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        
+        .captcha-error-container {
+            will-change: transform, opacity;
+        }
+        
+        .captcha-error-hint {
+            transform: translateX(100%);
+            opacity: 0;
+            animation: slideInError 0.3s ease forwards;
+        }
+        
+        @keyframes slideInError {
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .captcha-progress-container {
+            will-change: width;
+        }
+        
+        .captcha-progress-fill {
+            will-change: width;
+        }
+        
+        .skeleton-shimmer {
+            will-change: transform;
+        }
+        
+        .captcha-refresh {
+            will-change: transform;
         }
         .visually-hidden {
             position: absolute;
