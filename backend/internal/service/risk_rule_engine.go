@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/database"
@@ -403,33 +404,372 @@ func (s *RiskRuleService) logRuleChange(ruleID uint, ruleName, action, oldValue,
 
 // ==================== 规则引擎执行 ====================
 
+type RiskScoringWeights struct {
+	SpeedWeight         float64
+	TrajectoryWeight    float64
+	PathComplexityWeight float64
+	ClickPatternWeight  float64
+	KeyboardPatternWeight float64
+	EnvironmentWeight   float64
+	HistoricalWeight    float64
+	VelocityWeight      float64
+	AccelerationWeight  float64
+	DirectionWeight     float64
+}
+
+type RealTimeScoringConfig struct {
+	Enabled           bool
+	UpdateInterval    int
+	WindowSize        int
+	AdaptiveWeights   bool
+	UseMLScoring      bool
+	ConfidenceThreshold float64
+}
+
+type RiskScorer struct {
+	weights    RiskScoringWeights
+	config    RealTimeScoringConfig
+	isEnabled bool
+}
+
+func NewRiskScorer() *RiskScorer {
+	return &RiskScorer{
+		weights: RiskScoringWeights{
+			SpeedWeight:          0.15,
+			TrajectoryWeight:     0.20,
+			PathComplexityWeight: 0.15,
+			ClickPatternWeight:   0.12,
+			KeyboardPatternWeight: 0.10,
+			EnvironmentWeight:    0.13,
+			HistoricalWeight:     0.10,
+			VelocityWeight:       0.08,
+			AccelerationWeight:   0.07,
+			DirectionWeight:      0.05,
+		},
+		config: RealTimeScoringConfig{
+			Enabled:            true,
+			UpdateInterval:     100,
+			WindowSize:         10,
+			AdaptiveWeights:    true,
+			UseMLScoring:       false,
+			ConfidenceThreshold: 0.75,
+		},
+		isEnabled: true,
+	}
+}
+
+func (s *RiskScorer) SetWeights(weights RiskScoringWeights) {
+	totalWeight := weights.SpeedWeight + weights.TrajectoryWeight +
+		weights.PathComplexityWeight + weights.ClickPatternWeight +
+		weights.KeyboardPatternWeight + weights.EnvironmentWeight +
+		weights.HistoricalWeight + weights.VelocityWeight +
+		weights.AccelerationWeight + weights.DirectionWeight
+
+	if math.Abs(totalWeight-1.0) < 0.01 {
+		s.weights = weights
+	}
+}
+
+func (s *RiskScorer) SetConfig(config RealTimeScoringConfig) {
+	s.config = config
+	s.isEnabled = config.Enabled
+}
+
+func (s *RiskScorer) CalculateRealTimeScore(context *model.RiskContext) float64 {
+	if !s.isEnabled {
+		return 50.0
+	}
+
+	baseScore := s.calculateBaseScore(context)
+
+	trajectoryScore := s.calculateTrajectoryScore(context)
+
+	pathComplexityScore := s.calculatePathComplexityScore(context)
+
+	clickPatternScore := s.calculateClickPatternScore(context)
+
+	keyboardPatternScore := s.calculateKeyboardPatternScore(context)
+
+	velocityScore := s.calculateVelocityScore(context)
+
+	accelerationScore := s.calculateAccelerationScore(context)
+
+	compositeScore := baseScore*s.weights.SpeedWeight +
+		trajectoryScore*s.weights.TrajectoryWeight +
+		pathComplexityScore*s.weights.PathComplexityWeight +
+		clickPatternScore*s.weights.ClickPatternWeight +
+		keyboardPatternScore*s.weights.KeyboardPatternWeight +
+		velocityScore*s.weights.VelocityWeight +
+		accelerationScore*s.weights.AccelerationWeight
+
+	if s.config.AdaptiveWeights {
+		compositeScore = s.adjustScoreWithContext(compositeScore, context)
+	}
+
+	return math.Min(math.Max(compositeScore, 0), 100)
+}
+
+func (s *RiskScorer) calculateBaseScore(context *model.RiskContext) float64 {
+	score := 50.0
+
+	if context.FailureCount > 0 {
+		score += float64(context.FailureCount) * 5.0
+	}
+
+	if context.IsProxy || context.IsVPN {
+		score += 15.0
+	}
+
+	if context.IsTor {
+		score += 20.0
+	}
+
+	if context.VerificationCount > 3 {
+		score -= 5.0
+	}
+
+	return math.Min(score, 100)
+}
+
+func (s *RiskScorer) calculateTrajectoryScore(context *model.RiskContext) float64 {
+	if len(context.TraceData) < 10 {
+		return 50.0
+	}
+
+	score := 50.0
+
+	avgSpeed := context.MouseSpeed
+
+	if avgSpeed > 2000 {
+		score += 30.0
+	} else if avgSpeed > 1000 {
+		score += 15.0
+	}
+
+	return math.Min(score, 100)
+}
+
+func (s *RiskScorer) calculatePathComplexityScore(context *model.RiskContext) float64 {
+	score := 50.0
+
+	if len(context.TraceData) < 2 {
+		return score
+	}
+
+	start := context.TraceData[0]
+	end := context.TraceData[len(context.TraceData)-1]
+
+	dx := end.X - start.X
+	dy := end.Y - start.Y
+	straightDist := math.Sqrt(float64(dx*dx + dy*dy))
+
+	totalDist := 0.0
+	for i := 1; i < len(context.TraceData); i++ {
+		dx := context.TraceData[i].X - context.TraceData[i-1].X
+		dy := context.TraceData[i].Y - context.TraceData[i-1].Y
+		totalDist += math.Sqrt(float64(dx*dx + dy*dy))
+	}
+
+	if totalDist > 0 {
+		directness := straightDist / totalDist
+		if directness > 0.95 {
+			score += 35.0
+		} else if directness > 0.9 {
+			score += 20.0
+		}
+	}
+
+	return math.Min(score, 100)
+}
+
+func (s *RiskScorer) calculateClickPatternScore(context *model.RiskContext) float64 {
+	score := 50.0
+
+	if context.VerificationCount > 5 {
+		score -= 10.0
+	}
+
+	if context.FailureCount > 2 {
+		score += 15.0
+	}
+
+	return math.Min(score, 100)
+}
+
+func (s *RiskScorer) calculateKeyboardPatternScore(context *model.RiskContext) float64 {
+	return 50.0
+}
+
+func (s *RiskScorer) calculateVelocityScore(context *model.RiskContext) float64 {
+	score := 50.0
+
+	if context.MouseSpeed > 1500 {
+		score += 25.0
+	} else if context.MouseSpeed > 800 {
+		score += 10.0
+	}
+
+	return math.Min(score, 100)
+}
+
+func (s *RiskScorer) calculateAccelerationScore(context *model.RiskContext) float64 {
+	return 50.0
+}
+
+func (s *RiskScorer) adjustScoreWithContext(score float64, context *model.RiskContext) float64 {
+	adjustment := 0.0
+
+	if context.TimeFromStart > 0 && context.TimeFromStart < 500 {
+		adjustment += 10.0
+	}
+
+	if context.PositionDiff < 50 && len(context.TraceData) > 20 {
+		adjustment += 15.0
+	}
+
+	if len(context.BrowserPlugins) == 0 {
+		adjustment += 10.0
+	}
+
+	return math.Min(score+adjustment, 100)
+}
+
+func (s *RiskScorer) BatchScore(contexts []*model.RiskContext) []float64 {
+	scores := make([]float64, len(contexts))
+	for i, ctx := range contexts {
+		scores[i] = s.CalculateRealTimeScore(ctx)
+	}
+	return scores
+}
+
+func (s *RiskScorer) GetWeights() RiskScoringWeights {
+	return s.weights
+}
+
+func (s *RiskScorer) GetConfig() RealTimeScoringConfig {
+	return s.config
+}
+
+type EnhancedRiskEvaluation struct {
+	BaseScore        float64
+	WeightedScore    float64
+	AdjustedScore    float64
+	FinalScore       float64
+	ConfidenceLevel  float64
+	AnomalyCount    int
+	ThreatLevel     string
+	Recommendations []string
+}
+
+func (s *RiskScorer) EnhancedEvaluate(context *model.RiskContext) *EnhancedRiskEvaluation {
+	eval := &EnhancedRiskEvaluation{}
+
+	eval.BaseScore = s.calculateBaseScore(context)
+
+	eval.WeightedScore = s.CalculateRealTimeScore(context)
+
+	eval.AdjustedScore = s.adjustScoreWithContext(eval.WeightedScore, context)
+
+	eval.FinalScore = s.applyConfidenceAndConstraints(eval.AdjustedScore, context)
+
+	eval.ConfidenceLevel = s.calculateConfidence(context)
+
+	eval.ThreatLevel = s.determineThreatLevel(eval.FinalScore, eval.ConfidenceLevel)
+
+	eval.Recommendations = s.generateRecommendations(eval)
+
+	return eval
+}
+
+func (s *RiskScorer) calculateConfidence(context *model.RiskContext) float64 {
+	confidence := 0.6
+
+	if len(context.TraceData) > 20 {
+		confidence += 0.2
+	} else if len(context.TraceData) > 10 {
+		confidence += 0.1
+	}
+
+	if context.VerificationCount > 3 {
+		confidence += 0.1
+	}
+
+	if context.FailureCount == 0 {
+		confidence += 0.1
+	}
+
+	return math.Min(confidence, 0.95)
+}
+
+func (s *RiskScorer) applyConfidenceAndConstraints(score float64, context *model.RiskContext) float64 {
+	constrainedScore := score
+
+	if context.IsTor {
+		constrainedScore = math.Max(constrainedScore, 70.0)
+	}
+
+	if context.FailureCount >= 5 {
+		constrainedScore = math.Max(constrainedScore, 80.0)
+	}
+
+	if context.VerificationCount > 10 && context.FailureCount == 0 {
+		constrainedScore *= 0.8
+	}
+
+	return math.Min(math.Max(constrainedScore, 0), 100)
+}
+
+func (s *RiskScorer) determineThreatLevel(score float64, confidence float64) string {
+	if score >= 80 && confidence >= 0.8 {
+		return "critical"
+	} else if score >= 60 && confidence >= 0.7 {
+		return "high"
+	} else if score >= 40 && confidence >= 0.6 {
+		return "medium"
+	}
+	return "low"
+}
+
+func (s *RiskScorer) generateRecommendations(eval *EnhancedRiskEvaluation) []string {
+	recommendations := []string{}
+
+	if eval.ThreatLevel == "critical" {
+		recommendations = append(recommendations, "立即阻止请求", "记录完整日志", "触发人工审核")
+	} else if eval.ThreatLevel == "high" {
+		recommendations = append(recommendations, "要求额外验证", "增加监控频率", "限制操作权限")
+	} else if eval.ThreatLevel == "medium" {
+		recommendations = append(recommendations, "显示验证码", "增加日志记录")
+	} else {
+		recommendations = append(recommendations, "正常处理")
+	}
+
+	return recommendations
+}
+
 // EvaluateRule 评估规则
 func (s *RiskRuleService) EvaluateRule(ruleID uint, inputData map[string]interface{}) (bool, string, error) {
 	rule, err := s.GetRiskRule(ruleID)
 	if err != nil {
 		return false, "", err
 	}
-	
+
 	if !rule.IsEnabled {
 		return false, "rule is disabled", nil
 	}
-	
+
 	startTime := time.Now()
-	
-	// 简单的规则评估逻辑
-	// 在实际项目中，这里应该是一个更复杂的规则引擎
+
 	result := s.evaluateCondition(rule.Condition, inputData)
-	
+
 	executionTime := time.Since(startTime).Milliseconds()
-	
+
 	actionTaken := ""
 	if result {
 		actionTaken = rule.Action
 	}
-	
-	// 记录触发历史
+
 	s.RecordRuleTrigger(ruleID, "", nil, nil, "", inputData, result, actionTaken, executionTime)
-	
+
 	return result, actionTaken, nil
 }
 

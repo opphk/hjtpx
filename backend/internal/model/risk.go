@@ -2,7 +2,10 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -14,6 +17,55 @@ const (
 	RiskLevelHigh     RiskLevel = "high"
 	RiskLevelCritical RiskLevel = "critical"
 )
+
+type AnomalyPatternType string
+
+const (
+	AnomalyConstantSpeed    AnomalyPatternType = "constant_speed"
+	AnomalyLinearPath      AnomalyPatternType = "linear_path"
+	AnomalyNoPause         AnomalyPatternType = "no_pause"
+	AnomalyMechanicalClick  AnomalyPatternType = "mechanical_click"
+	AnomalyRapidFire       AnomalyPatternType = "rapid_fire"
+	AnomalyRepeatingPath   AnomalyPatternType = "repeating_path"
+	AnomalyZeroJitter      AnomalyPatternType = "zero_jitter"
+	AnomalySuperhumanSpeed AnomalyPatternType = "superhuman_speed"
+	AnomalyPerfectRegular  AnomalyPatternType = "perfect_regular"
+	AnomalyNoMicroAdjust   AnomalyPatternType = "no_micro_adjust"
+	AnomalyPatternDev      AnomalyPatternType = "pattern_deviation"
+	AnomalyBurstBehavior   AnomalyPatternType = "burst_behavior"
+	AnomalyImpossibleMouse AnomalyPatternType = "impossible_mouse"
+	AnomalyCopyPaste       AnomalyPatternType = "copy_paste"
+	AnomalyAutoFill        AnomalyPatternType = "auto_fill"
+)
+
+type AnomalyPattern struct {
+	Type        AnomalyPatternType `json:"type"`
+	Severity    float64           `json:"severity"`
+	Confidence  float64           `json:"confidence"`
+	Evidence    []string          `json:"evidence"`
+	Timestamp   time.Time         `json:"timestamp"`
+	Description string            `json:"description"`
+}
+
+type EnhancedRiskResult struct {
+	RiskLevel          RiskLevel          `json:"risk_level"`
+	RiskScore          float64           `json:"risk_score"`
+	PositionScore      float64           `json:"position_score"`
+	TraceScore         float64           `json:"trace_score"`
+	EnvScore           float64           `json:"env_score"`
+	RiskFactors        []string          `json:"risk_factors"`
+	Action             string            `json:"action"`
+	RecommendVerify    bool              `json:"recommend_verify"`
+	HumanProbability   float64           `json:"human_probability"`
+	Details            map[string]float64 `json:"details,omitempty"`
+	AnomalyPatterns    []AnomalyPattern  `json:"anomaly_patterns,omitempty"`
+	CompositeScore     float64           `json:"composite_score,omitempty"`
+	ConfidenceLevel    float64           `json:"confidence_level,omitempty"`
+	ThreatLevel        string            `json:"threat_level,omitempty"`
+	BehavioralEntropy  float64           `json:"behavioral_entropy,omitempty"`
+	PatternDeviation  float64           `json:"pattern_deviation,omitempty"`
+	HistoricalSimilarity float64         `json:"historical_similarity,omitempty"`
+}
 
 type RiskLog struct {
 	ID          int64     `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -157,6 +209,94 @@ func ParseRiskResult(data string) (*RiskResult, error) {
 	var result RiskResult
 	err := json.Unmarshal([]byte(data), &result)
 	return &result, err
+}
+
+func (r *EnhancedRiskResult) AddAnomalyPattern(pattern AnomalyPattern) {
+	r.AnomalyPatterns = append(r.AnomalyPatterns, pattern)
+}
+
+func (r *EnhancedRiskResult) CalculateCompositeScore() float64 {
+	if len(r.AnomalyPatterns) == 0 {
+		return r.RiskScore
+	}
+
+	var totalSeverity float64
+	var maxSeverity float64
+	for _, pattern := range r.AnomalyPatterns {
+		totalSeverity += pattern.Severity * pattern.Confidence
+		if pattern.Severity > maxSeverity {
+			maxSeverity = pattern.Severity
+		}
+	}
+
+	patternScore := totalSeverity / float64(len(r.AnomalyPatterns))
+
+	compositeScore := r.RiskScore*0.6 + patternScore*0.4
+
+	if maxSeverity > 80 {
+		compositeScore = math.Max(compositeScore, maxSeverity)
+	}
+
+	return math.Min(compositeScore, 100)
+}
+
+func (r *EnhancedRiskResult) DetermineThreatLevel() string {
+	if r.RiskScore >= 90 || len(r.AnomalyPatterns) >= 5 {
+		return "critical"
+	} else if r.RiskScore >= 70 || len(r.AnomalyPatterns) >= 3 {
+		return "high"
+	} else if r.RiskScore >= 50 || len(r.AnomalyPatterns) >= 2 {
+		return "medium"
+	}
+	return "low"
+}
+
+func (r *EnhancedRiskResult) CalculateConfidenceLevel() float64 {
+	baseConfidence := 0.7
+
+	if len(r.AnomalyPatterns) > 0 {
+		patternConfidence := 0.0
+		for _, pattern := range r.AnomalyPatterns {
+			patternConfidence += pattern.Confidence
+		}
+		patternConfidence /= float64(len(r.AnomalyPatterns))
+		baseConfidence += patternConfidence * 0.2
+	}
+
+	dataPoints := len(r.Details)
+	if dataPoints > 10 {
+		baseConfidence += 0.1
+	} else if dataPoints > 5 {
+		baseConfidence += 0.05
+	}
+
+	return math.Min(baseConfidence, 0.99)
+}
+
+func (r *EnhancedRiskResult) GenerateReport() string {
+	report := "Enhanced Risk Analysis Report\n"
+	report += "============================\n"
+	report += fmt.Sprintf("Risk Level: %s\n", r.RiskLevel)
+	report += fmt.Sprintf("Risk Score: %.2f\n", r.RiskScore)
+	report += fmt.Sprintf("Composite Score: %.2f\n", r.CompositeScore)
+	report += fmt.Sprintf("Threat Level: %s\n", r.ThreatLevel)
+	report += fmt.Sprintf("Confidence: %.2f%%\n", r.ConfidenceLevel*100)
+
+	if len(r.AnomalyPatterns) > 0 {
+		report += "\nDetected Anomaly Patterns:\n"
+		for i, pattern := range r.AnomalyPatterns {
+			report += fmt.Sprintf("%d. [%s] Severity: %.2f, Confidence: %.2f%%\n",
+				i+1, pattern.Type, pattern.Severity, pattern.Confidence*100)
+			report += fmt.Sprintf("   Description: %s\n", pattern.Description)
+			if len(pattern.Evidence) > 0 {
+				report += fmt.Sprintf("   Evidence: %s\n", strings.Join(pattern.Evidence, ", "))
+			}
+		}
+	}
+
+	report += fmt.Sprintf("\nRecommended Action: %s\n", r.Action)
+
+	return report
 }
 
 func (rc *RiskContext) HasHighRiskIndicators() bool {

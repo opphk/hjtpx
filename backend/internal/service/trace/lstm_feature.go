@@ -1491,7 +1491,345 @@ func (e *LSTMFeatureExtractor) DetectAnomalousPatterns(traceData *model.TraceDat
 		}
 	}
 
+	anomalies = append(anomalies, e.detectAdvancedAnomalies(seq)...)
+
 	return anomalies, nil
+}
+
+func (e *LSTMFeatureExtractor) detectAdvancedAnomalies(seq *TrajectorySequence) []string {
+	anomalies := []string{}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 2 {
+		accelChanges := 0
+		for i := 1; i < len(seq.VelocitySeq); i++ {
+			diff := math.Abs(seq.VelocitySeq[i] - seq.VelocitySeq[i-1])
+			if diff < 0.5 {
+				accelChanges++
+			}
+		}
+		changeRatio := float64(accelChanges) / float64(len(seq.VelocitySeq)-1)
+		if changeRatio > 0.95 {
+			anomalies = append(anomalies, "速度变化异常平滑")
+		}
+	}
+
+	if seq.DirectionSeq != nil && len(seq.DirectionSeq) > 2 {
+		directionChanges := 0
+		for i := 1; i < len(seq.DirectionSeq); i++ {
+			diff := math.Abs(seq.DirectionSeq[i] - seq.DirectionSeq[i-1])
+			if diff > math.Pi {
+				diff = 2*math.Pi - diff
+			}
+			if diff < 0.01 {
+				directionChanges++
+			}
+		}
+		changeRatio := float64(directionChanges) / float64(len(seq.DirectionSeq)-1)
+		if changeRatio > 0.9 {
+			anomalies = append(anomalies, "方向变化异常规律")
+		}
+	}
+
+	if len(seq.Points) > 10 {
+		startEndDist := e.computeStartEndDistance(seq.Points)
+		totalDist := e.computeTotalDistance(seq.Points)
+		if totalDist > 0 && startEndDist/totalDist > 0.95 {
+			anomalies = append(anomalies, "路径过于笔直(两点间距离接近总距离)")
+		}
+	}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 5 {
+		speedPeaks := e.countSpeedPeaks(seq.VelocitySeq)
+		if speedPeaks == 0 && len(seq.VelocitySeq) > 10 {
+			anomalies = append(anomalies, "无速度峰值-异常平稳移动")
+		}
+	}
+
+	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 5 {
+		accelPeaks := e.countAccelPeaks(seq.AccelerationSeq)
+		if accelPeaks == 0 && len(seq.AccelerationSeq) > 10 {
+			anomalies = append(anomalies, "无加速度变化-机械运动特征")
+		}
+	}
+
+	return anomalies
+}
+
+func (e *LSTMFeatureExtractor) computeStartEndDistance(points []model.TracePoint) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+
+	dx := points[len(points)-1].X - points[0].X
+	dy := points[len(points)-1].Y - points[0].Y
+
+	return math.Sqrt(float64(dx*dx) + float64(dy*dy))
+}
+
+func (e *LSTMFeatureExtractor) computeTotalDistance(points []model.TracePoint) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+
+	var totalDist float64
+	for i := 1; i < len(points); i++ {
+		dx := points[i].X - points[i-1].X
+		dy := points[i].Y - points[i-1].Y
+		totalDist += math.Sqrt(float64(dx*dx) + float64(dy*dy))
+	}
+
+	return totalDist
+}
+
+func (e *LSTMFeatureExtractor) countSpeedPeaks(velocities []float64) int {
+	if len(velocities) < 3 {
+		return 0
+	}
+
+	peaks := 0
+	threshold := e.stddev(velocities) * 0.5
+
+	for i := 1; i < len(velocities)-1; i++ {
+		if velocities[i] > velocities[i-1]+threshold && velocities[i] > velocities[i+1]+threshold {
+			peaks++
+		}
+	}
+
+	return peaks
+}
+
+func (e *LSTMFeatureExtractor) countAccelPeaks(accels []float64) int {
+	if len(accels) < 3 {
+		return 0
+	}
+
+	peaks := 0
+	threshold := e.stddev(accels) * 0.5
+
+	for i := 1; i < len(accels)-1; i++ {
+		if math.Abs(accels[i]) > math.Abs(accels[i-1])+threshold &&
+			math.Abs(accels[i]) > math.Abs(accels[i+1])+threshold {
+			peaks++
+		}
+	}
+
+	return peaks
+}
+
+func (e *LSTMFeatureExtractor) ExtractAdvancedAnomalyFeatures(traceData *model.TraceData) (map[string]float64, error) {
+	features := make(map[string]float64)
+
+	if len(traceData.Points) < 2 {
+		return features, nil
+	}
+
+	features["path_directness"] = e.computePathDirectness(traceData)
+	features["movement_smoothness"] = e.computeMovementSmoothness(traceData)
+	features["temporal_regularity"] = e.computeTemporalRegularity(traceData)
+	features["speed_consistency"] = e.computeSpeedConsistency(traceData)
+	features["acceleration_regularity"] = e.computeAccelerationRegularity(traceData)
+	features["direction_entropy"] = e.computeDirectionEntropyScore(traceData)
+	features["velocity_peak_ratio"] = e.computeVelocityPeakRatio(traceData)
+	features["micro_movement_ratio"] = e.computeMicroMovementRatio(traceData)
+
+	return features, nil
+}
+
+func (e *LSTMFeatureExtractor) computePathDirectness(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 0
+	}
+
+	startEndDist := e.computeStartEndDistance(traceData.Points)
+	totalDist := e.computeTotalDistance(traceData.Points)
+
+	if totalDist == 0 {
+		return 0
+	}
+
+	return startEndDist / totalDist
+}
+
+func (e *LSTMFeatureExtractor) computeMovementSmoothness(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 1.0
+	}
+
+	angles := []float64{}
+	for i := 1; i < len(traceData.Points)-1; i++ {
+		v1x := float64(traceData.Points[i].X - traceData.Points[i-1].X)
+		v1y := float64(traceData.Points[i].Y - traceData.Points[i-1].Y)
+		v2x := float64(traceData.Points[i+1].X - traceData.Points[i].X)
+		v2y := float64(traceData.Points[i+1].Y - traceData.Points[i].Y)
+
+		dot := v1x*v2x + v1y*v2y
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angles = append(angles, math.Acos(cosAngle))
+		}
+	}
+
+	if len(angles) == 0 {
+		return 1.0
+	}
+
+	var sumAngle float64
+	for _, angle := range angles {
+		sumAngle += angle
+	}
+	avgAngle := sumAngle / float64(len(angles))
+
+	maxAngle := math.Pi * 2
+	smoothness := 1.0 - (avgAngle / maxAngle)
+
+	return math.Max(0, math.Min(1, smoothness))
+}
+
+func (e *LSTMFeatureExtractor) computeTemporalRegularity(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 1.0
+	}
+
+	intervals := []float64{}
+	for i := 1; i < len(traceData.Points); i++ {
+		interval := float64(traceData.Points[i].Timestamp - traceData.Points[i-1].Timestamp)
+		if interval > 0 {
+			intervals = append(intervals, interval)
+		}
+	}
+
+	if len(intervals) < 2 {
+		return 1.0
+	}
+
+	mean := e.mean(intervals)
+	if mean == 0 {
+		return 0
+	}
+
+	variance := e.variance(intervals)
+
+	regularity := 1.0 / (1.0 + variance/(mean*mean))
+
+	return math.Max(0, math.Min(1, regularity))
+}
+
+func (e *LSTMFeatureExtractor) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (e *LSTMFeatureExtractor) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := e.mean(values)
+	var sum float64
+	for _, v := range values {
+		diff := v - mean
+		sum += diff * diff
+	}
+	return sum / float64(len(values))
+}
+
+func (e *LSTMFeatureExtractor) computeSpeedConsistency(traceData *model.TraceData) float64 {
+	velocities := e.computeVelocitySequence(traceData)
+	if len(velocities) < 2 {
+		return 0
+	}
+
+	mean := e.mean(velocities)
+	if mean == 0 {
+		return 0
+	}
+
+	variance := e.variance(velocities)
+
+	consistency := 1.0 / (1.0 + math.Sqrt(variance)/mean)
+
+	return math.Max(0, math.Min(1, consistency))
+}
+
+func (e *LSTMFeatureExtractor) computeAccelerationRegularity(traceData *model.TraceData) float64 {
+	accels := e.computeAccelerationSequence(traceData)
+	if len(accels) < 2 {
+		return 1.0
+	}
+
+	mean := e.mean(accels)
+	if mean == 0 {
+		return 1.0
+	}
+
+	variance := e.variance(accels)
+
+	regularity := 1.0 / (1.0 + math.Sqrt(variance)/math.Abs(mean))
+
+	return math.Max(0, math.Min(1, regularity))
+}
+
+func (e *LSTMFeatureExtractor) computeDirectionEntropyScore(traceData *model.TraceData) float64 {
+	directions := e.computeDirectionSequence(traceData)
+	if len(directions) < 4 {
+		return 0
+	}
+
+	entropy := e.computeDirectionEntropy(directions)
+
+	maxEntropy := math.Log2(8.0)
+
+	normalizedEntropy := entropy / maxEntropy
+
+	return math.Max(0, math.Min(1, normalizedEntropy))
+}
+
+func (e *LSTMFeatureExtractor) computeVelocityPeakRatio(traceData *model.TraceData) float64 {
+	velocities := e.computeVelocitySequence(traceData)
+	if len(velocities) < 3 {
+		return 0
+	}
+
+	peaks := e.countSpeedPeaks(velocities)
+
+	ratio := float64(peaks) / float64(len(velocities))
+
+	return ratio
+}
+
+func (e *LSTMFeatureExtractor) computeMicroMovementRatio(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 0
+	}
+
+	microCount := 0
+	for i := 1; i < len(traceData.Points); i++ {
+		dx := traceData.Points[i].X - traceData.Points[i-1].X
+		dy := traceData.Points[i].Y - traceData.Points[i-1].Y
+		dist := math.Sqrt(float64(dx*dx + dy*dy))
+
+		if dist < 5 {
+			microCount++
+		}
+	}
+
+	ratio := float64(microCount) / float64(len(traceData.Points)-1)
+
+	return ratio
 }
 
 type TraceFeatureSummary struct {
