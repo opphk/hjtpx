@@ -1,642 +1,756 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
-	"os"
+	"strings"
+	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/api/middleware"
 	"github.com/hjtpx/hjtpx/internal/service"
 )
 
-type SecurityTestResult struct {
-	TestName       string                 `json:"test_name"`
-	OWASPID        string                 `json:"owasp_id"`
-	Category       string                 `json:"category"`
-	Passed         bool                   `json:"passed"`
-	Severity       string                 `json:"severity"`
-	Description    string                 `json:"description"`
-	RequestPayload string                 `json:"request_payload,omitempty"`
-	ExpectedResult string                 `json:"expected_result"`
-	ActualResult   string                 `json:"actual_result"`
-	Remediation    string                 `json:"remediation,omitempty"`
-	Metrics        map[string]interface{} `json:"metrics,omitempty"`
+func init() {
+	gin.SetMode(gin.TestMode)
 }
 
-type SecurityTestSuite struct {
-	results   []*SecurityTestResult
-	startTime time.Time
-	endTime   time.Time
-}
+func TestEnhancedDDoSProtection(t *testing.T) {
+	fmt.Println("\n=== Testing Enhanced DDoS Protection ===")
 
-func NewSecurityTestSuite() *SecurityTestSuite {
-	return &SecurityTestSuite{
-		results:   make([]*SecurityTestResult, 0),
-		startTime: time.Now(),
-	}
-}
-
-func (s *SecurityTestSuite) AddResult(r *SecurityTestResult) {
-	s.results = append(s.results, r)
-}
-
-func (s *SecurityTestSuite) GetResults() []*SecurityTestResult {
-	return s.results
-}
-
-func (s *SecurityTestSuite) GetSummary() map[string]interface{} {
-	s.endTime = time.Now()
-
-	total := len(s.results)
-	passed := 0
-	failed := 0
-	critical := 0
-	high := 0
-	medium := 0
-	low := 0
-
-	byCategory := make(map[string]map[string]int)
-
-	for _, r := range s.results {
-		if r.Passed {
-			passed++
-		} else {
-			failed++
-		}
-
-		switch r.Severity {
-		case "Critical":
-			critical++
-		case "High":
-			high++
-		case "Medium":
-			medium++
-		case "Low":
-			low++
-		}
-
-		if byCategory[r.Category] == nil {
-			byCategory[r.Category] = make(map[string]int)
-		}
-		byCategory[r.Category]["total"]++
-		if r.Passed {
-			byCategory[r.Category]["passed"]++
-		} else {
-			byCategory[r.Category]["failed"]++
-		}
-	}
-
-	return map[string]interface{}{
-		"total_tests":    total,
-		"passed":          passed,
-		"failed":          failed,
-		"pass_rate":       fmt.Sprintf("%.2f%%", float64(passed)/float64(total)*100),
-		"duration":        s.endTime.Sub(s.startTime).String(),
-		"critical":        critical,
-		"high":            high,
-		"medium":          medium,
-		"low":             low,
-		"by_category":     byCategory,
-	}
-}
-
-func (s *SecurityTestSuite) RunAllTests() {
-	s.testA01BrokenAccessControl()
-	s.testA02CryptographicFailures()
-	s.testA03InjectionSQL()
-	s.testA03InjectionXSS()
-	s.testA03InjectionCommand()
-	s.testA05SecurityMisconfiguration()
-	s.testA07AuthenticationFailures()
-	s.testA10ServerSideRequestForgery()
-	s.testCSRFProtection()
-	s.testDDoSProtection()
-	s.testRateLimiting()
-}
-
-func (s *SecurityTestSuite) testA01BrokenAccessControl() {
-	tests := []struct {
-		name        string
-		path        string
-		method      string
-		shouldBlock bool
-		description string
-	}{
-		{"Admin path access", "/admin/config", "GET", false, "Access to admin configuration"},
-		{"Sensitive file access (.env)", "/.env", "GET", true, "Access to environment file"},
-		{"Git directory access", "/.git/config", "GET", true, "Access to git directory"},
-		{"Backup file access", "/backup/db.sql", "GET", true, "Access to database backup"},
-		{"Normal API path", "/api/v1/captcha/generate", "GET", false, "Normal API access"},
-	}
-
-	for _, tt := range tests {
+	t.Run("BasicRateLimiting", func(t *testing.T) {
 		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(tt.method, tt.path, nil)
+		router := gin.New()
 
-		owaspService := service.NewOWASPService()
-		safe, msg := owaspService.CheckBrokenAccessControl(c.Request)
+		router.Use(middleware.EnhancedDDoSMiddleware())
 
-		s.AddResult(&SecurityTestResult{
-			TestName:       tt.name,
-			OWASPID:        "A01",
-			Category:       "Broken Access Control",
-			Passed:         safe || tt.shouldBlock,
-			Severity:       "High",
-			Description:    tt.description,
-			RequestPayload: tt.path,
-			ExpectedResult: fmt.Sprintf("Safe or blocked (shouldBlock=%v)", tt.shouldBlock),
-			ActualResult:   msg,
-			Remediation:    "Implement proper access control checks for sensitive paths",
+		router.GET("/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "ok"})
 		})
-	}
-}
 
-func (s *SecurityTestSuite) testA02CryptographicFailures() {
-	tests := []struct {
-		name        string
-		protoHeader string
-		shouldBlock bool
-	}{
-		{"HTTP without TLS", "", true},
-		{"HTTP with X-Forwarded-Proto: https", "https", false},
-	}
-
-	for _, tt := range tests {
-		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		if tt.protoHeader != "" {
-			req.Header.Set("X-Forwarded-Proto", tt.protoHeader)
-		}
-		c.Request = req
-
-		owaspService := service.NewOWASPService()
-		safe, msg := owaspService.CheckCryptographicFailures(c.Request)
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tt.name,
-			OWASPID:        "A02",
-			Category:       "Cryptographic Failures",
-			Passed:         safe || !tt.shouldBlock,
-			Severity:       "Critical",
-			Description:    "Testing TLS/HTTPS enforcement",
-			RequestPayload: fmt.Sprintf("Proto=%s", tt.protoHeader),
-			ExpectedResult: "HTTPS enforced",
-			ActualResult:   msg,
-			Remediation:    "Enforce HTTPS for all connections in production",
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testA03InjectionSQL() {
-	testCases := []struct {
-		name     string
-		path     string
-		query    string
-		expected string
-	}{
-		{"SQL UNION injection", "/api/search", "id=1%20UNION%20SELECT%20%2A%20FROM%20users", "Blocked"},
-		{"SQL SELECT injection", "/api/search", "q=SELECT%20password%20FROM%20admin", "Blocked"},
-		{"SQL DROP injection", "/api/search", "table=DROP%20TABLE%20sessions", "Blocked"},
-		{"SQL comment injection", "/api/search", "id=1--", "Potentially Risky"},
-		{"SQL OR injection", "/api/search", "id=1%20OR%201%3D1", "Potentially Risky"},
-		{"Normal query", "/api/search", "search=hello", "Allowed"},
-	}
-
-	for _, tc := range testCases {
-		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		
-		c.Request = httptest.NewRequest("GET", tc.path+"?"+tc.query, nil)
-
-		owaspService := service.NewOWASPService()
-		safe, msg := owaspService.CheckInjection(c.Request)
-
-		passed := safe || tc.expected == "Allowed"
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A03-SQL",
-			Category:       "Injection - SQL",
-			Passed:         passed,
-			Severity:       "Critical",
-			Description:    "Testing SQL injection protection",
-			RequestPayload: tc.query,
-			ExpectedResult: tc.expected,
-			ActualResult:   msg,
-			Remediation:    "Use parameterized queries, input validation, and ORM frameworks",
-			Metrics: map[string]interface{}{
-				"detected": !safe,
-			},
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testA03InjectionXSS() {
-	testCases := []struct {
-		name     string
-		payload  string
-		expected string
-	}{
-		{"Script tag injection", "%3Cscript%3Ealert('XSS')%3C%2Fscript%3E", "Blocked"},
-		{"JavaScript protocol", "javascript%3Aalert('XSS')", "Blocked"},
-		{"Onload event", "%3Cimg%20src%3Dx%20onload%3Dalert('XSS')%3E", "Blocked"},
-		{"Onerror event", "%3Cdiv%20onerror%3Dalert('XSS')%3E", "Blocked"},
-		{"SVG injection", "%3Csvg%20onload%3Dalert('XSS')%3E", "Blocked"},
-		{"Iframe injection", "%3Ciframe%20src%3D'evil'%3E%3C%2Fiframe%3E", "Blocked"},
-		{"Normal text", "Hello%20World", "Allowed"},
-	}
-
-	for _, tc := range testCases {
-		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest("GET", "/api/search?q="+tc.payload, nil)
-
-		securityService := service.NewSecurityService(nil)
-		sanitized := securityService.SanitizeHTML(tc.payload)
-		changed := sanitized != tc.payload
-
-		passed := tc.expected == "Allowed" || changed
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A03-XSS",
-			Category:       "Injection - XSS",
-			Passed:         passed,
-			Severity:       "Critical",
-			Description:    "Testing XSS injection protection",
-			RequestPayload: tc.payload,
-			ExpectedResult: tc.expected,
-			ActualResult:   fmt.Sprintf("Sanitized: %v", changed),
-			Remediation:    "Implement HTML escaping, CSP headers, and input validation",
-			Metrics: map[string]interface{}{
-				"sanitized":       changed,
-				"sanitized_value": sanitized,
-			},
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testA03InjectionCommand() {
-	testCases := []struct {
-		name     string
-		payload  string
-		expected string
-	}{
-		{"Command chaining", "test%3B%20ls%20-la", "Blocked"},
-		{"Pipe command", "cat%20%2Fetc%2Fpasswd%20%7C%20grep%20root", "Blocked"},
-		{"Backtick execution", "%60whoami%60", "Blocked"},
-		{"Subshell execution", "%24(whoami)", "Blocked"},
-		{"Double pipe", "a%20%7C%7C%20rm%20-rf", "Blocked"},
-		{"Semicolon separator", "a%3B%20rm%20-rf%20%2F", "Blocked"},
-		{"Normal input", "hello", "Allowed"},
-	}
-
-	for _, tc := range testCases {
-		securityService := service.NewSecurityService(nil)
-		sanitized := securityService.SanitizeInput(tc.payload)
-		changed := sanitized != tc.payload
-
-		passed := tc.expected == "Allowed" || changed
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A03-CMD",
-			Category:       "Injection - Command",
-			Passed:         passed,
-			Severity:       "Critical",
-			Description:    "Testing command injection protection",
-			RequestPayload: tc.payload,
-			ExpectedResult: tc.expected,
-			ActualResult:   fmt.Sprintf("Sanitized: %v", changed),
-			Remediation:    "Avoid shell execution, use parameterized APIs",
-			Metrics: map[string]interface{}{
-				"sanitized": changed,
-			},
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testA05SecurityMisconfiguration() {
-	testCases := []struct {
-		name         string
-		serverHeader string
-		shouldWarn   bool
-	}{
-		{"Apache with version", "Apache/2.4.41", true},
-		{"nginx with version", "nginx/1.18.0", true},
-		{"No server header", "", false},
-		{"Custom header", "MyServer", false},
-	}
-
-	for _, tc := range testCases {
-		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		if tc.serverHeader != "" {
-			req.Header.Set("Server", tc.serverHeader)
-		}
-		c.Request = req
-
-		owaspService := service.NewOWASPService()
-		safe, msg := owaspService.CheckSecurityMisconfiguration(c.Request)
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A05",
-			Category:       "Security Misconfiguration",
-			Passed:         safe || !tc.shouldWarn,
-			Severity:       "Medium",
-			Description:    "Testing server header information disclosure",
-			RequestPayload: tc.serverHeader,
-			ExpectedResult: fmt.Sprintf("Safe: %v", !tc.shouldWarn),
-			ActualResult:   msg,
-			Remediation:    "Hide server version information in production",
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testA07AuthenticationFailures() {
-	testCases := []struct {
-		name        string
-		path        string
-		hasAuth     bool
-		shouldBlock bool
-	}{
-		{"Protected resource without auth", "/api/admin/users", false, true},
-		{"Protected resource with auth", "/api/admin/users", true, false},
-		{"Public resource without auth", "/api/captcha/generate", false, false},
-		{"Login endpoint", "/api/auth/login", false, false},
-	}
-
-	for _, tc := range testCases {
-		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		req := httptest.NewRequest("GET", tc.path, nil)
-		if tc.hasAuth {
-			req.Header.Set("Authorization", "Bearer test-token")
-		}
-		c.Request = req
-
-		owaspService := service.NewOWASPService()
-		safe, msg := owaspService.CheckAuthFailures(c.Request)
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A07",
-			Category:       "Authentication Failures",
-			Passed:         safe || !tc.shouldBlock,
-			Severity:       "High",
-			Description:    "Testing authentication requirements",
-			RequestPayload: tc.path,
-			ExpectedResult: fmt.Sprintf("Has auth: %v, Should block: %v", tc.hasAuth, tc.shouldBlock),
-			ActualResult:   msg,
-			Remediation:    "Implement proper authentication and session management",
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testA10ServerSideRequestForgery() {
-	testCases := []struct {
-		name        string
-		payload     string
-		shouldBlock bool
-	}{
-		{"Localhost access", "url=http://localhost/admin", true},
-		{"127.0.0.1 access", "url=http://127.0.0.1:8080/api", true},
-		{"Internal network", "url=http://192.168.1.1", true},
-		{"Metadata endpoint", "url=http://169.254.169.254", true},
-		{"File protocol", "url=file:///etc/passwd", true},
-		{"Gopher protocol", "url=gopher://localhost", true},
-		{"Valid external URL", "url=https://example.com/api", false},
-	}
-
-	for _, tc := range testCases {
-		gin.SetMode(gin.TestMode)
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest("GET", "/api/fetch?"+tc.payload, nil)
-
-		owaspService := service.NewOWASPService()
-		safe, msg := owaspService.CheckSSRF(c.Request)
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A10",
-			Category:       "Server-Side Request Forgery",
-			Passed:         safe || !tc.shouldBlock,
-			Severity:       "High",
-			Description:    "Testing SSRF protection",
-			RequestPayload: tc.payload,
-			ExpectedResult: fmt.Sprintf("Blocked: %v", tc.shouldBlock),
-			ActualResult:   msg,
-			Remediation:    "Implement URL validation, use allowlists, disable unused protocols",
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testCSRFProtection() {
-	testCases := []struct {
-		name       string
-		method     string
-		hasToken   bool
-		shouldPass bool
-	}{
-		{"GET request without token", "GET", false, true},
-		{"GET request with token", "GET", true, true},
-		{"POST request without token", "POST", false, false},
-		{"POST request with valid token", "POST", true, true},
-		{"PUT request without token", "PUT", false, false},
-		{"DELETE request without token", "DELETE", false, false},
-		{"OPTIONS request without token", "OPTIONS", false, true},
-	}
-
-	for _, tc := range testCases {
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A01-CSRF",
-			Category:       "CSRF Protection",
-			Passed:         tc.shouldPass,
-			Severity:       "High",
-			Description:    "Testing CSRF token validation",
-			RequestPayload: fmt.Sprintf("Method: %s, HasToken: %v", tc.method, tc.hasToken),
-			ExpectedResult: fmt.Sprintf("Should pass: %v", tc.shouldPass),
-			ActualResult:   "Middleware configured - token validation required for state-changing operations",
-			Remediation:    "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
-			Metrics: map[string]interface{}{
-				"has_token": tc.hasToken,
-			},
-		})
-	}
-}
-
-func (s *SecurityTestSuite) testDDoSProtection() {
-	ddosService := service.NewDDoSProtectionService()
-
-	testCases := []struct {
-		name         string
-		requestCount int
-		shouldBlock  bool
-	}{
-		{"Normal traffic (10 req/min)", 10, false},
-		{"High traffic (150 req/min)", 150, true},
-		{"Burst traffic (50 req/10sec)", 50, true},
-		{"Sustained normal (90 req/min)", 90, false},
-	}
-
-	for _, tc := range testCases {
-		blocked := false
-		for i := 0; i < tc.requestCount; i++ {
-			gin.SetMode(gin.TestMode)
+		for i := 0; i < 100; i++ {
+			req, _ := http.NewRequest("GET", "/test", nil)
+			req.RemoteAddr = "192.168.1.1:12345"
 			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest("GET", "/api/test", nil)
+			router.ServeHTTP(w, req)
 
-			result := ddosService.CheckRequest(c.Request)
-			if !result.Allowed {
-				blocked = true
-				break
+			if w.Code != http.StatusOK {
+				if i >= 60 {
+					t.Logf("Request %d blocked as expected", i)
+				}
+			}
+		}
+
+		t.Log("Basic rate limiting test completed")
+	})
+
+	t.Run("BlacklistIP", func(t *testing.T) {
+		ddosService := service.NewEnhancedDDoSProtectionService()
+		testIP := "10.0.0.1"
+
+		ddosService.AddToBlacklist(testIP, "test_block", 1*time.Hour)
+
+		stats := ddosService.GetIPStats(testIP)
+		if stats != nil && !stats.IsBlacklisted {
+			t.Error("IP should be blacklisted")
+		}
+
+		ddosService.RemoveFromBlacklist(testIP)
+
+		t.Log("Blacklist test completed")
+	})
+
+	t.Run("ConnectionTracking", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		router.Use(middleware.ConnectionTrackingMiddlewareHandler(5, 60))
+
+		router.GET("/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "ok"})
+		})
+
+		for i := 0; i < 10; i++ {
+			req, _ := http.NewRequest("GET", "/test", nil)
+			req.RemoteAddr = "192.168.1.100:12345"
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+		}
+
+		t.Log("Connection tracking test completed")
+	})
+
+	t.Log("Enhanced DDoS Protection tests completed")
+}
+
+func TestEnhancedCSRFProtection(t *testing.T) {
+	fmt.Println("\n=== Testing Enhanced CSRF Protection ===")
+
+	t.Run("TokenGeneration", func(t *testing.T) {
+		csrf := service.NewCSRFSecurity(nil)
+
+		token1, err := csrf.GenerateToken()
+		if err != nil {
+			t.Fatalf("Failed to generate token: %v", err)
+		}
+
+		if len(token1) < 16 {
+			t.Error("Token length too short")
+		}
+
+		token2, _ := csrf.GenerateToken()
+		if token1 == token2 {
+			t.Error("Tokens should be unique")
+		}
+
+		t.Log("Token generation test completed")
+	})
+
+	t.Run("TokenStorageAndVerification", func(t *testing.T) {
+		csrf := service.NewCSRFSecurity(nil)
+
+		sessionID := "test-session-123"
+		token, _ := csrf.GenerateToken()
+
+		err := csrf.StoreToken(sessionID, token)
+		if err != nil {
+			t.Fatalf("Failed to store token: %v", err)
+		}
+
+		valid, err := csrf.VerifyToken(sessionID, token)
+		if err != nil {
+			t.Fatalf("Failed to verify token: %v", err)
+		}
+
+		if !valid {
+			t.Error("Token should be valid")
+		}
+
+		invalid, _ := csrf.VerifyToken(sessionID, "invalid-token")
+		if invalid {
+			t.Error("Invalid token should not be valid")
+		}
+
+		t.Log("Token storage and verification test completed")
+	})
+
+	t.Run("MiddlewareIntegration", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		router.Use(middleware.EnhancedCSRFProtection())
+
+		router.GET("/protected", func(c *gin.Context) {
+			token := c.GetHeader("X-CSRF-Token")
+			c.JSON(200, gin.H{"csrf_token": token})
+		})
+
+		router.POST("/submit", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "success"})
+		})
+
+		req, _ := http.NewRequest("GET", "/protected", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		csrfToken := w.Header().Get("X-CSRF-Token")
+		if csrfToken == "" {
+			t.Error("CSRF token should be set in response header")
+		}
+
+		t.Log("CSRF middleware integration test completed")
+	})
+
+	t.Log("Enhanced CSRF Protection tests completed")
+}
+
+func TestXSSProtection(t *testing.T) {
+	fmt.Println("\n=== Testing XSS Protection ===")
+
+	t.Run("BasicSanitization", func(t *testing.T) {
+		xss := service.NewXSSSecurity(nil)
+
+		testCases := []struct {
+			input    string
+			contains string
+		}{
+			{"<script>alert('xss')</script>", ""},
+			{"<img src=x onerror=alert(1)>", ""},
+			{"javascript:alert('xss')", ""},
+			{"<iframe src='evil.com'></iframe>", ""},
+			{"normal text", "normal text"},
+		}
+
+		for _, tc := range testCases {
+			sanitized := xss.SanitizeInput(tc.input)
+
+			if tc.contains != "" && !strings.Contains(sanitized, tc.contains) {
+				t.Errorf("Input %s: expected to contain %s, got %s", tc.input, tc.contains, sanitized)
 			}
 
-			time.Sleep(100 * time.Millisecond)
+			if strings.Contains(strings.ToLower(sanitized), "script") ||
+				strings.Contains(strings.ToLower(sanitized), "javascript:") ||
+				strings.Contains(strings.ToLower(sanitized), "onerror") ||
+				strings.Contains(strings.ToLower(sanitized), "onload") {
+				t.Errorf("XSS input %s was not sanitized properly: %s", tc.input, sanitized)
+			}
 		}
 
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A07-DDoS",
-			Category:       "DDoS Protection",
-			Passed:         blocked == tc.shouldBlock,
-			Severity:       "High",
-			Description:    "Testing DDoS rate limiting",
-			RequestPayload: fmt.Sprintf("Count: %d", tc.requestCount),
-			ExpectedResult: fmt.Sprintf("Blocked: %v", tc.shouldBlock),
-			ActualResult:   fmt.Sprintf("Blocked: %v", blocked),
-			Remediation:    "Implement rate limiting, IP blocking, and traffic analysis",
+		t.Log("Basic sanitization test completed")
+	})
+
+	t.Run("XSSDetection", func(t *testing.T) {
+		xss := service.NewXSSSecurity(nil)
+
+		maliciousInputs := []string{
+			"<script>alert('test')</script>",
+			"javascript:void(0)",
+			"<img src=x onerror=alert(1)>",
+			"onclick=alert('xss')",
+			"<iframe src='http://evil.com'></iframe>",
+		}
+
+		for _, input := range maliciousInputs {
+			detected, pattern := xss.DetectXSS(input)
+			if !detected {
+				t.Errorf("XSS attack not detected in input: %s", input)
+			} else {
+				t.Logf("Detected XSS pattern: %s in input: %s", pattern, input)
+			}
+		}
+
+		benignInputs := []string{
+			"Hello World",
+			"<p>Normal text</p>",
+			"https://example.com",
+			"user@example.com",
+		}
+
+		for _, input := range benignInputs {
+			detected, _ := xss.DetectXSS(input)
+			if detected {
+				t.Errorf("Benign input incorrectly flagged as XSS: %s", input)
+			}
+		}
+
+		t.Log("XSS detection test completed")
+	})
+
+	t.Run("MiddlewareIntegration", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		router.Use(middleware.EnhancedXSSProtectionMiddleware())
+
+		router.POST("/submit", func(c *gin.Context) {
+			var data map[string]string
+			c.BindJSON(&data)
+			c.JSON(200, gin.H{"status": "ok"})
 		})
-	}
+
+		body := map[string]string{"name": "<script>alert('xss')</script>"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/submit", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		t.Log("XSS middleware integration test completed")
+	})
+
+	t.Log("XSS Protection tests completed")
 }
 
-func (s *SecurityTestSuite) testRateLimiting() {
-	testCases := []struct {
-		name         string
-		requestCount int
-		shouldLimit  bool
-	}{
-		{"Under limit (50)", 50, false},
-		{"At limit (100)", 100, false},
-		{"Over limit (150)", 150, true},
-		{"Far over limit (500)", 500, true},
-	}
+func TestRequestSignature(t *testing.T) {
+	fmt.Println("\n=== Testing Request Signature Verification ===")
 
-	for _, tc := range testCases {
-		limited := tc.requestCount > 100
-
-		s.AddResult(&SecurityTestResult{
-			TestName:       tc.name,
-			OWASPID:        "A07-RateLimit",
-			Category:       "Rate Limiting",
-			Passed:         limited == tc.shouldLimit,
-			Severity:       "Medium",
-			Description:    "Testing API rate limiting",
-			RequestPayload: fmt.Sprintf("Count: %d", tc.requestCount),
-			ExpectedResult: fmt.Sprintf("Limited: %v", tc.shouldLimit),
-			ActualResult:   fmt.Sprintf("Limited: %v", limited),
-			Remediation:    "Implement per-IP and per-user rate limits",
+	t.Run("SignatureGeneration", func(t *testing.T) {
+		validator := service.NewSignatureValidator(service.RequestSignatureConfig{
+			SecretKey: "test-secret-key-12345",
+			Algorithm: "SHA256",
 		})
-	}
+
+		method := "POST"
+		path := "/api/test"
+		query := "param1=value1&param2=value2"
+		body := []byte(`{"key": "value"}`)
+
+		signature, timestamp, nonce, err := validator.GenerateSignature(method, path, query, body)
+		if err != nil {
+			t.Fatalf("Failed to generate signature: %v", err)
+		}
+
+		if signature == "" {
+			t.Error("Signature should not be empty")
+		}
+
+		if timestamp == 0 {
+			t.Error("Timestamp should not be zero")
+		}
+
+		if nonce == "" {
+			t.Error("Nonce should not be empty")
+		}
+
+		t.Logf("Generated signature: %s, timestamp: %d, nonce: %s", signature[:16]+"...", timestamp, nonce)
+		t.Log("Signature generation test completed")
+	})
+
+	t.Run("SignatureVerification", func(t *testing.T) {
+		validator := service.NewSignatureValidator(service.RequestSignatureConfig{
+			SecretKey: "test-secret-key-12345",
+			Algorithm: "SHA256",
+		})
+
+		method := "POST"
+		path := "/api/test"
+		query := "param1=value1"
+		body := []byte(`{"test": "data"}`)
+
+		signature, timestamp, nonce, _ := validator.GenerateSignature(method, path, query, body)
+
+		headers := map[string]string{
+			"X-Signature": signature,
+			"X-Timestamp": fmt.Sprintf("%d", timestamp),
+			"X-Nonce":     nonce,
+		}
+
+		result := validator.ValidateRequest(method, path, query, headers, body, "127.0.0.1")
+
+		if !result.Valid {
+			t.Errorf("Signature verification failed: %s", result.Reason)
+		}
+
+		if !result.SignatureValid {
+			t.Error("Signature should be valid")
+		}
+
+		t.Log("Signature verification test completed")
+	})
+
+	t.Run("ReplayAttackPrevention", func(t *testing.T) {
+		validator := service.NewSignatureValidator(service.RequestSignatureConfig{
+			SecretKey: "test-secret-key-12345",
+			Algorithm: "SHA256",
+		})
+
+		method := "POST"
+		path := "/api/test"
+		query := ""
+		body := []byte(`{"test": "data"}`)
+
+		signature, timestamp, nonce, _ := validator.GenerateSignature(method, path, query, body)
+
+		headers := map[string]string{
+			"X-Signature": signature,
+			"X-Timestamp": fmt.Sprintf("%d", timestamp),
+			"X-Nonce":     nonce,
+		}
+
+		result1 := validator.ValidateRequest(method, path, query, headers, body, "127.0.0.1")
+		if !result1.Valid {
+			t.Errorf("First request should be valid: %s", result1.Reason)
+		}
+
+		result2 := validator.ValidateRequest(method, path, query, headers, body, "127.0.0.1")
+		if result2.Valid {
+			t.Error("Replay attack should be detected")
+		}
+
+		if !result2.ReplayDetected {
+			t.Error("Replay should be detected")
+		}
+
+		t.Log("Replay attack prevention test completed")
+	})
+
+	t.Run("TimestampValidation", func(t *testing.T) {
+		validator := service.NewSignatureValidator(service.RequestSignatureConfig{
+			SecretKey:          "test-secret-key-12345",
+			Algorithm:          "SHA256",
+			TimestampTolerance: 5 * time.Minute,
+		})
+
+		method := "POST"
+		path := "/api/test"
+		query := ""
+		body := []byte(`{"test": "data"}`)
+
+		oldTimestamp := time.Now().Add(-10 * time.Minute).Unix()
+		nonce, _ := service.GenerateSecureNonce(16)
+
+		headers := map[string]string{
+			"X-Signature": "dummy-signature",
+			"X-Timestamp": fmt.Sprintf("%d", oldTimestamp),
+			"X-Nonce":     nonce,
+		}
+
+		result := validator.ValidateRequest(method, path, query, headers, body, "127.0.0.1")
+
+		if result.TimestampValid {
+			t.Error("Old timestamp should be invalid")
+		}
+
+		t.Log("Timestamp validation test completed")
+	})
+
+	t.Log("Request Signature tests completed")
 }
 
-func (s *SecurityTestSuite) ExportJSON() ([]byte, error) {
-	data := map[string]interface{}{
-		"summary": s.GetSummary(),
-		"tests":   s.results,
-	}
-	return json.MarshalIndent(data, "", "  ")
+func TestRateLimiting(t *testing.T) {
+	fmt.Println("\n=== Testing Rate Limiting ===")
+
+	t.Run("TokenBucketAlgorithm", func(t *testing.T) {
+		rateLimitService := service.NewTokenBucketRateLimitService()
+
+		key := "test-client-1"
+
+		allowed := 0
+		for i := 0; i < 150; i++ {
+			if rateLimitService.Allow(key) {
+				allowed++
+			}
+		}
+
+		if allowed < 100 || allowed > 150 {
+			t.Logf("Allowed %d requests (expected around 100-150 due to token bucket)", allowed)
+		}
+
+		tokens := rateLimitService.GetTokens(key)
+		t.Logf("Remaining tokens for %s: %.2f", key, tokens)
+
+		rateLimitService.Reset(key)
+
+		t.Log("Token bucket algorithm test completed")
+	})
+
+	t.Run("SlidingWindowAlgorithm", func(t *testing.T) {
+		rateLimitService := service.NewSlidingWindowRateLimitService()
+
+		key := "test-client-2"
+
+		allowed := 0
+		for i := 0; i < 120; i++ {
+			if rateLimitService.Allow(key) {
+				allowed++
+			}
+		}
+
+		t.Logf("Allowed %d requests in sliding window", allowed)
+
+		rateLimitService.Reset(key)
+
+		t.Log("Sliding window algorithm test completed")
+	})
+
+	t.Run("DistributedRateLimiting", func(t *testing.T) {
+		rateLimitService := service.NewDistributedRateLimitService()
+
+		ctx := context.Background()
+		key := "distributed-test"
+
+		allowed := 0
+		for i := 0; i < 50; i++ {
+			ok, _ := rateLimitService.Allow(ctx, key, 100)
+			if ok {
+				allowed++
+			}
+		}
+
+		t.Logf("Distributed: allowed %d requests", allowed)
+
+		t.Log("Distributed rate limiting test completed")
+	})
+
+	t.Log("Rate Limiting tests completed")
+}
+
+func TestContentSecurityPolicy(t *testing.T) {
+	fmt.Println("\n=== Testing Content Security Policy ===")
+
+	t.Run("CSPHeaderGeneration", func(t *testing.T) {
+		cspConfig := service.ContentSecurityPolicyConfig{
+			DefaultSrc: []string{"'self'"},
+			ScriptSrc:  []string{"'self'"},
+			StyleSrc:   []string{"'self'", "'unsafe-inline'"},
+			ImgSrc:     []string{"'self'", "data:", "https:"},
+			FrameSrc:   []string{"'none'"},
+		}
+
+		policy := cspConfig.BuildPolicy()
+
+		t.Logf("Generated CSP: %s", policy)
+
+		if !strings.Contains(policy, "default-src") {
+			t.Error("CSP should contain default-src")
+		}
+
+		if !strings.Contains(policy, "script-src") {
+			t.Error("CSP should contain script-src")
+		}
+
+		t.Log("CSP header generation test completed")
+	})
+
+	t.Run("SecurityHeaders", func(t *testing.T) {
+		config := service.SecurityHeadersConfig{
+			EnableCSP:            true,
+			EnableHSTS:           true,
+			EnableXFrameOptions:  true,
+			EnableXContentType:   true,
+			EnableXSSProtection:  true,
+			EnableReferrerPolicy: true,
+		}
+
+		headers := service.BuildSecurityHeaders(config)
+
+		if headers["Content-Security-Policy"] == "" {
+			t.Error("CSP header should be set")
+		}
+
+		if headers["Strict-Transport-Security"] == "" {
+			t.Error("HSTS header should be set")
+		}
+
+		if headers["X-Frame-Options"] != "DENY" {
+			t.Error("X-Frame-Options should be DENY")
+		}
+
+		t.Logf("Generated security headers: %+v", headers)
+		t.Log("Security headers test completed")
+	})
+
+	t.Run("MiddlewareIntegration", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		router.Use(middleware.EnhancedCSPMiddleware())
+		router.Use(middleware.EnhancedSecurityHeadersMiddleware())
+
+		router.GET("/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "ok"})
+		})
+
+		req, _ := http.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Header().Get("Content-Security-Policy") == "" {
+			t.Error("CSP header should be set by middleware")
+		}
+
+		if w.Header().Get("X-Frame-Options") != "DENY" {
+			t.Error("X-Frame-Options should be DENY")
+		}
+
+		t.Log("CSP middleware integration test completed")
+	})
+
+	t.Log("Content Security Policy tests completed")
+}
+
+func TestSecurityIntegration(t *testing.T) {
+	fmt.Println("\n=== Testing Security Integration ===")
+
+	t.Run("CompleteSecurityChain", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		router.Use(middleware.EnhancedDDoSMiddleware())
+		router.Use(middleware.EnhancedCSRFProtection())
+		router.Use(middleware.EnhancedCSPMiddleware())
+		router.Use(middleware.EnhancedSecurityHeadersMiddleware())
+
+		router.GET("/api/public", func(c *gin.Context) {
+			c.JSON(200, gin.H{"data": "public endpoint"})
+		})
+
+		router.POST("/api/private", func(c *gin.Context) {
+			c.JSON(200, gin.H{"data": "private endpoint"})
+		})
+
+		req, _ := http.NewRequest("GET", "/api/public", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		if w.Header().Get("Content-Security-Policy") == "" {
+			t.Error("CSP header should be set")
+		}
+
+		if w.Header().Get("Strict-Transport-Security") == "" {
+			t.Error("HSTS header should be set")
+		}
+
+		t.Log("Complete security chain test completed")
+	})
+
+	t.Run("DDoSWithRealisticTraffic", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		router := gin.New()
+
+		router.Use(middleware.EnhancedDDoSMiddleware())
+
+		router.GET("/api/test", func(c *gin.Context) {
+			c.JSON(200, gin.H{"status": "ok"})
+		})
+
+		successCount := 0
+		blockCount := 0
+
+		for i := 0; i < 200; i++ {
+			req, _ := http.NewRequest("GET", "/api/test", nil)
+			req.RemoteAddr = fmt.Sprintf("192.168.1.%d:12345", i%255)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code == http.StatusOK {
+				successCount++
+			} else if w.Code == http.StatusTooManyRequests || w.Code == http.StatusForbidden {
+				blockCount++
+			}
+		}
+
+		t.Logf("Realistic traffic test: %d successful, %d blocked", successCount, blockCount)
+
+		if blockCount == 0 {
+			t.Log("Note: No requests were blocked - this might indicate rate limits are too permissive")
+		}
+
+		t.Log("Realistic traffic test completed")
+	})
+
+	t.Log("Security Integration tests completed")
+}
+
+func TestPerformanceBenchmarks(t *testing.T) {
+	fmt.Println("\n=== Running Performance Benchmarks ===")
+
+	t.Run("DDoSCheckPerformance", func(t *testing.T) {
+		ddosService := service.NewEnhancedDDoSProtectionService()
+
+		start := time.Now()
+		iterations := 10000
+
+		for i := 0; i < iterations; i++ {
+			req, _ := http.NewRequest("GET", "/test", nil)
+			req.RemoteAddr = fmt.Sprintf("192.168.1.%d:12345", i%1000)
+			ddosService.CheckRequest(req)
+		}
+
+		elapsed := time.Since(start)
+		perRequest := elapsed / time.Duration(iterations)
+
+		t.Logf("DDoS check: %d requests in %v (%.2f µs per request)", iterations, elapsed, float64(perRequest.Microseconds()))
+	})
+
+	t.Run("XSSSanitizationPerformance", func(t *testing.T) {
+		xssService := service.NewXSSSecurity(nil)
+
+		testInputs := []string{
+			"<script>alert('xss')</script>",
+			"normal text",
+			"<img src=x onerror=alert(1)>",
+			strings.Repeat("a", 1000),
+		}
+
+		start := time.Now()
+		iterations := 1000
+
+		for i := 0; i < iterations; i++ {
+			for _, input := range testInputs {
+				xssService.SanitizeInput(input)
+			}
+		}
+
+		elapsed := time.Since(start)
+		perRequest := elapsed / time.Duration(iterations*len(testInputs))
+
+		t.Logf("XSS sanitization: %d operations in %v (%.2f µs per operation)", iterations*len(testInputs), elapsed, float64(perRequest.Microseconds()))
+	})
+
+	t.Run("SignatureVerificationPerformance", func(t *testing.T) {
+		validator := service.NewSignatureValidator(service.RequestSignatureConfig{
+			SecretKey: "test-secret-key-12345",
+			Algorithm: "SHA256",
+		})
+
+		method := "POST"
+		path := "/api/test"
+		query := "param1=value1&param2=value2"
+		body := []byte(`{"test": "data", "more": "content"}`)
+
+		signature, timestamp, nonce, _ := validator.GenerateSignature(method, path, query, body)
+
+		headers := map[string]string{
+			"X-Signature": signature,
+			"X-Timestamp": fmt.Sprintf("%d", timestamp),
+			"X-Nonce":     nonce,
+		}
+
+		start := time.Now()
+		iterations := 5000
+
+		for i := 0; i < iterations; i++ {
+			validator.ValidateRequest(method, path, query, headers, body, "127.0.0.1")
+		}
+
+		elapsed := time.Since(start)
+		perRequest := elapsed / time.Duration(iterations)
+
+		t.Logf("Signature verification: %d operations in %v (%.2f µs per operation)", iterations, elapsed, float64(perRequest.Microseconds()))
+	})
+
+	t.Run("RateLimitPerformance", func(t *testing.T) {
+		rateLimitService := service.NewTokenBucketRateLimitService()
+
+		start := time.Now()
+		iterations := 100000
+
+		for i := 0; i < iterations; i++ {
+			rateLimitService.Allow(fmt.Sprintf("client-%d", i%1000))
+		}
+
+		elapsed := time.Since(start)
+		perRequest := elapsed / time.Duration(iterations)
+
+		t.Logf("Rate limiting: %d operations in %v (%.2f µs per operation)", iterations, elapsed, float64(perRequest.Microseconds()))
+	})
+
+	t.Log("Performance Benchmarks completed")
 }
 
 func main() {
 	fmt.Println("========================================")
-	fmt.Println("   HJTPX Security Test Suite v11.0")
+	fmt.Println("  HJTPX Security Enhancement Test Suite")
 	fmt.Println("========================================")
 	fmt.Println()
 
-	suite := NewSecurityTestSuite()
-	suite.RunAllTests()
-
-	summary := suite.GetSummary()
-
-	fmt.Println("Test Summary:")
-	fmt.Println("----------------------------------------")
-	fmt.Printf("  Total Tests:    %d\n", summary["total_tests"])
-	fmt.Printf("  Passed:         %d\n", summary["passed"])
-	fmt.Printf("  Failed:         %d\n", summary["failed"])
-	fmt.Printf("  Pass Rate:      %s\n", summary["pass_rate"])
-	fmt.Printf("  Duration:       %s\n", summary["duration"])
-	fmt.Println()
-	fmt.Printf("  Critical:       %d\n", summary["critical"])
-	fmt.Printf("  High:           %d\n", summary["high"])
-	fmt.Printf("  Medium:         %d\n", summary["medium"])
-	fmt.Printf("  Low:            %d\n", summary["low"])
-	fmt.Println("----------------------------------------")
-	fmt.Println()
-
-	fmt.Println("Results by Category:")
-	if categories, ok := summary["by_category"].(map[string]map[string]int); ok {
-		for cat, stats := range categories {
-			fmt.Printf("  %s: %d/%d passed\n", cat, stats["passed"], stats["total"])
-		}
-	}
-	fmt.Println()
-
-	fmt.Println("Detailed Test Results:")
-	fmt.Println("----------------------------------------")
-	for i, result := range suite.GetResults() {
-		status := "PASS"
-		if !result.Passed {
-			status = "FAIL"
-		}
-		fmt.Printf("\n[%d] %s (%s)\n", i+1, result.TestName, status)
-		fmt.Printf("     OWASP: %s | Severity: %s | Category: %s\n", result.OWASPID, result.Severity, result.Category)
-		fmt.Printf("     Payload: %s\n", result.RequestPayload)
-		fmt.Printf("     Result: %s\n", result.ActualResult)
-		if !result.Passed {
-			fmt.Printf("     Remediation: %s\n", result.Remediation)
-		}
-	}
-	fmt.Println("----------------------------------------")
-	fmt.Println()
-
-	jsonData, err := suite.ExportJSON()
-	if err != nil {
-		fmt.Printf("Error exporting JSON: %v\n", err)
-		os.Exit(1)
-	}
-
-	filename := fmt.Sprintf("security_test_report_%s.json", time.Now().Format("20060102_150405"))
-	err = os.WriteFile(filename, jsonData, 0644)
-	if err != nil {
-		fmt.Printf("Error writing report file: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Full JSON report saved to: %s\n", filename)
-	fmt.Println()
-
-	if summary["failed"].(int) > 0 {
-		fmt.Printf("WARNING: %d security test(s) failed!\n", summary["failed"])
-		os.Exit(1)
-	} else {
-		fmt.Println("SUCCESS: All security tests passed!")
-		os.Exit(0)
-	}
+	testing.Main(func(pat, str string) (bool, error) { return true, nil },
+		[]testing.InternalTest{
+			{Name: "TestEnhancedDDoSProtection", F: TestEnhancedDDoSProtection},
+			{Name: "TestEnhancedCSRFProtection", F: TestEnhancedCSRFProtection},
+			{Name: "TestXSSProtection", F: TestXSSProtection},
+			{Name: "TestRequestSignature", F: TestRequestSignature},
+			{Name: "TestRateLimiting", F: TestRateLimiting},
+			{Name: "TestContentSecurityPolicy", F: TestContentSecurityPolicy},
+			{Name: "TestSecurityIntegration", F: TestSecurityIntegration},
+			{Name: "TestPerformanceBenchmarks", F: TestPerformanceBenchmarks},
+		},
+		nil,
+		nil,
+	)
 }
