@@ -150,5 +150,32 @@
 	"portuguese": "Português",
 	"italian": "Italiano",
 	"russian": "Русский",
-	"arabic": "العربية"
+	"arabic": "العربية",
+	"click_captcha_hints": {
+		"number": "依次点击: ",
+		"letter": "依次点击字母: ",
+		"chinese": "依次点击汉字: ",
+		"icon": "依次点击图标: ",
+		"mixed": "依次点击: ",
+		"order_hint": "请按顺序点击"
+	},
+	"click_captcha_messages": {
+		"success": "验证成功",
+		"failed": "验证失败",
+		"wrong_order": "点击顺序错误",
+		"wrong_position": "点击位置有误",
+		"timeout": "验证码已过期",
+		"invalid_session": "会话无效",
+		"try_again": "请重试",
+		"too_fast": "点击过快",
+		"too_slow": "点击过慢",
+		"abnormal_behavior": "检测到异常行为"
+	},
+	"just_now": "刚刚",
+	"minutes_ago": "{0}分钟前",
+	"hours_ago": "{0}小时前",
+	"days_ago": "{0}天前",
+	"weeks_ago": "{0}周前",
+	"months_ago": "{0}个月前",
+	"years_ago": "{0}年前"
 }

@@ -135,5 +135,32 @@
 	"vietnamese": "Tiếng Việt",
 	"thai": "ไทย",
 	"indonesian": "Bahasa Indonesia",
-	"turkish": "Türkçe"
+	"turkish": "Türkçe",
+	"click_captcha_hints": {
+		"number": "คลิกตามลำดับ: ",
+		"letter": "คลิกตัวอักษรตามลำดับ: ",
+		"chinese": "คลิกอักษรจีนตามลำดับ: ",
+		"icon": "คลิกไอคอนตามลำดับ: ",
+		"mixed": "คลิกตามลำดับ: ",
+		"order_hint": "กรุณาคลิกตามลำดับ"
+	},
+	"click_captcha_messages": {
+		"success": "ยืนยันสำเร็จ",
+		"failed": "ยืนยันล้มเหลว",
+		"wrong_order": "ลำดับการคลิกไม่ถูกต้อง",
+		"wrong_position": "ตำแหน่งการคลิกไม่ถูกต้อง",
+		"timeout": "Captcha หมดอายุ",
+		"invalid_session": "เซสชันไม่ถูกต้อง",
+		"try_again": "กรุณาลองอีกครั้ง",
+		"too_fast": "คลิกเร็วเกินไป",
+		"too_slow": "คลิกช้าเกินไป",
+		"abnormal_behavior": "ตรวจพบพฤติกรรมผิดปกติ"
+	},
+	"just_now": "เพิ่งจะ",
+	"minutes_ago": "{0} นาทีที่แล้ว",
+	"hours_ago": "{0} ชั่วโมงที่แล้ว",
+	"days_ago": "{0} วันที่แล้ว",
+	"weeks_ago": "{0} สัปดาห์ที่แล้ว",
+	"months_ago": "{0} เดือนที่แล้ว",
+	"years_ago": "{0} ปีที่แล้ว"
 }

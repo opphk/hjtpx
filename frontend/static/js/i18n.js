@@ -275,13 +275,54 @@ const I18n = {
         const isRTL = langInfo && langInfo.rtl;
         
         document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+        document.documentElement.lang = this.currentLang;
         
         if (isRTL) {
             document.body.classList.add('rtl');
             document.body.classList.remove('ltr');
+            this.applyRTLStyles();
         } else {
             document.body.classList.add('ltr');
             document.body.classList.remove('rtl');
+            this.removeRTLStyles();
+        }
+    },
+    
+    applyRTLStyles: function() {
+        let styleEl = document.getElementById('rtl-styles');
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'rtl-styles';
+            document.head.appendChild(styleEl);
+        }
+        
+        styleEl.textContent = `
+            [dir="rtl"] .text-left { text-align: right !important; }
+            [dir="rtl"] .text-right { text-align: left !important; }
+            [dir="rtl"] .ml-auto { margin-left: 0 !important; margin-right: auto !important; }
+            [dir="rtl"] .mr-auto { margin-right: 0 !important; margin-left: auto !important; }
+            [dir="rtl"] .pl-3 { padding-left: 0 !important; padding-right: 1rem !important; }
+            [dir="rtl"] .pr-3 { padding-right: 0 !important; padding-left: 1rem !important; }
+            [dir="rtl"] .ml-3 { margin-left: 0 !important; margin-right: 1rem !important; }
+            [dir="rtl"] .mr-3 { margin-right: 0 !important; margin-left: 1rem !important; }
+            [dir="rtl"] .float-left { float: right !important; }
+            [dir="rtl"] .float-right { float: left !important; }
+            [dir="rtl"] .border-left { border-left: 0 !important; border-right: 1px solid #dee2e6; }
+            [dir="rtl"] .border-right { border-right: 0 !important; border-left: 1px solid #dee2e6; }
+            [dir="rtl"] .rounded-left { border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; border-top-right-radius: 0.25rem !important; border-bottom-right-radius: 0.25rem !important; }
+            [dir="rtl"] .rounded-right { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; border-top-left-radius: 0.25rem !important; border-bottom-left-radius: 0.25rem !important; }
+            [dir="rtl"] input[type="text"] { text-align: right; }
+            [dir="rtl"] input[type="email"] { text-align: right; }
+            [dir="rtl"] input[type="number"] { text-align: right; }
+            [dir="rtl"] input[type="password"] { text-align: right; }
+            [dir="rtl"] textarea { text-align: right; }
+        `;
+    },
+    
+    removeRTLStyles: function() {
+        const styleEl = document.getElementById('rtl-styles');
+        if (styleEl) {
+            styleEl.remove();
         }
     },
     

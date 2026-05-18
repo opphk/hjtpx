@@ -499,3 +499,121 @@ func GetPreviousDSTTransition(tz string, before time.Time) (time.Time, error) {
 
 	return time.Time{}, fmt.Errorf("no DST transition found within a year")
 }
+
+func GetAllTimezoneInfos() []TimezoneInfo {
+	result := make([]TimezoneInfo, 0, len(supportedTimezones))
+	for _, tz := range supportedTimezones {
+		info := GetTimezoneInfo(tz)
+		result = append(result, info)
+	}
+	return result
+}
+
+func GetTimezonesByCountry(countryCode string) []string {
+	result := make([]string, 0)
+	for tz := range getCountryCodeToTimezones() {
+		result = append(result, tz)
+	}
+	return result
+}
+
+func getCountryCodeToTimezones() map[string]string {
+	return map[string]string{
+		"CN": "Asia/Shanghai",
+		"HK": "Asia/Hong_Kong",
+		"JP": "Asia/Tokyo",
+		"KR": "Asia/Seoul",
+		"SG": "Asia/Singapore",
+		"TH": "Asia/Bangkok",
+		"ID": "Asia/Jakarta",
+		"PH": "Asia/Manila",
+		"MY": "Asia/Kuala_Lumpur",
+		"VN": "Asia/Ho_Chi_Minh",
+		"TW": "Asia/Taipei",
+		"IN": "Asia/Kolkata",
+		"AE": "Asia/Dubai",
+		"SA": "Asia/Riyadh",
+		"IL": "Asia/Jerusalem",
+		"IR": "Asia/Tehran",
+		"PK": "Asia/Karachi",
+		"BD": "Asia/Dhaka",
+		"NP": "Asia/Kathmandu",
+		"LK": "Asia/Colombo",
+		"AF": "Asia/Kabul",
+		"UZ": "Asia/Tashkent",
+		"KZ": "Asia/Almaty",
+		"AZ": "Asia/Baku",
+		"GE": "Asia/Tbilisi",
+		"AM": "Asia/Yerevan",
+		"GB": "Europe/London",
+		"FR": "Europe/Paris",
+		"DE": "Europe/Berlin",
+		"ES": "Europe/Madrid",
+		"IT": "Europe/Rome",
+		"RU": "Europe/Moscow",
+		"TR": "Europe/Istanbul",
+		"NL": "Europe/Amsterdam",
+		"BE": "Europe/Brussels",
+		"AT": "Europe/Vienna",
+		"SE": "Europe/Stockholm",
+		"NO": "Europe/Oslo",
+		"DK": "Europe/Copenhagen",
+		"FI": "Europe/Helsinki",
+		"PL": "Europe/Warsaw",
+		"CZ": "Europe/Prague",
+		"GR": "Europe/Athens",
+		"UA": "Europe/Kiev",
+		"BY": "Europe/Minsk",
+		"RO": "Europe/Bucharest",
+		"BG": "Europe/Sofia",
+		"RS": "Europe/Belgrade",
+		"HR": "Europe/Zagreb",
+		"BA": "Europe/Sarajevo",
+		"PT": "Europe/Lisbon",
+		"IE": "Europe/Dublin",
+		"SK": "Europe/Bratislava",
+		"SI": "Europe/Ljubljana",
+		"EE": "Europe/Tallinn",
+		"LV": "Europe/Riga",
+		"LT": "Europe/Vilnius",
+		"US": "America/New_York",
+		"CA": "America/Toronto",
+		"MX": "America/Mexico_City",
+		"BR": "America/Sao_Paulo",
+		"CL": "America/Santiago",
+		"AR": "America/Buenos_Aires",
+		"AU": "Australia/Sydney",
+		"NZ": "Pacific/Auckland",
+		"EG": "Africa/Cairo",
+		"ZA": "Africa/Johannesburg",
+		"NG": "Africa/Lagos",
+		"KE": "Africa/Nairobi",
+	}
+}
+
+func FormatTimeRange(start, end time.Time, tz string, lang string) string {
+	loc := GetLocation(tz)
+	start = start.In(loc)
+	end = end.In(loc)
+	
+	dateFormat := GetDateFormat(lang)
+	timeFormat := "15:04"
+	
+	if start.Format("2006-01-02") == end.Format("2006-01-02") {
+		return fmt.Sprintf("%s %s - %s",
+			start.Format(dateFormat),
+			start.Format(timeFormat),
+			end.Format(timeFormat))
+	}
+	
+	return fmt.Sprintf("%s %s - %s %s",
+		start.Format(dateFormat),
+		start.Format(timeFormat),
+		end.Format(dateFormat),
+		end.Format(timeFormat))
+}
+
+func IsValidTimezone(tz string) bool {
+	_, err := time.LoadLocation(tz)
+	return err == nil
+}

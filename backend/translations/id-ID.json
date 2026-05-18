@@ -135,5 +135,32 @@
 	"vietnamese": "Tiếng Việt",
 	"thai": "ไทย",
 	"indonesian": "Bahasa Indonesia",
-	"turkish": "Türkçe"
+	"turkish": "Türkçe",
+	"click_captcha_hints": {
+		"number": "Klik berurutan: ",
+		"letter": "Klik huruf berurutan: ",
+		"chinese": "Klik karakter Tionghoa berurutan: ",
+		"icon": "Klik ikon berurutan: ",
+		"mixed": "Klik berurutan: ",
+		"order_hint": "Silakan klik berurutan"
+	},
+	"click_captcha_messages": {
+		"success": "Verifikasi berhasil",
+		"failed": "Verifikasi gagal",
+		"wrong_order": "Urutan klik salah",
+		"wrong_position": "Posisi klik salah",
+		"timeout": "Captcha kedaluwarsa",
+		"invalid_session": "Sesi tidak valid",
+		"try_again": "Silakan coba lagi",
+		"too_fast": "Klik terlalu cepat",
+		"too_slow": "Klik terlalu lambat",
+		"abnormal_behavior": "Deteksi perilaku tidak normal"
+	},
+	"just_now": "baru saja",
+	"minutes_ago": "{0} menit yang lalu",
+	"hours_ago": "{0} jam yang lalu",
+	"days_ago": "{0} hari yang lalu",
+	"weeks_ago": "{0} minggu yang lalu",
+	"months_ago": "{0} bulan yang lalu",
+	"years_ago": "{0} tahun yang lalu"
 }

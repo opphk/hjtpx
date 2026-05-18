@@ -130,5 +130,32 @@
 	"portuguese": "Português",
 	"italian": "Italiano",
 	"russian": "Русский",
-	"arabic": "العربية"
+	"arabic": "العربية",
+	"click_captcha_hints": {
+		"number": "순서대로 클릭: ",
+		"letter": "문자를 순서대로 클릭: ",
+		"chinese": "한자를 순서대로 클릭: ",
+		"icon": "아이콘을 순서대로 클릭: ",
+		"mixed": "순서대로 클릭: ",
+		"order_hint": "순서대로 클릭해 주세요"
+	},
+	"click_captcha_messages": {
+		"success": "인증 성공",
+		"failed": "인증 실패",
+		"wrong_order": "클릭 순서가 올바르지 않습니다",
+		"wrong_position": "클릭 위치가 올바르지 않습니다",
+		"timeout": "캡차가 만료되었습니다",
+		"invalid_session": "잘못된 세션",
+		"try_again": "다시 시도해 주세요",
+		"too_fast": "클릭이 너무 빠릅니다",
+		"too_slow": "클릭이 너무 느립니다",
+		"abnormal_behavior": "비정상적인 행동이 감지되었습니다"
+	},
+	"just_now": "방금",
+	"minutes_ago": "{0}분 전",
+	"hours_ago": "{0}시간 전",
+	"days_ago": "{0}일 전",
+	"weeks_ago": "{0}주 전",
+	"months_ago": "{0}개월 전",
+	"years_ago": "{0}년 전"
 }

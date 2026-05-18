@@ -130,5 +130,32 @@
 	"portuguese": "Português",
 	"italian": "Italiano",
 	"russian": "Русский",
-	"arabic": "العربية"
+	"arabic": "العربية",
+	"click_captcha_hints": {
+		"number": "順番にクリック: ",
+		"letter": "文字を順番にクリック: ",
+		"chinese": "漢字を順番にクリック: ",
+		"icon": "アイコンを順番にクリック: ",
+		"mixed": "順番にクリック: ",
+		"order_hint": "順番にクリックしてください"
+	},
+	"click_captcha_messages": {
+		"success": "認証成功",
+		"failed": "認証失敗",
+		"wrong_order": "クリック順序が正しくありません",
+		"wrong_position": "クリック位置が正しくありません",
+		"timeout": "キャプチャが期限切れです",
+		"invalid_session": "無効なセッション",
+		"try_again": "再試行してください",
+		"too_fast": "クリックが速すぎます",
+		"too_slow": "クリックが遅すぎます",
+		"abnormal_behavior": "異常な行動が検出されました"
+	},
+	"just_now": "たった今",
+	"minutes_ago": "{0}分前",
+	"hours_ago": "{0}時間前",
+	"days_ago": "{0}日前",
+	"weeks_ago": "{0}週間前",
+	"months_ago": "{0}ヶ月前",
+	"years_ago": "{0}年前"
 }

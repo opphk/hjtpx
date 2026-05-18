@@ -135,5 +135,32 @@
 	"vietnamese": "Tiếng Việt",
 	"thai": "ไทย",
 	"indonesian": "Bahasa Indonesia",
-	"turkish": "Türkçe"
+	"turkish": "Türkçe",
+	"click_captcha_hints": {
+		"number": "क्रम में क्लिक करें: ",
+		"letter": "क्रम में अक्षरों पर क्लिक करें: ",
+		"chinese": "क्रम में चीनी वर्णों पर क्लिक करें: ",
+		"icon": "क्रम में आइकन पर क्लिक करें: ",
+		"mixed": "क्रम में क्लिक करें: ",
+		"order_hint": "कृपया क्रम में क्लिक करें"
+	},
+	"click_captcha_messages": {
+		"success": "सत्यापन सफल",
+		"failed": "सत्यापन विफल",
+		"wrong_order": "क्लिक क्रम गलत",
+		"wrong_position": "क्लिक स्थिति गलत",
+		"timeout": "कैप्चा समाप्त",
+		"invalid_session": "अमान्य सत्र",
+		"try_again": "कृपया पुनः प्रयास करें",
+		"too_fast": "बहुत तेज़ क्लिक",
+		"too_slow": "बहुत धीमी क्लिक",
+		"abnormal_behavior": "असामान्य व्यवहार पाया गया"
+	},
+	"just_now": "अभी",
+	"minutes_ago": "{0} मिनट पहले",
+	"hours_ago": "{0} घंटे पहले",
+	"days_ago": "{0} दिन पहले",
+	"weeks_ago": "{0} सप्ताह पहले",
+	"months_ago": "{0} महीने पहले",
+	"years_ago": "{0} साल पहले"
 }

@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -687,4 +688,146 @@ func FormatCurrency(value float64, lang string) string {
 
 func FormatCurrencyWithCode(value float64, lang string, currencyCode string) string {
 	return FormatCurrency(value, lang) + " " + currencyCode
+}
+
+type RelativeTimeFormat struct {
+	JustNow  string
+	MinutesAgo  string
+	HoursAgo  string
+	DaysAgo  string
+	WeeksAgo  string
+	MonthsAgo  string
+	YearsAgo  string
+}
+
+var relativeTimeFormats = map[string]RelativeTimeFormat{
+	"zh-CN": {
+		JustNow:  "刚刚",
+		MinutesAgo: "{0}分钟前",
+		HoursAgo:   "{0}小时前",
+		DaysAgo:    "{0}天前",
+		WeeksAgo:   "{0}周前",
+		MonthsAgo:  "{0}个月前",
+		YearsAgo:   "{0}年前",
+	},
+	"en-US": {
+		JustNow:  "just now",
+		MinutesAgo: "{0}m ago",
+		HoursAgo:   "{0}h ago",
+		DaysAgo:    "{0}d ago",
+		WeeksAgo:   "{0}w ago",
+		MonthsAgo:  "{0}mo ago",
+		YearsAgo:   "{0}y ago",
+	},
+	"ja-JP": {
+		JustNow:  "たった今",
+		MinutesAgo: "{0}分前",
+		HoursAgo:   "{0}時間前",
+		DaysAgo:    "{0}日前",
+		WeeksAgo:   "{0}週間前",
+		MonthsAgo:  "{0}ヶ月前",
+		YearsAgo:   "{0}年前",
+	},
+	"ko-KR": {
+		JustNow:  "방금",
+		MinutesAgo: "{0}분 전",
+		HoursAgo:   "{0}시간 전",
+		DaysAgo:    "{0}일 전",
+		WeeksAgo:   "{0}주 전",
+		MonthsAgo:  "{0}개월 전",
+		YearsAgo:   "{0}년 전",
+	},
+	"fr-FR": {
+		JustNow:  "à l'instant",
+		MinutesAgo: "il y a {0} minute",
+		HoursAgo:   "il y a {0} heure",
+		DaysAgo:    "il y a {0} jour",
+		WeeksAgo:   "il y a {0} semaine",
+		MonthsAgo:  "il y a {0} mois",
+		YearsAgo:   "il y a {0} an",
+	},
+	"de-DE": {
+		JustNow:  "gerade eben",
+		MinutesAgo: "vor {0} Minute",
+		HoursAgo:   "vor {0} Stunde",
+		DaysAgo:    "vor {0} Tag",
+		WeeksAgo:   "vor {0} Woche",
+		MonthsAgo:  "vor {0} Monat",
+		YearsAgo:   "vor {0} Jahr",
+	},
+}
+
+func FormatRelativeTimeFriendly(t time.Time, lang string) string {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	format, ok := relativeTimeFormats[targetLang]
+	if !ok {
+		format = relativeTimeFormats[defaultLang]
+	}
+
+	now := time.Now()
+	diff := now.Sub(t)
+
+	if diff < time.Minute {
+		return format.JustNow
+	} else if diff < time.Hour {
+		minutes := int(diff.Minutes())
+		return strings.Replace(format.MinutesAgo, "{0}", fmt.Sprintf("%d", minutes), 1)
+	} else if diff < 24*time.Hour {
+		hours := int(diff.Hours())
+		return strings.Replace(format.HoursAgo, "{0}", fmt.Sprintf("%d", hours), 1)
+	} else if diff < 7*24*time.Hour {
+		days := int(diff.Hours() / 24)
+		return strings.Replace(format.DaysAgo, "{0}", fmt.Sprintf("%d", days), 1)
+	} else if diff < 30*24*time.Hour {
+		weeks := int(diff.Hours() / (24 * 7))
+		return strings.Replace(format.WeeksAgo, "{0}", fmt.Sprintf("%d", weeks), 1)
+	} else if diff < 365*24*time.Hour {
+		months := int(diff.Hours() / (24 * 30))
+		return strings.Replace(format.MonthsAgo, "{0}", fmt.Sprintf("%d", months), 1)
+	} else {
+		years := int(diff.Hours() / (24 * 365))
+		return strings.Replace(format.YearsAgo, "{0}", fmt.Sprintf("%d", years), 1)
+	}
+}
+
+func FormatCompactNumber(value float64, lang string) string {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	if value >= 1000000000 {
+		return fmt.Sprintf("%.1fB", value/1000000000)
+	} else if value >= 1000000 {
+		return fmt.Sprintf("%.1fM", value/1000000)
+	} else if value >= 1000 {
+		return fmt.Sprintf("%.1fK", value/1000)
+	}
+	return fmt.Sprintf("%.0f", value)
+}
+
+func FormatDuration(d time.Duration, lang string) string {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	totalSeconds := int(d.Seconds())
+
+	if totalSeconds < 60 {
+		return fmt.Sprintf("%ds", totalSeconds)
+	} else if totalSeconds < 3600 {
+		minutes := totalSeconds / 60
+		seconds := totalSeconds % 60
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	} else {
+		hours := totalSeconds / 3600
+		minutes := (totalSeconds % 3600) / 60
+		seconds := totalSeconds % 60
+		return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+	}
 }

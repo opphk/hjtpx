@@ -135,5 +135,32 @@
 	"vietnamese": "Tiếng Việt",
 	"thai": "ไทย",
 	"indonesian": "Bahasa Indonesia",
-	"turkish": "Türkçe"
+	"turkish": "Türkçe",
+	"click_captcha_hints": {
+		"number": "Nhấp theo thứ tự: ",
+		"letter": "Nhấp các chữ cái theo thứ tự: ",
+		"chinese": "Nhấp các ký tự Trung Quốc theo thứ tự: ",
+		"icon": "Nhấp các biểu tượng theo thứ tự: ",
+		"mixed": "Nhấp theo thứ tự: ",
+		"order_hint": "Vui lòng nhấp theo thứ tự"
+	},
+	"click_captcha_messages": {
+		"success": "Xác minh thành công",
+		"failed": "Xác minh thất bại",
+		"wrong_order": "Thứ tự nhấp không đúng",
+		"wrong_position": "Vị trí nhấp không đúng",
+		"timeout": "Captcha đã hết hạn",
+		"invalid_session": "Phiên không hợp lệ",
+		"try_again": "Vui lòng thử lại",
+		"too_fast": "Nhấp quá nhanh",
+		"too_slow": "Nhấp quá chậm",
+		"abnormal_behavior": "Phát hiện hành vi bất thường"
+	},
+	"just_now": "vừa xong",
+	"minutes_ago": "{0} phút trước",
+	"hours_ago": "{0} giờ trước",
+	"days_ago": "{0} ngày trước",
+	"weeks_ago": "{0} tuần trước",
+	"months_ago": "{0} tháng trước",
+	"years_ago": "{0} năm trước"
 }

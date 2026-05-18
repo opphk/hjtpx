@@ -135,5 +135,32 @@
 	"vietnamese": "Tiếng Việt",
 	"thai": "ไทย",
 	"indonesian": "Bahasa Indonesia",
-	"turkish": "Türkçe"
+	"turkish": "Türkçe",
+	"click_captcha_hints": {
+		"number": "Sırayla tıklayın: ",
+		"letter": "Harfleri sırayla tıklayın: ",
+		"chinese": "Çince karakterleri sırayla tıklayın: ",
+		"icon": "Simgeleri sırayla tıklayın: ",
+		"mixed": "Sırayla tıklayın: ",
+		"order_hint": "Lütfen sırayla tıklayın"
+	},
+	"click_captcha_messages": {
+		"success": "Doğrulama başarılı",
+		"failed": "Doğrulama başarısız",
+		"wrong_order": "Tıklama sırası yanlış",
+		"wrong_position": "Tıklama konumu yanlış",
+		"timeout": "Captcha süresi doldu",
+		"invalid_session": "Geçersiz oturum",
+		"try_again": "Lütfen tekrar deneyin",
+		"too_fast": "Çok hızlı tıklama",
+		"too_slow": "Çok yavaş tıklama",
+		"abnormal_behavior": "Anormal davranış tespit edildi"
+	},
+	"just_now": "az önce",
+	"minutes_ago": "{0} dakika önce",
+	"hours_ago": "{0} saat önce",
+	"days_ago": "{0} gün önce",
+	"weeks_ago": "{0} hafta önce",
+	"months_ago": "{0} ay önce",
+	"years_ago": "{0} yıl önce"
 }

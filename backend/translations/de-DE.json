@@ -130,5 +130,32 @@
 	"portuguese": "Português",
 	"italian": "Italiano",
 	"russian": "Русский",
-	"arabic": "العربية"
+	"arabic": "العربية",
+	"click_captcha_hints": {
+		"number": "In der Reihenfolge klicken: ",
+		"letter": "Buchstaben in der Reihenfolge klicken: ",
+		"chinese": "Chinesische Zeichen in der Reihenfolge klicken: ",
+		"icon": "Symbole in der Reihenfolge klicken: ",
+		"mixed": "In der Reihenfolge klicken: ",
+		"order_hint": "Bitte in der Reihenfolge klicken"
+	},
+	"click_captcha_messages": {
+		"success": "Verifizierung erfolgreich",
+		"failed": "Verifizierung fehlgeschlagen",
+		"wrong_order": "Klickreihenfolge falsch",
+		"wrong_position": "Klickposition falsch",
+		"timeout": "Captcha abgelaufen",
+		"invalid_session": "Ungültige Sitzung",
+		"try_again": "Bitte versuchen Sie es erneut",
+		"too_fast": "Klick zu schnell",
+		"too_slow": "Klick zu langsam",
+		"abnormal_behavior": "Unnormales Verhalten erkannt"
+	},
+	"just_now": "gerade eben",
+	"minutes_ago": "vor {0} Minute",
+	"hours_ago": "vor {0} Stunde",
+	"days_ago": "vor {0} Tag",
+	"weeks_ago": "vor {0} Woche",
+	"months_ago": "vor {0} Monat",
+	"years_ago": "vor {0} Jahr"
 }
