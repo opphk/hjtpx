@@ -12,17 +12,6 @@ import (
 	"time"
 )
 
-func getClientIP(r *http.Request) string {
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		ips := strings.Split(forwarded, ",")
-		return strings.TrimSpace(ips[0])
-	}
-	if forwarded := r.Header.Get("X-Real-IP"); forwarded != "" {
-		return forwarded
-	}
-	return r.RemoteAddr
-}
-
 var (
 	botUserAgentPatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)bot`),

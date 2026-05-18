@@ -867,8 +867,7 @@ func (d *EnhancedProxyDetection) DetectProxyByPort(proxyPort int) bool {
 		7913:   true,
 		8191:   true,
 		8192:   true,
-		1080:   true,
-		}
+	}
 	return commonProxyPorts[proxyPort]
 }
 

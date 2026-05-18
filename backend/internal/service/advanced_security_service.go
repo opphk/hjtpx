@@ -393,6 +393,23 @@ func (s *CSRFSecurity) GenerateToken() (string, error) {
 	return tokenStr, nil
 }
 
+func (s *CSRFSecurity) GenerateTokenWithEntropy(length int) (string, error) {
+	token := make([]byte, length)
+	if _, err := rand.Read(token); err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	tokenStr := base64.URLEncoding.EncodeToString(token)
+
+	if s.redis != nil {
+		hashedToken := crypto.HashSHA256([]byte(tokenStr))
+		key := fmt.Sprintf("csrf:%s", hashedToken)
+		s.redis.Set(s.ctx, key, "1", s.expiration)
+	}
+
+	return tokenStr, nil
+}
+
 func (s *CSRFSecurity) ValidateToken(token string) bool {
 	if token == "" {
 		return false

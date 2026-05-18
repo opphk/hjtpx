@@ -868,23 +868,6 @@ func (a *AdvancedFingerprintAnalyzer) detectAdvancedVPNIndicators(fp *Fingerprin
 	}
 }
 
-func isPrivateIP(ip string) bool {
-	privateRanges := []string{
-		"10.", "172.16.", "172.17.", "172.18.", "172.19.",
-		"172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
-		"172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
-		"172.30.", "172.31.", "192.168.", "127.", "169.254.",
-	}
-
-	for _, prefix := range privateRanges {
-		if strings.HasPrefix(ip, prefix) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (a *AdvancedFingerprintAnalyzer) calculateAdvancedConfidence(fp *FingerprintAnalysis) float64 {
 	fields := 0
 	complete := 0

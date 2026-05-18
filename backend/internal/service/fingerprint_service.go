@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"math"
 	"net"
 	"net/http"
@@ -917,18 +918,27 @@ func (s *FingerprintService) PerformEnhancedAnalysis(r *http.Request, additional
 	fp := s.ExtractEnhancedFingerprintData(r, additionalData)
 
 	canvasAnalysis := &CanvasFingerprint{}
-	if canvasData, ok := additionalData["canvas_data"].(map[string]interface{}); ok {
-		canvasAnalysis = s.AnalyzeCanvasFingerprint(canvasData)
+	if canvasData, ok := additionalData["canvas_data"]; ok {
+		var parsedData map[string]interface{}
+		if err := json.Unmarshal([]byte(canvasData), &parsedData); err == nil {
+			canvasAnalysis = s.AnalyzeCanvasFingerprint(parsedData)
+		}
 	}
 
 	webglAnalysis := &WebGLFingerprint{}
-	if webglData, ok := additionalData["webgl_data"].(map[string]interface{}); ok {
-		webglAnalysis = s.AnalyzeWebGLFingerprint(webglData)
+	if webglData, ok := additionalData["webgl_data"]; ok {
+		var parsedData map[string]interface{}
+		if err := json.Unmarshal([]byte(webglData), &parsedData); err == nil {
+			webglAnalysis = s.AnalyzeWebGLFingerprint(parsedData)
+		}
 	}
 
 	audioAnalysis := &AudioFingerprint{}
-	if audioData, ok := additionalData["audio_data"].(map[string]interface{}); ok {
-		audioAnalysis = s.AnalyzeAudioFingerprint(audioData)
+	if audioData, ok := additionalData["audio_data"]; ok {
+		var parsedData map[string]interface{}
+		if err := json.Unmarshal([]byte(audioData), &parsedData); err == nil {
+			audioAnalysis = s.AnalyzeAudioFingerprint(parsedData)
+		}
 	}
 
 	isAnomaly, anomalyReasons, anomalyScore := s.DetectFingerprintAnomalies(fp)

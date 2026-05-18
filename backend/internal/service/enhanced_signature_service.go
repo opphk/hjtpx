@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/crypto/scrypt"
 )
 
 type RequestSignatureConfig struct {
@@ -735,11 +733,8 @@ func (v *DoubleSignatureValidator) ValidateRequest(method, path, query string, h
 	}
 
 	secondaryTimestampStr := headers["X-Timestamp-Secondary"]
-	var secondaryTimestamp int64
 	if secondaryTimestampStr != "" {
-		var err error
-		secondaryTimestamp, err = strconv.ParseInt(secondaryTimestampStr, 10, 64)
-		if err != nil {
+		if _, err := strconv.ParseInt(secondaryTimestampStr, 10, 64); err != nil {
 			primaryResult.Valid = false
 			primaryResult.Reason = "invalid_secondary_timestamp"
 			primaryResult.ErrorCode = "INVALID_SECONDARY_TIMESTAMP"
@@ -747,7 +742,6 @@ func (v *DoubleSignatureValidator) ValidateRequest(method, path, query string, h
 		}
 	}
 
-	nonce2, _ := GenerateSignatureNonce(16)
 	secondaryHeaders := map[string]string{
 		v.secondaryValidator.config.SignatureHeader: secondarySignature,
 	}
