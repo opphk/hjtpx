@@ -111,6 +111,7 @@ type CacheStats struct {
 	Errors       atomic.Int64
 	TotalLatency atomic.Int64
 	RequestCount atomic.Int64
+	Expired      atomic.Int64
 }
 
 type CircuitBreaker struct {
@@ -428,6 +429,69 @@ func (ec *EnhancedCache) evictLRU() {
 		ec.l1Metrics.size.Add(-1)
 		ec.l1Metrics.evictions.Add(1)
 	}
+}
+
+func (ec *EnhancedCache) evictLRUWithCount(count int) int {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+
+	evicted := 0
+	for i := 0; i < count; i++ {
+		var oldestKey string
+		var oldestTime time.Time
+
+		ec.l1Cache.Range(func(key, value interface{}) bool {
+			entry := value.(*l1Entry)
+			if oldestKey == "" || entry.accessTime.Before(oldestTime) {
+				oldestKey = key.(string)
+				oldestTime = entry.accessTime
+			}
+			return true
+		})
+
+		if oldestKey == "" {
+			break
+		}
+
+		ec.l1Cache.Delete(oldestKey)
+		ec.l1Metrics.size.Add(-1)
+		ec.l1Metrics.evictions.Add(1)
+		evicted++
+	}
+
+	return evicted
+}
+
+func (ec *EnhancedCache) evictByTTL() int {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+
+	now := time.Now()
+	evicted := 0
+
+	ec.l1Cache.Range(func(key, value interface{}) bool {
+		entry := value.(*l1Entry)
+		if now.After(entry.expiresAt) {
+			ec.l1Cache.Delete(key)
+			ec.l1Metrics.size.Add(-1)
+			ec.l1Metrics.evictions.Add(1)
+			evicted++
+		}
+		return true
+	})
+
+	return evicted
+}
+
+func (ec *EnhancedCache) getEvictionStats() map[string]interface{} {
+	stats := make(map[string]interface{})
+	stats["total_evictions"] = ec.l1Metrics.evictions.Load()
+	stats["current_size"] = ec.l1Metrics.size.Load()
+	stats["max_size"] = ec.config.L1Size
+	stats["hit_rate"] = ec.l1Metrics.hits.Load()
+	stats["miss_rate"] = ec.l1Metrics.misses.Load()
+
+	return stats
 }
 
 func (ec *EnhancedCache) startL1Eviction() {

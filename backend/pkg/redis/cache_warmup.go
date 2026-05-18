@@ -15,6 +15,7 @@ const (
 	WarmupPolicyLazy
 	WarmupPolicyScheduled
 	WarmupPolicyAdaptive
+	WarmupPolicyOnDemand
 )
 
 type WarmupPriority int
@@ -25,6 +26,13 @@ const (
 	WarmupPriorityNormal
 	WarmupPriorityLow
 )
+
+type WarmupItem struct {
+	Key    string
+	Value  []byte
+	TTL    time.Duration
+	Loader func(ctx context.Context) ([]byte, error)
+}
 
 type CacheWarmupTask struct {
 	Name        string
@@ -41,6 +49,7 @@ type CacheWarmupTask struct {
 	LastRun     time.Time
 	LastSuccess time.Time
 	Stats       *WarmupStats
+	PreloadKeys []string
 }
 
 type WarmupStats struct {
@@ -80,6 +89,30 @@ var DefaultWarmupConfig = &WarmupConfig{
 	Concurrency: 5,
 	BatchSize:   100,
 	Enabled:     true,
+}
+
+type WarmupMetrics struct {
+	TotalWarmupTasks   int32
+	ActiveWarmupTasks  int32
+	CompletedWarmupTasks int32
+	FailedWarmupTasks  int32
+	LastWarmupTime     time.Time
+	AverageWarmupTime  time.Duration
+}
+
+type WarmupStatistics struct {
+	TotalRuns      atomic.Int64
+	SuccessCount   atomic.Int64
+	FailureCount   atomic.Int64
+	TotalDuration  atomic.Int64
+	AvgDuration    atomic.Int64
+	LastError      atomic.Value
+	PeakMemory     atomic.Int64
+	PeakKeys       atomic.Int64
+}
+
+func NewWarmupStatistics() *WarmupStatistics {
+	return &WarmupStatistics{}
 }
 
 func NewCacheWarmupManager(config *WarmupConfig) *CacheWarmupManager {
@@ -365,6 +398,114 @@ func (cwm *CacheWarmupManager) ResetTaskStats(name string) {
 	if ok {
 		task.Stats = NewWarmupStats()
 	}
+}
+
+func (cwm *CacheWarmupManager) WarmupByPriority(ctx context.Context, priority WarmupPriority) error {
+	cwm.mu.RLock()
+	tasks := make([]*CacheWarmupTask, 0, len(cwm.tasks))
+	for _, task := range cwm.tasks {
+		if task.Enabled && task.Priority == priority {
+			tasks = append(tasks, task)
+		}
+	}
+	cwm.mu.RUnlock()
+
+	return cwm.warmupWithConcurrency(ctx, tasks)
+}
+
+func (cwm *CacheWarmupManager) WarmupByPattern(ctx context.Context, keys []string, loader func(ctx context.Context, key string) ([]byte, error), ttl time.Duration) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	items := make([]*WarmupItem, 0, len(keys))
+	for _, key := range keys {
+		k := key
+		items = append(items, &WarmupItem{
+			Key:    k,
+			Loader: func(ctx context.Context) ([]byte, error) {
+				return loader(ctx, k)
+			},
+			TTL:    ttl,
+		})
+	}
+
+	processor := NewBatchWarmupProcessor(cwm.batchSize, cwm.concurrency)
+	return processor.Warmup(ctx, items)
+}
+
+func (cwm *CacheWarmupManager) GetWarmupStatus() map[string]interface{} {
+	cwm.mu.RLock()
+	defer cwm.mu.RUnlock()
+
+	status := make(map[string]interface{})
+	status["running"] = cwm.running
+	status["total_tasks"] = len(cwm.tasks)
+
+	enabledTasks := 0
+	for _, task := range cwm.tasks {
+		if task.Enabled {
+			enabledTasks++
+		}
+	}
+	status["enabled_tasks"] = enabledTasks
+
+	return status
+}
+
+func (cwm *CacheWarmupManager) Pause() {
+	cwm.mu.Lock()
+	defer cwm.mu.Unlock()
+	cwm.running = false
+}
+
+func (cwm *CacheWarmupManager) Resume() {
+	cwm.mu.Lock()
+	defer cwm.mu.Unlock()
+
+	if !cwm.running {
+		cwm.running = true
+		for _, task := range cwm.tasks {
+			if task.Enabled {
+				cwm.wg.Add(1)
+				go cwm.runTask(task)
+			}
+		}
+	}
+}
+
+type WarmupPolicyHandler interface {
+	ShouldWarmup(task *CacheWarmupTask) bool
+	GetLoadPriority() []string
+}
+
+type AdaptiveWarmupPolicy struct {
+	threshold int64
+	tracker  *AccessTracker
+}
+
+func NewAdaptiveWarmupPolicy(threshold int64) *AdaptiveWarmupPolicy {
+	return &AdaptiveWarmupPolicy{
+		threshold: threshold,
+		tracker:  NewAccessTracker(),
+	}
+}
+
+func (awp *AdaptiveWarmupPolicy) RecordAccess(key string) {
+	awp.tracker.RecordAccess(key)
+}
+
+func (awp *AdaptiveWarmupPolicy) ShouldWarmup(task *CacheWarmupTask) bool {
+	for _, key := range task.PreloadKeys {
+		if awp.tracker.GetAccessCount(key) >= awp.threshold {
+			return true
+		}
+	}
+	return false
+}
+
+func (awp *AdaptiveWarmupPolicy) GetLoadPriority() []string {
+	return awp.tracker.GetHotKeys(awp.threshold)
 }
 
 type SmartWarmupStrategy struct {
