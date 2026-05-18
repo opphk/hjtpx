@@ -349,7 +349,6 @@ func TestTokenBucketRateLimitMiddleware_CustomOptions(t *testing.T) {
 	options := &TokenBucketOptions{
 		Rate:          100,
 		Capacity:      1000,
-		BurstSize:     500,
 		InitialTokens: 1000,
 	}
 	r.Use(TokenBucketRateLimitMiddleware(options))
@@ -476,7 +475,6 @@ func TestAdvancedCombinedMiddleware(t *testing.T) {
 	tbOptions := &TokenBucketOptions{
 		Rate:          10,
 		Capacity:      100,
-		BurstSize:     50,
 		InitialTokens: 100,
 	}
 	quotaOptions := &QuotaOptions{

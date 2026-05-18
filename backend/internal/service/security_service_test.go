@@ -86,12 +86,12 @@ func TestInputValidator(t *testing.T) {
 }
 
 func TestSecurityHeadersConfig(t *testing.T) {
-	assert.NotEmpty(t, DefaultSecurityHeaders.CSP)
-	assert.NotEmpty(t, DefaultSecurityHeaders.HSTS)
-	assert.NotEmpty(t, DefaultSecurityHeaders.XFrameOptions)
-	assert.NotEmpty(t, DefaultSecurityHeaders.XContentTypeOptions)
-	assert.NotEmpty(t, DefaultSecurityHeaders.XXSSProtection)
-	assert.NotEmpty(t, DefaultSecurityHeaders.ReferrerPolicy)
+	assert.NotEmpty(t, DefaultBasicSecurityHeaders.CSP)
+	assert.NotEmpty(t, DefaultBasicSecurityHeaders.HSTS)
+	assert.NotEmpty(t, DefaultBasicSecurityHeaders.XFrameOptions)
+	assert.NotEmpty(t, DefaultBasicSecurityHeaders.XContentTypeOptions)
+	assert.NotEmpty(t, DefaultBasicSecurityHeaders.XXSSProtection)
+	assert.NotEmpty(t, DefaultBasicSecurityHeaders.ReferrerPolicy)
 }
 
 func TestCalculateSignature(t *testing.T) {

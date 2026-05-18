@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Code int
@@ -49,6 +50,11 @@ type AppError struct {
 	Detail     string                 `json:"detail,omitempty"`
 	Err        error                  `json:"-"`
 	Fields     map[string]interface{} `json:"fields,omitempty"`
+	Category   ErrorCategory          `json:"category,omitempty"`
+	Severity   ErrorSeverity          `json:"severity,omitempty"`
+	Timestamp  time.Time              `json:"timestamp,omitempty"`
+	ErrorID    string                 `json:"error_id,omitempty"`
+	Retryable  bool                   `json:"retryable,omitempty"`
 }
 
 func (e *AppError) Error() string {
@@ -139,6 +145,9 @@ func New(code Code, message string) *AppError {
 		Code:       code,
 		HttpStatus: CodeToHTTPStatus(code),
 		Message:    message,
+		Timestamp:  time.Now(),
+		ErrorID:    GenerateErrorID(),
+		Retryable:  IsRetryable(code),
 	}
 }
 
@@ -148,6 +157,9 @@ func NewWithError(code Code, message string, err error) *AppError {
 		HttpStatus: CodeToHTTPStatus(code),
 		Message:    message,
 		Err:        err,
+		Timestamp:  time.Now(),
+		ErrorID:    GenerateErrorID(),
+		Retryable:  IsRetryable(code),
 	}
 }
 
@@ -163,6 +175,9 @@ func Wrap(err error, code Code, message string) *AppError {
 			Message:    message,
 			Detail:     appErr.Message,
 			Err:        err,
+			Timestamp:  time.Now(),
+			ErrorID:    GenerateErrorID(),
+			Retryable:  IsRetryable(code),
 		}
 	}
 
@@ -171,6 +186,9 @@ func Wrap(err error, code Code, message string) *AppError {
 		HttpStatus: CodeToHTTPStatus(code),
 		Message:    message,
 		Err:        err,
+		Timestamp:  time.Now(),
+		ErrorID:    GenerateErrorID(),
+		Retryable:  IsRetryable(code),
 	}
 }
 
@@ -179,6 +197,17 @@ func WrapIfErr(err error, message string) error {
 		return nil
 	}
 	return New(CodeInternalError, message).Wrap(err)
+}
+
+func IsRetryable(code Code) bool {
+	switch code {
+	case CodeTokenExpired, CodeDatabaseError, CodeCacheError, CodeExternalService,
+		CodeOperationFailed, CodeOperationTimeout, CodeRateLimited, CodeTooManyRequest,
+		CodeCaptchaFailed, CodeResourceLimit:
+		return true
+	default:
+		return false
+	}
 }
 
 func CodeToHTTPStatus(code Code) int {

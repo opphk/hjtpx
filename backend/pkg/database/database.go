@@ -133,7 +133,7 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 			log.Printf("Warning: Index analysis failed: %v", err)
 		}
 
-		queryOptimizer := NewAdvancedQueryOptimizer(DB, 50*time.Millisecond)
+		queryOptimizer := NewQueryOptimizer(DB)
 		if err := queryOptimizer.OptimizeAll(); err != nil {
 			log.Printf("Warning: Query optimization failed: %v", err)
 		} else {

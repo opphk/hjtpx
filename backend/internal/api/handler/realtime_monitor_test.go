@@ -140,7 +140,7 @@ func TestRealtimeDataPayload_Structure(t *testing.T) {
 
 func TestAlertPayload_Structure(t *testing.T) {
 	payload := AlertPayload{
-		ID:        1,
+		ID:        "1",
 		Type:      "system",
 		Severity:  "warning",
 		Message:   "Test message",
@@ -148,7 +148,7 @@ func TestAlertPayload_Structure(t *testing.T) {
 		Icon:      "info-circle",
 	}
 
-	assert.Equal(t, 1, payload.ID)
+	assert.Equal(t, "1", payload.ID)
 	assert.Equal(t, "system", payload.Type)
 	assert.Equal(t, "warning", payload.Severity)
 	assert.Equal(t, "Test message", payload.Message)

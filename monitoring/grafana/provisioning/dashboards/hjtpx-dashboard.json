@@ -30,7 +30,7 @@
         "x": 0,
         "y": 0
       },
-      "id": 100,
+      "id": 1,
       "panels": [],
       "title": "系统概览",
       "type": "row"
@@ -85,7 +85,7 @@
         "x": 0,
         "y": 1
       },
-      "id": 101,
+      "id": 2,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -147,7 +147,7 @@
         "x": 4,
         "y": 1
       },
-      "id": 102,
+      "id": 3,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -209,7 +209,7 @@
         "x": 8,
         "y": 1
       },
-      "id": 103,
+      "id": 4,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -271,7 +271,7 @@
         "x": 12,
         "y": 1
       },
-      "id": 104,
+      "id": 5,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -333,7 +333,7 @@
         "x": 16,
         "y": 1
       },
-      "id": 105,
+      "id": 6,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -395,7 +395,7 @@
         "x": 20,
         "y": 1
       },
-      "id": 106,
+      "id": 7,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -427,9 +427,9 @@
         "x": 0,
         "y": 5
       },
-      "id": 200,
+      "id": 8,
       "panels": [],
-      "title": "请求性能",
+      "title": "验证码监控",
       "type": "row"
     },
     {
@@ -492,7 +492,7 @@
         "x": 0,
         "y": 6
       },
-      "id": 201,
+      "id": 9,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -508,17 +508,12 @@
       "pluginVersion": "10.2.2",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"hjtpx-app\"}[5m])) by (status)",
-          "legendFormat": "{{status}}",
+          "expr": "sum(rate(hjtpx_captcha_requests_total[5m])) by (captcha_type, status)",
+          "legendFormat": "{{captcha_type}} - {{status}}",
           "refId": "A"
-        },
-        {
-          "expr": "sum(rate(http_requests_total{job=\"hjtpx-app\"}[5m]))",
-          "legendFormat": "总计",
-          "refId": "B"
         }
       ],
-      "title": "请求速率 (按状态码)",
+      "title": "验证码请求 (按类型和状态)",
       "type": "timeseries"
     },
     {
@@ -571,7 +566,7 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -581,7 +576,7 @@
         "x": 12,
         "y": 6
       },
-      "id": 202,
+      "id": 10,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -597,12 +592,12 @@
       "pluginVersion": "10.2.2",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{job=\"hjtpx-app\"}[5m])) by (path)",
-          "legendFormat": "{{path}}",
+          "expr": "hjtpx_captcha_success_rate",
+          "legendFormat": "{{captcha_type}}",
           "refId": "A"
         }
       ],
-      "title": "请求速率 (按路径)",
+      "title": "验证码成功率",
       "type": "timeseries"
     },
     {
@@ -665,7 +660,7 @@
         "x": 0,
         "y": 14
       },
-      "id": 203,
+      "id": 11,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -681,22 +676,17 @@
       "pluginVersion": "10.2.2",
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le)) * 1000",
-          "legendFormat": "P99",
+          "expr": "histogram_quantile(0.95, sum(rate(hjtpx_captcha_verification_duration_seconds_bucket[5m])) by (le, captcha_type)) * 1000",
+          "legendFormat": "{{captcha_type}} P95",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le)) * 1000",
-          "legendFormat": "P95",
+          "expr": "histogram_quantile(0.50, sum(rate(hjtpx_captcha_verification_duration_seconds_bucket[5m])) by (le, captcha_type)) * 1000",
+          "legendFormat": "{{captcha_type}} P50",
           "refId": "B"
-        },
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le)) * 1000",
-          "legendFormat": "P50",
-          "refId": "C"
         }
       ],
-      "title": "响应延迟分布",
+      "title": "验证码验证延迟",
       "type": "timeseries"
     },
     {
@@ -749,7 +739,7 @@
               }
             ]
           },
-          "unit": "ms"
+          "unit": "none"
         },
         "overrides": []
       },
@@ -759,7 +749,7 @@
         "x": 12,
         "y": 14
       },
-      "id": 204,
+      "id": 12,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -775,12 +765,17 @@
       "pluginVersion": "10.2.2",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le, path)) * 1000",
-          "legendFormat": "{{path}}",
+          "expr": "hjtpx_active_sessions",
+          "legendFormat": "活跃会话数",
           "refId": "A"
+        },
+        {
+          "expr": "rate(hjtpx_session_timeout_total[5m])",
+          "legendFormat": "会话超时数/s",
+          "refId": "B"
         }
       ],
-      "title": "P95延迟 (按路径)",
+      "title": "验证码会话状态",
       "type": "timeseries"
     },
     {
@@ -791,7 +786,1403 @@
         "x": 0,
         "y": 22
       },
-      "id": 300,
+      "id": 13,
+      "panels": [],
+      "title": "告警监控",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 23
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "sum(hjtpx_active_alerts{severity=\"critical\"})",
+          "legendFormat": "Critical",
+          "refId": "A"
+        }
+      ],
+      "title": "活跃告警 (Critical)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "orange",
+                "value": 20
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 23
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "sum(hjtpx_active_alerts{severity=\"warning\"})",
+          "legendFormat": "Warning",
+          "refId": "A"
+        }
+      ],
+      "title": "活跃告警 (Warning)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 120
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 23
+      },
+      "id": 16,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(hjtpx_alert_delivery_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P95延迟",
+          "refId": "A"
+        }
+      ],
+      "title": "告警响应时间 P95",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 23
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "hjtpx_alert_accuracy_percent",
+          "legendFormat": "准确率",
+          "refId": "A"
+        }
+      ],
+      "title": "告警准确率",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "critical"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "warning"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "info"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 16,
+        "y": 23
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "sum(increase(hjtpx_alert_triggers_total[5m])) by (severity)",
+          "legendFormat": "{{severity}}",
+          "refId": "A"
+        }
+      ],
+      "title": "告警触发统计",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "rate(hjtpx_alert_escalations_total[5m])",
+          "legendFormat": "告警升级",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(hjtpx_alert_resolved_total[5m])",
+          "legendFormat": "已解决",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(hjtpx_alert_acknowledged_total[5m])",
+          "legendFormat": "已确认",
+          "refId": "C"
+        }
+      ],
+      "title": "告警处理趋势",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 27
+      },
+      "id": 20,
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "sum(hjtpx_active_alerts) by (severity)",
+          "legendFormat": "{{severity}}",
+          "refId": "A"
+        }
+      ],
+      "title": "活跃告警分布",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 27
+      },
+      "id": 21,
+      "options": {
+        "legend": {
+          "calcs": ["mean"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "hjtpx_sla_compliance_percent{sla_type=\"availability\"}",
+          "legendFormat": "可用性 SLA",
+          "refId": "A"
+        },
+        {
+          "expr": "hjtpx_sla_compliance_percent{sla_type=\"p99_latency\"}",
+          "legendFormat": "延迟 SLA",
+          "refId": "B"
+        }
+      ],
+      "title": "SLA合规率",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "id": 22,
+      "panels": [],
+      "title": "安全监控",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 36
+      },
+      "id": 23,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "rate(hjtpx_security_threats_blocked_total[5m])",
+          "legendFormat": "{{threat_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "安全威胁阻止",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      },
+      "id": 24,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "rate(hjtpx_ddos_protection_triggers_total[5m])",
+          "legendFormat": "DDoS防护触发",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(hjtpx_rate_limit_hits_total[5m])",
+          "legendFormat": "限流命中",
+          "refId": "B"
+        }
+      ],
+      "title": "DDoS防护与限流",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 36
+      },
+      "id": 25,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "rate(hjtpx_bot_detection_total{result=\"bot\"}[5m])",
+          "legendFormat": "Bot检测 - {{type}}",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(hjtpx_proxy_detection_total{result=\"proxy_detected\"}[5m])",
+          "legendFormat": "代理检测",
+          "refId": "B"
+        }
+      ],
+      "title": "Bot与代理检测",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 26,
+      "panels": [],
+      "title": "业务指标",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 45
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "hjtpx_active_users",
+          "legendFormat": "活跃用户",
+          "refId": "A"
+        }
+      ],
+      "title": "活跃用户",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 45
+      },
+      "id": 28,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "hjtpx_applications_total",
+          "legendFormat": "应用数",
+          "refId": "A"
+        }
+      ],
+      "title": "应用数量",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 45
+      },
+      "id": 29,
+      "options": {
+        "legend": {
+          "calcs": ["sum"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "rate(hjtpx_user_registrations_total[5m])",
+          "legendFormat": "注册",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(hjtpx_user_logins_total{status=\"success\"}[5m])",
+          "legendFormat": "登录成功",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(hjtpx_user_logins_total{status=\"failed\"}[5m])",
+          "legendFormat": "登录失败",
+          "refId": "C"
+        }
+      ],
+      "title": "用户活动趋势",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 45
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "rate(hjtpx_blacklist_hits_total[5m])",
+          "legendFormat": "{{type}} - {{action}}",
+          "refId": "A"
+        }
+      ],
+      "title": "黑名单命中趋势",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "id": 31,
+      "panels": [],
+      "title": "ML模型监控",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(hjtpx_ml_model_inference_duration_seconds_bucket[5m])) by (le, model_type)) * 1000",
+          "legendFormat": "{{model_type}} P95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(hjtpx_ml_model_inference_duration_seconds_bucket[5m])) by (le, model_type)) * 1000",
+          "legendFormat": "{{model_type}} P50",
+          "refId": "B"
+        }
+      ],
+      "title": "ML模型推理延迟",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "calcs": ["mean"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "sum(rate(hjtpx_ml_model_confidence{prediction=\"high\"}[5m])) by (model_type) / sum(rate(hjtpx_ml_model_confidence[5m])) by (model_type)",
+          "legendFormat": "{{model_type}} 高置信度",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(hjtpx_ml_model_confidence{prediction=\"low\"}[5m])) by (model_type) / sum(rate(hjtpx_ml_model_confidence[5m])) by (model_type)",
+          "legendFormat": "{{model_type}} 低置信度",
+          "refId": "B"
+        }
+      ],
+      "title": "ML模型置信度分布",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 62
+      },
+      "id": 34,
       "panels": [],
       "title": "数据库",
       "type": "row"
@@ -844,9 +2235,9 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 23
+        "y": 63
       },
-      "id": 301,
+      "id": 35,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -906,9 +2297,9 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 23
+        "y": 63
       },
-      "id": 302,
+      "id": 36,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -930,68 +2321,6 @@
         }
       ],
       "title": "连接使用率",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 100
-              },
-              {
-                "color": "red",
-                "value": 500
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 23
-      },
-      "id": 303,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.2.2",
-      "targets": [
-        {
-          "expr": "rate(pg_stat_statements_mean_exec_time{job=\"postgres-exporter\"}[5m])",
-          "legendFormat": "平均查询时间",
-          "refId": "A"
-        }
-      ],
-      "title": "平均查询时间",
       "type": "stat"
     },
     {
@@ -1050,11 +2379,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 27
+        "w": 8,
+        "x": 8,
+        "y": 63
       },
-      "id": 304,
+      "id": 37,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -1139,11 +2468,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 27
+        "w": 8,
+        "x": 16,
+        "y": 63
       },
-      "id": 305,
+      "id": 38,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -1178,9 +2507,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 71
       },
-      "id": 400,
+      "id": 39,
       "panels": [],
       "title": "Redis",
       "type": "row"
@@ -1233,9 +2562,9 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 36
+        "y": 72
       },
-      "id": 401,
+      "id": 40,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -1295,9 +2624,9 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 36
+        "y": 72
       },
-      "id": 402,
+      "id": 41,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -1319,68 +2648,6 @@
         }
       ],
       "title": "内存使用率",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "percentage",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 70
-              },
-              {
-                "color": "red",
-                "value": 85
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 36
-      },
-      "id": 403,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.2.2",
-      "targets": [
-        {
-          "expr": "rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m]) / (rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m]) + rate(redis_keyspace_misses_total{job=\"redis-exporter\"}[5m])) * 100",
-          "legendFormat": "命中率",
-          "refId": "A"
-        }
-      ],
-      "title": "缓存命中率",
       "type": "stat"
     },
     {
@@ -1433,20 +2700,20 @@
               }
             ]
           },
-          "unit": "ops"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 40
+        "w": 8,
+        "x": 8,
+        "y": 72
       },
-      "id": 404,
+      "id": 42,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
+          "calcs": ["mean"],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -1459,17 +2726,12 @@
       "pluginVersion": "10.2.2",
       "targets": [
         {
-          "expr": "rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m])",
-          "legendFormat": "命中",
+          "expr": "rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m]) / (rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m]) + rate(redis_keyspace_misses_total{job=\"redis-exporter\"}[5m])) * 100",
+          "legendFormat": "命中率",
           "refId": "A"
-        },
-        {
-          "expr": "rate(redis_keyspace_misses_total{job=\"redis-exporter\"}[5m])",
-          "legendFormat": "未命中",
-          "refId": "B"
         }
       ],
-      "title": "缓存访问",
+      "title": "缓存命中率",
       "type": "timeseries"
     },
     {
@@ -1528,11 +2790,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 40
+        "w": 8,
+        "x": 16,
+        "y": 72
       },
-      "id": 405,
+      "id": 43,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -1567,9 +2829,205 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 80
       },
-      "id": 500,
+      "id": 44,
+      "panels": [],
+      "title": "请求性能",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 81
+      },
+      "id": 45,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{job=\"hjtpx-app\"}[5m])) by (status)",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{job=\"hjtpx-app\"}[5m]))",
+          "legendFormat": "总计",
+          "refId": "B"
+        }
+      ],
+      "title": "请求速率 (按状态码)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 81
+      },
+      "id": 46,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le)) * 1000",
+          "legendFormat": "P99",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le)) * 1000",
+          "legendFormat": "P95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=\"hjtpx-app\"}[5m])) by (le)) * 1000",
+          "legendFormat": "P50",
+          "refId": "C"
+        }
+      ],
+      "title": "响应延迟分布",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 89
+      },
+      "id": 47,
       "panels": [],
       "title": "基础设施",
       "type": "row"
@@ -1610,9 +3068,9 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 49
+        "y": 90
       },
-      "id": 501,
+      "id": 48,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -1672,9 +3130,9 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 49
+        "y": 90
       },
-      "id": 502,
+      "id": 49,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -1754,11 +3212,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 53
+        "w": 8,
+        "x": 8,
+        "y": 90
       },
-      "id": 503,
+      "id": 50,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -1838,11 +3296,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 53
+        "w": 8,
+        "x": 16,
+        "y": 90
       },
-      "id": 504,
+      "id": 51,
       "options": {
         "legend": {
           "calcs": ["mean", "max"],
@@ -1865,184 +3323,11 @@
       ],
       "title": "节点 内存使用率",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 61
-      },
-      "id": 505,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "10.2.2",
-      "targets": [
-        {
-          "expr": "(node_filesystem_avail_bytes{fstype!~\"tmpfs|fuse.lxcfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|fuse.lxcfs\"}) * 100",
-          "legendFormat": "{{instance}} - {{mountpoint}}",
-          "refId": "A"
-        }
-      ],
-      "title": "节点 磁盘使用率",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "Bps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 61
-      },
-      "id": 506,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "10.2.2",
-      "targets": [
-        {
-          "expr": "rate(node_disk_read_bytes_total[5m])",
-          "legendFormat": "{{instance}} - 读取",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(node_disk_written_bytes_total[5m])",
-          "legendFormat": "{{instance}} - 写入",
-          "refId": "B"
-        }
-      ],
-      "title": "节点 磁盘 I/O",
-      "type": "timeseries"
     }
   ],
   "refresh": "10s",
   "schemaVersion": 38,
-  "tags": ["hjtpx", "application", "monitoring"],
+  "tags": ["hjtpx", "application", "monitoring", "captcha", "alert", "security"],
   "templating": {
     "list": []
   },
@@ -2052,8 +3337,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "HJTPX 综合监控看板",
-  "uid": "hjtpx-dashboard",
-  "version": 2,
+  "title": "HJTPX 综合监控看板 v2.0",
+  "uid": "hjtpx-dashboard-v2",
+  "version": 3,
   "weekStart": ""
 }

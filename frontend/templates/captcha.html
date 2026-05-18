@@ -7,7 +7,11 @@
     <meta name="theme-color" content="#1a1a2e">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>在线体验 - 墨盾验证</title>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <title>在线体验 - 墨盾验证</link>
     <link rel="preconnect" href="https://cdn.bootcdn.net">
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
@@ -272,6 +276,26 @@
             overflow: hidden;
             box-shadow: 0 4px 16px rgba(0,0,0,0.1);
             transition: transform 0.1s ease-out;
+            position: relative;
+            background: #f0f0f0;
+        }
+
+        .rotation-captcha-display::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 3px dashed rgba(201,169,110,0.3);
+            border-radius: 50%;
+            animation: rotation-target-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes rotation-target-pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; }
         }
 
         .rotation-captcha-img {
@@ -279,22 +303,30 @@
             height: 100%;
             object-fit: cover;
             transition: transform 0.05s linear;
+            transform-origin: center center;
         }
 
         .rotation-slider-container {
             width: 100%;
             max-width: 220px;
-            height: 44px;
+            height: 48px;
             background: var(--captcha-light);
-            border-radius: 22px;
+            border-radius: 24px;
             position: relative;
             cursor: pointer;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.1);
             transition: var(--captcha-transition);
+            border: 2px solid transparent;
         }
 
         .rotation-slider-container:hover {
-            box-shadow: inset 0 2px 6px rgba(0,0,0,0.15);
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.15);
+            border-color: rgba(201,169,110,0.3);
+        }
+
+        .rotation-slider-container:focus-within {
+            border-color: var(--captcha-primary);
+            box-shadow: 0 0 0 3px rgba(201,169,110,0.2);
         }
 
         .rotation-slider-track {
@@ -312,44 +344,112 @@
             position: absolute;
             left: 2px;
             top: 2px;
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             background: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
             cursor: grab;
             transition: var(--captcha-transition);
             color: var(--captcha-primary);
+            touch-action: none;
+            user-select: none;
         }
 
         .rotation-slider-button:hover {
-            transform: scale(1.1);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: scale(1.08);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.2);
         }
 
-        .rotation-slider-button:active {
+        .rotation-slider-button:active,
+        .rotation-slider-button.dragging {
             cursor: grabbing;
             transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .rotation-slider-button.success {
+            background: var(--captcha-success);
+            color: white;
+            animation: slider-success-pop 0.4s ease-out;
+        }
+
+        .rotation-slider-button.error {
+            background: var(--captcha-danger);
+            color: white;
+            animation: slider-error-shake 0.5s ease-in-out;
+        }
+
+        @keyframes slider-success-pop {
+            0% { transform: scale(0.8); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes slider-error-shake {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            20% { transform: translateX(-6px) rotate(-5deg); }
+            40% { transform: translateX(6px) rotate(5deg); }
+            60% { transform: translateX(-4px) rotate(-3deg); }
+            80% { transform: translateX(4px) rotate(3deg); }
         }
 
         .rotation-slider-text {
             position: absolute;
             width: 100%;
             text-align: center;
-            line-height: 44px;
+            line-height: 48px;
             font-size: 0.85rem;
             color: #6c757d;
             pointer-events: none;
+            user-select: none;
         }
 
         .rotation-angle-display {
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             color: #6c757d;
             display: flex;
             gap: 0.5rem;
+            align-items: center;
+        }
+
+        .rotation-angle-display span:first-child {
+            color: #6c757d;
+        }
+
+        .rotation-angle-value {
+            font-weight: 600;
+            color: var(--captcha-primary);
+            font-size: 1rem;
+            min-width: 45px;
+            text-align: left;
+        }
+
+        .rotation-target-indicator {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            background: rgba(40, 167, 69, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.75rem;
+            opacity: 0;
+            transform: scale(0);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+
+        .rotation-target-indicator.show {
+            opacity: 1;
+            transform: scale(1);
         }
 
         .btn {
@@ -430,6 +530,7 @@
             50% { opacity: 0.5; }
         }
 
+        /* Enhanced Responsive Design */
         @media (max-width: 991.98px) {
             .nav-pills {
                 flex-wrap: wrap;
@@ -450,12 +551,16 @@
             }
 
             .rotation-slider-container {
-                max-width: 180px;
+                max-width: 200px;
             }
 
             .rotation-captcha-display {
-                width: 150px;
-                height: 150px;
+                width: 160px;
+                height: 160px;
+            }
+
+            .captcha-loading-container {
+                transform: scale(0.95);
             }
         }
 
@@ -478,7 +583,116 @@
             }
 
             .rotation-slider-container {
+                max-width: 180px;
+                height: 44px;
+            }
+
+            .rotation-captcha-display {
+                width: 140px;
+                height: 140px;
+            }
+
+            .rotation-slider-button {
+                width: 40px;
+                height: 40px;
+            }
+
+            .rotation-slider-text {
+                line-height: 44px;
+            }
+
+            .captcha-demo-area {
+                min-height: 160px;
+            }
+
+            .captcha-loading-container {
+                transform: scale(0.9);
+            }
+
+            .captcha-error-hint,
+            .captcha-success-hint {
+                padding: 0.75rem;
+            }
+        }
+
+        /* Touch Device Optimization */
+        @media (hover: none) and (pointer: coarse) {
+            .captcha-btn:hover {
+                transform: none;
+            }
+
+            .captcha-refresh-btn:hover {
+                transform: none;
+            }
+
+            .rotation-slider-button:hover {
+                transform: none;
+            }
+
+            .rotation-slider-button:active {
+                transform: scale(0.95);
+            }
+
+            .demo-card:hover {
+                transform: none;
+            }
+
+            .btn:hover {
+                transform: translateY(0);
+            }
+
+            .btn:active {
+                transform: scale(0.98);
+            }
+
+            .captcha-loading-dots span {
+                width: 14px;
+                height: 14px;
+            }
+
+            .captcha-click-marker {
+                width: 36px;
+                height: 36px;
+            }
+
+            .rotation-target-indicator {
+                width: 32px;
+                height: 32px;
+            }
+        }
+
+        /* Large Mobile Devices */
+        @media (min-width: 576px) and (max-width: 767.98px) {
+            .rotation-slider-container {
+                max-width: 200px;
+                height: 46px;
+            }
+
+            .rotation-slider-button {
+                width: 42px;
+                height: 42px;
+            }
+
+            .rotation-slider-text {
+                line-height: 46px;
+            }
+        }
+
+        /* Extra Small Devices */
+        @media (max-width: 375px) {
+            .rotation-slider-container {
                 max-width: 160px;
+                height: 40px;
+            }
+
+            .rotation-slider-button {
+                width: 36px;
+                height: 36px;
+            }
+
+            .rotation-slider-text {
+                line-height: 40px;
+                font-size: 0.75rem;
             }
 
             .rotation-captcha-display {
@@ -486,8 +700,16 @@
                 height: 120px;
             }
 
-            .captcha-demo-area {
-                min-height: 160px;
+            .rotation-angle-display {
+                font-size: 0.8rem;
+            }
+
+            .rotation-angle-value {
+                font-size: 0.9rem;
+            }
+
+            .captcha-loading-text {
+                font-size: 0.8rem;
             }
         }
 
@@ -594,7 +816,211 @@
             to { transform: rotate(360deg); }
         }
 
-        /* 进度指示器样式 */
+        /* Enhanced Loading Animations */
+        .captcha-loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .captcha-loading-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .captcha-loading-dots span {
+            width: 12px;
+            height: 12px;
+            background: var(--captcha-primary);
+            border-radius: 50%;
+            animation: loading-dot-bounce 1.4s infinite ease-in-out both;
+        }
+
+        .captcha-loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .captcha-loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .captcha-loading-dots span:nth-child(3) { animation-delay: 0s; }
+        .captcha-loading-dots span:nth-child(4) { animation-delay: 0.16s; }
+        .captcha-loading-dots span:nth-child(5) { animation-delay: 0.32s; }
+
+        @keyframes loading-dot-bounce {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .captcha-loading-text {
+            color: var(--captcha-primary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .captcha-skeleton {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+            border-radius: var(--captcha-radius-sm);
+        }
+
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .captcha-skeleton-text {
+            height: 14px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+
+        .captcha-skeleton-text:last-child {
+            width: 60%;
+            margin-bottom: 0;
+        }
+
+        /* Enhanced Error Hints */
+        .captcha-error-hint {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 0.75rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            animation: error-slide-in 0.3s ease;
+        }
+
+        @keyframes error-slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .captcha-error-hint i {
+            color: var(--captcha-danger);
+            margin-top: 2px;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .captcha-error-hint-text {
+            flex: 1;
+        }
+
+        .captcha-error-hint-title {
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 0.25rem;
+            font-size: 0.95rem;
+        }
+
+        .captcha-error-hint-desc {
+            font-size: 0.875rem;
+            color: #6c757d;
+            line-height: 1.5;
+        }
+
+        .captcha-error-hint-action {
+            margin-top: 0.5rem;
+        }
+
+        .captcha-error-hint-action button {
+            background: transparent;
+            border: none;
+            color: var(--captcha-danger);
+            font-size: 0.85rem;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+        }
+
+        .captcha-error-hint-action button:hover {
+            color: #a71d2a;
+        }
+
+        /* Enhanced Success Hints */
+        .captcha-success-hint {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 0.75rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            animation: success-slide-in 0.3s ease;
+        }
+
+        @keyframes success-slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .captcha-success-hint i {
+            color: var(--captcha-success);
+            margin-top: 2px;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .captcha-success-hint-title {
+            font-weight: 600;
+            color: var(--captcha-success);
+            font-size: 0.95rem;
+        }
+
+        .captcha-success-hint-desc {
+            font-size: 0.875rem;
+            color: #6c757d;
+            line-height: 1.5;
+            margin-top: 0.25rem;
+        }
+
+        /* Success Celebration */
+        .captcha-celebration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            overflow: hidden;
+        }
+
+        .confetti-particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            animation: confetti-fall 3s ease-out forwards;
+        }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        /* Progress Indicator */
         .captcha-progress-container {
             display: flex;
             flex-direction: column;
@@ -604,23 +1030,46 @@
 
         .captcha-progress-bar {
             width: 100%;
-            height: 4px;
+            height: 6px;
             background-color: rgba(201, 169, 110, 0.2);
-            border-radius: 2px;
+            border-radius: 3px;
             overflow: hidden;
         }
 
         .captcha-progress-fill {
             height: 100%;
             background: linear-gradient(90deg, var(--captcha-primary), #d4b87a);
-            border-radius: 2px;
+            border-radius: 3px;
             transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .captcha-progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: progress-shine 1.5s linear infinite;
+        }
+
+        @keyframes progress-shine {
+            0% { left: -100%; }
+            100% { left: 100%; }
         }
 
         .captcha-progress-text {
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             color: #6c757d;
             text-align: center;
+        }
+
+        .captcha-progress-text .highlight {
+            color: var(--captcha-primary);
+            font-weight: 600;
         }
 
         /* 重试按钮样式 */
@@ -1441,6 +1890,8 @@
                 rotationState.startTime = Date.now();
                 rotationState.trajectoryData = [];
                 button.style.cursor = 'grabbing';
+                button.classList.add('dragging');
+                container.setAttribute('aria-grabbed', 'true');
             };
 
             var drag = function(e) {
@@ -1459,7 +1910,7 @@
                 var text = document.getElementById('rotationSliderText');
                 if (track) track.style.width = (progress * maxWidth) + 'px';
                 button.style.left = (deltaX + 2) + 'px';
-                if (text) text.textContent = '旋转中...';
+                if (text) text.textContent = getTranslation('dragging');
 
                 var img = document.getElementById('rotationCaptchaImg');
                 if (img) {
@@ -1467,6 +1918,7 @@
                 }
 
                 updateRotationAngleDisplay(rotationState.totalAngle);
+                container.setAttribute('aria-valuenow', Math.round(rotationState.totalAngle));
                 rotationState.trajectoryData.push({
                     angle: rotationState.totalAngle,
                     timestamp: Date.now()
@@ -1477,9 +1929,11 @@
                 if (!rotationState.isDragging) return;
                 rotationState.isDragging = false;
                 button.style.cursor = 'grab';
+                button.classList.remove('dragging');
+                container.setAttribute('aria-grabbed', 'false');
 
                 var text = document.getElementById('rotationSliderText');
-                if (text) text.textContent = '拖动旋转';
+                if (text) text.textContent = getTranslation('rotationDrag');
 
                 if (rotationState.totalAngle > 5) {
                     submitRotationCaptcha();
@@ -1493,6 +1947,34 @@
             document.addEventListener('touchmove', drag, { passive: false });
             document.addEventListener('mouseup', endDrag);
             document.addEventListener('touchend', endDrag);
+
+            container.addEventListener('keydown', function(e) {
+                var step = 15;
+                if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    rotationState.totalAngle = (rotationState.totalAngle + step) % 360;
+                    updateRotationAngleDisplay(rotationState.totalAngle);
+                    var img = document.getElementById('rotationCaptchaImg');
+                    if (img) {
+                        img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
+                    }
+                    container.setAttribute('aria-valuenow', Math.round(rotationState.totalAngle));
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    rotationState.totalAngle = (rotationState.totalAngle - step + 360) % 360;
+                    updateRotationAngleDisplay(rotationState.totalAngle);
+                    var img = document.getElementById('rotationCaptchaImg');
+                    if (img) {
+                        img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
+                    }
+                    container.setAttribute('aria-valuenow', Math.round(rotationState.totalAngle));
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (rotationState.totalAngle > 5) {
+                        submitRotationCaptcha();
+                    }
+                }
+            });
         }
 
         function resetRotationSlider() {
@@ -1870,6 +2352,139 @@
             animateError: animateError,
             getTranslation: getTranslation,
             switchLanguage: switchLanguage
+        };
+
+        function showSuccessCelebration() {
+            var celebrationContainer = document.createElement('div');
+            celebrationContainer.className = 'captcha-celebration';
+            document.body.appendChild(celebrationContainer);
+            
+            var colors = ['#c9a96e', '#d4b87a', '#28a745', '#ffc107', '#dc3545', '#0dcaf0'];
+            var shapes = ['circle', 'square', 'triangle'];
+            
+            for (var i = 0; i < 60; i++) {
+                var particle = document.createElement('div');
+                particle.className = 'confetti-particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.animationDelay = Math.random() * 2 + 's';
+                particle.style.animationDuration = (2 + Math.random() * 2) + 's';
+                
+                var shape = shapes[Math.floor(Math.random() * shapes.length)];
+                if (shape === 'circle') {
+                    particle.style.borderRadius = '50%';
+                } else if (shape === 'triangle') {
+                    particle.style.width = '0';
+                    particle.style.height = '0';
+                    particle.style.backgroundColor = 'transparent';
+                    particle.style.borderLeft = '5px solid transparent';
+                    particle.style.borderRight = '5px solid transparent';
+                    particle.style.borderBottom = '10px solid ' + colors[Math.floor(Math.random() * colors.length)];
+                }
+                
+                celebrationContainer.appendChild(particle);
+            }
+            
+            setTimeout(function() {
+                celebrationContainer.remove();
+            }, 5000);
+        }
+
+        function showEnhancedErrorHint(message, container, options) {
+            options = options || {};
+            var errorHint = document.createElement('div');
+            errorHint.className = 'captcha-error-hint';
+            errorHint.setAttribute('role', 'alert');
+            errorHint.innerHTML = '<i class="fas fa-exclamation-circle"></i>' +
+                '<div class="captcha-error-hint-text">' +
+                '<div class="captcha-error-hint-title">' + (options.title || getTranslation('verificationFailed')) + '</div>' +
+                '<div class="captcha-error-hint-desc">' + message + '</div>';
+            
+            if (options.showRetry !== false) {
+                errorHint.innerHTML += '<div class="captcha-error-hint-action">' +
+                    '<button type="button" onclick="refreshCaptcha(); this.closest(\'.captcha-error-hint\').remove();">' +
+                    '<i class="fas fa-redo me-1"></i>' + getTranslation('refresh') + '</button></div>';
+            }
+            
+            errorHint.innerHTML += '</div>';
+            
+            if (container) {
+                container.appendChild(errorHint);
+                setTimeout(function() {
+                    if (errorHint.parentNode) {
+                        errorHint.style.opacity = '0';
+                        setTimeout(function() {
+                            if (errorHint.parentNode) {
+                                errorHint.remove();
+                            }
+                        }, 300);
+                    }
+                }, options.duration || 5000);
+            }
+            
+            return errorHint;
+        }
+
+        function showEnhancedSuccessHint(message, container, options) {
+            options = options || {};
+            var successHint = document.createElement('div');
+            successHint.className = 'captcha-success-hint';
+            successHint.setAttribute('role', 'status');
+            successHint.innerHTML = '<i class="fas fa-check-circle"></i>' +
+                '<div class="captcha-success-hint-text">' +
+                '<div class="captcha-success-hint-title">' + getTranslation('verificationSuccess') + '</div>' +
+                '<div class="captcha-success-hint-desc">' + message + '</div>' +
+                '</div>';
+            
+            if (container) {
+                container.appendChild(successHint);
+                setTimeout(function() {
+                    if (successHint.parentNode) {
+                        successHint.style.opacity = '0';
+                        setTimeout(function() {
+                            if (successHint.parentNode) {
+                                successHint.remove();
+                            }
+                        }, 300);
+                    }
+                }, options.duration || 3000);
+            }
+            
+            return successHint;
+        }
+
+        function updateRotationAngleDisplay(angle) {
+            var el = document.getElementById('rotationAngleValue');
+            if (el) {
+                el.textContent = Math.round(angle) + '°';
+                el.classList.add('rotation-angle-value');
+            }
+        }
+
+        var originalShowResult = showResult;
+        showResult = function(type, success, message) {
+            var resultEl = document.getElementById(type + 'Result');
+            var container = document.getElementById(type + 'DemoArea');
+            
+            if (success) {
+                animateSuccess(resultEl);
+                showSuccessCelebration();
+                if (container) {
+                    showEnhancedSuccessHint(message, container, { duration: 3000 });
+                }
+                if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
+                    CaptchaUI.toast.success(message || 'Verification successful!', 'Success');
+                }
+            } else {
+                animateError(resultEl);
+                if (container) {
+                    showEnhancedErrorHint(message, container, { showRetry: true, duration: 5000 });
+                }
+                if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
+                    CaptchaUI.toast.error(message || 'Verification failed, please try again', 'Error');
+                }
+            }
+            originalShowResult(type, success, message);
         };
     </script>
 </body>

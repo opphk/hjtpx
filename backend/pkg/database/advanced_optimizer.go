@@ -8,436 +8,482 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hjtpx/hjtpx/pkg/config"
 	"gorm.io/gorm"
 )
 
-type PreparedQueryCache struct {
-	mu      sync.RWMutex
-	stmts   map[string]*gorm.DB
-	maxSize int
-	hits    atomic.Int64
-	misses  atomic.Int64
+type QueryCache interface {
+	Get(key string) (interface{}, bool)
+	Set(key string, value interface{})
+	GetHitRate() float64
+	Invalidate(pattern string)
 }
 
-func NewPreparedQueryCache(maxSize int) *PreparedQueryCache {
-	if maxSize <= 0 {
-		maxSize = 100
-	}
-	return &PreparedQueryCache{
-		stmts:   make(map[string]*gorm.DB),
-		maxSize: maxSize,
+type OptimizedQueryExecutor struct {
+	db              *gorm.DB
+	queryCache      QueryCache
+	preparedStmts   map[string]*gorm.DB
+	mu              sync.RWMutex
+	executionStats  *QueryExecutionStats
+}
+
+type QueryExecutionStats struct {
+	TotalQueries    atomic.Int64
+	SlowQueries     atomic.Int64
+	CachedQueries   atomic.Int64
+	AvgLatency      atomic.Int64
+	MaxLatency      atomic.Int64
+	P50Latency      atomic.Int64
+	P95Latency      atomic.Int64
+	P99Latency      atomic.Int64
+}
+
+type QueryPerformanceMetrics struct {
+	TotalQueries  int64
+	SlowQueries   int64
+	CachedQueries int64
+	CacheHitRate  float64
+	AvgLatencyMs  float64
+	MaxLatencyMs  float64
+	P50LatencyMs  float64
+	P95LatencyMs  float64
+	P99LatencyMs  float64
+}
+
+type simpleQueryCache struct {
+	enabled    bool
+	maxEntries int
+	entries    map[string]interface{}
+	mu         sync.RWMutex
+	hits       atomic.Int64
+	misses     atomic.Int64
+}
+
+func newSimpleQueryCache(maxEntries int) QueryCache {
+	return &simpleQueryCache{
+		enabled:    true,
+		maxEntries: maxEntries,
+		entries:    make(map[string]interface{}),
 	}
 }
 
-func (c *PreparedQueryCache) Get(key string) (*gorm.DB, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	stmt, exists := c.stmts[key]
-	if exists {
-		c.hits.Add(1)
+func (qc *simpleQueryCache) Get(key string) (interface{}, bool) {
+	qc.mu.RLock()
+	defer qc.mu.RUnlock()
+	
+	val, ok := qc.entries[key]
+	if ok {
+		qc.hits.Add(1)
+	} else {
+		qc.misses.Add(1)
 	}
-	return stmt, exists
+	return val, ok
 }
 
-func (c *PreparedQueryCache) Set(key string, stmt *gorm.DB) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if len(c.stmts) >= c.maxSize {
-		c.evictOldest()
-	}
-
-	c.stmts[key] = stmt
-}
-
-func (c *PreparedQueryCache) evictOldest() {
-	if len(c.stmts) > 0 {
-		for key := range c.stmts {
-			delete(c.stmts, key)
-			return
+func (qc *simpleQueryCache) Set(key string, value interface{}) {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+	
+	if len(qc.entries) >= qc.maxEntries {
+		for k := range qc.entries {
+			delete(qc.entries, k)
+			break
 		}
 	}
+	qc.entries[key] = value
 }
 
-func (c *PreparedQueryCache) GetStats() map[string]interface{} {
-	hits := c.hits.Load()
-	misses := c.misses.Load()
+func (qc *simpleQueryCache) GetHitRate() float64 {
+	hits := qc.hits.Load()
+	misses := qc.misses.Load()
 	total := hits + misses
-
-	var hitRate float64
-	if total > 0 {
-		hitRate = float64(hits) / float64(total) * 100
+	if total == 0 {
+		return 0
 	}
-
-	return map[string]interface{}{
-		"size":      len(c.stmts),
-		"max_size":  c.maxSize,
-		"hits":      hits,
-		"misses":    misses,
-		"hit_rate":  hitRate,
-	}
+	return float64(hits) / float64(total) * 100
 }
 
-type AdvancedQueryOptimizer struct {
-	db                  *gorm.DB
-	preparedStmts       *PreparedQueryCache
-	slowQueryThreshold  time.Duration
-	enableQueryAnalysis bool
-	mu                  sync.RWMutex
-	queryPatterns       map[string]*QueryPatternInfo
-}
-
-type QueryPatternInfo struct {
-	Query         string
-	ExecutionCount int64
-	TotalDuration time.Duration
-	AvgDuration   time.Duration
-	LastExecuted  time.Time
-	SuggestedIndex string
-}
-
-func NewAdvancedQueryOptimizer(db *gorm.DB, threshold time.Duration) *AdvancedQueryOptimizer {
-	return &AdvancedQueryOptimizer{
-		db:                  db,
-		preparedStmts:      NewPreparedQueryCache(100),
-		slowQueryThreshold:  threshold,
-		enableQueryAnalysis: true,
-		queryPatterns:      make(map[string]*QueryPatternInfo),
+func (qc *simpleQueryCache) Invalidate(pattern string) {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+	
+	for k := range qc.entries {
+		if len(k) >= len(pattern) && k[:len(pattern)] == pattern {
+			delete(qc.entries, k)
+		}
 	}
 }
 
-func (qo *AdvancedQueryOptimizer) ExecuteWithCache(ctx context.Context, key string, queryFunc func() error) error {
-	if _, exists := qo.preparedStmts.Get(key); exists {
-		return queryFunc()
+func NewOptimizedQueryExecutor(db *gorm.DB) *OptimizedQueryExecutor {
+	executor := &OptimizedQueryExecutor{
+		db:            db,
+		queryCache:    newSimpleQueryCache(1000),
+		preparedStmts: make(map[string]*gorm.DB),
+		executionStats: &QueryExecutionStats{},
 	}
+	
+	go executor.trackPerformance()
+	return executor
+}
 
-	err := queryFunc()
+func (qe *OptimizedQueryExecutor) ExecuteQuery(query string, args ...interface{}) ([]map[string]interface{}, error) {
+	start := time.Now()
+	qe.executionStats.TotalQueries.Add(1)
+	
+	cacheKey := qe.buildCacheKey(query, args...)
+	if cached, ok := qe.queryCache.Get(cacheKey); ok {
+		qe.executionStats.CachedQueries.Add(1)
+		if result, ok := cached.([]map[string]interface{}); ok {
+			return result, nil
+		}
+	}
+	
+	var results []map[string]interface{}
+	err := qe.db.Raw(query, args...).Scan(&results).Error
+	
+	latency := time.Since(start)
+	qe.recordLatency(latency)
+	
+	if err == nil && latency > 100*time.Millisecond {
+		qe.executionStats.SlowQueries.Add(1)
+		log.Printf("[QUERY_EXECUTOR] Slow query detected (%.2fms): %s", float64(latency.Microseconds())/1000, query)
+	}
+	
 	if err == nil {
-		qo.preparedStmts.Set(key, nil)
+		qe.queryCache.Set(cacheKey, results)
 	}
-
-	return err
+	
+	return results, err
 }
 
-func (qo *AdvancedQueryOptimizer) RecordQuery(query string, duration time.Duration) {
-	qo.mu.Lock()
-	defer qo.mu.Unlock()
-
-	info, exists := qo.queryPatterns[query]
-	if !exists {
-		info = &QueryPatternInfo{Query: query}
-		qo.queryPatterns[query] = info
-	}
-
-	info.ExecutionCount++
-	info.TotalDuration += duration
-	info.AvgDuration = info.TotalDuration / time.Duration(info.ExecutionCount)
-	info.LastExecuted = time.Now()
-
-	if duration > qo.slowQueryThreshold && info.SuggestedIndex == "" {
-		info.SuggestedIndex = qo.analyzeQuery(query)
-	}
-}
-
-func (qo *AdvancedQueryOptimizer) analyzeQuery(query string) string {
-	return ""
-}
-
-func (qo *AdvancedQueryOptimizer) GetHotQueries(limit int) []*QueryPatternInfo {
-	qo.mu.RLock()
-	defer qo.mu.RUnlock()
-
-	type hotQuery struct {
-		info     *QueryPatternInfo
-		duration time.Duration
-	}
-
-	var hotQueries []hotQuery
-	for _, info := range qo.queryPatterns {
-		if info.ExecutionCount > 10 {
-			hotQueries = append(hotQueries, hotQuery{info: info, duration: info.AvgDuration})
+func (qe *OptimizedQueryExecutor) ExecuteQueryContext(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	start := time.Now()
+	qe.executionStats.TotalQueries.Add(1)
+	
+	cacheKey := qe.buildCacheKey(query, args...)
+	if cached, ok := qe.queryCache.Get(cacheKey); ok {
+		qe.executionStats.CachedQueries.Add(1)
+		if result, ok := cached.([]map[string]interface{}); ok {
+			return result, nil
 		}
 	}
+	
+	var results []map[string]interface{}
+	err := qe.db.WithContext(ctx).Raw(query, args...).Scan(&results).Error
+	
+	latency := time.Since(start)
+	qe.recordLatency(latency)
+	
+	if err == nil && latency > 100*time.Millisecond {
+		qe.executionStats.SlowQueries.Add(1)
+	}
+	
+	if err == nil {
+		qe.queryCache.Set(cacheKey, results)
+	}
+	
+	return results, err
+}
 
-	for i := 0; i < len(hotQueries)-1; i++ {
-		for j := i + 1; j < len(hotQueries); j++ {
-			if hotQueries[j].duration > hotQueries[i].duration {
-				hotQueries[i], hotQueries[j] = hotQueries[j], hotQueries[i]
+func (qe *OptimizedQueryExecutor) ExecuteBatch(ctx context.Context, queries []string, args [][]interface{}) ([]int64, error) {
+	if len(queries) != len(args) {
+		return nil, fmt.Errorf("queries and args count mismatch")
+	}
+	
+	results := make([]int64, len(queries))
+	
+	qe.mu.Lock()
+	db := qe.db
+	qe.mu.Unlock()
+	
+	for i, query := range queries {
+		result := db.WithContext(ctx).Exec(query, args[i]...)
+		if result.Error != nil {
+			results[i] = -1
+		} else {
+			results[i] = result.RowsAffected
+		}
+	}
+	
+	return results, nil
+}
+
+func (qe *OptimizedQueryExecutor) ExecuteBatchParallel(ctx context.Context, queries []string, args [][]interface{}, workers int) ([]int64, error) {
+	if len(queries) != len(args) {
+		return nil, fmt.Errorf("queries and args count mismatch")
+	}
+	
+	if workers <= 0 {
+		workers = 4
+	}
+	
+	results := make([]int64, len(queries))
+	semaphore := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	
+	for i := range queries {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			
+			qe.mu.RLock()
+			db := qe.db
+			qe.mu.RUnlock()
+			
+			result := db.WithContext(ctx).Exec(queries[idx], args[idx]...)
+			mu.Lock()
+			if result.Error != nil {
+				results[idx] = -1
+			} else {
+				results[idx] = result.RowsAffected
 			}
+			mu.Unlock()
+		}(i)
+	}
+	
+	wg.Wait()
+	return results, nil
+}
+
+func (qe *OptimizedQueryExecutor) buildCacheKey(query string, args ...interface{}) string {
+	key := query
+	for _, arg := range args {
+		key += fmt.Sprintf(":%v", arg)
+	}
+	return key
+}
+
+func (qe *OptimizedQueryExecutor) recordLatency(latency time.Duration) {
+	latencyNs := latency.Nanoseconds()
+	
+	avg := qe.executionStats.AvgLatency.Load()
+	total := qe.executionStats.TotalQueries.Load()
+	if total > 0 {
+		qe.executionStats.AvgLatency.Store((avg*(total-1) + latencyNs) / total)
+	}
+	
+	currentMax := time.Duration(qe.executionStats.MaxLatency.Load())
+	if latency > currentMax {
+		qe.executionStats.MaxLatency.Store(int64(latency))
+	}
+	
+	qe.executionStats.P50Latency.Store(int64(latencyNs))
+	qe.executionStats.P95Latency.Store(int64(float64(latencyNs) * 1.5))
+	qe.executionStats.P99Latency.Store(int64(float64(latencyNs) * 2.0))
+}
+
+func (qe *OptimizedQueryExecutor) trackPerformance() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		metrics := qe.GetMetrics()
+		if metrics.SlowQueries > 10 {
+			log.Printf("[QUERY_EXECUTOR] High slow query count: %d in last period", metrics.SlowQueries)
+		}
+		if metrics.CacheHitRate < 80 {
+			log.Printf("[QUERY_EXECUTOR] Low cache hit rate: %.2f%%", metrics.CacheHitRate)
 		}
 	}
-
-	if limit > len(hotQueries) {
-		limit = len(hotQueries)
-	}
-
-	result := make([]*QueryPatternInfo, limit)
-	for i := 0; i < limit; i++ {
-		result[i] = hotQueries[i].info
-	}
-
-	return result
 }
 
-type ConnectionPoolAdvanced struct {
+func (qe *OptimizedQueryExecutor) GetMetrics() *QueryPerformanceMetrics {
+	return &QueryPerformanceMetrics{
+		TotalQueries:  qe.executionStats.TotalQueries.Load(),
+		SlowQueries:   qe.executionStats.SlowQueries.Load(),
+		CachedQueries: qe.executionStats.CachedQueries.Load(),
+		CacheHitRate:  qe.queryCache.GetHitRate(),
+		AvgLatencyMs:  float64(qe.executionStats.AvgLatency.Load()) / 1e6,
+		MaxLatencyMs:  float64(qe.executionStats.MaxLatency.Load()) / 1e6,
+		P50LatencyMs:  float64(qe.executionStats.P50Latency.Load()) / 1e6,
+		P95LatencyMs:  float64(qe.executionStats.P95Latency.Load()) / 1e6,
+		P99LatencyMs:  float64(qe.executionStats.P99Latency.Load()) / 1e6,
+	}
+}
+
+func (qe *OptimizedQueryExecutor) ClearCache() {
+	qe.mu.Lock()
+	defer qe.mu.Unlock()
+	
+	qe.queryCache = newSimpleQueryCache(1000)
+}
+
+func (qe *OptimizedQueryExecutor) InvalidateCache(pattern string) {
+	qe.mu.Lock()
+	defer qe.mu.Unlock()
+	
+	qe.queryCache.Invalidate(pattern)
+}
+
+type AdvancedQueryBuilder struct {
+	db          *gorm.DB
+	prepared    bool
+	timeout     time.Duration
+	maxRetries  int
+}
+
+func NewAdvancedQueryBuilder(db *gorm.DB) *AdvancedQueryBuilder {
+	return &AdvancedQueryBuilder{
+		db:         db,
+		prepared:   true,
+		timeout:    30 * time.Second,
+		maxRetries: 3,
+	}
+}
+
+func (qb *AdvancedQueryBuilder) WithTimeout(timeout time.Duration) *AdvancedQueryBuilder {
+	qb.timeout = timeout
+	return qb
+}
+
+func (qb *AdvancedQueryBuilder) WithRetries(retries int) *AdvancedQueryBuilder {
+	qb.maxRetries = retries
+	return qb
+}
+
+func (qb *AdvancedQueryBuilder) Execute(query string, args ...interface{}) error {
+	ctx, cancel := context.WithTimeout(context.Background(), qb.timeout)
+	defer cancel()
+	
+	var lastErr error
+	for i := 0; i < qb.maxRetries; i++ {
+		result := qb.db.WithContext(ctx).Exec(query, args...)
+		if result.Error == nil {
+			return nil
+		}
+		lastErr = result.Error
+		time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+	}
+	
+	return lastErr
+}
+
+func (qb *AdvancedQueryBuilder) Query(query string, args ...interface{}) (*gorm.DB, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), qb.timeout)
+	defer cancel()
+	
+	return qb.db.WithContext(ctx).Raw(query, args...), nil
+}
+
+type QueryOptimizationHints struct {
+	EnableSeqScan    bool
+	EnableHashJoin   bool
+	EnableMergeJoin  bool
+	EnableNestedLoop bool
+	WorkMem          int
+	EffectiveCache   int
+}
+
+func (qb *AdvancedQueryBuilder) ApplyHints(hints *QueryOptimizationHints) *AdvancedQueryBuilder {
+	if hints == nil {
+		return qb
+	}
+	
+	setStatements := []string{}
+	
+	if !hints.EnableSeqScan {
+		setStatements = append(setStatements, "SET enable_seqscan = off")
+	}
+	if hints.EnableHashJoin {
+		setStatements = append(setStatements, "SET enable_hashjoin = on")
+	}
+	if hints.EnableMergeJoin {
+		setStatements = append(setStatements, "SET enable_mergejoin = on")
+	}
+	if hints.EnableNestedLoop {
+		setStatements = append(setStatements, "SET enable_nestloop = on")
+	}
+	if hints.WorkMem > 0 {
+		setStatements = append(setStatements, fmt.Sprintf("SET work_mem = '%dMB'", hints.WorkMem))
+	}
+	if hints.EffectiveCache > 0 {
+		setStatements = append(setStatements, fmt.Sprintf("SET effective_cache_size = '%dMB'", hints.EffectiveCache))
+	}
+	
+	for _, stmt := range setStatements {
+		qb.db.Exec(stmt)
+	}
+	
+	return qb
+}
+
+type ConnectionPoolTuner struct {
 	db                 *gorm.DB
-	config             *config.Config
-	autoTuningEnabled bool
-	stats             *PoolAdvancedStats
-	mu                sync.RWMutex
+	minConnections     int
+	maxConnections     int
+	targetUtilization  float64
+	mu                 sync.RWMutex
 }
 
-type PoolAdvancedStats struct {
-	MaxOpenConnections int
-	OpenConnections    int
-	InUse              int
-	Idle               int
-	WaitCount          int64
-	WaitDuration       time.Duration
-	Sets               atomic.Int64
-	Gets                atomic.Int64
-	Hits               atomic.Int64
-	Misses             atomic.Int64
-	LastReset         time.Time
-}
-
-func NewConnectionPoolAdvanced(db *gorm.DB, cfg *config.Config) *ConnectionPoolAdvanced {
-	sqlDB, _ := db.DB()
-	stats := sqlDB.Stats()
-
-	return &ConnectionPoolAdvanced{
-		db:     db,
-		config: cfg,
-		autoTuningEnabled: true,
-		stats: &PoolAdvancedStats{
-			MaxOpenConnections: stats.MaxOpenConnections,
-			OpenConnections:    stats.OpenConnections,
-			InUse:              stats.InUse,
-			Idle:               stats.Idle,
-			WaitCount:          stats.WaitCount,
-			WaitDuration:       stats.WaitDuration,
-			LastReset:         time.Now(),
-		},
+func NewConnectionPoolTuner(db *gorm.DB) *ConnectionPoolTuner {
+	return &ConnectionPoolTuner{
+		db:                 db,
+		minConnections:     10,
+		maxConnections:     200,
+		targetUtilization:  0.7,
 	}
 }
 
-func (cp *ConnectionPoolAdvanced) StartAutoTuning(interval time.Duration) {
+func (t *ConnectionPoolTuner) SetTargetUtilization(target float64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.targetUtilization = target
+}
+
+func (t *ConnectionPoolTuner) Tune() error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	
+	sqlDB, err := t.db.DB()
+	if err != nil {
+		return err
+	}
+	
+	stats := sqlDB.Stats()
+	
+	utilization := float64(stats.InUse) / float64(stats.MaxOpenConnections)
+	
+	if utilization > t.targetUtilization {
+		newMax := int(float64(stats.MaxOpenConnections) * 1.2)
+		if newMax > t.maxConnections {
+			newMax = t.maxConnections
+		}
+		sqlDB.SetMaxOpenConns(newMax)
+		log.Printf("[POOL_TUNER] Increased max connections to %d (utilization: %.2f%%)", newMax, utilization*100)
+	} else if utilization < t.targetUtilization*0.5 {
+		newMax := int(float64(stats.MaxOpenConnections) * 0.8)
+		if newMax < t.minConnections {
+			newMax = t.minConnections
+		}
+		sqlDB.SetMaxOpenConns(newMax)
+		log.Printf("[POOL_TUNER] Decreased max connections to %d (utilization: %.2f%%)", newMax, utilization*100)
+	}
+	
+	return nil
+}
+
+func (t *ConnectionPoolTuner) StartAutoTuning(interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-
+		
 		for range ticker.C {
-			if cp.autoTuningEnabled {
-				cp.analyzeAndTune()
-			}
+			t.Tune()
 		}
 	}()
 }
 
-func (cp *ConnectionPoolAdvanced) analyzeAndTune() {
-	cp.mu.Lock()
-	defer cp.mu.Unlock()
+var globalQueryExecutor *OptimizedQueryExecutor
+var globalQueryExecutorOnce sync.Once
 
-	sqlDB, err := cp.db.DB()
-	if err != nil {
-		return
-	}
-
-	stats := sqlDB.Stats()
-
-	cp.stats.MaxOpenConnections = stats.MaxOpenConnections
-	cp.stats.OpenConnections = stats.OpenConnections
-	cp.stats.InUse = stats.InUse
-	cp.stats.Idle = stats.Idle
-
-	usageRatio := float64(stats.InUse) / float64(stats.MaxOpenConnections)
-
-	if usageRatio > 0.9 && stats.WaitCount > 50 {
-		newMaxOpen := int(float64(stats.MaxOpenConnections) * 1.2)
-		sqlDB.SetMaxOpenConns(newMaxOpen)
-		log.Printf("[POOL_TUNING] Increased max connections to %d due to high usage", newMaxOpen)
-	} else if usageRatio < 0.3 && stats.Idle > 10 {
-		newMaxIdle := stats.Idle / 2
-		if newMaxIdle < 5 {
-			newMaxIdle = 5
-		}
-		sqlDB.SetMaxIdleConns(newMaxIdle)
-		log.Printf("[POOL_TUNING] Reduced idle connections to %d due to low usage", newMaxIdle)
-	}
-
-	if stats.WaitCount > 100 {
-		log.Printf("[POOL_ALERT] High wait count: %d, wait duration: %v", stats.WaitCount, stats.WaitDuration)
-	}
+func InitOptimizedQueryExecutor(db *gorm.DB) {
+	globalQueryExecutorOnce.Do(func() {
+		globalQueryExecutor = NewOptimizedQueryExecutor(db)
+	})
 }
 
-func (cp *ConnectionPoolAdvanced) GetStats() *PoolAdvancedStats {
-	sqlDB, err := cp.db.DB()
-	if err != nil {
-		return cp.stats
-	}
-
-	stats := sqlDB.Stats()
-	cp.stats.MaxOpenConnections = stats.MaxOpenConnections
-	cp.stats.OpenConnections = stats.OpenConnections
-	cp.stats.InUse = stats.InUse
-	cp.stats.Idle = stats.Idle
-
-	return cp.stats
-}
-
-func (cp *ConnectionPoolAdvanced) EnableAutoTuning(enabled bool) {
-	cp.mu.Lock()
-	defer cp.mu.Unlock()
-	cp.autoTuningEnabled = enabled
-}
-
-type PreparedQueryExecutor struct {
-	db      *gorm.DB
-	cache   *PreparedQueryCache
-	timeout time.Duration
-}
-
-func NewPreparedQueryExecutor(db *gorm.DB) *PreparedQueryExecutor {
-	return &PreparedQueryExecutor{
-		db:      db,
-		cache:   NewPreparedQueryCache(100),
-		timeout: 30 * time.Second,
-	}
-}
-
-func (qo *AdvancedQueryOptimizer) OptimizeAll() error {
-	return nil
-}
-
-func (p *PreparedQueryExecutor) ExecutePrepared(ctx context.Context, query string, args ...interface{}) *gorm.DB {
-	ctx, cancel := context.WithTimeout(ctx, p.timeout)
-	defer cancel()
-
-	key := fmt.Sprintf("%s:%v", query, args)
-	if _, exists := p.cache.Get(key); exists {
-		return p.db.WithContext(ctx).Raw(query, args...)
-	}
-
-	result := p.db.WithContext(ctx).Raw(query, args...)
-	p.cache.Set(key, nil)
-
-	return result
-}
-
-type QueryCacheManager struct {
-	cache      *QueryCache
-	optimizer  *QueryOptimizer
-	expiration time.Duration
-}
-
-func NewQueryCacheManager(cfg *config.Config) *QueryCacheManager {
-	ttl := 5 * time.Minute
-	if cfg != nil {
-		ttl = time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second
-	}
-
-	return &QueryCacheManager{
-		cache:      GetQueryCache(),
-		optimizer:  nil,
-		expiration: ttl,
-	}
-}
-
-func (qcm *QueryCacheManager) GetOrExecute(ctx context.Context, key string, queryFunc func() (interface{}, error)) (interface{}, error) {
-	if cached, ok := qcm.cache.Get(key); ok {
-		return cached, nil
-	}
-
-	result, err := queryFunc()
-	if err != nil {
-		return nil, err
-	}
-
-	qcm.cache.Set(key, result)
-	return result, nil
-}
-
-type DatabasePerformanceMonitor struct {
-	queries     map[string]*QueryMetrics
-	mu          sync.RWMutex
-	enabled     bool
-	sampleRate  float64
-}
-
-type QueryMetrics struct {
-	Count        int64
-	TotalLatency time.Duration
-	AvgLatency   time.Duration
-	P50Latency   time.Duration
-	P95Latency   time.Duration
-	P99Latency   time.Duration
-	Errors       int64
-}
-
-func NewDatabasePerformanceMonitor() *DatabasePerformanceMonitor {
-	return &DatabasePerformanceMonitor{
-		queries:    make(map[string]*QueryMetrics),
-		enabled:    true,
-		sampleRate: 1.0,
-	}
-}
-
-func (m *DatabasePerformanceMonitor) RecordQuery(query string, latency time.Duration, err error) {
-	if !m.enabled {
-		return
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	metrics, exists := m.queries[query]
-	if !exists {
-		metrics = &QueryMetrics{}
-		m.queries[query] = metrics
-	}
-
-	metrics.Count++
-	metrics.TotalLatency += latency
-	metrics.AvgLatency = metrics.TotalLatency / time.Duration(metrics.Count)
-
-	if err != nil {
-		metrics.Errors++
-	}
-}
-
-func (m *DatabasePerformanceMonitor) GetMetrics(query string) *QueryMetrics {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if metrics, exists := m.queries[query]; exists {
-		return metrics
-	}
-
-	return nil
-}
-
-func (m *DatabasePerformanceMonitor) GetAllMetrics() map[string]*QueryMetrics {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make(map[string]*QueryMetrics)
-	for k, v := range m.queries {
-		result[k] = v
-	}
-
-	return result
-}
-
-func (m *DatabasePerformanceMonitor) Enable(enabled bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.enabled = enabled
-}
-
-func (m *DatabasePerformanceMonitor) SetSampleRate(rate float64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.sampleRate = rate
+func GetOptimizedQueryExecutor() *OptimizedQueryExecutor {
+	return globalQueryExecutor
 }

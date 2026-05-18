@@ -106,6 +106,7 @@ type ObfuscatorConfig struct {
 	CustomObfuscationPatterns    []string
 	ObfuscationSeed               int64
 	EnableDeterministicOutput     bool
+	MaxCacheSize                  int
 }
 
 var defaultObfuscatorConfig = ObfuscatorConfig{
@@ -190,6 +191,7 @@ var defaultObfuscatorConfig = ObfuscatorConfig{
 	CustomObfuscationPatterns: []string{},
 	ObfuscationSeed:          time.Now().UnixNano(),
 	EnableDeterministicOutput: false,
+	MaxCacheSize:             100,
 }
 
 type Obfuscator struct {
@@ -5326,6 +5328,397 @@ func GenerateAdvancedCodeProtectionFinal(code string, config ObfuscatorConfig) s
 	result.WriteString(code)
 
 	return result.String()
+}
+
+func CreateRealtimeIntegrityMonitor(intervalMs int) string {
+	return fmt.Sprintf(`
+;(function(){
+	var _0xRIM={
+		interval:%d,
+		timer:null,
+		hashHistory:[],
+		maxHistory:10,
+		detectAnomaly:function(){
+			var scripts=document.getElementsByTagName('script');
+			var totalLength=0;
+			for(var i=0;i<scripts.length;i++){
+				totalLength+=scripts[i].textContent.length;
+			}
+			this.hashHistory.push(totalLength);
+			if(this.hashHistory.length>this.maxHistory){
+				this.hashHistory.shift();
+			}
+			if(this.hashHistory.length>=3){
+				var first=this.hashHistory[0];
+				var last=this.hashHistory[this.hashHistory.length-1];
+				var diff=Math.abs(last-first);
+				if(diff>first*0.1){
+					return true;
+				}
+			}
+			return false;
+		},
+		block:function(){
+			clearInterval(this.timer);
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>实时完整性监控失败</h1></div>';
+			throw new Error('Realtime integrity monitor triggered');
+		},
+		start:function(){
+			var self=this;
+			this.timer=setInterval(function(){
+				if(self.detectAnomaly()){
+					self.block();
+				}
+			},this.interval);
+		}
+	};
+	_0xRIM.start();
+	window.__RIM=_0xRIM;
+})();
+`, intervalMs)
+}
+
+func CreateAdvancedDevToolsDetection() string {
+	return `
+;(function(){
+	var _0xADDD={
+		detectionMethods:[
+			function(){
+				var threshold=160;
+				return window.outerWidth-window.innerWidth>threshold||window.outerHeight-window.innerHeight>threshold;
+			},
+			function(){
+				var s=performance.now();
+				debugger;
+				var e=performance.now();
+				return e-s>50;
+			},
+			function(){
+				var result=false;
+				var test=function(){};
+				test.toString=function(){
+					result=true;
+				};
+				console.log(test);
+				console.clear&&console.clear();
+				return result;
+			},
+			function(){
+				return typeof window.webkitDebuggerAPI!=='undefined';
+			},
+			function(){
+				return window.firebug&&window.firebug.initial;
+			},
+			function(){
+				var w=window.outerWidth-window.innerWidth;
+				var h=window.outerHeight-window.innerHeight;
+				return w>0||h>0;
+			},
+			function(){
+				var el=document.createElement('div');
+				Object.defineProperty(el,'id',{get:function(){return true;}});
+				return el.id===true;
+			},
+			function(){
+				var getComputedStyle=window.getComputedStyle;
+				return getComputedStyle.toString().length>50;
+			}
+		],
+		detect:function(){
+			for(var i=0;i<this.detectionMethods.length;i++){
+				try{
+					if(this.detectionMethods[i]()){
+						return true;
+					}
+				}catch(e){}
+			}
+			return false;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.detect()){
+					self.block();
+				}
+			},2000);
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>高级DevTools检测</h1></div>';
+			throw new Error('Advanced DevTools detection');
+		},
+		init:function(){
+			this.protect();
+		}
+	};
+	_0xADDD.init();
+	window.__ADDD=_0xADDD;
+})();
+`
+}
+
+func CreateBreakpointDefender() string {
+	return `
+;(function(){
+	var _0xBPD={
+		originalFunctions:[],
+		guardCount:0,
+		maxGuards:5,
+		installGuards:function(){
+			var targets=['Function.prototype.toString','Object.prototype.toString','Array.prototype.toString'];
+			var self=this;
+			targets.forEach(function(target){
+				try{
+					var parts=target.split('.');
+					var obj=window;
+					for(var i=0;i<parts.length-1;i++){
+						obj=obj[parts[i]];
+					}
+					var method=parts[parts.length-1];
+					var original=obj[method];
+					self.originalFunctions.push({obj:obj,method:method,original:original});
+					obj[method]=function(){
+						self.guardCount++;
+						if(self.guardCount>self.maxGuards){
+							self.block();
+						}
+						return original.apply(this,arguments);
+					};
+				}catch(e){}
+			});
+		},
+		checkGuards:function(){
+			for(var i=0;i<this.originalFunctions.length;i++){
+				var f=this.originalFunctions[i];
+				if(f.obj[f.method]!==f.original){
+					return true;
+				}
+			}
+			return false;
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<h1>Breakpoint Defender Triggered</h1>';
+			throw new Error('Breakpoint defender');
+		},
+		init:function(){
+			this.installGuards();
+			var self=this;
+			setInterval(function(){
+				if(self.checkGuards()){
+					self.block();
+				}
+			},3000);
+		}
+	};
+	_0xBPD.init();
+	window.__BPD=_0xBPD;
+})();
+`
+}
+
+func CreateDynamicAnalysisShield() string {
+	return `
+;(function(){
+	var _0xDAS={
+		checks:[],
+		registerCheck:function(fn){
+			this.checks.push(fn);
+		},
+		detectAutomation:function(){
+			if(navigator.webdriver===true)return true;
+			if(navigator.permissions&&navigator.permissions.query===undefined)return true;
+			if(window.callPhantom||window._phantom)return true;
+			if(window.__webdriver_evaluate||window.__selenium_evaluate)return true;
+			if(navigator.plugins.length<3)return true;
+			return false;
+		},
+		detectDebugger:function(){
+			var s=performance.now();
+			debugger;
+			var e=performance.now();
+			return e-s>50;
+		},
+		detectDevTools:function(){
+			var threshold=160;
+			return window.outerWidth-window.innerWidth>threshold||window.outerHeight-window.innerHeight>threshold;
+		},
+		detect:function(){
+			if(this.detectAutomation())return true;
+			if(this.detectDebugger())return true;
+			if(this.detectDevTools())return true;
+			for(var i=0;i<this.checks.length;i++){
+				try{
+					if(this.checks[i]())return true;
+				}catch(e){}
+			}
+			return false;
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<h1>Analysis Shield Activated</h1>';
+			throw new Error('Analysis detected');
+		},
+		init:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.detect()){
+					self.block();
+				}
+			},2500);
+		}
+	};
+	_0xDAS.init();
+	window.__DAS=_0xDAS;
+})();
+`
+}
+
+func CreateCodeSplittingLoader(config ObfuscatorConfig) string {
+	return fmt.Sprintf(`
+;(function(){
+	var _0xCSL={
+		chunks:{},
+		loadedChunks:[],
+		maxCache:%d,
+		registerChunk:function(name,code){
+			this.chunks[name]=code;
+		},
+		loadChunk:function(name){
+			if(this.loadedChunks.indexOf(name)>-1){
+				return this.chunks[name];
+			}
+			var code=this.chunks[name];
+			if(!code)return null;
+			this.loadedChunks.push(name);
+			if(this.loadedChunks.length>this.maxCache){
+				var removed=this.loadedChunks.shift();
+				delete this.chunks[removed];
+			}
+			return code;
+		},
+		evalChunk:function(name){
+			var code=this.loadChunk(name);
+			if(code){
+				try{return eval(code);}catch(e){return null;}
+			}
+			return null;
+		},
+		preload:function(names){
+			var self=this;
+			names.forEach(function(name){
+				self.loadChunk(name);
+			});
+		}
+	};
+	window.__CSL=_0xCSL;
+})();
+`, config.MaxCacheSize)
+}
+
+func GenerateEnhancedIntegrityReport(code string, config ObfuscatorConfig) map[string]interface{} {
+	hashes, _ := GenerateIntegrityHashes(code)
+
+	report := map[string]interface{}{
+		"timestamp":           time.Now().Format(time.RFC3339),
+		"code_length":         len(code),
+		"sha256_hash":         hashes.SHA256,
+		"sha384_hash":         hashes.SHA384,
+		"sha512_hash":         hashes.SHA512,
+		"md5_hash":            hashes.MD5,
+		"crc32_checksum":      fmt.Sprintf("%08x", crc32Checksum(code)),
+		"custom_checksum":     GenerateCustomHash(code, string(config.StringEncryptionKey)),
+		"entropy":             CalculateObfuscationEntropy(code),
+		"verification_tag":    generateVerificationTag(code),
+		"protection_enabled":  true,
+		"obfuscation_level":   config.EnhancedEncryptionLevel,
+	}
+
+	return report
+}
+
+func ValidateCodeIntegrity(code string, expectedHash string) bool {
+	hash, err := GenerateFileHash(code, "sha256")
+	if err != nil {
+		return false
+	}
+	return hash == expectedHash
+}
+
+func GenerateIntegrityToken() (string, error) {
+	randomBytes := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, randomBytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(randomBytes), nil
+}
+
+func (o *Obfuscator) addStateMachineFlattening(code string) string {
+	stateMachine := `
+;(function(){
+	var _0xSMF={
+		state:0,
+		transitions:{},
+		registerTransition:function(from,to,condition){
+			if(!this.transitions[from]){
+				this.transitions[from]=[];
+			}
+			this.transitions[from].push({to:to,condition:condition});
+		},
+		execute:function(state){
+			this.state=state;
+			if(this.transitions[state]){
+				for(var i=0;i<this.transitions[state].length;i++){
+					var t=this.transitions[state][i];
+					if(t.condition()){
+						this.state=t.to;
+						break;
+					}
+				}
+			}
+		}
+	};
+	window.__SMF=_0xSMF;
+})();
+`
+	return code + stateMachine
+}
+
+func (o *Obfuscator) addOpaquePredicate(code string) string {
+	opaque := `
+;(function(){
+	var _0xOP={
+		predicates:[],
+		registerPredicate:function(fn){
+			this.predicates.push(fn);
+		},
+		evaluate:function(){
+			for(var i=0;i<this.predicates.length;i++){
+				var result=this.predicates[i]();
+				if(!result){
+					return false;
+				}
+			}
+			return true;
+		}
+	};
+	_0xOP.registerPredicate(function(){
+		var x=Math.random();
+		return (x*x-x+0.25)>0;
+	});
+	_0xOP.registerPredicate(function(){
+		var a=true,b=false;
+		return !((a&&b)||!(a||b));
+	});
+	window.__OP=_0xOP;
+})();
+`
+	return code + opaque
+}
+
+func CalculateObfuscationEntropyFinal(code string) float64 {
+	return CalculateObfuscationEntropy(code)
 }
 
 

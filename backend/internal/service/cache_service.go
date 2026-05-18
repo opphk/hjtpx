@@ -692,14 +692,14 @@ func (cs *CacheService) DeleteCaptchaCache(ctx context.Context, captchaID string
 	return cs.Delete(ctx, key)
 }
 
-type BehaviorCache struct {
+type BehaviorCacheV2 struct {
 	UserID     string    `json:"user_id"`
 	SessionID  string    `json:"session_id"`
 	Trajectory string    `json:"trajectory"`
 	Timestamp  time.Time `json:"timestamp"`
 }
 
-func (cs *CacheService) SetBehaviorCache(ctx context.Context, sessionID string, data *BehaviorCache) error {
+func (cs *CacheService) SetBehaviorCache(ctx context.Context, sessionID string, data *BehaviorCacheV2) error {
 	if redis.Client == nil {
 		return nil
 	}
@@ -708,13 +708,13 @@ func (cs *CacheService) SetBehaviorCache(ctx context.Context, sessionID string, 
 	return cs.SetWithTTL(ctx, key, data, BehaviorCacheTTL)
 }
 
-func (cs *CacheService) GetBehaviorCache(ctx context.Context, sessionID string) (*BehaviorCache, error) {
+func (cs *CacheService) GetBehaviorCache(ctx context.Context, sessionID string) (*BehaviorCacheV2, error) {
+	var cache BehaviorCacheV2
 	if redis.Client == nil {
 		return nil, ErrCacheMiss
 	}
 
 	key := cs.keyManager.BuildBehaviorKey(sessionID)
-	var cache BehaviorCache
 	if err := cs.GetJSON(ctx, key, &cache); err != nil {
 		return nil, err
 	}

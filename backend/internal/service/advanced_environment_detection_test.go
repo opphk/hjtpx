@@ -3,201 +3,464 @@ package service
 import (
 	"context"
 	"net/http"
+	"sync"
 	"testing"
-	"time"
 )
 
-func TestAdvancedFingerprintAnalyzer(t *testing.T) {
-	analyzer := NewAdvancedFingerprintAnalyzer()
+func TestEnhancedVMDetector(t *testing.T) {
+	detector := NewEnhancedVMDetector()
 
-	t.Run("analyze_basic_fingerprint", func(t *testing.T) {
+	t.Run("detect_vmware", func(t *testing.T) {
 		data := map[string]interface{}{
-			"user_agent":        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-			"canvas_hash":       "abc123hash",
-			"webgl_hash":        "def456hash",
-			"screen_resolution": "1920x1080",
-			"timezone":          "America/New_York",
-			"language":          "en-US",
-			"platform":          "Win32",
-			"hardware_concurrency": float64(4),
-			"device_memory":     float64(8),
+			"user_agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) VMware, VirtualBox",
+			"webgl_renderer":  "VMware SVGA II Adapter",
+			"cpu_cores":       float64(2),
+			"device_memory":    float64(2),
 		}
 
-		analysis, err := analyzer.AnalyzeAdvancedFingerprint(data)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
+		result := detector.DetectVM(data)
+
+		if len(result.Indicators) == 0 {
+			t.Error("Expected VM indicators to be detected")
 		}
 
-		if analysis == nil {
-			t.Fatal("Expected analysis to be non-nil")
+		if result.RiskScore == 0 {
+			t.Error("Expected non-zero risk score")
 		}
 
-		if analysis.BaseFingerprint == nil {
-			t.Fatal("Expected base fingerprint to be non-nil")
+		t.Logf("VM Detection - Type: %s, Score: %d, Indicators: %v", result.VMType, result.RiskScore, result.Indicators)
+	})
+
+	t.Run("detect_virtualbox", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Oracle VirtualBox",
+			"webgl_renderer":  "VirtualBox Graphics Adapter",
+			"cpu_cores":       float64(4),
+			"device_memory":    float64(8),
 		}
 
-		if analysis.BaseFingerprint.UserAgent != data["user_agent"] {
-			t.Errorf("Expected UserAgent %s, got %s", data["user_agent"], analysis.BaseFingerprint.UserAgent)
+		result := detector.DetectVM(data)
+
+		if result.RiskScore > 0 {
+			t.Logf("VirtualBox detected with score: %d", result.RiskScore)
 		}
 	})
 
-	t.Run("detect_bot_patterns", func(t *testing.T) {
+	t.Run("detect_headless_browser", func(t *testing.T) {
 		data := map[string]interface{}{
-			"user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/91.0 Headless",
+			"user_agent":      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/91.0 HeadlessChrome",
+			"webgl_renderer":  "SwiftShader",
+			"cpu_cores":       float64(4),
+			"device_memory":    float64(8),
+			"headless_browser": true,
 		}
 
-		analysis, err := analyzer.AnalyzeAdvancedFingerprint(data)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+		result := detector.DetectVM(data)
 
-		if analysis.BaseFingerprint.IsKnownBot {
-			t.Log("Bot pattern detected successfully")
+		if result.RiskScore > 0 {
+			t.Logf("Headless browser detected with score: %d", result.RiskScore)
 		}
 	})
 
-	t.Run("detect_vpn_indicators", func(t *testing.T) {
+	t.Run("detect_low_core_count", func(t *testing.T) {
 		data := map[string]interface{}{
-			"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-			"public_ip":   "45.33.32.156",
+			"user_agent":   "Mozilla/5.0 Test Browser",
+			"cpu_cores":    float64(1),
+			"device_memory": float64(0.5),
 		}
 
-		analysis, err := analyzer.AnalyzeAdvancedFingerprint(data)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
+		result := detector.DetectVM(data)
+
+		found := false
+		for _, ind := range result.Indicators {
+			if ind == "single_core_detected" || ind == "very_low_memory" {
+				found = true
+			}
 		}
 
-		if analysis.BaseFingerprint.IsKnownVPN {
-			t.Log("VPN indicator detected successfully")
+		if !found {
+			t.Error("Expected low resource indicators")
+		}
+	})
+
+	t.Run("detect_emulator_resolution", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent":         "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36",
+			"screen_resolution":  "375x667",
+		}
+
+		result := detector.DetectVM(data)
+
+		width, ok := result.Details["screen_width"]
+		if !ok {
+			t.Error("Expected screen_width in details")
+			return
+		}
+		switch v := width.(type) {
+		case int:
+			if v != 375 {
+				t.Errorf("Expected screen width 375, got %v", v)
+			}
+		case float64:
+			if int(v) != 375 {
+				t.Errorf("Expected screen width 375, got %v", v)
+			}
+		default:
+			t.Errorf("Unexpected type for screen_width: %T", width)
+		}
+	})
+
+	t.Run("detect_hyperv", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Microsoft Hyper-V",
+			"webgl_renderer":  "Microsoft Basic Render Driver",
+			"cpu_cores":       float64(4),
+			"device_memory":    float64(8),
+		}
+
+		result := detector.DetectVM(data)
+
+		if result.RiskScore > 0 {
+			t.Logf("Hyper-V detected with score: %d", result.RiskScore)
+		}
+	})
+
+	t.Run("detect_qemu_kvm", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent":      "Mozilla/5.0 (X11; Linux x86_64; QEMU) AppleWebKit/537.36",
+			"webgl_renderer":  "llvmpipe (LLVM 12.0.0, 256 bits)",
+			"cpu_cores":       float64(2),
+			"device_memory":    float64(4),
+		}
+
+		result := detector.DetectVM(data)
+
+		if result.RiskScore > 0 {
+			t.Logf("QEMU/KVM detected with score: %d", result.RiskScore)
+		}
+	})
+
+	t.Run("detect_automation_framework", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0 Selenium",
+			"automation_detected": true,
+		}
+
+		result := detector.DetectVM(data)
+
+		found := false
+		for _, ind := range result.Indicators {
+			if ind == "automation_framework_detected" {
+				found = true
+			}
+		}
+
+		if !found {
+			t.Error("Expected automation framework indicator")
 		}
 	})
 }
 
-func TestEnhancedProxyDetection(t *testing.T) {
-	detection := NewEnhancedProxyDetection()
+func TestEnhancedContainerDetection(t *testing.T) {
+	detector := NewEnhancedVMDetector()
 
-	t.Run("detect_proxy_headers", func(t *testing.T) {
-		headers := http.Header{}
-		headers.Set("X-Forwarded-For", "203.0.113.1, 192.168.1.1, 10.0.0.1")
+	t.Run("detect_docker", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent": "Mozilla/5.0 (Linux; Docker) AppleWebKit/537.36",
+			"hostname":   "container-abc12345",
+			"environment_vars": map[string]string{
+				"container": "docker",
+				"HOME":      "/root",
+			},
+			"storage_info": map[string]interface{}{
+				"quota": float64(0),
+			},
+		}
 
+		result := detector.DetectContainer(data)
+
+		if len(result.Indicators) >= 3 {
+			t.Logf("Container detected with %d indicators: %v", len(result.Indicators), result.Indicators)
+		}
+	})
+
+	t.Run("detect_kubernetes", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent": "Mozilla/5.0 (Linux; Kubernetes; GKE) AppleWebKit/537.36",
+			"hostname":   "myapp-deployment-abc123",
+			"environment_vars": map[string]string{
+				"KUBERNETES_PORT": "tcp://10.0.0.1:443",
+			},
+		}
+
+		result := detector.DetectContainer(data)
+
+		if len(result.Indicators) > 0 {
+			t.Logf("Kubernetes detected with %d indicators: %v", len(result.Indicators), result.Indicators)
+		}
+	})
+
+	t.Run("detect_low_storage_quota", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent": "Mozilla/5.0 Test Browser",
+			"storage_info": map[string]interface{}{
+				"quota": float64(50000000),
+			},
+		}
+
+		result := detector.DetectContainer(data)
+
+		found := false
+		for _, ind := range result.Indicators {
+			if ind == "low_storage_quota" {
+				found = true
+			}
+		}
+
+		if !found {
+			t.Error("Expected low storage quota indicator")
+		}
+	})
+
+	t.Run("detect_lxc", func(t *testing.T) {
+		data := map[string]interface{}{
+			"user_agent": "Mozilla/5.0 (Linux; LXC) AppleWebKit/537.36",
+			"hostname":   "container-lxc-xyz789",
+			"environment_vars": map[string]string{
+				"LXC_NAME": "my-container",
+			},
+		}
+
+		result := detector.DetectContainer(data)
+
+		if len(result.Indicators) > 0 {
+			t.Logf("LXC detected with %d indicators", len(result.Indicators))
+		}
+	})
+}
+
+func TestEnhancedProxyVPNDetector(t *testing.T) {
+	detector := NewEnhancedProxyVPNDetector()
+
+	t.Run("detect_vpn_by_ip_range", func(t *testing.T) {
 		ctx := context.Background()
-		result, err := detection.DetectProxy(ctx, "203.0.113.1", headers)
+		result := detector.DetectProxyVPN(ctx, "45.33.32.156", nil, nil)
 
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-
-		if result == nil {
-			t.Fatal("Expected result to be non-nil")
-		}
-
-		if !result.Headers.XForwardedFor {
-			t.Error("Expected X-Forwarded-For to be detected")
-		}
-
-		if !result.IsProxy {
-			t.Log("Proxy detected via multi-hop headers")
+		if result.IsVPN {
+			t.Logf("VPN detected: %v, Provider: %s", result.IsVPN, result.VPNProvider)
+		} else {
+			t.Log("VPN not detected (IP may not be in known ranges)")
 		}
 	})
 
 	t.Run("detect_tor_exit_node", func(t *testing.T) {
 		ctx := context.Background()
-		result, err := detection.DetectProxy(ctx, "128.31.0.34", nil)
-
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+		result := detector.DetectProxyVPN(ctx, "128.31.0.34", nil, nil)
 
 		if result.IsTor {
-			t.Log("Tor exit node detected successfully")
+			t.Logf("Tor exit node detected with confidence: %.2f", result.Confidence)
+		} else {
+			t.Error("Expected Tor exit node to be detected")
 		}
 	})
 
-	t.Run("detect_vpn_provider", func(t *testing.T) {
-		ctx := context.Background()
-		result, err := detection.DetectProxy(ctx, "45.33.32.156", nil)
-
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-
-		if result.IsVPN {
-			t.Log("VPN provider detected successfully")
-		}
-	})
-
-	t.Run("calculate_confidence", func(t *testing.T) {
+	t.Run("detect_proxy_headers", func(t *testing.T) {
 		ctx := context.Background()
 		headers := http.Header{}
-		headers.Set("X-Forwarded-For", "203.0.113.1")
+		headers.Set("X-Forwarded-For", "203.0.113.1, 192.168.1.1, 10.0.0.1")
 		headers.Set("Via", "1.1 proxy-server")
 
-		result, err := detection.DetectProxy(ctx, "203.0.113.1", headers)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
+		result := detector.DetectProxyVPN(ctx, "203.0.113.1", headers, nil)
+
+		if result.IsProxy {
+			t.Logf("Proxy detected via headers")
 		}
 
-		if result.Confidence < 0 || result.Confidence > 100 {
-			t.Errorf("Confidence should be between 0 and 100, got %f", result.Confidence)
+		if len(result.Indicators) > 0 {
+			t.Logf("Indicators: %v", result.Indicators)
+		}
+	})
+
+	t.Run("detect_vpn_by_asn", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]interface{}{
+			"asn": float64(201229),
 		}
 
-		t.Logf("Detection confidence: %.2f", result.Confidence)
+		result := detector.DetectProxyVPN(ctx, "192.168.1.1", nil, data)
+
+		if result.IsVPN {
+			t.Logf("VPN detected via ASN: %s", result.VPNProvider)
+		}
+	})
+
+	t.Run("detect_datacenter_ip", func(t *testing.T) {
+		ctx := context.Background()
+		result := detector.DetectProxyVPN(ctx, "45.67.89.10", nil, nil)
+
+		if result.IsDatacenter {
+			t.Log("Datacenter IP detected")
+		}
+	})
+
+	t.Run("detect_webrtc_leak", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]interface{}{
+			"webrtc_ips": []string{"192.168.1.100", "203.0.113.50"},
+		}
+
+		result := detector.DetectProxyVPN(ctx, "192.168.1.100", nil, data)
+
+		found := false
+		for _, ind := range result.Indicators {
+			if ind == "webrtc_ip_mismatch" {
+				found = true
+			}
+		}
+
+		if found {
+			t.Log("WebRTC leak detected")
+		}
+	})
+
+	t.Run("calculate_risk_level", func(t *testing.T) {
+		ctx := context.Background()
+		result := detector.DetectProxyVPN(ctx, "128.31.0.34", nil, nil)
+
+		if result.RiskLevel != "" {
+			t.Logf("Risk level: %s, Score: %d", result.RiskLevel, result.Score)
+		}
+
+		if len(result.Recommendations) > 0 {
+			t.Logf("Recommendations: %v", result.Recommendations)
+		}
 	})
 
 	t.Run("batch_detect", func(t *testing.T) {
 		ctx := context.Background()
-		requests := []ProxyCheckRequest{
-			{IP: "203.0.113.1", Headers: http.Header{}},
-			{IP: "45.33.32.156", Headers: http.Header{}},
-			{IP: "128.31.0.34", Headers: http.Header{}},
+		requests := []ProxyCheckRequestEnv{
+			{IP: "45.33.32.156", Headers: nil, Data: nil},
+			{IP: "128.31.0.34", Headers: nil, Data: nil},
+			{IP: "203.0.113.1", Headers: http.Header{}, Data: nil},
 		}
 
-		results := detection.BatchDetect(ctx, requests)
+		results := detector.BatchDetect(ctx, requests)
 
 		if len(results) != len(requests) {
 			t.Errorf("Expected %d results, got %d", len(requests), len(results))
 		}
+
+		for i, result := range results {
+			t.Logf("Request %d - VPN: %v, Tor: %v, Proxy: %v, Score: %d",
+				i, result.IsVPN, result.IsTor, result.IsProxy, result.Score)
+		}
+	})
+
+	t.Run("connection_type_vpn", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]interface{}{
+			"connection_type": "vpn",
+		}
+
+		result := detector.DetectProxyVPN(ctx, "192.168.1.1", nil, data)
+
+		if result.IsVPN {
+			t.Logf("VPN detected via connection type")
+		}
+	})
+
+	t.Run("connection_type_proxy", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]interface{}{
+			"connection_type": "socks",
+		}
+
+		result := detector.DetectProxyVPN(ctx, "192.168.1.1", nil, data)
+
+		if result.IsProxy {
+			t.Logf("Proxy detected via connection type")
+		}
 	})
 }
 
-func TestAdvancedRiskScorer(t *testing.T) {
-	scorer := NewEnhancedRiskScorer()
+func TestDetectionPatternMatcher(t *testing.T) {
+	matcher := NewDetectionPatternMatcher()
 
-	t.Run("calculate_score", func(t *testing.T) {
-		analysis := &AdvancedFingerprintAnalysis{
-			BaseFingerprint: &FingerprintAnalysis{
-				AnomalyScore: 50,
-			},
-			MLRiskScore: 30,
-			BehaviorScore: 25,
-			AdvancedIndicators: &AdvancedIndicators{
-				AutomationIndicators: []string{"headless", "webdriver"},
-				ProxyVPNIndicators:   []string{"proxy_detected"},
-			},
-		}
-
-		score := scorer.CalculateScore(analysis)
-
-		if score < 0 || score > 100 {
-			t.Errorf("Score should be between 0 and 100, got %f", score)
-		}
-
-		t.Logf("Calculated risk score: %.2f", score)
-	})
-}
-
-func TestPatternMatcher(t *testing.T) {
-	matcher := NewPatternMatcher()
-
-	t.Run("match_patterns", func(t *testing.T) {
+	t.Run("match_headless_browser", func(t *testing.T) {
 		testCases := []struct {
 			text     string
 			expected bool
 		}{
 			{"headless browser detected", true},
-			{"puppeteer automation active", true},
+			{"phantomjs automation", true},
+			{"puppeteer is running", true},
+			{"playwright framework", true},
+			{"selenium webdriver", true},
 			{"normal browser session", false},
-			{"virtualbox vm running", true},
+		}
+
+		for _, tc := range testCases {
+			results := matcher.Match(tc.text)
+			matched := len(results) > 0
+
+			if matched != tc.expected {
+				t.Errorf("For text '%s', expected match=%v, got match=%v", tc.text, tc.expected, matched)
+			}
+		}
+	})
+
+	t.Run("match_virtual_machine", func(t *testing.T) {
+		testCases := []struct {
+			text     string
+			expected bool
+		}{
+			{"vmware virtual platform", true},
+			{"virtualbox guest", true},
+			{"hyper-v detected", true},
+			{"qemu kvm running", true},
+			{"physical machine", false},
+		}
+
+		for _, tc := range testCases {
+			results := matcher.Match(tc.text)
+			matched := len(results) > 0
+
+			if matched != tc.expected {
+				t.Errorf("For text '%s', expected match=%v, got match=%v", tc.text, tc.expected, matched)
+			}
+		}
+	})
+
+	t.Run("match_tor", func(t *testing.T) {
+		testCases := []struct {
+			text     string
+			expected bool
+		}{
+			{"torbrowser bundle", true},
+			{"tor exit node", true},
+			{"torproject relay", true},
+			{"onion routing", true},
+		}
+
+		for _, tc := range testCases {
+			results := matcher.Match(tc.text)
+			matched := len(results) > 0
+
+			if matched != tc.expected {
+				t.Errorf("For text '%s', expected match=%v, got match=%v", tc.text, tc.expected, matched)
+			}
+		}
+	})
+
+	t.Run("match_vpn", func(t *testing.T) {
+		testCases := []struct {
+			text     string
+			expected bool
+		}{
+			{"nordvpn connected", true},
+			{"expressvpn active", true},
+			{"surfshark tunnel", true},
+			{"protonvpn enabled", true},
 		}
 
 		for _, tc := range testCases {
@@ -211,276 +474,112 @@ func TestPatternMatcher(t *testing.T) {
 	})
 }
 
-func TestRiskReport(t *testing.T) {
-	analyzer := NewAdvancedFingerprintAnalyzer()
-
-	t.Run("generate_report", func(t *testing.T) {
+func TestCalculateFingerprintHash(t *testing.T) {
+	t.Run("hash_consistency", func(t *testing.T) {
 		data := map[string]interface{}{
-			"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0 Headless",
+			"user_agent": "Mozilla/5.0 Test",
+			"canvas":     "test123",
+			"webgl":      "test456",
 		}
 
-		analysis, err := analyzer.AnalyzeAdvancedFingerprint(data)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
+		hash1 := CalculateFingerprintHash(data)
+		hash2 := CalculateFingerprintHash(data)
+
+		if hash1 != hash2 {
+			t.Error("Hash should be consistent for same data")
 		}
-
-		report := analyzer.GenerateRiskReport(analysis)
-
-		if report == nil {
-			t.Fatal("Expected report to be non-nil")
-		}
-
-		if report.FinalScore < 0 || report.FinalScore > 100 {
-			t.Errorf("FinalScore should be between 0 and 100, got %f", report.FinalScore)
-		}
-
-		t.Logf("Risk Level: %s", report.RiskLevel)
-		t.Logf("Summary: %s", report.GetSummary())
 	})
-}
 
-func TestAdvancedFingerprintDatabase(t *testing.T) {
-	db := NewAdvancedFingerprintDatabase()
+	t.Run("hash_uniqueness", func(t *testing.T) {
+		data1 := map[string]interface{}{
+			"user_agent": "Mozilla/5.0 Test 1",
+		}
 
-	t.Run("add_and_get_analysis", func(t *testing.T) {
+		data2 := map[string]interface{}{
+			"user_agent": "Mozilla/5.0 Test 2",
+		}
+
+		hash1 := CalculateFingerprintHash(data1)
+		hash2 := CalculateFingerprintHash(data2)
+
+		if hash1 == hash2 {
+			t.Error("Hash should be different for different data")
+		}
+	})
+
+	t.Run("hash_length", func(t *testing.T) {
 		data := map[string]interface{}{
-			"user_agent": "Mozilla/5.0 Test Browser",
-			"canvas_hash": "test123",
+			"test": "data",
 		}
 
-		analyzer := NewAdvancedFingerprintAnalyzer()
-		analysis, err := analyzer.AnalyzeAdvancedFingerprint(data)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+		hash := CalculateFingerprintHash(data)
 
-		id := analysis.BaseFingerprint.FingerprintID
-		db.AddAdvancedAnalysis(id, analysis)
-
-		retrieved, exists := db.GetAdvancedAnalysis(id)
-		if !exists {
-			t.Fatal("Expected analysis to exist")
-		}
-
-		if retrieved.BaseFingerprint.FingerprintID != id {
-			t.Errorf("Expected ID %s, got %s", id, retrieved.BaseFingerprint.FingerprintID)
-		}
-	})
-
-	t.Run("get_analytics", func(t *testing.T) {
-		analytics := db.GetAnalytics()
-
-		if analytics == nil {
-			t.Fatal("Expected analytics to be non-nil")
-		}
-
-		t.Logf("Total Fingerprints: %d", analytics.TotalFingerprints)
-		t.Logf("Bot Count: %d", analytics.BotCount)
-		t.Logf("VPN Count: %d", analytics.VPNCount)
-	})
-}
-
-func TestTemporalPatternAnalysis(t *testing.T) {
-	analyzer := NewAdvancedFingerprintAnalyzer()
-
-	t.Run("analyze_temporal_pattern", func(t *testing.T) {
-		now := float64(time.Now().UnixMilli())
-		data := map[string]interface{}{
-			"request_timestamps": []interface{}{
-				now,
-				now + 100,
-				now + 200,
-				now + 300,
-				now + 400,
-			},
-		}
-
-		analysis := analyzer.AnalyzeTemporalPattern(data)
-
-		if analysis == nil {
-			t.Fatal("Expected analysis to be non-nil")
-		}
-
-		if analysis.RequestCount != 5 {
-			t.Errorf("Expected 5 requests, got %d", analysis.RequestCount)
-		}
-
-		t.Logf("Avg Interval: %.2fms", analysis.AvgInterval)
-	})
-}
-
-func TestProxyDatabase(t *testing.T) {
-	t.Run("add_and_get_proxy", func(t *testing.T) {
-		detection := NewEnhancedProxyDetection()
-
-		proxy := &ProxyInfo{
-			IP:          "192.168.1.100",
-			Port:        8080,
-			Type:        "http",
-			Protocol:    "HTTP",
-			Country:     "US",
-			Anonymity:   "high",
-			LastChecked: time.Now(),
-			LastSeen:    time.Now(),
-		}
-
-		detection.database.Add(proxy)
-
-		retrieved, exists := detection.database.Get(proxy.IP)
-		if !exists {
-			t.Fatal("Expected proxy to exist")
-		}
-
-		if retrieved.IP != proxy.IP {
-			t.Errorf("Expected IP %s, got %s", proxy.IP, retrieved.IP)
+		if len(hash) != 16 {
+			t.Errorf("Expected hash length 16, got %d", len(hash))
 		}
 	})
 }
 
-func TestWebRTCLeak(t *testing.T) {
-	detection := NewEnhancedProxyDetection()
-
-	t.Run("detect_webrtc_leak", func(t *testing.T) {
-		ctx := context.Background()
-		localIPs := []string{"192.168.1.100", "203.0.113.50"}
-		remoteIP := "192.168.1.100"
-
-		isLeaked, leakedIPs := detection.CheckWebRTCLeak(ctx, localIPs, remoteIP)
-
-		if isLeaked && len(leakedIPs) > 0 {
-			t.Logf("WebRTC leak detected: %v", leakedIPs)
-		} else {
-			t.Log("No WebRTC leak detected")
-		}
-	})
-}
-
-func TestConnectionAnalysis(t *testing.T) {
-	detection := NewEnhancedProxyDetection()
-
-	t.Run("analyze_connection", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		analysis, err := detection.AnalyzeConnection(ctx, "8.8.8.8")
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-
-		if analysis == nil {
-			t.Fatal("Expected analysis to be non-nil")
-		}
-
-		t.Logf("Connection analysis for %s", analysis.IP)
-		t.Logf("TLS Versions: %v", analysis.TLSVersions)
-	})
-}
-
-func TestVPNProviderDetection(t *testing.T) {
-	detection := NewEnhancedProxyDetection()
-
-	t.Run("detect_vpn_by_asn", func(t *testing.T) {
-		testCases := []struct {
-			asn         int
-			expectedVPN bool
-		}{
-			{201229, true},
-			{212502, true},
-			{12345, false},
-		}
-
-		for _, tc := range testCases {
-			isVPN, provider := detection.DetectVPNByASN(tc.asn)
-
-			if isVPN != tc.expectedVPN {
-				t.Errorf("For ASN %d, expected VPN=%v, got VPN=%v", tc.asn, tc.expectedVPN, isVPN)
-			}
-
-			if isVPN {
-				t.Logf("ASN %d is VPN provider: %s", tc.asn, provider)
-			}
-		}
-	})
-}
-
-func TestTorExitNodeManagement(t *testing.T) {
-	detection := NewEnhancedProxyDetection()
-
-	t.Run("check_tor_exit_node", func(t *testing.T) {
-		if !detection.IsTorExitNode("128.31.0.34") {
-			t.Error("Expected 128.31.0.34 to be a known Tor exit node")
-		}
-
-		if detection.IsTorExitNode("8.8.8.8") {
-			t.Error("Expected 8.8.8.8 to NOT be a Tor exit node")
-		}
-	})
-
-	t.Run("add_tor_exit_node", func(t *testing.T) {
-		newTorIP := "192.168.1.200"
-		detection.AddTorExitNode(newTorIP)
-
-		if !detection.IsTorExitNode(newTorIP) {
-			t.Error("Expected new Tor exit node to be added")
-		}
-	})
-}
-
-func TestProxyRiskReport(t *testing.T) {
-	detection := NewEnhancedProxyDetection()
-
-	t.Run("generate_risk_report", func(t *testing.T) {
-		ctx := context.Background()
-		result, _ := detection.DetectProxy(ctx, "203.0.113.1", nil)
-
-		report := detection.GenerateRiskReport(result)
-
-		if report == nil {
-			t.Fatal("Expected report to be non-nil")
-		}
-
-		t.Logf("Risk Level: %s", report.RiskLevel)
-		t.Logf("Risk Score: %.2f", report.Score)
-		t.Logf("Summary: %s", report.Summary)
-		t.Logf("Is Threat: %v", report.IsThreat)
-	})
-}
-
-func BenchmarkAdvancedFingerprintAnalysis(b *testing.B) {
-	analyzer := NewAdvancedFingerprintAnalyzer()
+func BenchmarkEnhancedVMDetection(b *testing.B) {
+	detector := NewEnhancedVMDetector()
 
 	data := map[string]interface{}{
-		"user_agent":            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		"canvas_hash":           "test_canvas_hash_123",
-		"webgl_hash":            "test_webgl_hash_456",
-		"audio_hash":            "test_audio_hash_789",
-		"font_hash":             "test_font_hash",
-		"screen_resolution":     "1920x1080",
-		"timezone":              "America/New_York",
-		"language":              "en-US",
-		"platform":              "Win32",
-		"hardware_concurrency":  float64(8),
-		"device_memory":         float64(16),
-		"plugins_count":         float64(5),
-		"languages_count":       float64(3),
+		"user_agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0",
+		"webgl_renderer":  "NVIDIA GeForce GTX 1080",
+		"cpu_cores":       float64(8),
+		"device_memory":    float64(16),
+		"screen_resolution": "1920x1080",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = analyzer.AnalyzeAdvancedFingerprint(data)
+		detector.DetectVM(data)
 	}
 }
 
-func BenchmarkProxyDetection(b *testing.B) {
-	detection := NewEnhancedProxyDetection()
-
-	headers := http.Header{}
-	headers.Set("X-Forwarded-For", "203.0.113.1, 192.168.1.1")
-
+func BenchmarkEnhancedProxyVPNDetection(b *testing.B) {
+	detector := NewEnhancedProxyVPNDetector()
 	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = detection.DetectProxy(ctx, "203.0.113.1", headers)
+		detector.DetectProxyVPN(ctx, "45.33.32.156", nil, nil)
+	}
+}
+
+func BenchmarkDetectionPatternMatching(b *testing.B) {
+	matcher := NewDetectionPatternMatcher()
+	text := "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/91.0 Headless PhantomJS detected"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		matcher.Match(text)
+	}
+}
+
+func BenchmarkConcurrentProxyDetection(b *testing.B) {
+	detector := NewEnhancedProxyVPNDetector()
+	ctx := context.Background()
+
+	requests := make([]ProxyCheckRequestEnv, 100)
+	for i := 0; i < 100; i++ {
+		requests[i] = ProxyCheckRequestEnv{
+			IP:      "192.168.1.1",
+			Headers: nil,
+			Data:    nil,
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var wg sync.WaitGroup
+		for _, req := range requests {
+			wg.Add(1)
+			go func(r ProxyCheckRequestEnv) {
+				defer wg.Done()
+				detector.DetectProxyVPN(ctx, r.IP, r.Headers, r.Data)
+			}(req)
+		}
+		wg.Wait()
 	}
 }

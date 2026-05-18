@@ -162,31 +162,62 @@
 
 <div class="row">
     <div class="col-md-8">
-        <div class="card card-primary">
+        <div class="card card-primary collapsed-card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>24小时趋势</h3>
                 <div class="card-tools">
-                    <div class="btn-group" role="group">
+                    <div class="btn-group mr-2" role="group">
                         <button type="button" class="btn btn-tool btn-sm active" data-period="hour">小时</button>
                         <button type="button" class="btn btn-tool btn-sm" data-period="day">天</button>
+                        <button type="button" class="btn btn-tool btn-sm" data-period="week">周</button>
                     </div>
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-tool btn-sm dropdown-toggle" data-toggle="dropdown" title="图表类型">
+                            <i class="fas fa-chart-area"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <a class="dropdown-item" href="#" onclick="changeChartType('line'); return false;"><i class="fas fa-chart-line mr-1"></i>折线图</a>
+                            <a class="dropdown-item" href="#" onclick="changeChartType('bar'); return false;"><i class="fas fa-chart-bar mr-1"></i>柱状图</a>
+                            <a class="dropdown-item" href="#" onclick="changeChartType('area'); return false;"><i class="fas fa-chart-area mr-1"></i>面积图</a>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="展开/收起">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
             <div class="card-body">
                 <div id="trendChart" style="min-height: 300px; height: 300px;"></div>
             </div>
+            <div class="card-footer bg-transparent">
+                <div class="row">
+                    <div class="col-md-3 col-6 text-center">
+                        <span class="text-muted small">峰值</span>
+                        <div class="font-weight-bold" id="peakValue">-</div>
+                    </div>
+                    <div class="col-md-3 col-6 text-center">
+                        <span class="text-muted small">均值</span>
+                        <div class="font-weight-bold" id="avgValue">-</div>
+                    </div>
+                    <div class="col-md-3 col-6 text-center">
+                        <span class="text-muted small">环比</span>
+                        <div class="font-weight-bold" id="trendChange">-</div>
+                    </div>
+                    <div class="col-md-3 col-6 text-center">
+                        <span class="text-muted small">预测</span>
+                        <div class="font-weight-bold" id="predictedValue">-</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card card-success">
+        <div class="card card-success collapsed-card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-pie-chart mr-2"></i>风险分布</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="展开/收起">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -200,12 +231,12 @@
 
 <div class="row">
     <div class="col-md-6">
-        <div class="card card-info">
+        <div class="card card-info collapsed-card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-bar-chart mr-2"></i>验证码类型分布</h3>
                 <div class="card-tools">
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="展开/收起">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -215,13 +246,13 @@
         </div>
     </div>
     <div class="col-md-6">
-        <div class="card card-secondary">
+        <div class="card card-secondary collapsed-card">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-history mr-2"></i>最近验证记录</h3>
                 <div class="card-tools">
                     <span class="badge badge-primary" id="liveIndicator"><i class="fas fa-circle text-success"></i> 实时</span>
-                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                        <i class="fas fa-minus"></i>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="展开/收起">
+                        <i class="fas fa-plus"></i>
                     </button>
                 </div>
             </div>
@@ -242,6 +273,76 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-danger collapsed-card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-bar mr-2"></i>对比分析</h3>
+                <div class="card-tools">
+                    <select class="form-control form-control-sm" id="comparePeriodSelect" style="width: auto;">
+                        <option value="prev">vs 昨日</option>
+                        <option value="prev_week">vs 上周</option>
+                        <option value="prev_month">vs 上月</option>
+                    </select>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="展开/收起">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="comparisonChart" style="min-height: 200px; height: 200px;"></div>
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead>
+                            <tr>
+                                <th>指标</th>
+                                <th>当前</th>
+                                <th>对比期</th>
+                                <th>变化</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparisonTableBody">
+                            <tr>
+                                <td>验证量</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td>通过率</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td>拦截率</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-dark collapsed-card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>应用分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse" title="展开/收起">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="appDistributionChart" style="min-height: 200px; height: 200px;"></div>
             </div>
         </div>
     </div>

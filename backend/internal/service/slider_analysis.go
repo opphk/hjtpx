@@ -146,6 +146,62 @@ type SliderFeatures struct {
 	BacktrackSpeed       float64   `json:"backtrack_speed"`
 	BacktrackIntent      float64   `json:"backtrack_intent"`
 	BacktrackPatterns    []BacktrackPattern `json:"backtrack_patterns"`
+	
+	SmoothnessMetrics    *SmoothnessMetrics `json:"smoothness_metrics"`
+	EnhancedAcceleration *EnhancedAccelerationMetrics `json:"enhanced_acceleration"`
+	EnhancedCurvature    *EnhancedCurvatureMetrics `json:"enhanced_curvature"`
+	EnhancedJitter       *EnhancedJitterMetrics `json:"enhanced_jitter"`
+}
+
+type SmoothnessMetrics struct {
+	PrimarySmoothness    float64 `json:"primary_smoothness"`
+	SecondarySmoothness float64 `json:"secondary_smoothness"`
+	JerkScore           float64 `json:"jerk_score"`
+	AngularVelocity     float64 `json:"angular_velocity"`
+	AngularAcceleration  float64 `json:"angular_acceleration"`
+	CurveContinuity     float64 `json:"curve_continuity"`
+	SegmentSmoothness    []float64 `json:"segment_smoothness"`
+	QualityScore        float64 `json:"quality_score"`
+	IsSmoothTransition   bool    `json:"is_smooth_transition"`
+	TransitionCount     int     `json:"transition_count"`
+}
+
+type EnhancedAccelerationMetrics struct {
+	MeanAcceleration    float64   `json:"mean_acceleration"`
+	StdAcceleration    float64   `json:"std_acceleration"`
+	MaxAcceleration    float64   `json:"max_acceleration"`
+	MinAcceleration    float64   `json:"min_acceleration"`
+	JerkMean           float64   `json:"jerk_mean"`
+	JerkStd            float64   `json:"jerk_std"`
+	JerkMax            float64   `json:"jerk_max"`
+	PositiveAccelRatio float64   `json:"positive_accel_ratio"`
+	AccelerationEntropy float64  `json:"acceleration_entropy"`
+	SustainedAccelTime float64   `json:"sustained_accel_time"`
+	DecelPhaseRatio    float64   `json:"decel_phase_ratio"`
+	AccelPattern       string    `json:"accel_pattern"`
+}
+
+type EnhancedCurvatureMetrics struct {
+	MeanCurvature    float64   `json:"mean_curvature"`
+	StdCurvature    float64   `json:"std_curvature"`
+	MaxCurvature    float64   `json:"max_curvature"`
+	CurvatureEntropy float64   `json:"curvature_entropy"`
+	CurvaturePeaks   []int     `json:"curvature_peaks"`
+	TurningPoints    int       `json:"turning_points"`
+	TurnDirection    string    `json:"turn_direction"`
+	CurvatureBursts  int       `json:"curvature_bursts"`
+	CurvatureTrend   float64   `json:"curvature_trend"`
+}
+
+type EnhancedJitterMetrics struct {
+	HorizontalJitter float64 `json:"horizontal_jitter"`
+	VerticalJitter   float64 `json:"vertical_jitter"`
+	TotalJitter      float64 `json:"total_jitter"`
+	JitterEntropy     float64 `json:"jitter_entropy"`
+	JitterPeriodicity float64 `json:"jitter_periodicity"`
+	IsMicroJitter    bool    `json:"is_micro_jitter"`
+	MicroJitterRatio float64 `json:"micro_jitter_ratio"`
+	JitterConsistency float64 `json:"jitter_consistency"`
 }
 
 type SliderAnalyzer struct {
@@ -513,6 +569,11 @@ func (sfe *SliderFeatureExtractor) ExtractFeatures(trajectory []SliderPoint, tar
 	if patterns, ok := enhancedBacktrack["patterns"].([]BacktrackPattern); ok {
 		features.BacktrackPatterns = patterns
 	}
+
+	features.SmoothnessMetrics = sfe.extractEnhancedSmoothnessMetrics(trajectory)
+	features.EnhancedAcceleration = sfe.extractEnhancedAccelerationMetrics(trajectory)
+	features.EnhancedCurvature = sfe.extractEnhancedCurvatureMetrics(trajectory, curvatures)
+	features.EnhancedJitter = sfe.extractEnhancedJitterMetrics(trajectory)
 
 	return features
 }
@@ -3949,6 +4010,1036 @@ func (sa *SliderAnalyzer) ExtractMicroMovements(trajectory []SliderPoint) []Slid
 	}
 	
 	return microMovements
+}
+
+func (sfe *SliderFeatureExtractor) extractEnhancedSmoothnessMetrics(trajectory []SliderPoint) *SmoothnessMetrics {
+	metrics := &SmoothnessMetrics{}
+	
+	if len(trajectory) < 3 {
+		return metrics
+	}
+	
+	metrics.PrimarySmoothness = sfe.calculatePrimarySmoothness(trajectory)
+	metrics.SecondarySmoothness = sfe.calculateSecondarySmoothness(trajectory)
+	metrics.JerkScore = sfe.calculateJerkScore(trajectory)
+	
+	angularVelocity := sfe.calculateAngularVelocity(trajectory)
+	metrics.AngularVelocity = angularVelocity.mean
+	
+	angularAcceleration := sfe.calculateAngularAcceleration(trajectory)
+	metrics.AngularAcceleration = angularAcceleration.mean
+	
+	metrics.CurveContinuity = sfe.calculateCurveContinuity(trajectory)
+	metrics.SegmentSmoothness = sfe.calculateSegmentSmoothness(trajectory, 5)
+	metrics.QualityScore = sfe.calculateSmoothnessQualityScore(metrics)
+	
+	smoothTransitions := sfe.detectSmoothTransitions(trajectory)
+	metrics.IsSmoothTransition = smoothTransitions.isSmooth
+	metrics.TransitionCount = smoothTransitions.count
+	
+	return metrics
+}
+
+func (sfe *SliderFeatureExtractor) calculatePrimarySmoothness(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 3 {
+		return 0
+	}
+	
+	angles := sfe.extractAngles(trajectory)
+	if len(angles) < 2 {
+		return 1.0
+	}
+	
+	angleChanges := make([]float64, 0)
+	for i := 1; i < len(angles); i++ {
+		change := math.Abs(angles[i] - angles[i-1])
+		if change > math.Pi {
+			change = 2*math.Pi - change
+		}
+		angleChanges = append(angleChanges, change)
+	}
+	
+	if len(angleChanges) == 0 {
+		return 1.0
+	}
+	
+	meanChange := sfe.mean(angleChanges)
+	variance := sfe.variance(angleChanges)
+	
+	smoothness := 1.0 - math.Min(meanChange/math.Pi, 1.0)
+	smoothness *= 1.0 - math.Min(math.Sqrt(variance)/math.Pi, 1.0)
+	
+	return math.Max(0, smoothness)
+}
+
+func (sfe *SliderFeatureExtractor) calculateSecondarySmoothness(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 4 {
+		return 0
+	}
+	
+	speeds := sfe.extractSpeeds(trajectory)
+	if len(speeds) < 2 {
+		return 1.0
+	}
+	
+	speedChanges := make([]float64, 0)
+	for i := 1; i < len(speeds); i++ {
+		change := math.Abs(speeds[i] - speeds[i-1])
+		speedChanges = append(speedChanges, change)
+	}
+	
+	if len(speedChanges) == 0 {
+		return 1.0
+	}
+	
+	meanChange := sfe.mean(speedChanges)
+	maxPossible := sfe.max(speeds)
+	if maxPossible == 0 {
+		return 1.0
+	}
+	
+	smoothness := 1.0 - math.Min(meanChange/maxPossible, 1.0)
+	return math.Max(0, smoothness)
+}
+
+func (sfe *SliderFeatureExtractor) calculateJerkScore(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 4 {
+		return 0
+	}
+	
+	speeds := sfe.extractSpeeds(trajectory)
+	if len(speeds) < 3 {
+		return 0
+	}
+	
+	accelerations := sfe.extractAccelerations(trajectory)
+	if len(accelerations) < 2 {
+		return 0
+	}
+	
+	jerks := make([]float64, 0)
+	for i := 1; i < len(accelerations); i++ {
+		dt := float64(trajectory[i+1].Timestamp - trajectory[i-1].Timestamp) / 2
+		if dt > 0 {
+			jerk := (accelerations[i] - accelerations[i-1]) / dt
+			jerks = append(jerks, math.Abs(jerk))
+		}
+	}
+	
+	if len(jerks) == 0 {
+		return 0
+	}
+	
+	meanJerk := sfe.mean(jerks)
+	variance := sfe.variance(jerks)
+	
+	jerkScore := meanJerk + math.Sqrt(variance)
+	normalizedScore := jerkScore / (jerkScore + 1.0)
+	
+	return math.Min(normalizedScore, 1.0)
+}
+
+func (sfe *SliderFeatureExtractor) extractAngles(trajectory []SliderPoint) []float64 {
+	angles := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		angle := math.Atan2(dy, dx)
+		if angle < 0 {
+			angle += 2 * math.Pi
+		}
+		angles = append(angles, angle)
+	}
+	return angles
+}
+
+func (sfe *SliderFeatureExtractor) calculateAngularVelocity(trajectory []SliderPoint) struct{ mean, max float64 } {
+	angles := sfe.extractAngles(trajectory)
+	if len(angles) < 2 {
+		return struct{ mean, max float64 }{0, 0}
+	}
+	
+	angularVelocities := make([]float64, 0)
+	for i := 1; i < len(angles); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			change := angles[i] - angles[i-1]
+			if change > math.Pi {
+				change -= 2 * math.Pi
+			} else if change < -math.Pi {
+				change += 2 * math.Pi
+			}
+			velocity := math.Abs(change) / dt * 1000
+			angularVelocities = append(angularVelocities, velocity)
+		}
+	}
+	
+	if len(angularVelocities) == 0 {
+		return struct{ mean, max float64 }{0, 0}
+	}
+	
+	return struct{ mean, max float64 }{
+		mean: sfe.mean(angularVelocities),
+		max:  sfe.max(angularVelocities),
+	}
+}
+
+func (sfe *SliderFeatureExtractor) calculateAngularAcceleration(trajectory []SliderPoint) struct{ mean, max float64 } {
+	angles := sfe.extractAngles(trajectory)
+	if len(angles) < 3 {
+		return struct{ mean, max float64 }{0, 0}
+	}
+	
+	angularVelocities := make([]float64, 0)
+	for i := 1; i < len(angles); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			change := angles[i] - angles[i-1]
+			if change > math.Pi {
+				change -= 2 * math.Pi
+			} else if change < -math.Pi {
+				change += 2 * math.Pi
+			}
+			velocity := change / dt * 1000
+			angularVelocities = append(angularVelocities, velocity)
+		}
+	}
+	
+	if len(angularVelocities) < 2 {
+		return struct{ mean, max float64 }{0, 0}
+	}
+	
+	angularAccelerations := make([]float64, 0)
+	for i := 1; i < len(angularVelocities); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			accel := (angularVelocities[i] - angularVelocities[i-1]) / dt * 1000
+			angularAccelerations = append(angularAccelerations, math.Abs(accel))
+		}
+	}
+	
+	if len(angularAccelerations) == 0 {
+		return struct{ mean, max float64 }{0, 0}
+	}
+	
+	return struct{ mean, max float64 }{
+		mean: sfe.mean(angularAccelerations),
+		max:  sfe.max(angularAccelerations),
+	}
+}
+
+func (sfe *SliderFeatureExtractor) calculateCurveContinuity(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 3 {
+		return 1.0
+	}
+	
+	discontinuities := 0
+	totalChecks := 0
+	
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+		
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+		
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle < -0.9 {
+				discontinuities++
+			}
+			totalChecks++
+		}
+	}
+	
+	if totalChecks == 0 {
+		return 1.0
+	}
+	
+	return 1.0 - float64(discontinuities)/float64(totalChecks)
+}
+
+func (sfe *SliderFeatureExtractor) calculateSegmentSmoothness(trajectory []SliderPoint, numSegments int) []float64 {
+	if len(trajectory) < numSegments*2 {
+		return []float64{}
+	}
+	
+	segmentSize := len(trajectory) / numSegments
+	smoothness := make([]float64, numSegments)
+	
+	for i := 0; i < numSegments; i++ {
+		start := i * segmentSize
+		end := start + segmentSize
+		if i == numSegments-1 {
+			end = len(trajectory)
+		}
+		
+		segment := trajectory[start:end]
+		smoothness[i] = sfe.calculatePrimarySmoothness(segment)
+	}
+	
+	return smoothness
+}
+
+func (sfe *SliderFeatureExtractor) calculateSmoothnessQualityScore(metrics *SmoothnessMetrics) float64 {
+	score := 0.0
+	weight := 0.0
+	
+	score += metrics.PrimarySmoothness * 0.3
+	weight += 0.3
+	
+	score += metrics.SecondarySmoothness * 0.2
+	weight += 0.2
+	
+	jerkContribution := 1.0 - metrics.JerkScore
+	score += jerkContribution * 0.2
+	weight += 0.2
+	
+	score += metrics.CurveContinuity * 0.2
+	weight += 0.2
+	
+	transitionContribution := 1.0
+	if metrics.TransitionCount > 0 {
+		transitionContribution = 1.0 / float64(metrics.TransitionCount+1)
+	}
+	score += transitionContribution * 0.1
+	weight += 0.1
+	
+	if weight > 0 {
+		return score / weight
+	}
+	return 0.5
+}
+
+func (sfe *SliderFeatureExtractor) detectSmoothTransitions(trajectory []SliderPoint) struct{ isSmooth bool; count int } {
+	if len(trajectory) < 3 {
+		return struct{ isSmooth bool; count int }{true, 0}
+	}
+	
+	smoothTransitions := 0
+	totalTransitions := 0
+	
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+		
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+		
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			
+			totalTransitions++
+			if cosAngle > 0.7 {
+				smoothTransitions++
+			}
+		}
+	}
+	
+	if totalTransitions == 0 {
+		return struct{ isSmooth bool; count int }{true, 0}
+	}
+	
+	smoothRatio := float64(smoothTransitions) / float64(totalTransitions)
+	return struct{ isSmooth bool; count int }{
+		isSmooth: smoothRatio > 0.7,
+		count:    totalTransitions - smoothTransitions,
+	}
+}
+
+func (sfe *SliderFeatureExtractor) extractEnhancedAccelerationMetrics(trajectory []SliderPoint) *EnhancedAccelerationMetrics {
+	metrics := &EnhancedAccelerationMetrics{}
+	
+	if len(trajectory) < 3 {
+		return metrics
+	}
+	
+	speeds := sfe.extractSpeeds(trajectory)
+	if len(speeds) < 2 {
+		return metrics
+	}
+	
+	accelerations := sfe.extractAccelerations(trajectory)
+	if len(accelerations) == 0 {
+		return metrics
+	}
+	
+	metrics.MeanAcceleration = sfe.mean(accelerations)
+	metrics.StdAcceleration = math.Sqrt(sfe.variance(accelerations))
+	metrics.MaxAcceleration = sfe.max(accelerations)
+	metrics.MinAcceleration = sfe.min(accelerations)
+	
+	jerks := sfe.calculateJerkValues(trajectory, accelerations)
+	if len(jerks) > 0 {
+		metrics.JerkMean = sfe.mean(jerks)
+		metrics.JerkStd = math.Sqrt(sfe.variance(jerks))
+		metrics.JerkMax = sfe.max(jerks)
+	}
+	
+	positiveCount := 0
+	for _, acc := range accelerations {
+		if acc > 0 {
+			positiveCount++
+		}
+	}
+	metrics.PositiveAccelRatio = float64(positiveCount) / float64(len(accelerations))
+	
+	metrics.AccelerationEntropy = sfe.calculateAccelerationEntropy(accelerations)
+	
+	duration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	if duration > 0 {
+		sustainedAccel := 0.0
+		for _, acc := range accelerations {
+			if acc > 0 {
+				sustainedAccel += 1.0
+			}
+		}
+		metrics.SustainedAccelTime = sustainedAccel / float64(len(accelerations)) * duration / 1000
+	}
+	
+	negativeCount := len(accelerations) - positiveCount
+	if len(accelerations) > 0 {
+		metrics.DecelPhaseRatio = float64(negativeCount) / float64(len(accelerations))
+	}
+	
+	metrics.AccelPattern = sfe.classifyAccelerationPattern(accelerations)
+	
+	return metrics
+}
+
+func (sfe *SliderFeatureExtractor) calculateJerkValues(trajectory []SliderPoint, accelerations []float64) []float64 {
+	jerks := make([]float64, 0)
+	for i := 1; i < len(accelerations); i++ {
+		dt := float64(trajectory[i+1].Timestamp - trajectory[i-1].Timestamp) / 2
+		if dt > 0 {
+			jerk := (accelerations[i] - accelerations[i-1]) / dt * 1000
+			jerks = append(jerks, jerk)
+		}
+	}
+	return jerks
+}
+
+func (sfe *SliderFeatureExtractor) calculateAccelerationEntropy(accelerations []float64) float64 {
+	if len(accelerations) == 0 {
+		return 0
+	}
+	
+	minAcc := sfe.min(accelerations)
+	maxAcc := sfe.max(accelerations)
+	if maxAcc == minAcc {
+		return 0
+	}
+	
+	bins := 10
+	counts := make([]int, bins)
+	binWidth := (maxAcc - minAcc) / float64(bins)
+	
+	for _, acc := range accelerations {
+		bin := int((acc - minAcc) / binWidth)
+		if bin >= bins {
+			bin = bins - 1
+		}
+		if bin < 0 {
+			bin = 0
+		}
+		counts[bin]++
+	}
+	
+	entropy := 0.0
+	total := float64(len(accelerations))
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / total
+			entropy -= p * math.Log2(p)
+		}
+	}
+	
+	return entropy
+}
+
+func (sfe *SliderFeatureExtractor) classifyAccelerationPattern(accelerations []float64) string {
+	if len(accelerations) < 3 {
+		return "unknown"
+	}
+	
+	positiveCount := 0
+	negativeCount := 0
+	for _, acc := range accelerations {
+		if acc > 0 {
+			positiveCount++
+		} else {
+			negativeCount++
+		}
+	}
+	
+	positiveRatio := float64(positiveCount) / float64(len(accelerations))
+	
+	variance := sfe.variance(accelerations)
+	
+	if variance < 0.001 {
+		return "constant"
+	}
+	
+	if positiveRatio > 0.7 {
+		return "accelerating"
+	} else if positiveRatio < 0.3 {
+		return "decelerating"
+	}
+	
+	firstHalf := accelerations[:len(accelerations)/2]
+	secondHalf := accelerations[len(accelerations)/2:]
+	
+	firstMean := sfe.mean(firstHalf)
+	secondMean := sfe.mean(secondHalf)
+	
+	if secondMean > firstMean*1.2 {
+		return "late_acceleration"
+	} else if secondMean < firstMean*0.8 {
+		return "early_deceleration"
+	}
+	
+	return "variable"
+}
+
+func (sfe *SliderFeatureExtractor) extractEnhancedCurvatureMetrics(trajectory []SliderPoint, curvatures []float64) *EnhancedCurvatureMetrics {
+	metrics := &EnhancedCurvatureMetrics{}
+	
+	if len(curvatures) == 0 {
+		return metrics
+	}
+	
+	metrics.MeanCurvature = sfe.mean(curvatures)
+	metrics.StdCurvature = math.Sqrt(sfe.variance(curvatures))
+	metrics.MaxCurvature = sfe.max(curvatures)
+	
+	metrics.CurvatureEntropy = sfe.calculateCurvatureEntropy(curvatures)
+	
+	peaks := sfe.detectCurvaturePeaks(curvatures)
+	metrics.CurvaturePeaks = peaks
+	metrics.CurvatureBursts = len(peaks)
+	
+	metrics.TurningPoints = sfe.countTurningPoints(trajectory)
+	metrics.TurnDirection = sfe.determineTurnDirection(trajectory)
+	
+	metrics.CurvatureTrend = sfe.calculateCurvatureTrend(curvatures)
+	
+	return metrics
+}
+
+func (sfe *SliderFeatureExtractor) calculateCurvatureEntropy(curvatures []float64) float64 {
+	if len(curvatures) == 0 {
+		return 0
+	}
+	
+	minCurv := sfe.min(curvatures)
+	maxCurv := sfe.max(curvatures)
+	if maxCurv == minCurv {
+		return 0
+	}
+	
+	bins := 10
+	counts := make([]int, bins)
+	binWidth := (maxCurv - minCurv) / float64(bins)
+	
+	for _, curv := range curvatures {
+		bin := int((curv - minCurv) / binWidth)
+		if bin >= bins {
+			bin = bins - 1
+		}
+		if bin < 0 {
+			bin = 0
+		}
+		counts[bin]++
+	}
+	
+	entropy := 0.0
+	total := float64(len(curvatures))
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / total
+			entropy -= p * math.Log2(p)
+		}
+	}
+	
+	return entropy
+}
+
+func (sfe *SliderFeatureExtractor) detectCurvaturePeaks(curvatures []float64) []int {
+	if len(curvatures) < 3 {
+		return []int{}
+	}
+	
+	peaks := make([]int, 0)
+	mean := sfe.mean(curvatures)
+	stdDev := math.Sqrt(sfe.variance(curvatures))
+	threshold := mean + 0.5*stdDev
+	
+	for i := 1; i < len(curvatures)-1; i++ {
+		if curvatures[i] > threshold && curvatures[i] > curvatures[i-1] && curvatures[i] > curvatures[i+1] {
+			peaks = append(peaks, i)
+		}
+	}
+	
+	return peaks
+}
+
+func (sfe *SliderFeatureExtractor) countTurningPoints(trajectory []SliderPoint) int {
+	if len(trajectory) < 3 {
+		return 0
+	}
+	
+	turningPoints := 0
+	var prevDirection float64
+	
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+		
+		crossProduct := v1x*v2y - v1y*v2x
+		direction := 0.0
+		if crossProduct > 0.001 {
+			direction = 1
+		} else if crossProduct < -0.001 {
+			direction = -1
+		}
+		
+		if i > 1 && direction != prevDirection && direction != 0 {
+			turningPoints++
+		}
+		prevDirection = direction
+	}
+	
+	return turningPoints
+}
+
+func (sfe *SliderFeatureExtractor) determineTurnDirection(trajectory []SliderPoint) string {
+	if len(trajectory) < 3 {
+		return "straight"
+	}
+	
+	leftTurns := 0
+	rightTurns := 0
+	
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+		
+		crossProduct := v1x*v2y - v1y*v2x
+		if crossProduct > 0.001 {
+			leftTurns++
+		} else if crossProduct < -0.001 {
+			rightTurns++
+		}
+	}
+	
+	if leftTurns > rightTurns*2 {
+		return "mostly_left"
+	} else if rightTurns > leftTurns*2 {
+		return "mostly_right"
+	} else if leftTurns > 0 || rightTurns > 0 {
+		return "mixed"
+	}
+	
+	return "straight"
+}
+
+func (sfe *SliderFeatureExtractor) calculateCurvatureTrend(curvatures []float64) float64 {
+	if len(curvatures) < 3 {
+		return 0
+	}
+	
+	n := float64(len(curvatures))
+	sumX, sumY, sumXY, sumX2 := 0.0, 0.0, 0.0, 0.0
+	
+	for i, curv := range curvatures {
+		x := float64(i)
+		sumX += x
+		sumY += curv
+		sumXY += x * curv
+		sumX2 += x * x
+	}
+	
+	denominator := n*sumX2 - sumX*sumX
+	if denominator == 0 {
+		return 0
+	}
+	
+	slope := (n*sumXY - sumX*sumY) / denominator
+	normalizedSlope := slope / (sfe.mean(curvatures) + 0.001)
+	
+	return math.Max(-1, math.Min(1, normalizedSlope))
+}
+
+func (sfe *SliderFeatureExtractor) extractEnhancedJitterMetrics(trajectory []SliderPoint) *EnhancedJitterMetrics {
+	metrics := &EnhancedJitterMetrics{}
+	
+	if len(trajectory) < 3 {
+		return metrics
+	}
+	
+	smoothed := sfe.smoothTrajectory(trajectory, 3)
+	
+	xDeviations := make([]float64, 0)
+	yDeviations := make([]float64, 0)
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - smoothed[i].X)
+		dy := float64(trajectory[i].Y - smoothed[i].Y)
+		xDeviations = append(xDeviations, math.Abs(dx))
+		yDeviations = append(yDeviations, math.Abs(dy))
+	}
+	
+	if len(xDeviations) > 0 {
+		metrics.HorizontalJitter = sfe.mean(xDeviations)
+		metrics.VerticalJitter = sfe.mean(yDeviations)
+		metrics.TotalJitter = math.Sqrt(metrics.HorizontalJitter*metrics.HorizontalJitter + 
+			metrics.VerticalJitter*metrics.VerticalJitter)
+	}
+	
+	metrics.JitterEntropy = sfe.calculateJitterEntropy(xDeviations, yDeviations)
+	metrics.JitterPeriodicity = sfe.calculateJitterPeriodicity(xDeviations)
+	
+	microJitterThreshold := 1.5
+	microJitterCount := 0
+	for _, j := range xDeviations {
+		if j < microJitterThreshold {
+			microJitterCount++
+		}
+	}
+	for _, j := range yDeviations {
+		if j < microJitterThreshold {
+			microJitterCount++
+		}
+	}
+	
+	totalSamples := len(xDeviations) + len(yDeviations)
+	if totalSamples > 0 {
+		metrics.MicroJitterRatio = float64(microJitterCount) / float64(totalSamples)
+	}
+	metrics.IsMicroJitter = metrics.MicroJitterRatio > 0.8
+	
+	metrics.JitterConsistency = sfe.calculateJitterConsistency(xDeviations, yDeviations)
+	
+	return metrics
+}
+
+func (sfe *SliderFeatureExtractor) calculateJitterEntropy(xDeviations, yDeviations []float64) float64 {
+	totalDeviations := append(xDeviations, yDeviations...)
+	if len(totalDeviations) == 0 {
+		return 0
+	}
+	
+	minDev := sfe.min(totalDeviations)
+	maxDev := sfe.max(totalDeviations)
+	if maxDev == minDev {
+		return 0
+	}
+	
+	bins := 8
+	counts := make([]int, bins)
+	binWidth := (maxDev - minDev) / float64(bins)
+	
+	for _, dev := range totalDeviations {
+		bin := int((dev - minDev) / binWidth)
+		if bin >= bins {
+			bin = bins - 1
+		}
+		if bin < 0 {
+			bin = 0
+		}
+		counts[bin]++
+	}
+	
+	entropy := 0.0
+	total := float64(len(totalDeviations))
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / total
+			entropy -= p * math.Log2(p)
+		}
+	}
+	
+	return entropy
+}
+
+func (sfe *SliderFeatureExtractor) calculateJitterPeriodicity(deviations []float64) float64 {
+	if len(deviations) < 4 {
+		return 0
+	}
+	
+	n := len(deviations)
+	maxLag := n / 2
+	if maxLag < 2 {
+		return 0
+	}
+	
+	maxCorrelation := 0.0
+	for lag := 1; lag <= maxLag; lag++ {
+		sumXY, sumX, sumY, sumX2, sumY2 := 0.0, 0.0, 0.0, 0.0, 0.0
+		count := 0
+		for i := 0; i < n-lag; i++ {
+			x := deviations[i]
+			y := deviations[i+lag]
+			sumXY += x * y
+			sumX += x
+			sumY += y
+			sumX2 += x * x
+			sumY2 += y * y
+			count++
+		}
+		
+		if count == 0 {
+			continue
+		}
+		
+		denominator := math.Sqrt((float64(count)*sumX2-sumX*sumX) * (float64(count)*sumY2-sumY*sumY))
+		if denominator == 0 {
+			continue
+		}
+		
+		correlation := (float64(count)*sumXY - sumX*sumY) / denominator
+		if correlation > maxCorrelation {
+			maxCorrelation = correlation
+		}
+	}
+	
+	return math.Max(0, maxCorrelation)
+}
+
+func (sfe *SliderFeatureExtractor) calculateJitterConsistency(xDeviations, yDeviations []float64) float64 {
+	if len(xDeviations) < 2 || len(yDeviations) < 2 {
+		return 0
+	}
+	
+	xConsistency := 1.0 - math.Min(sfe.variance(xDeviations)/math.Max(sfe.mean(xDeviations), 0.1), 1.0)
+	yConsistency := 1.0 - math.Min(sfe.variance(yDeviations)/math.Max(sfe.mean(yDeviations), 0.1), 1.0)
+	
+	return (xConsistency + yConsistency) / 2.0
+}
+
+type UnifiedRiskScorer struct {
+	featureWeights   map[string]float64
+	categoryWeights  map[string]float64
+}
+
+func NewUnifiedRiskScorer() *UnifiedRiskScorer {
+	return &UnifiedRiskScorer{
+		featureWeights: map[string]float64{
+			"path_efficiency":     0.08,
+			"speed_consistency":   0.06,
+			"smoothness_score":   0.07,
+			"human_likeness":      0.10,
+			"acceleration_pattern": 0.05,
+			"curvature_pattern":   0.05,
+			"jitter_score":        0.04,
+			"pause_count":         0.03,
+			"backtrack_count":    0.03,
+			"micro_corrections":  0.03,
+			"direction_changes":   0.03,
+			"trajectory_entropy":  0.04,
+			"fractal_dimension":   0.04,
+			"speed_variance":     0.04,
+			"acceleration_variance": 0.03,
+		},
+		categoryWeights: map[string]float64{
+			"trajectory":    0.35,
+			"velocity":      0.25,
+			"smoothness":    0.20,
+			"anomaly":       0.20,
+		},
+	}
+}
+
+func (urs *UnifiedRiskScorer) CalculateRiskScore(features *SliderFeatures) float64 {
+	if features == nil {
+		return 0.5
+	}
+	
+	trajectoryScore := urs.calculateTrajectoryScore(features)
+	velocityScore := urs.calculateVelocityScore(features)
+	smoothnessScore := urs.calculateSmoothnessScoreFromFeatures(features)
+	anomalyScore := urs.calculateAnomalyScore(features)
+	
+	totalRisk := 0.0
+	totalWeight := 0.0
+	
+	totalRisk += trajectoryScore * urs.categoryWeights["trajectory"]
+	totalWeight += urs.categoryWeights["trajectory"]
+	
+	totalRisk += velocityScore * urs.categoryWeights["velocity"]
+	totalWeight += urs.categoryWeights["velocity"]
+	
+	totalRisk += smoothnessScore * urs.categoryWeights["smoothness"]
+	totalWeight += smoothnessScore * urs.categoryWeights["smoothness"]
+	
+	totalRisk += anomalyScore * urs.categoryWeights["anomaly"]
+	totalWeight += urs.categoryWeights["anomaly"]
+	
+	if totalWeight > 0 {
+		return math.Min(totalRisk/totalWeight, 1.0)
+	}
+	return 0.5
+}
+
+func (urs *UnifiedRiskScorer) calculateTrajectoryScore(features *SliderFeatures) float64 {
+	score := 0.0
+	
+	if features.PathEfficiency > 0.98 {
+		score += 0.9
+	} else if features.PathEfficiency > 0.9 {
+		score += 0.5
+	} else if features.PathEfficiency > 0.7 {
+		score += 0.2
+	}
+	
+	if features.FractalDimension < 1.1 {
+		score += 0.7
+	} else if features.FractalDimension < 1.3 {
+		score += 0.3
+	}
+	
+	if features.TrajectoryEntropy < 2.0 {
+		score += 0.5
+	}
+	
+	return math.Min(score, 1.0)
+}
+
+func (urs *UnifiedRiskScorer) calculateVelocityScore(features *SliderFeatures) float64 {
+	score := 0.0
+	
+	if features.SpeedConsistency > 0.95 {
+		score += 0.8
+	} else if features.SpeedConsistency > 0.8 {
+		score += 0.4
+	} else if features.SpeedConsistency > 0.5 {
+		score += 0.2
+	}
+	
+	if features.AverageSpeed > 1500 {
+		score += 0.6
+	} else if features.AverageSpeed > 800 {
+		score += 0.3
+	}
+	
+	if features.SpeedVariance < 0.01 {
+		score += 0.7
+	} else if features.SpeedVariance < 0.1 {
+		score += 0.3
+	}
+	
+	if urs.hasEnhancedMetrics(features) {
+		metrics := features.EnhancedAcceleration
+		if metrics != nil {
+			if metrics.AccelPattern == "constant" {
+				score += 0.5
+			}
+			if metrics.PositiveAccelRatio > 0.8 || metrics.PositiveAccelRatio < 0.2 {
+				score += 0.3
+			}
+		}
+	}
+	
+	return math.Min(score, 1.0)
+}
+
+func (urs *UnifiedRiskScorer) calculateSmoothnessScoreFromFeatures(features *SliderFeatures) float64 {
+	score := 0.0
+	
+	if features.SmoothnessScore > 0.95 {
+		score += 0.8
+	} else if features.SmoothnessScore > 0.8 {
+		score += 0.4
+	} else if features.SmoothnessScore > 0.5 {
+		score += 0.2
+	}
+	
+	if features.JitterScore < 0.01 {
+		score += 0.6
+	} else if features.JitterScore < 0.05 {
+		score += 0.3
+	}
+	
+	if urs.hasEnhancedMetrics(features) {
+		metrics := features.SmoothnessMetrics
+		if metrics != nil {
+			if metrics.PrimarySmoothness > 0.95 {
+				score += 0.4
+			}
+			if metrics.JerkScore < 0.1 {
+				score += 0.3
+			}
+			if metrics.CurveContinuity < 0.5 {
+				score += 0.4
+			}
+			if !metrics.IsSmoothTransition && metrics.TransitionCount > 5 {
+				score -= 0.3
+			}
+		}
+		
+		jitterMetrics := features.EnhancedJitter
+		if jitterMetrics != nil {
+			if jitterMetrics.IsMicroJitter {
+				score += 0.4
+			}
+			if jitterMetrics.JitterPeriodicity > 0.8 {
+				score += 0.3
+			}
+		}
+	}
+	
+	return math.Max(0, math.Min(score, 1.0))
+}
+
+func (urs *UnifiedRiskScorer) calculateAnomalyScore(features *SliderFeatures) float64 {
+	score := 0.0
+	
+	if features.MicroCorrections == 0 && features.TotalDuration > 500 {
+		score += 0.4
+	}
+	
+	if features.PauseCount == 0 && features.TotalDuration > 1000 {
+		score += 0.3
+	}
+	
+	if features.BacktrackCount > 5 {
+		score += 0.2
+	}
+	
+	if features.CurvatureVariance < 0.001 {
+		score += 0.4
+	}
+	
+	if urs.hasEnhancedMetrics(features) {
+		curvMetrics := features.EnhancedCurvature
+		if curvMetrics != nil {
+			if curvMetrics.TurningPoints < 3 && features.TotalDuration > 2000 {
+				score += 0.3
+			}
+			if curvMetrics.CurvatureBursts > 10 {
+				score += 0.2
+			}
+		}
+	}
+	
+	return math.Min(score, 1.0)
+}
+
+func (urs *UnifiedRiskScorer) hasEnhancedMetrics(features *SliderFeatures) bool {
+	return features.SmoothnessMetrics != nil && 
+		features.EnhancedAcceleration != nil &&
+		features.EnhancedCurvature != nil &&
+		features.EnhancedJitter != nil
 }
 
 func (sa *SliderAnalyzer) AnalyzeTrajectorySmoothness(trajectory []SliderPoint) map[string]interface{} {

@@ -507,9 +507,9 @@ func (h *EnvironmentDetectionHandler) BatchDetectProxy(c *gin.Context) {
 	}
 
 	// 使用 BatchDetect
-	proxyRequests := make([]service.ProxyCheckRequest, len(req.IPs))
+	proxyRequests := make([]service.ProxyCheckRequestV2, len(req.IPs))
 	for i, ip := range req.IPs {
-		proxyRequests[i] = service.ProxyCheckRequest{
+		proxyRequests[i] = service.ProxyCheckRequestV2{
 			IP:      ip,
 			Headers: httpHeaders,
 		}

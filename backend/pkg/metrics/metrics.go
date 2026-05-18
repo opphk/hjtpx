@@ -13,10 +13,10 @@ var (
 )
 
 func init() {
-	go metricsCollector()
+	go collectBasicMetrics()
 }
 
-func metricsCollector() {
+func collectBasicMetrics() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {

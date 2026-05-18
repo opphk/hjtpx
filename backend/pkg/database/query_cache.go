@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -13,20 +12,20 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/config"
 )
 
-type QueryCache struct {
+type QueryCacheV2 struct {
 	mu        sync.RWMutex
-	cache     map[string]cacheEntry
+	cache     map[string]cacheEntryV2
 	maxSize   int
 	ttl       time.Duration
 	enabled   bool
-	stats     *QueryCacheStats
-	strategy  QueryCacheStrategy
+	stats     *QueryCacheStatsV2
+	strategy  QueryCacheStrategyV2
 	hits      atomic.Int64
 	misses    atomic.Int64
 	evictions atomic.Int64
 }
 
-type cacheEntry struct {
+type cacheEntryV2 struct {
 	value       interface{}
 	expiration  time.Time
 	accessCount int64
@@ -34,7 +33,7 @@ type cacheEntry struct {
 	frequency   float64
 }
 
-type QueryCacheStats struct {
+type QueryCacheStatsV2 struct {
 	TotalHits     atomic.Int64
 	TotalMisses   atomic.Int64
 	TotalSets     atomic.Int64
@@ -43,22 +42,22 @@ type QueryCacheStats struct {
 	PeakSize      atomic.Int64
 }
 
-type QueryCacheStrategy int
+type QueryCacheStrategyV2 int
 
 const (
-	StrategyLRU QueryCacheStrategy = iota
-	StrategyLFU
-	StrategyAdaptive
-	StrategyTTL
+	StrategyLRUV2 QueryCacheStrategyV2 = iota
+	StrategyLFUV2
+	StrategyAdaptiveV2
+	StrategyTTLV2
 )
 
-type IntelligentQueryCache struct {
-	baseCache     *QueryCache
-	queryPatterns map[string]*QueryPattern
+type IntelligentQueryCacheV2 struct {
+	baseCache     *QueryCacheV2
+	queryPatterns map[string]*QueryPatternV2
 	mu            sync.RWMutex
 }
 
-type QueryPattern struct {
+type QueryPatternV2 struct {
 	Pattern       string
 	Frequency     float64
 	AvgLatency    time.Duration
@@ -70,49 +69,148 @@ type QueryPattern struct {
 	Priority      int
 }
 
-var queryCache *QueryCache
-var intelligentCache *IntelligentQueryCache
+var queryCacheV2 *QueryCacheV2
+var intelligentCacheV2 *IntelligentQueryCacheV2
 
 func InitQueryCache(cfg *config.Config) {
-	queryCache = &QueryCache{
-		cache:   make(map[string]cacheEntry),
-		maxSize: cfg.Database.QueryOptimization.MaxQueryCacheSize,
-		ttl:     time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second,
-		enabled: cfg.Database.QueryOptimization.EnableQueryCache,
-		stats:  &QueryCacheStats{},
-		strategy: StrategyAdaptive,
+	queryCacheV2 = &QueryCacheV2{
+		cache:    make(map[string]cacheEntryV2),
+		maxSize:  cfg.Database.QueryOptimization.MaxQueryCacheSize,
+		ttl:      time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second,
+		enabled:  cfg.Database.QueryOptimization.EnableQueryCache,
+		stats:    &QueryCacheStatsV2{},
+		strategy: StrategyAdaptiveV2,
 	}
 
-	intelligentCache = &IntelligentQueryCache{
-		baseCache:     queryCache,
-		queryPatterns: make(map[string]*QueryPattern),
+	intelligentCacheV2 = &IntelligentQueryCacheV2{
+		baseCache:     queryCacheV2,
+		queryPatterns: make(map[string]*QueryPatternV2),
 	}
 
-	go queryCache.startCleanup()
+	go queryCacheV2.startCleanup()
 
-	if queryCache.enabled {
+	if queryCacheV2.enabled {
 		log.Println("Query cache initialized with intelligent strategy")
 	}
 }
 
-func GetIntelligentCache() *IntelligentQueryCache {
-	if intelligentCache == nil {
-		intelligentCache = NewIntelligentQueryCache()
+func GetIntelligentCache() *IntelligentQueryCacheV2 {
+	if intelligentCacheV2 == nil {
+		intelligentCacheV2 = NewIntelligentQueryCache()
 	}
-	return intelligentCache
+	return intelligentCacheV2
 }
 
-func GetQueryCache() *QueryCache {
-	return queryCache
+func GetQueryCache() *QueryCacheV2 {
+	return queryCacheV2
+}
+
+func (qc *QueryCacheV2) startCleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		qc.cleanup()
+	}
+}
+
+func (qc *QueryCacheV2) cleanup() {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+	
+	now := time.Now()
+	for key, entry := range qc.cache {
+		if now.After(entry.expiration) {
+			delete(qc.cache, key)
+			qc.evictions.Add(1)
+		}
+	}
+	
+	if len(qc.cache) > qc.maxSize {
+		qc.evictLRU()
+	}
+}
+
+func (qc *QueryCacheV2) evictLRU() {
+	var oldestKey string
+	var oldestTime time.Time
+	
+	for key, entry := range qc.cache {
+		if oldestKey == "" || entry.lastAccess.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = entry.lastAccess
+		}
+	}
+	
+	if oldestKey != "" {
+		delete(qc.cache, oldestKey)
+		qc.evictions.Add(1)
+	}
+}
+
+func (qc *QueryCacheV2) Get(key string) (interface{}, bool) {
+	if !qc.enabled {
+		return nil, false
+	}
+	
+	qc.mu.RLock()
+	defer qc.mu.RUnlock()
+	
+	entry, exists := qc.cache[key]
+	if !exists {
+		qc.misses.Add(1)
+		return nil, false
+	}
+	
+	if time.Now().After(entry.expiration) {
+		qc.mu.RUnlock()
+		qc.mu.Lock()
+		delete(qc.cache, key)
+		qc.mu.Unlock()
+		qc.mu.RLock()
+		qc.misses.Add(1)
+		return nil, false
+	}
+	
+	entry.accessCount++
+	entry.lastAccess = time.Now()
+	qc.hits.Add(1)
+	return entry.value, true
+}
+
+func (qc *QueryCacheV2) Set(key string, value interface{}) {
+	if !qc.enabled {
+		return
+	}
+	
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+	
+	if len(qc.cache) >= qc.maxSize {
+		qc.evictLRU()
+	}
+	
+	qc.cache[key] = cacheEntryV2{
+		value:       value,
+		expiration:  time.Now().Add(qc.ttl),
+		accessCount: 1,
+		lastAccess:  time.Now(),
+	}
+}
+
+func (qc *QueryCacheV2) generateKey(suffix string) string {
+	h := md5.New()
+	h.Write([]byte(suffix))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func CachedQuery(keySuffix string, dest interface{}, queryFunc func() error, ttl ...time.Duration) error {
-	if !queryCache.enabled {
+	if !queryCacheV2.enabled {
 		return queryFunc()
 	}
 
-	key := queryCache.generateKey(keySuffix)
-	if cached, ok := queryCache.Get(key); ok {
+	key := queryCacheV2.generateKey(keySuffix)
+	if cached, ok := queryCacheV2.Get(key); ok {
 		if cachedData, err := json.Marshal(cached); err == nil {
 			json.Unmarshal(cachedData, dest)
 			return nil
@@ -123,228 +221,91 @@ func CachedQuery(keySuffix string, dest interface{}, queryFunc func() error, ttl
 		return err
 	}
 
-	queryCache.Set(key, dest)
+	queryCacheV2.Set(key, dest)
 	return nil
 }
 
 func InvalidateQueryCache(tableName string) {
-	if queryCache == nil {
-		return
+	if queryCacheV2 != nil {
+		queryCacheV2.mu.Lock()
+		defer queryCacheV2.mu.Unlock()
+		
+		for key := range queryCacheV2.cache {
+			if len(tableName) == 0 || len(key) >= len(tableName) && key[:len(tableName)] == tableName {
+				delete(queryCacheV2.cache, key)
+			}
+		}
 	}
-	queryCache.ClearPattern(fmt.Sprintf("table:%s:", tableName))
 }
 
-func (c *QueryCache) generateKey(query string, args ...interface{}) string {
-	data := query
-	for _, arg := range args {
-		argBytes, _ := json.Marshal(arg)
-		data += string(argBytes)
+func NewIntelligentQueryCache() *IntelligentQueryCacheV2 {
+	return &IntelligentQueryCacheV2{
+		baseCache:     queryCacheV2,
+		queryPatterns: make(map[string]*QueryPatternV2),
 	}
-	hash := md5.Sum([]byte(data))
-	return hex.EncodeToString(hash[:])
 }
 
-func (c *QueryCache) Get(key string) (interface{}, bool) {
-	if !c.enabled {
+func (ic *IntelligentQueryCacheV2) Get(key string) (interface{}, bool) {
+	if ic.baseCache == nil {
 		return nil, false
 	}
+	return ic.baseCache.Get(key)
+}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (ic *IntelligentQueryCacheV2) Set(key string, value interface{}) {
+	if ic.baseCache == nil {
+		return
+	}
+	ic.baseCache.Set(key, value)
+}
 
-	entry, exists := c.cache[key]
+func (ic *IntelligentQueryCacheV2) RecordQuery(pattern string, latency time.Duration, cached bool) {
+	ic.mu.Lock()
+	defer ic.mu.Unlock()
+	
+	p, exists := ic.queryPatterns[pattern]
 	if !exists {
-		c.misses.Add(1)
-		return nil, false
-	}
-
-	if time.Now().After(entry.expiration) {
-		delete(c.cache, key)
-		c.misses.Add(1)
-		return nil, false
-	}
-
-	entry.accessCount++
-	entry.lastAccess = time.Now()
-	c.hits.Add(1)
-	return entry.value, true
-}
-
-func (c *QueryCache) Set(key string, value interface{}) {
-	if !c.enabled {
-		return
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if len(c.cache) >= c.maxSize {
-		c.evictByStrategy()
-	}
-
-	entry := cacheEntry{
-		value:       value,
-		expiration:  time.Now().Add(c.ttl),
-		accessCount: 1,
-		lastAccess:  time.Now(),
-		frequency:   1.0,
-	}
-
-	c.cache[key] = entry
-	c.stats.TotalSets.Add(1)
-
-	if int64(len(c.cache)) > c.stats.PeakSize.Load() {
-		c.stats.PeakSize.Store(int64(len(c.cache)))
-	}
-}
-
-func (c *QueryCache) evictByStrategy() {
-	switch c.strategy {
-	case StrategyLRU:
-		c.evictLRU()
-	case StrategyLFU:
-		c.evictLFU()
-	case StrategyAdaptive:
-		c.evictAdaptive()
-	default:
-		c.evictLRU()
-	}
-}
-
-func (c *QueryCache) evictLRU() {
-	oldestKey := ""
-	oldestTime := time.Now().Add(24 * time.Hour)
-
-	for k, v := range c.cache {
-		if v.lastAccess.Before(oldestTime) {
-			oldestTime = v.lastAccess
-			oldestKey = k
+		p = &QueryPatternV2{
+			Pattern: pattern,
 		}
+		ic.queryPatterns[pattern] = p
 	}
-
-	if oldestKey != "" {
-		delete(c.cache, oldestKey)
-		c.evictions.Add(1)
-		c.stats.TotalEvictions.Add(1)
+	
+	p.TotalQueries++
+	p.LastQuery = time.Now()
+	
+	if cached {
+		p.HitRate = (p.HitRate*float64(p.TotalQueries-1) + 100) / float64(p.TotalQueries)
+	} else {
+		p.HitRate = (p.HitRate * float64(p.TotalQueries-1)) / float64(p.TotalQueries)
 	}
+	
+	p.AvgLatency = (p.AvgLatency*time.Duration(p.TotalQueries-1) + latency) / time.Duration(p.TotalQueries)
 }
 
-func (c *QueryCache) evictLFU() {
-	lowestFreqKey := ""
-	lowestFreq := float64(0)
-
-	for k, v := range c.cache {
-		if lowestFreqKey == "" || v.frequency < lowestFreq {
-			lowestFreq = v.frequency
-			lowestFreqKey = k
-		}
+func GetCacheStats() map[string]interface{} {
+	if queryCacheV2 == nil {
+		return nil
 	}
-
-	if lowestFreqKey != "" {
-		delete(c.cache, lowestFreqKey)
-		c.evictions.Add(1)
-		c.stats.TotalEvictions.Add(1)
-	}
-}
-
-func (c *QueryCache) evictAdaptive() {
-	now := time.Now()
-	score := make(map[string]float64)
-
-	for k, v := range c.cache {
-		age := now.Sub(v.lastAccess).Seconds()
-		freq := v.frequency
-		ttlRemaining := v.expiration.Sub(now).Seconds()
-
-		score[k] = freq * 10 / (age + 1) * (ttlRemaining / c.ttl.Seconds() + 0.1)
-	}
-
-	var lowestScoreKey string
-	var lowestScore float64 = 0
-
-	for k, s := range score {
-		if lowestScoreKey == "" || s < lowestScore {
-			lowestScore = s
-			lowestScoreKey = k
-		}
-	}
-
-	if lowestScoreKey != "" {
-		delete(c.cache, lowestScoreKey)
-		c.evictions.Add(1)
-		c.stats.TotalEvictions.Add(1)
-	}
-}
-
-func (c *QueryCache) startCleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		c.cleanupExpired()
-		c.updateFrequencies()
-	}
-}
-
-func (c *QueryCache) cleanupExpired() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	now := time.Now()
-	for k, v := range c.cache {
-		if now.After(v.expiration) {
-			delete(c.cache, k)
-			c.evictions.Add(1)
-			c.stats.TotalEvictions.Add(1)
-		}
-	}
-}
-
-func (c *QueryCache) updateFrequencies() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	decayFactor := 0.95
-	for k, v := range c.cache {
-		v.frequency *= decayFactor
-		c.cache[k] = v
-	}
-}
-
-func (c *QueryCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.cache = make(map[string]cacheEntry)
-}
-
-func (c *QueryCache) ClearPattern(pattern string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for k := range c.cache {
-		if len(k) >= len(pattern) && k[:len(pattern)] == pattern {
-			delete(c.cache, k)
-		}
-	}
-}
-
-func (c *QueryCache) GetStats() map[string]interface{} {
+	
 	return map[string]interface{}{
-		"size":            len(c.cache),
-		"max_size":        c.maxSize,
-		"enabled":         c.enabled,
-		"hits":            c.hits.Load(),
-		"misses":          c.misses.Load(),
-		"evictions":        c.evictions.Load(),
-		"hit_rate":        c.calculateHitRate(),
-		"peak_size":       c.stats.PeakSize.Load(),
-		"strategy":        c.getStrategyName(),
+		"hits":      queryCacheV2.hits.Load(),
+		"misses":    queryCacheV2.misses.Load(),
+		"evictions": queryCacheV2.evictions.Load(),
+		"size":      func() int {
+			queryCacheV2.mu.RLock()
+			defer queryCacheV2.mu.RUnlock()
+			return len(queryCacheV2.cache)
+		}(),
 	}
 }
 
-func (c *QueryCache) calculateHitRate() float64 {
-	hits := c.hits.Load()
-	misses := c.misses.Load()
+func GetCacheHitRate() float64 {
+	if queryCacheV2 == nil {
+		return 0
+	}
+	hits := queryCacheV2.hits.Load()
+	misses := queryCacheV2.misses.Load()
 	total := hits + misses
 	if total == 0 {
 		return 0
@@ -352,101 +313,10 @@ func (c *QueryCache) calculateHitRate() float64 {
 	return float64(hits) / float64(total) * 100
 }
 
-func (c *QueryCache) getStrategyName() string {
-	switch c.strategy {
-	case StrategyLRU:
-		return "LRU"
-	case StrategyLFU:
-		return "LFU"
-	case StrategyAdaptive:
-		return "Adaptive"
-	case StrategyTTL:
-		return "TTL"
-	default:
-		return "Unknown"
+func ClearQueryCache() {
+	if queryCacheV2 != nil {
+		queryCacheV2.mu.Lock()
+		defer queryCacheV2.mu.Unlock()
+		queryCacheV2.cache = make(map[string]cacheEntryV2)
 	}
-}
-
-func (c *QueryCache) SetStrategy(strategy QueryCacheStrategy) {
-	c.strategy = strategy
-}
-
-func NewIntelligentQueryCache() *IntelligentQueryCache {
-	return &IntelligentQueryCache{
-		baseCache:     queryCache,
-		queryPatterns: make(map[string]*QueryPattern),
-	}
-}
-
-func (iqc *IntelligentQueryCache) RecordQuery(query string, latency time.Duration, cached bool) {
-	iqc.mu.Lock()
-	defer iqc.mu.Unlock()
-
-	pattern, exists := iqc.queryPatterns[query]
-	if !exists {
-		pattern = &QueryPattern{
-			Pattern:      query,
-			OptimalTTL:   5 * time.Minute,
-			Priority:     1,
-			Complexity:   "normal",
-		}
-		iqc.queryPatterns[query] = pattern
-	}
-
-	pattern.TotalQueries++
-	pattern.LastQuery = time.Now()
-
-	if cached {
-		pattern.HitRate = (pattern.HitRate*float64(pattern.TotalQueries-1) + 100) / float64(pattern.TotalQueries)
-	} else {
-		pattern.HitRate = (pattern.HitRate * float64(pattern.TotalQueries-1)) / float64(pattern.TotalQueries)
-	}
-
-	pattern.AvgLatency = (pattern.AvgLatency*time.Duration(pattern.TotalQueries-1) + latency) / time.Duration(pattern.TotalQueries)
-
-	if latency > 100*time.Millisecond {
-		pattern.Complexity = "high"
-		pattern.OptimalTTL = 15 * time.Minute
-		pattern.Priority = 3
-	} else if latency > 10*time.Millisecond {
-		pattern.Complexity = "medium"
-		pattern.OptimalTTL = 10 * time.Minute
-		pattern.Priority = 2
-	} else {
-		pattern.Complexity = "low"
-		pattern.OptimalTTL = 5 * time.Minute
-		pattern.Priority = 1
-	}
-}
-
-func (iqc *IntelligentQueryCache) GetOptimalTTL(query string) time.Duration {
-	iqc.mu.RLock()
-	defer iqc.mu.RUnlock()
-
-	if pattern, exists := iqc.queryPatterns[query]; exists {
-		return pattern.OptimalTTL
-	}
-	return 5 * time.Minute
-}
-
-func (iqc *IntelligentQueryCache) GetPatternStats() map[string]interface{} {
-	iqc.mu.RLock()
-	defer iqc.mu.RUnlock()
-
-	stats := make(map[string]interface{})
-	stats["total_patterns"] = len(iqc.queryPatterns)
-
-	var totalHits float64
-	var totalQueries int64
-	for _, p := range iqc.queryPatterns {
-		totalHits += p.HitRate
-		totalQueries += p.TotalQueries
-	}
-
-	if len(iqc.queryPatterns) > 0 {
-		stats["avg_hit_rate"] = totalHits / float64(len(iqc.queryPatterns))
-	}
-	stats["total_queries"] = totalQueries
-
-	return stats
 }

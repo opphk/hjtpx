@@ -2,675 +2,563 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type CacheMetricsCollector struct {
-	stats          *CacheStats
-	hotKeys        *sync.Map
-	keyAccessCount *sync.Map
-	queryLatency   *LatencyHistogram
-	memoryUsage    *MemoryStats
-	mu             sync.RWMutex
-	started        time.Time
-	hitsHistory    *RingBuffer
-	missesHistory  *RingBuffer
-	evictionHistory *RingBuffer
+type CacheMetricsMonitor struct {
+	mu                  sync.RWMutex
+	enabled             bool
+	collectInterval     time.Duration
+	metricsHistory      []*CacheMetricSnapshot
+	maxHistorySize      int
+	l1HitRate           float64
+	l2HitRate           float64
+	totalHitRate        float64
+	totalHits           atomic.Int64
+	totalMisses         atomic.Int64
+	l1Hits              atomic.Int64
+	l1Misses            atomic.Int64
+	l2Hits              atomic.Int64
+	l2Misses            atomic.Int64
+	totalSets           atomic.Int64
+	totalDeletes        atomic.Int64
+	totalErrors         atomic.Int64
+	totalEvictions      atomic.Int64
+	totalBytesRead      atomic.Int64
+	totalBytesWritten   atomic.Int64
+	avgGetLatency       atomic.Int64
+	avgSetLatency       atomic.Int64
+	lastSnapshot        *CacheMetricSnapshot
+	alerts              []*CacheMetricAlert
+	alertThresholds     *CacheAlertThresholds
 }
 
-type RingBuffer struct {
-	buffer []int64
-	size   int
-	index  int
-	mu     sync.Mutex
+type CacheMetricSnapshot struct {
+	Timestamp           time.Time
+	TotalHits          int64
+	TotalMisses        int64
+	L1Hits            int64
+	L1Misses          int64
+	L2Hits            int64
+	L2Misses          int64
+	HitRate           float64
+	L1HitRate         float64
+	L2HitRate         float64
+	TotalSets         int64
+	TotalDeletes      int64
+	TotalErrors       int64
+	TotalEvictions    int64
+	BytesRead         int64
+	BytesWritten      int64
+	AvgGetLatencyMs   float64
+	AvgSetLatencyMs   float64
+	CurrentL1Size     int64
 }
 
-func NewRingBuffer(size int) *RingBuffer {
-	return &RingBuffer{
-		buffer: make([]int64, size),
-		size:   size,
-		index:  0,
-	}
+type CacheMetricAlert struct {
+	Timestamp    time.Time
+	AlertType    string
+	Message      string
+	Severity     string
+	MetricValue  float64
+	Threshold    float64
 }
 
-func (rb *RingBuffer) Add(value int64) {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-	rb.buffer[rb.index] = value
-	rb.index = (rb.index + 1) % rb.size
+type CacheAlertThresholds struct {
+	LowHitRateThreshold     float64
+	HighErrorRateThreshold  float64
+	HighLatencyThreshold    time.Duration
+	LowL1HitRateThreshold   float64
+	HighEvictionThreshold    int64
 }
 
-func (rb *RingBuffer) Average() float64 {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
-
-	var sum int64
-	var count int
-	for i := 0; i < rb.size; i++ {
-		if i < rb.index || rb.index == 0 {
-			sum += rb.buffer[i]
-			count++
-		}
-	}
-
-	if count == 0 {
-		return 0
-	}
-	return float64(sum) / float64(count)
+var DefaultAlertThresholds = &CacheAlertThresholds{
+	LowHitRateThreshold:    80.0,
+	HighErrorRateThreshold: 0.01,
+	HighLatencyThreshold:   10 * time.Millisecond,
+	LowL1HitRateThreshold:  60.0,
+	HighEvictionThreshold:  1000,
 }
 
-type LatencyHistogram struct {
-	buckets []time.Duration
-	counts  []int64
-	mu      sync.RWMutex
-}
-
-type MemoryStats struct {
-	L1Size       int64
-	L2Keys       int64
-	L2MemoryUsed int64
-	PeakUsage    int64
-}
-
-type DetailedMetrics struct {
-	Uptime              time.Duration    `json:"uptime"`
-	HitRate             float64          `json:"hit_rate"`
-	TotalRequests       int64            `json:"total_requests"`
-	Hits                int64            `json:"hits"`
-	Misses              int64            `json:"misses"`
-	Sets                int64            `json:"sets"`
-	Deletes             int64            `json:"deletes"`
-	Errors              int64            `json:"errors"`
-	AverageLatency      time.Duration    `json:"average_latency"`
-	P95Latency          time.Duration    `json:"p95_latency"`
-	P99Latency          time.Duration    `json:"p99_latency"`
-	L1HitRate           float64          `json:"l1_hit_rate"`
-	L2HitRate           float64          `json:"l2_hit_rate"`
-	CompressedCount     int64            `json:"compressed_count"`
-	DecompressedCount   int64            `json:"decompressed_count"`
-	HotKeys             []HotKeyMetric   `json:"hot_keys"`
-	MemoryUsage         MemoryStats      `json:"memory_usage"`
-	LatencyDistribution map[string]int64 `json:"latency_distribution"`
-	ExpirationRate      float64          `json:"expiration_rate"`
-	EvictionRate        float64          `json:"eviction_rate"`
-	HitRateTrend        float64          `json:"hit_rate_trend"`
-	AverageHitRate      float64          `json:"average_hit_rate"`
-}
-
-type HotKeyMetric struct {
-	Key         string    `json:"key"`
-	AccessCount int64     `json:"access_count"`
-	LastAccess  time.Time `json:"last_access"`
-	TTL         time.Duration `json:"ttl"`
-	HitRate     float64   `json:"hit_rate"`
-}
-
-type LRUMetrics struct {
-	TotalEvictions int64
-	EvictionReasons map[string]int64
-	LastEvictedKey string
-	PeakEvictions  int64
-}
-
-func NewCacheMetricsCollector() *CacheMetricsCollector {
-	cmc := &CacheMetricsCollector{
-		stats:           &CacheStats{},
-		hotKeys:         &sync.Map{},
-		keyAccessCount:  &sync.Map{},
-		queryLatency:    NewLatencyHistogram(),
-		memoryUsage:     &MemoryStats{},
-		started:         time.Now(),
-		hitsHistory:     NewRingBuffer(100),
-		missesHistory:   NewRingBuffer(100),
-		evictionHistory: NewRingBuffer(100),
-	}
-	return cmc
-}
-
-func NewLatencyHistogram() *LatencyHistogram {
-	return &LatencyHistogram{
-		buckets: []time.Duration{
-			time.Microsecond,
-			10 * time.Microsecond,
-			100 * time.Microsecond,
-			time.Millisecond,
-			10 * time.Millisecond,
-			100 * time.Millisecond,
-			time.Second,
-			10 * time.Second,
-		},
-		counts: make([]int64, 9),
-	}
-}
-
-func (lh *LatencyHistogram) Record(duration time.Duration) {
-	lh.mu.Lock()
-	defer lh.mu.Unlock()
-
-	for i, bucket := range lh.buckets {
-		if duration <= bucket {
-			atomic.AddInt64(&lh.counts[i], 1)
-			return
-		}
-	}
-	atomic.AddInt64(&lh.counts[len(lh.counts)-1], 1)
-}
-
-func (lh *LatencyHistogram) Percentile(p float64) time.Duration {
-	lh.mu.RLock()
-	defer lh.mu.RUnlock()
-
-	total := int64(0)
-	for _, count := range lh.counts {
-		total += count
-	}
-
-	if total == 0 {
-		return 0
-	}
-
-	target := int64(float64(total) * p)
-	current := int64(0)
-
-	for i, count := range lh.counts {
-		current += count
-		if current >= target {
-			return lh.buckets[i]
-		}
-	}
-
-	return lh.buckets[len(lh.buckets)-1]
-}
-
-func (lh *LatencyHistogram) GetDistribution() map[string]int64 {
-	lh.mu.RLock()
-	defer lh.mu.RUnlock()
-
-	dist := make(map[string]int64)
-	for i, bucket := range lh.buckets {
-		dist[bucket.String()] = atomic.LoadInt64(&lh.counts[i])
-	}
-	return dist
-}
-
-func (cmc *CacheMetricsCollector) RecordHit() {
-	cmc.stats.Hits.Add(1)
-	cmc.stats.RequestCount.Add(1)
-	if cmc.hitsHistory != nil {
-		cmc.hitsHistory.Add(1)
-	}
-}
-
-func (cmc *CacheMetricsCollector) RecordMiss() {
-	cmc.stats.Misses.Add(1)
-	cmc.stats.RequestCount.Add(1)
-	if cmc.missesHistory != nil {
-		cmc.missesHistory.Add(1)
-	}
-}
-
-func (cmc *CacheMetricsCollector) RecordEviction() {
-	if cmc.evictionHistory != nil {
-		cmc.evictionHistory.Add(1)
-	}
-}
-
-func (cmc *CacheMetricsCollector) RecordExpiration() {
-	cmc.stats.Expired.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) GetExpirationRate() float64 {
-	totalSets := cmc.stats.Sets.Load()
-	expired := cmc.stats.Expired.Load()
-	if totalSets == 0 {
-		return 0
-	}
-	return float64(expired) / float64(totalSets) * 100
-}
-
-func (cmc *CacheMetricsCollector) GetEvictionRate() float64 {
-	if cmc.evictionHistory == nil {
-		return 0
-	}
-	evictions := int64(cmc.evictionHistory.Average())
-	sets := cmc.stats.Sets.Load()
-	if sets == 0 {
-		return 0
-	}
-	return (float64(evictions) / float64(sets)) * 100
-}
-
-func (cmc *CacheMetricsCollector) GetHitRateTrend() float64 {
-	if cmc.hitsHistory == nil || cmc.missesHistory == nil {
-		return 0
-	}
-	avgHits := cmc.hitsHistory.Average()
-	avgMisses := cmc.missesHistory.Average()
-	total := avgHits + avgMisses
-	if total == 0 {
-		return 0
-	}
-	return (avgHits / total) * 100
-}
-
-func (cmc *CacheMetricsCollector) GetAverageHitRate() float64 {
-	if cmc.hitsHistory == nil || cmc.missesHistory == nil {
-		return 0
-	}
-	avgHits := cmc.hitsHistory.Average()
-	avgMisses := cmc.missesHistory.Average()
-	total := avgHits + avgMisses
-	if total == 0 {
-		return 0
-	}
-	return (avgHits / total) * 100
-}
-
-func (cmc *CacheMetricsCollector) RecordL1Hit() {
-	cmc.stats.L1Hits.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordL1Miss() {
-	cmc.stats.L1Misses.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordL2Hit() {
-	cmc.stats.L2Hits.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordL2Miss() {
-	cmc.stats.L2Misses.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordSet() {
-	cmc.stats.Sets.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordDelete() {
-	cmc.stats.Deletes.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordError() {
-	cmc.stats.Errors.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordLatency(duration time.Duration) {
-	cmc.stats.TotalLatency.Add(duration.Nanoseconds())
-	cmc.queryLatency.Record(duration)
-}
-
-func (cmc *CacheMetricsCollector) RecordKeyAccess(key string) {
-	val, _ := cmc.keyAccessCount.LoadOrStore(key, int64(0))
-	newVal := val.(int64) + 1
-	cmc.keyAccessCount.Store(key, newVal)
-
-	cmc.hotKeys.Store(key, &HotKeyInfo{
-		Key:         key,
-		AccessCount: newVal,
-		LastAccess:  time.Now(),
-	})
-}
-
-func (cmc *CacheMetricsCollector) RecordCompressed() {
-	cmc.stats.Compressed.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) RecordDecompressed() {
-	cmc.stats.Decompressed.Add(1)
-}
-
-func (cmc *CacheMetricsCollector) UpdateMemoryUsage(l1Size, l2Keys, l2Memory int64) {
-	cmc.mu.Lock()
-	defer cmc.mu.Unlock()
-	cmc.memoryUsage.L1Size = l1Size
-	cmc.memoryUsage.L2Keys = l2Keys
-	cmc.memoryUsage.L2MemoryUsed = l2Memory
-}
-
-func (cmc *CacheMetricsCollector) GetDetailedMetrics() *DetailedMetrics {
-	cmc.mu.RLock()
-	defer cmc.mu.RUnlock()
-
-	totalRequests := cmc.stats.RequestCount.Load()
-	hits := cmc.stats.Hits.Load()
-	misses := cmc.stats.Misses.Load()
-	l1Hits := cmc.stats.L1Hits.Load()
-	l1Misses := cmc.stats.L1Misses.Load()
-	l2Hits := cmc.stats.L2Hits.Load()
-	l2Misses := cmc.stats.L2Misses.Load()
-	totalLatency := cmc.stats.TotalLatency.Load()
-
-	var hitRate, l1HitRate, l2HitRate float64
-	var avgLatency time.Duration
-
-	if totalRequests > 0 {
-		hitRate = float64(hits) / float64(totalRequests) * 100
-		avgLatency = time.Duration(totalLatency / totalRequests)
-	}
-
-	if l1Hits+l1Misses > 0 {
-		l1HitRate = float64(l1Hits) / float64(l1Hits+l1Misses) * 100
-	}
-
-	if l2Hits+l2Misses > 0 {
-		l2HitRate = float64(l2Hits) / float64(l2Hits+l2Misses) * 100
-	}
-
-	return &DetailedMetrics{
-		Uptime:               time.Since(cmc.started),
-		HitRate:              hitRate,
-		TotalRequests:        totalRequests,
-		Hits:                 hits,
-		Misses:               misses,
-		Sets:                 cmc.stats.Sets.Load(),
-		Deletes:              cmc.stats.Deletes.Load(),
-		Errors:               cmc.stats.Errors.Load(),
-		AverageLatency:       avgLatency,
-		P95Latency:           cmc.queryLatency.Percentile(0.95),
-		P99Latency:           cmc.queryLatency.Percentile(0.99),
-		L1HitRate:            l1HitRate,
-		L2HitRate:            l2HitRate,
-		CompressedCount:      cmc.stats.Compressed.Load(),
-		DecompressedCount:    cmc.stats.Decompressed.Load(),
-		HotKeys:              cmc.getHotKeys(),
-		MemoryUsage:          *cmc.memoryUsage,
-		LatencyDistribution:  cmc.queryLatency.GetDistribution(),
-		ExpirationRate:       cmc.GetExpirationRate(),
-		EvictionRate:        cmc.GetEvictionRate(),
-		HitRateTrend:        cmc.GetHitRateTrend(),
-		AverageHitRate:      cmc.GetAverageHitRate(),
-	}
-}
-
-func (cmc *CacheMetricsCollector) getHotKeys() []HotKeyMetric {
-	var hotKeys []HotKeyMetric
-	cmc.hotKeys.Range(func(key, value interface{}) bool {
-		info := value.(*HotKeyInfo)
-		hotKeys = append(hotKeys, HotKeyMetric{
-			Key:         info.Key,
-			AccessCount: info.AccessCount,
-			LastAccess:  info.LastAccess,
-		})
-		return true
-	})
-	return hotKeys
-}
-
-func (cmc *CacheMetricsCollector) GetHotKeys(limit int) []HotKeyMetric {
-	hotKeys := cmc.getHotKeys()
-	if len(hotKeys) > limit {
-		hotKeys = hotKeys[:limit]
-	}
-	return hotKeys
-}
-
-func (cmc *CacheMetricsCollector) Reset() {
-	cmc.mu.Lock()
-	defer cmc.mu.Unlock()
-
-	cmc.stats.Hits.Store(0)
-	cmc.stats.Misses.Store(0)
-	cmc.stats.Sets.Store(0)
-	cmc.stats.Deletes.Store(0)
-	cmc.stats.Errors.Store(0)
-	cmc.stats.L1Hits.Store(0)
-	cmc.stats.L1Misses.Store(0)
-	cmc.stats.L2Hits.Store(0)
-	cmc.stats.L2Misses.Store(0)
-	cmc.stats.TotalLatency.Store(0)
-	cmc.stats.RequestCount.Store(0)
-	cmc.stats.Compressed.Store(0)
-	cmc.stats.Decompressed.Store(0)
-
-	cmc.started = time.Now()
-	cmc.keyAccessCount = &sync.Map{}
-	cmc.hotKeys = &sync.Map{}
-	cmc.queryLatency = NewLatencyHistogram()
-}
-
-func (cmc *CacheMetricsCollector) ToJSON() ([]byte, error) {
-	return json.Marshal(cmc.GetDetailedMetrics())
-}
-
-type MetricsExporter struct {
-	collector *CacheMetricsCollector
-	interval  time.Duration
-	ctx       context.Context
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
-}
-
-func NewMetricsExporter(collector *CacheMetricsCollector, interval time.Duration) *MetricsExporter {
+func NewCacheMetricsMonitor(interval time.Duration) *CacheMetricsMonitor {
 	if interval <= 0 {
 		interval = 10 * time.Second
 	}
+	
+	monitor := &CacheMetricsMonitor{
+		enabled:         true,
+		collectInterval: interval,
+		metricsHistory: make([]*CacheMetricSnapshot, 0),
+		maxHistorySize:  360,
+		alertThresholds: DefaultAlertThresholds,
+	}
+	
+	go monitor.startCollection()
+	return monitor
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	return &MetricsExporter{
-		collector: collector,
-		interval:  interval,
-		ctx:       ctx,
-		cancel:    cancel,
+func (m *CacheMetricsMonitor) startCollection() {
+	ticker := time.NewTicker(m.collectInterval)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		if !m.enabled {
+			continue
+		}
+		m.collectSnapshot()
 	}
 }
 
-func (me *MetricsExporter) Start() {
-	me.wg.Add(1)
-	go me.run()
+func (m *CacheMetricsMonitor) collectSnapshot() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	snapshot := &CacheMetricSnapshot{
+		Timestamp:         time.Now(),
+		TotalHits:        m.totalHits.Load(),
+		TotalMisses:      m.totalMisses.Load(),
+		L1Hits:          m.l1Hits.Load(),
+		L1Misses:        m.l1Misses.Load(),
+		L2Hits:          m.l2Hits.Load(),
+		L2Misses:        m.l2Misses.Load(),
+		TotalSets:       m.totalSets.Load(),
+		TotalDeletes:    m.totalDeletes.Load(),
+		TotalErrors:    m.totalErrors.Load(),
+		TotalEvictions: m.totalEvictions.Load(),
+		BytesRead:      m.totalBytesRead.Load(),
+		BytesWritten:   m.totalBytesWritten.Load(),
+	}
+	
+	total := snapshot.TotalHits + snapshot.TotalMisses
+	if total > 0 {
+		snapshot.HitRate = float64(snapshot.TotalHits) / float64(total) * 100
+	}
+	
+	l1Total := snapshot.L1Hits + snapshot.L1Misses
+	if l1Total > 0 {
+		snapshot.L1HitRate = float64(snapshot.L1Hits) / float64(l1Total) * 100
+	}
+	
+	l2Total := snapshot.L2Hits + snapshot.L2Misses
+	if l2Total > 0 {
+		snapshot.L2HitRate = float64(snapshot.L2Hits) / float64(l2Total) * 100
+	}
+	
+	totalGets := m.totalHits.Load() + m.totalMisses.Load()
+	if totalGets > 0 {
+		snapshot.AvgGetLatencyMs = float64(m.avgGetLatency.Load()) / float64(totalGets) / 1e6
+	}
+	
+	totalSets := m.totalSets.Load()
+	if totalSets > 0 {
+		snapshot.AvgSetLatencyMs = float64(m.avgSetLatency.Load()) / float64(totalSets) / 1e6
+	}
+	
+	snapshot.CurrentL1Size = totalSets + m.totalHits.Load()
+	
+	m.metricsHistory = append(m.metricsHistory, snapshot)
+	if len(m.metricsHistory) > m.maxHistorySize {
+		m.metricsHistory = m.metricsHistory[1:]
+	}
+	
+	m.lastSnapshot = snapshot
+	m.checkAlerts(snapshot)
 }
 
-func (me *MetricsExporter) Stop() {
-	me.cancel()
-	me.wg.Wait()
-}
-
-func (me *MetricsExporter) run() {
-	defer me.wg.Done()
-
-	ticker := time.NewTicker(me.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-me.ctx.Done():
-			return
-		case <-ticker.C:
-			me.export()
+func (m *CacheMetricsMonitor) checkAlerts(snapshot *CacheMetricSnapshot) {
+	if snapshot.HitRate < m.alertThresholds.LowHitRateThreshold {
+		m.addAlert(CacheMetricAlert{
+			Timestamp:   time.Now(),
+			AlertType:   "LowHitRate",
+			Message:     fmt.Sprintf("Cache hit rate %.2f%% below threshold %.2f%%", snapshot.HitRate, m.alertThresholds.LowHitRateThreshold),
+			Severity:    "warning",
+			MetricValue: snapshot.HitRate,
+			Threshold:   m.alertThresholds.LowHitRateThreshold,
+		})
+	}
+	
+	totalOps := snapshot.TotalSets + snapshot.TotalDeletes
+	if totalOps > 0 {
+		errorRate := float64(snapshot.TotalErrors) / float64(totalOps)
+		if errorRate > m.alertThresholds.HighErrorRateThreshold {
+			m.addAlert(CacheMetricAlert{
+				Timestamp:   time.Now(),
+				AlertType:   "HighErrorRate",
+				Message:     fmt.Sprintf("Cache error rate %.4f%% exceeds threshold %.4f%%", errorRate, m.alertThresholds.HighErrorRateThreshold),
+				Severity:    "critical",
+				MetricValue: errorRate,
+				Threshold:   m.alertThresholds.HighErrorRateThreshold,
+			})
 		}
 	}
-}
-
-func (me *MetricsExporter) export() {
-}
-
-func (me *MetricsExporter) ExportToPrometheus() string {
-	metrics := me.collector.GetDetailedMetrics()
-
-	return fmt.Sprintf(`# HELP cache_hits_total Total number of cache hits
-# TYPE cache_hits_total counter
-cache_hits_total %d
-
-# HELP cache_misses_total Total number of cache misses
-# TYPE cache_misses_total counter
-cache_misses_total %d
-
-# HELP cache_hit_rate Current cache hit rate
-# TYPE cache_hit_rate gauge
-cache_hit_rate %.2f
-
-# HELP cache_requests_total Total number of cache requests
-# TYPE cache_requests_total counter
-cache_requests_total %d
-
-# HELP cache_latency_seconds Cache operation latency
-# TYPE cache_latency_seconds histogram
-cache_latency_seconds_bucket{quantile="0.95"} %.6f
-cache_latency_seconds_bucket{quantile="0.99"} %.6f
-
-# HELP cache_errors_total Total number of cache errors
-# TYPE cache_errors_total counter
-cache_errors_total %d
-
-# HELP cache_sets_total Total number of cache sets
-# TYPE cache_sets_total counter
-cache_sets_total %d
-
-# HELP cache_deletes_total Total number of cache deletes
-# TYPE cache_deletes_total counter
-cache_deletes_total %d
-
-# HELP cache_l1_hit_rate L1 cache hit rate
-# TYPE cache_l1_hit_rate gauge
-cache_l1_hit_rate %.2f
-
-# HELP cache_l2_hit_rate L2 cache hit rate
-# TYPE cache_l2_hit_rate gauge
-cache_l2_hit_rate %.2f
-
-# HELP cache_compressed_total Total number of compressions
-# TYPE cache_compressed_total counter
-cache_compressed_total %d
-
-# HELP cache_decompressed_total Total number of decompressions
-# TYPE cache_decompressed_total counter
-cache_decompressed_total %d`,
-		metrics.Hits,
-		metrics.Misses,
-		metrics.HitRate/100,
-		metrics.TotalRequests,
-		metrics.P95Latency.Seconds(),
-		metrics.P99Latency.Seconds(),
-		metrics.Errors,
-		metrics.Sets,
-		metrics.Deletes,
-		metrics.L1HitRate/100,
-		metrics.L2HitRate/100,
-		metrics.CompressedCount,
-		metrics.DecompressedCount,
-	)
-}
-
-func (me *MetricsExporter) ExportToJSON() (string, error) {
-	metrics := me.collector.GetDetailedMetrics()
-	data, err := json.MarshalIndent(metrics, "", "  ")
-	if err != nil {
-		return "", err
+	
+	if snapshot.AvgGetLatencyMs > float64(m.alertThresholds.HighLatencyThreshold)/float64(time.Millisecond) {
+		m.addAlert(CacheMetricAlert{
+			Timestamp:   time.Now(),
+			AlertType:   "HighLatency",
+			Message:     fmt.Sprintf("Cache get latency %.2fms exceeds threshold %.2fms", snapshot.AvgGetLatencyMs, float64(m.alertThresholds.HighLatencyThreshold)/float64(time.Millisecond)),
+			Severity:    "warning",
+			MetricValue: snapshot.AvgGetLatencyMs,
+			Threshold:   float64(m.alertThresholds.HighLatencyThreshold)/float64(time.Millisecond),
+		})
 	}
-	return string(data), nil
+	
+	if snapshot.L1HitRate < m.alertThresholds.LowL1HitRateThreshold && snapshot.L1Misses > 100 {
+		m.addAlert(CacheMetricAlert{
+			Timestamp:   time.Now(),
+			AlertType:   "LowL1HitRate",
+			Message:     fmt.Sprintf("L1 cache hit rate %.2f%% below threshold %.2f%%", snapshot.L1HitRate, m.alertThresholds.LowL1HitRateThreshold),
+			Severity:    "warning",
+			MetricValue: snapshot.L1HitRate,
+			Threshold:   m.alertThresholds.LowL1HitRateThreshold,
+		})
+	}
 }
 
-func (me *MetricsExporter) GetAlertSummary() map[string]interface{} {
-	metrics := me.collector.GetDetailedMetrics()
-	alerts := GetCacheMonitoringCollector().GetAlerts()
-
-	summary := make(map[string]interface{})
-	summary["total_alerts"] = len(alerts)
-	summary["recent_alerts"] = alerts
-
-	alertCounts := make(map[string]int)
-	for _, alert := range alerts {
-		alertCounts[alert.Type]++
+func (m *CacheMetricsMonitor) addAlert(alert CacheMetricAlert) {
+	m.alerts = append(m.alerts, &alert)
+	if len(m.alerts) > 100 {
+		m.alerts = m.alerts[1:]
 	}
-	summary["alert_counts"] = alertCounts
-
-	summary["hit_rate_status"] = "healthy"
-	if metrics.HitRate < 80 {
-		summary["hit_rate_status"] = "warning"
+	
+	switch alert.Severity {
+	case "critical":
+		log.Printf("[CACHE_ALERT_CRITICAL] %s", alert.Message)
+	case "warning":
+		log.Printf("[CACHE_ALERT_WARNING] %s", alert.Message)
 	}
-	if metrics.HitRate < 50 {
-		summary["hit_rate_status"] = "critical"
-	}
-
-	summary["error_rate"] = 0.0
-	if metrics.TotalRequests > 0 {
-		summary["error_rate"] = float64(metrics.Errors) / float64(metrics.TotalRequests) * 100
-	}
-
-	return summary
 }
 
-type CacheMetricsSnapshot struct {
-	Timestamp time.Time
-	Metrics   *DetailedMetrics
-	Alerts    []CacheAlert
+func (m *CacheMetricsMonitor) RecordHit(isL1 bool) {
+	m.totalHits.Add(1)
+	if isL1 {
+		m.l1Hits.Add(1)
+	} else {
+		m.l2Hits.Add(1)
+	}
 }
 
-func (cmc *CacheMetricsCollector) TakeSnapshot() *CacheMetricsSnapshot {
-	return &CacheMetricsSnapshot{
+func (m *CacheMetricsMonitor) RecordMiss(isL1 bool) {
+	m.totalMisses.Add(1)
+	if isL1 {
+		m.l1Misses.Add(1)
+	} else {
+		m.l2Misses.Add(1)
+	}
+}
+
+func (m *CacheMetricsMonitor) RecordSet(latency time.Duration) {
+	m.totalSets.Add(1)
+	m.avgSetLatency.Add(latency.Nanoseconds())
+}
+
+func (m *CacheMetricsMonitor) RecordGet(latency time.Duration) {
+	m.avgGetLatency.Add(latency.Nanoseconds())
+}
+
+func (m *CacheMetricsMonitor) RecordDelete() {
+	m.totalDeletes.Add(1)
+}
+
+func (m *CacheMetricsMonitor) RecordError() {
+	m.totalErrors.Add(1)
+}
+
+func (m *CacheMetricsMonitor) RecordEviction() {
+	m.totalEvictions.Add(1)
+}
+
+func (m *CacheMetricsMonitor) RecordBytesRead(bytes int64) {
+	m.totalBytesRead.Add(bytes)
+}
+
+func (m *CacheMetricsMonitor) RecordBytesWritten(bytes int64) {
+	m.totalBytesWritten.Add(bytes)
+}
+
+func (m *CacheMetricsMonitor) GetCurrentMetrics() *CacheMetricSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if m.lastSnapshot == nil {
+		return &CacheMetricSnapshot{}
+	}
+	
+	return m.lastSnapshot
+}
+
+func (m *CacheMetricsMonitor) GetMetricsHistory(limit int) []*CacheMetricSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if limit <= 0 || limit > len(m.metricsHistory) {
+		limit = len(m.metricsHistory)
+	}
+	
+	history := make([]*CacheMetricSnapshot, limit)
+	copy(history, m.metricsHistory[len(m.metricsHistory)-limit:])
+	return history
+}
+
+func (m *CacheMetricsMonitor) GetAlerts(limit int) []*CacheMetricAlert {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if limit <= 0 || limit > len(m.alerts) {
+		limit = len(m.alerts)
+	}
+	
+	alerts := make([]*CacheMetricAlert, limit)
+	copy(alerts, m.alerts[len(m.alerts)-limit:])
+	return alerts
+}
+
+func (m *CacheMetricsMonitor) GetPerformanceReport() *CachePerformanceReport {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	snapshot := m.lastSnapshot
+	if snapshot == nil {
+		snapshot = &CacheMetricSnapshot{}
+	}
+	
+	report := &CachePerformanceReport{
 		Timestamp: time.Now(),
-		Metrics:   cmc.GetDetailedMetrics(),
-		Alerts:   GetCacheMonitoringCollector().GetAlerts(),
+		CurrentMetrics: *snapshot,
+		AggregatedMetrics: m.calculateAggregatedMetrics(),
+		TrendAnalysis: m.analyzeTrends(),
+		Recommendations: m.generateRecommendations(),
+	}
+	
+	return report
+}
+
+func (m *CacheMetricsMonitor) calculateAggregatedMetrics() AggregatedCacheMetrics {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var totalHits, totalMisses, l1Hits, l1Misses int64
+	var totalSets, totalDeletes, totalErrors, totalEvictions int64
+	var totalGetLatency, totalSetLatency int64
+	var getCount, setCount int64
+	
+	for _, snap := range m.metricsHistory {
+		totalHits += snap.TotalHits
+		totalMisses += snap.TotalMisses
+		l1Hits += snap.L1Hits
+		l1Misses += snap.L1Misses
+		totalSets += snap.TotalSets
+		totalDeletes += snap.TotalDeletes
+		totalErrors += snap.TotalErrors
+		totalEvictions += snap.TotalEvictions
+	}
+	
+	avgGetLat := float64(totalGetLatency) / float64(getCount) / 1e6
+	avgSetLat := float64(totalSetLatency) / float64(setCount) / 1e6
+	
+	return AggregatedCacheMetrics{
+		TotalHits:        totalHits,
+		TotalMisses:      totalMisses,
+		OverallHitRate:   calculateHitRate(totalHits, totalMisses),
+		L1HitRate:        calculateHitRate(l1Hits, l1Misses),
+		TotalSets:        totalSets,
+		TotalDeletes:     totalDeletes,
+		TotalErrors:      totalErrors,
+		TotalEvictions:   totalEvictions,
+		AvgGetLatencyMs: avgGetLat,
+		AvgSetLatencyMs: avgSetLat,
+		SnapshotsCount:   len(m.metricsHistory),
 	}
 }
 
-type MetricsAggregator struct {
-	snapshots    []*CacheMetricsSnapshot
-	maxSnapshots int
-	mu           sync.Mutex
-}
-
-func NewMetricsAggregator(maxSnapshots int) *MetricsAggregator {
-	if maxSnapshots <= 0 {
-		maxSnapshots = 100
+func (m *CacheMetricsMonitor) analyzeTrends() CacheTrendAnalysis {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	if len(m.metricsHistory) < 2 {
+		return CacheTrendAnalysis{}
 	}
-	return &MetricsAggregator{
-		snapshots:    make([]*CacheMetricsSnapshot, 0, maxSnapshots),
-		maxSnapshots: maxSnapshots,
-	}
-}
-
-func (ma *MetricsAggregator) AddSnapshot(snapshot *CacheMetricsSnapshot) {
-	ma.mu.Lock()
-	defer ma.mu.Unlock()
-
-	ma.snapshots = append(ma.snapshots, snapshot)
-	if len(ma.snapshots) > ma.maxSnapshots {
-		ma.snapshots = ma.snapshots[1:]
+	
+	recent := m.metricsHistory[len(m.metricsHistory)-1]
+	older := m.metricsHistory[len(m.metricsHistory)/2]
+	
+	return CacheTrendAnalysis{
+		HitRateTrend:     recent.HitRate - older.HitRate,
+		L1HitRateTrend:   recent.L1HitRate - older.L1HitRate,
+		LatencyTrend:     recent.AvgGetLatencyMs - older.AvgGetLatencyMs,
+		EvictionTrend:    recent.TotalEvictions - older.TotalEvictions,
+		ErrorRateTrend:   calculateErrorRate(recent.TotalErrors, recent.TotalSets+recent.TotalDeletes) - 
+			                calculateErrorRate(older.TotalErrors, older.TotalSets+older.TotalDeletes),
 	}
 }
 
-func (ma *MetricsAggregator) GetAverageHitRate() float64 {
-	ma.mu.Lock()
-	defer ma.mu.Unlock()
+func (m *CacheMetricsMonitor) generateRecommendations() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
+	var recommendations []string
+	
+	if m.lastSnapshot != nil {
+		if m.lastSnapshot.HitRate < 80 {
+			recommendations = append(recommendations, "建议增加缓存预热策略以提高命中率")
+		}
+		if m.lastSnapshot.L1HitRate < 50 {
+			recommendations = append(recommendations, "L1缓存命中率偏低，考虑增加L1缓存容量")
+		}
+		if m.lastSnapshot.AvgGetLatencyMs > 5 {
+			recommendations = append(recommendations, "缓存延迟偏高，检查网络或Redis性能")
+		}
+		if m.lastSnapshot.TotalEvictions > 100 {
+			recommendations = append(recommendations, "缓存驱逐频繁，考虑增加缓存容量")
+		}
+	}
+	
+	if len(m.metricsHistory) >= 60 {
+		trend := m.analyzeTrends()
+		if trend.HitRateTrend < -5 {
+			recommendations = append(recommendations, "缓存命中率呈下降趋势，需要检查缓存策略")
+		}
+		if trend.LatencyTrend > 2 {
+			recommendations = append(recommendations, "缓存延迟呈上升趋势")
+		}
+	}
+	
+	return recommendations
+}
 
-	if len(ma.snapshots) == 0 {
+type AggregatedCacheMetrics struct {
+	TotalHits        int64
+	TotalMisses      int64
+	OverallHitRate   float64
+	L1HitRate        float64
+	TotalSets        int64
+	TotalDeletes     int64
+	TotalErrors      int64
+	TotalEvictions   int64
+	AvgGetLatencyMs  float64
+	AvgSetLatencyMs  float64
+	SnapshotsCount   int
+}
+
+type CacheTrendAnalysis struct {
+	HitRateTrend    float64
+	L1HitRateTrend  float64
+	LatencyTrend    float64
+	EvictionTrend   int64
+	ErrorRateTrend  float64
+}
+
+type CachePerformanceReport struct {
+	Timestamp          time.Time
+	CurrentMetrics     CacheMetricSnapshot
+	AggregatedMetrics  AggregatedCacheMetrics
+	TrendAnalysis      CacheTrendAnalysis
+	Recommendations    []string
+}
+
+func calculateHitRate(hits, misses int64) float64 {
+	total := hits + misses
+	if total == 0 {
 		return 0
 	}
-
-	var sum float64
-	for _, snapshot := range ma.snapshots {
-		sum += snapshot.Metrics.HitRate
-	}
-	return sum / float64(len(ma.snapshots))
+	return float64(hits) / float64(total) * 100
 }
 
-func (ma *MetricsAggregator) GetAverageLatency() time.Duration {
-	ma.mu.Lock()
-	defer ma.mu.Unlock()
-
-	if len(ma.snapshots) == 0 {
+func calculateErrorRate(errors, total int64) float64 {
+	if total == 0 {
 		return 0
 	}
-
-	var sum int64
-	for _, snapshot := range ma.snapshots {
-		sum += snapshot.Metrics.AverageLatency.Nanoseconds()
-	}
-	return time.Duration(sum / int64(len(ma.snapshots)))
+	return float64(errors) / float64(total)
 }
 
-var (
-	globalMetricsCollector     *CacheMetricsCollector
-	globalMetricsCollectorOnce sync.Once
-)
+func (m *CacheMetricsMonitor) SetAlertThresholds(thresholds *CacheAlertThresholds) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.alertThresholds = thresholds
+}
 
-func GetGlobalMetricsCollector() *CacheMetricsCollector {
-	globalMetricsCollectorOnce.Do(func() {
-		globalMetricsCollector = NewCacheMetricsCollector()
+func (m *CacheMetricsMonitor) Enable(enabled bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.enabled = enabled
+}
+
+func (m *CacheMetricsMonitor) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
+	m.totalHits.Store(0)
+	m.totalMisses.Store(0)
+	m.l1Hits.Store(0)
+	m.l1Misses.Store(0)
+	m.l2Hits.Store(0)
+	m.l2Misses.Store(0)
+	m.totalSets.Store(0)
+	m.totalDeletes.Store(0)
+	m.totalErrors.Store(0)
+	m.totalEvictions.Store(0)
+	m.totalBytesRead.Store(0)
+	m.totalBytesWritten.Store(0)
+	m.avgGetLatency.Store(0)
+	m.avgSetLatency.Store(0)
+	m.metricsHistory = make([]*CacheMetricSnapshot, 0)
+	m.lastSnapshot = nil
+}
+
+var globalCacheMetricsMonitor *CacheMetricsMonitor
+var globalCacheMonitorOnce sync.Once
+
+func InitCacheMetricsMonitor(interval time.Duration) {
+	globalCacheMonitorOnce.Do(func() {
+		globalCacheMetricsMonitor = NewCacheMetricsMonitor(interval)
 	})
-	return globalMetricsCollector
+}
+
+func GetCacheMetricsMonitor() *CacheMetricsMonitor {
+	if globalCacheMetricsMonitor == nil {
+		InitCacheMetricsMonitor(10 * time.Second)
+	}
+	return globalCacheMetricsMonitor
+}
+
+type CacheHealthChecker struct {
+	monitor *CacheMetricsMonitor
+}
+
+func NewCacheHealthChecker(monitor *CacheMetricsMonitor) *CacheHealthChecker {
+	return &CacheHealthChecker{monitor: monitor}
+}
+
+func (h *CacheHealthChecker) CheckHealth(ctx context.Context) *CacheHealthReport {
+	status := &CacheHealthReport{
+		Timestamp: time.Now(),
+		Healthy:   true,
+	}
+	
+	snapshot := h.monitor.GetCurrentMetrics()
+	
+	if snapshot.HitRate < 50 {
+		status.Healthy = false
+		status.Issues = append(status.Issues, "缓存命中率过低")
+	}
+	
+	if snapshot.TotalErrors > 0 {
+		errorRate := float64(snapshot.TotalErrors) / float64(snapshot.TotalSets+snapshot.TotalDeletes+1)
+		if errorRate > 0.01 {
+			status.Healthy = false
+			status.Issues = append(status.Issues, fmt.Sprintf("错误率过高: %.4f%%", errorRate*100))
+		}
+	}
+	
+	return status
+}
+
+type CacheHealthReport struct {
+	Timestamp time.Time
+	Healthy   bool
+	Issues    []string
 }

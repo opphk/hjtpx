@@ -72,7 +72,7 @@ type CacheMonitoringCollector struct {
 	keyAccessHistory    map[string]*AccessRecord
 	memorySnapshots     []MemorySnapshot
 	
-	alerts              []CacheAlert
+	alerts              []CacheAlertDetail
 	maxAlerts           int
 	
 	lastHitCount        int64
@@ -127,7 +127,7 @@ func NewCacheMonitoringCollector(config *CacheMonitoringConfig) *CacheMonitoring
 		latencyDistribution: make(map[string]*atomic.Int64),
 		keyAccessHistory:    make(map[string]*AccessRecord),
 		memorySnapshots:     make([]MemorySnapshot, 0, 100),
-		alerts:              make([]CacheAlert, 0, 50),
+		alerts:              make([]CacheAlertDetail, 0, 50),
 		maxAlerts:           100,
 	}
 
@@ -657,7 +657,7 @@ func RecordCacheKeyAccess(key string) {
 	GetCacheMonitoringCollector().RecordKeyAccess(key)
 }
 
-type CacheAlert struct {
+type CacheAlertDetail struct {
 	ID        int       `json:"id"`
 	Type      string    `json:"type"`
 	Message   string    `json:"message"`
@@ -711,7 +711,7 @@ func (cmc *CacheMonitoringCollector) checkAndTriggerAlerts() {
 }
 
 func (cmc *CacheMonitoringCollector) addAlert(alertType, message, severity string) {
-	alert := CacheAlert{
+	alert := CacheAlertDetail{
 		ID:        int(atomic.AddInt64(&alertIDCounter, 1)),
 		Type:      alertType,
 		Message:   message,
@@ -733,11 +733,10 @@ func (cmc *CacheMonitoringCollector) addAlert(alertType, message, severity strin
 	}
 }
 
-func (cmc *CacheMonitoringCollector) GetAlerts() []CacheAlert {
+func (cmc *CacheMonitoringCollector) GetAlerts() []CacheAlertDetail {
 	cmc.mu.RLock()
 	defer cmc.mu.RUnlock()
-
-	alerts := make([]CacheAlert, 0, len(cmc.alerts))
+	alerts := make([]CacheAlertDetail, 0, len(cmc.alerts))
 	for _, alert := range cmc.alerts {
 		if alert.Active {
 			alerts = append(alerts, alert)
@@ -760,5 +759,5 @@ func (cmc *CacheMonitoringCollector) AcknowledgeAlert(alertID int) {
 func (cmc *CacheMonitoringCollector) ClearAlerts() {
 	cmc.mu.Lock()
 	defer cmc.mu.Unlock()
-	cmc.alerts = make([]CacheAlert, 0, cmc.maxAlerts)
+	cmc.alerts = make([]CacheAlertDetail, 0, cmc.maxAlerts)
 }

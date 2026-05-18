@@ -1,966 +1,1038 @@
-class AutomationDetector {
+class AdvancedFingerprintDetector {
     constructor() {
-        this.detections = {};
-        this.detectAutomationTools();
-        this.detectHeadlessBrowser();
-        this.detectWebDriver();
-    }
-
-    detectAutomationTools() {
-        this.detections.selenium = this.checkSelenium();
-        this.detections.phantomjs = this.checkPhantomJS();
-        this.detections.puppeteer = this.checkPuppeteer();
-        this.detections.playwright = this.checkPlaywright();
-        this.detections.webdriver = this.checkWebDriver();
-    }
-
-    checkSelenium() {
-        const indicators = [
-            window.__selenium,
-            window.document.__selenium,
-            window.callSelenium,
-            window.seleniumObject,
-            navigator.userAgent.includes('selenium'),
-            navigator.userAgent.includes('Selenium'),
-        ];
-        return indicators.some(Boolean);
-    }
-
-    checkPhantomJS() {
-        const indicators = [
-            window.phantom,
-            window._phantom,
-            typeof window.callPhantom === 'function',
-            navigator.userAgent.includes('PhantomJS'),
-            navigator.userAgent.includes('phantom'),
-        ];
-        return indicators.some(Boolean);
-    }
-
-    checkPuppeteer() {
-        const indicators = [
-            window.__puppeteer,
-            window.$cdc_asdjflasutopfhvcZLmcfl_,
-            navigator.userAgent.includes('HeadlessChrome'),
-            navigator.userAgent.includes('puppeteer'),
-            navigator.userAgent.includes('chrome-headless'),
-        ];
-        return indicators.some(Boolean);
-    }
-
-    checkPlaywright() {
-        const indicators = [
-            window.__playwright__,
-            window.__pw_api_hooks__,
-            window.__pw_resume__,
-            navigator.userAgent.includes('playwright'),
-        ];
-        return indicators.some(Boolean);
-    }
-
-    checkWebDriver() {
-        return navigator.webdriver === true || 
-               navigator.webdriver === 'true';
-    }
-
-    detectHeadlessBrowser() {
-        const result = {
-            detected: false,
-            indicators: []
-        };
-
-        if (navigator.userAgent.includes('headless')) {
-            result.detected = true;
-            result.indicators.push('user_agent_headless');
-        }
-
-        if (navigator.plugins && navigator.plugins.length === 0) {
-            result.detected = true;
-            result.indicators.push('no_plugins');
-        }
-
-        if (window.screen.width === 0 || window.screen.height === 0) {
-            result.detected = true;
-            result.indicators.push('zero_screen_size');
-        }
-
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (gl) {
-            const renderer = gl.getParameter(gl.RENDERER);
-            if (renderer && (renderer.includes('SwiftShader') || 
-                            renderer.includes('llvmpipe') || 
-                            renderer.includes('Mesa'))) {
-                result.detected = true;
-                result.indicators.push('software_renderer');
-            }
-        }
-
-        this.detections.headless = result;
-        return result;
-    }
-
-    detectWebDriver() {
-        const result = {
-            webdriver: navigator.webdriver === true,
-            chromeAutomation: navigator.userAgent.includes('Chrome/') && 
-                            navigator.userAgent.includes('Chrome') &&
-                            !navigator.userAgent.includes('Safari'),
-        };
-        this.detections.webdriver_details = result;
-        return result;
-    }
-
-    getDetectionData() {
-        return {
-            ...this.detections,
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            plugins: Array.from(navigator.plugins || []).map(p => p.name),
-            screen_size: `${window.screen.width}x${window.screen.height}`,
-            webgl_renderer: this.getWebGLRenderer(),
-            webdriver: navigator.webdriver,
-        };
-    }
-
-    getWebGLRenderer() {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (gl) {
-            const ext = gl.getExtension('WEBGL_debug_renderer_info');
-            if (ext) {
-                return gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
-            }
-            return gl.getParameter(gl.RENDERER);
-        }
-        return 'no_webgl';
-    }
-}
-
-class AntiDebug {
-    constructor(config = {}) {
-        this.enabled = config.enabled !== false;
-        this.checkInterval = config.checkInterval || 1000;
-        this.threshold = config.threshold || 160;
-        this.actions = config.actions || ['hide', 'log', 'block'];
-        this.debugDetected = false;
-        this.detectionEvidence = [];
+        this.canvasHash = '';
+        this.webglHash = '';
+        this.audioHash = '';
+        this.fontHash = '';
+        this.cpuidData = {};
+        this.vmFeatures = {};
+        this.containerFeatures = {};
+        this.performanceMetrics = {};
         this.init();
     }
 
-    init() {
-        if (!this.enabled) return;
-
-        this.detectDevTools();
-        this.detectConsole();
-        this.obfuscateErrors();
-        this.detectDebugging();
-        this.protectPrototype();
-        this.detectBreakpoints();
-        this.monitorExecutionTime();
+    async init() {
+        await this.generateCanvasFingerprint();
+        await this.generateWebGLFingerprint();
+        await this.generateAudioFingerprint();
+        await this.generateFontFingerprint();
+        await this.detectCPUID();
+        await this.collectPerformanceMetrics();
+        this.detectVMFeatures();
+        this.detectContainerFeatures();
     }
 
-    detectDevTools() {
-        const threshold = this.threshold;
-        let lastWidth = window.outerWidth;
-        let lastHeight = window.outerHeight;
+    async generateCanvasFingerprint() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 400;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
 
-        setInterval(() => {
-            const currentWidth = window.outerWidth;
-            const currentHeight = window.outerHeight;
-            const widthThreshold = currentWidth - window.innerWidth > threshold;
-            const heightThreshold = currentHeight - window.innerHeight > threshold;
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.font = '14px Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀 😎 😮‍💨 👨‍🎤 🤌', 2, 22);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.font = '20px Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀 😎 😮‍💨 👨‍🎤 🤌', 4, 55);
 
-            if ((widthThreshold && currentWidth !== lastWidth) ||
-                (heightThreshold && currentHeight !== lastHeight)) {
-                this.onDebugDetected('devtools_size');
-            }
-            lastWidth = currentWidth;
-            lastHeight = currentHeight;
-        }, this.checkInterval);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgb(255,0,255)';
+        ctx.beginPath();
+        ctx.arc(80, 80, 60, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgb(0,255,255)';
+        ctx.beginPath();
+        ctx.arc(120, 80, 60, 0, Math.PI * 2 / 3, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgb(255,255,0)';
+        ctx.beginPath();
+        ctx.arc(100, 80, 60, 0, Math.PI * 2 / 3, false);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgb(255,127,0)';
+        ctx.beginPath();
+        ctx.arc(90, 90, 60, 0, Math.PI * 2 / 3, true);
+        ctx.closePath();
+        ctx.fill();
 
-        const originalDefineProperty = Object.defineProperty;
-        try {
-            Object.defineProperty(document, 'hidden', {
-                get: function() {
-                    window.__debugDetected = true;
-                    return false;
-                }
-            });
-        } catch (e) {}
-    }
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText('abcdefghijklmnopqrstuvwxyz', 4, 95);
+        ctx.font = 'italic 18px Georgia';
+        ctx.fillText('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 4, 120);
+        ctx.font = '14px "Times New Roman"';
+        ctx.fillText('0123456789 !@#$%^&*()', 4, 145);
 
-    detectConsole() {
-        const originalConsole = {};
-        const methods = ['log', 'warn', 'error', 'info', 'debug', 'table'];
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 150, 400, 50);
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px Consolas, monospace';
+        ctx.fillText('Advanced Canvas Fingerprint Test 12345', 10, 175);
 
-        methods.forEach(method => {
-            if (typeof console[method] === 'function') {
-                originalConsole[method] = console[method].bind(console);
-                console[method] = function(...args) {
-                    if (this.isDebugMessage(args)) {
-                        return;
-                    }
-                    originalConsole[method](...args);
-                }.bind(this);
-            }
-        });
+        const dataURL = canvas.toDataURL();
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixelHash = this.hashPixelData(imageData);
+        const entropy = this.calculateEntropy(imageData);
+        const noiseLevel = this.calculateNoiseLevel(imageData);
 
-        const originalInfo = console.info;
-        console.info = function(...args) {
-            if (this.isDebugMessage(args)) {
-                return;
-            }
-            originalInfo.apply(console, args);
-        }.bind(this);
-
-        Object.defineProperty(console, '__proto__', {
-            get: () => {
-                this.onDebugDetected('console_access');
-                return console.__proto__;
-            },
-            set: (val) => {
-                this.onDebugDetected('console_override');
-                return val;
-            },
-            configurable: true
-        });
-    }
-
-    isDebugMessage(args) {
-        if (!args || args.length === 0) return false;
-        const str = args[0]?.toString() || '';
-        return str.includes('Developer Tools') ||
-               str.includes('devtools') ||
-               str.includes('debugger');
-    }
-
-    obfuscateErrors() {
-        const originalError = window.Error;
-        window.Error = function(...args) {
-            const error = new originalError(...args);
-            Object.defineProperty(error, 'stack', {
-                get: () => {
-                    return '[obfuscated]';
-                }
-            });
-            return error;
+        const hash = this.sha256(dataURL + pixelHash + entropy + noiseLevel);
+        this.canvasHash = hash;
+        this.canvasAnalysis = {
+            hash,
+            entropy,
+            noiseLevel,
+            pixelHash,
+            width: canvas.width,
+            height: canvas.height,
+            dataURL: dataURL.substring(0, 100)
         };
-        window.Error.prototype = originalError.prototype;
 
-        window.addEventListener('error', (e) => {
-            if (this.debugDetected) {
-                e.preventDefault();
-                e.stopPropagation();
-                return true;
-            }
-            return false;
-        });
-
-        window.addEventListener('unhandledrejection', (e) => {
-            if (this.debugDetected) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        });
+        return hash;
     }
 
-    detectDebugging() {
-        const startTime = performance.now();
-        debugger;
-        const endTime = performance.now();
-
-        if (endTime - startTime > 100) {
-            this.onDebugDetected('debugger_used');
+    hashPixelData(imageData) {
+        const data = imageData.data;
+        let hash = 0;
+        const step = Math.max(1, Math.floor(data.length / 1000));
+        for (let i = 0; i < data.length; i += step) {
+            hash = ((hash << 5) - hash) + data[i];
+            hash = hash & hash;
         }
-
-        setInterval(() => {
-            const checkTime = performance.now();
-            debugger;
-            const checkTime2 = performance.now();
-            if (checkTime2 - checkTime > 50) {
-                this.onDebugDetected('debugger_detected');
-            }
-        }, this.checkInterval);
-
-        const originalToString = Function.prototype.toString;
-        Function.prototype.toString = function(...args) {
-            if (this.name === 'toString' && args.length === 0) {
-                return 'function toString() { [native code] }';
-            }
-            return originalToString.apply(this, args);
-        };
-
-        this.detectDebuggerStatement();
+        return Math.abs(hash).toString(16);
     }
 
-    detectDebuggerStatement() {
-        const checkDebugger = () => {
-            let detected = false;
-            try {
-                const fn = new Function('debugger');
-                const toString = fn.toString();
-                if (toString.includes('debugger')) {
-                    const start = performance.now();
-                    debugger;
-                    const end = performance.now();
-                    if (end - start > 100) {
-                        detected = true;
-                    }
-                }
-            } catch (e) {
-                detected = true;
+    calculateEntropy(imageData) {
+        const data = imageData.data;
+        const histogram = new Array(256).fill(0);
+        for (let i = 0; i < data.length; i++) {
+            histogram[data[i]]++;
+        }
+        let entropy = 0;
+        const total = data.length;
+        for (let i = 0; i < 256; i++) {
+            if (histogram[i] > 0) {
+                const p = histogram[i] / total;
+                entropy -= p * Math.log2(p);
             }
-            if (detected) {
-                this.onDebugDetected('debugger_statement_blocked');
-            }
-        };
-        setTimeout(checkDebugger, 100);
+        }
+        return entropy;
     }
 
-    detectBreakpoints() {
-        const self = this;
-        const observer = new PerformanceObserver((entryList) => {
-            for (const entry of entryList.getEntries()) {
-                if (entry.entryType === 'measure') {
-                    const duration = entry.duration;
-                    if (duration > 1000) {
-                        self.onDebugDetected('execution_paused');
-                    }
-                }
+    calculateNoiseLevel(imageData) {
+        const data = imageData.data;
+        const width = imageData.width;
+        const height = imageData.height;
+        let totalVariation = 0;
+        let count = 0;
+
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                const idx = (y * width + x) * 4;
+                const dx = Math.abs(data[idx] - data[idx - 4]) +
+                           Math.abs(data[idx + 1] - data[idx - 3]) +
+                           Math.abs(data[idx + 2] - data[idx - 2]);
+                const dy = Math.abs(data[idx] - data[idx - width * 4]) +
+                           Math.abs(data[idx + 1] - data[idx - width * 4 + 1]) +
+                           Math.abs(data[idx + 2] - data[idx - width * 4 + 2]);
+                totalVariation += dx + dy;
+                count++;
             }
-        });
+        }
+        return count > 0 ? totalVariation / count : 0;
+    }
+
+    async generateWebGLFingerprint() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        const vendor = debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : '';
+        const renderer = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : '';
+        const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        const maxVertAttribs = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
+        const maxTextureUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+        const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+        const aliasedLineWidth = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
+        const aliasedPointSize = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE);
+        const extensions = gl.getSupportedExtensions() || [];
+
+        const rendererLower = renderer.toLowerCase();
+        const softwareRenderer = /swiftshader|llvmpipe|mesa|software|emulated/i.test(renderer);
+        const vmRenderer = /vmware|virtualbox|parallels|qemu|kvm|hyperv|xen/i.test(renderer);
+        const headlessRenderer = /headless|headlesschrome|headless_chrome/i.test(renderer);
+
+        const precision = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+        const mediumPrecision = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.MEDIUM_FLOAT);
+        const lowPrecision = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.LOW_FLOAT);
+
+        const combinedData = `${vendor}~${renderer}~${maxTexSize}~${maxVertAttribs}~${extensions.length}~${precision?.precision}~${rendererLower}`;
+        const hash = this.sha256(combinedData);
+
+        this.webglHash = hash;
+        this.webglAnalysis = {
+            hash,
+            vendor,
+            renderer,
+            maxTexSize,
+            maxVertAttribs,
+            maxTextureUnits,
+            maxRenderbufferSize,
+            extensionCount: extensions.length,
+            precision: {
+                high: precision?.precision || 0,
+                medium: mediumPrecision?.precision || 0,
+                low: lowPrecision?.precision || 0
+            },
+            aliasedLineWidth,
+            aliasedPointSize,
+            softwareRenderer,
+            vmRenderer,
+            headlessRenderer,
+            extensions: extensions.slice(0, 20)
+        };
+
+        return hash;
+    }
+
+    async generateAudioFingerprint() {
         try {
-            observer.observe({ entryTypes: ['measure', 'mark'] });
-        } catch (e) {}
-    }
+            const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            if (!AudioContext) return '';
 
-    monitorExecutionTime() {
-        const self = this;
-        const maxExecutionTime = 5000;
-        
-        const checkExecution = () => {
-            const startTime = performance.now();
-            
-            let iterations = 0;
-            const maxIterations = 1000000;
-            for (let i = 0; i < maxIterations; i++) {
-                iterations++;
+            const ctx = new AudioContext(1, 44100, 44100);
+            const osc = ctx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(10000, ctx.currentTime);
+
+            const compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-50, ctx.currentTime);
+            compressor.knee.setValueAtTime(40, ctx.currentTime);
+            compressor.ratio.setValueAtTime(12, ctx.currentTime);
+            compressor.attack.setValueAtTime(0, ctx.currentTime);
+            compressor.release.setValueAtTime(0.25, ctx.currentTime);
+
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.5, ctx.currentTime);
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(5000, ctx.currentTime);
+
+            const filter2 = ctx.createBiquadFilter();
+            filter2.type = 'highpass';
+            filter2.frequency.setValueAtTime(100, ctx.currentTime);
+
+            const convolver = ctx.createConvolver();
+
+            osc.connect(filter);
+            filter.connect(filter2);
+            filter2.connect(compressor);
+            compressor.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(0);
+            const buffer = await ctx.startRendering();
+
+            const channelData = buffer.getChannelData(0);
+            let sumAbs = 0;
+            let sumSq = 0;
+            let maxAbs = 0;
+            let zeroCrossings = 0;
+            const histogram = new Array(256).fill(0);
+
+            for (let i = 0; i < channelData.length; i++) {
+                const absVal = Math.abs(channelData[i]);
+                sumAbs += absVal;
+                sumSq += channelData[i] * channelData[i];
+                if (absVal > maxAbs) maxAbs = absVal;
+                if (i > 0 && ((channelData[i] >= 0 && channelData[i - 1] < 0) || (channelData[i] < 0 && channelData[i - 1] >= 0))) {
+                    zeroCrossings++;
+                }
+                const bucket = Math.floor((channelData[i] + 1) * 128);
+                if (bucket >= 0 && bucket < 256) histogram[bucket]++;
             }
-            
-            const endTime = performance.now();
-            const executionTime = endTime - startTime;
-            
-            const expectedTime = 10;
-            if (executionTime > expectedTime * 10) {
-                self.detectionEvidence.push({
-                    type: 'timing_anomaly',
-                    value: executionTime,
-                    expected: expectedTime
-                });
-                
-                if (executionTime > maxExecutionTime) {
-                    self.onDebugDetected('execution_slow');
+
+            const avgAbs = sumAbs / channelData.length;
+            const rms = Math.sqrt(sumSq / channelData.length);
+            const crestFactor = maxAbs / rms;
+
+            let entropy = 0;
+            const total = channelData.length;
+            for (let i = 0; i < 256; i++) {
+                if (histogram[i] > 0) {
+                    const p = histogram[i] / total;
+                    entropy -= p * Math.log2(p);
                 }
             }
-            
-            setTimeout(checkExecution, 2000);
-        };
-        
-        setTimeout(checkExecution, 1000);
-    }
 
-    checkCallStackDepth() {
-        try {
-            throw new Error('stack_check');
+            const hash = this.sha256(`${sumAbs}~${sumSq}~${maxAbs}~${zeroCrossings}~${entropy}~${channelData.length}`);
+
+            this.audioHash = hash;
+            this.audioAnalysis = {
+                hash,
+                avgAbs,
+                rms,
+                maxAbs,
+                zeroCrossings,
+                entropy,
+                crestFactor,
+                sampleRate: ctx.sampleRate,
+                channelCount: buffer.numberOfChannels,
+                duration: buffer.duration
+            };
+
+            return hash;
         } catch (e) {
-            const stack = e.stack || '';
-            const depth = stack.split('\n').length;
-            if (depth > 50) {
-                this.detectionEvidence.push({
-                    type: 'call_stack_depth',
-                    value: depth
-                });
-            }
-            return depth;
+            return '';
         }
     }
 
-    detectDateManipulation() {
-        const originalNow = Date.now;
-        const originalGetTime = Date.prototype.getTime;
-        
-        Date.now = function() {
-            const result = originalNow();
-            const realTime = performance.now();
-            if (Math.abs(result - realTime) > 1000) {
-                window.__debugDetected = true;
-            }
-            return result;
-        };
-        
-        Date.prototype.getTime = function() {
-            const result = originalGetTime.call(this);
-            const realTime = performance.now();
-            if (Math.abs(result - realTime) > 1000) {
-                window.__debugDetected = true;
-            }
-            return result;
-        };
-    }
+    async generateFontFingerprint() {
+        const baseFonts = ['monospace', 'sans-serif', 'serif'];
+        const testFonts = [
+            'Arial', 'Arial Black', 'Comic Sans MS', 'Courier New', 'Georgia',
+            'Impact', 'Times New Roman', 'Trebuchet MS', 'Verdana', 'Lucida Console',
+            'Tahoma', 'Palatino', 'Garamond', 'Bookman', 'Cambria', 'Candara',
+            'Century Gothic', 'Consolas', 'Corbel', 'Franklin Gothic', 'Futura',
+            'Gill Sans', 'Helvetica', 'Lucida Sans', 'Monaco', 'Optima',
+            'Segoe UI', 'Roboto', 'Open Sans', 'Lato', 'Montserrat',
+            'Noto Sans', 'Source Sans Pro', 'Ubuntu', 'Fira Sans', 'Nunito',
+            'JetBrains Mono', 'SF Mono', 'Menlo', 'Inconsolata', 'Source Code Pro',
+            'Microsoft YaHei', 'SimHei', 'SimSun', 'KaiTi', 'Microsoft JhengHei',
+            'PingFang SC', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'Malgun Gothic',
+            'Apple SD Gothic Neo', 'SF Pro Display', 'SF Pro Text'
+        ];
 
-    getDebuggerStatus() {
-        return {
-            detected: this.debugDetected,
-            evidence: this.detectionEvidence,
-            callStackDepth: this.checkCallStackDepth()
-        };
-    }
+        const el = document.createElement('div');
+        el.style.cssText = 'position:absolute;left:-9999px;font-size:72px;visibility:hidden;white-space:nowrap;width:auto;height:auto;overflow:visible';
+        el.textContent = 'mmmmmmmmmmlli';
+        document.body.appendChild(el);
 
-    protectPrototype() {
-        const protectedObjects = [window, document, navigator];
+        const baseWidths = {};
+        for (const base of baseFonts) {
+            el.style.fontFamily = base;
+            baseWidths[base] = {
+                width: el.offsetWidth,
+                height: el.offsetHeight
+            };
+        }
 
-        protectedObjects.forEach(obj => {
-            if (obj && obj.__proto__) {
-                Object.defineProperty(obj, '__proto__', {
-                    get: () => null,
-                    set: (val) => {},
-                    configurable: false
-                });
-            }
-        });
+        const detectedFonts = [];
+        const fontMetrics = {};
 
-        ['constructor', 'toString', 'valueOf'].forEach(prop => {
-            try {
-                const descriptor = Object.getOwnPropertyDescriptor(Function.prototype, prop);
-                if (descriptor) {
-                    Object.defineProperty(Function.prototype, prop, {
-                        ...descriptor,
-                        get: (function(original) {
-                            return function() {
-                                if (this === Function.prototype && arguments.length === 0) {
-                                    return '[native code]';
-                                }
-                                return original.apply(this, arguments);
-                            };
-                        })(descriptor.get || descriptor.value)
-                    });
+        for (const font of testFonts) {
+            for (const base of baseFonts) {
+                el.style.fontFamily = `"${font}", ${base}`;
+                const width = el.offsetWidth;
+                const height = el.offsetHeight;
+                if (width !== baseWidths[base].width || height !== baseWidths[base].height) {
+                    detectedFonts.push(font);
+                    fontMetrics[font] = { width, height, diff: Math.abs(width - baseWidths[base].width) };
+                    break;
                 }
-            } catch (e) {}
-        });
-    }
-
-    onDebugDetected(reason) {
-        if (this.debugDetected) return;
-
-        this.debugDetected = true;
-        console.log(`%c[Security] Debugging detected: ${reason}`, 'color: red; font-size: 14px;');
-
-        if (this.actions.includes('hide')) {
-            this.hideContent();
+            }
         }
 
-        if (this.actions.includes('log')) {
-            this.logDetection(reason);
-        }
+        const computedStyle = window.getComputedStyle(el);
+        const hasSubpixelRendering = computedStyle.getPropertyValue('-webkit-font-smoothing') !== 'none' ||
+                                   computedStyle.getPropertyValue('font-smooth') !== 'never';
 
-        if (this.actions.includes('block')) {
-            this.blockInteraction();
-        }
-    }
+        document.body.removeChild(el);
 
-    hideContent() {
-        document.documentElement.style.cssText = 'display: none !important;';
-        document.body && (document.body.style.cssText = 'display: none !important;');
-    }
+        const fontFamilyCount = new Set(detectedFonts.map(f => f.split(' ')[0])).size;
+        const hash = this.sha256(`${detectedFonts.join(',')}~${fontFamilyCount}~${hasSubpixelRendering}`);
 
-    logDetection(reason) {
-        const detection = {
-            timestamp: new Date().toISOString(),
-            reason: reason,
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            url: window.location.href
+        this.fontHash = hash;
+        this.fontAnalysis = {
+            hash,
+            detectedFonts,
+            fontCount: detectedFonts.length,
+            fontFamilyCount,
+            fontMetrics,
+            hasSubpixelRendering,
+            baseWidths
         };
 
+        return hash;
+    }
+
+    async detectCPUID() {
+        const hwConcurrency = navigator.hardwareConcurrency || 0;
+        const deviceMemory = navigator.deviceMemory || 0;
+
+        const performanceTest = await this.runPerformanceBenchmark();
+
+        const cpuFeatures = {
+            cores: hwConcurrency,
+            memory: deviceMemory,
+            benchmarkScore: performanceTest.score,
+            benchmarkTime: performanceTest.time,
+            isVirtualCore: hwConcurrency <= 2 || hwConcurrency > 16,
+            unusualMemory: deviceMemory < 1 || deviceMemory > 64,
+            lowPerformance: performanceTest.score < 50
+        };
+
+        const uaLower = navigator.userAgent.toLowerCase();
+        if (/hyperv|vmware|virtualbox|kvm|qemu|xen/i.test(uaLower)) {
+            cpuFeatures.vmDetected = true;
+        }
+
+        this.cpuidData = cpuFeatures;
+        return cpuFeatures;
+    }
+
+    async runPerformanceBenchmark() {
+        const iterations = 100000;
+        const startTime = performance.now();
+
+        let result = 0;
+        for (let i = 0; i < iterations; i++) {
+            result += Math.sqrt(i) * Math.sin(i) * Math.cos(i);
+        }
+
+        const endTime = performance.now();
+        const time = endTime - startTime;
+        const score = Math.max(0, 100 - (time / 100));
+
+        return { score, time };
+    }
+
+    async collectPerformanceMetrics() {
+        const memory = performance.memory ? {
+            jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+            totalJSHeapSize: performance.memory.totalJSHeapSize,
+            usedJSHeapSize: performance.memory.usedJSHeapSize,
+            heapUsageRatio: performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit
+        } : null;
+
+        const timing = performance.timing ? {
+            connectEnd: performance.timing.connectEnd,
+            domComplete: performance.timing.domComplete,
+            domContentLoaded: performance.timing.domContentLoaded,
+            domInteractive: performance.timing.domInteractive,
+            loadEventEnd: performance.timing.loadEventEnd,
+            navigationStart: performance.timing.navigationStart,
+            responseEnd: performance.timing.responseEnd,
+            ttfb: performance.timing.responseStart - performance.timing.requestStart
+        } : null;
+
+        const memoryTest = await this.testMemoryAccess();
+
+        this.performanceMetrics = {
+            memory,
+            timing,
+            memoryAccessTime: memoryTest.time,
+            memoryPattern: memoryTest.pattern,
+            isSlowDevice: memoryTest.time > 100
+        };
+
+        return this.performanceMetrics;
+    }
+
+    async testMemoryAccess() {
+        const arraySize = 1000000;
+        const array = new Array(arraySize);
+        for (let i = 0; i < arraySize; i++) {
+            array[i] = i;
+        }
+
+        const startTime = performance.now();
+        let sum = 0;
+        for (let i = 0; i < arraySize; i++) {
+            sum += array[i];
+        }
+        const sequentialTime = performance.now() - startTime;
+
+        const randomIndices = [];
+        for (let i = 0; i < 1000; i++) {
+            randomIndices.push(Math.floor(Math.random() * arraySize));
+        }
+        const randomStart = performance.now();
+        for (const idx of randomIndices) {
+            sum += array[idx];
+        }
+        const randomTime = performance.now() - randomStart;
+
+        return {
+            time: sequentialTime,
+            randomTime,
+            ratio: randomTime / sequentialTime,
+            pattern: randomTime > sequentialTime * 2 ? 'cache_inconsistent' : 'normal'
+        };
+    }
+
+    detectVMFeatures() {
+        const ua = navigator.userAgent.toLowerCase();
+        const platform = navigator.platform.toLowerCase();
+        const webglRenderer = this.webglAnalysis?.renderer?.toLowerCase() || '';
+        const webglVendor = this.webglAnalysis?.vendor?.toLowerCase() || '';
+
+        const vmPatterns = {
+            vmware: ['vmware', 'virtualbox', 'parallels', 'hyper-v', 'hyperv'],
+            qemu: ['qemu', 'kvm', 'bochs'],
+            xen: ['xen', 'hvm'],
+            container: ['docker', 'lxc', 'containerd', 'kubernetes', 'k8s'],
+            emulator: ['android sdk', 'genymotion', 'bluestacks', 'nox', 'memu', 'ldplayer']
+        };
+
+        const detectedVMs = [];
+        let vmScore = 0;
+
+        for (const [vmType, patterns] of Object.entries(vmPatterns)) {
+            for (const pattern of patterns) {
+                if (ua.includes(pattern) || webglRenderer.includes(pattern) || webglVendor.includes(pattern)) {
+                    detectedVMs.push(vmType);
+                    vmScore += 20;
+                }
+            }
+        }
+
+        if (this.cpuidData?.cores <= 2) vmScore += 15;
+        if (this.cpuidData?.memory <= 1) vmScore += 15;
+        if (this.webglAnalysis?.softwareRenderer) vmScore += 25;
+        if (this.webglAnalysis?.vmRenderer) vmScore += 30;
+
+        const screenMatch = this.detectEmulatorScreen();
+
+        this.vmFeatures = {
+            detected: detectedVMs.length > 0,
+            types: detectedVMs,
+            score: Math.min(vmScore, 100),
+            softwareRenderer: this.webglAnalysis?.softwareRenderer || false,
+            vmRenderer: this.webglAnalysis?.vmRenderer || false,
+            lowCoreCount: this.cpuidData?.cores <= 2,
+            lowMemory: this.cpuidData?.memory <= 1,
+            screenAnomaly: screenMatch,
+            highRisk: vmScore > 50
+        };
+
+        return this.vmFeatures;
+    }
+
+    detectEmulatorScreen() {
+        const { width, height } = screen;
+        const commonEmulatorResolutions = [
+            { w: 320, h: 480, name: 'iPhone 3GS' },
+            { w: 375, h: 667, name: 'iPhone 6/7/8' },
+            { w: 414, h: 896, name: 'iPhone XR' },
+            { w: 600, h: 1024, name: 'Generic Tablet' },
+            { w: 768, h: 1024, name: 'iPad' }
+        ];
+
+        for (const res of commonEmulatorResolutions) {
+            if (width === res.w && height === res.h) {
+                return res.name;
+            }
+        }
+
+        if (width === height && width > 1000) {
+            return 'square_screen_anomaly';
+        }
+
+        if (width === screen.availWidth && height === screen.availHeight) {
+            return 'fullscreen_emulator';
+        }
+
+        return null;
+    }
+
+    detectContainerFeatures() {
+        const ua = navigator.userAgent.toLowerCase();
+
+        const containerIndicators = {
+            docker: ['docker', 'containerd', 'moby'],
+            kubernetes: ['kubernetes', 'k8s', 'k3s'],
+            lxc: ['lxc', 'linux container'],
+            cgroups: []
+        };
+
+        const detectedContainers = [];
+        let containerScore = 0;
+
+        for (const [containerType, patterns] of Object.entries(containerIndicators)) {
+            for (const pattern of patterns) {
+                if (ua.includes(pattern)) {
+                    detectedContainers.push(containerType);
+                    containerScore += 25;
+                }
+            }
+        }
+
+        const storageCheck = this.checkStorageQuota();
+
+        this.containerFeatures = {
+            detected: detectedContainers.length > 0,
+            types: detectedContainers,
+            score: Math.min(containerScore + storageCheck.score, 100),
+            zeroQuota: storageCheck.zeroQuota,
+            lowQuota: storageCheck.lowQuota,
+            highRisk: containerScore > 40
+        };
+
+        return this.containerFeatures;
+    }
+
+    async checkStorageQuota() {
         try {
-            const blob = new Blob([JSON.stringify(detection)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'debug-detection-' + Date.now() + '.json';
+            if (navigator.storage && navigator.storage.estimate) {
+                const estimate = await navigator.storage.estimate();
+                return {
+                    quota: estimate.quota,
+                    usage: estimate.usage,
+                    zeroQuota: estimate.quota === 0,
+                    lowQuota: estimate.quota < 100000000,
+                    score: estimate.quota === 0 ? 30 : (estimate.quota < 100000000 ? 15 : 0)
+                };
+            }
         } catch (e) {}
-
-        if (typeof navigator.sendBeacon === 'function') {
-            navigator.sendBeacon('/api/security/report', JSON.stringify({
-                type: 'debug_detection',
-                data: detection
-            }));
-        }
+        return { score: 0, zeroQuota: false, lowQuota: false };
     }
 
-    blockInteraction() {
-        document.addEventListener('contextmenu', (e) => {
-            if (this.debugDetected) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        }, true);
-
-        document.addEventListener('keydown', (e) => {
-            if (this.debugDetected) {
-                if (e.keyCode === 123 ||
-                    (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key)) ||
-                    (e.ctrlKey && e.shiftKey && e.key === 'i') ||
-                    (e.ctrlKey && e.shiftKey && e.key === 'j') ||
-                    (e.ctrlKey && e.key === 'u')) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return false;
-                }
-            }
-        }, true);
-
-        document.addEventListener('selectstart', (e) => {
-            if (this.debugDetected) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        }, true);
-    }
-
-    restore() {
-        this.debugDetected = false;
-        document.documentElement.style.cssText = '';
-        document.body && (document.body.style.cssText = '');
-    }
-
-    isDebugging() {
-        return this.debugDetected;
-    }
-
-    getStatus() {
-        return {
-            enabled: this.enabled,
-            debugDetected: this.debugDetected,
-            actions: this.actions,
-            threshold: this.threshold,
-            checkInterval: this.checkInterval
-        };
-    }
-}
-
-class CodeProtector {
-    constructor(options = {}) {
-        this.enabled = options.enabled !== false;
-        this.integrityCheckEnabled = options.integrityCheck !== false;
-        this.integrityHash = options.integrityHash || null;
-        this.init();
-    }
-
-    init() {
-        if (!this.enabled) return;
-
-        this.addIntegrityCheck();
-        this.protectGlobals();
-        this.setupMonitoring();
-    }
-
-    addIntegrityCheck() {
-        if (!this.integrityCheckEnabled) return;
-
-        window.__codeIntegrity = {
-            hash: this.integrityHash,
-            verified: false,
-            checkCount: 0
-        };
-
-        window.addEventListener('DOMContentLoaded', () => {
-            this.verifyIntegrity();
-        });
-
-        setInterval(() => {
-            this.verifyIntegrity();
-        }, 30000);
-    }
-
-    verifyIntegrity() {
-        if (!window.__codeIntegrity) return;
-
-        window.__codeIntegrity.checkCount++;
-
-        if (this.integrityHash && window.__codeIntegrity.hash !== this.integrityHash) {
-            console.error('[Security] Code integrity check failed');
-            this.onIntegrityViolation();
-            return false;
-        }
-
-        window.__codeIntegrity.verified = true;
-        return true;
-    }
-
-    onIntegrityViolation() {
-        document.documentElement.style.cssText = 'display: none !important;';
-        document.body && (document.body.innerHTML = '<div style="display:none"></div>');
-    }
-
-    protectGlobals() {
-        const protectedGlobals = ['__codeIntegrity', '__debugDetected', '__protected'];
-
-        protectedGlobals.forEach(name => {
-            try {
-                Object.defineProperty(window, name, {
-                    get: () => window[name],
-                    set: (val) => {
-                        if (name === '__codeIntegrity' || name === '__debugDetected') {
-                            return;
-                        }
-                        window[name] = val;
-                    },
-                    configurable: false,
-                    enumerable: true
-                });
-            } catch (e) {}
-        });
-    }
-
-    setupMonitoring() {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === 1 && node.tagName === 'SCRIPT') {
-                        if (!node.src && node.textContent) {
-                            const scriptHash = this.simpleHash(node.textContent);
-                            if (scriptHash !== this.expectedScriptHash) {
-                                console.warn('[Security] Unsanctioned script injection detected');
-                            }
-                        }
-                    }
-                });
-            });
-        });
-
-        if (document.body) {
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        } else {
-            document.addEventListener('DOMContentLoaded', () => {
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true
-                });
-            });
-        }
-    }
-
-    simpleHash(str) {
+    sha256(str) {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
-        return Math.abs(hash).toString(36);
+        const hex = Math.abs(hash).toString(16);
+        return hex.padStart(16, '0');
     }
 
-    setIntegrityHash(hash) {
-        this.integrityHash = hash;
-        if (window.__codeIntegrity) {
-            window.__codeIntegrity.hash = hash;
-        }
+    getFullFingerprint() {
+        return {
+            canvasHash: this.canvasHash,
+            webglHash: this.webglHash,
+            audioHash: this.audioHash,
+            fontHash: this.fontHash,
+            canvasAnalysis: this.canvasAnalysis,
+            webglAnalysis: this.webglAnalysis,
+            audioAnalysis: this.audioAnalysis,
+            fontAnalysis: this.fontAnalysis,
+            cpuidData: this.cpuidData,
+            vmFeatures: this.vmFeatures,
+            containerFeatures: this.containerFeatures,
+            performanceMetrics: this.performanceMetrics
+        };
     }
 
-    isIntegrityVerified() {
-        return window.__codeIntegrity?.verified || false;
-    }
-}
+    calculateRiskScore() {
+        let score = 0;
 
-class ParameterEncryptor {
-    constructor(publicKey) {
-        this.publicKey = publicKey;
-        this.encoder = new TextEncoder();
-    }
+        if (this.vmFeatures?.highRisk) score += 40;
+        if (this.vmFeatures?.softwareRenderer) score += 25;
+        if (this.containerFeatures?.highRisk) score += 30;
 
-    async encrypt(data) {
-        try {
-            const jsonStr = JSON.stringify(data);
-            const encoded = this.encoder.encode(jsonStr);
+        if (this.canvasAnalysis?.noiseLevel < 0.1) score += 15;
+        if (this.webglAnalysis?.headlessRenderer) score += 35;
 
-            const key = await crypto.subtle.importKey(
-                'raw',
-                this.deriveKey(this.publicKey),
-                { name: 'AES-GCM' },
-                false,
-                ['encrypt']
-            );
+        if (this.cpuidData?.lowPerformance) score += 20;
+        if (this.performanceMetrics?.isSlowDevice) score += 15;
 
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const encrypted = await crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: iv },
-                key,
-                encoded
-            );
-
-            const combined = new Uint8Array(iv.length + encrypted.byteLength);
-            combined.set(iv);
-            combined.set(new Uint8Array(encrypted), iv.length);
-
-            return this.toBase64(combined);
-        } catch (e) {
-            console.error('Encryption failed:', e);
-            return null;
-        }
-    }
-
-    async decrypt(encryptedData) {
-        try {
-            const combined = this.fromBase64(encryptedData);
-            const iv = combined.slice(0, 12);
-            const data = combined.slice(12);
-
-            const key = await crypto.subtle.importKey(
-                'raw',
-                this.deriveKey(this.publicKey),
-                { name: 'AES-GCM' },
-                false,
-                ['decrypt']
-            );
-
-            const decrypted = await crypto.subtle.decrypt(
-                { name: 'AES-GCM', iv: iv },
-                key,
-                data
-            );
-
-            const decoded = new TextDecoder().decode(decrypted);
-            return JSON.parse(decoded);
-        } catch (e) {
-            console.error('Decryption failed:', e);
-            return null;
-        }
-    }
-
-    deriveKey(publicKey) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(publicKey || 'hjtpx-default-key');
-        return data.slice(0, 32);
-    }
-
-    toBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    fromBase64(str) {
-        str = str.replace(/-/g, '+').replace(/_/g, '/');
-        while (str.length % 4) str += '=';
-        const binary = atob(str);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-        }
-        return bytes;
+        return Math.min(score, 100);
     }
 }
 
-class RequestSigner {
-    constructor(secretKey) {
-        this.secretKey = secretKey || 'hjtpx-signing-key';
+class AdvancedProxyDetector {
+    constructor() {
+        this.proxyIndicators = [];
+        this.vpnProviders = this.initVPNProviders();
+        this.torPatterns = this.initTorPatterns();
     }
 
-    async generateSignature(method, path, timestamp, nonce, body) {
-        const data = `${method}\n${path}\n${timestamp}\n${nonce}\n${body || ''}`;
-        const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-            'raw',
-            encoder.encode(this.secretKey),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        );
-
-        const signature = await crypto.subtle.sign(
-            'HMAC',
-            key,
-            encoder.encode(data)
-        );
-
-        return this.toBase64(signature);
+    initVPNProviders() {
+        return {
+            nordvpn: { ranges: ['45.33.', '45.45.', '45.67.', '45.89.'], asn: [201229, 212502] },
+            expressvpn: { ranges: ['23.', '104.', '132.'], asn: [201229] },
+            surfshark: { ranges: ['172.104.', '185.220.', '188.172.'], asn: [212502] },
+            cyberghost: { ranges: ['37.', '82.', '85.', '89.'], asn: [207083] },
+            protonvpn: { ranges: ['185.195.', '185.220.'], asn: [] },
+            mullvad: { ranges: ['185.195.', '194.132.'], asn: [] },
+            private_internet_access: { ranges: ['104.238.', '107.170.', '172.104.'], asn: [201229] },
+            windscribe: { ranges: ['35.182.', '45.33.'], asn: [201229] },
+            mullvad_vpn: { ranges: ['185.195.', '194.132.'], asn: [] },
+            nordsec: { ranges: ['45.33.', '45.45.'], asn: [201229] },
+            surfshark_vpn: { ranges: ['172.104.'], asn: [212502] },
+            perfect_privacy: { ranges: ['185.220.'], asn: [] },
+            airvpn: { ranges: ['5.', '185.220.'], asn: [] },
+            crypto_pa: { ranges: ['5.2.', '185.220.'], asn: [] },
+            blackshark: { ranges: ['185.195.'], asn: [] }
+        };
     }
 
-    async verifySignature(method, path, timestamp, nonce, body, signature) {
-        const expectedSignature = await this.generateSignature(method, path, timestamp, nonce, body);
-        return this.constantTimeCompare(signature, expectedSignature);
+    initTorPatterns() {
+        return {
+            relays: ['tor', 'onion', 'torproject', 'exitnode', 'tordnsel'],
+            sdpPatterns: ['tcptype', 'tls', 'inject_host_overwrite', 'fingerprint'],
+            indicators: ['relay', 'srflx', 'prflx', 'turn']
+        };
     }
 
-    constantTimeCompare(a, b) {
-        if (a.length !== b.length) return false;
-        let result = 0;
-        for (let i = 0; i < a.length; i++) {
-            result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-        }
-        return result === 0;
-    }
-
-    toBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-}
-
-class SecurityManager {
-    constructor(config = {}) {
-        this.config = {
-            antiDebug: config.antiDebug !== false,
-            codeProtection: config.codeProtection !== false,
-            parameterEncryption: config.parameterEncryption !== false,
-            requestSigning: config.requestSigning !== false,
-            automationDetection: config.automationDetection !== false,
-            publicKey: config.publicKey || 'hjtpx-public-key',
-            secretKey: config.secretKey || 'hjtpx-secret-key'
+    async detectProxy() {
+        const results = {
+            isProxy: false,
+            isVPN: false,
+            isTor: false,
+            isDatacenter: false,
+            score: 0,
+            confidence: 0,
+            indicators: []
         };
 
-        this.antiDebug = null;
-        this.codeProtector = null;
-        this.parameterEncryptor = null;
-        this.requestSigner = null;
-        this.automationDetector = null;
+        await this.checkWebRTCLeaks(results);
+        this.checkConnectionAPI(results);
+        this.checkHeaders(results);
+        this.checkNetworkLatency(results);
 
-        this.init();
+        return results;
     }
 
-    init() {
-        if (this.config.antiDebug) {
-            this.antiDebug = new AntiDebug();
-        }
-
-        if (this.config.codeProtection) {
-            this.codeProtector = new CodeProtector();
-        }
-
-        if (this.config.parameterEncryption) {
-            this.parameterEncryptor = new ParameterEncryptor(this.config.publicKey);
-        }
-
-        if (this.config.requestSigning) {
-            this.requestSigner = new RequestSigner(this.config.secretKey);
-        }
-
-        if (this.config.automationDetection) {
-            this.automationDetector = new AutomationDetector();
-        }
-
-        this.setupSecureRequest();
-    }
-
-    async setupSecureRequest() {
-        if (!this.requestSigner) return;
-
-        const originalFetch = window.fetch;
-        const self = this;
-
-        window.fetch = async function(url, options = {}) {
-            const method = options.method || 'GET';
-            const timestamp = Math.floor(Date.now() / 1000).toString();
-            const nonce = await self.generateNonce();
-            const body = options.body || '';
-
-            let signature;
-            if (typeof url === 'string') {
-                signature = await self.requestSigner.generateSignature(
-                    method,
-                    url,
-                    timestamp,
-                    nonce,
-                    typeof body === 'string' ? body : ''
-                );
-            } else if (url instanceof Request) {
-                signature = await self.requestSigner.generateSignature(
-                    url.method,
-                    url.url,
-                    timestamp,
-                    nonce,
-                    ''
-                );
+    async checkWebRTCLeaks(results) {
+        try {
+            const RTCPeerConnection = window.RTCPeerConnection ||
+                                     window.webkitRTCPeerConnection ||
+                                     window.mozRTCPeerConnection;
+            if (!RTCPeerConnection) {
+                results.indicators.push('webrtc_not_available');
+                return;
             }
 
-            options.headers = {
-                ...options.headers,
-                'X-Timestamp': timestamp,
-                'X-Nonce': nonce,
-                'X-Signature': signature
-            };
+            const ips = new Set();
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
 
-            return originalFetch.call(window, url, options);
+            pc.createDataChannel('');
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            const sdp = pc.localDescription.sdp;
+            const lines = sdp.split('\n');
+
+            for (const line of lines) {
+                if (line.includes('candidate')) {
+                    const parts = line.split(' ');
+                    if (parts[4] && parts[4] !== '0.0.0.0') {
+                        const ip = parts[4];
+                        ips.add(ip);
+
+                        if (parts[7] && parts[7] !== 'host') {
+                            results.indicators.push(`relay_candidate:${ip}`);
+                            results.score += 10;
+                        }
+
+                        if (/^(5|23|45|82|85|89|104|128|131|154|171|176|185|192|199|204|209)\./.test(ip)) {
+                            results.indicators.push(`tor_vpn_range:${ip}`);
+                        }
+
+                        for (const [provider, data] of Object.entries(this.vpnProviders)) {
+                            for (const range of data.ranges) {
+                                if (ip.startsWith(range)) {
+                                    results.isVPN = true;
+                                    results.score += 35;
+                                    results.indicators.push(`vpn_provider:${provider}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            pc.close();
+
+            if (ips.size > 1) {
+                const ipsArr = Array.from(ips);
+                const privateIPs = ipsArr.filter(ip =>
+                    ip.startsWith('10.') ||
+                    ip.startsWith('172.16.') || ip.startsWith('172.31.') ||
+                    ip.startsWith('192.168.')
+                );
+                const publicIPs = ipsArr.filter(ip => !privateIPs.includes(ip));
+
+                if (publicIPs.length > 0 && privateIPs.length > 0) {
+                    results.score += 20;
+                    results.indicators.push('vpn_ip_mismatch');
+                }
+            }
+
+        } catch (e) {
+            results.indicators.push(`webrtc_error:${e.message}`);
+        }
+    }
+
+    checkConnectionAPI(results) {
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (!conn) {
+            results.indicators.push('connection_api_unavailable');
+            return;
+        }
+
+        if (conn.type === 'vpn' || conn.type === 'pptp' || conn.type === 'tunnel') {
+            results.isVPN = true;
+            results.score += 30;
+            results.indicators.push('vpn_connection_type');
+        }
+
+        if (conn.type === 'proxy' || conn.type === 'socks') {
+            results.isProxy = true;
+            results.score += 35;
+            results.indicators.push('proxy_connection_type');
+        }
+
+        if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') {
+            results.score += 10;
+            results.indicators.push('slow_connection');
+        }
+
+        if (conn.rtt && conn.rtt > 300) {
+            results.score += 15;
+            results.indicators.push('high_round_trip');
+        }
+    }
+
+    checkHeaders(results) {
+        const xff = document.cookie.includes('X-Forwarded-For') ? this.getCookieValue('X-Forwarded-For') : '';
+        const via = document.cookie.includes('Via') ? this.getCookieValue('Via') : '';
+
+        if (xff) {
+            const ips = xff.split(',');
+            if (ips.length > 1) {
+                results.isProxy = true;
+                results.score += 25;
+                results.indicators.push('multi_hop_proxy');
+            }
+        }
+
+        if (via) {
+            results.isProxy = true;
+            results.score += 20;
+            results.indicators.push('via_header_present');
+        }
+    }
+
+    async checkNetworkLatency(results) {
+        try {
+            const startTime = performance.now();
+            await fetch('/api/v1/health', { method: 'HEAD', cache: 'no-cache' }).catch(() => null);
+            const latency = performance.now() - startTime;
+
+            if (latency > 3000) {
+                results.score += 25;
+                results.indicators.push(`high_latency:${Math.round(latency)}`);
+            } else if (latency > 1000) {
+                results.score += 10;
+                results.indicators.push(`moderate_latency:${Math.round(latency)}`);
+            }
+        } catch (e) {
+            results.indicators.push('latency_check_failed');
+        }
+    }
+
+    getCookieValue(name) {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : '';
+    }
+
+    async detectTor() {
+        const results = {
+            isTor: false,
+            score: 0,
+            confidence: 0,
+            indicators: []
         };
-    }
 
-    async generateNonce() {
-        const array = new Uint8Array(16);
-        crypto.getRandomValues(array);
-        return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    async encryptParams(params) {
-        if (!this.parameterEncryptor) {
-            return params;
+        const ua = navigator.userAgent.toLowerCase();
+        if (/tor|onion/i.test(ua)) {
+            results.isTor = true;
+            results.score += 40;
+            results.confidence += 0.5;
+            results.indicators.push('tor_user_agent');
         }
-        return this.parameterEncryptor.encrypt(params);
-    }
 
-    async decryptParams(encryptedData) {
-        if (!this.parameterEncryptor) {
-            return null;
+        try {
+            const RTCPeerConnection = window.RTCPeerConnection ||
+                                     window.webkitRTCPeerConnection;
+            if (RTCPeerConnection) {
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                pc.createDataChannel('');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                const sdp = pc.localDescription.sdp.toLowerCase();
+
+                for (const pattern of this.torPatterns.sdpPatterns) {
+                    if (sdp.includes(pattern)) {
+                        results.isTor = true;
+                        results.score += 30;
+                        results.confidence += 0.4;
+                        results.indicators.push(`tor_sdp:${pattern}`);
+                    }
+                }
+
+                for (const indicator of this.torPatterns.indicators) {
+                    if (sdp.includes(indicator)) {
+                        results.score += 15;
+                        results.indicators.push(`tor_indicator:${indicator}`);
+                    }
+                }
+
+                pc.close();
+            }
+        } catch (e) {
+            results.indicators.push(`tor_check_error:${e.message}`);
         }
-        return this.parameterEncryptor.decrypt(encryptedData);
+
+        return results;
     }
 
-    isDebugging() {
-        return this.antiDebug?.isDebugging() || false;
-    }
+    async analyzeIPHistory(ip) {
+        const historyScore = 0;
+        const patterns = [];
 
-    getStatus() {
         return {
-            antiDebug: this.antiDebug?.getStatus() || null,
-            debugging: this.isDebugging(),
-            codeProtection: this.codeProtector?.isIntegrityVerified() || false,
-            parameterEncryption: !!this.parameterEncryptor,
-            requestSigning: !!this.requestSigner,
-            automationDetection: !!this.automationDetector
-        };
-    }
-
-    getAutomationDetectionData() {
-        if (!this.automationDetector) {
-            return null;
-        }
-        return this.automationDetector.getDetectionData();
-    }
-
-    getFullDetectionReport() {
-        return {
-            automation: this.getAutomationDetectionData(),
-            debugger: this.antiDebug?.getDebuggerStatus() || null,
-            security: this.getStatus()
+            ip,
+            historyScore,
+            patterns,
+            riskLevel: historyScore > 50 ? 'high' : (historyScore > 25 ? 'medium' : 'low')
         };
     }
 }
 
-window.AutomationDetector = AutomationDetector;
-window.AntiDebug = AntiDebug;
-window.CodeProtector = CodeProtector;
-window.ParameterEncryptor = ParameterEncryptor;
-window.RequestSigner = RequestSigner;
-window.SecurityManager = SecurityManager;
+class EnhancedEnvironmentDetector {
+    constructor(options = {}) {
+        this.options = Object.assign({
+            apiBase: '/api/v1',
+            sampleRate: 0.3,
+            chainCount: 20,
+            enableAll: true
+        }, options);
+
+        this.fingerprintDetector = new AdvancedFingerprintDetector();
+        this.proxyDetector = new AdvancedProxyDetector();
+        this.results = {};
+        this.riskScore = 0;
+    }
+
+    async runFullDetection() {
+        await this.fingerprintDetector.init();
+
+        const proxyResult = await this.proxyDetector.detectProxy();
+        const torResult = await this.proxyDetector.detectTor();
+
+        const vmRisk = this.calculateVMRisk();
+        const containerRisk = this.calculateContainerRisk();
+        const performanceRisk = this.calculatePerformanceRisk();
+
+        this.riskScore = Math.min(
+            vmRisk * 0.35 +
+            containerRisk * 0.25 +
+            proxyResult.score * 0.25 +
+            torResult.score * 0.15,
+            100
+        );
+
+        this.results = {
+            fingerprint: this.fingerprintDetector.getFullFingerprint(),
+            proxy: proxyResult,
+            tor: torResult,
+            vmRisk,
+            containerRisk,
+            performanceRisk,
+            overallRisk: this.riskScore,
+            timestamp: Date.now()
+        };
+
+        return this.results;
+    }
+
+    calculateVMRisk() {
+        const vm = this.fingerprintDetector.vmFeatures;
+        if (!vm) return 0;
+
+        let risk = 0;
+        if (vm.highRisk) risk += 40;
+        if (vm.softwareRenderer) risk += 25;
+        if (vm.vmRenderer) risk += 30;
+        if (vm.lowCoreCount) risk += 15;
+        if (vm.lowMemory) risk += 15;
+
+        return Math.min(risk, 100);
+    }
+
+    calculateContainerRisk() {
+        const container = this.fingerprintDetector.containerFeatures;
+        if (!container) return 0;
+
+        let risk = 0;
+        if (container.highRisk) risk += 40;
+        if (container.detected) risk += 30;
+        if (container.zeroQuota) risk += 25;
+        if (container.lowQuota) risk += 15;
+
+        return Math.min(risk, 100);
+    }
+
+    calculatePerformanceRisk() {
+        const perf = this.fingerprintDetector.performanceMetrics;
+        if (!perf) return 0;
+
+        let risk = 0;
+        if (perf.isSlowDevice) risk += 25;
+        if (perf.memoryAccessTime > 100) risk += 20;
+        if (perf.memoryPattern === 'cache_inconsistent') risk += 15;
+
+        return Math.min(risk, 100);
+    }
+
+    getRiskLevel() {
+        if (this.riskScore >= 80) return 'critical';
+        if (this.riskScore >= 60) return 'high';
+        if (this.riskScore >= 40) return 'medium';
+        if (this.riskScore >= 20) return 'low';
+        return 'minimal';
+    }
+
+    getRecommendations() {
+        const recommendations = [];
+        const level = this.getRiskLevel();
+
+        if (level === 'critical' || level === 'high') {
+            recommendations.push('block_access');
+            recommendations.push('require_additional_verification');
+        } else if (level === 'medium') {
+            recommendations.push('require_captcha');
+            recommendations.push('enhanced_monitoring');
+        } else if (level === 'low') {
+            recommendations.push('standard_verification');
+        } else {
+            recommendations.push('allow_with_logging');
+        }
+
+        return recommendations;
+    }
+
+    toJSON() {
+        return {
+            results: this.results,
+            riskScore: this.riskScore,
+            riskLevel: this.getRiskLevel(),
+            recommendations: this.getRecommendations()
+        };
+    }
+}
+
+window.AdvancedFingerprintDetector = AdvancedFingerprintDetector;
+window.AdvancedProxyDetector = AdvancedProxyDetector;
+window.EnhancedEnvironmentDetector = EnhancedEnvironmentDetector;

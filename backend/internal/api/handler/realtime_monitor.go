@@ -64,7 +64,7 @@ type RealtimeDataPayload struct {
 }
 
 type AlertPayload struct {
-	ID        int    `json:"id"`
+	ID        string `json:"id"`
 	Type      string `json:"type"`
 	Severity  string `json:"severity"`
 	Message   string `json:"message"`
@@ -311,7 +311,7 @@ func startAlertService() {
 			}
 			idx := rand.Intn(len(severities))
 			payload := AlertPayload{
-				ID:        rand.Intn(10000),
+				ID:        uuid.New().String(),
 				Type:      "system",
 				Severity:  severities[idx],
 				Message:   messages[rand.Intn(len(messages))],
@@ -600,7 +600,7 @@ func GetConnectedClientsCount() int {
 
 func TriggerAlert(alertType, severity, message string) error {
 	payload := AlertPayload{
-		ID:        int(time.Now().UnixNano() % 10000),
+		ID:        uuid.New().String(),
 		Type:      alertType,
 		Severity:  severity,
 		Message:   message,

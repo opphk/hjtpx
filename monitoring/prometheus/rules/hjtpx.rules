@@ -7,87 +7,107 @@ groups:
         for: 1m
         labels:
           severity: critical
+          category: availability
         annotations:
           summary: "HJTPX application is down"
           description: "HJTPX application instance {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://docs.example.com/runbooks/hjtpx-down"
+          dashboard_url: "{{ $labels.instance }}/metrics"
 
       - alert: HJTXPHighErrorRate
         expr: rate(http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
+          category: performance
         annotations:
           summary: "HJTPX high error rate"
           description: "HJTPX application error rate is above 5% for more than 5 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/high-error-rate"
 
       - alert: HJTXPTooManyErrors
         expr: rate(http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.15
         for: 3m
         labels:
           severity: critical
+          category: performance
         annotations:
           summary: "HJTPX critical error rate"
           description: "HJTPX application error rate is above 15% for more than 3 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/critical-error-rate"
 
       - alert: HJTXPHighLatency
         expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 1
         for: 5m
         labels:
           severity: warning
+          category: performance
         annotations:
           summary: "HJTPX high latency"
           description: "HJTPX 95th percentile latency is above 1 second for more than 5 minutes. Current p95: {{ $value | printf \"%.2f\" }}s"
+          runbook_url: "https://docs.example.com/runbooks/high-latency"
 
       - alert: HJTXPTooHighLatency
         expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 3
         for: 3m
         labels:
           severity: critical
+          category: performance
         annotations:
           summary: "HJTPX critical latency"
           description: "HJTPX 95th percentile latency is above 3 seconds for more than 3 minutes. Current p95: {{ $value | printf \"%.2f\" }}s"
+          runbook_url: "https://docs.example.com/runbooks/critical-latency"
 
       - alert: HJTXPHighMemoryUsage
         expr: process_resident_memory_bytes{job="hjtpx-app"} / process_memory_limit_bytes > 0.85
         for: 10m
         labels:
           severity: warning
+          category: resource
         annotations:
           summary: "HJTPX high memory usage"
           description: "HJTPX memory usage is above 85% for more than 10 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/high-memory"
 
       - alert: HJTXPTooHighMemoryUsage
         expr: process_resident_memory_bytes{job="hjtpx-app"} / process_memory_limit_bytes > 0.95
         for: 5m
         labels:
           severity: critical
+          category: resource
         annotations:
           summary: "HJTPX critical memory usage"
           description: "HJTPX memory usage is above 95% for more than 5 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/critical-memory"
 
       - alert: HJTXPHighCPUUsage
         expr: rate(process_cpu_seconds_total{job="hjtpx-app"}[5m]) * 100 > 80
         for: 10m
         labels:
           severity: warning
+          category: resource
         annotations:
           summary: "HJTPX high CPU usage"
           description: "HJTPX CPU usage is above 80% for more than 10 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/high-cpu"
 
       - alert: HJTXPTooHighCPUUsage
         expr: rate(process_cpu_seconds_total{job="hjtpx-app"}[5m]) * 100 > 95
         for: 5m
         labels:
           severity: critical
+          category: resource
         annotations:
           summary: "HJTPX critical CPU usage"
           description: "HJTPX CPU usage is above 95% for more than 5 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/critical-cpu"
 
       - alert: HJTXPHighRequestRate
         expr: rate(http_requests_total{job="hjtpx-app"}[5m]) > 1000
         for: 5m
         labels:
           severity: info
+          category: capacity
         annotations:
           summary: "HJTPX high request rate"
           description: "HJTPX request rate is above 1000 req/s for more than 5 minutes"
@@ -97,6 +117,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: security
         annotations:
           summary: "HJTPX high blocked request rate"
           description: "HJTPX blocked request rate is above 10/s for more than 5 minutes"
@@ -106,6 +127,7 @@ groups:
         for: 3m
         labels:
           severity: critical
+          category: security
         annotations:
           summary: "HJTPX critical blocked request rate"
           description: "HJTPX blocked request rate is above 100/s for more than 3 minutes"
@@ -115,6 +137,7 @@ groups:
         for: 5m
         labels:
           severity: info
+          category: database
         annotations:
           summary: "HJTPX high slow query rate"
           description: "HJTPX slow query rate is above 10/s for more than 5 minutes"
@@ -124,9 +147,290 @@ groups:
         for: 2m
         labels:
           severity: warning
+          category: availability
         annotations:
           summary: "HJTPX health check failure"
           description: "HJTPX health check endpoint is not responding for more than 2 minutes"
+
+      - alert: HJTXPQPSDrop
+        expr: rate(http_requests_total{job="hjtpx-app"}[5m]) < 1
+        for: 10m
+        labels:
+          severity: warning
+          category: availability
+        annotations:
+          summary: "HJTPX QPS drop detected"
+          description: "HJTPX request rate has dropped below 1 req/s for more than 10 minutes"
+
+      - alert: HJTXPApiLatencySpike
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "HJTPX API latency spike"
+          description: "HJTPX 99th percentile latency is above 5 seconds"
+
+      - alert: HJTXPRequestTimeoutRate
+        expr: rate(http_requests_total{job="hjtpx-app",status="504"}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "HJTPX high timeout rate"
+          description: "HJTPX timeout rate is above 1%"
+
+  - name: captcha-metrics
+    interval: 30s
+    rules:
+      - alert: CaptchaHighFailureRate
+        expr: rate(hjtpx_captcha_requests_total{captcha_type="slider",status="failed"}[5m]) / rate(hjtpx_captcha_requests_total{captcha_type="slider"}[5m]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+          category: captcha
+        annotations:
+          summary: "Captcha high failure rate"
+          description: "Slider captcha failure rate is above 30% for more than 10 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/captcha-failure"
+
+      - alert: CaptchaCriticalFailureRate
+        expr: rate(hjtpx_captcha_requests_total{captcha_type="slider",status="failed"}[5m]) / rate(hjtpx_captcha_requests_total{captcha_type="slider"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          category: captcha
+        annotations:
+          summary: "Captcha critical failure rate"
+          description: "Slider captcha failure rate is above 50% for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/captcha-critical-failure"
+
+      - alert: CaptchaHighBlockedRate
+        expr: rate(hjtpx_captcha_requests_total{captcha_type="slider",status="blocked"}[5m]) / rate(hjtpx_captcha_requests_total{captcha_type="slider"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Captcha high blocked rate"
+          description: "Captcha blocked rate is above 10%, possible attack detected"
+
+      - alert: CaptchaLatencyHigh
+        expr: histogram_quantile(0.95, rate(hjtpx_captcha_verification_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Captcha verification latency high"
+          description: "Captcha verification 95th percentile latency is above 2 seconds"
+
+      - alert: CaptchaGenerationFailure
+        expr: rate(hjtpx_captcha_generation_total{status="failed"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: captcha
+        annotations:
+          summary: "Captcha generation failures detected"
+          description: "Captcha generation failures rate is above 1/s"
+
+      - alert: CaptchaSuccessRateLow
+        expr: hjtpx_captcha_success_rate < 70
+        for: 15m
+        labels:
+          severity: warning
+          category: captcha
+        annotations:
+          summary: "Captcha success rate below threshold"
+          description: "Captcha success rate has been below 70% for more than 15 minutes"
+
+      - alert: ActiveSessionsHigh
+        expr: hjtpx_active_sessions > 10000
+        for: 10m
+        labels:
+          severity: warning
+          category: capacity
+        annotations:
+          summary: "High number of active captcha sessions"
+          description: "Active captcha sessions above 10000"
+
+      - alert: SessionTimeoutRate
+        expr: rate(hjtpx_session_timeout_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: captcha
+        annotations:
+          summary: "High session timeout rate"
+          description: "Session timeout rate above 10/s"
+
+  - name: security-metrics
+    interval: 30s
+    rules:
+      - alert: SecurityThreatsBlocked
+        expr: rate(hjtpx_security_threats_blocked_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High security threats blocked"
+          description: "Security threats blocked rate above 50/s for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/security-threats"
+
+      - alert: DDOSProtectionTriggered
+        expr: rate(hjtpx_ddos_protection_triggers_total[5m]) > 10
+        for: 3m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "DDoS protection triggered"
+          description: "DDoS protection has been triggered more than 10 times in the last 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/ddos-attack"
+
+      - alert: BlacklistHitRate
+        expr: rate(hjtpx_blacklist_hits_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High blacklist hit rate"
+          description: "Blacklist hits above 100/s"
+
+      - alert: RateLimitHitsHigh
+        expr: rate(hjtpx_rate_limit_hits_total[5m]) > 200
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High rate limit hits"
+          description: "Rate limit hits above 200/s"
+
+      - alert: BotDetectionHigh
+        expr: rate(hjtpx_bot_detection_total{result="bot"}[5m]) > 50
+        for: 5m
+        labels:
+          severity: info
+          category: security
+        annotations:
+          summary: "High bot detection rate"
+          description: "Bots detected above 50/s"
+
+      - alert: ProxyDetectionHigh
+        expr: rate(hjtpx_proxy_detection_total{result="proxy_detected"}[5m]) > 20
+        for: 5m
+        labels:
+          severity: info
+          category: security
+        annotations:
+          summary: "High proxy detection rate"
+          description: "Proxy connections detected above 20/s"
+
+  - name: ml-metrics
+    interval: 60s
+    rules:
+      - alert: MLModelLatencyHigh
+        expr: histogram_quantile(0.95, rate(hjtpx_ml_model_inference_duration_seconds_bucket[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          category: ml
+        annotations:
+          summary: "ML model inference latency high"
+          description: "ML model inference 95th percentile latency above 500ms"
+
+      - alert: MLModelLowConfidence
+        expr: rate(hjtpx_ml_model_confidence{prediction="low"}[5m]) / rate(hjtpx_ml_model_confidence[5m]) > 0.3
+        for: 15m
+        labels:
+          severity: info
+          category: ml
+        annotations:
+          summary: "High rate of low confidence ML predictions"
+          description: "More than 30% of ML predictions have low confidence"
+
+  - name: alert-metrics
+    interval: 30s
+    rules:
+      - alert: AlertDeliveryLatencyHigh
+        expr: histogram_quantile(0.95, rate(hjtpx_alert_delivery_latency_seconds_bucket[5m])) > 60
+        for: 10m
+        labels:
+          severity: warning
+          category: alerting
+        annotations:
+          summary: "Alert delivery latency high"
+          description: "Alert delivery 95th percentile latency above 60 seconds"
+
+      - alert: AlertAccuracyLow
+        expr: hjtpx_alert_accuracy_percent < 70
+        for: 30m
+        labels:
+          severity: warning
+          category: alerting
+        annotations:
+          summary: "Alert accuracy below threshold"
+          description: "Alert accuracy has been below 70% for more than 30 minutes"
+
+      - alert: AlertEscalationRate
+        expr: rate(hjtpx_alert_escalations_total[15m]) > 5
+        for: 15m
+        labels:
+          severity: warning
+          category: alerting
+        annotations:
+          summary: "High alert escalation rate"
+          description: "More than 5 alerts escalated in 15 minutes"
+
+      - alert: CriticalAlertsActive
+        expr: hjtpx_active_alerts{severity="critical"} > 3
+        for: 5m
+        labels:
+          severity: critical
+          category: alerting
+        annotations:
+          summary: "Multiple critical alerts active"
+          description: "More than 3 critical alerts are currently active"
+
+      - alert: AlertResponseTimeSlow
+        expr: hjtpx_alert_response_time_seconds > 120
+        for: 10m
+        labels:
+          severity: warning
+          category: alerting
+        annotations:
+          summary: "Alert response time exceeds 2 minutes"
+          description: "Alert response time has exceeded 2 minutes"
+
+  - name: sla-metrics
+    interval: 60s
+    rules:
+      - alert: SLAAvailabilityViolation
+        expr: hjtpx_sla_compliance_percent{sla_type="availability"} < 99.5
+        for: 15m
+        labels:
+          severity: critical
+          category: sla
+        annotations:
+          summary: "SLA availability violation"
+          description: "System availability has been below 99.5% for more than 15 minutes. Current: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/sla-violation"
+
+      - alert: SLALatencyViolation
+        expr: hjtpx_sla_compliance_percent{sla_type="p99_latency"} < 99
+        for: 15m
+        labels:
+          severity: warning
+          category: sla
+        annotations:
+          summary: "SLA latency violation"
+          description: "P99 latency SLA has been violated for more than 15 minutes"
 
   - name: database
     interval: 30s
@@ -136,33 +440,40 @@ groups:
         for: 1m
         labels:
           severity: critical
+          category: database
         annotations:
           summary: "PostgreSQL is down"
           description: "PostgreSQL instance is not responding"
+          runbook_url: "https://docs.example.com/runbooks/postgres-down"
 
       - alert: PostgreSQLHighConnections
         expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
         for: 5m
         labels:
           severity: warning
+          category: database
         annotations:
           summary: "PostgreSQL high connection usage"
           description: "PostgreSQL connection usage is above 80%. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/postgres-connections"
 
       - alert: PostgreSQLTooManyConnections
         expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.95
         for: 2m
         labels:
           severity: critical
+          category: database
         annotations:
           summary: "PostgreSQL critical connection usage"
           description: "PostgreSQL connection usage is above 95%. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/postgres-connections-critical"
 
       - alert: PostgreSQLSlowQueries
         expr: rate(pg_stat_statements_mean_exec_time{job="postgres-exporter"}[5m]) > 1000
         for: 5m
         labels:
           severity: warning
+          category: database
         annotations:
           summary: "PostgreSQL slow queries"
           description: "PostgreSQL average query time is above 1 second. Current avg: {{ $value | printf \"%.2f\" }}ms"
@@ -172,6 +483,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: database
         annotations:
           summary: "PostgreSQL long running transactions"
           description: "PostgreSQL has high number of blocked transactions"
@@ -181,9 +493,30 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: database
         annotations:
           summary: "PostgreSQL replication lag"
           description: "PostgreSQL replication lag is above 30 seconds. Current lag: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: PostgreSQLDiskIOHigh
+        expr: rate(pg_stat_database_blk_read_total{job="postgres-exporter"}[5m]) + rate(pg_stat_database_blk_write_total{job="postgres-exporter"}[5m]) > 1000
+        for: 10m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "PostgreSQL high disk I/O"
+          description: "PostgreSQL disk I/O rate is above 1000 ops/s"
+
+      - alert: PostgreSQLCacheHitRatioLow
+        expr: pg_stat_database_blks_hit{job="postgres-exporter"} / (pg_stat_database_blks_hit{job="postgres-exporter"} + pg_stat_database_blks_read{job="postgres-exporter"}) < 0.9
+        for: 30m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "PostgreSQL cache hit ratio low"
+          description: "PostgreSQL cache hit ratio is below 90%"
 
   - name: redis
     interval: 30s
@@ -193,33 +526,40 @@ groups:
         for: 1m
         labels:
           severity: critical
+          category: cache
         annotations:
           summary: "Redis is down"
           description: "Redis instance is not responding"
+          runbook_url: "https://docs.example.com/runbooks/redis-down"
 
       - alert: RedisHighMemoryUsage
         expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
         for: 5m
         labels:
           severity: warning
+          category: cache
         annotations:
           summary: "Redis high memory usage"
           description: "Redis memory usage is above 85%. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/redis-memory"
 
       - alert: RedisTooHighMemoryUsage
         expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
         for: 3m
         labels:
           severity: critical
+          category: cache
         annotations:
           summary: "Redis critical memory usage"
           description: "Redis memory usage is above 95%. Current usage: {{ $value | printf \"%.2f\" }}%"
+          runbook_url: "https://docs.example.com/runbooks/redis-memory-critical"
 
       - alert: RedisHighEvictionRate
         expr: rate(redis_evicted_keys_total{job="redis-exporter"}[5m]) > 100
         for: 5m
         labels:
           severity: warning
+          category: cache
         annotations:
           summary: "Redis high eviction rate"
           description: "Redis is evicting keys at a high rate (>100/s)"
@@ -229,6 +569,7 @@ groups:
         for: 3m
         labels:
           severity: critical
+          category: cache
         annotations:
           summary: "Redis critical eviction rate"
           description: "Redis is evicting keys at a critical rate (>1000/s)"
@@ -238,6 +579,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: cache
         annotations:
           summary: "Redis high connection usage"
           description: "Redis connection usage is above 80%"
@@ -247,68 +589,75 @@ groups:
         for: 10m
         labels:
           severity: info
+          category: cache
         annotations:
           summary: "Redis high cache miss rate"
           description: "Redis cache hit ratio is below 50%"
 
-  - name: nginx
-    interval: 30s
-    rules:
-      - alert: NginxDown
-        expr: up{job="nginx"} == 0
+      - alert: RedisSlowCommandRate
+        expr: rate(redis_slowlog_length[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Redis high slow command rate"
+          description: "Redis slow commands above 10/s"
+
+      - alert: RedisOOMCount
+        expr: increase(redis_rejected_connections_total[5m]) > 0
         for: 1m
         labels:
           severity: critical
+          category: cache
         annotations:
-          summary: "Nginx is down"
-          description: "Nginx instance is not responding"
+          summary: "Redis out of memory events"
+          description: "Redis has rejected connections due to OOM"
 
-      - alert: NginxHighErrorRate
-        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
-        for: 5m
+  - name: business-metrics
+    interval: 60s
+    rules:
+      - alert: UserRegistrationDrop
+        expr: rate(hjtpx_user_registrations_total[15m]) < 0.1
+        for: 30m
+        labels:
+          severity: info
+          category: business
+        annotations:
+          summary: "User registration rate dropped"
+          description: "User registrations below 0.1/s for 30 minutes"
+
+      - alert: UserLoginFailureRate
+        expr: rate(hjtpx_user_logins_total{status="failed"}[5m]) / rate(hjtpx_user_logins_total[5m]) > 0.2
+        for: 10m
         labels:
           severity: warning
+          category: security
         annotations:
-          summary: "Nginx high error rate"
-          description: "Nginx error rate is above 5%"
+          summary: "High user login failure rate"
+          description: "Login failure rate above 20%"
 
-      - alert: NginxTooHighErrorRate
-        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.15
-        for: 3m
+      - alert: ActiveUsersDrop
+        expr: hjtpx_active_users < 10
+        for: 30m
         labels:
-          severity: critical
+          severity: info
+          category: business
         annotations:
-          summary: "Nginx critical error rate"
-          description: "Nginx error rate is above 15%"
+          summary: "Active users dropped significantly"
+          description: "Active users below 10 for 30 minutes"
 
-      - alert: NginxHighLatency
-        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 2
+      - alert: ApplicationCountChange
+        expr: abs(delta(hjtpx_applications_total[1h])) > 100
         for: 5m
         labels:
-          severity: warning
+          severity: info
+          category: business
         annotations:
-          summary: "Nginx high latency"
-          description: "Nginx 95th percentile latency is above 2 seconds"
+          summary: "Significant application count change"
+          description: "Application count changed by more than 100 in the last hour"
 
-      - alert: NginxTooHighLatency
-        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 5
-        for: 3m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Nginx critical latency"
-          description: "Nginx 95th percentile latency is above 5 seconds"
-
-      - alert: NginxHighConnectionUsage
-        expr: nginx_connections_active > 10000
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Nginx high connection usage"
-          description: "Nginx has more than 10000 active connections"
-
-  - name: node
+  - name: infrastructure
     interval: 30s
     rules:
       - alert: NodeHighCPU
@@ -316,42 +665,51 @@ groups:
         for: 10m
         labels:
           severity: warning
+          category: infrastructure
         annotations:
           summary: "Node high CPU usage"
           description: "Node CPU usage is above 80%"
+          runbook_url: "https://docs.example.com/runbooks/node-cpu"
 
       - alert: NodeCriticalCPU
         expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
         for: 5m
         labels:
           severity: critical
+          category: infrastructure
         annotations:
           summary: "Node critical CPU usage"
           description: "Node CPU usage is above 95%"
+          runbook_url: "https://docs.example.com/runbooks/node-cpu-critical"
 
       - alert: NodeHighMemory
         expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
         for: 10m
         labels:
           severity: warning
+          category: infrastructure
         annotations:
           summary: "Node high memory usage"
           description: "Node memory usage is above 85%"
+          runbook_url: "https://docs.example.com/runbooks/node-memory"
 
       - alert: NodeCriticalMemory
         expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 95
         for: 5m
         labels:
           severity: critical
+          category: infrastructure
         annotations:
           summary: "Node critical memory usage"
           description: "Node memory usage is above 95%"
+          runbook_url: "https://docs.example.com/runbooks/node-memory-critical"
 
       - alert: NodeHighDiskUsage
         expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"}) * 100 < 15
         for: 5m
         labels:
           severity: warning
+          category: infrastructure
         annotations:
           summary: "Node high disk usage"
           description: "Node disk usage is above 85%"
@@ -361,6 +719,7 @@ groups:
         for: 3m
         labels:
           severity: critical
+          category: infrastructure
         annotations:
           summary: "Node critical disk usage"
           description: "Node disk usage is above 95%"
@@ -370,6 +729,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: infrastructure
         annotations:
           summary: "Node high disk I/O"
           description: "Node disk I/O utilization is above 80%"
@@ -379,9 +739,83 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: infrastructure
         annotations:
           summary: "Node network errors"
           description: "Node has high network error rate"
+
+      - alert: NodeLoadAverageHigh
+        expr: node_load1 > 4
+        for: 15m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Node high load average"
+          description: "Node load average is above 4"
+
+  - name: nginx
+    interval: 30s
+    rules:
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Nginx is down"
+          description: "Nginx instance is not responding"
+
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Nginx high error rate"
+          description: "Nginx error rate is above 5%"
+
+      - alert: NginxTooHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.15
+        for: 3m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Nginx critical error rate"
+          description: "Nginx error rate is above 15%"
+
+      - alert: NginxHighLatency
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Nginx high latency"
+          description: "Nginx 95th percentile latency is above 2 seconds"
+
+      - alert: NginxTooHighLatency
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Nginx critical latency"
+          description: "Nginx 95th percentile latency is above 5 seconds"
+
+      - alert: NginxHighConnectionUsage
+        expr: nginx_connections_active > 10000
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Nginx high connection usage"
+          description: "Nginx has more than 10000 active connections"
 
   - name: loki
     interval: 60s
@@ -391,6 +825,7 @@ groups:
         for: 2m
         labels:
           severity: warning
+          category: logging
         annotations:
           summary: "Loki is down"
           description: "Loki instance is not responding"
@@ -400,6 +835,124 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: logging
         annotations:
           summary: "Loki high ingester errors"
           description: "Loki ingester is experiencing high reconnection errors"
+
+  - name: websocket-metrics
+    interval: 30s
+    rules:
+      - alert: WebSocketConnectionsHigh
+        expr: hjtpx_websocket_connections_active > 5000
+        for: 10m
+        labels:
+          severity: warning
+          category: websocket
+        annotations:
+          summary: "High number of WebSocket connections"
+          description: "WebSocket connections above 5000"
+
+      - alert: WebSocketMessageFailureRate
+        expr: rate(hjtpx_websocket_messages_total{direction="sent",status="failed"}[5m]) / rate(hjtpx_websocket_messages_total{direction="sent"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: websocket
+        annotations:
+          summary: "High WebSocket message failure rate"
+          description: "WebSocket message failure rate above 10%"
+
+  - name: backup-metrics
+    interval: 5m
+    rules:
+      - alert: BackupOperationFailed
+        expr: rate(hjtpx_backup_operations_total{status="failed"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: backup
+        annotations:
+          summary: "Backup operation failed"
+          description: "A backup operation has failed"
+
+      - alert: BackupDurationHigh
+        expr: histogram_quantile(0.95, rate(hjtpx_backup_duration_seconds_bucket[1h])) > 600
+        for: 10m
+        labels:
+          severity: warning
+          category: backup
+        annotations:
+          summary: "Backup duration high"
+          description: "Backup 95th percentile duration is above 10 minutes"
+
+  - name: query-metrics
+    interval: 30s
+    rules:
+      - alert: SlowQueriesHigh
+        expr: rate(hjtpx_slow_queries_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High rate of slow queries"
+          description: "Slow query rate above 10/s"
+
+      - alert: QueryErrorsHigh
+        expr: rate(hjtpx_query_errors_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High rate of query errors"
+          description: "Query error rate above 5/s"
+
+  - name: cache-metrics
+    interval: 30s
+    rules:
+      - alert: CacheEvictionsHigh
+        expr: rate(hjtpx_cache_evictions_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "High cache eviction rate"
+          description: "Cache eviction rate above 1000/s"
+
+      - alert: CacheMemoryHigh
+        expr: hjtpx_cache_memory_usage_bytes / 1073741824 > 8
+        for: 10m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Cache memory usage high"
+          description: "Cache memory usage above 8GB"
+
+  - name: escalation-rules
+    interval: 60s
+    rules:
+      - alert: AlertEscalationCritical
+        expr: (hjtpx_active_alerts{severity="critical"} > 0) and (hjtpx_active_alerts{severity="critical"} == hjtpx_active_alerts{severity="critical"} offset 15m)
+        for: 15m
+        labels:
+          severity: critical
+          category: escalation
+        annotations:
+          summary: "Critical alert not resolved after 15 minutes"
+          description: "A critical alert has been active for more than 15 minutes without resolution"
+          escalation: "auto-escalate"
+
+      - alert: AlertEscalationRepeated
+        expr: sum(increase(hjtpx_alert_triggers_total{severity="warning"}[30m])) by (rule_name) > 10
+        for: 30m
+        labels:
+          severity: warning
+          category: escalation
+        annotations:
+          summary: "Same warning alert triggered repeatedly"
+          description: "Warning alert {{ $labels.rule_name }} has been triggered more than 10 times in 30 minutes"
+          escalation: "review-required"

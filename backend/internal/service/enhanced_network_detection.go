@@ -162,33 +162,6 @@ func (nd *EnhancedNetworkDetection) initVPNProviders() {
 }
 
 func (nd *EnhancedNetworkDetection) initTorExitNodes() {
-	nd.torExitNodes["128.31.0.34"] = &TorExitNode{IP: "128.31.0.34", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 1000}
-	nd.torExitNodes["128.93.34.5"] = &TorExitNode{IP: "128.93.34.5", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 800}
-	nd.torExitNodes["131.188.40.189"] = &TorExitNode{IP: "131.188.40.189", ORPort: 443, DirectoryPort: 9030, Country: "DE", Bandwidth: 1200}
-	nd.torExitNodes["154.35.22.11"] = &TorExitNode{IP: "154.35.22.11", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 900}
-	nd.torExitNodes["171.25.193.77"] = &TorExitNode{IP: "171.25.193.77", ORPort: 443, DirectoryPort: 9030, Country: "DE", Bandwidth: 1100}
-	nd.torExitNodes["176.10.99.200"] = &TorExitNode{IP: "176.10.99.200", ORPort: 443, DirectoryPort: 9030, Country: "FR", Bandwidth: 750}
-	nd.torExitNodes["185.220.101.1"] = &TorExitNode{IP: "185.220.101.1", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 2000}
-	nd.torExitNodes["185.220.101.2"] = &TorExitNode{IP: "185.220.101.2", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 1800}
-	nd.torExitNodes["185.220.101.3"] = &TorExitNode{IP: "185.220.101.3", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 1500}
-	nd.torExitNodes["185.220.101.4"] = &TorExitNode{IP: "185.220.101.4", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 1600}
-	nd.torExitNodes["185.220.101.5"] = &TorExitNode{IP: "185.220.101.5", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 1400}
-	nd.torExitNodes["192.95.30.12"] = &TorExitNode{IP: "192.95.30.12", ORPort: 443, DirectoryPort: 9030, Country: "CA", Bandwidth: 600}
-	nd.torExitNodes["193.11.166.7"] = &TorExitNode{IP: "193.11.166.7", ORPort: 443, DirectoryPort: 9030, Country: "FR", Bandwidth: 850}
-	nd.torExitNodes["199.249.230.1"] = &TorExitNode{IP: "199.249.230.1", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 950}
-	nd.torExitNodes["204.13.164.53"] = &TorExitNode{IP: "204.13.164.53", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 700}
-	nd.torExitNodes["209.141.60.1"] = &TorExitNode{IP: "209.141.60.1", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 650}
-	nd.torExitNodes["23.129.64.1"] = &TorExitNode{IP: "23.129.64.1", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 1300}
-	nd.torExitNodes["23.129.64.2"] = &TorExitNode{IP: "23.129.64.2", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 1250}
-	nd.torExitNodes["45.154.34.1"] = &TorExitNode{IP: "45.154.34.1", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 1700}
-	nd.torExitNodes["62.210.105.116"] = &TorExitNode{IP: "62.210.105.116", ORPort: 443, DirectoryPort: 9030, Country: "FR", Bandwidth: 550}
-	nd.torExitNodes["66.111.2.131"] = &TorExitNode{IP: "66.111.2.131", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 800}
-	nd.torExitNodes["72.14.180.105"] = &TorExitNode{IP: "72.14.180.105", ORPort: 443, DirectoryPort: 9030, Country: "US", Bandwidth: 500}
-	nd.torExitNodes["78.142.211.102"] = &TorExitNode{IP: "78.142.211.102", ORPort: 443, DirectoryPort: 9030, Country: "SE", Bandwidth: 700}
-	nd.torExitNodes["86.59.21.38"] = &TorExitNode{IP: "86.59.21.38", ORPort: 443, DirectoryPort: 9030, Country: "GB", Bandwidth: 600}
-	nd.torExitNodes["91.250.242.12"] = &TorExitNode{IP: "91.250.242.12", ORPort: 443, DirectoryPort: 9030, Country: "FI", Bandwidth: 900}
-	nd.torExitNodes["94.140.8.48"] = &TorExitNode{IP: "94.140.8.48", ORPort: 443, DirectoryPort: 9030, Country: "NL", Bandwidth: 1100}
-	nd.torExitNodes["95.211.138.97"] = &TorExitNode{IP: "95.211.138.97", ORPort: 443, DirectoryPort: 9030, Country: "FI", Bandwidth: 850}
 }
 
 func (nd *EnhancedNetworkDetection) DetectNetwork(ctx context.Context, ip string, headers http.Header) (*NetworkDetectionResult, error) {
@@ -360,7 +333,7 @@ func (nd *EnhancedNetworkDetection) detectTor(ip string, result *NetworkDetectio
 			ExitNodeIP: node.IP,
 			Country:    node.Country,
 			LastSeen:   node.LastSeen,
-			Bandwidth:  node.Bandwidth,
+			Bandwidth:  int(node.Bandwidth),
 			RelayCount: 3,
 		}
 	}

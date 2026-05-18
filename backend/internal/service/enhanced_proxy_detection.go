@@ -14,10 +14,18 @@ import (
 	"time"
 )
 
+type TorExitNodeV2 struct {
+	IP           string
+	Port         int
+	LastSeen     time.Time
+	Country      string
+	Bandwidth    float64
+}
+
 type EnhancedProxyDetection struct {
-	database      *ProxyDatabase
+	database      *ProxyDatabaseV2
 	vpnProviders  map[string]*VPNProvider
-	torExitNodes  map[string]bool
+	torExitNodes  map[string]*TorExitNodeV2
 	httpClient    *http.Client
 	wsClient      *websocketClient
 	detectionMu   sync.RWMutex
@@ -31,22 +39,13 @@ type VPNProvider struct {
 	LastUpdated  time.Time
 }
 
-type TorExitNode struct {
-	IP           string
-	ORPort       int
-	DirectoryPort int
-	LastSeen     time.Time
-	Country      string
-	Bandwidth    int
-}
-
-type ProxyDatabase struct {
-	proxies    map[string]*ProxyInfo
+type ProxyDatabaseV2 struct {
+	proxies    map[string]*ProxyInfoV2
 	mu         sync.RWMutex
-	stats      *ProxyStats
+	stats      *ProxyStatsV2
 }
 
-type ProxyInfo struct {
+type ProxyInfoV2 struct {
 	IP           string    `json:"ip"`
 	Port         int       `json:"port"`
 	Type         string    `json:"type"`
@@ -62,7 +61,7 @@ type ProxyInfo struct {
 	Reliability  float64   `json:"reliability"`
 }
 
-type ProxyStats struct {
+type ProxyStatsV2 struct {
 	TotalProxies   int64     `json:"total_proxies"`
 	HTTPProxies    int64     `json:"http_proxies"`
 	HTTPSProxies   int64     `json:"https_proxies"`
@@ -128,7 +127,7 @@ func NewEnhancedProxyDetection() *EnhancedProxyDetection {
 	detection := &EnhancedProxyDetection{
 		database:     newProxyDatabase(),
 		vpnProviders: make(map[string]*VPNProvider),
-		torExitNodes: make(map[string]bool),
+		torExitNodes: make(map[string]*TorExitNodeV2),
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
 			Transport: &http.Transport{
@@ -149,14 +148,14 @@ func NewEnhancedProxyDetection() *EnhancedProxyDetection {
 	return detection
 }
 
-func newProxyDatabase() *ProxyDatabase {
-	return &ProxyDatabase{
-		proxies: make(map[string]*ProxyInfo),
-		stats: &ProxyStats{},
+func newProxyDatabase() *ProxyDatabaseV2 {
+	return &ProxyDatabaseV2{
+		proxies: make(map[string]*ProxyInfoV2),
+		stats: &ProxyStatsV2{},
 	}
 }
 
-func (p *ProxyDatabase) Add(proxy *ProxyInfo) {
+func (p *ProxyDatabaseV2) Add(proxy *ProxyInfoV2) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -164,7 +163,7 @@ func (p *ProxyDatabase) Add(proxy *ProxyInfo) {
 	p.updateStats()
 }
 
-func (p *ProxyDatabase) Get(ip string) (*ProxyInfo, bool) {
+func (p *ProxyDatabaseV2) Get(ip string) (*ProxyInfoV2, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -172,19 +171,19 @@ func (p *ProxyDatabase) Get(ip string) (*ProxyInfo, bool) {
 	return info, exists
 }
 
-func (p *ProxyDatabase) GetAll() []*ProxyInfo {
+func (p *ProxyDatabaseV2) GetAll() []*ProxyInfoV2 {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	proxies := make([]*ProxyInfo, 0, len(p.proxies))
+	proxies := make([]*ProxyInfoV2, 0, len(p.proxies))
 	for _, proxy := range p.proxies {
 		proxies = append(proxies, proxy)
 	}
 	return proxies
 }
 
-func (p *ProxyDatabase) updateStats() {
-	stats := &ProxyStats{}
+func (p *ProxyDatabaseV2) updateStats() {
+	stats := &ProxyStatsV2{}
 
 	for _, proxy := range p.proxies {
 		stats.TotalProxies++
@@ -259,34 +258,34 @@ func (d *EnhancedProxyDetection) initVPNProviders() {
 }
 
 func (d *EnhancedProxyDetection) initTorExitNodes() {
-	d.torExitNodes = map[string]bool{
-		"128.31.0.34": true,
-		"128.93.34.5": true,
-		"131.188.40.189": true,
-		"154.35.22.11": true,
-		"171.25.193.77": true,
-		"176.10.99.200": true,
-		"185.220.101.1": true,
-		"185.220.101.2": true,
-		"185.220.101.3": true,
-		"185.220.101.4": true,
-		"185.220.101.5": true,
-		"192.95.30.12": true,
-		"193.11.166.7": true,
-		"199.249.230.1": true,
-		"204.13.164.53": true,
-		"209.141.60.1": true,
-		"23.129.64.1": true,
-		"23.129.64.2": true,
-		"45.154.34.1": true,
-		"62.210.105.116": true,
-		"66.111.2.131": true,
-		"72.14.180.105": true,
-		"78.142.211.102": true,
-		"86.59.21.38": true,
-		"91.250.242.12": true,
-		"94.140.8.48": true,
-		"95.211.138.97": true,
+	d.torExitNodes = map[string]*TorExitNodeV2{
+		"128.31.0.34": {IP: "128.31.0.34", Port: 443, Country: "US", Bandwidth: 1000},
+		"128.93.34.5": {IP: "128.93.34.5", Port: 443, Country: "US", Bandwidth: 800},
+		"131.188.40.189": {IP: "131.188.40.189", Port: 443, Country: "DE", Bandwidth: 1200},
+		"154.35.22.11": {IP: "154.35.22.11", Port: 443, Country: "NL", Bandwidth: 900},
+		"171.25.193.77": {IP: "171.25.193.77", Port: 443, Country: "DE", Bandwidth: 1100},
+		"176.10.99.200": {IP: "176.10.99.200", Port: 443, Country: "FR", Bandwidth: 750},
+		"185.220.101.1": {IP: "185.220.101.1", Port: 443, Country: "NL", Bandwidth: 2000},
+		"185.220.101.2": {IP: "185.220.101.2", Port: 443, Country: "NL", Bandwidth: 1800},
+		"185.220.101.3": {IP: "185.220.101.3", Port: 443, Country: "NL", Bandwidth: 1500},
+		"185.220.101.4": {IP: "185.220.101.4", Port: 443, Country: "NL", Bandwidth: 1600},
+		"185.220.101.5": {IP: "185.220.101.5", Port: 443, Country: "NL", Bandwidth: 1400},
+		"192.95.30.12": {IP: "192.95.30.12", Port: 443, Country: "CA", Bandwidth: 600},
+		"193.11.166.7": {IP: "193.11.166.7", Port: 443, Country: "FR", Bandwidth: 850},
+		"199.249.230.1": {IP: "199.249.230.1", Port: 443, Country: "US", Bandwidth: 950},
+		"204.13.164.53": {IP: "204.13.164.53", Port: 443, Country: "US", Bandwidth: 700},
+		"209.141.60.1": {IP: "209.141.60.1", Port: 443, Country: "US", Bandwidth: 650},
+		"23.129.64.1": {IP: "23.129.64.1", Port: 443, Country: "US", Bandwidth: 1300},
+		"23.129.64.2": {IP: "23.129.64.2", Port: 443, Country: "US", Bandwidth: 1250},
+		"45.154.34.1": {IP: "45.154.34.1", Port: 443, Country: "NL", Bandwidth: 1700},
+		"62.210.105.116": {IP: "62.210.105.116", Port: 443, Country: "FR", Bandwidth: 550},
+		"66.111.2.131": {IP: "66.111.2.131", Port: 443, Country: "US", Bandwidth: 800},
+		"72.14.180.105": {IP: "72.14.180.105", Port: 443, Country: "US", Bandwidth: 500},
+		"78.142.211.102": {IP: "78.142.211.102", Port: 443, Country: "SE", Bandwidth: 700},
+		"86.59.21.38": {IP: "86.59.21.38", Port: 443, Country: "GB", Bandwidth: 600},
+		"91.250.242.12": {IP: "91.250.242.12", Port: 443, Country: "FI", Bandwidth: 900},
+		"94.140.8.48": {IP: "94.140.8.48", Port: 443, Country: "NL", Bandwidth: 1100},
+		"95.211.138.97": {IP: "95.211.138.97", Port: 443, Country: "FI", Bandwidth: 850},
 	}
 }
 
@@ -731,7 +730,7 @@ func (d *EnhancedProxyDetection) DetectVPNByASN(asn int) (bool, string) {
 	return false, ""
 }
 
-func (d *EnhancedProxyDetection) GetProxyStats() *ProxyStats {
+func (d *EnhancedProxyDetection) GetProxyStats() *ProxyStatsV2 {
 	return d.database.stats
 }
 
@@ -739,7 +738,7 @@ func (d *EnhancedProxyDetection) ExportResults(result *EnhancedProxyResult) ([]b
 	return json.MarshalIndent(result, "", "  ")
 }
 
-func (d *EnhancedProxyDetection) BatchDetect(ctx context.Context, requests []ProxyCheckRequest) []*EnhancedProxyResult {
+func (d *EnhancedProxyDetection) BatchDetect(ctx context.Context, requests []ProxyCheckRequestV2) []*EnhancedProxyResult {
 	results := make([]*EnhancedProxyResult, len(requests))
 
 	for i, req := range requests {
@@ -756,7 +755,7 @@ func (d *EnhancedProxyDetection) BatchDetect(ctx context.Context, requests []Pro
 	return results
 }
 
-type ProxyCheckRequest struct {
+type ProxyCheckRequestV2 struct {
 	IP      string
 	Headers http.Header
 }
@@ -782,11 +781,12 @@ func (d *EnhancedProxyDetection) GetTorExitNodes() []string {
 }
 
 func (d *EnhancedProxyDetection) AddTorExitNode(ip string) {
-	d.torExitNodes[ip] = true
+	d.torExitNodes[ip] = &TorExitNodeV2{IP: ip, Port: 443, Country: "Unknown", Bandwidth: 0}
 }
 
 func (d *EnhancedProxyDetection) IsTorExitNode(ip string) bool {
-	return d.torExitNodes[ip]
+	_, exists := d.torExitNodes[ip]
+	return exists
 }
 
 func (d *EnhancedProxyDetection) GenerateRiskReport(result *EnhancedProxyResult) *ProxyRiskReport {

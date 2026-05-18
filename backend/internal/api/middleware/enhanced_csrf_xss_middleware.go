@@ -3,7 +3,10 @@ package middleware
 import (
 	"crypto/rand"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -624,5 +627,138 @@ func SSRFProtectionMiddleware(configs ...SSRFProtectionConfig) gin.HandlerFunc {
 }
 
 func isSSRFAttack(urlStr string, cfg SSRFProtectionConfig) bool {
+	ssrfPatterns := []string{
+		"http://127.0.0.1",
+		"http://localhost",
+		"http://0.0.0.0",
+		"http://[::]",
+		"http://[::1]",
+		"file://",
+		"gopher://",
+		"dict://",
+		"ftp://",
+	}
+
+	privateIPRegex := regexp.MustCompile(`(?i)(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.|127\.)`)
+
+	for _, pattern := range ssrfPatterns {
+		if strings.Contains(urlStr, pattern) {
+			return true
+		}
+	}
+
+	if privateIPRegex.MatchString(urlStr) {
+		return true
+	}
+
+	metadataEndpoints := []string{
+		"metadata.google.internal",
+		"metadata.azure.com",
+		"169.254.169.254",
+		"metadata.openstack.org",
+	}
+
+	for _, endpoint := range metadataEndpoints {
+		if strings.Contains(urlStr, endpoint) {
+			return true
+		}
+	}
+
+	if cfg.Enabled {
+		for _, blocked := range cfg.BlockedIPRanges {
+			if strings.Contains(urlStr, blocked) {
+				return true
+			}
+		}
+
+		if cfg.CheckPrivate {
+			host := urlStr
+			if strings.HasPrefix(host, "http://") {
+				host = strings.TrimPrefix(host, "http://")
+			} else if strings.HasPrefix(host, "https://") {
+				host = strings.TrimPrefix(host, "https://")
+			}
+			host = strings.Split(host, "/")[0]
+			host = strings.Split(host, ":")[0]
+
+			ip := net.ParseIP(host)
+			if ip != nil {
+				if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+type SSRFProtectionMiddlewareV2 struct {
+	config     SSRFProtectionConfig
+	validator  *ssrfValidator
+}
+
+type ssrfValidator struct {
+	blockedRanges []*net.IPNet
+	allowedDomains map[string]bool
+}
+
+func newSSRFValidator(cfg SSRFProtectionConfig) *ssrfValidator {
+	v := &ssrfValidator{
+		allowedDomains: make(map[string]bool),
+	}
+
+	for _, domain := range cfg.AllowedDomains {
+		v.allowedDomains[strings.ToLower(domain)] = true
+	}
+
+	for _, cidr := range cfg.BlockedIPRanges {
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err == nil {
+			v.blockedRanges = append(v.blockedRanges, ipnet)
+		}
+	}
+
+	defaultBlocked := []string{
+		"127.0.0.0/8",
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+		"0.0.0.0/8",
+	}
+	for _, cidr := range defaultBlocked {
+		if _, ipnet, err := net.ParseCIDR(cidr); err == nil {
+			v.blockedRanges = append(v.blockedRanges, ipnet)
+		}
+	}
+
+	return v
+}
+
+func (v *ssrfValidator) isBlocked(urlStr string) bool {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return true
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return true
+	}
+
+	if v.allowedDomains[strings.ToLower(host)] {
+		return false
+	}
+
+	ip := net.ParseIP(host)
+	if ip != nil {
+		for _, blocked := range v.blockedRanges {
+			if blocked.Contains(ip) {
+				return true
+			}
+		}
+	}
+
 	return false
 }

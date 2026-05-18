@@ -1,14 +1,18 @@
-let requestTrendChart, realtimeChart;
+let requestTrendChart, realtimeChart, comparisonChart, appDistributionChart;
 let ws = null;
 let wsConnected = false;
 let autoRefreshInterval = null;
 let realtimeDataPoints = [];
 let previousStats = null;
+let currentChartType = 'line';
+let currentPeriod = 'hour';
 const REALTIME_UPDATE_INTERVAL = 5000;
 const MAX_REALTIME_POINTS = 60;
 const WS_RECONNECT_DELAY = 3000;
 const AUTO_REFRESH_INTERVAL = 30000;
 let isAutoRefreshEnabled = false;
+let comparisonData = null;
+let appDistributionData = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     initECharts();
@@ -120,6 +124,8 @@ function updateExtendedStats(data) {
 function initECharts() {
     initRequestTrendChart();
     initRealtimeChart();
+    initComparisonChart();
+    initAppDistributionChart();
 }
 
 function initRequestTrendChart() {
@@ -128,6 +134,143 @@ function initRequestTrendChart() {
 
     requestTrendChart = echarts.init(container);
     window.addEventListener('resize', () => requestTrendChart.resize());
+    initRequestTrendChartOptions();
+}
+
+function initRequestTrendChartOptions() {
+    if (!requestTrendChart) return;
+    
+    let seriesConfig = {
+        data: [],
+        smooth: true,
+        lineStyle: { color: '#3c8dbc', width: 2 },
+        itemStyle: { color: '#3c8dbc' }
+    };
+    
+    if (currentChartType === 'area') {
+        seriesConfig.areaStyle = {
+            color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                    { offset: 0, color: 'rgba(60, 140, 188, 0.3)' },
+                    { offset: 1, color: 'rgba(60, 140, 188, 0.05)' }
+                ]
+            }
+        };
+    } else if (currentChartType === 'bar') {
+        seriesConfig.type = 'bar';
+        seriesConfig.barWidth = '60%';
+        seriesConfig.itemStyle = {
+            color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                    { offset: 0, color: '#3c8dbc' },
+                    { offset: 1, color: '#1a5a7a' }
+                ]
+            },
+            borderRadius: [4, 4, 0, 0]
+        };
+        delete seriesConfig.smooth;
+        delete seriesConfig.lineStyle;
+    }
+    
+    requestTrendChart.setOption({
+        xAxis: {
+            type: 'category',
+            data: [],
+            axisLabel: { color: '#666' }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' }
+        },
+        series: [seriesConfig],
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true }
+    });
+}
+
+function initComparisonChart() {
+    const container = document.getElementById('comparisonChart');
+    if (!container) return;
+    
+    comparisonChart = echarts.init(container);
+    window.addEventListener('resize', () => comparisonChart.resize());
+    
+    comparisonChart.setOption({
+        xAxis: {
+            type: 'category',
+            data: ['验证量', '通过率', '拦截率', '响应时间'],
+            axisLabel: { color: '#666' }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: '#666' }
+        },
+        series: [
+            {
+                name: '当前',
+                type: 'bar',
+                data: [],
+                itemStyle: { color: '#007bff' },
+                barWidth: '35%'
+            },
+            {
+                name: '对比期',
+                type: 'bar',
+                data: [],
+                itemStyle: { color: '#6c757d' },
+                barWidth: '35%'
+            }
+        ],
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        legend: {
+            data: ['当前', '对比期'],
+            bottom: 0
+        },
+        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
+    });
+}
+
+function initAppDistributionChart() {
+    const container = document.getElementById('appDistributionChart');
+    if (!container) return;
+    
+    appDistributionChart = echarts.init(container);
+    window.addEventListener('resize', () => appDistributionChart.resize());
+    
+    appDistributionChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+        },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+                borderRadius: 4,
+                borderColor: '#fff',
+                borderWidth: 2
+            },
+            label: {
+                show: true,
+                formatter: '{b}: {d}%'
+            },
+            data: []
+        }],
+        color: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+    });
 }
 
 function initRealtimeChart() {
@@ -143,6 +286,68 @@ function initRealtimeChart() {
     window.addEventListener('resize', () => realtimeChart.resize());
 
     updateRealtimeChartInit();
+}
+
+function changeChartType(type) {
+    currentChartType = type;
+    initRequestTrendChartOptions();
+    
+    if (window.trendChartData) {
+        updateTrendChartWithType(window.trendChartData);
+    }
+}
+
+function updateTrendChartWithType(data) {
+    if (!requestTrendChart || !data) return;
+    
+    window.trendChartData = data;
+    
+    const labels = data.map(t => t.time || t.label);
+    const values = data.map(t => t.requests || t.count || t.value);
+    
+    let seriesConfig = {
+        data: values,
+        smooth: true,
+        lineStyle: { color: '#3c8dbc', width: 2 },
+        itemStyle: { color: '#3c8dbc' }
+    };
+    
+    if (currentChartType === 'area') {
+        seriesConfig.areaStyle = {
+            color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                    { offset: 0, color: 'rgba(60, 140, 188, 0.3)' },
+                    { offset: 1, color: 'rgba(60, 140, 188, 0.05)' }
+                ]
+            }
+        };
+    } else if (currentChartType === 'bar') {
+        seriesConfig.type = 'bar';
+        seriesConfig.barWidth = '60%';
+        seriesConfig.itemStyle = {
+            color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                    { offset: 0, color: '#3c8dbc' },
+                    { offset: 1, color: '#1a5a7a' }
+                ]
+            },
+            borderRadius: [4, 4, 0, 0]
+        };
+        delete seriesConfig.smooth;
+        delete seriesConfig.lineStyle;
+    }
+    
+    requestTrendChart.setOption({
+        xAxis: {
+            data: labels,
+            axisLabel: { color: '#666' }
+        },
+        series: [seriesConfig]
+    }, false);
 }
 
 function updateRealtimeChartInit() {
@@ -321,6 +526,13 @@ function setupEventListeners() {
             await loadRequestTrendData(period);
         });
     });
+    
+    const comparePeriodSelect = document.getElementById('comparePeriodSelect');
+    if (comparePeriodSelect) {
+        comparePeriodSelect.addEventListener('change', () => {
+            loadComparisonData();
+        });
+    }
 }
 
 function startAutoRefresh() {
@@ -361,6 +573,132 @@ async function loadDashboardStats() {
 
     await loadRequestTrendData('hour');
     updateRealtimeChart(mockData.requestsPerMinute || 0);
+    loadComparisonData();
+    loadAppDistributionData();
+}
+
+async function loadComparisonData() {
+    const period = document.getElementById('comparePeriodSelect')?.value || 'prev';
+    
+    try {
+        const response = await auth.request(`/admin/api/dashboard/comparison?period=${period}`);
+        if (response.code === 0) {
+            comparisonData = response.data;
+        } else {
+            comparisonData = getMockComparisonData();
+        }
+    } catch (error) {
+        comparisonData = getMockComparisonData();
+    }
+    
+    updateComparisonChart(comparisonData);
+}
+
+async function loadAppDistributionData() {
+    try {
+        const response = await auth.request('/admin/api/dashboard/app-distribution');
+        if (response.code === 0) {
+            appDistributionData = response.data;
+        } else {
+            appDistributionData = getMockAppDistributionData();
+        }
+    } catch (error) {
+        appDistributionData = getMockAppDistributionData();
+    }
+    
+    updateAppDistributionChartData(appDistributionData);
+}
+
+function getMockComparisonData() {
+    return {
+        current: {
+            requests: 12500,
+            passRate: 98.5,
+            blockRate: 1.5,
+            responseTime: 125
+        },
+        previous: {
+            requests: 11200,
+            passRate: 97.8,
+            blockRate: 2.2,
+            responseTime: 140
+        }
+    };
+}
+
+function getMockAppDistributionData() {
+    return [
+        { name: '用户中心', value: 35 },
+        { name: '支付系统', value: 28 },
+        { name: '订单系统', value: 18 },
+        { name: '登录系统', value: 12 },
+        { name: '其他', value: 7 }
+    ];
+}
+
+function updateComparisonChart(data) {
+    if (!comparisonChart || !data) return;
+    
+    const currentData = [data.current.requests / 100, data.current.passRate, data.current.blockRate * 10, data.current.responseTime / 10];
+    const previousData = [data.previous.requests / 100, data.previous.passRate, data.previous.blockRate * 10, data.previous.responseTime / 10];
+    
+    comparisonChart.setOption({
+        xAxis: {
+            data: ['验证量(x100)', '通过率(%)', '拦截率(x10)', '响应(x10ms)']
+        },
+        series: [
+            { name: '当前', data: currentData },
+            { name: '对比期', data: previousData }
+        ]
+    }, false);
+    
+    updateComparisonTable(data);
+}
+
+function updateComparisonTable(data) {
+    const tbody = document.getElementById('comparisonTableBody');
+    if (!tbody || !data) return;
+    
+    const change = (current, previous) => {
+        if (previous === 0) return '-';
+        const pct = ((current - previous) / previous * 100).toFixed(1);
+        const isPositive = parseFloat(pct) >= 0;
+        return `<span class="${isPositive ? 'text-success' : 'text-danger'}">${isPositive ? '+' : ''}${pct}%</span>`;
+    };
+    
+    tbody.innerHTML = `
+        <tr>
+            <td>验证量</td>
+            <td>${formatNumber(data.current.requests)}</td>
+            <td>${formatNumber(data.previous.requests)}</td>
+            <td>${change(data.current.requests, data.previous.requests)}</td>
+        </tr>
+        <tr>
+            <td>通过率</td>
+            <td>${data.current.passRate}%</td>
+            <td>${data.previous.passRate}%</td>
+            <td>${change(data.current.passRate, data.previous.passRate)}</td>
+        </tr>
+        <tr>
+            <td>拦截率</td>
+            <td>${data.current.blockRate}%</td>
+            <td>${data.previous.blockRate}%</td>
+            <td>${change(data.current.blockRate, data.previous.blockRate)}</td>
+        </tr>
+    `;
+}
+
+function updateAppDistributionChartData(data) {
+    if (!appDistributionChart || !data) return;
+    
+    appDistributionChart.setOption({
+        series: [{
+            data: data.map(item => ({
+                name: item.name,
+                value: item.value
+            }))
+        }]
+    }, false);
 }
 
 function getMockDashboardStats() {
@@ -522,6 +860,7 @@ function formatTime(date) {
 }
 
 async function loadRequestTrendData(period) {
+    currentPeriod = period;
     const mockData = getMockTrendData(period);
 
     try {
@@ -550,52 +889,57 @@ function getMockTrendData(period) {
         dataValues = [85000, 92000, 105000, 98000, 120000, 135000, 145000];
     }
 
-    return { labels, data: dataValues };
+    return labels.map((label, i) => ({ time: label, requests: dataValues[i] }));
 }
 
 function updateRequestTrendChart(data) {
     if (!requestTrendChart || !data) return;
 
-    const labels = data.labels || [];
-    const values = data.data || [];
+    const labels = data.map(t => t.time || t.label);
+    const values = data.map(t => t.requests || t.count || t.value);
+    
+    window.trendChartData = data;
+    
+    updateTrendChartWithType(data);
+    updateTrendStats(values);
+}
 
-    requestTrendChart.setOption({
-        xAxis: {
-            type: 'category',
-            data: labels,
-            axisLabel: { color: '#666', rotate: 45 }
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: '#666' }
-        },
-        series: [{
-            data: values,
-            type: 'line',
-            smooth: true,
-            areaStyle: {
-                color: {
-                    type: 'linear',
-                    x: 0, y: 0, x2: 0, y2: 1,
-                    colorStops: [
-                        { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-                        { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
-                    ]
-                }
-            },
-            lineStyle: { color: '#3b82f6', width: 2 },
-            itemStyle: { color: '#3b82f6' },
-            symbol: 'circle',
-            symbolSize: 4
-        }],
-        tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(0,0,0,0.8)',
-            textStyle: { color: '#fff' },
-            padding: 12
-        },
-        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
-    }, false);
+function updateTrendStats(values) {
+    if (!values || values.length === 0) return;
+    
+    const peak = Math.max(...values);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const peakEl = document.getElementById('peakValue');
+    const avgEl = document.getElementById('avgValue');
+    const predictedEl = document.getElementById('predictedValue');
+    
+    if (peakEl) peakEl.textContent = formatNumber(peak);
+    if (avgEl) avgEl.textContent = formatNumber(Math.round(avg));
+    if (predictedEl) {
+        const predicted = predictNextValue(values);
+        predictedEl.textContent = formatNumber(Math.round(predicted));
+    }
+}
+
+function predictNextValue(values) {
+    if (values.length < 3) return values[values.length - 1] || 0;
+    
+    const n = values.length;
+    const lastValues = values.slice(-7);
+    const weights = [0.1, 0.15, 0.2, 0.2, 0.15, 0.1, 0.1];
+    
+    let weightedSum = 0;
+    let weightSum = 0;
+    
+    for (let i = 0; i < lastValues.length; i++) {
+        weightedSum += lastValues[i] * weights[i];
+        weightSum += weights[i];
+    }
+    
+    const avg = weightedSum / weightSum;
+    const recentTrend = (values[n - 1] - values[Math.max(0, n - 7)]) / 6;
+    
+    return avg + recentTrend * 0.3;
 }
 
 function updateRealtimeChart(value) {

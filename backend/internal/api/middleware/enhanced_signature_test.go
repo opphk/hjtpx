@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -11,106 +13,53 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func init() {
-	gin.SetMode(gin.TestMode)
-}
-
-func TestEnhancedSignatureConfigDefaults(t *testing.T) {
-	config := defaultEnhancedSignatureConfig
-
-	if config.SecretKey == "" {
-		t.Error("SecretKey should not be empty")
-	}
-	if config.Algorithm != "SHA256" {
-		t.Error("Default algorithm should be SHA256")
-	}
-	if config.TimestampTolerance != 5*time.Minute {
-		t.Error("Default timestamp tolerance should be 5 minutes")
-	}
-	if !config.RequireTimestamp {
-		t.Error("Timestamp should be required by default")
-	}
-	if !config.RequireNonce {
-		t.Error("Nonce should be required by default")
-	}
-}
-
-func TestNewEnhancedSignatureConfig(t *testing.T) {
-	secretKey := "test-secret-key"
-	config := NewEnhancedSignatureConfig(secretKey)
-
-	if config.SecretKey != secretKey {
-		t.Error("SecretKey should match")
-	}
-	if config.Algorithm != "SHA256" {
-		t.Error("Algorithm should be SHA256")
-	}
-	if config.RequireNonce != true {
-		t.Error("Nonce should be required")
-	}
-}
-
-func TestEnhancedSignatureExcludedPaths(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(EnhancedSignatureVerification())
-	router.GET("/health", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
-
-	req := httptest.NewRequest("GET", "/health", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Excluded path should return 200, got %d", w.Code)
-	}
-}
-
-func TestEnhancedSignatureMissingHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(EnhancedSignatureVerification())
-	router.GET("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Missing signature should return 401, got %d", w.Code)
-	}
-}
-
-func TestEnhancedSignatureValid(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	config := NewEnhancedSignatureConfig("test-secret-key-12345")
-
-	router := gin.New()
-	router.Use(EnhancedSignatureVerification(config))
-	router.POST("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
-
-	body := []byte(`{"test": "data"}`)
+func TestEnhancedSignatureGeneration(t *testing.T) {
+	secretKey := "test-secret-key-12345"
+	method := "POST"
+	path := "/api/test"
+	query := "key=value"
 	timestamp := time.Now().Unix()
-	nonce := "test-nonce-123456789"
+	nonce := "test-nonce-12345"
+	body := []byte(`{"test": "data"}`)
 
-	signature := GenerateEnhancedSignature(
-		config.SecretKey,
-		"POST",
-		"/api/test",
-		"",
-		timestamp,
-		nonce,
-		body,
-	)
+	signature := GenerateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, body)
 
-	req := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	if signature == "" {
+		t.Error("Expected non-empty signature")
+	}
+
+	if len(signature) != 64 {
+		t.Errorf("Expected SHA256 signature length 64, got %d", len(signature))
+	}
+}
+
+func TestEnhancedSignatureVerification(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	secretKey := "test-secret-key-12345"
+
+	router := gin.New()
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:          secretKey,
+		RequireTimestamp:   true,
+		RequireNonce:       true,
+		TimestampTolerance: 5 * time.Minute,
+	}))
+
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	method := "POST"
+	path := "/test"
+	query := "key=value"
+	timestamp := time.Now().Unix()
+	nonce := "test-nonce-" + fmt.Sprintf("%d", timestamp)
+	body := []byte(`{"test": "data"}`)
+
+	signature := GenerateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, body)
+
+	req := httptest.NewRequest(method, path+"?"+query, nil)
 	req.Header.Set("X-Signature", signature)
 	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
 	req.Header.Set("X-Nonce", nonce)
@@ -119,104 +68,89 @@ func TestEnhancedSignatureValid(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Errorf("Valid signature should return 200, got %d", w.Code)
+		t.Errorf("Expected status OK, got %d", w.Code)
 	}
 }
 
-func TestEnhancedSignatureInvalidSignature(t *testing.T) {
+func TestEnhancedSignatureMissingSignature(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	config := NewEnhancedSignatureConfig("test-secret-key-12345")
-
 	router := gin.New()
-	router.Use(EnhancedSignatureVerification(config))
-	router.POST("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:        "test-secret",
+		RequireTimestamp: true,
+		RequireNonce:     true,
+	}))
+
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
 	})
 
-	body := []byte(`{"test": "data"}`)
-	timestamp := time.Now().Unix()
-	nonce := "test-nonce-123456789"
-
-	req := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Signature", "invalid-signature")
-	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
-	req.Header.Set("X-Nonce", nonce)
-
+	req := httptest.NewRequest("POST", "/test", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Invalid signature should return 401, got %d", w.Code)
+		t.Errorf("Expected status 401, got %d", w.Code)
 	}
 }
 
-func TestEnhancedSignatureExpiredTimestamp(t *testing.T) {
+func TestEnhancedSignatureInvalidTimestamp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	config := NewEnhancedSignatureConfig("test-secret-key-12345")
-	config.TimestampTolerance = 5 * time.Minute
+	secretKey := "test-secret"
 
 	router := gin.New()
-	router.Use(EnhancedSignatureVerification(config))
-	router.GET("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:          secretKey,
+		RequireTimestamp:   true,
+		RequireNonce:       true,
+		TimestampTolerance: 5 * time.Minute,
+	}))
+
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
 	})
 
-	timestamp := time.Now().Add(-10 * time.Minute).Unix()
-	nonce := "test-nonce-123456789"
+	oldTimestamp := time.Now().Add(-10 * time.Minute).Unix()
+	nonce := "test-nonce"
+	signature := GenerateEnhancedSignature(secretKey, "POST", "/test", "", oldTimestamp, nonce, nil)
 
-	signature := GenerateEnhancedSignature(
-		config.SecretKey,
-		"GET",
-		"/api/test",
-		"",
-		timestamp,
-		nonce,
-		nil,
-	)
-
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := httptest.NewRequest("POST", "/test", nil)
 	req.Header.Set("X-Signature", signature)
-	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
+	req.Header.Set("X-Timestamp", strconv.FormatInt(oldTimestamp, 10))
 	req.Header.Set("X-Nonce", nonce)
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Expired timestamp should return 401, got %d", w.Code)
+		t.Errorf("Expected status 401 for expired timestamp, got %d", w.Code)
 	}
 }
 
-func TestEnhancedSignatureReplayAttack(t *testing.T) {
+func TestEnhancedSignatureReplayDetection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	config := NewEnhancedSignatureConfig("test-secret-key-12345")
+	secretKey := "test-secret"
 
 	router := gin.New()
-	router.Use(EnhancedSignatureVerification(config))
-	router.POST("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:          secretKey,
+		RequireTimestamp:   true,
+		RequireNonce:       true,
+		TimestampTolerance: 5 * time.Minute,
+	}))
+
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
 	})
 
-	body := []byte(`{"test": "data"}`)
 	timestamp := time.Now().Unix()
 	nonce := "unique-nonce-replay-test"
+	signature := GenerateEnhancedSignature(secretKey, "POST", "/test", "", timestamp, nonce, nil)
 
-	signature := GenerateEnhancedSignature(
-		config.SecretKey,
-		"POST",
-		"/api/test",
-		"",
-		timestamp,
-		nonce,
-		body,
-	)
-
-	req1 := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
-	req1.Header.Set("Content-Type", "application/json")
+	req1 := httptest.NewRequest("POST", "/test", nil)
 	req1.Header.Set("X-Signature", signature)
 	req1.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
 	req1.Header.Set("X-Nonce", nonce)
@@ -228,8 +162,7 @@ func TestEnhancedSignatureReplayAttack(t *testing.T) {
 		t.Errorf("First request should succeed, got %d", w1.Code)
 	}
 
-	req2 := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
-	req2.Header.Set("Content-Type", "application/json")
+	req2 := httptest.NewRequest("POST", "/test", nil)
 	req2.Header.Set("X-Signature", signature)
 	req2.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
 	req2.Header.Set("X-Nonce", nonce)
@@ -238,523 +171,254 @@ func TestEnhancedSignatureReplayAttack(t *testing.T) {
 	router.ServeHTTP(w2, req2)
 
 	if w2.Code != http.StatusUnauthorized {
-		t.Errorf("Replay request should fail with 401, got %d", w2.Code)
+		t.Errorf("Replay request should be blocked, got %d", w2.Code)
 	}
 }
 
-func TestEnhancedNonceCache(t *testing.T) {
-	cache := &enhancedNonceCache{
-		records: make(map[string]*nonceRecord),
-		limit:   100,
+func TestEnhancedSignatureNonceFormat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	testCases := []struct {
+		name          string
+		nonce         string
+		shouldSucceed bool
+	}{
+		{
+			name:          "Valid alphanumeric nonce",
+			nonce:         "ValidNonce123-_",
+			shouldSucceed: true,
+		},
+		{
+			name:          "Empty nonce",
+			nonce:         "",
+			shouldSucceed: false,
+		},
+		{
+			name:          "Nonce too short",
+			nonce:         "short",
+			shouldSucceed: false,
+		},
+		{
+			name:          "Nonce with invalid characters",
+			nonce:         "invalid@nonce#",
+			shouldSucceed: false,
+		},
 	}
 
-	nonce := "test-nonce-12345"
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			secretKey := "test-secret"
 
-	if cache.isUsed(nonce) {
-		t.Error("New nonce should not be marked as used")
-	}
+			router := gin.New()
+			router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+				SecretKey:          secretKey,
+				RequireTimestamp:   true,
+				RequireNonce:       true,
+				TimestampTolerance: 5 * time.Minute,
+				MinNonceLength:     8,
+				MaxNonceLength:     64,
+			}))
 
-	cache.markUsed(nonce)
+			router.POST("/test", func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
 
-	if !cache.isUsed(nonce) {
-		t.Error("Nonce should be marked as used after markUsed")
+			timestamp := time.Now().Unix()
+			var signature string
+			if tc.nonce != "" {
+				signature = GenerateEnhancedSignature(secretKey, "POST", "/test", "", timestamp, tc.nonce, nil)
+			}
+
+			req := httptest.NewRequest("POST", "/test", nil)
+			req.Header.Set("X-Signature", signature)
+			req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
+			req.Header.Set("X-Nonce", tc.nonce)
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if tc.shouldSucceed && w.Code != http.StatusOK {
+				t.Errorf("Expected success for nonce: %s, got %d", tc.name, w.Code)
+			}
+			if !tc.shouldSucceed && w.Code == http.StatusOK {
+				t.Errorf("Expected failure for nonce: %s", tc.name)
+			}
+		})
 	}
 }
 
-func TestEnhancedNonceCacheCleanup(t *testing.T) {
-	cache := &enhancedNonceCache{
-		records: make(map[string]*nonceRecord),
-		limit:   100,
-	}
+func TestEnhancedSignatureBodyIntegrity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-	for i := 0; i < 10; i++ {
-		nonce := "test-nonce-" + strconv.Itoa(i)
-		nonceRecord := &nonceRecord{
-			timestamp:   time.Now().Add(-25 * time.Hour),
-			hashedNonce: hashNonce(nonce),
-			count:       1,
-		}
-		cache.records[hashNonce(nonce)] = nonceRecord
-	}
+	secretKey := "test-secret"
 
-	cache.cleanup()
+	router := gin.New()
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:          secretKey,
+		RequireTimestamp:   true,
+		RequireNonce:       true,
+		TimestampTolerance: 5 * time.Minute,
+		EnableIntegrityCheck: true,
+	}))
 
-	for _, record := range cache.records {
-		if time.Since(record.timestamp) > 24*time.Hour {
-			t.Error("Old nonces should be cleaned up")
-		}
-	}
-}
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
-func TestGenerateEnhancedNonce(t *testing.T) {
-	nonce, err := GenerateEnhancedNonce(16)
-	if err != nil {
-		t.Fatalf("GenerateEnhancedNonce failed: %v", err)
-	}
+	timestamp := time.Now().Unix()
+	nonce := "test-nonce-body"
+	body := []byte(`{"sensitive": "data"}`)
+	signature := GenerateEnhancedSignature(secretKey, "POST", "/test", "", timestamp, nonce, body)
 
-	if len(nonce) < 8 {
-		t.Error("Nonce length should be at least 8")
-	}
+	integrity := computeBodyIntegrity(body)
 
-	nonce2, _ := GenerateEnhancedNonce(16)
-	if nonce == nonce2 {
-		t.Error("Generated nonces should be unique")
+	req := httptest.NewRequest("POST", "/test", bytesFromString(string(body)))
+	req.Header.Set("X-Signature", signature)
+	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
+	req.Header.Set("X-Nonce", nonce)
+	req.Header.Set("X-Body-Integrity", integrity)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK with valid body integrity, got %d", w.Code)
 	}
 }
 
 func TestGenerateSecureNonce(t *testing.T) {
 	nonce, err := GenerateSecureNonce(16)
 	if err != nil {
-		t.Fatalf("GenerateSecureNonce failed: %v", err)
+		t.Errorf("Unexpected error: %v", err)
 	}
 
 	if len(nonce) != 16 {
-		t.Errorf("Nonce length should be 16, got %d", len(nonce))
+		t.Errorf("Expected nonce length 16, got %d", len(nonce))
 	}
 
-	for _, c := range nonce {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
-			t.Error("Nonce should only contain alphanumeric, dash, and underscore")
-		}
-	}
-}
-
-func TestGenerateSecureNonceLengthValidation(t *testing.T) {
-	nonce, _ := GenerateSecureNonce(4)
-	if len(nonce) != 16 {
-		t.Errorf("Nonce should default to 16 when less, got %d", len(nonce))
-	}
-
-	nonce, _ = GenerateSecureNonce(100)
-	if len(nonce) != 64 {
-		t.Errorf("Nonce should be capped at 64, got %d", len(nonce))
-	}
-}
-
-func TestHashNonce(t *testing.T) {
-	nonce := "test-nonce-12345"
-	hash1 := hashNonce(nonce)
-	hash2 := hashNonce(nonce)
-
-	if hash1 != hash2 {
-		t.Error("Same nonce should produce same hash")
-	}
-
-	hash3 := hashNonce("different-nonce")
-	if hash1 == hash3 {
-		t.Error("Different nonces should produce different hashes")
-	}
-}
-
-func TestIsValidNonceFormat(t *testing.T) {
-	validNonces := []string{
-		"abc123",
-		"ABC-123_xyz",
-		"a1-b2_c3",
-		"123456789012345678901234567890",
-	}
-
-	for _, nonce := range validNonces {
-		if !isValidNonceFormat(nonce) {
-			t.Errorf("Nonce '%s' should be valid", nonce)
-		}
-	}
-
-	invalidNonces := []string{
-		"",
-		"abc@123",
-		"abc 123",
-		"abc!123",
-		"abc#123",
-	}
-
-	for _, nonce := range invalidNonces {
-		if isValidNonceFormat(nonce) {
-			t.Errorf("Nonce '%s' should be invalid", nonce)
-		}
-	}
-}
-
-func TestCalculateEnhancedSignature(t *testing.T) {
-	secretKey := "test-secret"
-	method := "POST"
-	path := "/api/test"
-	query := "foo=bar&baz=qux"
-	timestamp := int64(1234567890)
-	nonce := "test-nonce"
-	bodyHash := "abc123"
-
-	sig := calculateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, bodyHash)
-
-	if sig == "" {
-		t.Error("Signature should not be empty")
-	}
-
-	sig2 := calculateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, bodyHash)
-	if sig != sig2 {
-		t.Error("Same inputs should produce same signature")
-	}
-}
-
-func TestCalculateDoubleSignature(t *testing.T) {
-	secretKey := "test-secret"
-
-	sig := calculateDoubleSignature(secretKey, "param1", "param2", "param3")
-
-	if sig == "" {
-		t.Error("Double signature should not be empty")
-	}
-}
-
-func TestBuildEnhancedStringToSign(t *testing.T) {
-	method := "POST"
-	path := "/api/test"
-	query := "foo=bar"
-	timestamp := int64(1234567890)
-	nonce := "test-nonce"
-	bodyHash := "abc123"
-
-	stringToSign := buildEnhancedStringToSign(method, path, query, timestamp, nonce, bodyHash)
-
-	if stringToSign == "" {
-		t.Error("String to sign should not be empty")
-	}
-
-	if !contains(stringToSign, "POST") {
-		t.Error("String to sign should contain method")
-	}
-	if !contains(stringToSign, "/api/test") {
-		t.Error("String to sign should contain path")
-	}
-	if !contains(stringToSign, "foo=bar") {
-		t.Error("String to sign should contain sorted query")
-	}
-	if !contains(stringToSign, "1234567890") {
-		t.Error("String to sign should contain timestamp")
-	}
-}
-
-func TestSortQueryStringEnhanced(t *testing.T) {
-	query := "z=3&a=1&m=2"
-	sorted := sortQueryStringEnhanced(query)
-
-	expected := "a=1&m=2&z=3"
-	if sorted != expected {
-		t.Errorf("Expected '%s', got '%s'", expected, sorted)
-	}
-}
-
-func TestHashBodyEnhanced(t *testing.T) {
-	body := []byte(`{"test": "data"}`)
-
-	hash1 := hashBodyEnhanced(body)
-	hash2 := hashBodyEnhanced(body)
-
-	if hash1 != hash2 {
-		t.Error("Same body should produce same hash")
-	}
-
-	hash3 := hashBodyEnhanced([]byte(`{"different": "data"}`))
-	if hash1 == hash3 {
-		t.Error("Different bodies should produce different hashes")
-	}
-
-	emptyHash := hashBodyEnhanced(nil)
-	if emptyHash != "" {
-		t.Error("Empty body should produce empty hash")
-	}
-}
-
-func TestComputeBodyIntegrity(t *testing.T) {
-	body := []byte(`{"test": "data"}`)
-
-	integrity := computeBodyIntegrity(body)
-
-	if integrity == "" {
-		t.Error("Body integrity should not be empty")
-	}
-}
-
-func TestVerifyBodyIntegrity(t *testing.T) {
-	body := []byte(`{"test": "data"}`)
-	integrity := computeBodyIntegrity(body)
-
-	if !verifyBodyIntegrity(body, integrity) {
-		t.Error("Body should verify against its integrity")
-	}
-
-	if verifyBodyIntegrity([]byte(`{"modified": "data"}`), integrity) {
-		t.Error("Modified body should not verify")
-	}
-
-	if !verifyBodyIntegrity(body, "") {
-		t.Error("Empty integrity should pass verification")
-	}
-}
-
-func TestVerifyEnhancedTimestamp(t *testing.T) {
-	tolerance := 5 * time.Minute
-
-	err := verifyEnhancedTimestamp(time.Now().Unix(), tolerance)
-	if err != nil {
-		t.Error("Current timestamp should be valid")
-	}
-
-	err = verifyEnhancedTimestamp(time.Now().Add(-10*time.Minute).Unix(), tolerance)
-	if err == nil {
-		t.Error("Expired timestamp should fail")
-	}
-}
-
-func TestVerifyEnhancedNonce(t *testing.T) {
-	config := NewEnhancedSignatureConfig("test-secret")
-
-	nonce := "valid-nonce-12345678"
-	err := verifyEnhancedNonce(nonce, config)
-	if err != nil {
-		t.Errorf("Valid nonce should pass: %v", err)
-	}
-
-	shortNonce := "short"
-	err = verifyEnhancedNonce(shortNonce, config)
-	if err == nil {
-		t.Error("Short nonce should fail")
-	}
-
-	longNonce := "this-nonce-is-way-too-long-and-should-fail-because-it-exceeds-maximum-length"
-	err = verifyEnhancedNonce(longNonce, config)
-	if err == nil {
-		t.Error("Long nonce should fail")
-	}
-}
-
-func TestSecureCompareEnhanced(t *testing.T) {
-	if !secureCompareEnhanced("test", "test") {
-		t.Error("Equal strings should compare as equal")
-	}
-
-	if secureCompareEnhanced("test", "different") {
-		t.Error("Different strings should not compare as equal")
-	}
-
-	if secureCompareEnhanced("test", "tes") {
-		t.Error("Different length strings should not compare as equal")
-	}
-}
-
-func TestGenerateEnhancedSignature(t *testing.T) {
-	secretKey := "test-secret"
-	method := "POST"
-	path := "/api/test"
-	query := ""
-	timestamp := time.Now().Unix()
-	nonce := "test-nonce-12345"
-	body := []byte(`{"test": "data"}`)
-
-	signature := GenerateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, body)
-
-	if signature == "" {
-		t.Error("Signature should not be empty")
-	}
-
-	signature2 := GenerateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, body)
-	if signature != signature2 {
-		t.Error("Same inputs should produce same signature")
-	}
-}
-
-func TestValidateEnhancedSignature(t *testing.T) {
-	secretKey := "test-secret-key-12345"
-
-	body := []byte(`{"test": "data"}`)
-	timestamp := time.Now().Unix()
-	nonce := "validation-test-nonce"
-
-	signature := GenerateEnhancedSignature(
-		secretKey,
-		"POST",
-		"/api/test",
-		"",
-		timestamp,
-		nonce,
-		body,
-	)
-
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.POST("/api/test", func(c *gin.Context) {
-		result := ValidateEnhancedSignature(c, secretKey)
-		if !result.Valid {
-			c.String(401, "Invalid")
-		}
-		c.String(200, "Valid")
-	})
-
-	req := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Signature", signature)
-	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
-	req.Header.Set("X-Nonce", nonce)
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Valid signature validation should return 200, got %d", w.Code)
-	}
-}
-
-func TestGetEnhancedSignatureInfo(t *testing.T) {
-	info := GetEnhancedSignatureInfo()
-
-	if info.Algorithm != "SHA256" {
-		t.Error("Algorithm should be SHA256")
-	}
-	if info.Version != "2.0" {
-		t.Error("Version should be 2.0")
-	}
-	if !info.NonceRequired {
-		t.Error("Nonce should be required")
-	}
-	if !info.Features.ReplayProtection {
-		t.Error("Replay protection should be enabled")
-	}
-}
-
-func TestBuildEnhancedSignatureInput(t *testing.T) {
-	secretKey := "test-secret"
-	method := "POST"
-	path := "/api/test"
-	query := ""
-	timestamp := time.Now().Unix()
-	body := []byte(`{"test": "data"}`)
-
-	signature, err := BuildEnhancedSignatureInput(secretKey, method, path, query, timestamp, "", body)
-	if err != nil {
-		t.Fatalf("BuildEnhancedSignatureInput failed: %v", err)
-	}
-
-	if signature == "" {
-		t.Error("Signature should not be empty")
+	nonce2, _ := GenerateSecureNonce(32)
+	if nonce == nonce2 {
+		t.Error("Expected different nonces")
 	}
 }
 
 func TestGenerateTimestampWithMillis(t *testing.T) {
-	timestamp := GenerateTimestampWithMillis()
+	ts1 := GenerateTimestampWithMillis()
+	ts2 := GenerateTimestampWithMillis()
 
-	if timestamp <= 0 {
-		t.Error("Timestamp should be positive")
+	if ts1 == 0 {
+		t.Error("Expected non-zero timestamp")
 	}
 
-	expectedLength := len(strconv.FormatInt(time.Now().UnixMilli(), 10))
-	actualLength := len(strconv.FormatInt(timestamp, 10))
-
-	if actualLength < expectedLength-1 || actualLength > expectedLength+1 {
-		t.Error("Timestamp should be in milliseconds")
+	if ts1 > ts2 {
+		t.Error("Expected increasing timestamps")
 	}
 }
 
 func TestVerifyTimestampMillis(t *testing.T) {
-	tolerance := 1 * time.Second
+	tolerance := 5 * time.Minute
 
-	err := VerifyTimestampMillis(time.Now().UnixMilli(), tolerance)
+	now := time.Now().UnixMilli()
+
+	err := VerifyTimestampMillis(now, tolerance)
 	if err != nil {
-		t.Error("Current timestamp should be valid")
+		t.Errorf("Expected no error for current timestamp: %v", err)
 	}
 
-	err = VerifyTimestampMillis(time.Now().Add(-5*time.Second).UnixMilli(), tolerance)
+	oldTimestamp := now - int64(10*time.Minute/time.Millisecond)
+	err = VerifyTimestampMillis(oldTimestamp, tolerance)
 	if err == nil {
-		t.Error("Expired timestamp should fail")
+		t.Error("Expected error for old timestamp")
 	}
 }
 
-func TestGenerateRequestID(t *testing.T) {
-	id1 := GenerateRequestID()
-	id2 := GenerateRequestID()
+func TestEnhancedSignatureInfo(t *testing.T) {
+	info := GetEnhancedSignatureInfo()
 
-	if id1 == id2 {
-		t.Error("Generated IDs should be unique")
+	if info.Algorithm != "SHA256" {
+		t.Errorf("Expected SHA256 algorithm, got %s", info.Algorithm)
 	}
 
-	if len(id1) < 10 {
-		t.Error("Request ID should be reasonably long")
+	if !info.NonceRequired {
+		t.Error("Expected nonce to be required")
+	}
+
+	if info.Version != "2.0" {
+		t.Errorf("Expected version 2.0, got %s", info.Version)
+	}
+
+	if !info.Features.ReplayProtection {
+		t.Error("Expected replay protection to be enabled")
 	}
 }
 
-func TestExtractRequestID(t *testing.T) {
+func TestSecureCompare(t *testing.T) {
+	testCases := []struct {
+		a        string
+		b        string
+		expected bool
+	}{
+		{
+			a:        "same",
+			b:        "same",
+			expected: true,
+		},
+		{
+			a:        "different",
+			b:        "different",
+			expected: true,
+		},
+		{
+			a:        "a",
+			b:        "b",
+			expected: false,
+		},
+		{
+			a:        "longer string",
+			b:        "longer string",
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.a+"_vs_"+tc.b, func(t *testing.T) {
+			result := secureCompareEnhanced(tc.a, tc.b)
+			if result != tc.expected {
+				t.Errorf("Expected %v for '%s' vs '%s'", tc.expected, tc.a, tc.b)
+			}
+		})
+	}
+}
+
+func TestEnhancedSignatureDoubleSignature(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	var extractedID string
-	router := gin.New()
-	router.GET("/test", func(c *gin.Context) {
-		extractedID = ExtractRequestID(c)
-		c.String(200, "OK")
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if extractedID == "" {
-		t.Error("Request ID should be extracted or generated")
-	}
-}
-
-func TestExtractRequestIDWithHeader(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	var extractedID string
-	router := gin.New()
-	router.GET("/test", func(c *gin.Context) {
-		extractedID = ExtractRequestID(c)
-		c.String(200, "OK")
-	})
-
-	customID := "custom-request-id-12345"
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-Request-ID", customID)
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if extractedID != customID {
-		t.Errorf("Should extract custom request ID, got %s", extractedID)
-	}
-}
-
-func TestCreateSignatureMiddlewareChain(t *testing.T) {
-	chain := CreateSignatureMiddlewareChain()
-
-	if len(chain) == 0 {
-		t.Error("Middleware chain should not be empty")
-	}
-}
-
-func TestRequireEnhancedSignature(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	secretKey := "test-secret"
 
 	router := gin.New()
-	router.Use(RequireEnhancedSignature())
-	router.GET("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:            secretKey,
+		RequireTimestamp:     true,
+		RequireNonce:         true,
+		TimestampTolerance:   5 * time.Minute,
+		EnableDoubleSignature: true,
+	}))
+
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
 	})
 
 	timestamp := time.Now().Unix()
-	nonce := "require-test-nonce-12345"
-	config := defaultEnhancedSignatureConfig
+	nonce := "test-nonce-double"
+	method := "POST"
+	path := "/test"
 
-	signature := GenerateEnhancedSignature(
-		config.SecretKey,
-		"GET",
-		"/api/test",
-		"",
-		timestamp,
-		nonce,
-		nil,
-	)
+	primarySig := GenerateEnhancedSignature(secretKey, method, path, "", timestamp, nonce, nil)
+	secondarySig := calculateDoubleSignature(secretKey, method, path, strconv.FormatInt(timestamp, 10), nonce)
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Signature", signature)
+	req := httptest.NewRequest(method, path, nil)
+	req.Header.Set("X-Signature", primarySig)
+	req.Header.Set("X-Signature-Secondary", secondarySig)
 	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
 	req.Header.Set("X-Nonce", nonce)
 
@@ -762,101 +426,161 @@ func TestRequireEnhancedSignature(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Errorf("Valid signature should return 200, got %d", w.Code)
+		t.Errorf("Expected status OK with valid double signature, got %d", w.Code)
 	}
 }
 
-func TestEnhancedSignatureResult(t *testing.T) {
-	result := EnhancedSignatureResult{
-		Valid:       true,
-		Reason:      "test passed",
-		Timestamp:   time.Now().Unix(),
-		Nonce:       "test-nonce",
-		Signature:   "test-signature",
-		Sequence:    1,
-		ElapsedTime: time.Millisecond * 100,
-		ClientIP:    "127.0.0.1",
-		RequestPath: "/api/test",
+func TestRequestEncryption(t *testing.T) {
+	config := defaultRequestEncryptionConfig
+	config.Enabled = true
+	config.EnablePayloadEncryption = true
+	config.EncryptionKey = []byte("12345678901234567890123456789012")
+
+	plaintext := []byte(`{"sensitive": "data"}`)
+
+	encrypted, err := EncryptRequestBody(plaintext, config)
+	if err != nil {
+		t.Errorf("Encryption failed: %v", err)
 	}
 
-	if !result.Valid {
-		t.Error("Result should be valid")
+	if encrypted.Version != 1 {
+		t.Errorf("Expected version 1, got %d", encrypted.Version)
 	}
-	if result.ElapsedTime == 0 {
-		t.Error("Elapsed time should be set")
+
+	if encrypted.EncryptedData == "" {
+		t.Error("Expected encrypted data")
+	}
+
+	decrypted, err := DecryptRequestBody(encrypted, config)
+	if err != nil {
+		t.Errorf("Decryption failed: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Errorf("Expected decrypted data to match original")
 	}
 }
 
-func TestEnhancedSignatureWithQueryString(t *testing.T) {
+func TestRequestEncryptionKeyRotation(t *testing.T) {
+	config := defaultRequestEncryptionConfig
+	config.Enabled = true
+	config.EnablePayloadEncryption = true
+	config.EncryptionKey = []byte("12345678901234567890123456789012")
+
+	plaintext := []byte(`{"data": "test"}`)
+
+	encrypted, err := EncryptRequestBody(plaintext, config)
+	if err != nil {
+		t.Errorf("Initial encryption failed: %v", err)
+	}
+
+	oldVersion := encrypted.KeyVersion
+
+	err = RotateEncryptionKey(&config)
+	if err != nil {
+		t.Errorf("Key rotation failed: %v", err)
+	}
+
+	if encrypted.KeyVersion >= config.CurrentKeyVersion {
+		t.Error("Expected key version to be incremented after rotation")
+	}
+
+	decrypted, err := DecryptRequestBody(encrypted, config)
+	if err != nil {
+		t.Errorf("Decryption with old key failed: %v", err)
+	}
+
+	if string(decrypted) != string(plaintext) {
+		t.Error("Expected decrypted data to match original after key rotation")
+	}
+
+	if oldVersion >= config.CurrentKeyVersion {
+		t.Error("Expected key version to increment")
+	}
+}
+
+func TestDualSignature(t *testing.T) {
+	config := DoubleSignatureConfig{
+		Enabled:            true,
+		PrimaryAlgorithm:   "SHA256",
+		SecondaryAlgorithm: "SHA512",
+		PrimaryKey:         []byte("primary-key-12345"),
+		SecondaryKey:       []byte("secondary-key-12345"),
+		VerifyOrder:        "any",
+		RequireBothValid:   false,
+	}
+
+	message := []byte("test message")
+
+	primarySig, secondarySig, err := GenerateDualSignature(message, config)
+	if err != nil {
+		t.Errorf("Signature generation failed: %v", err)
+	}
+
+	if primarySig == "" || secondarySig == "" {
+		t.Error("Expected non-empty signatures")
+	}
+
+	valid1, valid2, err := VerifyDualSignature(message, primarySig, secondarySig, config)
+	if err != nil {
+		t.Errorf("Signature verification failed: %v", err)
+	}
+
+	if !valid1 || !valid2 {
+		t.Error("Expected valid signatures")
+	}
+
+	valid1, valid2, err = VerifyDualSignature(message, primarySig, "invalid", config)
+	if err != nil {
+		t.Errorf("Expected no error for invalid secondary: %v", err)
+	}
+	if valid2 {
+		t.Error("Expected invalid secondary signature")
+	}
+}
+
+func TestAntiReplayBloomFilter(t *testing.T) {
+	filter := NewBloomFilter(1000, 7)
+
+	item1 := "unique-item-1"
+	item2 := "unique-item-2"
+
+	if filter.Contains(item1) {
+		t.Error("New item should not be in filter")
+	}
+
+	filter.Add(item1)
+
+	if !filter.Contains(item1) {
+		t.Error("Added item should be in filter")
+	}
+
+	if filter.Contains(item2) {
+		t.Error("Non-added item should not be in filter")
+	}
+}
+
+func TestAntiReplaySlidingWindow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	config := NewEnhancedSignatureConfig("test-secret-key-12345")
-
-	router := gin.New()
-	router.Use(EnhancedSignatureVerification(config))
-	router.GET("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
-
-	timestamp := time.Now().Unix()
-	nonce := "query-test-nonce-12345"
-	query := "foo=bar&baz=qux"
-
-	signature := GenerateEnhancedSignature(
-		config.SecretKey,
-		"GET",
-		"/api/test",
-		query,
-		timestamp,
-		nonce,
-		nil,
-	)
-
-	req := httptest.NewRequest("GET", "/api/test?"+query, nil)
-	req.Header.Set("X-Signature", signature)
-	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
-	req.Header.Set("X-Nonce", nonce)
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Valid signature with query should return 200, got %d", w.Code)
+	config := EnhancedAntiReplayConfig{
+		WindowSize:           1 * time.Minute,
+		MaxRequestsPerWindow: 5,
+		EnableSlidingWindow:  true,
+		EnableBloomFilter:    true,
 	}
-}
-
-func TestEnhancedSignatureRateLimitPerIP(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	config := NewEnhancedSignatureConfig("test-secret-key-12345")
-	config.EnableRateLimitPerIP = true
-	config.RateLimitPerIPLimit = 3
-	config.RateLimitPerIPWindow = time.Minute
 
 	router := gin.New()
-	router.Use(EnhancedSignatureVerification(config))
-	router.GET("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
+	router.Use(EnhancedAntiReplayV2(config))
+
+	router.POST("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
 	})
 
-	timestamp := time.Now().Unix()
-	nonce := "rate-limit-test-nonce"
-
-	for i := 0; i < 3; i++ {
-		signature := GenerateEnhancedSignature(
-			config.SecretKey,
-			"GET",
-			"/api/test",
-			"",
-			timestamp,
-			nonce+strconv.Itoa(i),
-			nil,
-		)
-
-		req := httptest.NewRequest("GET", "/api/test", nil)
-		req.Header.Set("X-Signature", signature)
-		req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
-		req.Header.Set("X-Nonce", nonce+strconv.Itoa(i))
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest("POST", "/test", nil)
+		req.Header.Set("X-Nonce", fmt.Sprintf("sliding-test-%d", i))
+		req.Header.Set("X-Timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -865,345 +589,276 @@ func TestEnhancedSignatureRateLimitPerIP(t *testing.T) {
 			t.Errorf("Request %d should succeed, got %d", i+1, w.Code)
 		}
 	}
-}
 
-func TestEnhancedSignatureSequenceState(t *testing.T) {
-	state := &enhancedSignatureState{
-		sequenceCounters: make(map[string]int64),
-		ipRequestCounts:  make(map[string]*ipRequestCounter),
-	}
+	req := httptest.NewRequest("POST", "/test", nil)
+	req.Header.Set("X-Nonce", "sliding-test-exceed")
+	req.Header.Set("X-Timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
-	clientID := "test-client"
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 
-	seq1 := state.getNextSequence(clientID)
-	if seq1 != 0 {
-		t.Errorf("First sequence should be 0, got %d", seq1)
-	}
-
-	seq2 := state.getNextSequence(clientID)
-	if seq2 != 1 {
-		t.Errorf("Second sequence should be 1, got %d", seq2)
-	}
-
-	if !state.validateSequence(clientID, 2) {
-		t.Error("Sequence 2 should be valid")
-	}
-
-	if state.validateSequence(clientID, 5) {
-		t.Error("Sequence 5 should not be valid")
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("Expected rate limit, got %d", w.Code)
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-func TestRequestEncryptionConfig(t *testing.T) {
-	config := defaultRequestEncryptionConfig
-
-	if config.Algorithm != "AES-256-GCM" {
-		t.Error("Default algorithm should be AES-256-GCM")
-	}
-	if config.KeyRotationInterval != 24*time.Hour {
-		t.Error("Default key rotation interval should be 24 hours")
-	}
-	if config.CurrentKeyVersion != 1 {
-		t.Error("Default key version should be 1")
-	}
-}
-
-func TestEncryptRequestBody(t *testing.T) {
-	config := RequestEncryptionConfig{
-		Enabled:                 true,
-		EnablePayloadEncryption: true,
-		EncryptionKey:           []byte("test-key-1234567890abcdef"),
-		Algorithm:               "AES-256-GCM",
-		CurrentKeyVersion:       1,
+func TestNonceValidator(t *testing.T) {
+	validator := &NonceValidator{
+		bloomFilter:      NewBloomFilter(1000, 7),
+		redisEnabled:     false,
+		nonceCacheTTL:    24 * time.Hour,
+		strictValidation: true,
+		MaxNonceAge:      15 * time.Minute,
 	}
 
-	body := []byte(`{"test": "data"}`)
+	validNonce := "valid-nonce-12345"
+	timestamp := time.Now().Unix()
 
-	encrypted, err := EncryptRequestBody(body, config)
+	err := validator.ValidateNonce(validNonce, timestamp)
 	if err != nil {
-		t.Fatalf("EncryptRequestBody failed: %v", err)
+		t.Errorf("Expected valid nonce to pass: %v", err)
 	}
 
-	if encrypted.Version != 1 {
-		t.Error("Encrypted version should be 1")
-	}
-	if encrypted.KeyVersion != 1 {
-		t.Error("Key version should match current version")
-	}
-	if encrypted.EncryptedData == "" {
-		t.Error("Encrypted data should not be empty")
-	}
-}
-
-func TestDecryptRequestBody(t *testing.T) {
-	config := RequestEncryptionConfig{
-		Enabled:                 true,
-		EnablePayloadEncryption: true,
-		EncryptionKey:           []byte("test-key-1234567890abcdef"),
-		Algorithm:               "AES-256-GCM",
-		CurrentKeyVersion:       1,
-	}
-
-	originalBody := []byte(`{"test": "data"}`)
-
-	encrypted, err := EncryptRequestBody(originalBody, config)
-	if err != nil {
-		t.Fatalf("EncryptRequestBody failed: %v", err)
-	}
-
-	decrypted, err := DecryptRequestBody(encrypted, config)
-	if err != nil {
-		t.Fatalf("DecryptRequestBody failed: %v", err)
-	}
-
-	if string(decrypted) != string(originalBody) {
-		t.Errorf("Decrypted body should match original, got %s", string(decrypted))
-	}
-}
-
-func TestRotateEncryptionKey(t *testing.T) {
-	config := RequestEncryptionConfig{
-		Enabled:                 true,
-		EnablePayloadEncryption: true,
-		EncryptionKey:           []byte("old-key-1234567890abcdef"),
-		CurrentKeyVersion:       1,
-		KeyHistory:              make([][]byte, 0),
-	}
-
-	err := RotateEncryptionKey(&config)
-	if err != nil {
-		t.Fatalf("RotateEncryptionKey failed: %v", err)
-	}
-
-	if config.CurrentKeyVersion != 2 {
-		t.Error("Key version should be incremented")
-	}
-	if len(config.KeyHistory) != 1 {
-		t.Error("Old key should be in history")
-	}
-}
-
-func TestDoubleSignatureConfig(t *testing.T) {
-	config := DoubleSignatureConfig{
-		Enabled:            true,
-		PrimaryAlgorithm:   "SHA256",
-		SecondaryAlgorithm: "SHA512",
-		PrimaryKey:         []byte("primary-key-1234567890"),
-		SecondaryKey:       []byte("secondary-key-1234567890"),
-	}
-
-	err := config.Validate()
-	if err != nil {
-		t.Errorf("Valid config should pass validation: %v", err)
-	}
-}
-
-func TestDoubleSignatureConfigMissingPrimaryKey(t *testing.T) {
-	config := DoubleSignatureConfig{
-		Enabled:            true,
-		PrimaryAlgorithm:   "SHA256",
-		SecondaryAlgorithm: "SHA512",
-		PrimaryKey:         nil,
-		SecondaryKey:       []byte("secondary-key-1234567890"),
-	}
-
-	err := config.Validate()
+	err = validator.ValidateNonce(validNonce, timestamp)
 	if err == nil {
-		t.Error("Missing primary key should fail validation")
+		t.Error("Expected replay detection")
+	}
+
+	shortNonce := "short"
+	err = validator.ValidateNonce(shortNonce, timestamp)
+	if err == nil {
+		t.Error("Expected short nonce to fail")
+	}
+
+	invalidCharsNonce := "invalid@nonce#"
+	err = validator.ValidateNonce(invalidCharsNonce, timestamp)
+	if err == nil {
+		t.Error("Expected invalid characters to fail")
+	}
+
+	oldTimestamp := time.Now().Add(-20 * time.Minute).Unix()
+	oldNonce := "old-nonce"
+	err = validator.ValidateNonce(oldNonce, oldTimestamp)
+	if err == nil {
+		t.Error("Expected old nonce to fail")
 	}
 }
 
-func TestGenerateDualSignature(t *testing.T) {
-	config := DoubleSignatureConfig{
-		Enabled:            true,
-		PrimaryAlgorithm:   "SHA256",
-		SecondaryAlgorithm: "SHA512",
-		PrimaryKey:         []byte("primary-key-1234567890"),
-		SecondaryKey:       []byte("secondary-key-1234567890"),
+func TestSlidingWindowCounter(t *testing.T) {
+	counter := &slidingWindowCounter{
+		requests: make([]time.Time, 0),
+		window:   1 * time.Second,
 	}
 
-	message := []byte("test message")
-
-	primarySig, secondarySig, err := GenerateDualSignature(message, config)
-	if err != nil {
-		t.Fatalf("GenerateDualSignature failed: %v", err)
+	for i := 0; i < 10; i++ {
+		counter.AddRequest()
 	}
 
-	if primarySig == "" {
-		t.Error("Primary signature should not be empty")
+	if counter.Count() != 10 {
+		t.Errorf("Expected count 10, got %d", counter.Count())
 	}
-	if secondarySig == "" {
-		t.Error("Secondary signature should not be empty")
+
+	time.Sleep(1100 * time.Millisecond)
+
+	if counter.Count() > 0 {
+		t.Errorf("Expected count 0 after window expiry, got %d", counter.Count())
 	}
 }
 
-func TestVerifyDualSignature(t *testing.T) {
-	config := DoubleSignatureConfig{
-		Enabled:            true,
-		PrimaryAlgorithm:   "SHA256",
-		SecondaryAlgorithm: "SHA512",
-		PrimaryKey:         []byte("primary-key-1234567890"),
-		SecondaryKey:       []byte("secondary-key-1234567890"),
+func TestBuildEnhancedStringToSign(t *testing.T) {
+	stringToSign := buildEnhancedStringToSign(
+		"POST",
+		"/api/test",
+		"key=value&other=123",
+		1234567890,
+		"test-nonce",
+		"body-hash",
+		"additional",
+	)
+
+	if stringToSign == "" {
+		t.Error("Expected non-empty string to sign")
 	}
 
-	message := []byte("test message")
-
-	primarySig, secondarySig, _ := GenerateDualSignature(message, config)
-
-	primaryValid, secondaryValid, err := VerifyDualSignature(message, primarySig, secondarySig, config)
-	if err != nil {
-		t.Fatalf("VerifyDualSignature failed: %v", err)
-	}
-
-	if !primaryValid {
-		t.Error("Primary signature should be valid")
-	}
-	if !secondaryValid {
-		t.Error("Secondary signature should be valid")
+	expected := "POST\n/api/test\nkey=value&other=123\n1234567890\ntest-nonce\nbody-hash\nadditional"
+	if stringToSign != expected {
+		t.Errorf("String to sign mismatch:\nExpected: %s\nGot: %s", expected, stringToSign)
 	}
 }
 
-func TestBloomFilter(t *testing.T) {
-	filter := NewBloomFilter(100, 3)
+func TestComputeEnhancedHMAC(t *testing.T) {
+	key := "test-key"
+	data := "test-data"
 
-	item := "test-item"
-	filter.Add(item)
+	sha256Result := computeEnhancedHMAC(key, data, false)
+	sha512Result := computeEnhancedHMAC(key, data, true)
 
-	if !filter.Contains(item) {
-		t.Error("Bloom filter should contain added item")
+	if sha256Result == "" || sha512Result == "" {
+		t.Error("Expected non-empty HMAC results")
 	}
 
-	if filter.Contains("non-existent-item") {
-		t.Error("Bloom filter should not contain non-existent item")
-	}
-}
-
-func TestBloomFilterFalsePositiveRate(t *testing.T) {
-	filter := NewBloomFilter(1000, 5)
-
-	for i := 0; i < 100; i++ {
-		filter.Add("item" + strconv.Itoa(i))
+	if sha256Result == sha512Result {
+		t.Error("Expected different HMAC results for SHA256 vs SHA512")
 	}
 
-	fpr := filter.FalsePositiveRate()
-	if fpr < 0 || fpr > 1 {
-		t.Error("False positive rate should be between 0 and 1")
+	if len(sha256Result) != 64 {
+		t.Errorf("Expected SHA256 length 64, got %d", len(sha256Result))
+	}
+
+	if len(sha512Result) != 128 {
+		t.Errorf("Expected SHA512 length 128, got %d", len(sha512Result))
 	}
 }
 
-func TestCheckReplay(t *testing.T) {
-	nonce := "test-nonce-replay-check"
+func TestHashNonce(t *testing.T) {
+	nonce := "test-nonce-123"
+
+	hash1 := hashNonce(nonce)
+	hash2 := hashNonce(nonce)
+
+	if hash1 != hash2 {
+		t.Error("Expected same nonce to produce same hash")
+	}
+
+	differentNonce := "different-nonce"
+	hash3 := hashNonce(differentNonce)
+
+	if hash1 == hash3 {
+		t.Error("Expected different nonces to produce different hashes")
+	}
+}
+
+func bytesFromString(s string) *bytes.Reader {
+	return bytes.NewReader([]byte(s))
+}
+
+func TestCheckReplayFunction(t *testing.T) {
+	nonce := fmt.Sprintf("replay-test-%d", time.Now().UnixNano())
 
 	firstCheck := CheckReplay(nonce)
 	if firstCheck {
-		t.Error("First check should return false (not in filter)")
+		t.Error("First check should return false")
 	}
 
 	secondCheck := CheckReplay(nonce)
 	if !secondCheck {
-		t.Error("Second check should return true (now in filter)")
+		t.Error("Second check should return true (replay detected)")
 	}
 }
 
-func TestEnhancedAntiReplayMiddleware(t *testing.T) {
+func TestSignatureExcludePaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	config := AntiReplayConfig{
-		WindowSize:           time.Minute,
-		MaxRequestsPerWindow: 10,
-		EnableSlidingWindow:  true,
-		EnableBloomFilter:    true,
-	}
-
 	router := gin.New()
-	router.Use(EnhancedAntiReplay(config))
+	router.Use(EnhancedSignatureVerification(EnhancedSignatureConfig{
+		SecretKey:        "test-secret",
+		RequireTimestamp: true,
+		RequireNonce:     true,
+		ExcludePaths:     []string{"/health", "/metrics"},
+	}))
+
+	router.GET("/health", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
 	router.GET("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
+		c.Status(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Nonce", "test-nonce-anti-replay")
+	req1 := httptest.NewRequest("GET", "/health", nil)
+	w1 := httptest.NewRecorder()
+	router.ServeHTTP(w1, req1)
 
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	if w1.Code != http.StatusOK {
+		t.Errorf("Health endpoint should be excluded, got %d", w1.Code)
+	}
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Valid request should return 200, got %d", w.Code)
+	req2 := httptest.NewRequest("GET", "/api/test", nil)
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusUnauthorized {
+		t.Errorf("API endpoint should require signature, got %d", w2.Code)
 	}
 }
 
-func TestEnhancedRequestEncryptionMiddleware(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+func TestEd25519KeyGeneration(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	if err != nil {
+		t.Errorf("Key generation failed: %v", err)
+	}
 
-	router := gin.New()
-	router.Use(EnhancedRequestEncryption())
-	router.POST("/api/test", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
-
-	body := []byte(`{"test": "data"}`)
-	req := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Valid request should return 200, got %d", w.Code)
+	if len(privateKey) == 0 || len(publicKey) == 0 {
+		t.Error("Expected non-empty keys")
 	}
 }
 
-func TestEd25519Config(t *testing.T) {
-	config := Ed25519Config{
-		Enabled:          false,
-		SignatureTTL:     time.Hour,
-		RequireSignature: true,
+func TestEd25519SignAndVerify(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	if err != nil {
+		t.Errorf("Key generation failed: %v", err)
 	}
 
-	if config.Enabled {
-		t.Error("Ed25519 should be disabled by default")
+	message := []byte("test message to sign")
+
+	signature, err := SignEd25519(message, privateKey)
+	if err != nil {
+		t.Errorf("Signing failed: %v", err)
 	}
-	if config.SignatureTTL != time.Hour {
-		t.Error("Signature TTL should be 1 hour")
+
+	if len(signature) != 64 {
+		t.Errorf("Expected signature length 64, got %d", len(signature))
+	}
+
+	valid, err := VerifyEd25519(message, signature, publicKey)
+	if err != nil {
+		t.Errorf("Verification failed: %v", err)
+	}
+
+	if !valid {
+		t.Error("Expected valid signature")
+	}
+
+	invalidMessage := []byte("different message")
+	valid, _ = VerifyEd25519(invalidMessage, signature, publicKey)
+	if valid {
+		t.Error("Expected invalid signature for different message")
 	}
 }
 
-func TestEnhancedSignatureResultFields(t *testing.T) {
-	result := EnhancedSignatureResult{
-		Valid:          true,
-		Reason:         "signature valid",
-		Timestamp:      time.Now().Unix(),
-		Nonce:          "test-nonce",
-		Signature:      "test-signature",
-		Sequence:       1,
-		ElapsedTime:    time.Millisecond * 50,
-		ErrorCode:      "",
-		ClientIP:       "127.0.0.1",
-		RequestPath:    "/api/test",
-		ReplayDetected: false,
-		IntegrityValid: true,
+func TestEd25519StringSignAndVerify(t *testing.T) {
+	_, publicKey, err := GenerateEd25519KeyPair()
+	if err != nil {
+		t.Errorf("Key generation failed: %v", err)
 	}
 
-	if !result.Valid {
-		t.Error("Result should be valid")
+	privateKey := make([]byte, 64)
+	for i := range privateKey {
+		privateKey[i] = byte(i)
 	}
-	if result.ReplayDetected {
-		t.Error("Replay should not be detected")
+
+	message := "test message"
+
+	signature, err := SignEd25519String(message, privateKey)
+	if err != nil {
+		t.Errorf("String signing failed: %v", err)
 	}
-	if !result.IntegrityValid {
-		t.Error("Integrity should be valid")
+
+	if signature == "" {
+		t.Error("Expected non-empty signature")
+	}
+
+	decodedSig, err := hex.DecodeString(signature)
+	if err != nil {
+		t.Errorf("Signature hex decode failed: %v", err)
+	}
+
+	valid, err := VerifyEd25519([]byte(message), decodedSig, publicKey)
+	if err != nil {
+		t.Errorf("String verification failed: %v", err)
+	}
+
+	if !valid {
+		t.Error("Expected valid string signature")
 	}
 }

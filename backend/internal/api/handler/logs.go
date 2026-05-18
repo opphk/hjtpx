@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -40,6 +42,8 @@ type GetVerificationLogsRequest struct {
 	MaxRiskScore  float64 `form:"max_risk_score"`
 	IPAddress     string  `form:"ip_address"`
 	RiskLevel     string  `form:"risk_level"`
+	SortBy        string  `form:"sort_by"`
+	SortOrder     string  `form:"sort_order"`
 }
 
 type LogListResponse struct {
@@ -48,14 +52,16 @@ type LogListResponse struct {
 	PageSize   int                      `json:"page_size"`
 	TotalPages int                      `json:"total_pages"`
 	Logs       []models.VerificationLog `json:"logs"`
+	Stats      *service.LogQueryStats   `json:"stats,omitempty"`
 }
 
 type LogListMapResponse struct {
-	Total      int64                    `json:"total"`
-	Page       int                      `json:"page"`
-	PageSize   int                      `json:"page_size"`
-	TotalPages int                      `json:"total_pages"`
-	Logs       []map[string]interface{} `json:"logs"`
+	Total      int64                      `json:"total"`
+	Page       int                        `json:"page"`
+	PageSize   int                        `json:"page_size"`
+	TotalPages int                        `json:"total_pages"`
+	Logs       []map[string]interface{}   `json:"logs"`
+	Stats      *service.LogQueryStats     `json:"stats,omitempty"`
 }
 
 func calculateRiskLevel(riskScore float64) string {
@@ -84,30 +90,6 @@ func logToMap(log models.VerificationLog) map[string]interface{} {
 	}
 }
 
-// GetVerificationLogs 获取验证日志列表
-// @Summary 获取验证日志列表
-// @Description 分页获取验证码验证日志
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param page query int false "页码，默认1"
-// @Param page_size query int false "每页数量，默认20"
-// @Param application_id query int false "应用ID"
-// @Param status query string false "状态：success, failed, pending"
-// @Param captcha_type query string false "验证码类型：slider, click, voice"
-// @Param session_id query string false "会话ID"
-// @Param start_date query string false "开始日期 YYYY-MM-DD"
-// @Param end_date query string false "结束日期 YYYY-MM-DD"
-// @Param min_risk_score query number false "最小风险评分"
-// @Param max_risk_score query number false "最大风险评分"
-// @Param ip_address query string false "IP地址"
-// @Param risk_level query string false "风险等级：low, medium, high, critical"
-// @Success 200 {object} LogListMapResponse "日志列表"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs [get]
 func GetVerificationLogs(c *gin.Context) {
 	handler := GetLogHandler()
 	var req GetVerificationLogsRequest
@@ -134,6 +116,8 @@ func GetVerificationLogs(c *gin.Context) {
 		MinRiskScore:  req.MinRiskScore,
 		MaxRiskScore:  req.MaxRiskScore,
 		IPAddress:     req.IPAddress,
+		SortBy:        req.SortBy,
+		SortOrder:     req.SortOrder,
 	}
 
 	result, err := handler.logService.QueryLogs(params)
@@ -174,6 +158,7 @@ func GetVerificationLogs(c *gin.Context) {
 			PageSize:   req.PageSize,
 			TotalPages: totalPages,
 			Logs:       pageLogs,
+			Stats:      result.Stats,
 		})
 		return
 	}
@@ -189,23 +174,10 @@ func GetVerificationLogs(c *gin.Context) {
 		PageSize:   result.PageSize,
 		TotalPages: result.TotalPages,
 		Logs:       logMaps,
+		Stats:      result.Stats,
 	})
 }
 
-// GetLogDetail 获取日志详情
-// @Summary 获取日志详情
-// @Description 根据ID获取验证日志详细信息
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "日志ID"
-// @Success 200 {object} map[string]interface{} "日志详情"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 404 {object} map[string]interface{} "日志不存在"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/{id} [get]
 func GetLogDetail(c *gin.Context) {
 	handler := GetLogHandler()
 	idStr := c.Param("id")
@@ -248,27 +220,9 @@ type ExportLogsRequest struct {
 	EndDate       string `form:"end_date"`
 	RiskLevel     string `form:"risk_level"`
 	Format        string `form:"format,default=csv"`
+	IncludeStats  bool   `form:"include_stats"`
 }
 
-// ExportLogs 导出日志
-// @Summary 导出验证日志
-// @Description 导出符合筛选条件的验证日志
-// @Tags 验证日志
-// @Accept json
-// @Produce json/csv
-// @Security BearerAuth
-// @Param application_id query int false "应用ID"
-// @Param status query string false "状态：success, failed, pending"
-// @Param captcha_type query string false "验证码类型：slider, click, voice"
-// @Param start_date query string false "开始日期 YYYY-MM-DD"
-// @Param end_date query string false "结束日期 YYYY-MM-DD"
-// @Param risk_level query string false "风险等级：low, medium, high, critical"
-// @Param format query string false "导出格式：csv, json，默认csv"
-// @Success 200 {file} file "CSV文件"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/export [get]
 func ExportLogs(c *gin.Context) {
 	handler := GetLogHandler()
 	var req ExportLogsRequest
@@ -294,18 +248,32 @@ func ExportLogs(c *gin.Context) {
 		StartDate:     startDate,
 		EndDate:       endDate,
 		Format:        req.Format,
+		IncludeStats:  req.IncludeStats,
 	}
 
-	data, err := handler.logService.ExportLogs(params)
+	result, err := handler.logService.ExportLogs(params)
 	if err != nil {
 		response.InternalServerError(c, "导出失败")
 		return
 	}
 
-	filename := fmt.Sprintf("verification_logs_%s.csv", time.Now().Format("20060102150405"))
-	c.Header("Content-Type", "text/csv")
+	var contentType string
+	var filename string
+	switch req.Format {
+	case "json":
+		contentType = "application/json"
+		filename = fmt.Sprintf("verification_logs_%s.json", time.Now().Format("20060102150405"))
+	default:
+		contentType = "text/csv"
+		filename = fmt.Sprintf("verification_logs_%s.csv", time.Now().Format("20060102150405"))
+	}
+
+	c.Header("Content-Type", contentType)
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Data(200, "text/csv", data)
+	c.Header("X-Record-Count", strconv.Itoa(result.RecordCount))
+	c.Header("X-File-Size", strconv.FormatInt(result.FileSize, 10))
+
+	c.Data(200, contentType, result.Data)
 }
 
 func DeleteOldLogs(c *gin.Context) {
@@ -328,19 +296,6 @@ func DeleteOldLogs(c *gin.Context) {
 	})
 }
 
-// GetLogsBySession 获取会话日志
-// @Summary 获取会话日志
-// @Description 根据会话ID获取所有相关日志
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param session_id path string true "会话ID"
-// @Success 200 {object} map[string]interface{} "日志列表"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/session/{session_id} [get]
 func GetLogsBySession(c *gin.Context) {
 	handler := GetLogHandler()
 	sessionID := c.Param("session_id")
@@ -355,24 +310,18 @@ func GetLogsBySession(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, logs)
+	logMaps := make([]map[string]interface{}, len(logs))
+	for i, log := range logs {
+		logMaps[i] = logToMap(log)
+	}
+
+	response.Success(c, logMaps)
 }
 
-// GetLogStatistics 获取日志统计
-// @Summary 获取日志统计
-// @Description 获取验证日志的统计数据
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]interface{} "统计数据"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/statistics [get]
 func GetLogStatistics(c *gin.Context) {
 	handler := GetLogHandler()
 
-	stats, err := handler.statsService.GetLogStatistics()
+	stats, err := handler.logService.GetLogStatistics()
 	if err != nil {
 		response.InternalServerError(c, "获取统计失败")
 		return
@@ -381,19 +330,46 @@ func GetLogStatistics(c *gin.Context) {
 	response.Success(c, stats)
 }
 
-// AdvancedSearchLogs 高级搜索日志
-// @Summary 高级搜索日志
-// @Description 使用高级查询条件搜索验证日志
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param body body service.AdvancedSearchQuery true "高级搜索查询"
-// @Success 200 {object} map[string]interface{} "搜索结果"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/search [post]
+type LogAnalyticsRequest struct {
+	StartDate string `json:"start_date" form:"start_date"`
+	EndDate   string `json:"end_date" form:"end_date"`
+}
+
+func GetLogAnalytics(c *gin.Context) {
+	handler := GetLogHandler()
+	var req LogAnalyticsRequest
+
+	if c.Request.Method == "POST" {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.BadRequest(c, "无效的请求参数")
+			return
+		}
+	} else {
+		req.StartDate = c.DefaultQuery("start_date", "")
+		req.EndDate = c.DefaultQuery("end_date", "")
+	}
+
+	startDate, _ := time.Parse("2006-01-02", req.StartDate)
+	endDate, _ := time.Parse("2006-01-02", req.EndDate)
+
+	if req.StartDate == "" {
+		startDate = time.Now().AddDate(0, 0, -7)
+	}
+	if req.EndDate == "" {
+		endDate = time.Now().Add(24 * time.Hour)
+	} else {
+		endDate = endDate.Add(24 * time.Hour)
+	}
+
+	analytics, err := handler.logService.GetLogAnalytics(startDate, endDate)
+	if err != nil {
+		response.InternalServerError(c, "获取分析数据失败")
+		return
+	}
+
+	response.Success(c, analytics)
+}
+
 func AdvancedSearchLogs(c *gin.Context) {
 	var query service.AdvancedSearchQuery
 	if err := c.ShouldBindJSON(&query); err != nil {
@@ -408,7 +384,6 @@ func AdvancedSearchLogs(c *gin.Context) {
 		return
 	}
 
-	// 转换为带风险等级的格式
 	logs, ok := result.Data.([]models.VerificationLog)
 	if ok {
 		logMaps := make([]map[string]interface{}, len(logs))
@@ -421,21 +396,14 @@ func AdvancedSearchLogs(c *gin.Context) {
 	response.Success(c, result)
 }
 
-// SaveLogSearch 保存日志搜索
-// @Summary 保存日志搜索
-// @Description 保存当前的搜索条件以便后续使用
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param body body SaveSearchRequest true "保存搜索请求"
-// @Success 200 {object} map[string]interface{} "保存结果"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/save-search [post]
+type SaveLogSearchRequest struct {
+	Name        string                 `json:"name" binding:"required"`
+	Query       map[string]interface{} `json:"query" binding:"required"`
+	Description string                 `json:"description"`
+}
+
 func SaveLogSearch(c *gin.Context) {
-	var req SaveSearchRequest
+	var req SaveLogSearchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "无效的请求参数")
 		return
@@ -448,7 +416,13 @@ func SaveLogSearch(c *gin.Context) {
 	}
 
 	searchService := service.NewAdvancedSearchService()
-	savedSearch, err := searchService.SaveSearch(req.Name, "logs", req.Query, req.Description, createdBy)
+	
+	query := service.AdvancedSearchQuery{}
+	if queryBytes, err := json.Marshal(req.Query); err == nil {
+		json.Unmarshal(queryBytes, &query)
+	}
+	
+	savedSearch, err := searchService.SaveSearch(req.Name, "logs", query, req.Description, createdBy)
 	if err != nil {
 		response.InternalServerError(c, "保存搜索失败")
 		return
@@ -457,17 +431,6 @@ func SaveLogSearch(c *gin.Context) {
 	response.Success(c, savedSearch)
 }
 
-// GetSavedLogSearches 获取保存的日志搜索
-// @Summary 获取保存的日志搜索列表
-// @Description 获取当前用户保存的所有日志搜索条件
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} map[string]interface{} "搜索列表"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/saved-searches [get]
 func GetSavedLogSearches(c *gin.Context) {
 	adminID, _ := c.Get("admin_id")
 	var createdBy uint
@@ -485,19 +448,6 @@ func GetSavedLogSearches(c *gin.Context) {
 	response.Success(c, searches)
 }
 
-// DeleteSavedLogSearch 删除保存的日志搜索
-// @Summary 删除保存的日志搜索
-// @Description 删除指定保存的搜索条件
-// @Tags 验证日志
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path int true "搜索ID"
-// @Success 200 {object} map[string]interface{} "删除结果"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "未授权"
-// @Failure 500 {object} map[string]interface{} "服务器内部错误"
-// @Router /api/v1/admin/logs/saved-searches/{id} [delete]
 func DeleteSavedLogSearch(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -513,4 +463,52 @@ func DeleteSavedLogSearch(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "删除成功"})
+}
+
+func StreamExportLogs(c *gin.Context) {
+	handler := GetLogHandler()
+	var req ExportLogsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(c, "无效的查询参数")
+		return
+	}
+
+	startDate, _ := time.Parse("2006-01-02", req.StartDate)
+	endDate, _ := time.Parse("2006-01-02", req.EndDate)
+	if req.EndDate != "" {
+		endDate = endDate.Add(24 * time.Hour)
+	}
+
+	if req.Format == "" {
+		req.Format = "csv"
+	}
+
+	params := service.LogExportParams{
+		ApplicationID: req.ApplicationID,
+		Status:        req.Status,
+		CaptchaType:   req.CaptchaType,
+		StartDate:     startDate,
+		EndDate:       endDate,
+		Format:        req.Format,
+		Stream:        true,
+	}
+
+	var contentType string
+	var filename string
+	switch req.Format {
+	case "json":
+		contentType = "application/json"
+		filename = fmt.Sprintf("verification_logs_%s.json", time.Now().Format("20060102150405"))
+	default:
+		contentType = "text/csv"
+		filename = fmt.Sprintf("verification_logs_%s.csv", time.Now().Format("20060102150405"))
+	}
+
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Transfer-Encoding", "chunked")
+
+	c.Stream(func(w io.Writer) bool {
+		return handler.logService.StreamExportLogs(params, w) == nil
+	})
 }

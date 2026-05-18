@@ -4,12 +4,17 @@ let currentRules = [];
 let currentView = 'table';
 let conditionCounter = 1;
 let testHistory = [];
+let ruleTemplates = {};
+let versionHistory = [];
+let isLoadingTemplates = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadRiskRulesSummary();
     loadRiskRules();
     setupEventListeners();
     initializeRuleBuilder();
+    loadRuleTemplates();
+    loadVersionHistory();
 });
 
 function setupEventListeners() {
@@ -52,10 +57,533 @@ function setupEventListeners() {
         el.addEventListener('change', updateRuleExpression);
         el.addEventListener('input', updateRuleExpression);
     });
+
+    const batchEnableBtn = document.getElementById('batchEnableBtn');
+    if (batchEnableBtn) {
+        batchEnableBtn.addEventListener('click', () => batchUpdateRules(true));
+    }
+
+    const batchDisableBtn = document.getElementById('batchDisableBtn');
+    if (batchDisableBtn) {
+        batchDisableBtn.addEventListener('click', () => batchUpdateRules(false));
+    }
+
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', batchDeleteRules);
+    }
+
+    const importBtn = document.getElementById('importRulesBtn');
+    if (importBtn) {
+        importBtn.addEventListener('click', showImportModal);
+    }
+
+    const exportBtn = document.getElementById('exportRulesBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportRules);
+    }
+
+    const resetBtn = document.getElementById('resetRulesBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetRules);
+    }
 }
 
 function initializeRuleBuilder() {
     updateRuleExpression();
+}
+
+function loadRuleTemplates() {
+    if (isLoadingTemplates) return;
+    isLoadingTemplates = true;
+
+    ruleTemplates = {
+        extreme_speed: {
+            name: '极端速度检测',
+            description: '检测异常快速的滑动行为',
+            icon: 'fa-bolt',
+            color: 'danger',
+            conditions: [
+                { field: 'speed', operator: 'gt', value: '2000' },
+                { field: 'path_efficiency', operator: 'gt', value: '0.98' }
+            ],
+            logic: 'AND',
+            action: 'block',
+            priority: 10
+        },
+        bot_pattern: {
+            name: '机器人模式检测',
+            description: '识别自动化脚本行为',
+            icon: 'fa-robot',
+            color: 'warning',
+            conditions: [
+                { field: 'click_regularity', operator: 'gt', value: '0.98' },
+                { field: 'hesitation_time', operator: 'lt', value: '50' },
+                { field: 'ml_score', operator: 'gt', value: '0.7' }
+            ],
+            logic: 'AND',
+            action: 'captcha',
+            priority: 8
+        },
+        human_behavior: {
+            name: '类人行为验证',
+            description: '验证行为符合人类特征',
+            icon: 'fa-user',
+            color: 'success',
+            conditions: [
+                { field: 'hesitation_time', operator: 'gt', value: '100' },
+                { field: 'path_efficiency', operator: 'lt', value: '0.95' }
+            ],
+            logic: 'OR',
+            action: 'warning',
+            priority: 5
+        },
+        combined_risk: {
+            name: '组合风险评估',
+            description: '多维度综合风险评估',
+            icon: 'fa-layer-group',
+            color: 'info',
+            conditions: [
+                { field: 'speed', operator: 'gt', value: '1500' },
+                { field: 'anomaly_score', operator: 'gt', value: '0.7' },
+                { field: 'ml_score', operator: 'gt', value: '0.6' }
+            ],
+            logic: 'AND',
+            action: 'captcha',
+            priority: 7
+        },
+        proxy_detection: {
+            name: '代理IP检测',
+            description: '识别使用代理的用户',
+            icon: 'fa-network-wired',
+            color: 'danger',
+            conditions: [
+                { field: 'env_risk_score', operator: 'gt', value: '0.7' },
+                { field: 'proxy_confidence', operator: 'gt', value: '0.8' }
+            ],
+            logic: 'AND',
+            action: 'block',
+            priority: 9
+        },
+        device_fingerprint: {
+            name: '设备指纹异常',
+            description: '检测重复或异常设备',
+            icon: 'fa-fingerprint',
+            color: 'warning',
+            conditions: [
+                { field: 'fingerprint_similarity', operator: 'gt', value: '0.9' },
+                { field: 'device_count', operator: 'gt', value: '5' }
+            ],
+            logic: 'AND',
+            action: 'review',
+            priority: 6
+        },
+        time_pattern: {
+            name: '时间模式异常',
+            description: '检测非正常时间访问',
+            icon: 'fa-clock',
+            color: 'info',
+            conditions: [
+                { field: 'hour_of_day', operator: 'lt', value: '3' },
+                { field: 'request_rate', operator: 'gt', value: '100' }
+            ],
+            logic: 'AND',
+            action: 'warning',
+            priority: 4
+        },
+        volume_spike: {
+            name: '流量突增检测',
+            description: '检测异常流量高峰',
+            icon: 'fa-chart-line',
+            color: 'danger',
+            conditions: [
+                { field: 'requests_per_minute', operator: 'gt', value: '500' },
+                { field: 'requests_growth', operator: 'gt', value: '3.0' }
+            ],
+            logic: 'AND',
+            action: 'rate_limit',
+            priority: 8
+        }
+    };
+
+    renderTemplateButtons();
+}
+
+function renderTemplateButtons() {
+    const container = document.querySelector('.rule-template-buttons');
+    if (!container) return;
+
+    let html = '';
+    for (const [key, template] of Object.entries(ruleTemplates)) {
+        html += `
+            <button class="btn btn-outline-secondary btn-sm text-start" onclick="applyTemplate('${key}')">
+                <i class="fas ${template.icon} me-2 text-${template.color}"></i>${template.name}
+            </button>
+        `;
+    }
+    container.innerHTML = html;
+}
+
+function applyTemplate(templateKey) {
+    const template = ruleTemplates[templateKey];
+    if (!template) return;
+
+    setGroupLogic('mainRuleGroup', template.logic || 'AND');
+
+    const conditionsContainer = document.getElementById('mainRuleConditions');
+    if (!conditionsContainer) return;
+
+    conditionsContainer.innerHTML = '';
+
+    template.conditions.forEach((cond, index) => {
+        conditionCounter++;
+        const conditionRow = createConditionRow(cond, conditionCounter, index === 0 ? '条件' : template.logic);
+        conditionsContainer.appendChild(conditionRow);
+    });
+
+    updateRuleExpression();
+    showToast(`已应用模板: ${template.name}`, 'success');
+}
+
+function createConditionRow(cond, counter, logicLabel) {
+    const conditionRow = document.createElement('div');
+    conditionRow.className = 'rule-condition-row';
+    conditionRow.dataset.conditionId = `cond${counter}`;
+    conditionRow.innerHTML = `
+        <div class="condition-logic-label">${logicLabel}</div>
+        <select class="form-select form-select-sm condition-field">
+            <option value="speed" ${cond.field === 'speed' ? 'selected' : ''}>平均速度</option>
+            <option value="speed_variance" ${cond.field === 'speed_variance' ? 'selected' : ''}>速度方差</option>
+            <option value="path_efficiency" ${cond.field === 'path_efficiency' ? 'selected' : ''}>路径效率</option>
+            <option value="smoothness" ${cond.field === 'smoothness' ? 'selected' : ''}>平滑度</option>
+            <option value="click_regularity" ${cond.field === 'click_regularity' ? 'selected' : ''}>点击规律性</option>
+            <option value="hesitation_time" ${cond.field === 'hesitation_time' ? 'selected' : ''}>犹豫时间</option>
+            <option value="ml_score" ${cond.field === 'ml_score' ? 'selected' : ''}>ML分数</option>
+            <option value="anomaly_score" ${cond.field === 'anomaly_score' ? 'selected' : ''}>异常分数</option>
+            <option value="env_risk_score" ${cond.field === 'env_risk_score' ? 'selected' : ''}>环境风险分</option>
+            <option value="proxy_confidence" ${cond.field === 'proxy_confidence' ? 'selected' : ''}>代理置信度</option>
+            <option value="fingerprint_similarity" ${cond.field === 'fingerprint_similarity' ? 'selected' : ''}>指纹相似度</option>
+            <option value="device_count" ${cond.field === 'device_count' ? 'selected' : ''}>设备数量</option>
+            <option value="requests_per_minute" ${cond.field === 'requests_per_minute' ? 'selected' : ''}>每分钟请求</option>
+            <option value="requests_growth" ${cond.field === 'requests_growth' ? 'selected' : ''}>请求增长率</option>
+        </select>
+        <select class="form-select form-select-sm condition-operator">
+            <option value="gt" ${cond.operator === 'gt' ? 'selected' : ''}>></option>
+            <option value="gte" ${cond.operator === 'gte' ? 'selected' : ''}>>=</option>
+            <option value="lt" ${cond.operator === 'lt' ? 'selected' : ''}><</option>
+            <option value="lte" ${cond.operator === 'lte' ? 'selected' : ''}><=</option>
+            <option value="eq" ${cond.operator === 'eq' ? 'selected' : ''}>=</option>
+        </select>
+        <input type="number" class="form-control form-control-sm condition-value" placeholder="阈值" step="0.01" value="${cond.value}">
+        <button class="btn btn-outline-danger btn-sm" onclick="removeCondition('cond${counter}')"><i class="fas fa-times"></i></button>
+    `;
+
+    conditionRow.querySelectorAll('select, input').forEach(el => {
+        el.addEventListener('change', updateRuleExpression);
+        el.addEventListener('input', updateRuleExpression);
+    });
+
+    return conditionRow;
+}
+
+async function loadVersionHistory() {
+    try {
+        const response = await auth.request('/admin/risk-rules/versions');
+        if (response.code === 0) {
+            versionHistory = response.data || [];
+        } else {
+            versionHistory = getMockVersionHistory();
+        }
+    } catch (error) {
+        versionHistory = getMockVersionHistory();
+    }
+
+    renderVersionHistory(versionHistory);
+}
+
+function getMockVersionHistory() {
+    return [
+        { version: 'v2.1.4', changeType: '测试', description: '沙盒测试', operator: 'admin', createdAt: new Date().toLocaleString(), isCurrent: true },
+        { version: 'v2.1.3', changeType: '修改', description: '调整速度阈值参数', operator: 'admin', createdAt: '2026-05-18 10:30', isCurrent: false },
+        { version: 'v2.1.2', changeType: '优化', description: '增加组合规则条件', operator: 'admin', createdAt: '2026-05-17 15:20', isCurrent: false },
+        { version: 'v2.1.1', changeType: '新增', description: '新增ML评分规则', operator: 'admin', createdAt: '2026-05-16 09:15', isCurrent: false },
+        { version: 'v2.1.0', changeType: '回滚', description: '回滚到v2.0.9', operator: 'admin', createdAt: '2026-05-15 14:00', isCurrent: false }
+    ];
+}
+
+function renderVersionHistory(versions) {
+    const tbody = document.getElementById('versionHistoryBody');
+    if (!tbody) return;
+
+    if (!versions || versions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无版本记录</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = versions.map(v => `
+        <tr class="${v.isCurrent ? 'table-success' : ''}">
+            <td><code>${escapeHtml(v.version)}</code></td>
+            <td><span class="badge bg-${getChangeTypeBadge(v.changeType)}">${escapeHtml(v.changeType)}</span></td>
+            <td>${escapeHtml(v.description)}</td>
+            <td>${escapeHtml(v.operator)}</td>
+            <td>${escapeHtml(v.createdAt)}</td>
+            <td><span class="badge bg-${v.isCurrent ? 'success' : 'secondary'}">${v.isCurrent ? '当前' : '历史'}</span></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="compareVersion('${escapeHtml(v.version)}')" title="对比"><i class="fas fa-code-compare"></i></button>
+                    ${!v.isCurrent ? `<button class="btn btn-outline-success" onclick="rollbackVersion('${escapeHtml(v.version)}')" title="回滚"><i class="fas fa-undo"></i></button>` : ''}
+                    <button class="btn btn-outline-info" onclick="exportVersion('${escapeHtml(v.version)}')" title="导出"><i class="fas fa-download"></i></button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getChangeTypeBadge(type) {
+    const map = {
+        '新增': 'primary',
+        '修改': 'info',
+        '优化': 'warning',
+        '回滚': 'danger',
+        '测试': 'secondary'
+    };
+    return map[type] || 'secondary';
+}
+
+function exportVersion(version) {
+    const versionData = versionHistory.find(v => v.version === version);
+    if (!versionData) return;
+
+    const blob = new Blob([JSON.stringify(versionData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rule_version_${version}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(`版本 ${version} 已导出`, 'success');
+}
+
+async function compareVersion(version) {
+    showToast(`正在比较版本 ${version}...`, 'info');
+
+    try {
+        const response = await auth.request(`/admin/risk-rules/versions/${version}/compare`);
+        if (response.code === 0) {
+            showVersionDiffModal(response.data, version);
+        }
+    } catch (error) {
+        const diffData = {
+            version: version,
+            changes: [
+                { field: 'speed_threshold', oldValue: '1500', newValue: '2000', type: 'modified' },
+                { field: 'action', oldValue: 'captcha', newValue: 'block', type: 'modified' }
+            ]
+        };
+        showVersionDiffModal(diffData, version);
+    }
+}
+
+function showVersionDiffModal(diffData, version) {
+    const modalId = 'versionDiffModal';
+    let existingModal = document.getElementById(modalId);
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-code-compare me-2"></i>版本对比 - ${version}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    ${diffData.changes && diffData.changes.length > 0 ? `
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>字段</th>
+                                    <th class="text-danger">旧值</th>
+                                    <th class="text-success">新值</th>
+                                    <th>变更类型</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${diffData.changes.map(change => `
+                                    <tr>
+                                        <td><code>${escapeHtml(change.field)}</code></td>
+                                        <td class="text-danger"><del>${escapeHtml(change.oldValue)}</del></td>
+                                        <td class="text-success">${escapeHtml(change.newValue)}</td>
+                                        <td><span class="badge bg-${getChangeTypeBadge(change.type)}">${escapeHtml(change.type)}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : `
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                            <p>版本内容与当前一致</p>
+                        </div>
+                    `}
+                    <pre class="bg-dark text-light p-3 rounded mt-3" style="max-height: 300px; overflow-y: auto;">${JSON.stringify(diffData, null, 2)}</pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn-ink" onclick="exportVersion('${version}')"><i class="fas fa-download me-1"></i>导出此版本</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+    modal.addEventListener('hidden.bs.modal', () => modal.remove());
+}
+
+async function rollbackVersion(version) {
+    if (!confirm(`确定要回滚到版本 ${version} 吗？`)) return;
+
+    showToast(`正在回滚到 ${version}...`, 'info');
+
+    try {
+        const response = await auth.request(`/admin/risk-rules/versions/${version}/rollback`, {
+            method: 'POST'
+        });
+
+        if (response.code === 0) {
+            showToast(`已成功回滚到 ${version}`, 'success');
+            await loadVersionHistory();
+            await loadRiskRules();
+        } else {
+            showToast('回滚失败: ' + (response.message || '未知错误'), 'danger');
+        }
+    } catch (error) {
+        showToast('回滚请求失败', 'danger');
+    }
+}
+
+function showImportModal() {
+    const modal = new bootstrap.Modal(document.getElementById('importRulesModal'));
+    modal.show();
+}
+
+function exportRules() {
+    const rulesToExport = currentRules.map(rule => ({
+        name: rule.name,
+        type: rule.type,
+        description: rule.description,
+        condition: rule.condition,
+        action: rule.action,
+        priority: rule.priority,
+        enabled: rule.enabled
+    }));
+
+    const blob = new Blob([JSON.stringify(rulesToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `risk_rules_export_${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(`已导出 ${rulesToExport.length} 条规则`, 'success');
+}
+
+function resetRules() {
+    if (!confirm('确定要重置所有规则配置吗？此操作将恢复为默认配置。')) return;
+
+    showToast('正在重置规则配置...', 'info');
+
+    setTimeout(() => {
+        loadRuleTemplates();
+        const conditionsContainer = document.getElementById('mainRuleConditions');
+        if (conditionsContainer) {
+            conditionsContainer.innerHTML = `
+                <div class="rule-condition-row" data-condition-id="cond1">
+                    <div class="condition-logic-label">条件</div>
+                    <select class="form-select form-select-sm condition-field">
+                        <option value="speed">平均速度</option>
+                        <option value="speed_variance">速度方差</option>
+                        <option value="path_efficiency">路径效率</option>
+                        <option value="smoothness">平滑度</option>
+                        <option value="click_regularity">点击规律性</option>
+                        <option value="hesitation_time">犹豫时间</option>
+                        <option value="ml_score">ML分数</option>
+                        <option value="anomaly_score">异常分数</option>
+                    </select>
+                    <select class="form-select form-select-sm condition-operator">
+                        <option value="gt">></option>
+                        <option value="gte">>=</option>
+                        <option value="lt"><</option>
+                        <option value="lte"><=</option>
+                        <option value="eq">=</option>
+                    </select>
+                    <input type="number" class="form-control form-control-sm condition-value" placeholder="阈值" step="0.01">
+                    <button class="btn btn-outline-danger btn-sm" onclick="removeCondition('cond1')"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+        }
+        setGroupLogic('mainRuleGroup', 'AND');
+        updateRuleExpression();
+        showToast('规则配置已重置', 'success');
+    }, 500);
+}
+
+async function batchUpdateRules(enabled) {
+    const checkboxes = document.querySelectorAll('.rule-checkbox:checked');
+    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+
+    if (selectedIds.length === 0) {
+        showToast('请先选择要操作的规则', 'warning');
+        return;
+    }
+
+    showToast(`正在${enabled ? '启用' : '禁用'} ${selectedIds.length} 条规则...`, 'info');
+
+    try {
+        for (const id of selectedIds) {
+            await auth.request(`/admin/risk-rules/${id}/toggle`, {
+                method: 'POST',
+                body: JSON.stringify({ enabled })
+            });
+        }
+
+        showToast(`已成功${enabled ? '启用' : '禁用'} ${selectedIds.length} 条规则`, 'success');
+        await loadRiskRules();
+        await loadRiskRulesSummary();
+    } catch (error) {
+        showToast('批量操作失败', 'danger');
+    }
+}
+
+async function batchDeleteRules() {
+    const checkboxes = document.querySelectorAll('.rule-checkbox:checked');
+    const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+
+    if (selectedIds.length === 0) {
+        showToast('请先选择要删除的规则', 'warning');
+        return;
+    }
+
+    if (!confirm(`确定要删除选中的 ${selectedIds.length} 条规则吗？此操作不可恢复！`)) return;
+
+    showToast(`正在删除 ${selectedIds.length} 条规则...`, 'info');
+
+    try {
+        for (const id of selectedIds) {
+            await auth.request(`/admin/risk-rules/${id}`, { method: 'DELETE' });
+        }
+
+        showToast(`已成功删除 ${selectedIds.length} 条规则`, 'success');
+        await loadRiskRules();
+        await loadRiskRulesSummary();
+    } catch (error) {
+        showToast('批量删除失败', 'danger');
+    }
 }
 
 function setGroupLogic(groupId, logic) {

@@ -112,7 +112,7 @@ func TestEnhancedCSRFProtection(t *testing.T) {
 	})
 
 	t.Run("TokenStorageAndVerification", func(t *testing.T) {
-		csrf := service.NewBasicCSRFSecurity(nil)
+		csrf := service.NewCSRFSecurity(nil)
 
 		sessionID := "test-session-123"
 		token, _ := csrf.GenerateToken()
@@ -461,8 +461,8 @@ func TestRateLimiting(t *testing.T) {
 
 		allowed := 0
 		for i := 0; i < 50; i++ {
-			ok, _ := rateLimitService.Allow(ctx, key, 100)
-			if ok {
+			result, _ := rateLimitService.CheckRateLimit(ctx, key)
+			if result != nil && result.Allowed {
 				allowed++
 			}
 		}

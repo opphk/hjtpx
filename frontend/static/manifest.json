@@ -1,0 +1,27 @@
+{
+  "name": "墨盾验证",
+  "short_name": "墨盾",
+  "description": "AI驱动的行为验证码系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "security"],
+  "lang": "zh-CN",
+  "prefer_related_applications": false
+}

@@ -359,11 +359,11 @@ func TestEnhancedNetworkDetection_TorExitNodeManagement(t *testing.T) {
 	nd := NewEnhancedNetworkDetection()
 
 	newNode := &TorExitNode{
-		IP:           "10.10.10.10",
-		ORPort:       443,
-		DirectoryPort: 9030,
-		Country:      "US",
-		Bandwidth:    1000,
+		IP:        "10.10.10.10",
+		Port:      443,
+		Country:   "US",
+		ASN:       "AS12345",
+		Bandwidth: 1000,
 	}
 
 	nd.AddTorExitNode(newNode)
