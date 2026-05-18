@@ -7,6 +7,8 @@
 server
 backend/server
 backend/api
+backend/hjtpx
+backend/hjtpx-*
 
 # Test binary, built with `go test -c`
 *.test
