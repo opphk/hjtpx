@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -67,6 +68,37 @@ type SaveSearchRequest struct {
 	Name        string                      `json:"name" binding:"required"`           // 搜索名称
 	Description string                      `json:"description"`                       // 搜索描述
 	Query       service.AdvancedSearchQuery `json:"query" binding:"required"`          // 搜索查询条件
+}
+
+// ImportApplicationRequest 导入应用请求
+// @Description 导入应用配置的请求参数
+type ImportApplicationRequest struct {
+	Name        string                        `json:"name" binding:"required"`          // 应用名称
+	Description string                        `json:"description"`                       // 应用描述
+	Domain      string                        `json:"domain"`                          // 域名
+	Website     string                        `json:"website"`                         // 网站URL
+	Config      map[string]interface{}        `json:"config"`                          // 应用配置
+	UserID      uint                          `json:"user_id"`                         // 用户ID
+}
+
+// CloneApplicationRequest 克隆应用请求
+// @Description 克隆应用的请求参数
+type CloneApplicationRequest struct {
+	NewName string `json:"new_name" binding:"required"` // 新应用名称
+}
+
+// BatchDeleteRequest 批量删除请求
+// @Description 批量删除的请求参数
+type BatchDeleteRequest struct {
+	IDs []uint `json:"ids" binding:"required,min=1"` // 应用ID列表
+}
+
+// BatchUpdateRequest 批量更新请求
+// @Description 批量更新的请求参数
+type BatchUpdateRequest struct {
+	IDs      []uint               `json:"ids" binding:"required,min=1"`    // 应用ID列表
+	IsActive *bool                 `json:"is_active"`                       // 是否启用
+	Config   map[string]interface{} `json:"config"`                         // 应用配置
 }
 
 func GetApplicationHandler() *ApplicationHandler {
@@ -507,4 +539,234 @@ func DeleteSavedApplicationSearch(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "删除成功"})
+}
+
+// ExportApplication 导出应用配置
+// @Summary 导出应用配置
+// @Description 导出指定应用的配置信息为JSON格式
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Success 200 {object} map[string]interface{} "应用配置JSON"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id}/export [get]
+func ExportApplication(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "无效的应用ID")
+		return
+	}
+
+	app, config, err := service.NewApplicationService().ExportApplicationConfig(uint(id))
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "应用不存在")
+			return
+		}
+		response.InternalServerError(c, "导出应用配置失败: "+err.Error())
+		return
+	}
+
+	exportData := gin.H{
+		"application": service.ToApplicationResponse(app),
+		"config":      config,
+		"export_time": time.Now().Format("2006-01-02 15:04:05"),
+		"version":     "1.0",
+	}
+
+	response.Success(c, exportData)
+}
+
+// ImportApplication 导入应用配置
+// @Summary 导入应用配置
+// @Description 从JSON配置导入创建新应用
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body ImportApplicationRequest true "导入应用请求"
+// @Success 200 {object} map[string]interface{} "导入结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/import [post]
+func ImportApplication(c *gin.Context) {
+	var req ImportApplicationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数: "+err.Error())
+		return
+	}
+
+	if req.Name == "" {
+		response.BadRequest(c, "应用名称不能为空")
+		return
+	}
+
+	app, err := service.NewApplicationService().ImportApplication(&service.ImportApplicationInput{
+		Name:        req.Name,
+		Description: req.Description,
+		Domain:      req.Domain,
+		Website:     req.Website,
+		Config:      req.Config,
+		UserID:      req.UserID,
+	})
+	if err != nil {
+		response.InternalServerError(c, "导入应用失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":     "应用导入成功",
+		"application": service.ToApplicationResponse(app),
+	})
+}
+
+// CloneApplication 克隆应用
+// @Summary 克隆应用
+// @Description 克隆指定应用创建一个新应用
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "源应用ID"
+// @Param body body CloneApplicationRequest true "克隆请求"
+// @Success 200 {object} map[string]interface{} "克隆结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id}/clone [post]
+func CloneApplication(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "无效的应用ID")
+		return
+	}
+
+	var req CloneApplicationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数: "+err.Error())
+		return
+	}
+
+	if req.NewName == "" {
+		response.BadRequest(c, "新应用名称不能为空")
+		return
+	}
+
+	newApp, err := service.NewApplicationService().CloneApplication(uint(id), req.NewName)
+	if err != nil {
+		if err == service.ErrApplicationNotFound {
+			response.NotFound(c, "源应用不存在")
+			return
+		}
+		response.InternalServerError(c, "克隆应用失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":     "应用克隆成功",
+		"original_id": id,
+		"new_app":     service.ToApplicationResponse(newApp),
+	})
+}
+
+// BatchDeleteApplications 批量删除应用
+// @Summary 批量删除应用
+// @Description 批量删除指定的应用
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body BatchDeleteRequest true "批量删除请求"
+// @Success 200 {object} map[string]interface{} "删除结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/batch-delete [post]
+func BatchDeleteApplications(c *gin.Context) {
+	var req BatchDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数: "+err.Error())
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		response.BadRequest(c, "请选择要删除的应用")
+		return
+	}
+
+	if len(req.IDs) > 100 {
+		response.BadRequest(c, "单次最多删除100个应用")
+		return
+	}
+
+	result, err := service.NewApplicationService().BatchDeleteApplications(req.IDs)
+	if err != nil {
+		response.InternalServerError(c, "批量删除失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":       "批量删除完成",
+		"total":         len(req.IDs),
+		"deleted":       result.Deleted,
+		"not_found":     result.NotFound,
+		"failed_ids":    result.FailedIDs,
+	})
+}
+
+// BatchUpdateApplications 批量更新应用
+// @Summary 批量更新应用
+// @Description 批量更新应用的配置信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body BatchUpdateRequest true "批量更新请求"
+// @Success 200 {object} map[string]interface{} "更新结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/batch-update [post]
+func BatchUpdateApplications(c *gin.Context) {
+	var req BatchUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数: "+err.Error())
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		response.BadRequest(c, "请选择要更新的应用")
+		return
+	}
+
+	if len(req.IDs) > 100 {
+		response.BadRequest(c, "单次最多更新100个应用")
+		return
+	}
+
+	result, err := service.NewApplicationService().BatchUpdateApplications(req.IDs, &service.BatchUpdateInput{
+		IsActive: req.IsActive,
+		Config:   req.Config,
+	})
+	if err != nil {
+		response.InternalServerError(c, "批量更新失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":     "批量更新完成",
+		"total":       len(req.IDs),
+		"updated":     result.Updated,
+		"not_found":   result.NotFound,
+		"failed_ids":  result.FailedIDs,
+	})
 }
