@@ -428,7 +428,7 @@ func TestMLRuleGenerator_CompareRules(t *testing.T) {
 }
 
 func TestMLRuleGenerator_CompareRules_EmptyRules(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	generator := NewMLRuleGenerator()
 
 	historicalData := generateTestHistoricalData(100)
@@ -709,7 +709,7 @@ func TestEnhancedRuleEngine_RunMLABTest(t *testing.T) {
 }
 
 func TestEnhancedRuleEngine_GetMLFeatureStatistics(t *testing.T) {
-	ctx := context.Background()
+	_ = context.Background()
 	engine := NewEnhancedRuleEngine()
 
 	stats := engine.GetMLFeatureStatistics()
