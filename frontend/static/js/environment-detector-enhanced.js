@@ -2149,6 +2149,936 @@ class EnvironmentDetectorEnhanced {
         return { detected: score > 10, score: Math.min(score, 100), detections };
     }
 
+    async detectSpeech() {
+        let score = 0;
+        const detections = [];
+        try {
+            if ('speechSynthesis' in window) {
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length === 0) {
+                    score += 15;
+                    detections.push('no_speech_voices');
+                }
+            } else {
+                score += 20;
+                detections.push('no_speech_api');
+            }
+        } catch (e) {
+            score += 15;
+            detections.push('speech_error');
+        }
+        return { detected: score > 10, score: Math.min(score, 100), detections };
+    }
+
+    async detectCanvasAdvanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 500;
+            canvas.height = 200;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return { detected: false, score: 0, detections: ['no_context'] };
+            }
+
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(10, 10, 100, 50);
+
+            const testStrings = [
+                'Cwm fjordbank glyphs vext quiz, 😀',
+                'The quick brown fox jumps over the lazy dog',
+                '0123456789 !@#$%^&*()',
+                '中文测试',
+                '日本語テスト'
+            ];
+
+            let yPos = 80;
+            for (const text of testStrings) {
+                ctx.fillStyle = '#069';
+                ctx.fillText(text, 10, yPos);
+                yPos += 25;
+            }
+
+            const gradients = [
+                ctx.createLinearGradient(10, 10, 200, 10),
+                ctx.createRadialGradient(300, 100, 10, 300, 100, 80)
+            ];
+            gradients[0].addColorStop(0, 'red');
+            gradients[0].addColorStop(0.5, 'green');
+            gradients[0].addColorStop(1, 'blue');
+            ctx.fillStyle = gradients[0];
+            ctx.fillRect(10, 180, 200, 15);
+
+            gradients[1].addColorStop(0, 'rgba(255,0,0,0.5)');
+            gradients[1].addColorStop(1, 'rgba(0,0,255,0.5)');
+            ctx.fillStyle = gradients[1];
+            ctx.beginPath();
+            ctx.arc(300, 100, 60, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                ctx.moveTo(10 + i * 50, 20);
+                ctx.lineTo(10 + i * 50, 50);
+            }
+            ctx.stroke();
+
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 5;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+            ctx.fillStyle = '#000';
+            ctx.fillText('Shadow Test', 250, 50);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            const histogram = new Array(256).fill(0);
+            for (let i = 0; i < data.length; i += 4) {
+                histogram[data[i]]++;
+                histogram[data[i + 1]]++;
+                histogram[data[i + 2]]++;
+            }
+
+            let nonZeroCount = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > 0 || data[i + 1] > 0 || data[i + 2] > 0) {
+                    nonZeroCount++;
+                }
+            }
+
+            const nonZeroRatio = nonZeroCount / (canvas.width * canvas.height);
+            detections.push('canvas_non_zero_ratio:' + nonZeroRatio.toFixed(4));
+            if (nonZeroRatio < 0.1) {
+                score += 30;
+                detections.push('low_canvas_activity');
+            }
+
+            let entropy = 0;
+            const totalPixels = data.length / 4;
+            for (let i = 0; i < 256; i++) {
+                if (histogram[i] > 0) {
+                    const p = histogram[i] / (totalPixels * 3);
+                    entropy -= p * Math.log2(p);
+                }
+            }
+            const maxEntropy = Math.log2(256);
+            const entropyRatio = entropy / maxEntropy;
+            detections.push('canvas_entropy:' + entropyRatio.toFixed(4));
+            if (entropyRatio < 0.2) {
+                score += 25;
+                detections.push('low_entropy');
+            }
+
+            const gradientChecks = [
+                { x: 50, y: 185, expected: 'gradient' },
+                { x: 300, y: 100, expected: 'radial' }
+            ];
+
+            for (const check of gradientChecks) {
+                const idx = (check.y * canvas.width + check.x) * 4;
+                if (data[idx] > 0 || data[idx + 1] > 0 || data[idx + 2] > 0) {
+                    detections.push('gradient_present:' + check.expected);
+                } else {
+                    score += 15;
+                    detections.push('gradient_missing:' + check.expected);
+                }
+            }
+
+            const dataURL = canvas.toDataURL();
+            const hash = this.hashString(dataURL);
+            this.fingerprintComponents.canvasAdvanced = hash;
+            detections.push('canvas_advanced_hash:' + hash.substring(0, 16));
+
+            this.fingerprintComponents.canvasRGBAHistogram = histogram;
+
+        } catch (e) {
+            score += 30;
+            detections.push('canvas_advanced_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebGLAdvanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) {
+                return { detected: false, score: 0, detections: ['no_webgl'] };
+            }
+
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            let vendor = '';
+            let renderer = '';
+            if (debugInfo) {
+                vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                this.fingerprintComponents.webglVendorAdvanced = vendor;
+                this.fingerprintComponents.webglRendererAdvanced = renderer;
+                detections.push('webgl_vendor:' + vendor.substring(0, 30));
+                detections.push('webgl_renderer:' + renderer.substring(0, 50));
+            }
+
+            const params = {
+                'MAX_TEXTURE_SIZE': gl.getParameter(gl.MAX_TEXTURE_SIZE),
+                'MAX_RENDERBUFFER_SIZE': gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+                'MAX_VERTEX_ATTRIBS': gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+                'MAX_VARYING_VECTORS': gl.getParameter(gl.MAX_VARYING_VECTORS),
+                'MAX_COMBINED_TEXTURE_IMAGE_UNITS': gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS),
+                'MAX_CUBE_MAP_TEXTURE_SIZE': gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE),
+                'MAX_3D_TEXTURE_SIZE': gl.getParameter(gl.MAX_3D_TEXTURE_SIZE),
+                'MAX_FRAMEBUFFER_WIDTH': gl.getParameter(gl.MAX_FRAMEBUFFER_WIDTH),
+                'MAX_FRAMEBUFFER_HEIGHT': gl.getParameter(gl.MAX_FRAMEBUFFER_HEIGHT),
+                'MAX_COLOR_ATTACHMENTS': gl.getParameter(gl.MAX_COLOR_ATTACHMENTS),
+                'MAX_SAMPLES': gl.getParameter(gl.MAX_SAMPLES),
+                'MAX_TEXTURE_MAX_ANISOTROPY_EXT': gl.getExtension('EXT_texture_filter_anisotropic') ?
+                    gl.getParameter(gl.getExtension('EXT_texture_filter_anisotropic').MAX_TEXTURE_MAX_ANISOTROPY_EXT) : 0
+            };
+
+            this.fingerprintComponents.webglParams = params;
+
+            for (const [name, value] of Object.entries(params)) {
+                if (value !== null && value !== undefined) {
+                    detections.push(name + ':' + value);
+                }
+            }
+
+            const supportedExtensions = gl.getSupportedExtensions() || [];
+            this.fingerprintComponents.webglExtensions = supportedExtensions;
+            detections.push('extension_count:' + supportedExtensions.length);
+
+            const criticalExtensions = [
+                'OES_texture_float', 'OES_texture_half_float',
+                'EXT_texture_filter_anisotropic', 'WEBGL_debug_renderer_info',
+                'WEBGL_compressed_texture_s3tc', 'WEBGL_depth_texture'
+            ];
+
+            let missingCritical = 0;
+            for (const ext of criticalExtensions) {
+                if (!supportedExtensions.includes(ext)) {
+                    missingCritical++;
+                    detections.push('missing_ext:' + ext);
+                }
+            }
+            if (missingCritical > 3) {
+                score += 30;
+                detections.push('many_missing_critical_extensions');
+            }
+
+            const shaderPrecisionFormats = [
+                { shader: gl.VERTEX_SHADER, type: gl.HIGH_FLOAT, name: 'vertex_high_float' },
+                { shader: gl.VERTEX_SHADER, type: gl.MEDIUM_FLOAT, name: 'vertex_medium_float' },
+                { shader: gl.VERTEX_SHADER, type: gl.LOW_FLOAT, name: 'vertex_low_float' },
+                { shader: gl.FRAGMENT_SHADER, type: gl.HIGH_FLOAT, name: 'fragment_high_float' },
+                { shader: gl.FRAGMENT_SHADER, type: gl.MEDIUM_FLOAT, name: 'fragment_medium_float' },
+                { shader: gl.FRAGMENT_SHADER, type: gl.LOW_FLOAT, name: 'fragment_low_float' }
+            ];
+
+            const precisionFormats = [];
+            for (const pf of shaderPrecisionFormats) {
+                const format = gl.getShaderPrecisionFormat(pf.shader, pf.type);
+                if (format) {
+                    precisionFormats.push({
+                        name: pf.name,
+                        precision: format.precision,
+                        rangeMin: format.rangeMin,
+                        rangeMax: format.rangeMax
+                    });
+                    detections.push(pf.name + '_precision:' + format.precision);
+                }
+            }
+            this.fingerprintComponents.webglPrecisionFormats = precisionFormats;
+
+            const softwarePatterns = [
+                /swiftshader/i, /llvmpipe/i, /mesa/i, /software/i,
+                /google\s*inc/i, /microsoft/i, /virtual/i
+            ];
+            for (const pattern of softwarePatterns) {
+                if (pattern.test(renderer)) {
+                    score += 35;
+                    detections.push('software_renderer:' + pattern.source);
+                    break;
+                }
+            }
+
+            const virtualPatterns = [
+                /vmware/i, /virtualbox/i, /parallels/i,
+                /qemu/i, /kvm/i, /hyper-v/i
+            ];
+            for (const pattern of virtualPatterns) {
+                if (pattern.test(renderer)) {
+                    score += 40;
+                    detections.push('virtual_gpu:' + pattern.source);
+                    break;
+                }
+            }
+
+            const rendererHash = this.hashString(renderer + vendor + JSON.stringify(params));
+            this.fingerprintComponents.webglAdvancedHash = rendererHash;
+            detections.push('webgl_advanced_hash:' + rendererHash.substring(0, 16));
+
+        } catch (e) {
+            score += 35;
+            detections.push('webgl_advanced_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectFontsAdvanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const testFonts = [
+                'Arial', 'Arial Black', 'Arial Narrow', 'Calibri', 'Cambria',
+                'Candara', 'Century Gothic', 'Comic Sans MS', 'Consolas', 'Constantia',
+                'Corbel', 'Courier', 'Courier New', 'Georgia', 'Impact',
+                'Lucida Console', 'Lucida Sans Unicode', 'Microsoft Sans Serif',
+                'Palatino Linotype', 'Segoe UI', 'Segoe UI Light', 'Segoe UI Semibold',
+                'Tahoma', 'Times', 'Times New Roman', 'Trebuchet MS', 'Verdana',
+                'Helvetica', 'Helvetica Neue', 'Geneva', 'Monaco', 'Monospace',
+                'SF Pro Display', 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+                'SimSun', 'SimHei', 'Microsoft JhengHei', 'STHeiti', 'Noto Sans CJK SC',
+                'Roboto', 'Roboto Condensed', 'Roboto Mono', 'Open Sans', 'Lato',
+                'Montserrat', 'Source Sans Pro', 'Raleway', 'Ubuntu', 'Fira Sans',
+                'Noto Sans', 'Droid Sans', 'Merriweather', 'Playfair Display', 'PT Sans',
+                'Nunito', 'Quicksand', 'Work Sans', 'Oswald', 'IBM Plex Sans',
+                'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Inconsolata'
+            ];
+
+            const testString = 'mmmmmmmmmmlli';
+            const testSize = '72px';
+
+            const el = document.createElement('div');
+            el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap';
+            document.body.appendChild(el);
+
+            const baseFonts = ['monospace', 'sans-serif', 'serif'];
+            const baseWidths = {};
+            for (const base of baseFonts) {
+                el.style.fontFamily = base;
+                el.style.fontSize = testSize;
+                el.textContent = testString;
+                baseWidths[base] = el.offsetWidth;
+            }
+
+            const detectedFonts = [];
+            const fontMetrics = [];
+            const fontFamilies = { monospace: [], serif: [], sansSerif: [], display: [], cjk: [] };
+
+            for (const font of testFonts) {
+                for (const base of baseFonts) {
+                    el.style.fontFamily = `"${font}", ${base}`;
+                    el.textContent = testString;
+                    const width = el.offsetWidth;
+                    if (width !== baseWidths[base]) {
+                        detectedFonts.push(font);
+
+                        el.style.fontSize = testSize;
+                        const metrics = ctx ? {} : null;
+                        if (typeof document !== 'undefined') {
+                            const canvas = document.createElement('canvas');
+                            const ctx2d = canvas.getContext('2d');
+                            if (ctx2d) {
+                                ctx2d.font = `${testSize} "${font}", ${base}`;
+                                const textMetrics = ctx2d.measureText(testString);
+                                fontMetrics.push({
+                                    font: font,
+                                    width: textMetrics.width,
+                                    actualBoundingBoxLeft: textMetrics.actualBoundingBoxLeft || 0,
+                                    actualBoundingBoxRight: textMetrics.actualBoundingBoxRight || 0,
+                                    actualBoundingBoxAscent: textMetrics.actualBoundingBoxAscent || 0,
+                                    actualBoundingBoxDescent: textMetrics.actualBoundingBoxDescent || 0,
+                                    fontBoundingBoxAscent: textMetrics.fontBoundingBoxAscent || 0,
+                                    fontBoundingBoxDescent: textMetrics.fontBoundingBoxDescent || 0
+                                });
+                            }
+                        }
+
+                        const cjkPattern = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/;
+                        if (cjkPattern.test(font)) {
+                            fontFamilies.cjk.push(font);
+                        } else if (/mono|courier|consola|code/i.test(font)) {
+                            fontFamilies.monospace.push(font);
+                        } else if (/serif|times|georgia|palatino|garamond/i.test(font)) {
+                            fontFamilies.serif.push(font);
+                        } else if (/sans|display|arial|helvetica|segoe|roboto/i.test(font)) {
+                            fontFamilies.sansSerif.push(font);
+                        } else {
+                            fontFamilies.display.push(font);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            document.body.removeChild(el);
+
+            detections.push('detected_font_count:' + detectedFonts.length);
+            this.fingerprintComponents.fontsAdvanced = detectedFonts;
+            this.fingerprintComponents.fontMetricsAdvanced = fontMetrics;
+            this.fingerprintComponents.fontFamiliesAdvanced = fontFamilies;
+
+            if (detectedFonts.length < 3) {
+                score += 40;
+                detections.push('very_few_fonts');
+            } else if (detectedFonts.length < 8) {
+                score += 25;
+                detections.push('few_fonts');
+            } else if (detectedFonts.length < 15) {
+                score += 15;
+                detections.push('limited_fonts');
+            }
+
+            for (const [category, fonts] of Object.entries(fontFamilies)) {
+                if (fonts.length > 0) {
+                    detections.push(category + '_fonts:' + fonts.length);
+                }
+            }
+
+            const fontHash = this.hashString(detectedFonts.sort().join(','));
+            this.fingerprintComponents.fontAdvancedHash = fontHash;
+            detections.push('font_advanced_hash:' + fontHash.substring(0, 16));
+
+            const commonMissing = [];
+            const commonFonts = ['Arial', 'Times New Roman', 'Courier New', 'Verdana', 'Helvetica'];
+            for (const cf of commonFonts) {
+                if (!detectedFonts.includes(cf)) {
+                    commonMissing.push(cf);
+                }
+            }
+            if (commonMissing.length > 3) {
+                score += 15;
+                detections.push('many_common_fonts_missing');
+            }
+
+            const suspiciousFonts = ['Keyboard', 'Fake Font', 'Font1', 'TestFont', 'Undefined'];
+            for (const sf of suspiciousFonts) {
+                if (detectedFonts.some(f => f.toLowerCase().includes(sf.toLowerCase()))) {
+                    score += 20;
+                    detections.push('suspicious_font_detected');
+                    break;
+                }
+            }
+
+        } catch (e) {
+            score += 35;
+            detections.push('fonts_advanced_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectAudioAdvanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            if (!AudioContext) {
+                return { detected: false, score: 0, detections: ['no_audio_context'] };
+            }
+
+            const sampleRate = 44100;
+            const duration = 5;
+            const numSamples = sampleRate * duration;
+
+            const ctx = new AudioContext(1, numSamples, sampleRate);
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            const compressor = ctx.createDynamicsCompressor();
+
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(10000, ctx.currentTime);
+            oscillator.frequency.linearRampToValueAtTime(5000, ctx.currentTime + duration);
+
+            gainNode.gain.setValueAtTime(0.8, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+
+            compressor.threshold.setValueAtTime(-50, ctx.currentTime);
+            compressor.knee.setValueAtTime(40, ctx.currentTime);
+            compressor.ratio.setValueAtTime(12, ctx.currentTime);
+            compressor.attack.setValueAtTime(0, ctx.currentTime);
+            compressor.release.setValueAtTime(0.25, ctx.currentTime);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(compressor);
+            compressor.connect(ctx.destination);
+            oscillator.start(0);
+            oscillator.stop(ctx.currentTime + duration);
+
+            const buffer = await ctx.startRendering();
+            const channelData = buffer.getChannelData(0);
+
+            const channelInfo = {
+                channel_index: 0,
+                sample_count: channelData.length,
+                min_value: Infinity,
+                max_value: -Infinity,
+                sum: 0,
+                sum_sq: 0
+            };
+
+            const histogram = new Array(256).fill(0);
+            for (let i = 0; i < channelData.length; i++) {
+                const val = channelData[i];
+                if (val < channelInfo.min_value) channelInfo.min_value = val;
+                if (val > channelInfo.max_value) channelInfo.max_value = val;
+                channelInfo.sum += val;
+                channelInfo.sum_sq += val * val;
+            }
+
+            channelInfo.mean_value = channelInfo.sum / channelData.length;
+            channelInfo.variance = (channelInfo.sum_sq / channelData.length) - (channelInfo.mean_value * channelInfo.mean_value);
+
+            const nonZeroCount = channelData.filter(v => Math.abs(v) > 0.001).length;
+            const nonZeroRatio = nonZeroCount / channelData.length;
+            detections.push('audio_non_zero_ratio:' + nonZeroRatio.toFixed(4));
+            if (nonZeroRatio < 0.3) {
+                score += 30;
+                detections.push('audio_mostly_silent');
+            }
+
+            let zeroCrossings = 0;
+            for (let i = 1; i < channelData.length; i++) {
+                if ((channelData[i - 1] >= 0 && channelData[i] < 0) ||
+                    (channelData[i - 1] < 0 && channelData[i] >= 0)) {
+                    zeroCrossings++;
+                }
+            }
+            const zeroCrossingRate = zeroCrossings / channelData.length;
+            detections.push('audio_zero_crossing_rate:' + zeroCrossingRate.toFixed(6));
+
+            let peakAmplitude = 0;
+            for (let i = 0; i < channelData.length; i++) {
+                const absVal = Math.abs(channelData[i]);
+                if (absVal > peakAmplitude) peakAmplitude = absVal;
+            }
+            detections.push('audio_peak_amplitude:' + peakAmplitude.toFixed(6));
+
+            const rms = Math.sqrt(channelInfo.sum_sq / channelData.length);
+            detections.push('audio_rms:' + rms.toFixed(6));
+
+            const dynamicRange = 20 * Math.log10(channelInfo.max_value / Math.max(channelInfo.min_value, -channelInfo.max_value) + 0.0001);
+            detections.push('audio_dynamic_range:' + dynamicRange.toFixed(2));
+
+            let spectralSum = 0;
+            let spectralCount = 0;
+            for (let i = 0; i < Math.min(1000, channelData.length); i++) {
+                spectralSum += Math.abs(channelData[i]);
+                spectralCount++;
+            }
+            const spectralCentroid = spectralSum / spectralCount;
+            detections.push('audio_spectral_centroid:' + spectralCentroid.toFixed(6));
+
+            const multipleBuffers = [];
+            for (let i = 0; i < 3; i++) {
+                const tempCtx = new AudioContext(1, 4410, 44100);
+                const tempOsc = tempCtx.createOscillator();
+                tempOsc.frequency.setValueAtTime(1000, tempCtx.currentTime);
+                tempOsc.connect(tempCtx.destination);
+                tempOsc.start(0);
+                const tempBuffer = await tempCtx.startRendering();
+                multipleBuffers.push(tempBuffer.getChannelData(0).slice(4500, 4550).join(','));
+            }
+
+            let isIdentical = true;
+            for (let i = 1; i < multipleBuffers.length; i++) {
+                if (multipleBuffers[i] !== multipleBuffers[0]) {
+                    isIdentical = false;
+                    break;
+                }
+            }
+
+            if (isIdentical) {
+                score += 35;
+                detections.push('audio_identical_across_renders');
+            }
+
+            this.fingerprintComponents.audioAdvanced = {
+                hash: this.hashString(multipleBuffers[0]),
+                variance: channelInfo.variance,
+                non_zero_ratio: nonZeroRatio,
+                peak_amplitude: peakAmplitude,
+                rms_level: rms,
+                dynamic_range: dynamicRange,
+                zero_crossing_rate: zeroCrossingRate,
+                spectral_centroid: spectralCentroid,
+                is_identical_across_renders: isIdentical,
+                channel_data: [channelInfo]
+            };
+
+            detections.push('audio_advanced_hash:' + this.fingerprintComponents.audioAdvanced.hash.substring(0, 16));
+
+        } catch (e) {
+            score += 40;
+            detections.push('audio_advanced_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectMediaAdvanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const mediaInfo = {
+                video_codecs: [],
+                audio_codecs: [],
+                media_devices: [],
+                supported_formats: [],
+                media_source_support: {},
+                video_capabilities: {},
+                audio_capabilities: {}
+            };
+
+            const videoCodecs = [
+                'video/webm;codecs=vp8', 'video/webm;codecs=vp9',
+                'video/webm;codecs=h264', 'video/webm;codecs=av1',
+                'video/mp4;codecs=avc1', 'video/mp4;codecs=hev1',
+                'video/mp4;codecs=hvc1'
+            ];
+
+            for (const codec of videoCodecs) {
+                const supported = MediaSourceRecorder ? false : (document.createElement('video').canPlayType ? document.createElement('video').canPlayType(codec) !== '' : false);
+                mediaInfo.video_codecs.push(codec.split(';')[0]);
+                if (supported) {
+                    detections.push('video_codec_supported:' + codec);
+                }
+            }
+
+            const audioCodecs = [
+                'audio/webm;codecs=opus', 'audio/webm;codecs=vorbis',
+                'audio/mp4;codecs=mp4a', 'audio/mp4;codecs=ec-3',
+                'audio/ogg;codecs=opus', 'audio/ogg;codecs=vorbis'
+            ];
+
+            for (const codec of audioCodecs) {
+                const supported = document.createElement('audio').canPlayType ? document.createElement('audio').canPlayType(codec) !== '' : false;
+                mediaInfo.audio_codecs.push(codec.split(';')[0]);
+                if (supported) {
+                    detections.push('audio_codec_supported:' + codec);
+                }
+            }
+
+            if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    for (const device of devices) {
+                        mediaInfo.media_devices.push({
+                            device_id: device.deviceId,
+                            label: device.label || '',
+                            kind: device.kind,
+                            group_id: device.groupId
+                        });
+                    }
+                    detections.push('media_device_count:' + devices.length);
+                } catch (e) {
+                    detections.push('media_devices_access_denied');
+                    score += 15;
+                }
+            } else {
+                score += 20;
+                detections.push('no_media_devices_api');
+            }
+
+            mediaInfo.media_source_support = {
+                media_source: typeof MediaSource !== 'undefined',
+                source_buffer: typeof SourceBuffer !== 'undefined',
+                webrtc: !!(window.RTCPeerConnection || window.webkitRTCPeerConnection),
+                media_stream: !!(window.MediaStream || window.webkitMediaStream),
+                media_recorder: !!(window.MediaRecorder || window.webkitMediaRecorder)
+            };
+
+            for (const [feature, supported] of Object.entries(mediaInfo.media_source_support)) {
+                if (supported) {
+                    detections.push('media_feature:' + feature);
+                }
+            }
+
+            if (navigator.mediaCapabilities) {
+                try {
+                    const capabilities = await navigator.mediaCapabilities.decodingInfo({
+                        type: 'file',
+                        video: { contentType: 'video/webm;codecs=vp8', width: 1920, height: 1080, bitrate: 5000000, framerate: 30 }
+                    });
+                    mediaInfo.video_capabilities = {
+                        supported: capabilities.supported,
+                        power_efficient: capabilities.powerEfficient,
+                        smooth: capabilities.smooth
+                    };
+                    detections.push('video_capabilities_supported');
+                } catch (e) {
+                    detections.push('video_capabilities_error');
+                }
+            }
+
+            const commonFormats = [
+                { mime: 'video/mp4', hasVideo: true, hasAudio: false },
+                { mime: 'video/webm', hasVideo: true, hasAudio: true },
+                { mime: 'audio/mpeg', hasVideo: false, hasAudio: true },
+                { mime: 'audio/ogg', hasVideo: false, hasAudio: true },
+                { mime: 'application/pdf', hasVideo: false, hasAudio: false }
+            ];
+
+            for (const format of commonFormats) {
+                const video = document.createElement('video');
+                const audio = document.createElement('audio');
+                const canPlay = format.hasVideo ?
+                    video.canPlayType && video.canPlayType(format.mime) !== '' :
+                    audio.canPlayType && audio.canPlayType(format.mime) !== '';
+
+                mediaInfo.supported_formats.push({
+                    mime_type: format.mime,
+                    has_video: format.hasVideo,
+                    has_audio: format.hasAudio,
+                    is_supported: canPlay
+                });
+
+                if (canPlay) {
+                    detections.push('format_supported:' + format.mime);
+                }
+            }
+
+            const videoInputCount = mediaInfo.media_devices.filter(d => d.kind === 'videoinput').length;
+            const audioInputCount = mediaInfo.media_devices.filter(d => d.kind === 'audioinput').length;
+            const audioOutputCount = mediaInfo.media_devices.filter(d => d.kind === 'audiooutput').length;
+
+            detections.push('video_inputs:' + videoInputCount);
+            detections.push('audio_inputs:' + audioInputCount);
+            detections.push('audio_outputs:' + audioOutputCount);
+
+            if (videoInputCount === 0 && audioInputCount === 0) {
+                score += 25;
+                detections.push('no_media_inputs');
+            }
+
+            this.fingerprintComponents.mediaAdvanced = mediaInfo;
+
+            const mediaHash = this.hashString(
+                videoInputCount + '|' + audioInputCount + '|' + audioOutputCount +
+                '|' + mediaInfo.video_codecs.length + '|' + mediaInfo.audio_codecs.length
+            );
+            this.fingerprintComponents.mediaAdvancedHash = mediaHash;
+            detections.push('media_advanced_hash:' + mediaHash.substring(0, 16));
+
+        } catch (e) {
+            score += 25;
+            detections.push('media_advanced_error: ' + e.message);
+        }
+        return { detected: score > 20, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebGL2Advanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            const gl2 = canvas.getContext('webgl2');
+            if (!gl2) {
+                return { detected: false, score: 0, detections: ['no_webgl2'] };
+            }
+
+            const debugInfo = gl2.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                const renderer = gl2.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                const vendor = gl2.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                detections.push('webgl2_renderer:' + renderer.substring(0, 50));
+                detections.push('webgl2_vendor:' + vendor.substring(0, 30));
+            }
+
+            const params2 = {
+                'MAX_TEXTURE_SIZE': gl2.getParameter(gl2.MAX_TEXTURE_SIZE),
+                'MAX_3D_TEXTURE_SIZE': gl2.getParameter(gl2.MAX_3D_TEXTURE_SIZE),
+                'MAX_CUBE_MAP_TEXTURE_SIZE': gl2.getParameter(gl2.MAX_CUBE_MAP_TEXTURE_SIZE),
+                'MAX_TEXTURE_MAX_ANISOTROPY': gl2.getExtension('EXT_texture_filter_anisotropic') ?
+                    gl2.getParameter(gl2.getExtension('EXT_texture_filter_anisotropic').MAX_TEXTURE_MAX_ANISOTROPY_EXT) : 0,
+                'MAX_VERTEX_OUTPUT_COMPONENTS': gl2.getParameter(gl2.MAX_VERTEX_OUTPUT_COMPONENTS),
+                'MAX_FRAGMENT_INPUT_COMPONENTS': gl2.getParameter(gl2.MAX_FRAGMENT_INPUT_COMPONENTS),
+                'MAX_UNIFORM_BUFFER_BINDINGS': gl2.getParameter(gl2.MAX_UNIFORM_BUFFER_BINDINGS),
+                'MAX_STORAGE_BLOCK_BINDINGS': gl2.getParameter(gl2.MAX_STORAGE_BUFFER_BINDINGS)
+            };
+
+            for (const [name, value] of Object.entries(params2)) {
+                detections.push('webgl2_' + name + ':' + value);
+            }
+
+            const supportedExts2 = gl2.getSupportedExtensions() || [];
+            detections.push('webgl2_extension_count:' + supportedExts2.length);
+
+            const softwarePatterns = [/swiftshader/i, /llvmpipe/i, /mesa/i, /software/i];
+            const renderer = gl2.getParameter(debugInfo?.UNMASKED_RENDERER_WEBGL || 0) || '';
+            for (const pattern of softwarePatterns) {
+                if (pattern.test(renderer)) {
+                    score += 30;
+                    detections.push('webgl2_software_renderer');
+                    break;
+                }
+            }
+
+            const shaderPrecisionFormats2 = [
+                { shader: gl2.VERTEX_SHADER, type: gl2.HIGH_FLOAT, name: 'vertex_high_float' },
+                { shader: gl2.VERTEX_SHADER, type: gl2.MEDIUM_FLOAT, name: 'vertex_medium_float' },
+                { shader: gl2.FRAGMENT_SHADER, type: gl2.HIGH_FLOAT, name: 'fragment_high_float' },
+                { shader: gl2.FRAGMENT_SHADER, type: gl2.MEDIUM_FLOAT, name: 'fragment_medium_float' }
+            ];
+
+            for (const pf of shaderPrecisionFormats2) {
+                const format = gl2.getShaderPrecisionFormat(pf.shader, pf.type);
+                if (format) {
+                    detections.push('webgl2_' + pf.name + '_precision:' + format.precision);
+                }
+            }
+
+            this.fingerprintComponents.webgl2Advanced = params2;
+            const webgl2Hash = this.hashString(JSON.stringify(params2) + renderer);
+            this.fingerprintComponents.webgl2AdvancedHash = webgl2Hash;
+            detections.push('webgl2_advanced_hash:' + webgl2Hash.substring(0, 16));
+
+        } catch (e) {
+            score += 25;
+            detections.push('webgl2_advanced_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectClientRects() {
+        let score = 0;
+        const detections = [];
+        try {
+            const div = document.createElement('div');
+            div.innerHTML = 'Test Content';
+            div.style.cssText = 'position:absolute;left:-9999px;top:-9999px;font-size:14px;font-family:Arial;';
+            document.body.appendChild(div);
+
+            const rects = div.getBoundingClientRect();
+            const clientRects = div.getClientRects();
+
+            const clientRectsData = {
+                bounding: {
+                    top: rects.top,
+                    left: rects.left,
+                    width: rects.width,
+                    height: rects.height,
+                    bottom: rects.bottom,
+                    right: rects.right
+                },
+                count: clientRects.length
+            };
+
+            this.fingerprintComponents.clientRects = clientRectsData;
+            detections.push('client_rects_count:' + clientRects.length);
+            detections.push('bounding_rect:' + Math.round(rects.width) + 'x' + Math.round(rects.height));
+
+            if (clientRects.length === 0) {
+                score += 20;
+                detections.push('no_client_rects');
+            }
+
+            if (rects.width === 0 || rects.height === 0) {
+                score += 25;
+                detections.push('zero_dimensions');
+            }
+
+            document.body.removeChild(div);
+
+        } catch (e) {
+            score += 20;
+            detections.push('client_rects_error: ' + e.message);
+        }
+        return { detected: score > 20, score: Math.min(score, 100), detections };
+    }
+
+    async detectAutomationAdvanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const automationMarkers = {
+                'window.navigator.webdriver': typeof navigator.webdriver !== 'undefined' && navigator.webdriver === true,
+                'window.document.$cdc_asdjflasutopfhvcZLmcfl_': typeof document.$cdc_asdjflasutopfhvcZLmcfl_ !== 'undefined',
+                'window.document.$chrome_asyncScriptInfo': typeof document.$chrome_asyncScriptInfo !== 'undefined',
+                'window.__playwright__': typeof window.__playwright__ !== 'undefined',
+                'window.__pw_tags': typeof window.__pw_tags !== 'undefined',
+                'window.__pw_resume__': typeof window.__pw_resume__ !== 'undefined',
+                'window._selenium': typeof window._selenium !== 'undefined',
+                'window.callSelenium': typeof window.callSelenium !== 'undefined'
+            };
+
+            for (const [marker, detected] of Object.entries(automationMarkers)) {
+                if (detected) {
+                    score += 40;
+                    detections.push('automation_marker:' + marker);
+                }
+            }
+
+            if (window.navigator.languages && window.navigator.languages.length === 0) {
+                score += 15;
+                detections.push('empty_languages');
+            }
+
+            if (window.navigator.plugins && window.navigator.plugins.length === 0) {
+                score += 20;
+                detections.push('no_plugins');
+            }
+
+            if (window.outerWidth === 0 || window.outerHeight === 0) {
+                score += 30;
+                detections.push('zero_outer_dimensions');
+            }
+
+            const testElement = document.createElement('div');
+            testElement.setAttribute('onfocus', 'return 1');
+            if (testElement.onfocus !== null) {
+                score += 25;
+                detections.push('automation_onfocus_handler');
+            }
+
+            const ua = navigator.userAgent || '';
+            const automationPatterns = [
+                /headless/i, /phantom/i, /puppeteer/i, /playwright/i,
+                /selenium/i, /webdriver/i, /automation/i
+            ];
+            for (const pattern of automationPatterns) {
+                if (pattern.test(ua)) {
+                    score += 35;
+                    detections.push('automation_ua_pattern:' + pattern.source);
+                    break;
+                }
+            }
+
+            if (typeof SharedArrayBuffer === 'undefined') {
+                score += 10;
+                detections.push('shared_array_buffer_unavailable');
+            }
+
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = 'rgba(255,0,0,0.5)';
+                    ctx.fillRect(0, 0, 10, 10);
+                    const imageData = ctx.getImageData(0, 0, 10, 10);
+                    const allZero = Array.from(imageData.data).every(v => v === 0);
+                    if (allZero) {
+                        score += 30;
+                        detections.push('canvas_reads_zero');
+                    }
+                }
+            } catch (e) {
+                score += 25;
+                detections.push('canvas_read_failed');
+            }
+
+        } catch (e) {
+            score += 20;
+            detections.push('automation_advanced_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
     getHeader(name) {
         return null;
     }
