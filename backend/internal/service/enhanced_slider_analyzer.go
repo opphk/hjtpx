@@ -5,8 +5,6 @@ import (
 	"math"
 )
 
-type BotDetectionResult = EnhancedBotDetectionResult
-
 type EnhancedSliderAnalyzer struct {
 	optimizer      *TrajectoryOptimizer
 	dtwOptimizer   *OptimizedDTW

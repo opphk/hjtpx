@@ -113,8 +113,8 @@ func TestIntegration_ComprehensiveAccuracy(t *testing.T) {
 		botScores = append(botScores, result.BotScore)
 	}
 
-	humanAvg := average(humanScores)
-	botAvg := average(botScores)
+	humanAvg := calculateAverage(humanScores)
+	botAvg := calculateAverage(botScores)
 
 	humanCorrect := 0
 	for _, score := range humanScores {
@@ -336,7 +336,7 @@ func TestIntegration_ReportGeneration(t *testing.T) {
 	}
 
 	t.Log("\nHuman report preview:")
-	fmt.Println(humanReport[:minInt(500, len(humanReport))])
+	fmt.Println(humanReport[:calculateMinInt(500, len(humanReport))])
 }
 
 func TestIntegration_ValidateTrajectories(t *testing.T) {
@@ -365,7 +365,7 @@ func TestIntegration_ValidateTrajectories(t *testing.T) {
 	}
 }
 
-func average(values []float64) float64 {
+func calculateAverage(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -376,7 +376,7 @@ func average(values []float64) float64 {
 	return sum / float64(len(values))
 }
 
-func minInt(a, b int) int {
+func calculateMinInt(a, b int) int {
 	if a < b {
 		return a
 	}
