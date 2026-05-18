@@ -30,14 +30,14 @@ type User struct {
 
 type Admin struct {
 	gorm.Model
-	Username     string `gorm:"size:100;uniqueIndex:idx_admins_username;not null" json:"username"`
-	PasswordHash string `gorm:"size:255;not null" json:"-"`
-	Email        string `gorm:"size:255;uniqueIndex:idx_admins_email" json:"email"`
-	Status       string `gorm:"size:20;default:active;index:idx_admins_status" json:"status"`
+	Username     string     `gorm:"size:100;uniqueIndex:idx_admins_username;not null" json:"username"`
+	PasswordHash string     `gorm:"size:255;not null" json:"-"`
+	Email        string     `gorm:"size:255;uniqueIndex:idx_admins_email" json:"email"`
+	Status       string     `gorm:"size:20;default:active;index:idx_admins_status" json:"status"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
-	LastLoginIP  string `gorm:"size:50" json:"last_login_ip"`
-	LoginCount   int `gorm:"default:0" json:"login_count"`
-	IsSuperAdmin bool `gorm:"default:false" json:"is_super_admin"`
+	LastLoginIP  string     `gorm:"size:50" json:"last_login_ip"`
+	LoginCount   int        `gorm:"default:0" json:"login_count"`
+	IsSuperAdmin bool       `gorm:"default:false" json:"is_super_admin"`
 }
 
 type AdminLoginLog struct {
@@ -157,16 +157,16 @@ type DeviceFingerprint struct {
 
 type ABTest struct {
 	gorm.Model
-	Name          string     `gorm:"size:255;not null;index:idx_abtest_name" json:"name"`
-	Description   string     `gorm:"type:text" json:"description"`
-	ApplicationID uint       `gorm:"not null;index:idx_abtest_app" json:"application_id"`
-	Status        string     `gorm:"size:50;default:draft;index:idx_abtest_status" json:"status"`
-	StartDate     *time.Time `json:"start_date"`
-	EndDate       *time.Time `json:"end_date"`
-	TrafficSplit  string     `gorm:"type:text" json:"traffic_split"`
-	Config        string     `gorm:"type:text" json:"config"`
-	CreatedBy     uint       `json:"created_by"`
-	Application   Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+	Name          string          `gorm:"size:255;not null;index:idx_abtest_name" json:"name"`
+	Description   string          `gorm:"type:text" json:"description"`
+	ApplicationID uint            `gorm:"not null;index:idx_abtest_app" json:"application_id"`
+	Status        string          `gorm:"size:50;default:draft;index:idx_abtest_status" json:"status"`
+	StartDate     *time.Time      `json:"start_date"`
+	EndDate       *time.Time      `json:"end_date"`
+	TrafficSplit  string          `gorm:"type:text" json:"traffic_split"`
+	Config        string          `gorm:"type:text" json:"config"`
+	CreatedBy     uint            `json:"created_by"`
+	Application   Application     `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
 	Variants      []ABTestVariant `gorm:"foreignKey:ABTestID" json:"variants,omitempty"`
 }
 
@@ -183,30 +183,30 @@ type ABTestVariant struct {
 
 type ABTestEvent struct {
 	gorm.Model
-	ABTestID       uint      `gorm:"not null;index:idx_event_abtest" json:"ab_test_id"`
-	VariantID      uint      `gorm:"not null;index:idx_event_variant" json:"variant_id"`
-	SessionID      string    `gorm:"size:100;index:idx_event_session" json:"session_id"`
-	EventName      string    `gorm:"size:100;index:idx_event_name" json:"event_name"`
-	EventType      string    `gorm:"size:50;index:idx_event_type" json:"event_type"`
-	IsConversion   bool      `gorm:"default:false;index:idx_event_conversion" json:"is_conversion"`
-	Value          float64   `json:"value"`
-	Metadata       string    `gorm:"type:text" json:"metadata"`
-	Timestamp      time.Time `gorm:"index:idx_event_timestamp" json:"timestamp"`
-	ABTest         ABTest    `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
-	Variant        ABTestVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
+	ABTestID     uint          `gorm:"not null;index:idx_event_abtest" json:"ab_test_id"`
+	VariantID    uint          `gorm:"not null;index:idx_event_variant" json:"variant_id"`
+	SessionID    string        `gorm:"size:100;index:idx_event_session" json:"session_id"`
+	EventName    string        `gorm:"size:100;index:idx_event_name" json:"event_name"`
+	EventType    string        `gorm:"size:50;index:idx_event_type" json:"event_type"`
+	IsConversion bool          `gorm:"default:false;index:idx_event_conversion" json:"is_conversion"`
+	Value        float64       `json:"value"`
+	Metadata     string        `gorm:"type:text" json:"metadata"`
+	Timestamp    time.Time     `gorm:"index:idx_event_timestamp" json:"timestamp"`
+	ABTest       ABTest        `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
+	Variant      ABTestVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
 }
 
 type ABTestAssignment struct {
 	gorm.Model
-	ABTestID       uint      `gorm:"not null;index:idx_assign_abtest" json:"ab_test_id"`
-	VariantID      uint      `gorm:"not null;index:idx_assign_variant" json:"variant_id"`
-	SessionID      string    `gorm:"size:100;index:idx_assign_session;uniqueIndex:idx_assign_abtest_session" json:"session_id"`
-	UserID         *uint     `gorm:"index:idx_assign_user" json:"user_id"`
-	DeviceID       string    `gorm:"size:64;index:idx_assign_device" json:"device_id"`
-	IPAddress      string    `gorm:"size:45" json:"ip_address"`
-	AssignedAt     time.Time `gorm:"index:idx_assign_time" json:"assigned_at"`
-	ABTest         ABTest    `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
-	Variant        ABTestVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
+	ABTestID   uint          `gorm:"not null;index:idx_assign_abtest" json:"ab_test_id"`
+	VariantID  uint          `gorm:"not null;index:idx_assign_variant" json:"variant_id"`
+	SessionID  string        `gorm:"size:100;index:idx_assign_session;uniqueIndex:idx_assign_abtest_session" json:"session_id"`
+	UserID     *uint         `gorm:"index:idx_assign_user" json:"user_id"`
+	DeviceID   string        `gorm:"size:64;index:idx_assign_device" json:"device_id"`
+	IPAddress  string        `gorm:"size:45" json:"ip_address"`
+	AssignedAt time.Time     `gorm:"index:idx_assign_time" json:"assigned_at"`
+	ABTest     ABTest        `gorm:"foreignKey:ABTestID" json:"ab_test,omitempty"`
+	Variant    ABTestVariant `gorm:"foreignKey:VariantID" json:"variant,omitempty"`
 }
 
 type AlertChannel struct {
@@ -220,153 +220,153 @@ type AlertChannel struct {
 
 type AlertRule struct {
 	gorm.Model
-	Name            string `gorm:"size:255;not null;index:idx_alert_rule_name" json:"name"`
-	EventType       string `gorm:"size:100;not null;index:idx_alert_rule_event" json:"event_type"`
-	Condition       string `gorm:"type:text" json:"condition"`
-	Severity        string `gorm:"size:20;not null;index:idx_alert_rule_severity" json:"severity"`
-	ChannelIDs      string `gorm:"type:text" json:"channel_ids"`
-	IsEnabled       bool   `gorm:"default:true;index:idx_alert_rule_enabled" json:"is_enabled"`
-	AggregationWindow int `gorm:"default:300" json:"aggregation_window"`
-	Threshold       int    `gorm:"default:1" json:"threshold"`
-	Description     string `gorm:"type:text" json:"description,omitempty"`
+	Name              string `gorm:"size:255;not null;index:idx_alert_rule_name" json:"name"`
+	EventType         string `gorm:"size:100;not null;index:idx_alert_rule_event" json:"event_type"`
+	Condition         string `gorm:"type:text" json:"condition"`
+	Severity          string `gorm:"size:20;not null;index:idx_alert_rule_severity" json:"severity"`
+	ChannelIDs        string `gorm:"type:text" json:"channel_ids"`
+	IsEnabled         bool   `gorm:"default:true;index:idx_alert_rule_enabled" json:"is_enabled"`
+	AggregationWindow int    `gorm:"default:300" json:"aggregation_window"`
+	Threshold         int    `gorm:"default:1" json:"threshold"`
+	Description       string `gorm:"type:text" json:"description,omitempty"`
 }
 
 type AlertRecord struct {
 	gorm.Model
-	RuleID        uint       `gorm:"not null;index:idx_alert_record_rule;index:idx_alert_record_rule_time" json:"rule_id"`
-	RuleName      string     `gorm:"size:255" json:"rule_name"`
-	EventType     string     `gorm:"size:100;index:idx_alert_record_event;index:idx_alert_record_event_time" json:"event_type"`
-	Severity      string     `gorm:"size:20;index:idx_alert_record_severity" json:"severity"`
-	Message       string     `gorm:"type:text" json:"message"`
-	Context       string     `gorm:"type:text" json:"context"`
-	Status        string     `gorm:"size:50;default:triggered;index:idx_alert_record_status" json:"status"`
-	AggregationKey string    `gorm:"size:255;index:idx_alert_record_agg_key" json:"aggregation_key"`
-	Count         int        `gorm:"default:1" json:"count"`
+	RuleID           uint       `gorm:"not null;index:idx_alert_record_rule;index:idx_alert_record_rule_time" json:"rule_id"`
+	RuleName         string     `gorm:"size:255" json:"rule_name"`
+	EventType        string     `gorm:"size:100;index:idx_alert_record_event;index:idx_alert_record_event_time" json:"event_type"`
+	Severity         string     `gorm:"size:20;index:idx_alert_record_severity" json:"severity"`
+	Message          string     `gorm:"type:text" json:"message"`
+	Context          string     `gorm:"type:text" json:"context"`
+	Status           string     `gorm:"size:50;default:triggered;index:idx_alert_record_status" json:"status"`
+	AggregationKey   string     `gorm:"size:255;index:idx_alert_record_agg_key" json:"aggregation_key"`
+	Count            int        `gorm:"default:1" json:"count"`
 	FirstTriggeredAt *time.Time `gorm:"index:idx_alert_record_first_triggered" json:"first_triggered_at"`
-	LastTriggeredAt *time.Time `gorm:"index:idx_alert_record_last_triggered" json:"last_triggered_at"`
-	ResolvedAt    *time.Time `json:"resolved_at,omitempty"`
-	Rule          *AlertRule `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+	LastTriggeredAt  *time.Time `gorm:"index:idx_alert_record_last_triggered" json:"last_triggered_at"`
+	ResolvedAt       *time.Time `json:"resolved_at,omitempty"`
+	Rule             *AlertRule `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
 }
 
 type AlertHistory struct {
 	gorm.Model
-	AlertID     uint       `gorm:"not null;index:idx_alert_history_alert" json:"alert_id"`
-	Action      string     `gorm:"size:50;not null" json:"action"`
-	OldStatus   string     `gorm:"size:50" json:"old_status"`
-	NewStatus   string     `gorm:"size:50" json:"new_status"`
-	Note        string     `gorm:"type:text" json:"note"`
-	PerformedBy uint       `json:"performed_by"`
+	AlertID     uint         `gorm:"not null;index:idx_alert_history_alert" json:"alert_id"`
+	Action      string       `gorm:"size:50;not null" json:"action"`
+	OldStatus   string       `gorm:"size:50" json:"old_status"`
+	NewStatus   string       `gorm:"size:50" json:"new_status"`
+	Note        string       `gorm:"type:text" json:"note"`
+	PerformedBy uint         `json:"performed_by"`
 	Alert       *AlertRecord `gorm:"foreignKey:AlertID" json:"alert,omitempty"`
 }
 
 // ScheduledExport 定时导出任务模型
 type ScheduledExport struct {
 	gorm.Model
-	Name             string    `gorm:"size:255;not null;index:idx_scheduled_name" json:"name"`
-	Description      string    `gorm:"type:text" json:"description,omitempty"`
-	CronExpression   string    `gorm:"size:100;not null" json:"cron_expression"`
-	ExportFormat     string    `gorm:"size:20;default:xlsx" json:"export_format"`
-	ExportType       string    `gorm:"size:50;default:logs" json:"export_type"`
-	Filters          string    `gorm:"type:text" json:"filters,omitempty"` // JSON格式的过滤条件
-	EmailRecipients  string    `gorm:"type:text" json:"email_recipients,omitempty"` // 收件人，逗号分隔
-	IsEnabled        bool      `gorm:"default:true;index:idx_scheduled_enabled" json:"is_enabled"`
+	Name             string     `gorm:"size:255;not null;index:idx_scheduled_name" json:"name"`
+	Description      string     `gorm:"type:text" json:"description,omitempty"`
+	CronExpression   string     `gorm:"size:100;not null" json:"cron_expression"`
+	ExportFormat     string     `gorm:"size:20;default:xlsx" json:"export_format"`
+	ExportType       string     `gorm:"size:50;default:logs" json:"export_type"`
+	Filters          string     `gorm:"type:text" json:"filters,omitempty"`          // JSON格式的过滤条件
+	EmailRecipients  string     `gorm:"type:text" json:"email_recipients,omitempty"` // 收件人，逗号分隔
+	IsEnabled        bool       `gorm:"default:true;index:idx_scheduled_enabled" json:"is_enabled"`
 	LastRunAt        *time.Time `json:"last_run_at,omitempty"`
 	NextRunAt        *time.Time `json:"next_run_at,omitempty"`
-	LastStatus       string    `gorm:"size:20;default:pending" json:"last_status"`
-	LastErrorMessage string    `gorm:"type:text" json:"last_error_message,omitempty"`
-	CreatedBy        uint      `json:"created_by"`
+	LastStatus       string     `gorm:"size:20;default:pending" json:"last_status"`
+	LastErrorMessage string     `gorm:"type:text" json:"last_error_message,omitempty"`
+	CreatedBy        uint       `json:"created_by"`
 }
 
 // ExportHistory 导出历史记录模型
 type ExportHistory struct {
 	gorm.Model
-	ScheduledExportID *uint           `gorm:"index:idx_export_history_scheduled" json:"scheduled_export_id,omitempty"`
-	Name              string          `gorm:"size:255" json:"name"`
-	ExportType        string          `gorm:"size:50" json:"export_type"`
-	ExportFormat      string          `gorm:"size:20" json:"export_format"`
-	FileSize          int64           `json:"file_size"`
-	RecordCount       int             `json:"record_count"`
-	FilePath          string          `gorm:"size:500" json:"file_path"`
-	Status            string          `gorm:"size:20;default:completed" json:"status"`
-	ErrorMessage      string          `gorm:"type:text" json:"error_message,omitempty"`
-	TriggeredBy       string          `gorm:"size:100" json:"triggered_by"`
+	ScheduledExportID *uint            `gorm:"index:idx_export_history_scheduled" json:"scheduled_export_id,omitempty"`
+	Name              string           `gorm:"size:255" json:"name"`
+	ExportType        string           `gorm:"size:50" json:"export_type"`
+	ExportFormat      string           `gorm:"size:20" json:"export_format"`
+	FileSize          int64            `json:"file_size"`
+	RecordCount       int              `json:"record_count"`
+	FilePath          string           `gorm:"size:500" json:"file_path"`
+	Status            string           `gorm:"size:20;default:completed" json:"status"`
+	ErrorMessage      string           `gorm:"type:text" json:"error_message,omitempty"`
+	TriggeredBy       string           `gorm:"size:100" json:"triggered_by"`
 	ScheduledExport   *ScheduledExport `gorm:"foreignKey:ScheduledExportID" json:"scheduled_export,omitempty"`
 }
 
 // ReportTemplate 报表模板模型
 type ReportTemplate struct {
 	gorm.Model
-	Name             string    `gorm:"size:255;not null;index:idx_template_name" json:"name"`
-	Description      string    `gorm:"type:text" json:"description,omitempty"`
-	ReportType       string    `gorm:"size:50;not null" json:"report_type"`
-	Layout           string    `gorm:"type:text" json:"layout,omitempty"` // 布局配置JSON
-	Columns          string    `gorm:"type:text" json:"columns,omitempty"` // 列配置JSON
-	Filters          string    `gorm:"type:text" json:"filters,omitempty"` // 默认过滤条件JSON
-	Styles           string    `gorm:"type:text" json:"styles,omitempty"` // 样式配置JSON
-	IsPublic         bool      `gorm:"default:false" json:"is_public"`
-	CreatedBy        uint      `json:"created_by"`
+	Name        string `gorm:"size:255;not null;index:idx_template_name" json:"name"`
+	Description string `gorm:"type:text" json:"description,omitempty"`
+	ReportType  string `gorm:"size:50;not null" json:"report_type"`
+	Layout      string `gorm:"type:text" json:"layout,omitempty"`  // 布局配置JSON
+	Columns     string `gorm:"type:text" json:"columns,omitempty"` // 列配置JSON
+	Filters     string `gorm:"type:text" json:"filters,omitempty"` // 默认过滤条件JSON
+	Styles      string `gorm:"type:text" json:"styles,omitempty"`  // 样式配置JSON
+	IsPublic    bool   `gorm:"default:false" json:"is_public"`
+	CreatedBy   uint   `json:"created_by"`
 }
 
 // VisualizationChart 可视化图表配置
 type VisualizationChart struct {
 	gorm.Model
-	Name              string    `gorm:"size:255;not null" json:"name"`
-	ChartType         string    `gorm:"size:50;not null" json:"chart_type"` // line, bar, pie, etc.
-	DataConfig        string    `gorm:"type:text" json:"data_config,omitempty"` // 数据配置JSON
-	StyleConfig       string    `gorm:"type:text" json:"style_config,omitempty"` // 样式配置JSON
-	ReportTemplateID  uint      `gorm:"index:idx_chart_template" json:"report_template_id"`
-	ReportTemplate    *ReportTemplate `gorm:"foreignKey:ReportTemplateID" json:"report_template,omitempty"`
+	Name             string          `gorm:"size:255;not null" json:"name"`
+	ChartType        string          `gorm:"size:50;not null" json:"chart_type"`      // line, bar, pie, etc.
+	DataConfig       string          `gorm:"type:text" json:"data_config,omitempty"`  // 数据配置JSON
+	StyleConfig      string          `gorm:"type:text" json:"style_config,omitempty"` // 样式配置JSON
+	ReportTemplateID uint            `gorm:"index:idx_chart_template" json:"report_template_id"`
+	ReportTemplate   *ReportTemplate `gorm:"foreignKey:ReportTemplateID" json:"report_template,omitempty"`
 }
 
 // SeamlessVerification 无感验证记录
 type SeamlessVerification struct {
 	gorm.Model
-	SessionID         string    `gorm:"size:100;index:idx_seamless_session" json:"session_id"`
-	ApplicationID     *uint     `gorm:"index:idx_seamless_app" json:"application_id,omitempty"`
-	UserID            *uint     `gorm:"index:idx_seamless_user" json:"user_id,omitempty"`
-	DeviceFingerprint string    `gorm:"size:64;index:idx_seamless_fingerprint" json:"device_fingerprint"`
-	Decision          string    `gorm:"size:50;not null;index:idx_seamless_decision" json:"decision"` // allow, challenge, block
-	RiskScore         float64   `gorm:"default:0" json:"risk_score"`
-	Reason            string    `gorm:"type:text" json:"reason,omitempty"`
-	IPAddress         string    `gorm:"size:50" json:"ip_address"`
-	UserAgent         string    `gorm:"size:500" json:"user_agent"`
-	Duration          int64     `gorm:"comment:'验证耗时(毫秒)'" json:"duration"`
+	SessionID         string       `gorm:"size:100;index:idx_seamless_session" json:"session_id"`
+	ApplicationID     *uint        `gorm:"index:idx_seamless_app" json:"application_id,omitempty"`
+	UserID            *uint        `gorm:"index:idx_seamless_user" json:"user_id,omitempty"`
+	DeviceFingerprint string       `gorm:"size:64;index:idx_seamless_fingerprint" json:"device_fingerprint"`
+	Decision          string       `gorm:"size:50;not null;index:idx_seamless_decision" json:"decision"` // allow, challenge, block
+	RiskScore         float64      `gorm:"default:0" json:"risk_score"`
+	Reason            string       `gorm:"type:text" json:"reason,omitempty"`
+	IPAddress         string       `gorm:"size:50" json:"ip_address"`
+	UserAgent         string       `gorm:"size:500" json:"user_agent"`
+	Duration          int64        `gorm:"comment:'验证耗时(毫秒)'" json:"duration"`
 	Application       *Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
-	User              *User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	User              *User        `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 // TrustedDevice 信任设备记录
 type TrustedDevice struct {
 	gorm.Model
-	UserID            uint      `gorm:"not null;index:idx_trusted_user" json:"user_id"`
-	DeviceFingerprint string    `gorm:"size:64;index:idx_trusted_fingerprint" json:"device_fingerprint"`
-	DeviceName        string    `gorm:"size:255" json:"device_name,omitempty"`
-	IsTrusted         bool      `gorm:"default:true;index:idx_trusted_is_trusted" json:"is_trusted"`
+	UserID            uint       `gorm:"not null;index:idx_trusted_user" json:"user_id"`
+	DeviceFingerprint string     `gorm:"size:64;index:idx_trusted_fingerprint" json:"device_fingerprint"`
+	DeviceName        string     `gorm:"size:255" json:"device_name,omitempty"`
+	IsTrusted         bool       `gorm:"default:true;index:idx_trusted_is_trusted" json:"is_trusted"`
 	TrustedAt         *time.Time `json:"trusted_at,omitempty"`
-	LastUsedAt        time.Time `gorm:"index:idx_trusted_last_used" json:"last_used_at"`
-	UseCount          int       `gorm:"default:1" json:"use_count"`
+	LastUsedAt        time.Time  `gorm:"index:idx_trusted_last_used" json:"last_used_at"`
+	UseCount          int        `gorm:"default:1" json:"use_count"`
 	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
-	User              User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	User              User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 // SeamlessConfig 无感验证配置
 type SeamlessConfig struct {
 	gorm.Model
-	ApplicationID     uint      `gorm:"not null;uniqueIndex:idx_seamless_config_app" json:"application_id"`
-	Enabled           bool      `gorm:"default:true" json:"enabled"`
-	AutoTrustAfter    int       `gorm:"default:3" json:"auto_trust_after"` // 连续验证成功次数后自动信任
-	TrustDurationDays int       `gorm:"default:30" json:"trust_duration_days"` // 信任设备有效期(天)
-	ChallengeThreshold float64  `gorm:"default:30" json:"challenge_threshold"` // 风险分高于此值需要挑战
-	BlockThreshold    float64   `gorm:"default:70" json:"block_threshold"` // 风险分高于此值直接阻止
-	WhitelistEnabled  bool      `gorm:"default:false" json:"whitelist_enabled"`
-	Application       Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+	ApplicationID      uint        `gorm:"not null;uniqueIndex:idx_seamless_config_app" json:"application_id"`
+	Enabled            bool        `gorm:"default:true" json:"enabled"`
+	AutoTrustAfter     int         `gorm:"default:3" json:"auto_trust_after"`     // 连续验证成功次数后自动信任
+	TrustDurationDays  int         `gorm:"default:30" json:"trust_duration_days"` // 信任设备有效期(天)
+	ChallengeThreshold float64     `gorm:"default:30" json:"challenge_threshold"` // 风险分高于此值需要挑战
+	BlockThreshold     float64     `gorm:"default:70" json:"block_threshold"`     // 风险分高于此值直接阻止
+	WhitelistEnabled   bool        `gorm:"default:false" json:"whitelist_enabled"`
+	Application        Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
 }
 
 type TraceRecord struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	SessionID      string    `gorm:"size:100;index:idx_trace_session" json:"session_id"`
-	VerificationID *uint      `gorm:"index:idx_trace_verification" json:"verification_id,omitempty"`
-	ApplicationID *uint      `gorm:"index:idx_trace_app" json:"application_id,omitempty"`
+	VerificationID *uint     `gorm:"index:idx_trace_verification" json:"verification_id,omitempty"`
+	ApplicationID  *uint     `gorm:"index:idx_trace_app" json:"application_id,omitempty"`
 	RawData        string    `gorm:"type:text" json:"raw_data"`
 	FeaturesData   string    `gorm:"type:text" json:"features_data"`
 	ScoreData      string    `gorm:"type:text" json:"score_data"`
@@ -387,24 +387,24 @@ func (TraceRecord) TableName() string {
 }
 
 type CaptchaSession struct {
-	ID          int64      `gorm:"primaryKey;autoIncrement" json:"id"`
-	SessionID   string     `gorm:"size:100;uniqueIndex;not null" json:"session_id"`
-	BackgroundURL string   `gorm:"size:500" json:"background_url"`
-	SliderURL   string     `gorm:"size:500" json:"slider_url"`
-	GapX        int        `json:"gap_x"`
-	GapY        int        `json:"gap_y"`
-	Status      string     `gorm:"size:50;default:pending" json:"status"`
-	VerifyCount int        `gorm:"default:0" json:"verify_count"`
-	MaxAttempts int        `gorm:"default:3" json:"max_attempts"`
-	RiskScore   float64    `gorm:"default:0" json:"risk_score"`
-	TraceScore  float64    `gorm:"default:0" json:"trace_score"`
-	EnvScore    float64    `gorm:"default:0" json:"env_score"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ExpiredAt   time.Time  `json:"expired_at"`
-	VerifiedAt  *time.Time `json:"verified_at"`
-	ClientIP    string     `gorm:"size:50" json:"client_ip"`
-	UserAgent   string     `gorm:"size:500" json:"user_agent"`
-	Fingerprint string     `gorm:"size:255" json:"fingerprint"`
+	ID            int64      `gorm:"primaryKey;autoIncrement" json:"id"`
+	SessionID     string     `gorm:"size:100;uniqueIndex;not null" json:"session_id"`
+	BackgroundURL string     `gorm:"size:500" json:"background_url"`
+	SliderURL     string     `gorm:"size:500" json:"slider_url"`
+	GapX          int        `json:"gap_x"`
+	GapY          int        `json:"gap_y"`
+	Status        string     `gorm:"size:50;default:pending" json:"status"`
+	VerifyCount   int        `gorm:"default:0" json:"verify_count"`
+	MaxAttempts   int        `gorm:"default:3" json:"max_attempts"`
+	RiskScore     float64    `gorm:"default:0" json:"risk_score"`
+	TraceScore    float64    `gorm:"default:0" json:"trace_score"`
+	EnvScore      float64    `gorm:"default:0" json:"env_score"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ExpiredAt     time.Time  `json:"expired_at"`
+	VerifiedAt    *time.Time `json:"verified_at"`
+	ClientIP      string     `gorm:"size:50" json:"client_ip"`
+	UserAgent     string     `gorm:"size:500" json:"user_agent"`
+	Fingerprint   string     `gorm:"size:255" json:"fingerprint"`
 }
 
 func (CaptchaSession) TableName() string {
@@ -434,15 +434,15 @@ func (VoiceCaptchaSession) TableName() string {
 // UserMFA 用户多因素认证配置
 type UserMFA struct {
 	gorm.Model
-	UserID         uint      `gorm:"not null;uniqueIndex:idx_user_mfa_user" json:"user_id"`
-	MFAType        string    `gorm:"size:20;not null;index:idx_user_mfa_type" json:"mfa_type"` // totp, sms, email
-	Secret         string    `gorm:"size:255" json:"-"`
-	Phone          string    `gorm:"size:20" json:"phone,omitempty"`
-	Email          string    `gorm:"size:255" json:"email,omitempty"`
-	IsEnabled      bool      `gorm:"default:false;index:idx_user_mfa_enabled" json:"is_enabled"`
-	BackupCodes    string    `gorm:"type:text" json:"-"` // JSON数组存储备份码
+	UserID         uint       `gorm:"not null;uniqueIndex:idx_user_mfa_user" json:"user_id"`
+	MFAType        string     `gorm:"size:20;not null;index:idx_user_mfa_type" json:"mfa_type"` // totp, sms, email
+	Secret         string     `gorm:"size:255" json:"-"`
+	Phone          string     `gorm:"size:20" json:"phone,omitempty"`
+	Email          string     `gorm:"size:255" json:"email,omitempty"`
+	IsEnabled      bool       `gorm:"default:false;index:idx_user_mfa_enabled" json:"is_enabled"`
+	BackupCodes    string     `gorm:"type:text" json:"-"` // JSON数组存储备份码
 	LastVerifiedAt *time.Time `json:"last_verified_at,omitempty"`
-	User           User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	User           User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 func (UserMFA) TableName() string {
@@ -452,15 +452,15 @@ func (UserMFA) TableName() string {
 // AdminMFA 管理员多因素认证配置
 type AdminMFA struct {
 	gorm.Model
-	AdminID        uint      `gorm:"not null;uniqueIndex:idx_admin_mfa_admin" json:"admin_id"`
-	MFAType        string    `gorm:"size:20;not null;index:idx_admin_mfa_type" json:"mfa_type"` // totp, sms, email
-	Secret         string    `gorm:"size:255" json:"-"`
-	Phone          string    `gorm:"size:20" json:"phone,omitempty"`
-	Email          string    `gorm:"size:255" json:"email,omitempty"`
-	IsEnabled      bool      `gorm:"default:false;index:idx_admin_mfa_enabled" json:"is_enabled"`
-	BackupCodes    string    `gorm:"type:text" json:"-"` // JSON数组存储备份码
+	AdminID        uint       `gorm:"not null;uniqueIndex:idx_admin_mfa_admin" json:"admin_id"`
+	MFAType        string     `gorm:"size:20;not null;index:idx_admin_mfa_type" json:"mfa_type"` // totp, sms, email
+	Secret         string     `gorm:"size:255" json:"-"`
+	Phone          string     `gorm:"size:20" json:"phone,omitempty"`
+	Email          string     `gorm:"size:255" json:"email,omitempty"`
+	IsEnabled      bool       `gorm:"default:false;index:idx_admin_mfa_enabled" json:"is_enabled"`
+	BackupCodes    string     `gorm:"type:text" json:"-"` // JSON数组存储备份码
 	LastVerifiedAt *time.Time `json:"last_verified_at,omitempty"`
-	Admin          Admin     `gorm:"foreignKey:AdminID" json:"admin,omitempty"`
+	Admin          Admin      `gorm:"foreignKey:AdminID" json:"admin,omitempty"`
 }
 
 func (AdminMFA) TableName() string {
@@ -486,15 +486,15 @@ func (MFACode) TableName() string {
 // UserConsent 用户同意设置模型
 type UserConsent struct {
 	gorm.Model
-	UserID                uint      `gorm:"not null;uniqueIndex:idx_consent_user" json:"user_id"`
-	ConsentMarketing      bool      `gorm:"default:false" json:"consent_marketing"`       // 营销信息同意
-	ConsentAnalytics      bool      `gorm:"default:true" json:"consent_analytics"`       // 分析数据收集同意
-	ConsentPersonalization bool     `gorm:"default:true" json:"consent_personalization"` // 个性化同意
-	ConsentDataSharing    bool      `gorm:"default:false" json:"consent_data_sharing"`   // 数据共享同意
-	ConsentUpdatedAt      time.Time `json:"consent_updated_at"`                          // 同意更新时间
-	ConsentIP             string    `gorm:"size:50" json:"consent_ip"`                   // 同意时的IP地址
-	ConsentUserAgent      string    `gorm:"size:500" json:"consent_user_agent"`          // 同意时的User Agent
-	User                  User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	UserID                 uint      `gorm:"not null;uniqueIndex:idx_consent_user" json:"user_id"`
+	ConsentMarketing       bool      `gorm:"default:false" json:"consent_marketing"`      // 营销信息同意
+	ConsentAnalytics       bool      `gorm:"default:true" json:"consent_analytics"`       // 分析数据收集同意
+	ConsentPersonalization bool      `gorm:"default:true" json:"consent_personalization"` // 个性化同意
+	ConsentDataSharing     bool      `gorm:"default:false" json:"consent_data_sharing"`   // 数据共享同意
+	ConsentUpdatedAt       time.Time `json:"consent_updated_at"`                          // 同意更新时间
+	ConsentIP              string    `gorm:"size:50" json:"consent_ip"`                   // 同意时的IP地址
+	ConsentUserAgent       string    `gorm:"size:500" json:"consent_user_agent"`          // 同意时的User Agent
+	User                   User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 func (UserConsent) TableName() string {
@@ -504,14 +504,14 @@ func (UserConsent) TableName() string {
 // DataExportRequest 数据导出请求模型
 type DataExportRequest struct {
 	gorm.Model
-	UserID       uint      `gorm:"not null;index:idx_export_user" json:"user_id"`
-	ExportFormat string    `gorm:"size:20;default:json" json:"export_format"` // json, csv
-	Status       string    `gorm:"size:50;default:pending;index:idx_export_status" json:"status"` // pending, processing, completed, failed
-	FilePath     string    `gorm:"size:500" json:"file_path,omitempty"`       // 导出文件路径
-	RequestedAt  time.Time `json:"requested_at"`                             // 请求时间
-	CompletedAt  *time.Time `json:"completed_at,omitempty"`                  // 完成时间
-	Error        string    `gorm:"type:text" json:"error,omitempty"`          // 错误信息
-	User         User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	UserID       uint       `gorm:"not null;index:idx_export_user" json:"user_id"`
+	ExportFormat string     `gorm:"size:20;default:json" json:"export_format"`                     // json, csv
+	Status       string     `gorm:"size:50;default:pending;index:idx_export_status" json:"status"` // pending, processing, completed, failed
+	FilePath     string     `gorm:"size:500" json:"file_path,omitempty"`                           // 导出文件路径
+	RequestedAt  time.Time  `json:"requested_at"`                                                  // 请求时间
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`                                        // 完成时间
+	Error        string     `gorm:"type:text" json:"error,omitempty"`                              // 错误信息
+	User         User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 func (DataExportRequest) TableName() string {
@@ -521,14 +521,14 @@ func (DataExportRequest) TableName() string {
 // DataDeletionRequest 数据删除请求模型
 type DataDeletionRequest struct {
 	gorm.Model
-	UserID        uint      `gorm:"not null;index:idx_deletion_user" json:"user_id"`
-	Status        string    `gorm:"size:50;default:pending;index:idx_deletion_status" json:"status"` // pending, processing, completed, rejected
-	RequestedAt   time.Time `json:"requested_at"`                            // 请求时间
-	ProcessedAt   *time.Time `json:"processed_at,omitempty"`                 // 处理时间
-	Reason        string    `gorm:"type:text" json:"reason,omitempty"`       // 删除原因
-	AuditLog      string    `gorm:"type:text" json:"audit_log,omitempty"`    // 审计日志
-	ProcessedBy   *uint     `json:"processed_by,omitempty"`                  // 处理人ID
-	User          User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	UserID      uint       `gorm:"not null;index:idx_deletion_user" json:"user_id"`
+	Status      string     `gorm:"size:50;default:pending;index:idx_deletion_status" json:"status"` // pending, processing, completed, rejected
+	RequestedAt time.Time  `json:"requested_at"`                                                    // 请求时间
+	ProcessedAt *time.Time `json:"processed_at,omitempty"`                                          // 处理时间
+	Reason      string     `gorm:"type:text" json:"reason,omitempty"`                               // 删除原因
+	AuditLog    string     `gorm:"type:text" json:"audit_log,omitempty"`                            // 审计日志
+	ProcessedBy *uint      `json:"processed_by,omitempty"`                                          // 处理人ID
+	User        User       `gorm:"foreignKey:UserID" json:"user,omitempty"`
 }
 
 func (DataDeletionRequest) TableName() string {
@@ -539,9 +539,9 @@ func (DataDeletionRequest) TableName() string {
 type UserDataSnapshot struct {
 	gorm.Model
 	UserID       uint      `gorm:"not null;uniqueIndex:idx_snapshot_user" json:"user_id"`
-	UserData     string    `gorm:"type:text" json:"user_data"`              // 用户数据JSON
-	DeletedAt    time.Time `json:"deleted_at"`                             // 删除时间
-	RetentionEnd time.Time `json:"retention_end"`                          // 保留结束时间
+	UserData     string    `gorm:"type:text" json:"user_data"` // 用户数据JSON
+	DeletedAt    time.Time `json:"deleted_at"`                 // 删除时间
+	RetentionEnd time.Time `json:"retention_end"`              // 保留结束时间
 }
 
 func (UserDataSnapshot) TableName() string {

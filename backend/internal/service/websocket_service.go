@@ -13,26 +13,26 @@ import (
 
 const (
 	// 消息类型
-	MessageTypeHello         = "hello"
-	MessageTypeChallenge     = "challenge"
-	MessageTypeAnswer        = "answer"
-	MessageTypeResult        = "result"
-	MessageTypePing          = "ping"
-	MessageTypePong          = "pong"
-	MessageTypeError         = "error"
-	MessageTypeClose         = "close"
+	MessageTypeHello     = "hello"
+	MessageTypeChallenge = "challenge"
+	MessageTypeAnswer    = "answer"
+	MessageTypeResult    = "result"
+	MessageTypePing      = "ping"
+	MessageTypePong      = "pong"
+	MessageTypeError     = "error"
+	MessageTypeClose     = "close"
 
 	// 验证状态
-	VerificationStatusPending  = "pending"
-	VerificationStatusSuccess  = "success"
-	VerificationStatusFailed   = "failed"
-	VerificationStatusExpired  = "expired"
+	VerificationStatusPending = "pending"
+	VerificationStatusSuccess = "success"
+	VerificationStatusFailed  = "failed"
+	VerificationStatusExpired = "expired"
 
 	// 超时设置
-	ConnectionTimeout   = 5 * time.Minute
-	PingInterval        = 30 * time.Second
-	ReadDeadline        = 60 * time.Second
-	WriteDeadline       = 10 * time.Second
+	ConnectionTimeout = 5 * time.Minute
+	PingInterval      = 30 * time.Second
+	ReadDeadline      = 60 * time.Second
+	WriteDeadline     = 10 * time.Second
 )
 
 var (
@@ -97,12 +97,12 @@ type WebSocketSession struct {
 
 // WebSocketService 管理所有WebSocket连接
 type WebSocketService struct {
-	sessions map[string]*WebSocketSession
-	clients  map[*WebSocketSession]bool
-	mu       sync.RWMutex
-	register chan *WebSocketSession
+	sessions   map[string]*WebSocketSession
+	clients    map[*WebSocketSession]bool
+	mu         sync.RWMutex
+	register   chan *WebSocketSession
 	unregister chan *WebSocketSession
-	broadcast chan []byte
+	broadcast  chan []byte
 }
 
 // NewWebSocketService 创建WebSocket服务
@@ -170,7 +170,7 @@ func (s *WebSocketService) RegisterSession(conn *websocket.Conn) *WebSocketSessi
 		LastActive: time.Now(),
 		Status:     VerificationStatusPending,
 	}
-	
+
 	s.register <- session
 	return session
 }
@@ -333,7 +333,7 @@ func (s *WebSocketService) handleHello(session *WebSocketSession, msg WebSocketM
 		Timestamp: time.Now().Unix(),
 	}
 	data, _ := json.Marshal(map[string]interface{}{
-		"session_id": session.ID,
+		"session_id":  session.ID,
 		"server_time": time.Now().Unix(),
 	})
 	response.Payload = data
@@ -442,7 +442,7 @@ func (s *WebSocketService) GetSessionCount() int {
 func (s *WebSocketService) GetActiveSessions() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	sessionIDs := make([]string, 0, len(s.sessions))
 	for id := range s.sessions {
 		sessionIDs = append(sessionIDs, id)

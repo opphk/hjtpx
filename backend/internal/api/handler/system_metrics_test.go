@@ -417,7 +417,7 @@ func TestAlertInfo_Struct(t *testing.T) {
 		Message:      "Test message",
 		Timestamp:    time.Now().Unix(),
 		Acknowledged: false,
-		Icon:        "bell",
+		Icon:         "bell",
 	}
 
 	assert.Equal(t, 1, alert.ID)
@@ -437,11 +437,11 @@ func TestAPIMetrics_Struct(t *testing.T) {
 		AvgResponseTime: 123.45,
 		MinResponseTime: 10.0,
 		MaxResponseTime: 500.0,
-		ErrorRate:      5.0,
-		SuccessRate:    95.0,
-		StatusCodes:    map[string]uint64{"2xx": 950, "4xx": 30, "5xx": 20},
-		TopEndpoints:   []EndpointMetric{},
-		Time:           time.Now().Unix(),
+		ErrorRate:       5.0,
+		SuccessRate:     95.0,
+		StatusCodes:     map[string]uint64{"2xx": 950, "4xx": 30, "5xx": 20},
+		TopEndpoints:    []EndpointMetric{},
+		Time:            time.Now().Unix(),
 	}
 
 	assert.Equal(t, uint64(1000), metrics.TotalRequests)
@@ -460,7 +460,7 @@ func TestEndpointMetric_Struct(t *testing.T) {
 	metric := EndpointMetric{
 		Path:           "/api/test",
 		Method:         "GET",
-		Requests:        500,
+		Requests:       500,
 		AvgTime:        85.5,
 		MaxTime:        200.0,
 		ErrorRate:      2.5,

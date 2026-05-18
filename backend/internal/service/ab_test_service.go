@@ -29,11 +29,11 @@ func NewABTestService() *ABTestService {
 }
 
 type CreateABTestInput struct {
-	Name        string                 `json:"name" binding:"required,min=1,max=255"`
-	Description string                 `json:"description"`
-	ApplicationID uint               `json:"application_id" binding:"required"`
-	Variants    []CreateVariantInput  `json:"variants" binding:"required,min=2"`
-	Config      map[string]interface{} `json:"config"`
+	Name          string                 `json:"name" binding:"required,min=1,max=255"`
+	Description   string                 `json:"description"`
+	ApplicationID uint                   `json:"application_id" binding:"required"`
+	Variants      []CreateVariantInput   `json:"variants" binding:"required,min=2"`
+	Config        map[string]interface{} `json:"config"`
 }
 
 type CreateVariantInput struct {
@@ -45,27 +45,27 @@ type CreateVariantInput struct {
 }
 
 type UpdateABTestInput struct {
-	Name        *string                `json:"name" binding:"omitempty,max=255"`
-	Description *string                `json:"description"`
-	Variants    *[]CreateVariantInput  `json:"variants"`
+	Name        *string                 `json:"name" binding:"omitempty,max=255"`
+	Description *string                 `json:"description"`
+	Variants    *[]CreateVariantInput   `json:"variants"`
 	Config      *map[string]interface{} `json:"config"`
 }
 
 type ListABTestsFilter struct {
-	Page         int
-	PageSize     int
-	Keyword      string
+	Page          int
+	PageSize      int
+	Keyword       string
 	ApplicationID uint
-	Status       string
-	SortField    string
-	SortOrder    string
+	Status        string
+	SortField     string
+	SortOrder     string
 }
 
 type ABTestSummary struct {
-	Total    int64 `json:"total"`
-	Running  int64 `json:"running"`
-	Stop     int64 `json:"stopped"`
-	Draft    int64 `json:"draft"`
+	Total   int64 `json:"total"`
+	Running int64 `json:"running"`
+	Stop    int64 `json:"stopped"`
+	Draft   int64 `json:"draft"`
 }
 
 type VariantStats struct {
@@ -81,33 +81,33 @@ type VariantStats struct {
 }
 
 type TestReport struct {
-	TestID         uint           `json:"test_id"`
-	TestName       string         `json:"test_name"`
-	Status         string         `json:"status"`
-	StartDate      *time.Time     `json:"start_date"`
-	EndDate        *time.Time     `json:"end_date"`
-	TotalVisitors  int64          `json:"total_visitors"`
-	WinningVariant *uint          `json:"winning_variant,omitempty"`
-	Variants       []VariantStats `json:"variants"`
-	Recommendations []string      `json:"recommendations"`
+	TestID          uint           `json:"test_id"`
+	TestName        string         `json:"test_name"`
+	Status          string         `json:"status"`
+	StartDate       *time.Time     `json:"start_date"`
+	EndDate         *time.Time     `json:"end_date"`
+	TotalVisitors   int64          `json:"total_visitors"`
+	WinningVariant  *uint          `json:"winning_variant,omitempty"`
+	Variants        []VariantStats `json:"variants"`
+	Recommendations []string       `json:"recommendations"`
 }
 
 type AssignVariantRequest struct {
-	TestID        uint   `json:"test_id" binding:"required"`
-	SessionID     string `json:"session_id" binding:"required"`
-	UserID        *uint  `json:"user_id"`
-	DeviceID      string `json:"device_id"`
+	TestID    uint   `json:"test_id" binding:"required"`
+	SessionID string `json:"session_id" binding:"required"`
+	UserID    *uint  `json:"user_id"`
+	DeviceID  string `json:"device_id"`
 }
 
 type TrackEventRequest struct {
-	TestID      uint                   `json:"test_id" binding:"required"`
-	VariantID   uint                   `json:"variant_id" binding:"required"`
-	SessionID   string                 `json:"session_id" binding:"required"`
-	EventName   string                 `json:"event_name" binding:"required"`
-	EventType   string                 `json:"event_type"`
+	TestID       uint                   `json:"test_id" binding:"required"`
+	VariantID    uint                   `json:"variant_id" binding:"required"`
+	SessionID    string                 `json:"session_id" binding:"required"`
+	EventName    string                 `json:"event_name" binding:"required"`
+	EventType    string                 `json:"event_type"`
 	IsConversion bool                   `json:"is_conversion"`
-	Value       float64                `json:"value"`
-	Metadata    map[string]interface{} `json:"metadata"`
+	Value        float64                `json:"value"`
+	Metadata     map[string]interface{} `json:"metadata"`
 }
 
 func (s *ABTestService) CreateABTest(input *CreateABTestInput) (*models.ABTest, error) {
@@ -166,12 +166,12 @@ func (s *ABTestService) CreateABTest(input *CreateABTestInput) (*models.ABTest, 
 		}
 
 		variant := &models.ABTestVariant{
-			ABTestID:      test.ID,
-			Name:          v.Name,
-			IsControl:     v.IsControl,
+			ABTestID:       test.ID,
+			Name:           v.Name,
+			IsControl:      v.IsControl,
 			TrafficPercent: v.TrafficPercent,
-			Config:        variantConfigJSON,
-			Description:   v.Description,
+			Config:         variantConfigJSON,
+			Description:    v.Description,
 		}
 		if err := database.DB.Create(variant).Error; err != nil {
 			return nil, fmt.Errorf("failed to create variant: %w", err)
@@ -596,7 +596,7 @@ func (s *ABTestService) calculateConfidence(cVisitors, cConversions, vVisitors, 
 	cRate := float64(cConversions) / float64(cVisitors)
 	vRate := float64(vConversions) / float64(vVisitors)
 
-	pPool := float64(cConversions + vConversions) / float64(cVisitors + vVisitors)
+	pPool := float64(cConversions+vConversions) / float64(cVisitors+vVisitors)
 	sePool := math.Sqrt(pPool * (1 - pPool) * (1/float64(cVisitors) + 1/float64(vVisitors)))
 
 	if sePool == 0 {

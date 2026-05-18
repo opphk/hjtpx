@@ -62,14 +62,14 @@ func MD5File(data io.Reader) (string, error) {
 }
 
 const (
-	FormatDateTime     = "2006-01-02 15:04:05"
-	FormatDate         = "2006-01-02"
-	FormatTime         = "15:04:05"
+	FormatDateTime      = "2006-01-02 15:04:05"
+	FormatDate          = "2006-01-02"
+	FormatTime          = "15:04:05"
 	FormatDateTimeShort = "20060102150405"
-	FormatDateShort    = "20060102"
-	FormatTimeShort    = "150405"
-	FormatISO8601      = "2006-01-02T15:04:05Z07:00"
-	FormatRFC3339      = time.RFC3339
+	FormatDateShort     = "20060102"
+	FormatTimeShort     = "150405"
+	FormatISO8601       = "2006-01-02T15:04:05Z07:00"
+	FormatRFC3339       = time.RFC3339
 )
 
 func FormatTimeToString(t time.Time, format string) string {

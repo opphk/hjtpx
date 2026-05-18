@@ -12,7 +12,7 @@ import (
 
 const (
 	CaptchaSessionPrefix = "captcha:session:"
-	DefaultTTL          = 5 * time.Minute
+	DefaultTTL           = 5 * time.Minute
 )
 
 type SessionCache struct {

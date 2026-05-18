@@ -3,7 +3,9 @@ package redis
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/config"
@@ -85,7 +87,24 @@ func ConnectRedis(cfg *config.RedisConfig) error {
 		return fmt.Errorf("failed to ping redis: %w", err)
 	}
 
+	go monitorPoolHealth(Client)
+
 	return nil
+}
+
+func monitorPoolHealth(client *redis.Client) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		stats := client.PoolStats()
+		if stats.Timeouts > 10 {
+			log.Printf("[REDIS_WARNING] High timeout count: %d", stats.Timeouts)
+		}
+		if stats.StaleConns > 5 {
+			log.Printf("[REDIS_WARNING] High stale connection count: %d", stats.StaleConns)
+		}
+	}
 }
 
 func CloseRedis() error {
@@ -345,4 +364,299 @@ func GetClusterClient() *redis.ClusterClient {
 	clusterMu.RLock()
 	defer clusterMu.RUnlock()
 	return Cluster
+}
+
+type ConnectionMetrics struct {
+	TotalConnections  int64
+	ActiveConnections int64
+	IdleConnections   int64
+	StaleConnections  int64
+	Timeouts          int64
+	TotalHits         int64
+	TotalMisses       int64
+	HitRate           float64
+}
+
+type RedisMetricsCollector struct {
+	mu                sync.RWMutex
+	totalConnections  int64
+	activeConnections int64
+	idleConnections   int64
+	staleConnections  int64
+	timeouts          int64
+	hits              int64
+	misses            int64
+	startTime         time.Time
+}
+
+var globalRedisMetricsCollector *RedisMetricsCollector
+
+func init() {
+	globalRedisMetricsCollector = &RedisMetricsCollector{
+		startTime: time.Now(),
+	}
+	go globalRedisMetricsCollector.collectMetrics()
+}
+
+func (mc *RedisMetricsCollector) collectMetrics() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if Client != nil {
+			stats := Client.PoolStats()
+			atomic.StoreInt64(&mc.totalConnections, int64(stats.TotalConns))
+			atomic.StoreInt64(&mc.idleConnections, int64(stats.IdleConns))
+			atomic.StoreInt64(&mc.staleConnections, int64(stats.StaleConns))
+			atomic.StoreInt64(&mc.timeouts, int64(stats.Timeouts))
+			atomic.StoreInt64(&mc.hits, int64(stats.Hits))
+			atomic.StoreInt64(&mc.misses, int64(stats.Misses))
+
+			total := atomic.LoadInt64(&mc.hits) + atomic.LoadInt64(&mc.misses)
+			if total > 0 {
+				atomic.StoreInt64(&mc.activeConnections, int64(stats.TotalConns))
+			}
+		}
+	}
+}
+
+func GetConnectionMetrics() *ConnectionMetrics {
+	metrics := &ConnectionMetrics{}
+
+	metrics.TotalConnections = atomic.LoadInt64(&globalRedisMetricsCollector.totalConnections)
+	metrics.ActiveConnections = atomic.LoadInt64(&globalRedisMetricsCollector.activeConnections)
+	metrics.IdleConnections = atomic.LoadInt64(&globalRedisMetricsCollector.idleConnections)
+	metrics.StaleConnections = atomic.LoadInt64(&globalRedisMetricsCollector.staleConnections)
+	metrics.Timeouts = atomic.LoadInt64(&globalRedisMetricsCollector.timeouts)
+	metrics.TotalHits = atomic.LoadInt64(&globalRedisMetricsCollector.hits)
+	metrics.TotalMisses = atomic.LoadInt64(&globalRedisMetricsCollector.misses)
+
+	total := metrics.TotalHits + metrics.TotalMisses
+	if total > 0 {
+		metrics.HitRate = float64(metrics.TotalHits) / float64(total) * 100
+	}
+
+	return metrics
+}
+
+type PoolConfigOptimizer struct {
+	client              *redis.Client
+	maxOpenConns        int
+	maxIdleConns        int
+	minIdleConns        int
+	connMaxLifetime     time.Duration
+	connMaxIdleTime     time.Duration
+	healthCheckInterval time.Duration
+}
+
+func NewPoolConfigOptimizer(client *redis.Client) *PoolConfigOptimizer {
+	return &PoolConfigOptimizer{
+		client:              client,
+		maxOpenConns:        100,
+		maxIdleConns:        50,
+		minIdleConns:        10,
+		connMaxLifetime:     30 * time.Minute,
+		connMaxIdleTime:     10 * time.Minute,
+		healthCheckInterval: 30 * time.Second,
+	}
+}
+
+func (p *PoolConfigOptimizer) Optimize() error {
+	if p.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	go p.monitorAndAdjust()
+	return nil
+}
+
+func (p *PoolConfigOptimizer) monitorAndAdjust() {
+	ticker := time.NewTicker(p.healthCheckInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		stats := p.client.PoolStats()
+
+		if stats.Timeouts > 20 {
+			p.maxOpenConns = int(float64(p.maxOpenConns) * 0.8)
+			if p.maxOpenConns < 10 {
+				p.maxOpenConns = 10
+			}
+		}
+
+		if stats.IdleConns < uint32(p.minIdleConns/2) {
+			p.minIdleConns = int(stats.IdleConns / 2)
+			if p.minIdleConns < 5 {
+				p.minIdleConns = 5
+			}
+		}
+	}
+}
+
+func (p *PoolConfigOptimizer) GetCurrentConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"max_open_conns":     p.maxOpenConns,
+		"max_idle_conns":     p.maxIdleConns,
+		"min_idle_conns":     p.minIdleConns,
+		"conn_max_lifetime":  p.connMaxLifetime.String(),
+		"conn_max_idle_time": p.connMaxIdleTime.String(),
+	}
+}
+
+type CacheKeyGenerator struct {
+	prefix  string
+	version int
+}
+
+func NewCacheKeyGenerator(prefix string) *CacheKeyGenerator {
+	return &CacheKeyGenerator{
+		prefix:  prefix,
+		version: 1,
+	}
+}
+
+func (kg *CacheKeyGenerator) Generate(keys ...string) string {
+	if len(keys) == 0 {
+		return kg.prefix
+	}
+	return fmt.Sprintf("%s:%s", kg.prefix, keys[0])
+}
+
+func (kg *CacheKeyGenerator) GenerateWithVersion(version int64, keys ...string) string {
+	base := kg.Generate(keys...)
+	return fmt.Sprintf("%s:v%d", base, version)
+}
+
+func (kg *CacheKeyGenerator) GeneratePattern() string {
+	return kg.prefix + ":*"
+}
+
+type DistributedLock struct {
+	client *redis.Client
+	key    string
+	value  string
+	ttl    time.Duration
+}
+
+func NewDistributedLock(client *redis.Client, key string, value string, ttl time.Duration) *DistributedLock {
+	return &DistributedLock{
+		client: client,
+		key:    key,
+		value:  value,
+		ttl:    ttl,
+	}
+}
+
+func (l *DistributedLock) Acquire(ctx context.Context) (bool, error) {
+	if l.client == nil {
+		return false, fmt.Errorf("redis client is nil")
+	}
+
+	result, err := l.client.SetNX(ctx, l.key, l.value, l.ttl).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return result, nil
+}
+
+func (l *DistributedLock) Release(ctx context.Context) error {
+	if l.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+		else
+			return 0
+		end
+	`
+
+	_, err := l.client.Eval(ctx, script, []string{l.key}, l.value).Result()
+	return err
+}
+
+func (l *DistributedLock) Extend(ctx context.Context, ttl time.Duration) error {
+	if l.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("pexpire", KEYS[1], ARGV[2])
+		else
+			return 0
+		end
+	`
+
+	_, err := l.client.Eval(ctx, script, []string{l.key}, l.value, ttl.Milliseconds()).Result()
+	return err
+}
+
+type PipelineOptimizer struct {
+	client    *redis.Client
+	batchSize int
+}
+
+func NewPipelineOptimizer(client *redis.Client, batchSize int) *PipelineOptimizer {
+	if batchSize <= 0 {
+		batchSize = 100
+	}
+	return &PipelineOptimizer{
+		client:    client,
+		batchSize: batchSize,
+	}
+}
+
+func (p *PipelineOptimizer) PipelineSet(ctx context.Context, items map[string]string, ttl time.Duration) error {
+	if p.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	pipe := p.client.Pipeline()
+
+	for key, value := range items {
+		pipe.Set(ctx, key, value, ttl)
+	}
+
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (p *PipelineOptimizer) PipelineGet(ctx context.Context, keys []string) (map[string]string, error) {
+	if p.client == nil {
+		return nil, fmt.Errorf("redis client is nil")
+	}
+
+	result := make(map[string]string)
+
+	for i := 0; i < len(keys); i += p.batchSize {
+		end := i + p.batchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+
+		batch := keys[i:end]
+		pipe := p.client.Pipeline()
+
+		cmds := make([]*redis.StringCmd, len(batch))
+		for j, key := range batch {
+			cmds[j] = pipe.Get(ctx, key)
+		}
+
+		_, err := pipe.Exec(ctx)
+		if err != nil && err != redis.Nil {
+			continue
+		}
+
+		for j, cmd := range cmds {
+			val, err := cmd.Result()
+			if err == nil {
+				result[batch[j]] = val
+			}
+		}
+	}
+
+	return result, nil
 }

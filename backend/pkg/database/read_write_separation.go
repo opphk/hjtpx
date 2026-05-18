@@ -15,13 +15,13 @@ import (
 )
 
 type DBRouter struct {
-	masterDB         *gorm.DB
-	slaveDBs         []*gorm.DB
-	slaveWeights     []int
-	currentSlave     uint32
-	enabled          bool
-	loadBalanceMode  string
-	mu               sync.RWMutex
+	masterDB        *gorm.DB
+	slaveDBs        []*gorm.DB
+	slaveWeights    []int
+	currentSlave    uint32
+	enabled         bool
+	loadBalanceMode string
+	mu              sync.RWMutex
 }
 
 var router *DBRouter

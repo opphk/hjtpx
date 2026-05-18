@@ -8,8 +8,8 @@ import (
 )
 
 type ClickVerification struct {
-	Clicks       []ClickData   `json:"clicks"`
-	TargetImages []TargetImage `json:"target_images"`
+	Clicks       []ClickData          `json:"clicks"`
+	TargetImages []TargetImage        `json:"target_images"`
 	Result       *ClickAnalysisResult `json:"result"`
 }
 
@@ -30,29 +30,29 @@ type TargetImage struct {
 }
 
 type ClickAnalysisResult struct {
-	ClickPattern       *ClickPatternAnalysis `json:"click_pattern"`
-	TimingAnalysis     *TimingAnalysis       `json:"timing_analysis"`
-	AccuracyAnalysis   *AccuracyAnalysis     `json:"accuracy_analysis"`
-	AnomalyScore       float64              `json:"anomaly_score"`
-	MLScore            float64              `json:"ml_score"`
-	OverallRiskScore   float64              `json:"overall_risk_score"`
-	IsBot              bool                 `json:"is_bot"`
-	Confidence         float64              `json:"confidence"`
-	RiskIndicators     []string             `json:"risk_indicators"`
-	AnomalyDetections  []string             `json:"anomaly_detections"`
+	ClickPattern      *ClickPatternAnalysis `json:"click_pattern"`
+	TimingAnalysis    *TimingAnalysis       `json:"timing_analysis"`
+	AccuracyAnalysis  *AccuracyAnalysis     `json:"accuracy_analysis"`
+	AnomalyScore      float64               `json:"anomaly_score"`
+	MLScore           float64               `json:"ml_score"`
+	OverallRiskScore  float64               `json:"overall_risk_score"`
+	IsBot             bool                  `json:"is_bot"`
+	Confidence        float64               `json:"confidence"`
+	RiskIndicators    []string              `json:"risk_indicators"`
+	AnomalyDetections []string              `json:"anomaly_detections"`
 }
 
 type ClickPatternAnalysis struct {
-	ClickCount          int           `json:"click_count"`
-	ClickIntervals      []float64    `json:"click_intervals"`
-	AverageInterval     float64      `json:"average_interval"`
-	IntervalVariance    float64      `json:"interval_variance"`
-	IntervalStdDev      float64      `json:"interval_std_dev"`
-	Regularity          float64      `json:"regularity"`
+	ClickCount           int                   `json:"click_count"`
+	ClickIntervals       []float64             `json:"click_intervals"`
+	AverageInterval      float64               `json:"average_interval"`
+	IntervalVariance     float64               `json:"interval_variance"`
+	IntervalStdDev       float64               `json:"interval_std_dev"`
+	Regularity           float64               `json:"regularity"`
 	PositionDistribution *PositionDistribution `json:"position_distribution"`
-	ClickSequence       string       `json:"click_sequence"`
-	SequencePattern     string       `json:"sequence_pattern"`
-	ClusteringScore     float64      `json:"clustering_score"`
+	ClickSequence        string                `json:"click_sequence"`
+	SequencePattern      string                `json:"sequence_pattern"`
+	ClusteringScore      float64               `json:"clustering_score"`
 }
 
 type PositionDistribution struct {
@@ -67,24 +67,24 @@ type PositionDistribution struct {
 }
 
 type TimingAnalysis struct {
-	TotalDuration    int64        `json:"total_duration"`
-	AverageDuration  float64      `json:"average_duration"`
-	DurationVariance float64     `json:"duration_variance"`
-	ResponseTimes    []float64   `json:"response_times"`
-	FirstClickDelay  int64        `json:"first_click_delay"`
-	HesitationTimes  []float64   `json:"hesitation_times"`
-	TimingPattern    string      `json:"timing_pattern"`
-	IsRhythmic       bool        `json:"is_rhythmic"`
+	TotalDuration    int64     `json:"total_duration"`
+	AverageDuration  float64   `json:"average_duration"`
+	DurationVariance float64   `json:"duration_variance"`
+	ResponseTimes    []float64 `json:"response_times"`
+	FirstClickDelay  int64     `json:"first_click_delay"`
+	HesitationTimes  []float64 `json:"hesitation_times"`
+	TimingPattern    string    `json:"timing_pattern"`
+	IsRhythmic       bool      `json:"is_rhythmic"`
 }
 
 type AccuracyAnalysis struct {
-	CorrectClicks    int           `json:"correct_clicks"`
-	TotalClicks      int           `json:"total_clicks"`
-	Accuracy         float64       `json:"accuracy"`
-	MissDistances    []float64     `json:"miss_distances"`
+	CorrectClicks       int       `json:"correct_clicks"`
+	TotalClicks         int       `json:"total_clicks"`
+	Accuracy            float64   `json:"accuracy"`
+	MissDistances       []float64 `json:"miss_distances"`
 	AverageMissDistance float64   `json:"average_miss_distance"`
-	TargetHits       []bool        `json:"target_hits"`
-	Precision        float64       `json:"precision"`
+	TargetHits          []bool    `json:"target_hits"`
+	Precision           float64   `json:"precision"`
 }
 
 type ClickAnalyzer struct {
@@ -114,17 +114,17 @@ func NewClickMLModel() *ClickMLModel {
 func (ca *ClickAnalyzer) AnalyzeClickVerification(verification *ClickVerification) *ClickAnalysisResult {
 	if verification == nil || len(verification.Clicks) == 0 {
 		return &ClickAnalysisResult{
-			IsBot:       true,
-			Confidence:  0.9,
+			IsBot:          true,
+			Confidence:     0.9,
 			RiskIndicators: []string{"无点击数据"},
 		}
 	}
 
 	result := &ClickAnalysisResult{
-		ClickPattern:     ca.analyzeClickPattern(verification),
-		TimingAnalysis:   ca.analyzeTiming(verification),
+		ClickPattern:      ca.analyzeClickPattern(verification),
+		TimingAnalysis:    ca.analyzeTiming(verification),
 		AccuracyAnalysis:  ca.analyzeAccuracy(verification),
-		RiskIndicators:   make([]string, 0),
+		RiskIndicators:    make([]string, 0),
 		AnomalyDetections: make([]string, 0),
 	}
 
@@ -919,4 +919,521 @@ func GenerateBotLikeClickData(targets []TargetImage, duration int64) []SliderCli
 	}
 
 	return clicks
+}
+
+type ClickTimingAnalyzer struct{}
+
+func NewClickTimingAnalyzer() *ClickTimingAnalyzer {
+	return &ClickTimingAnalyzer{}
+}
+
+type TimingFeatures struct {
+	Intervals         []float64 `json:"intervals"`
+	MeanInterval      float64   `json:"mean_interval"`
+	StdDevInterval    float64   `json:"std_dev_interval"`
+	CvInterval        float64   `json:"cv_interval"`
+	IsRhythmic        bool      `json:"is_rhythmic"`
+	RhythmScore       float64   `json:"rhythm_score"`
+	TimingPattern     string    `json:"timing_pattern"`
+	FirstClickDelay   float64   `json:"first_click_delay"`
+	LastClickDelay    float64   `json:"last_click_delay"`
+	AccelerationTrend float64   `json:"acceleration_trend"`
+	VarianceTrend     float64   `json:"variance_trend"`
+	AnomalyIntervals  []int     `json:"anomaly_intervals"`
+	ConsistencyScore  float64   `json:"consistency_score"`
+}
+
+func (cta *ClickTimingAnalyzer) AnalyzeTiming(clicks []ClickData) *TimingFeatures {
+	features := &TimingFeatures{}
+
+	if len(clicks) < 2 {
+		return features
+	}
+
+	intervals := cta.extractIntervals(clicks)
+	features.Intervals = intervals
+
+	if len(intervals) > 0 {
+		features.MeanInterval = cta.mean(intervals)
+		features.StdDevInterval = cta.stdDev(intervals)
+
+		if features.MeanInterval > 0 {
+			features.CvInterval = features.StdDevInterval / features.MeanInterval
+		}
+
+		features.IsRhythmic = features.CvInterval < 0.15
+		features.RhythmScore = 1.0 - math.Min(features.CvInterval, 1.0)
+	}
+
+	if len(clicks) > 0 {
+		features.FirstClickDelay = float64(clicks[0].Timestamp)
+		features.LastClickDelay = float64(clicks[len(clicks)-1].Timestamp)
+	}
+
+	features.AccelerationTrend = cta.calculateAccelerationTrend(intervals)
+	features.VarianceTrend = cta.calculateVarianceTrend(intervals)
+	features.AnomalyIntervals = cta.detectAnomalyIntervals(intervals)
+	features.ConsistencyScore = cta.calculateConsistencyScore(intervals)
+
+	features.TimingPattern = cta.classifyTimingPattern(features)
+
+	return features
+}
+
+func (cta *ClickTimingAnalyzer) extractIntervals(clicks []ClickData) []float64 {
+	intervals := make([]float64, 0)
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		intervals = append(intervals, interval)
+	}
+	return intervals
+}
+
+func (cta *ClickTimingAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (cta *ClickTimingAnalyzer) stdDev(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := cta.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return math.Sqrt(sum / float64(len(values)))
+}
+
+func (cta *ClickTimingAnalyzer) calculateAccelerationTrend(intervals []float64) float64 {
+	if len(intervals) < 3 {
+		return 0
+	}
+
+	accelerations := make([]float64, 0)
+	for i := 1; i < len(intervals); i++ {
+		accel := intervals[i] - intervals[i-1]
+		accelerations = append(accelerations, accel)
+	}
+
+	meanAccel := cta.mean(accelerations)
+	return meanAccel / cta.mean(intervals)
+}
+
+func (cta *ClickTimingAnalyzer) calculateVarianceTrend(intervals []float64) float64 {
+	if len(intervals) < 6 {
+		return 0
+	}
+
+	firstHalf := intervals[:len(intervals)/2]
+	secondHalf := intervals[len(intervals)/2:]
+
+	firstVariance := cta.stdDev(firstHalf)
+	secondVariance := cta.stdDev(secondHalf)
+
+	if firstVariance == 0 {
+		return 0
+	}
+
+	return (secondVariance - firstVariance) / firstVariance
+}
+
+func (cta *ClickTimingAnalyzer) detectAnomalyIntervals(intervals []float64) []int {
+	if len(intervals) == 0 {
+		return []int{}
+	}
+
+	mean := cta.mean(intervals)
+	stdDev := cta.stdDev(intervals)
+
+	anomalies := make([]int, 0)
+	for i, interval := range intervals {
+		if math.Abs(interval-mean) > 2*stdDev {
+			anomalies = append(anomalies, i)
+		}
+	}
+
+	return anomalies
+}
+
+func (cta *ClickTimingAnalyzer) calculateConsistencyScore(intervals []float64) float64 {
+	if len(intervals) < 2 {
+		return 0
+	}
+
+	mean := cta.mean(intervals)
+	if mean == 0 {
+		return 0
+	}
+
+	consistentCount := 0
+	for _, interval := range intervals {
+		if math.Abs(interval-mean)/mean < 0.3 {
+			consistentCount++
+		}
+	}
+
+	return float64(consistentCount) / float64(len(intervals))
+}
+
+func (cta *ClickTimingAnalyzer) classifyTimingPattern(features *TimingFeatures) string {
+	if features.MeanInterval < 100 {
+		return "extremely_fast"
+	}
+	if features.MeanInterval < 300 {
+		return "very_fast"
+	}
+	if features.MeanInterval < 600 {
+		return "fast"
+	}
+	if features.MeanInterval < 1500 {
+		return "normal"
+	}
+	if features.MeanInterval < 3000 {
+		return "slow"
+	}
+	return "very_slow"
+}
+
+type ClickPressureAnalyzer struct{}
+
+func NewClickPressureAnalyzer() *ClickPressureAnalyzer {
+	return &ClickPressureAnalyzer{}
+}
+
+type PressureFeatures struct {
+	HasPressureData     bool      `json:"has_pressure_data"`
+	Pressures           []float64 `json:"pressures"`
+	MeanPressure        float64   `json:"mean_pressure"`
+	PressureVariance    float64   `json:"pressure_variance"`
+	PressureConsistency float64   `json:"pressure_consistency"`
+	IsBotLike           bool      `json:"is_bot_like"`
+}
+
+type ClickDataWithPressure struct {
+	X         int
+	Y         int
+	Timestamp int64
+	Pressure  float64
+}
+
+func (cpa *ClickPressureAnalyzer) AnalyzePressure(clickEvents []map[string]interface{}) *PressureFeatures {
+	features := &PressureFeatures{}
+
+	if len(clickEvents) == 0 {
+		return features
+	}
+
+	pressures := make([]float64, 0)
+	for _, event := range clickEvents {
+		if pressure, ok := event["pressure"].(float64); ok {
+			pressures = append(pressures, pressure)
+		} else if force, ok := event["force"].(float64); ok {
+			pressures = append(pressures, force)
+		}
+	}
+
+	if len(pressures) == 0 {
+		features.HasPressureData = false
+		return features
+	}
+
+	features.HasPressureData = true
+	features.Pressures = pressures
+	features.MeanPressure = cpa.mean(pressures)
+	features.PressureVariance = cpa.variance(pressures)
+	features.PressureConsistency = 1.0 - math.Min(math.Sqrt(features.PressureVariance)/features.MeanPressure, 1.0)
+
+	features.IsBotLike = features.PressureConsistency > 0.95 && features.MeanPressure > 0.8
+
+	return features
+}
+
+func (cpa *ClickPressureAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (cpa *ClickPressureAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := cpa.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+type AnomalyClickPattern struct {
+	Name        string
+	Description string
+	Detector    func(*ClickAnalysisResult) bool
+	Weight      float64
+}
+
+type AnomalyClickDetector struct {
+	patterns []AnomalyClickPattern
+}
+
+func NewAnomalyClickDetector() *AnomalyClickDetector {
+	return &AnomalyClickDetector{
+		patterns: []AnomalyClickPattern{
+			{
+				Name:        "perfect_precision",
+				Description: "异常精准的点击，无任何偏差",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.AccuracyAnalysis == nil {
+						return false
+					}
+					return result.AccuracyAnalysis.Accuracy == 1.0 &&
+						result.AccuracyAnalysis.AverageMissDistance < 5 &&
+						result.AccuracyAnalysis.TotalClicks > 2
+				},
+				Weight: 0.35,
+			},
+			{
+				Name:        "mechanical_timing",
+				Description: "机械般规律的点击间隔",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.IsRhythmic &&
+						result.TimingAnalysis.DurationVariance < 100
+				},
+				Weight: 0.3,
+			},
+			{
+				Name:        "instant_response",
+				Description: "无犹豫的即时响应",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.FirstClickDelay < 100 &&
+						len(result.TimingAnalysis.HesitationTimes) == 0 &&
+						result.TimingAnalysis.TotalDuration > 1000
+				},
+				Weight: 0.25,
+			},
+			{
+				Name:        "uniform_position",
+				Description: "均匀分布的点击位置",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.ClickPattern == nil ||
+						result.ClickPattern.PositionDistribution == nil {
+						return false
+					}
+					dist := result.ClickPattern.PositionDistribution
+					return dist.XVariance < 10 && dist.YVariance < 10
+				},
+				Weight: 0.2,
+			},
+			{
+				Name:        "linear_trajectory",
+				Description: "线性点击轨迹",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.ClickPattern == nil {
+						return false
+					}
+					return result.ClickPattern.SequencePattern == "linear" &&
+						len(result.ClickPattern.ClickIntervals) > 3
+				},
+				Weight: 0.2,
+			},
+			{
+				Name:        "no_hesitation",
+				Description: "整个过程中无犹豫",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return len(result.TimingAnalysis.HesitationTimes) == 0 &&
+						result.TimingAnalysis.TotalDuration > 2000
+				},
+				Weight: 0.15,
+			},
+			{
+				Name:        "constant_interval",
+				Description: "恒定的点击间隔",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.ClickPattern == nil || len(result.ClickPattern.ClickIntervals) < 3 {
+						return false
+					}
+					intervals := result.ClickPattern.ClickIntervals
+					mean := 0.0
+					for _, i := range intervals {
+						mean += i
+					}
+					mean /= float64(len(intervals))
+
+					if mean == 0 {
+						return false
+					}
+
+					for _, interval := range intervals {
+						if math.Abs(interval-mean)/mean > 0.05 {
+							return false
+						}
+					}
+					return true
+				},
+				Weight: 0.25,
+			},
+			{
+				Name:        "high_accuracy",
+				Description: "异常高的准确率",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.AccuracyAnalysis == nil {
+						return false
+					}
+					return result.AccuracyAnalysis.Accuracy > 0.95 &&
+						result.AccuracyAnalysis.TotalClicks > 4
+				},
+				Weight: 0.3,
+			},
+		},
+	}
+}
+
+func (acd *AnomalyClickDetector) DetectAnomalies(result *ClickAnalysisResult) (float64, []string) {
+	totalScore := 0.0
+	detectedPatterns := make([]string, 0)
+
+	for _, pattern := range acd.patterns {
+		if pattern.Detector(result) {
+			totalScore += pattern.Weight
+			detectedPatterns = append(detectedPatterns,
+				fmt.Sprintf("%s: %s", pattern.Name, pattern.Description))
+		}
+	}
+
+	return totalScore, detectedPatterns
+}
+
+type AdvancedClickAnalyzer struct {
+	timingAnalyzer   *ClickTimingAnalyzer
+	pressureAnalyzer *ClickPressureAnalyzer
+	anomalyDetector  *AnomalyClickDetector
+}
+
+func NewAdvancedClickAnalyzer() *AdvancedClickAnalyzer {
+	return &AdvancedClickAnalyzer{
+		timingAnalyzer:   NewClickTimingAnalyzer(),
+		pressureAnalyzer: NewClickPressureAnalyzer(),
+		anomalyDetector:  NewAnomalyClickDetector(),
+	}
+}
+
+type AdvancedClickResult struct {
+	BasicResult      *ClickAnalysisResult
+	TimingFeatures   *TimingFeatures
+	PressureFeatures *PressureFeatures
+	AnomalyPatterns  []string
+	AnomalyScore     float64
+	BotScore         float64
+}
+
+func (aca *AdvancedClickAnalyzer) AnalyzeAdvanced(verification *ClickVerification) *AdvancedClickResult {
+	result := &AdvancedClickResult{
+		BasicResult: NewClickAnalyzer().AnalyzeClickVerification(verification),
+	}
+
+	if len(verification.Clicks) >= 2 {
+		result.TimingFeatures = aca.timingAnalyzer.AnalyzeTiming(verification.Clicks)
+	}
+
+	if verification.Clicks != nil && len(verification.Clicks) > 0 {
+		clickEvents := make([]map[string]interface{}, len(verification.Clicks))
+		for i, click := range verification.Clicks {
+			clickEvents[i] = map[string]interface{}{
+				"x":         click.X,
+				"y":         click.Y,
+				"timestamp": click.Timestamp,
+			}
+		}
+		result.PressureFeatures = aca.pressureAnalyzer.AnalyzePressure(clickEvents)
+	}
+
+	anomalyScore, anomalyPatterns := aca.anomalyDetector.DetectAnomalies(result.BasicResult)
+	result.AnomalyPatterns = anomalyPatterns
+	result.AnomalyScore = anomalyScore
+
+	result.BotScore = aca.calculateBotScore(result)
+
+	return result
+}
+
+func (aca *AdvancedClickAnalyzer) calculateBotScore(result *AdvancedClickResult) float64 {
+	botScore := 0.0
+
+	if result.BasicResult != nil {
+		botScore += result.BasicResult.MLScore * 0.25
+		botScore += result.BasicResult.AnomalyScore * 0.25
+	}
+
+	if result.TimingFeatures != nil {
+		if result.TimingFeatures.IsRhythmic {
+			botScore += 0.15
+		}
+		if result.TimingFeatures.RhythmScore > 0.9 {
+			botScore += 0.1
+		}
+		if result.TimingFeatures.ConsistencyScore > 0.9 {
+			botScore += 0.1
+		}
+	}
+
+	if result.PressureFeatures != nil && result.PressureFeatures.HasPressureData {
+		if result.PressureFeatures.IsBotLike {
+			botScore += 0.15
+		}
+	}
+
+	botScore += result.AnomalyScore * 0.25
+
+	return math.Min(botScore, 1.0)
+}
+
+func (ca *ClickAnalyzer) AnalyzeWithAdvancedFeatures(verification *ClickVerification) *ClickAnalysisResult {
+	result := ca.AnalyzeClickVerification(verification)
+
+	advancedAnalyzer := NewAdvancedClickAnalyzer()
+	advancedResult := advancedAnalyzer.AnalyzeAdvanced(verification)
+
+	if advancedResult.TimingFeatures != nil {
+		result.RiskIndicators = append(result.RiskIndicators,
+			fmt.Sprintf("时序模式: %s", advancedResult.TimingFeatures.TimingPattern))
+		result.RiskIndicators = append(result.RiskIndicators,
+			fmt.Sprintf("节奏性分数: %.2f", advancedResult.TimingFeatures.RhythmScore))
+
+		if advancedResult.TimingFeatures.IsRhythmic {
+			result.AnomalyDetections = append(result.AnomalyDetections,
+				"检测到机械节奏模式")
+		}
+	}
+
+	if advancedResult.PressureFeatures != nil && advancedResult.PressureFeatures.HasPressureData {
+		result.RiskIndicators = append(result.RiskIndicators,
+			fmt.Sprintf("压力一致性: %.2f", advancedResult.PressureFeatures.PressureConsistency))
+	}
+
+	result.RiskIndicators = append(result.RiskIndicators, advancedResult.AnomalyPatterns...)
+
+	return result
 }

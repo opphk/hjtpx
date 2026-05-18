@@ -13,23 +13,23 @@ import (
 )
 
 type ProxyDetection struct {
-	IPAddress          string                 `json:"ip_address"`
-	IsProxy           bool                   `json:"is_proxy"`
-	IsVPN             bool                   `json:"is_vpn"`
-	IsTor             bool                   `json:"is_tor"`
-	IsDatacenter      bool                   `json:"is_datacenter"`
-	Confidence        float64                `json:"confidence"`
-	DetectionMethods   []string              `json:"detection_methods"`
-	RiskLevel         string                 `json:"risk_level"`
-	Country           string                 `json:"country"`
-	ISP               string                 `json:"isp"`
-	ASN               string                 `json:"asn"`
-	Hosting           bool                   `json:"hosting"`
-	Mobile            bool                   `json:"mobile"`
-	Score             float64                `json:"score"`
-	LastChecked       time.Time              `json:"last_checked"`
-	ResponseTime      time.Duration          `json:"response_time"`
-	Headers           map[string]string      `json:"headers"`
+	IPAddress        string            `json:"ip_address"`
+	IsProxy          bool              `json:"is_proxy"`
+	IsVPN            bool              `json:"is_vpn"`
+	IsTor            bool              `json:"is_tor"`
+	IsDatacenter     bool              `json:"is_datacenter"`
+	Confidence       float64           `json:"confidence"`
+	DetectionMethods []string          `json:"detection_methods"`
+	RiskLevel        string            `json:"risk_level"`
+	Country          string            `json:"country"`
+	ISP              string            `json:"isp"`
+	ASN              string            `json:"asn"`
+	Hosting          bool              `json:"hosting"`
+	Mobile           bool              `json:"mobile"`
+	Score            float64           `json:"score"`
+	LastChecked      time.Time         `json:"last_checked"`
+	ResponseTime     time.Duration     `json:"response_time"`
+	Headers          map[string]string `json:"headers"`
 }
 
 type IPInfo struct {
@@ -50,46 +50,46 @@ type IPInfo struct {
 }
 
 type ProxyDatabase struct {
-	knownProxies map[string]*ProxyDetection
-	knownVPNs    map[string]*ProxyDetection
-	knownTor     map[string]bool
+	knownProxies     map[string]*ProxyDetection
+	knownVPNs        map[string]*ProxyDetection
+	knownTor         map[string]bool
 	datacenterRanges []string
-	blacklist    map[string]time.Time
-	mu           sync.RWMutex
+	blacklist        map[string]time.Time
+	mu               sync.RWMutex
 }
 
 type ConnectionAnalysis struct {
-	Latency          time.Duration `json:"latency"`
-	Jitter           float64      `json:"jitter"`
-	PacketLoss       float64      `json:"packet_loss"`
-	Bandwidth        float64      `json:"bandwidth"`
-	IsProxyPattern   bool         `json:"is_proxy_pattern"`
-	IsVPNPattern     bool         `json:"is_vpn_pattern"`
-	AnomalyScore     float64      `json:"anomaly_score"`
+	Latency        time.Duration `json:"latency"`
+	Jitter         float64       `json:"jitter"`
+	PacketLoss     float64       `json:"packet_loss"`
+	Bandwidth      float64       `json:"bandwidth"`
+	IsProxyPattern bool          `json:"is_proxy_pattern"`
+	IsVPNPattern   bool          `json:"is_vpn_pattern"`
+	AnomalyScore   float64       `json:"anomaly_score"`
 }
 
 type ProxyDetectionService struct {
-	database      *ProxyDatabase
-	httpClient    *http.Client
-	ipapiEndpoint string
+	database       *ProxyDatabase
+	httpClient     *http.Client
+	ipapiEndpoint  string
 	ipdataEndpoint string
-	mu            sync.RWMutex
+	mu             sync.RWMutex
 }
 
 func NewProxyDetectionService() *ProxyDetectionService {
 	return &ProxyDetectionService{
-		database:      NewProxyDatabase(),
-		httpClient:    &http.Client{Timeout: 10 * time.Second},
-		ipapiEndpoint: "http://ip-api.com/json",
+		database:       NewProxyDatabase(),
+		httpClient:     &http.Client{Timeout: 10 * time.Second},
+		ipapiEndpoint:  "http://ip-api.com/json",
 		ipdataEndpoint: "https://api.ipdata.co",
 	}
 }
 
 func NewProxyDatabase() *ProxyDatabase {
 	return &ProxyDatabase{
-		knownProxies:   make(map[string]*ProxyDetection),
-		knownVPNs:      make(map[string]*ProxyDetection),
-		knownTor:       make(map[string]bool),
+		knownProxies: make(map[string]*ProxyDetection),
+		knownVPNs:    make(map[string]*ProxyDetection),
+		knownTor:     make(map[string]bool),
 		datacenterRanges: []string{
 			"3.", "4.", "8.", "13.", "15.", "16.", "17.", "18.", "20.",
 			"23.", "34.", "35.", "40.", "44.", "45.", "47.", "48.", "49.",
@@ -121,10 +121,10 @@ func (s *ProxyDetectionService) DetectProxy(ip string, headers map[string]string
 	startTime := time.Now()
 
 	detection := &ProxyDetection{
-		IPAddress:     ip,
-		Headers:       headers,
-		LastChecked:   time.Now(),
-		ResponseTime:  time.Since(startTime),
+		IPAddress:    ip,
+		Headers:      headers,
+		LastChecked:  time.Now(),
+		ResponseTime: time.Since(startTime),
 	}
 
 	detectionMethods := []string{}
@@ -460,26 +460,26 @@ func (s *ProxyDetectionService) ClearExpiredBlacklist() int {
 type RealtimeCheckRequest struct {
 	IPAddress string            `json:"ip_address"`
 	Headers   map[string]string `json:"headers"`
-	UserAgent string           `json:"user_agent"`
+	UserAgent string            `json:"user_agent"`
 }
 
 type RealtimeCheckResponse struct {
-	IPAddress    string                 `json:"ip_address"`
-	IsSuspicious bool                   `json:"is_suspicious"`
-	RiskLevel    string                 `json:"risk_level"`
-	Score        float64                `json:"score"`
-	Reasons      []string               `json:"reasons"`
-	Indicators   []string               `json:"indicators"`
-	Recommendations []string             `json:"recommendations"`
-	ProxyResult  *ProxyDetection        `json:"proxy_detection"`
-	Analysis     *ConnectionAnalysis     `json:"connection_analysis"`
+	IPAddress       string              `json:"ip_address"`
+	IsSuspicious    bool                `json:"is_suspicious"`
+	RiskLevel       string              `json:"risk_level"`
+	Score           float64             `json:"score"`
+	Reasons         []string            `json:"reasons"`
+	Indicators      []string            `json:"indicators"`
+	Recommendations []string            `json:"recommendations"`
+	ProxyResult     *ProxyDetection     `json:"proxy_detection"`
+	Analysis        *ConnectionAnalysis `json:"connection_analysis"`
 }
 
 func (s *ProxyDetectionService) RealtimeCheck(req *RealtimeCheckRequest) (*RealtimeCheckResponse, error) {
 	response := &RealtimeCheckResponse{
-		IPAddress:  req.IPAddress,
-		Reasons:    make([]string, 0),
-		Indicators: make([]string, 0),
+		IPAddress:       req.IPAddress,
+		Reasons:         make([]string, 0),
+		Indicators:      make([]string, 0),
 		Recommendations: make([]string, 0),
 	}
 
@@ -683,4 +683,543 @@ func (s *ProxyDetectionService) ValidateHeaders(headers map[string]string) (bool
 	}
 
 	return len(flagged) > 0, flagged
+}
+
+type EnhancedIPRiskAssessment struct {
+	IPAddress         string       `json:"ip_address"`
+	OverallRisk       float64      `json:"overall_risk"`
+	RiskLevel         string       `json:"risk_level"`
+	RiskFactors       []RiskFactor `json:"risk_factors"`
+	Confidence        float64      `json:"confidence"`
+	AssessmentMethods []string     `json:"assessment_methods"`
+	LastAssessed      time.Time    `json:"last_assessed"`
+}
+
+type RiskFactor struct {
+	Category    string   `json:"category"`
+	Description string   `json:"description"`
+	Score       float64  `json:"score"`
+	Evidence    []string `json:"evidence"`
+	Severity    string   `json:"severity"`
+}
+
+type EnhancedProxyDetectionService struct {
+	*ProxyDetectionService
+	ipRiskCache        map[string]*EnhancedIPRiskAssessment
+	knownVPNProviders  map[string]*VPNProviderInfo
+	knownCDNProviders  map[string]*CDNProviderInfo
+	threatIntelligence *ThreatIntelligence
+	assessmentMethods  []string
+	riskFactors        []RiskFactor
+	overallRisk         float64
+	riskLevel          string
+	confidence         float64
+}
+
+type VPNProviderInfo struct {
+	Name            string   `json:"name"`
+	IPRanges        []string `json:"ip_ranges"`
+	ASNPatterns     []string `json:"asn_patterns"`
+	DetectionWeight float64  `json:"detection_weight"`
+}
+
+type CDNProviderInfo struct {
+	Name            string   `json:"name"`
+	IPRanges        []string `json:"ip_ranges"`
+	HostingPatterns []string `json:"hosting_patterns"`
+	IsDatacenter    bool     `json:"is_datacenter"`
+}
+
+type ThreatIntelligence struct {
+	KnownMaliciousIPs map[string]bool
+	KnownBotNets      map[string]bool
+	LastUpdated       time.Time
+}
+
+func NewEnhancedProxyDetectionService() *EnhancedProxyDetectionService {
+	service := &EnhancedProxyDetectionService{
+		ProxyDetectionService: NewProxyDetectionService(),
+		ipRiskCache:           make(map[string]*EnhancedIPRiskAssessment),
+		knownVPNProviders:     make(map[string]*VPNProviderInfo),
+		knownCDNProviders:     make(map[string]*CDNProviderInfo),
+		threatIntelligence: &ThreatIntelligence{
+			KnownMaliciousIPs: make(map[string]bool),
+			KnownBotNets:      make(map[string]bool),
+			LastUpdated:       time.Now(),
+		},
+	}
+
+	service.initializeKnownProviders()
+	return service
+}
+
+func (s *EnhancedProxyDetectionService) initializeKnownProviders() {
+	s.knownVPNProviders["ExpressVPN"] = &VPNProviderInfo{
+		Name:            "ExpressVPN",
+		ASNPatterns:     []string{"AS400052", "AS400053", "AS400054"},
+		IPRanges:        []string{},
+		DetectionWeight: 0.9,
+	}
+
+	s.knownVPNProviders["NordVPN"] = &VPNProviderInfo{
+		Name:            "NordVPN",
+		ASNPatterns:     []string{"AS45090", "AS42366"},
+		IPRanges:        []string{},
+		DetectionWeight: 0.9,
+	}
+
+	s.knownVPNProviders["Surfshark"] = &VPNProviderInfo{
+		Name:            "Surfshark",
+		ASNPatterns:     []string{"AS400065", "AS400066"},
+		IPRanges:        []string{},
+		DetectionWeight: 0.85,
+	}
+
+	s.knownVPNProviders["PrivateInternetAccess"] = &VPNProviderInfo{
+		Name:            "Private Internet Access",
+		ASNPatterns:     []string{"AS393398", "AS393399"},
+		IPRanges:        []string{},
+		DetectionWeight: 0.9,
+	}
+
+	s.knownVPNProviders["ProtonVPN"] = &VPNProviderInfo{
+		Name:            "ProtonVPN",
+		ASNPatterns:     []string{"AS42385", "AS42386"},
+		IPRanges:        []string{},
+		DetectionWeight: 0.85,
+	}
+
+	s.knownCDNProviders["Cloudflare"] = &CDNProviderInfo{
+		Name:            "Cloudflare",
+		IPRanges:        []string{"104.16.0.0/12", "172.64.0.0/13", "198.41.128.0/17"},
+		HostingPatterns: []string{"cloudflare", "cloudflare.com"},
+		IsDatacenter:    true,
+	}
+
+	s.knownCDNProviders["Akamai"] = &CDNProviderInfo{
+		Name:            "Akamai",
+		IPRanges:        []string{"23.0.0.0/8", "104.64.0.0/10"},
+		HostingPatterns: []string{"akamaitechnologies", "akamai.com"},
+		IsDatacenter:    true,
+	}
+
+	s.knownCDNProviders["Fastly"] = &CDNProviderInfo{
+		Name:            "Fastly",
+		IPRanges:        []string{"151.101.0.0/16", "199.232.0.0/16"},
+		HostingPatterns: []string{"fastly", "fastly.com"},
+		IsDatacenter:    true,
+	}
+
+	s.knownCDNProviders["AWS_CloudFront"] = &CDNProviderInfo{
+		Name:            "AWS CloudFront",
+		IPRanges:        []string{"52.84.0.0/15", "54.230.0.0/16", "99.84.0.0/16"},
+		HostingPatterns: []string{"amazon", "aws", "cloudfront"},
+		IsDatacenter:    true,
+	}
+}
+
+func (s *EnhancedProxyDetectionService) AssessIPRisk(ip string, headers map[string]string, additionalData map[string]interface{}) *EnhancedIPRiskAssessment {
+	s.assessmentMethods = make([]string, 0)
+	s.riskFactors = make([]RiskFactor, 0)
+
+	assessment := &EnhancedIPRiskAssessment{
+		IPAddress:         ip,
+		RiskFactors:       make([]RiskFactor, 0),
+		AssessmentMethods: make([]string, 0),
+		LastAssessed:      time.Now(),
+	}
+
+	s.assessProxyRisk(ip, headers)
+	s.assessVPNRisk(ip, headers)
+	s.assessTorRisk(ip)
+	s.assessCDNRisk(ip)
+	s.assessHostingRisk(ip)
+	s.assessThreatIntelligence(ip)
+	s.assessBehavioralRisk(additionalData)
+	s.calculateOverallRisk()
+
+	assessment.AssessmentMethods = s.assessmentMethods
+	assessment.RiskFactors = s.riskFactors
+
+	return assessment
+}
+
+func (s *EnhancedProxyDetectionService) assessProxyRisk(ip string, headers map[string]string) {
+	method := "proxy_assessment"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	detection, err := s.ProxyDetectionService.DetectProxy(ip, headers)
+	if err != nil {
+		return
+	}
+
+	if detection.IsProxy {
+		riskFactor := RiskFactor{
+			Category:    "proxy",
+			Description: "代理服务器检测",
+			Score:       0.85,
+			Evidence:    detection.DetectionMethods,
+			Severity:    "high",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+
+	if len(headers) > 0 {
+		for headerName := range headers {
+			if strings.Contains(strings.ToLower(headerName), "forwarded") ||
+				strings.Contains(strings.ToLower(headerName), "proxy") {
+				riskFactor := RiskFactor{
+					Category:    "proxy_header",
+					Description: fmt.Sprintf("检测到代理相关头部: %s", headerName),
+					Score:       0.6,
+					Evidence:    []string{headerName + ": " + headers[headerName]},
+					Severity:    "medium",
+				}
+				s.riskFactors = append(s.riskFactors, riskFactor)
+			}
+		}
+	}
+}
+
+func (s *EnhancedProxyDetectionService) assessVPNRisk(ip string, headers map[string]string) {
+	method := "vpn_assessment"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	detection, err := s.ProxyDetectionService.DetectProxy(ip, headers)
+	if err != nil {
+		return
+	}
+
+	if detection.IsVPN {
+		riskFactor := RiskFactor{
+			Category:    "vpn",
+			Description: "VPN连接检测",
+			Score:       0.75,
+			Evidence:    []string{fmt.Sprintf("ISP: %s", detection.ISP)},
+			Severity:    "high",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+
+	for providerName, provider := range s.knownVPNProviders {
+		for _, asnPattern := range provider.ASNPatterns {
+			if strings.Contains(detection.ASN, asnPattern) {
+				riskFactor := RiskFactor{
+					Category:    "vpn_provider",
+					Description: fmt.Sprintf("检测到已知VPN提供商: %s", providerName),
+					Score:       provider.DetectionWeight,
+					Evidence:    []string{fmt.Sprintf("ASN: %s", detection.ASN)},
+					Severity:    "medium",
+				}
+				s.riskFactors = append(s.riskFactors, riskFactor)
+				break
+			}
+		}
+	}
+}
+
+func (s *EnhancedProxyDetectionService) assessTorRisk(ip string) {
+	method := "tor_assessment"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	isTor := s.isTorExitIP(ip)
+	if isTor {
+		riskFactor := RiskFactor{
+			Category:    "tor",
+			Description: "Tor出口节点检测",
+			Score:       0.95,
+			Evidence:    []string{"IP匹配已知Tor出口节点"},
+			Severity:    "critical",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+
+	torRelatedPatterns := []string{"tor", "onion", "torproject"}
+	for _, pattern := range torRelatedPatterns {
+		if strings.Contains(strings.ToLower(ip), pattern) {
+			riskFactor := RiskFactor{
+				Category:    "tor_related",
+				Description: "IP地址与Tor网络相关",
+				Score:       0.8,
+				Evidence:    []string{fmt.Sprintf("模式匹配: %s", pattern)},
+				Severity:    "high",
+			}
+			s.riskFactors = append(s.riskFactors, riskFactor)
+			break
+		}
+	}
+}
+
+func (s *EnhancedProxyDetectionService) assessCDNRisk(ip string) {
+	method := "cdn_assessment"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	isCDNIP := false
+	cdnName := ""
+
+	for providerName, provider := range s.knownCDNProviders {
+		for _, ipRange := range provider.IPRanges {
+			if strings.HasPrefix(ip, ipRange[:strings.LastIndex(ipRange, "/")]) {
+				isCDNIP = true
+				cdnName = providerName
+				break
+			}
+		}
+		if isCDNIP {
+			break
+		}
+	}
+
+	if isCDNIP {
+		riskFactor := RiskFactor{
+			Category:    "cdn_origin",
+			Description: fmt.Sprintf("检测到CDN提供商IP地址: %s", cdnName),
+			Score:       0.7,
+			Evidence:    []string{fmt.Sprintf("IP: %s", ip)},
+			Severity:    "medium",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+}
+
+func (s *EnhancedProxyDetectionService) assessHostingRisk(ip string) {
+	method := "hosting_assessment"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	detection, _ := s.ProxyDetectionService.DetectProxy(ip, make(map[string]string))
+
+	if detection.IsDatacenter {
+		riskFactor := RiskFactor{
+			Category:    "datacenter",
+			Description: "数据中心IP地址检测",
+			Score:       0.6,
+			Evidence:    []string{fmt.Sprintf("ISP: %s", detection.ISP)},
+			Severity:    "medium",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+
+	if detection.Hosting {
+		riskFactor := RiskFactor{
+			Category:    "hosting_provider",
+			Description: "托管服务提供商检测",
+			Score:       0.55,
+			Evidence:    []string{fmt.Sprintf("ISP: %s", detection.ISP)},
+			Severity:    "low",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+}
+
+func (s *EnhancedProxyDetectionService) assessThreatIntelligence(ip string) {
+	method := "threat_intelligence"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	if s.threatIntelligence.KnownMaliciousIPs[ip] {
+		riskFactor := RiskFactor{
+			Category:    "threat_intel",
+			Description: "IP地址在已知恶意IP列表中",
+			Score:       1.0,
+			Evidence:    []string{"威胁情报匹配"},
+			Severity:    "critical",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+
+	if s.threatIntelligence.KnownBotNets[ip] {
+		riskFactor := RiskFactor{
+			Category:    "botnet",
+			Description: "IP地址与已知僵尸网络相关",
+			Score:       1.0,
+			Evidence:    []string{"僵尸网络情报匹配"},
+			Severity:    "critical",
+		}
+		s.riskFactors = append(s.riskFactors, riskFactor)
+	}
+}
+
+func (s *EnhancedProxyDetectionService) assessBehavioralRisk(data map[string]interface{}) {
+	if data == nil {
+		return
+	}
+
+	method := "behavioral_assessment"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	if requestPattern, ok := data["request_pattern"].(string); ok {
+		if strings.Contains(strings.ToLower(requestPattern), "automated") {
+			riskFactor := RiskFactor{
+				Category:    "behavior",
+				Description: "检测到自动化请求模式",
+				Score:       0.8,
+				Evidence:    []string{"请求模式分析"},
+				Severity:    "high",
+			}
+			s.riskFactors = append(s.riskFactors, riskFactor)
+		}
+	}
+
+	if frequency, ok := data["request_frequency"].(float64); ok {
+		if frequency > 100 {
+			riskFactor := RiskFactor{
+				Category:    "frequency",
+				Description: "异常高频请求",
+				Score:       0.7,
+				Evidence:    []string{fmt.Sprintf("频率: %.2f req/min", frequency)},
+				Severity:    "medium",
+			}
+			s.riskFactors = append(s.riskFactors, riskFactor)
+		}
+	}
+}
+
+func (s *EnhancedProxyDetectionService) calculateOverallRisk() {
+	var totalScore float64
+	var weightSum float64
+
+	severityWeights := map[string]float64{
+		"critical": 1.5,
+		"high":     1.2,
+		"medium":   1.0,
+		"low":      0.7,
+	}
+
+	for _, factor := range s.riskFactors {
+		weight := severityWeights[factor.Severity]
+		totalScore += factor.Score * weight
+		weightSum += weight
+	}
+
+	if weightSum > 0 {
+		s.overallRisk = math.Min(totalScore/weightSum*100, 100)
+	}
+
+	if s.overallRisk >= 70 {
+		s.riskLevel = "high"
+		s.confidence = 0.85
+	} else if s.overallRisk >= 40 {
+		s.riskLevel = "medium"
+		s.confidence = 0.75
+	} else if s.overallRisk >= 20 {
+		s.riskLevel = "low"
+		s.confidence = 0.60
+	} else {
+		s.riskLevel = "minimal"
+		s.confidence = 0.50
+	}
+}
+
+func (s *EnhancedProxyDetectionService) GetCachedAssessment(ip string) (*EnhancedIPRiskAssessment, bool) {
+	if assessment, exists := s.ipRiskCache[ip]; exists {
+		if time.Since(assessment.LastAssessed) < 1*time.Hour {
+			return assessment, true
+		}
+	}
+	return nil, false
+}
+
+func (s *EnhancedProxyDetectionService) CacheAssessment(assessment *EnhancedIPRiskAssessment) {
+	s.ipRiskCache[assessment.IPAddress] = assessment
+
+	if len(s.ipRiskCache) > 10000 {
+		s.cleanupRiskCache()
+	}
+}
+
+func (s *EnhancedProxyDetectionService) cleanupRiskCache() {
+	cutoff := time.Now().Add(-1 * time.Hour)
+	for ip, assessment := range s.ipRiskCache {
+		if assessment.LastAssessed.Before(cutoff) {
+			delete(s.ipRiskCache, ip)
+		}
+	}
+}
+
+func (s *EnhancedProxyDetectionService) UpdateThreatIntelligence(maliciousIPs []string, botNets []string) {
+	for _, ip := range maliciousIPs {
+		s.threatIntelligence.KnownMaliciousIPs[ip] = true
+	}
+
+	for _, ip := range botNets {
+		s.threatIntelligence.KnownBotNets[ip] = true
+	}
+
+	s.threatIntelligence.LastUpdated = time.Now()
+}
+
+func (s *EnhancedProxyDetectionService) DetectVPN(ip string, headers map[string]string) (bool, float64, []string) {
+	method := "vpn_detection"
+	s.assessmentMethods = append(s.assessmentMethods, method)
+
+	isVPN := false
+	confidence := 0.0
+	evidence := make([]string, 0)
+
+	detection, err := s.ProxyDetectionService.DetectProxy(ip, headers)
+	if err == nil && detection.IsVPN {
+		isVPN = true
+		confidence = detection.Confidence
+		evidence = append(evidence, fmt.Sprintf("VPN检测: ISP=%s, ASN=%s", detection.ISP, detection.ASN))
+	}
+
+	for providerName, provider := range s.knownVPNProviders {
+		for _, asnPattern := range provider.ASNPatterns {
+			if strings.Contains(detection.ASN, asnPattern) {
+				isVPN = true
+				confidence = math.Max(confidence, provider.DetectionWeight)
+				evidence = append(evidence, fmt.Sprintf("VPN提供商: %s", providerName))
+			}
+		}
+	}
+
+	vpnHeaders := map[string]bool{
+		"X-VPN-Connection": true,
+		"X-VPN-Type":       true,
+		"X-ProxyVPN":       true,
+	}
+
+	for headerName := range headers {
+		if vpnHeaders[headerName] {
+			isVPN = true
+			confidence = math.Max(confidence, 0.95)
+			evidence = append(evidence, fmt.Sprintf("VPN头部: %s", headerName))
+		}
+	}
+
+	return isVPN, confidence, evidence
+}
+
+func (s *EnhancedProxyDetectionService) DetectTorNetwork(ip string) (bool, float64, []string) {
+	isTor := s.isTorExitIP(ip)
+	confidence := 0.0
+	evidence := make([]string, 0)
+
+	if isTor {
+		confidence = 0.95
+		evidence = append(evidence, "Tor出口节点匹配")
+	}
+
+	torIndicators := []string{"tor", "exit", "node"}
+	for _, indicator := range torIndicators {
+		if strings.Contains(strings.ToLower(ip), indicator) {
+			isTor = true
+			confidence = math.Max(confidence, 0.85)
+			evidence = append(evidence, fmt.Sprintf("Tor指标: %s", indicator))
+		}
+	}
+
+	return isTor, confidence, evidence
+}
+
+func (s *EnhancedProxyDetectionService) DetectCDNOrigin(ip string) (bool, string, float64) {
+	for providerName, provider := range s.knownCDNProviders {
+		for _, ipRange := range provider.IPRanges {
+			prefix := ipRange[:strings.Index(ipRange, "/")]
+			if strings.HasPrefix(ip, prefix) {
+				return true, providerName, 0.9
+			}
+		}
+	}
+
+	return false, "", 0.0
 }

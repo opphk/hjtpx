@@ -266,7 +266,7 @@ func TestRealtimeClientSendToClient(t *testing.T) {
 		Type:      "test",
 		Payload:   map[string]interface{}{"key": "value"},
 		Timestamp: time.Now().Unix(),
-		ID:       "msg-id",
+		ID:        "msg-id",
 	}
 
 	client.sendToClient(client, msg)
@@ -308,7 +308,7 @@ func TestContextManagement(t *testing.T) {
 }
 
 type testMessageHandler struct {
-	mu      sync.Mutex
+	mu       sync.Mutex
 	messages []Message
 }
 
@@ -328,7 +328,7 @@ func TestMessageHandler(t *testing.T) {
 			Type:      "test",
 			Payload:   map[string]interface{}{"index": i},
 			Timestamp: time.Now().Unix(),
-			ID:       "msg-" + string(rune('0'+i)),
+			ID:        "msg-" + string(rune('0'+i)),
 		}
 		handler.handleMessage(msg)
 	}

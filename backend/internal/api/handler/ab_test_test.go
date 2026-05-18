@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 	"github.com/hjtpx/hjtpx/internal/service"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewABTestHandler(t *testing.T) {
@@ -34,8 +34,8 @@ func TestCreateABTestRequest_Validation(t *testing.T) {
 		{
 			name: "valid request",
 			request: CreateABTestRequest{
-				Name:         "Test A/B",
-				Description:  "Test description",
+				Name:          "Test A/B",
+				Description:   "Test description",
 				ApplicationID: 1,
 				Variants: []CreateVariantRequest{
 					{Name: "Control", IsControl: true, TrafficPercent: 50},
@@ -69,9 +69,9 @@ func TestCreateABTestRequest_Validation(t *testing.T) {
 		{
 			name: "not enough variants",
 			request: CreateABTestRequest{
-				Name:         "Test A/B",
+				Name:          "Test A/B",
 				ApplicationID: 1,
-				Variants:     []CreateVariantRequest{},
+				Variants:      []CreateVariantRequest{},
 			},
 			wantErr: true,
 		},
@@ -180,12 +180,12 @@ func TestListABTestsQuery_Defaults(t *testing.T) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"page":        query.Page,
-			"page_size":   query.PageSize,
-			"keyword":     query.Keyword,
-			"status":      query.Status,
-			"sort_field":  query.SortField,
-			"sort_order":  query.SortOrder,
+			"page":       query.Page,
+			"page_size":  query.PageSize,
+			"keyword":    query.Keyword,
+			"status":     query.Status,
+			"sort_field": query.SortField,
+			"sort_order": query.SortOrder,
 		})
 	})
 
@@ -211,13 +211,13 @@ func TestListABTestsQuery_WithParams(t *testing.T) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"page":            query.Page,
-			"page_size":       query.PageSize,
-			"keyword":         query.Keyword,
-			"application_id":  query.ApplicationID,
-			"status":          query.Status,
-			"sort_field":      query.SortField,
-			"sort_order":      query.SortOrder,
+			"page":           query.Page,
+			"page_size":      query.PageSize,
+			"keyword":        query.Keyword,
+			"application_id": query.ApplicationID,
+			"status":         query.Status,
+			"sort_field":     query.SortField,
+			"sort_order":     query.SortOrder,
 		})
 	})
 
@@ -249,10 +249,10 @@ func TestAssignVariantRequest_Validation(t *testing.T) {
 		{
 			name: "valid request",
 			request: service.AssignVariantRequest{
-				TestID:   1,
+				TestID:    1,
 				SessionID: "session-123",
-				UserID:   &userID,
-				DeviceID: "device-456",
+				UserID:    &userID,
+				DeviceID:  "device-456",
 			},
 			wantErr: false,
 		},
@@ -314,22 +314,22 @@ func TestTrackEventRequest_Validation(t *testing.T) {
 		{
 			name: "valid request",
 			request: service.TrackEventRequest{
-				TestID:      1,
-				VariantID:   1,
-				SessionID:   "session-123",
-				EventName:   "conversion",
-				EventType:   "purchase",
+				TestID:       1,
+				VariantID:    1,
+				SessionID:    "session-123",
+				EventName:    "conversion",
+				EventType:    "purchase",
 				IsConversion: true,
-				Value:       99.99,
+				Value:        99.99,
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing test_id",
 			request: service.TrackEventRequest{
-				VariantID:  1,
-				SessionID:  "session-123",
-				EventName:  "conversion",
+				VariantID: 1,
+				SessionID: "session-123",
+				EventName: "conversion",
 			},
 			wantErr: true,
 		},

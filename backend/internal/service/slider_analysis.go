@@ -27,55 +27,55 @@ type SliderPoint struct {
 }
 
 type SliderAnalysisResult struct {
-	Trajectory            *SliderTrajectory        `json:"trajectory"`
-	Features              *SliderFeatures          `json:"features"`
-	AnomalyScore          float64                 `json:"anomaly_score"`
-	MLScore               float64                 `json:"ml_score"`
-	IsBot                 bool                    `json:"is_bot"`
-	Confidence            float64                 `json:"confidence"`
-	RiskIndicators        []string                `json:"risk_indicators"`
-	AnomalyDetections     []string                `json:"anomaly_detections"`
-	TrajectoryPattern     string                  `json:"trajectory_pattern"`
-	SpeedProfile          string                  `json:"speed_profile"`
-	OverallRiskScore      float64                 `json:"overall_risk_score"`
+	Trajectory        *SliderTrajectory `json:"trajectory"`
+	Features          *SliderFeatures   `json:"features"`
+	AnomalyScore      float64           `json:"anomaly_score"`
+	MLScore           float64           `json:"ml_score"`
+	IsBot             bool              `json:"is_bot"`
+	Confidence        float64           `json:"confidence"`
+	RiskIndicators    []string          `json:"risk_indicators"`
+	AnomalyDetections []string          `json:"anomaly_detections"`
+	TrajectoryPattern string            `json:"trajectory_pattern"`
+	SpeedProfile      string            `json:"speed_profile"`
+	OverallRiskScore  float64           `json:"overall_risk_score"`
 }
 
 type SliderFeatures struct {
-	TotalDistance         float64 `json:"total_distance"`
-	DirectDistance        float64 `json:"direct_distance"`
-	PathEfficiency        float64 `json:"path_efficiency"`
-	AverageSpeed          float64 `json:"average_speed"`
-	MaxSpeed              float64 `json:"max_speed"`
-	MinSpeed              float64 `json:"min_speed"`
-	SpeedVariance         float64 `json:"speed_variance"`
-	SpeedConsistency      float64 `json:"speed_consistency"`
-	AverageAcceleration   float64 `json:"average_acceleration"`
-	AccelerationVariance  float64 `json:"acceleration_variance"`
-	CurvatureAverage      float64 `json:"curvature_average"`
-	CurvatureVariance     float64 `json:"curvature_variance"`
-	CurvatureMax          float64 `json:"curvature_max"`
-	DirectionChanges      int     `json:"direction_changes"`
-	MicroCorrections      int     `json:"micro_corrections"`
-	BacktrackCount        int     `json:"backtrack_count"`
-	BacktrackDistance     float64 `json:"backtrack_distance"`
-	PauseCount            int     `json:"pause_count"`
-	TotalPauseDuration    float64 `json:"total_pause_duration"`
-	HoverCount            int     `json:"hover_count"`
-	HoverDurationTotal    float64 `json:"hover_duration_total"`
-	StartDelay            int64   `json:"start_delay"`
-	ResponseTime          int64   `json:"response_time"`
-	TotalDuration         int64   `json:"total_duration"`
-	SpeedDistribution     []float64 `json:"speed_distribution"`
-	AngleDistribution     []float64 `json:"angle_distribution"`
-	JitterScore           float64 `json:"jitter_score"`
-	SmoothnessScore       float64 `json:"smoothness_score"`
-	TrajectoryEntropy     float64 `json:"trajectory_entropy"`
-	VelocityProfile       []float64 `json:"velocity_profile"`
-	AccelerationProfile   []float64 `json:"acceleration_profile"`
-	FourierFrequency      float64 `json:"fourier_frequency"`
-	FourierEnergy         float64 `json:"fourier_energy"`
-	FractalDimension      float64 `json:"fractal_dimension"`
-	HumanLikenessScore    float64 `json:"human_likeness_score"`
+	TotalDistance        float64   `json:"total_distance"`
+	DirectDistance       float64   `json:"direct_distance"`
+	PathEfficiency       float64   `json:"path_efficiency"`
+	AverageSpeed         float64   `json:"average_speed"`
+	MaxSpeed             float64   `json:"max_speed"`
+	MinSpeed             float64   `json:"min_speed"`
+	SpeedVariance        float64   `json:"speed_variance"`
+	SpeedConsistency     float64   `json:"speed_consistency"`
+	AverageAcceleration  float64   `json:"average_acceleration"`
+	AccelerationVariance float64   `json:"acceleration_variance"`
+	CurvatureAverage     float64   `json:"curvature_average"`
+	CurvatureVariance    float64   `json:"curvature_variance"`
+	CurvatureMax         float64   `json:"curvature_max"`
+	DirectionChanges     int       `json:"direction_changes"`
+	MicroCorrections     int       `json:"micro_corrections"`
+	BacktrackCount       int       `json:"backtrack_count"`
+	BacktrackDistance    float64   `json:"backtrack_distance"`
+	PauseCount           int       `json:"pause_count"`
+	TotalPauseDuration   float64   `json:"total_pause_duration"`
+	HoverCount           int       `json:"hover_count"`
+	HoverDurationTotal   float64   `json:"hover_duration_total"`
+	StartDelay           int64     `json:"start_delay"`
+	ResponseTime         int64     `json:"response_time"`
+	TotalDuration        int64     `json:"total_duration"`
+	SpeedDistribution    []float64 `json:"speed_distribution"`
+	AngleDistribution    []float64 `json:"angle_distribution"`
+	JitterScore          float64   `json:"jitter_score"`
+	SmoothnessScore      float64   `json:"smoothness_score"`
+	TrajectoryEntropy    float64   `json:"trajectory_entropy"`
+	VelocityProfile      []float64 `json:"velocity_profile"`
+	AccelerationProfile  []float64 `json:"acceleration_profile"`
+	FourierFrequency     float64   `json:"fourier_frequency"`
+	FourierEnergy        float64   `json:"fourier_energy"`
+	FractalDimension     float64   `json:"fractal_dimension"`
+	HumanLikenessScore   float64   `json:"human_likeness_score"`
 }
 
 type SliderAnalyzer struct {
@@ -101,9 +101,9 @@ func NewSliderAnalyzer() *SliderAnalyzer {
 
 func NewSliderMLModel() *SliderMLModel {
 	return &SliderMLModel{
-		weights:        make([]float64, 30),
-		bias:           -15.0,
-		isTrained:      false,
+		weights:          make([]float64, 30),
+		bias:             -15.0,
+		isTrained:        false,
 		featureExtractor: NewSliderFeatureExtractor(),
 	}
 }
@@ -115,15 +115,15 @@ func NewSliderFeatureExtractor() *SliderFeatureExtractor {
 func (sa *SliderAnalyzer) AnalyzeSliderTrajectory(trajectory []SliderPoint, targetPosition int) (*SliderAnalysisResult, error) {
 	if len(trajectory) < 3 {
 		return &SliderAnalysisResult{
-			IsBot:        true,
-			Confidence:   0.9,
+			IsBot:          true,
+			Confidence:     0.9,
 			RiskIndicators: []string{"轨迹数据点不足"},
 		}, nil
 	}
 
 	result := &SliderAnalysisResult{
 		Trajectory:        sa.analyzeTrajectoryBasic(trajectory, targetPosition),
-		RiskIndicators:   make([]string, 0),
+		RiskIndicators:    make([]string, 0),
 		AnomalyDetections: make([]string, 0),
 	}
 
@@ -687,7 +687,7 @@ func (sfe *SliderFeatureExtractor) calculateJitterScore(trajectory []SliderPoint
 		distance2 := math.Sqrt(dx2*dx2 + dy2*dy2)
 
 		if distance1 > 0 {
-			totalJitter += math.Abs(distance1 - distance2) / distance1
+			totalJitter += math.Abs(distance1-distance2) / distance1
 		}
 	}
 
@@ -1431,11 +1431,11 @@ func (sa *SliderAnalyzer) min(values []float64) float64 {
 }
 
 type SliderTrajectoryValidator struct {
-	minPoints          int
-	maxDuration        int64
-	minDistance        float64
-	maxSpeed           float64
-	allowedYVariance   float64
+	minPoints        int
+	maxDuration      int64
+	minDistance      float64
+	maxSpeed         float64
+	allowedYVariance float64
 }
 
 func NewSliderTrajectoryValidator() *SliderTrajectoryValidator {
@@ -1632,4 +1632,786 @@ func GenerateBotLikeSliderTrajectory(startX, startY, endX, endY int, duration in
 	}
 
 	return trajectory
+}
+
+type DTWAnalyzer struct {
+	windowSize int
+}
+
+func NewDTWAnalyzer() *DTWAnalyzer {
+	return &DTWAnalyzer{
+		windowSize: 10,
+	}
+}
+
+func (dtw *DTWAnalyzer) ComputeDistance(traj1, traj2 []SliderPoint) float64 {
+	if len(traj1) == 0 || len(traj2) == 0 {
+		return math.MaxFloat64
+	}
+
+	n, m := len(traj1), len(traj2)
+	dtwMatrix := make([][]float64, n+1)
+	for i := range dtwMatrix {
+		dtwMatrix[i] = make([]float64, m+1)
+		for j := range dtwMatrix[i] {
+			dtwMatrix[i][j] = math.MaxFloat64
+		}
+	}
+	dtwMatrix[0][0] = 0
+
+	for i := 1; i <= n; i++ {
+		for j := 1; j <= m; j++ {
+			dist := dtw.pointDistance(traj1[i-1], traj2[j-1])
+			dtwMatrix[i][j] = dist + math.Min(math.Min(dtwMatrix[i-1][j], dtwMatrix[i][j-1]), dtwMatrix[i-1][j-1])
+		}
+	}
+
+	return dtwMatrix[n][m]
+}
+
+func (dtw *DTWAnalyzer) pointDistance(p1, p2 SliderPoint) float64 {
+	dx := float64(p1.X - p2.X)
+	dy := float64(p1.Y - p2.Y)
+	return math.Sqrt(dx*dx + dy*dy)
+}
+
+func (dtw *DTWAnalyzer) ComputeSimilarity(traj1, traj2 []SliderPoint) float64 {
+	distance := dtw.ComputeDistance(traj1, traj2)
+	maxPossibleDistance := 1000.0
+	similarity := 1.0 - math.Min(distance/maxPossibleDistance, 1.0)
+	return math.Max(0, similarity)
+}
+
+type BotTrajectoryPattern struct {
+	Name        string
+	Description string
+	Detector    func([]SliderPoint) bool
+	Weight      float64
+}
+
+type BotPatternLibrary struct {
+	patterns []BotTrajectoryPattern
+}
+
+func NewBotPatternLibrary() *BotPatternLibrary {
+	return &BotPatternLibrary{
+		patterns: []BotTrajectoryPattern{
+			{
+				Name:        "perfect_linear",
+				Description: "完全直线轨迹，无任何偏差",
+				Detector: func(traj []SliderPoint) bool {
+					if len(traj) < 3 {
+						return false
+					}
+					startX := float64(traj[0].X)
+					endX := float64(traj[len(traj)-1].X)
+					totalDist := 0.0
+					for i := 1; i < len(traj); i++ {
+						dx := float64(traj[i].X - traj[i-1].X)
+						dy := float64(traj[i].Y - traj[i-1].Y)
+						totalDist += math.Sqrt(dx*dx + dy*dy)
+					}
+					directDist := math.Abs(endX - startX)
+					efficiency := directDist / totalDist
+					return efficiency > 0.999
+				},
+				Weight: 0.4,
+			},
+			{
+				Name:        "constant_speed",
+				Description: "恒定速度移动",
+				Detector: func(traj []SliderPoint) bool {
+					if len(traj) < 5 {
+						return false
+					}
+					speeds := make([]float64, 0)
+					for i := 1; i < len(traj); i++ {
+						dx := float64(traj[i].X - traj[i-1].X)
+						dy := float64(traj[i].Y - traj[i-1].Y)
+						dist := math.Sqrt(dx*dx + dy*dy)
+						dt := float64(traj[i].Timestamp - traj[i-1].Timestamp)
+						if dt > 0 {
+							speeds = append(speeds, dist/dt*1000)
+						}
+					}
+					if len(speeds) < 3 {
+						return false
+					}
+					mean := 0.0
+					for _, s := range speeds {
+						mean += s
+					}
+					mean /= float64(len(speeds))
+					variance := 0.0
+					for _, s := range speeds {
+						variance += (s - mean) * (s - mean)
+					}
+					variance /= float64(len(speeds))
+					cv := math.Sqrt(variance) / mean
+					return cv < 0.02 && mean > 100
+				},
+				Weight: 0.35,
+			},
+			{
+				Name:        "instant_completion",
+				Description: "瞬间完成轨迹，无延迟",
+				Detector: func(traj []SliderPoint) bool {
+					if len(traj) < 2 {
+						return false
+					}
+					duration := traj[len(traj)-1].Timestamp - traj[0].Timestamp
+					totalDist := 0.0
+					for i := 1; i < len(traj); i++ {
+						dx := float64(traj[i].X - traj[i-1].X)
+						dy := float64(traj[i].Y - traj[i-1].Y)
+						totalDist += math.Sqrt(dx*dx + dy*dy)
+					}
+					return duration < 500 && totalDist > 100
+				},
+				Weight: 0.3,
+			},
+			{
+				Name:        "no_human_features",
+				Description: "缺少人类行为特征",
+				Detector: func(traj []SliderPoint) bool {
+					if len(traj) < 10 {
+						return false
+					}
+					hasPause := false
+					hasCorrection := false
+					hasYVariation := false
+
+					for i := 1; i < len(traj); i++ {
+						dx := float64(traj[i].X - traj[i-1].X)
+						dy := float64(traj[i].Y - traj[i-1].Y)
+						dist := math.Sqrt(dx*dx + dy*dy)
+						dt := float64(traj[i].Timestamp - traj[i-1].Timestamp)
+
+						if dist < 3 && dt > 100 {
+							hasPause = true
+						}
+
+						if i > 1 {
+							dx2 := float64(traj[i-1].X - traj[i-2].X)
+							dy2 := float64(traj[i-1].Y - traj[i-2].Y)
+							dot := dx*dx2 + dy*dy2
+							mag1 := math.Sqrt(dx*dx + dy*dy)
+							mag2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+							if mag1 > 0 && mag2 > 0 {
+								cosAngle := dot / (mag1 * mag2)
+								if cosAngle < 0.95 && cosAngle > -0.95 {
+									hasCorrection = true
+								}
+							}
+						}
+
+						if math.Abs(float64(traj[i].Y)-float64(traj[0].Y)) > 10 {
+							hasYVariation = true
+						}
+					}
+
+					return !hasPause && !hasCorrection && !hasYVariation
+				},
+				Weight: 0.25,
+			},
+			{
+				Name:        "mechanical_movement",
+				Description: "机械式移动，均匀采样",
+				Detector: func(traj []SliderPoint) bool {
+					if len(traj) < 5 {
+						return false
+					}
+					intervals := make([]float64, 0)
+					for i := 1; i < len(traj); i++ {
+						dt := float64(traj[i].Timestamp - traj[i-1].Timestamp)
+						if dt > 0 {
+							intervals = append(intervals, dt)
+						}
+					}
+					if len(intervals) < 3 {
+						return false
+					}
+					mean := 0.0
+					for _, t := range intervals {
+						mean += t
+					}
+					mean /= float64(len(intervals))
+					variance := 0.0
+					for _, t := range intervals {
+						variance += (t - mean) * (t - mean)
+					}
+					variance /= float64(len(intervals))
+					cv := math.Sqrt(variance) / mean
+					return cv < 0.05
+				},
+				Weight: 0.2,
+			},
+		},
+	}
+}
+
+func (bpl *BotPatternLibrary) DetectPatterns(traj []SliderPoint) (float64, []string) {
+	totalScore := 0.0
+	detectedPatterns := make([]string, 0)
+
+	for _, pattern := range bpl.patterns {
+		if pattern.Detector(traj) {
+			totalScore += pattern.Weight
+			detectedPatterns = append(detectedPatterns, pattern.Name+": "+pattern.Description)
+		}
+	}
+
+	return totalScore, detectedPatterns
+}
+
+func (sa *SliderAnalyzer) AnalyzeAdvancedFeatures(trajectory []SliderPoint, targetPosition int) map[string]float64 {
+	features := make(map[string]float64)
+
+	if len(trajectory) < 3 {
+		return features
+	}
+
+	accelerations := sa.extractAccelerations(trajectory)
+	if len(accelerations) > 0 {
+		features["acceleration_mean"] = sa.mean(accelerations)
+		features["acceleration_std"] = math.Sqrt(sa.variance(accelerations))
+		features["acceleration_max"] = sa.max(accelerations)
+		features["acceleration_min"] = sa.min(accelerations)
+
+		posCount := 0
+		negCount := 0
+		for _, acc := range accelerations {
+			if acc > 0 {
+				posCount++
+			} else {
+				negCount++
+			}
+		}
+		features["acceleration_pos_ratio"] = float64(posCount) / float64(len(accelerations))
+		features["acceleration_balance"] = math.Abs(float64(posCount)-float64(negCount)) / float64(len(accelerations))
+	}
+
+	curvatures := sa.extractCurvatures(trajectory)
+	if len(curvatures) > 0 {
+		features["curvature_mean"] = sa.mean(curvatures)
+		features["curvature_std"] = math.Sqrt(sa.variance(curvatures))
+		features["curvature_max"] = sa.max(curvatures)
+
+		significantCurvatures := 0
+		for _, c := range curvatures {
+			if c > 0.1 {
+				significantCurvatures++
+			}
+		}
+		features["curvature_significant_ratio"] = float64(significantCurvatures) / float64(len(curvatures))
+	}
+
+	jitter := sa.calculateJitterAdvanced(trajectory)
+	features["jitter_score"] = jitter
+	features["jitter_normalized"] = math.Min(jitter*10, 1.0)
+
+	smoothness := sa.calculateSmoothnessAdvanced(trajectory)
+	features["smoothness_score"] = smoothness
+
+	fourier := sa.calculateFourierFeatures(trajectory)
+	features["fourier_dominant_freq"] = fourier["dominant_freq"]
+	features["fourier_energy"] = fourier["energy"]
+	features["fourier_entropy"] = fourier["entropy"]
+
+	fractal := sa.calculateFractalDimensionSimple(trajectory)
+	features["fractal_dimension"] = fractal
+
+	wavelet := sa.calculateWaveletFeatures(trajectory)
+	features["wavelet_energy"] = wavelet["energy"]
+	features["wavelet_variance"] = wavelet["variance"]
+
+	speeds := sa.extractSpeeds(trajectory)
+	if len(speeds) > 0 {
+		features["speed_skewness"] = sa.calculateSkewness(speeds)
+		features["speed_kurtosis"] = sa.calculateKurtosis(speeds)
+		features["speed_range"] = sa.max(speeds) - sa.min(speeds)
+	}
+
+	features["start_delay_normalized"] = math.Min(float64(trajectory[0].Timestamp)/5000, 1.0)
+	features["end_behavior"] = sa.analyzeEndBehavior(trajectory)
+
+	return features
+}
+
+func (sa *SliderAnalyzer) extractAccelerations(trajectory []SliderPoint) []float64 {
+	speeds := sa.extractSpeeds(trajectory)
+	accelerations := make([]float64, 0)
+	for i := 2; i < len(speeds); i++ {
+		dt := float64(trajectory[i+1].Timestamp-trajectory[i-1].Timestamp) / 2
+		if dt > 0 {
+			accel := (speeds[i] - speeds[i-1]) / dt
+			accelerations = append(accelerations, accel)
+		}
+	}
+	return accelerations
+}
+
+func (sa *SliderAnalyzer) extractCurvatures(trajectory []SliderPoint) []float64 {
+	curvatures := make([]float64, 0)
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			curvatures = append(curvatures, math.Abs(angle))
+		}
+	}
+	return curvatures
+}
+
+func (sa *SliderAnalyzer) calculateJitterAdvanced(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 3 {
+		return 0
+	}
+
+	smoothed := sa.smoothTrajectoryAdvanced(trajectory, 3)
+	totalJitter := 0.0
+
+	for i := 1; i < len(trajectory); i++ {
+		dx1 := float64(trajectory[i].X - trajectory[i-1].X)
+		dy1 := float64(trajectory[i].Y - trajectory[i-1].Y)
+		dx2 := float64(smoothed[i].X - smoothed[i-1].X)
+		dy2 := float64(smoothed[i].Y - smoothed[i-1].Y)
+
+		distance1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+		distance2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+
+		if distance1 > 0 {
+			totalJitter += math.Abs(distance1-distance2) / distance1
+		}
+	}
+
+	return totalJitter / float64(len(trajectory)-1)
+}
+
+func (sa *SliderAnalyzer) smoothTrajectoryAdvanced(trajectory []SliderPoint, windowSize int) []SliderPoint {
+	if len(trajectory) < windowSize {
+		return trajectory
+	}
+
+	if windowSize%2 == 0 {
+		windowSize++
+	}
+
+	halfWindow := windowSize / 2
+	smoothed := make([]SliderPoint, len(trajectory))
+
+	for i := range trajectory {
+		start := i - halfWindow
+		end := i + halfWindow
+
+		if start < 0 {
+			start = 0
+		}
+		if end >= len(trajectory) {
+			end = len(trajectory) - 1
+		}
+
+		sumX := 0
+		sumY := 0
+		count := 0
+
+		for j := start; j <= end; j++ {
+			sumX += trajectory[j].X
+			sumY += trajectory[j].Y
+			count++
+		}
+
+		smoothed[i] = trajectory[i]
+		smoothed[i].X = sumX / count
+		smoothed[i].Y = sumY / count
+	}
+
+	return smoothed
+}
+
+func (sa *SliderAnalyzer) calculateSmoothnessAdvanced(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 3 {
+		return 0
+	}
+
+	totalAngleChange := 0.0
+	count := 0
+
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			totalAngleChange += angle
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 1.0
+	}
+
+	avgAngleChange := totalAngleChange / float64(count)
+	return 1.0 - math.Min(avgAngleChange/math.Pi, 1.0)
+}
+
+func (sa *SliderAnalyzer) calculateFourierFeatures(trajectory []SliderPoint) map[string]float64 {
+	features := make(map[string]float64)
+
+	if len(trajectory) < 8 {
+		return features
+	}
+
+	n := len(trajectory)
+	for n&(n-1) != 0 {
+		n--
+	}
+	if n < 8 {
+		return features
+	}
+
+	x := make([]float64, n)
+	for i := 0; i < n; i++ {
+		x[i] = float64(trajectory[i].X)
+	}
+
+	fft := sa.fft(x)
+	maxMag := 0.0
+	dominantIdx := 0
+	totalEnergy := 0.0
+
+	for i := 1; i < n/2; i++ {
+		mag := math.Sqrt(real(fft[i])*real(fft[i]) + imag(fft[i])*imag(fft[i]))
+		totalEnergy += mag * mag
+		if mag > maxMag {
+			maxMag = mag
+			dominantIdx = i
+		}
+	}
+
+	totalTime := float64(trajectory[n-1].Timestamp - trajectory[0].Timestamp)
+	if totalTime > 0 {
+		features["dominant_freq"] = float64(dominantIdx) / totalTime * 1000
+	}
+	features["energy"] = totalEnergy
+
+	entropy := 0.0
+	for i := 1; i < n/2; i++ {
+		mag := math.Sqrt(real(fft[i])*real(fft[i]) + imag(fft[i])*imag(fft[i]))
+		if mag > 0 {
+			p := (mag * mag) / totalEnergy
+			entropy -= p * math.Log2(p)
+		}
+	}
+	features["entropy"] = entropy
+
+	return features
+}
+
+func (sa *SliderAnalyzer) fft(x []float64) []complex128 {
+	n := len(x)
+	if n <= 1 {
+		result := make([]complex128, n)
+		for i, val := range x {
+			result[i] = complex(val, 0)
+		}
+		return result
+	}
+
+	even := make([]float64, n/2)
+	odd := make([]float64, n/2)
+	for i := 0; i < n/2; i++ {
+		even[i] = x[2*i]
+		odd[i] = x[2*i+1]
+	}
+
+	fftEven := sa.fft(even)
+	fftOdd := sa.fft(odd)
+
+	result := make([]complex128, n)
+	for k := 0; k < n/2; k++ {
+		theta := -2 * math.Pi * float64(k) / float64(n)
+		t := complex(math.Cos(theta), math.Sin(theta)) * fftOdd[k]
+		result[k] = complex(real(fftEven[k])+real(t), imag(fftEven[k])+imag(t))
+		result[k+n/2] = complex(real(fftEven[k])-real(t), imag(fftEven[k])-imag(t))
+	}
+
+	return result
+}
+
+func (sa *SliderAnalyzer) calculateWaveletFeatures(trajectory []SliderPoint) map[string]float64 {
+	features := make(map[string]float64)
+
+	if len(trajectory) < 4 {
+		return features
+	}
+
+	levels := 3
+	coefficients := make([][]float64, levels)
+
+	for level := 0; level < levels && len(trajectory) > 1; level++ {
+		coeffs := make([]float64, 0)
+		for i := 0; i < len(trajectory)-1; i += 2 {
+			avg := float64(trajectory[i].X+trajectory[i+1].X) / 2
+			detail := float64(trajectory[i].X-trajectory[i+1].X) / 2
+			coeffs = append(coeffs, detail)
+			_ = avg
+		}
+		coefficients[level] = coeffs
+
+		newTraj := make([]SliderPoint, len(coeffs))
+		for i := 0; i < len(coeffs); i++ {
+			newTraj[i] = SliderPoint{
+				X:         int(float64(trajectory[i].X+trajectory[i+1].X) / 2),
+				Y:         trajectory[i].Y,
+				Timestamp: trajectory[i].Timestamp,
+			}
+		}
+		trajectory = newTraj
+	}
+
+	totalEnergy := 0.0
+	for _, level := range coefficients {
+		for _, c := range level {
+			totalEnergy += c * c
+		}
+	}
+	features["energy"] = totalEnergy
+
+	var variance float64
+	for _, level := range coefficients {
+		if len(level) > 1 {
+			mean := 0.0
+			for _, c := range level {
+				mean += c
+			}
+			mean /= float64(len(level))
+			for _, c := range level {
+				variance += (c - mean) * (c - mean)
+			}
+			variance /= float64(len(level))
+		}
+	}
+	features["variance"] = variance
+
+	return features
+}
+
+func (sa *SliderAnalyzer) calculateSkewness(values []float64) float64 {
+	if len(values) < 3 {
+		return 0
+	}
+	mean := sa.mean(values)
+	stdDev := math.Sqrt(sa.variance(values))
+	if stdDev == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += math.Pow((v-mean)/stdDev, 3)
+	}
+	return sum / float64(len(values))
+}
+
+func (sa *SliderAnalyzer) calculateKurtosis(values []float64) float64 {
+	if len(values) < 4 {
+		return 0
+	}
+	mean := sa.mean(values)
+	stdDev := math.Sqrt(sa.variance(values))
+	if stdDev == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += math.Pow((v-mean)/stdDev, 4)
+	}
+	return (sum / float64(len(values))) - 3
+}
+
+func (sa *SliderAnalyzer) analyzeEndBehavior(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 5 {
+		return 0.5
+	}
+
+	lastPoints := trajectory[len(trajectory)-5:]
+	totalDist := 0.0
+	netDist := 0.0
+
+	for i := 1; i < len(lastPoints); i++ {
+		dx := float64(lastPoints[i].X - lastPoints[i-1].X)
+		dy := float64(lastPoints[i].Y - lastPoints[i-1].Y)
+		totalDist += math.Sqrt(dx*dx + dy*dy)
+	}
+
+	startX := float64(lastPoints[0].X)
+	startY := float64(lastPoints[0].Y)
+	endX := float64(lastPoints[len(lastPoints)-1].X)
+	endY := float64(lastPoints[len(lastPoints)-1].Y)
+	netDist = math.Sqrt((endX-startX)*(endX-startX) + (endY-startY)*(endY-startY))
+
+	if totalDist == 0 {
+		return 0.5
+	}
+
+	return netDist / totalDist
+}
+
+func (sa *SliderAnalyzer) calculateFractalDimensionSimple(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 10 {
+		return 1.0
+	}
+
+	minX, maxX := trajectory[0].X, trajectory[0].X
+	minY, maxY := trajectory[0].Y, trajectory[0].Y
+
+	for _, p := range trajectory {
+		if p.X < minX {
+			minX = p.X
+		}
+		if p.X > maxX {
+			maxX = p.X
+		}
+		if p.Y < minY {
+			minY = p.Y
+		}
+		if p.Y > maxY {
+			maxY = p.Y
+		}
+	}
+
+	width := maxX - minX
+	height := maxY - minY
+
+	if width == 0 && height == 0 {
+		return 1.0
+	}
+
+	maxScale := 5
+	logScales := make([]float64, maxScale)
+	logCounts := make([]float64, maxScale)
+
+	for scale := 0; scale < maxScale; scale++ {
+		boxSize := int(math.Pow(2, float64(maxScale-scale)))
+		grid := make(map[string]bool)
+
+		for _, p := range trajectory {
+			gx := (p.X - minX) / boxSize
+			gy := (p.Y - minY) / boxSize
+			key := fmt.Sprintf("%d,%d", gx, gy)
+			grid[key] = true
+		}
+
+		logScales[scale] = math.Log(1.0 / float64(boxSize))
+		logCounts[scale] = math.Log(float64(len(grid)))
+	}
+
+	return math.Max(1.0, math.Min(sa.linearRegressionSimple(logScales, logCounts), 2.0))
+}
+
+func (sa *SliderAnalyzer) linearRegressionSimple(x, y []float64) float64 {
+	n := len(x)
+	if n != len(y) || n < 2 {
+		return 1.0
+	}
+
+	sumX, sumY, sumXY, sumX2 := 0.0, 0.0, 0.0, 0.0
+	for i := 0; i < n; i++ {
+		sumX += x[i]
+		sumY += y[i]
+		sumXY += x[i] * y[i]
+		sumX2 += x[i] * x[i]
+	}
+
+	denominator := float64(n)*sumX2 - sumX*sumX
+	if denominator == 0 {
+		return 1.0
+	}
+
+	return (float64(n)*sumXY - sumX*sumY) / denominator
+}
+
+func (sa *SliderAnalyzer) CalculateAdvancedBotScore(trajectory []SliderPoint, targetPosition int) (float64, []string) {
+	if len(trajectory) < 3 {
+		return 1.0, []string{"轨迹数据点不足"}
+	}
+
+	dtwAnalyzer := NewDTWAnalyzer()
+	botPatternLibrary := NewBotPatternLibrary()
+	_ = dtwAnalyzer
+
+	botScore := 0.0
+	indicators := make([]string, 0)
+
+	advancedFeatures := sa.AnalyzeAdvancedFeatures(trajectory, targetPosition)
+
+	if advancedFeatures["acceleration_std"] < 0.01 && advancedFeatures["acceleration_mean"] < 0.1 {
+		botScore += 0.15
+		indicators = append(indicators, "加速度变化异常平稳")
+	}
+
+	if advancedFeatures["curvature_mean"] < 0.01 && advancedFeatures["curvature_significant_ratio"] < 0.05 {
+		botScore += 0.2
+		indicators = append(indicators, "曲率异常低")
+	}
+
+	if advancedFeatures["jitter_normalized"] < 0.05 {
+		botScore += 0.15
+		indicators = append(indicators, "轨迹抖动异常低")
+	}
+
+	if advancedFeatures["fourier_entropy"] < 2.0 {
+		botScore += 0.1
+		indicators = append(indicators, "频谱熵异常低")
+	}
+
+	if advancedFeatures["fractal_dimension"] < 1.2 {
+		botScore += 0.15
+		indicators = append(indicators, "分形维数过低")
+	}
+
+	if advancedFeatures["speed_skewness"] < 0.1 && advancedFeatures["speed_kurtosis"] < 0.5 {
+		botScore += 0.1
+		indicators = append(indicators, "速度分布异常规则")
+	}
+
+	if advancedFeatures["end_behavior"] > 0.99 {
+		botScore += 0.1
+		indicators = append(indicators, "末端行为异常")
+	}
+
+	patternScore, patternIndicators := botPatternLibrary.DetectPatterns(trajectory)
+	botScore += patternScore * 0.3
+	indicators = append(indicators, patternIndicators...)
+
+	return math.Min(botScore, 1.0), indicators
 }

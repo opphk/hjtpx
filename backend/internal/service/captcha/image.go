@@ -64,8 +64,8 @@ func (g *ImageGenerator) GenerateSliderCaptcha() (*CaptchaResult, error) {
 
 	background := g.generateBackground()
 
-	gapX := rand.Intn(g.width - g.sliderWidth - 20) + 10
-	gapY := rand.Intn(g.height - g.sliderHeight - 20) + 10
+	gapX := rand.Intn(g.width-g.sliderWidth-20) + 10
+	gapY := rand.Intn(g.height-g.sliderHeight-20) + 10
 
 	gap := image.Rect(gapX, gapY, gapX+g.sliderWidth, gapY+g.sliderHeight)
 
@@ -215,10 +215,10 @@ func (g *ImageGenerator) drawGeometricBackground(img *image.RGBA) {
 		size := 10 + rand.Intn(30)
 
 		c := color.RGBA{
-			R:     uint8(rand.Intn(200)),
-			G:     uint8(rand.Intn(200)),
-			B:     uint8(rand.Intn(200)),
-			A:     uint8(30 + rand.Intn(50)),
+			R: uint8(rand.Intn(200)),
+			G: uint8(rand.Intn(200)),
+			B: uint8(rand.Intn(200)),
+			A: uint8(30 + rand.Intn(50)),
 		}
 
 		switch shapeType {

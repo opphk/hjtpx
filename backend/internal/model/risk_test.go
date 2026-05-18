@@ -32,10 +32,10 @@ func TestDetermineRiskLevel(t *testing.T) {
 
 func TestCalculateHumanProbability(t *testing.T) {
 	tests := []struct {
-		name     string
-		score    float64
-		minProb  float64
-		maxProb  float64
+		name    string
+		score   float64
+		minProb float64
+		maxProb float64
 	}{
 		{"zero score", 0, 1.0, 1.0},
 		{"low score", 10, 10.8, 10.9},
@@ -67,14 +67,14 @@ func TestNewRiskContext(t *testing.T) {
 
 func TestRiskContext_HasHighRiskIndicators(t *testing.T) {
 	tests := []struct {
-		name         string
-		isProxy      bool
-		isVPN        bool
-		isTor        bool
-		failureCount int
-		mouseSpeed   float64
+		name          string
+		isProxy       bool
+		isVPN         bool
+		isTor         bool
+		failureCount  int
+		mouseSpeed    float64
 		timeFromStart int64
-		expected     bool
+		expected      bool
 	}{
 		{"all safe", false, false, false, 0, 100, 5000, false},
 		{"is proxy", true, false, false, 0, 100, 5000, true},
@@ -127,12 +127,12 @@ func TestRiskContext_GetTrustScore(t *testing.T) {
 			ctx := &RiskContext{
 				VerificationCount: tt.verificationCount,
 				FailureCount:      tt.failureCount,
-				IsProxy:            tt.isProxy,
-				IsVPN:              tt.isVPN,
-				IsTor:              tt.isTor,
-				HasTouchDevice:     tt.hasTouchDevice,
-				Timezone:           tt.timezone,
-				Language:           tt.language,
+				IsProxy:           tt.isProxy,
+				IsVPN:             tt.isVPN,
+				IsTor:             tt.isTor,
+				HasTouchDevice:    tt.hasTouchDevice,
+				Timezone:          tt.timezone,
+				Language:          tt.language,
 			}
 			score := ctx.GetTrustScore()
 			assert.Equal(t, tt.expectedScore, score)

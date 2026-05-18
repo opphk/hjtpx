@@ -163,19 +163,19 @@ func (s *ConfigService) Validate(key, value string) error {
 
 func (s *ConfigService) InitializeDefaults() error {
 	defaults := map[string]string{
-		"captcha.difficulty":                   "3",
-		"captcha.timeout":                      "120",
-		"captcha.max_attempts":                "3",
-		"risk.threshold_pass":                  "75",
-		"risk.threshold_review":                "60",
-		"risk.enable_env_check":               "true",
-		"rate_limit.enabled":                  "true",
-		"rate_limit.max_per_ip":               "100",
-		"session.timeout":                     "30",
-		"session.storage":                      "redis",
-		"security.enable_csrf":                 "true",
-		"security.enable_captcha":              "true",
-		"security.enable_replay_protection":  "true",
+		"captcha.difficulty":                "3",
+		"captcha.timeout":                   "120",
+		"captcha.max_attempts":              "3",
+		"risk.threshold_pass":               "75",
+		"risk.threshold_review":             "60",
+		"risk.enable_env_check":             "true",
+		"rate_limit.enabled":                "true",
+		"rate_limit.max_per_ip":             "100",
+		"session.timeout":                   "30",
+		"session.storage":                   "redis",
+		"security.enable_csrf":              "true",
+		"security.enable_captcha":           "true",
+		"security.enable_replay_protection": "true",
 	}
 
 	existingConfigs, err := s.GetAll()

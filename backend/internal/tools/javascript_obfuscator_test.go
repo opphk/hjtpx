@@ -22,11 +22,11 @@ func TestObfuscatorCreation(t *testing.T) {
 
 func TestObfuscatorWithCustomConfig(t *testing.T) {
 	config := ObfuscatorConfig{
-		EnableVariableObfuscation:  false,
-		EnableStringEncryption:    false,
-		EnableCodeCompression:     false,
+		EnableVariableObfuscation:   false,
+		EnableStringEncryption:      false,
+		EnableCodeCompression:       false,
 		EnableControlFlowFlattening: false,
-		StringEncryptionKey:      []byte("test-key-1234567890"),
+		StringEncryptionKey:         []byte("test-key-1234567890"),
 	}
 	obfuscator := NewObfuscator(config)
 	if obfuscator.config.EnableVariableObfuscation != false {
@@ -81,7 +81,6 @@ return true;
 	}
 }
 
-
 func TestObfuscateVariables(t *testing.T) {
 	code := `var myVariable = 10;
 let anotherVar = "test";
@@ -132,7 +131,6 @@ var token = "Bearer xyz123";`
 		t.Error("Encrypted strings should use decoder function")
 	}
 }
-
 
 func TestEncryptString(t *testing.T) {
 	plaintext := "Hello, World!"
@@ -185,7 +183,7 @@ func TestCompressCode(t *testing.T) {
 }`
 	obfuscator := NewObfuscator(ObfuscatorConfig{
 		EnableCodeCompression: true,
-		CompressWhitespace:   true,
+		CompressWhitespace:    true,
 	})
 	result := obfuscator.compressCode(code)
 
@@ -597,8 +595,6 @@ func TestObfuscationOptions(t *testing.T) {
 	}
 }
 
-
-
 func TestGetRandomInt(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		val := GetRandomInt(1, 10)
@@ -725,8 +721,8 @@ func TestObfuscateWithConfig(t *testing.T) {
 	code := `function hello() { return "world"; }`
 	config := ObfuscatorConfig{
 		EnableVariableObfuscation: true,
-		EnableStringEncryption:   false,
-		RemoveComments:           true,
+		EnableStringEncryption:    false,
+		RemoveComments:            true,
 	}
 
 	result, err := ObfuscateWithConfig(code, config)
@@ -753,14 +749,14 @@ function multiply(x, y) {
 }`
 
 	config := ObfuscatorConfig{
-		EnableVariableObfuscation:  true,
-		EnableStringEncryption:     true,
-		EnableCodeCompression:      true,
+		EnableVariableObfuscation:   true,
+		EnableStringEncryption:      true,
+		EnableCodeCompression:       true,
 		EnableControlFlowFlattening: true,
-		EnableFunctionWrapping:     true,
-		RemoveComments:            true,
-		PreserveConsole:           true,
-		StringEncryptionKey:       []byte("test-key-1234567890"),
+		EnableFunctionWrapping:      true,
+		RemoveComments:              true,
+		PreserveConsole:             true,
+		StringEncryptionKey:         []byte("test-key-1234567890"),
 	}
 
 	obfuscator := NewObfuscator(config)
@@ -818,5 +814,310 @@ func TestObfuscationDeterminism(t *testing.T) {
 
 	if result1 != result2 {
 		t.Error("Same code with same key should produce deterministic results")
+	}
+}
+
+func TestFlattenControlFlowAdvanced(t *testing.T) {
+	code := `for (var i = 0; i < 10; i++) { sum += i; }
+while (true) { break; }`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableControlFlowFlattening: true,
+	})
+	result := obfuscator.flattenControlFlowAdvanced(code)
+
+	if result == code {
+		t.Error("Advanced control flow flattening should modify code")
+	}
+}
+
+func TestAddStateMachineFlattening(t *testing.T) {
+	code := `for (var i = 0; i < 10; i++) { sum += i; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.addStateMachineFlattening(code)
+
+	if !strings.Contains(result, "switch(") {
+		t.Error("State machine should use switch statements")
+	}
+}
+
+func TestAddOpaquePredicate(t *testing.T) {
+	code := `var x = 10;`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.addOpaquePredicate(code)
+
+	if !strings.Contains(result, "Math.random()") {
+		t.Error("Opaque predicate should use random values")
+	}
+}
+
+func TestAddLoopUnswitching(t *testing.T) {
+	code := `if (x > 0) { console.log("positive"); } else { console.log("non-positive"); }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.addLoopUnswitching(code)
+
+	if !strings.Contains(result, "switch(") {
+		t.Error("Loop unswitching should use switch statements")
+	}
+}
+
+func TestEncryptStringsDynamic(t *testing.T) {
+	code := `var url = "https://api.example.com";`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableStringEncryption: true,
+	})
+	result := obfuscator.encryptStringsDynamic(code)
+
+	if strings.Contains(result, "https://api.example.com") {
+		t.Error("Dynamic string encryption should encrypt strings")
+	}
+}
+
+func TestGenerateDynamicDecryptor(t *testing.T) {
+	obfuscator := NewObfuscator()
+	decoderVar := "_0xTest"
+	result := obfuscator.generateDynamicDecryptor(decoderVar)
+
+	if !strings.Contains(result, "atob") {
+		t.Error("Dynamic decryptor should use atob for base64 decoding")
+	}
+	if !strings.Contains(result, decoderVar) {
+		t.Error("Dynamic decryptor should use the provided decoder variable name")
+	}
+}
+
+func TestCreateVirtualization(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.createVirtualization(code)
+
+	if result == "" {
+		t.Error("Virtualization should produce output")
+	}
+}
+
+func TestVirtualMachineStructure(t *testing.T) {
+	vm := &VirtualMachine{
+		instructions: make([]string, 0),
+		registers:    make(map[string]int),
+	}
+
+	vm.addInstruction("LOAD_CONST", 0)
+	vm.addInstruction("NOP", 0)
+
+	if len(vm.instructions) != 2 {
+		t.Error("VM should have 2 instructions")
+	}
+
+	loader := vm.generateLoader()
+	if !strings.Contains(loader, "switch") {
+		t.Error("VM loader should use switch statement")
+	}
+}
+
+func TestVirtualMachineCompile(t *testing.T) {
+	vm := &VirtualMachine{
+		instructions: make([]string, 0),
+		registers:    make(map[string]int),
+	}
+
+	code := "test"
+	result := vm.compile(code)
+
+	if !strings.Contains(result, "\\x") {
+		t.Error("Compiled code should use hex escape sequences")
+	}
+}
+
+func TestVirtualMachineWrapVMCode(t *testing.T) {
+	vm := &VirtualMachine{
+		instructions: make([]string, 0),
+		registers:    make(map[string]int),
+	}
+
+	code := "test"
+	result := vm.wrapVMCode(code)
+
+	if !strings.Contains(result, "parseInt") {
+		t.Error("Wrapped VM code should use parseInt")
+	}
+}
+
+func TestInjectEnhancedAntiDebug(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.InjectEnhancedAntiDebug(code)
+
+	if !strings.Contains(result, "keydown") {
+		t.Error("Enhanced anti-debug should listen for keydown events")
+	}
+	if !strings.Contains(result, "keyCode==123") {
+		t.Error("Enhanced anti-debug should detect F12 key")
+	}
+}
+
+func TestInjectSelfDestruct(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	err := obfuscator.InjectSelfDestruct(code)
+
+	if err != nil {
+		t.Error("Self destruct injection should not return error")
+	}
+}
+
+func TestAddMemoryProtection(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.AddMemoryProtection(code)
+
+	if !strings.Contains(result, "Object.defineProperty") {
+		t.Error("Memory protection should use Object.defineProperty")
+	}
+}
+
+func TestApplyAdvancedObfuscation(t *testing.T) {
+	code := `function hello() { return "world"; }`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableVariableObfuscation:   true,
+		EnableStringEncryption:      true,
+		EnableControlFlowFlattening: true,
+		EnableDeadCodeInjection:     true,
+		EnableFunctionWrapping:      true,
+	})
+
+	result, err := obfuscator.ApplyAdvancedObfuscation(code)
+	if err != nil {
+		t.Fatalf("Advanced obfuscation failed: %v", err)
+	}
+
+	if result == code {
+		t.Error("Advanced obfuscation should modify code")
+	}
+}
+
+func TestWrapCodeAdvanced(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.wrapCodeAdvanced(code)
+
+	if !strings.Contains(result, "window") {
+		t.Error("Advanced wrapping should use window object")
+	}
+}
+
+func TestInjectDeadCodeAdvanced(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.injectDeadCodeAdvanced(code)
+
+	if !strings.Contains(result, "Math.random()") {
+		t.Error("Advanced dead code should use random values")
+	}
+}
+
+func TestGenerateRandomIntExpr(t *testing.T) {
+	obfuscator := NewObfuscator()
+	result := obfuscator.generateRandomIntExpr()
+
+	if result == "" {
+		t.Error("Random int expression should not be empty")
+	}
+}
+
+func TestGenerateRandomBoolExpr(t *testing.T) {
+	obfuscator := NewObfuscator()
+	result := obfuscator.generateRandomBoolExpr()
+
+	if !strings.Contains(result, ">") {
+		t.Error("Random bool expression should use comparison operator")
+	}
+}
+
+func TestCompressCodeAdvanced(t *testing.T) {
+	code := `function  test()  {
+    var   x   =   10;
+}`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		CompressWhitespace: true,
+	})
+	result := obfuscator.compressCodeAdvanced(code)
+
+	if strings.Contains(result, "  ") {
+		t.Error("Advanced compression should remove multiple spaces")
+	}
+}
+
+func TestCalculateObfuscationEntropy(t *testing.T) {
+	code := `function test() { return true; }`
+
+	entropy := CalculateObfuscationEntropy(code)
+	if entropy <= 0 {
+		t.Error("Entropy should be positive for non-empty code")
+	}
+
+	emptyEntropy := CalculateObfuscationEntropy("")
+	if emptyEntropy != 0 {
+		t.Error("Entropy should be 0 for empty code")
+	}
+}
+
+func TestEstimateObfuscationQuality(t *testing.T) {
+	original := `function test() { return "hello world"; }`
+	obfuscated := `function _0x1(){return _0x2;}`
+
+	quality := EstimateObfuscationQuality(original, obfuscated)
+
+	if _, ok := quality["entropy_original"]; !ok {
+		t.Error("Quality estimate should include entropy_original")
+	}
+	if _, ok := quality["entropy_obfuscated"]; !ok {
+		t.Error("Quality estimate should include entropy_obfuscated")
+	}
+	if _, ok := quality["overall_quality"]; !ok {
+		t.Error("Quality estimate should include overall_quality")
+	}
+}
+
+func TestGenerateObfuscationCertificate(t *testing.T) {
+	original := `function test() { return true; }`
+	obfuscated := `function _0x1(){return!1;}`
+
+	config := ObfuscatorConfig{
+		EnableVariableObfuscation: true,
+		EnableStringEncryption:    true,
+		EnableCodeCompression:     true,
+	}
+
+	cert := GenerateObfuscationCertificate(original, obfuscated, config)
+
+	if !strings.Contains(cert, "代码混淆证书") {
+		t.Error("Certificate should contain title")
+	}
+}
+
+func TestCreateSelfCheckingCode(t *testing.T) {
+	code := `function test() { return true; }`
+	key := []byte("test-key-1234567890")
+
+	result := CreateSelfCheckingCode(code, key)
+
+	if !strings.Contains(result, "data-hash") {
+		t.Error("Self-checking code should include hash attribute")
+	}
+	if !strings.Contains(result, code) {
+		t.Error("Original code should be preserved")
 	}
 }

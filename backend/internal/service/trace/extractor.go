@@ -208,7 +208,7 @@ func (e *TraceExtractor) calculateMaxAcceleration(traceData *model.TraceData) fl
 
 		time := float64(next.Timestamp-prev.Timestamp) / 1000.0
 		if time > 0 && time < 1000 {
-			accel := math.Abs(v2 - v1) / time
+			accel := math.Abs(v2-v1) / time
 			if accel > maxAccel {
 				maxAccel = accel
 			}

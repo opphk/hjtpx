@@ -20,7 +20,7 @@ type ServiceInfo struct {
 	Name      string            `json:"name"`
 	Endpoints []string          `json:"endpoints"`
 	Healthy   bool              `json:"healthy"`
-	LastCheck time.Time        `json:"last_check"`
+	LastCheck time.Time         `json:"last_check"`
 	Metadata  map[string]string `json:"metadata"`
 }
 
@@ -44,11 +44,11 @@ func (gw *APIGateway) RegisterService(name string, endpoints []string, metadata 
 	defer gw.registry.mu.Unlock()
 
 	gw.registry.services[name] = &ServiceInfo{
-		Name:       name,
-		Endpoints:  endpoints,
-		Healthy:    true,
+		Name:      name,
+		Endpoints: endpoints,
+		Healthy:   true,
 		LastCheck: time.Now(),
-		Metadata:   metadata,
+		Metadata:  metadata,
 	}
 }
 
@@ -65,7 +65,7 @@ func (gw *APIGateway) GetService(name string) (*ServiceInfo, bool) {
 func (gw *APIGateway) GatewayMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
-		
+
 		// 记录请求
 		c.Header("X-Gateway-Version", "v1.0")
 
@@ -93,9 +93,9 @@ func APIVersionMiddleware() gin.HandlerFunc {
 
 // HealthCheckHandler 健康检查处理
 func (gw *APIGateway) HealthCheckHandler(c *gin.Context) {
-		status := map[string]interface{}{
-		"status": "healthy",
-		"services": gw.registry.services,
+	status := map[string]interface{}{
+		"status":    "healthy",
+		"services":  gw.registry.services,
 		"timestamp": time.Now().Format(time.RFC3339),
 	}
 	c.JSON(http.StatusOK, status)

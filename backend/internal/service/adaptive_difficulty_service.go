@@ -10,10 +10,10 @@ import (
 type DifficultyLevel string
 
 const (
-	DifficultyEasy    DifficultyLevel = "Easy"
-	DifficultyMedium  DifficultyLevel = "Medium"
-	DifficultyHard    DifficultyLevel = "Hard"
-	DifficultyExpert  DifficultyLevel = "Expert"
+	DifficultyEasy   DifficultyLevel = "Easy"
+	DifficultyMedium DifficultyLevel = "Medium"
+	DifficultyHard   DifficultyLevel = "Hard"
+	DifficultyExpert DifficultyLevel = "Expert"
 )
 
 // UserRiskProfile 用户风险档案
@@ -29,13 +29,13 @@ type UserRiskProfile struct {
 
 // DifficultyConfig 难度配置
 type DifficultyConfig struct {
-	EasyThreshold    float64
-	MediumThreshold  float64
-	HardThreshold    float64
-	ExpertThreshold  float64
-	FailureWeight    float64
-	SuccessWeight    float64
-	TimePenalty      float64
+	EasyThreshold   float64
+	MediumThreshold float64
+	HardThreshold   float64
+	ExpertThreshold float64
+	FailureWeight   float64
+	SuccessWeight   float64
+	TimePenalty     float64
 }
 
 // AdaptiveDifficultyService 自适应难度服务

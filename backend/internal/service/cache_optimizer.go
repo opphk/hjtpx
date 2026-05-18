@@ -13,13 +13,13 @@ import (
 )
 
 type CacheOptimizer struct {
-	cacheService     *CacheService
-	enhancedCache    *redis.EnhancedCache
-	cacheWarmer      *redis.CacheWarmer
+	cacheService      *CacheService
+	enhancedCache     *redis.EnhancedCache
+	cacheWarmer       *redis.CacheWarmer
 	adaptiveRefresher *redis.AdaptiveRefresher
-	hotKeys          map[string]int64
-	hotKeysMu        sync.RWMutex
-	initialized      bool
+	hotKeys           map[string]int64
+	hotKeysMu         sync.RWMutex
+	initialized       bool
 }
 
 var (
@@ -185,7 +185,7 @@ func (co *CacheOptimizer) loadStatsSummary(ctx context.Context) ([]byte, error) 
 	}
 
 	stats := make(map[string]interface{})
-	
+
 	var userCount int64
 	db.Model(&models.User{}).Count(&userCount)
 	stats["total_users"] = userCount
@@ -204,7 +204,7 @@ func (co *CacheOptimizer) loadStatsSummary(ctx context.Context) ([]byte, error) 
 
 func (co *CacheOptimizer) GetBlacklistItem(ctx context.Context, targetType, target string) (*models.Blacklist, error) {
 	key := fmt.Sprintf("%s%s:%s", BlacklistCachePrefix, targetType, target)
-	
+
 	var item models.Blacklist
 	if err := co.cacheService.GetJSON(ctx, key, &item); err == nil {
 		co.recordHotKey(key)
@@ -226,7 +226,7 @@ func (co *CacheOptimizer) GetBlacklistItem(ctx context.Context, targetType, targ
 
 func (co *CacheOptimizer) GetApplicationByAPIKey(ctx context.Context, apiKey string) (*models.Application, error) {
 	key := fmt.Sprintf("%s%s", ApplicationCachePrefix, apiKey)
-	
+
 	var app models.Application
 	if err := co.cacheService.GetJSON(ctx, key, &app); err == nil {
 		co.recordHotKey(key)
@@ -282,16 +282,16 @@ func (co *CacheOptimizer) ResetHotKeys() {
 }
 
 type PerformanceCacheStats struct {
-	Hits          int64         `json:"hits"`
-	Misses        int64         `json:"misses"`
-	HitRate       float64       `json:"hit_rate"`
-	HotKeys       []string      `json:"hot_keys"`
-	MemoryUsage   int64         `json:"memory_usage,omitempty"`
+	Hits        int64    `json:"hits"`
+	Misses      int64    `json:"misses"`
+	HitRate     float64  `json:"hit_rate"`
+	HotKeys     []string `json:"hot_keys"`
+	MemoryUsage int64    `json:"memory_usage,omitempty"`
 }
 
 func (co *CacheOptimizer) GetStats(ctx context.Context) *PerformanceCacheStats {
 	enhancedStats := co.enhancedCache.GetStats()
-	
+
 	hitRate := 0.0
 	total := enhancedStats.Hits + enhancedStats.Misses
 	if total > 0 {

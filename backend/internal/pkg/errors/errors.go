@@ -43,11 +43,11 @@ const (
 )
 
 type AppError struct {
-	Code       Code   `json:"code"`
-	HttpStatus int    `json:"-"`
-	Message    string `json:"message"`
-	Detail     string `json:"detail,omitempty"`
-	Err        error  `json:"-"`
+	Code       Code                   `json:"code"`
+	HttpStatus int                    `json:"-"`
+	Message    string                 `json:"message"`
+	Detail     string                 `json:"detail,omitempty"`
+	Err        error                  `json:"-"`
 	Fields     map[string]interface{} `json:"fields,omitempty"`
 }
 
@@ -337,31 +337,31 @@ func GetHTTPStatus(err error) int {
 }
 
 var (
-	ErrInvalidParams      = New(CodeInvalidParams, "参数无效")
-	ErrMissingParams      = New(CodeMissingParams, "缺少参数")
-	ErrInvalidFormat      = New(CodeInvalidFormat, "格式错误")
+	ErrInvalidParams = New(CodeInvalidParams, "参数无效")
+	ErrMissingParams = New(CodeMissingParams, "缺少参数")
+	ErrInvalidFormat = New(CodeInvalidFormat, "格式错误")
 
-	ErrUnauthorized       = New(CodeUnauthorized, "未认证")
-	ErrTokenExpired      = New(CodeTokenExpired, "令牌已过期")
-	ErrTokenInvalid      = New(CodeTokenInvalid, "令牌无效")
-	ErrPermissionDenied  = New(CodePermissionDenied, "权限不足")
+	ErrUnauthorized     = New(CodeUnauthorized, "未认证")
+	ErrTokenExpired     = New(CodeTokenExpired, "令牌已过期")
+	ErrTokenInvalid     = New(CodeTokenInvalid, "令牌无效")
+	ErrPermissionDenied = New(CodePermissionDenied, "权限不足")
 
-	ErrNotFound           = New(CodeNotFound, "资源不存在")
-	ErrAlreadyExists      = New(CodeAlreadyExists, "资源已存在")
-	ErrResourceLimit      = New(CodeResourceLimit, "资源受限")
+	ErrNotFound      = New(CodeNotFound, "资源不存在")
+	ErrAlreadyExists = New(CodeAlreadyExists, "资源已存在")
+	ErrResourceLimit = New(CodeResourceLimit, "资源受限")
 
-	ErrInternal           = New(CodeInternalError, "内部错误")
-	ErrDatabase           = New(CodeDatabaseError, "数据库错误")
-	ErrCache              = New(CodeCacheError, "缓存错误")
-	ErrExternalService    = New(CodeExternalService, "外部服务错误")
+	ErrInternal        = New(CodeInternalError, "内部错误")
+	ErrDatabase        = New(CodeDatabaseError, "数据库错误")
+	ErrCache           = New(CodeCacheError, "缓存错误")
+	ErrExternalService = New(CodeExternalService, "外部服务错误")
 
-	ErrValidationFailed   = New(CodeValidationFailed, "验证失败")
-	ErrOperationFailed    = New(CodeOperationFailed, "操作失败")
-	ErrOperationTimeout   = New(CodeOperationTimeout, "操作超时")
+	ErrValidationFailed = New(CodeValidationFailed, "验证失败")
+	ErrOperationFailed  = New(CodeOperationFailed, "操作失败")
+	ErrOperationTimeout = New(CodeOperationTimeout, "操作超时")
 
-	ErrRateLimited        = New(CodeRateLimited, "请求过于频繁")
-	ErrTooManyRequest     = New(CodeTooManyRequest, "请求过多")
+	ErrRateLimited    = New(CodeRateLimited, "请求过于频繁")
+	ErrTooManyRequest = New(CodeTooManyRequest, "请求过多")
 
-	ErrSecurityRisk       = New(CodeSecurityRisk, "安全风险")
-	ErrCaptchaFailed      = New(CodeCaptchaFailed, "验证码失败")
+	ErrSecurityRisk  = New(CodeSecurityRisk, "安全风险")
+	ErrCaptchaFailed = New(CodeCaptchaFailed, "验证码失败")
 )

@@ -66,7 +66,7 @@ func TestBotFingerprinting(t *testing.T) {
 
 	additionalData := map[string]string{
 		"X-Canvas-Hash": "abc123",
-		"X-WebGL-Hash": "def456",
+		"X-WebGL-Hash":  "def456",
 	}
 
 	result := service.DetectBot(req, additionalData)

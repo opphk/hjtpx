@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xuri/excelize/v2"
-	"github.com/jung-kurt/gofpdf/v2"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"github.com/jung-kurt/gofpdf/v2"
+	"github.com/xuri/excelize/v2"
 )
 
 const (
-	FormatCSV  = "csv"
+	FormatCSV   = "csv"
 	FormatExcel = "xlsx"
-	FormatPDF  = "pdf"
-	FormatJSON = "json"
+	FormatPDF   = "pdf"
+	FormatJSON  = "json"
 )
 
 // ExportData 定义通用导出数据结构
@@ -200,10 +200,10 @@ func (p *PDFExporter) Export(data ExportData) ([]byte, error) {
 // Export 实现JSON导出
 func (j *JSONExporter) Export(data ExportData) ([]byte, error) {
 	result := map[string]interface{}{
-		"title":     data.Title,
-		"headers":   data.Headers,
-		"rows":      data.Rows,
-		"metadata":  data.Metadata,
+		"title":       data.Title,
+		"headers":     data.Headers,
+		"rows":        data.Rows,
+		"metadata":    data.Metadata,
 		"exported_at": time.Now().Format(time.RFC3339),
 	}
 	return json.MarshalIndent(result, "", "  ")
@@ -278,7 +278,7 @@ func ConvertLogsToExportData(logs []models.VerificationLog, title string) Export
 	}
 
 	metadata := map[string]string{
-		"Export Time": time.Now().Format("2006-01-02 15:04:05"),
+		"Export Time":  time.Now().Format("2006-01-02 15:04:05"),
 		"Record Count": fmt.Sprintf("%d", len(logs)),
 	}
 

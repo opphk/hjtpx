@@ -5,13 +5,13 @@ import (
 )
 
 type TimezoneInfo struct {
-	Name      string
-	Offset    int
-	Zone      string
+	Name   string
+	Offset int
+	Zone   string
 }
 
 var (
-	defaultTimezone = "Asia/Shanghai"
+	defaultTimezone    = "Asia/Shanghai"
 	supportedTimezones = []string{
 		"Asia/Shanghai",
 		"America/New_York",

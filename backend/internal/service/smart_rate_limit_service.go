@@ -34,7 +34,7 @@ type SmartRateLimitConfig struct {
 	DefaultBurstLimit     int
 	EnableAdaptiveLimit   bool
 	EnableRiskBasedLimit  bool
-	Tiers                []RateLimitTier
+	Tiers                 []RateLimitTier
 	HistoryWindow         time.Duration
 }
 
@@ -49,10 +49,10 @@ type SmartRateLimitResult struct {
 }
 
 type SmartRateLimitService struct {
-	clients    map[string]*ClientRecord
-	mu         sync.RWMutex
-	config     SmartRateLimitConfig
-	tierMap    map[string]RateLimitTier
+	clients map[string]*ClientRecord
+	mu      sync.RWMutex
+	config  SmartRateLimitConfig
+	tierMap map[string]RateLimitTier
 }
 
 func NewSmartRateLimitService(config ...SmartRateLimitConfig) *SmartRateLimitService {
@@ -61,7 +61,7 @@ func NewSmartRateLimitService(config ...SmartRateLimitConfig) *SmartRateLimitSer
 		DefaultBurstLimit:     10,
 		EnableAdaptiveLimit:   true,
 		EnableRiskBasedLimit:  true,
-		Tiers:                defaultTiers,
+		Tiers:                 defaultTiers,
 		HistoryWindow:         24 * time.Hour,
 	}
 	if len(config) > 0 {
@@ -160,7 +160,7 @@ func (s *SmartRateLimitService) determineTier(client *ClientRecord) RateLimitTie
 
 func (s *SmartRateLimitService) calculateAdaptiveTier(client *ClientRecord) RateLimitTier {
 	requestFrequency := float64(len(client.RequestHistory))
-	successRate := float64(client.TotalRequests - client.RateLimitHits) / math.Max(1, float64(client.TotalRequests))
+	successRate := float64(client.TotalRequests-client.RateLimitHits) / math.Max(1, float64(client.TotalRequests))
 
 	var selectedTier RateLimitTier
 	if successRate > 0.99 && requestFrequency < 30 {
@@ -213,13 +213,13 @@ func (s *SmartRateLimitService) GetClientStats(clientID string) map[string]inter
 	}
 
 	return map[string]interface{}{
-		"client_id":       client.ID,
-		"tier":            client.Tier,
-		"risk_score":      client.RiskScore,
-		"total_requests":  client.TotalRequests,
-		"rate_limit_hits": client.RateLimitHits,
+		"client_id":        client.ID,
+		"tier":             client.Tier,
+		"risk_score":       client.RiskScore,
+		"total_requests":   client.TotalRequests,
+		"rate_limit_hits":  client.RateLimitHits,
 		"current_requests": len(client.RequestHistory),
-		"last_seen":       client.LastSeen,
+		"last_seen":        client.LastSeen,
 	}
 }
 
@@ -249,11 +249,11 @@ func (s *SmartRateLimitService) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_clients":     totalClients,
-		"total_requests":    totalRequests,
-		"total_limit_hits":  totalHits,
-		"hit_rate":          float64(totalHits) / math.Max(1, float64(totalRequests)),
-		"adaptive_enabled":  s.config.EnableAdaptiveLimit,
+		"total_clients":      totalClients,
+		"total_requests":     totalRequests,
+		"total_limit_hits":   totalHits,
+		"hit_rate":           float64(totalHits) / math.Max(1, float64(totalRequests)),
+		"adaptive_enabled":   s.config.EnableAdaptiveLimit,
 		"risk_based_enabled": s.config.EnableRiskBasedLimit,
 	}
 }

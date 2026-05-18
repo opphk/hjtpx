@@ -643,9 +643,9 @@ func TestEnhancedRuleEngine_ThresholdEffect(t *testing.T) {
 
 	highRiskFeatures := &RuleEngineFeatures{
 		PathEfficiency:     0.99,
-		SpeedConsistency:    0.99,
-		AverageSpeed:        2500,
-		HumanLikenessScore:  0.05,
+		SpeedConsistency:   0.99,
+		AverageSpeed:       2500,
+		HumanLikenessScore: 0.05,
 	}
 
 	engine.SetThreshold(0.9)

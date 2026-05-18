@@ -38,14 +38,14 @@ func (l Level) String() string {
 type Fields map[string]interface{}
 
 type LogEntry struct {
-	Time      string                 `json:"time"`
-	Level     string                 `json:"level"`
-	Message   string                 `json:"message"`
-	Fields    Fields                 `json:"fields,omitempty"`
-	File      string                 `json:"file,omitempty"`
-	Line      int                    `json:"line,omitempty"`
-	FuncName  string                 `json:"func_name,omitempty"`
-	Timestamp time.Time              `json:"-"`
+	Time      string    `json:"time"`
+	Level     string    `json:"level"`
+	Message   string    `json:"message"`
+	Fields    Fields    `json:"fields,omitempty"`
+	File      string    `json:"file,omitempty"`
+	Line      int       `json:"line,omitempty"`
+	FuncName  string    `json:"func_name,omitempty"`
+	Timestamp time.Time `json:"-"`
 }
 
 type Logger struct {
@@ -391,13 +391,13 @@ func (h *ConsoleHook) Fire(entry *LogEntry) error {
 }
 
 type RotatingFileHook struct {
-	hook     *FileHook
-	dir      string
-	prefix   string
-	maxSize  int64
-	maxAge   time.Duration
-	rotator  *time.Ticker
-	done     chan struct{}
+	hook    *FileHook
+	dir     string
+	prefix  string
+	maxSize int64
+	maxAge  time.Duration
+	rotator *time.Ticker
+	done    chan struct{}
 }
 
 func NewRotatingFileHook(dir, prefix string, maxSize int64, maxAge time.Duration) (*RotatingFileHook, error) {

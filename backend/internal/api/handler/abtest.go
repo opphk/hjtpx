@@ -23,11 +23,11 @@ func GetABTestHandler() *ABTestHandler {
 }
 
 type CreateABTestRequest struct {
-	Name         string                 `json:"name" binding:"required,min=1,max=255"`
-	Description  string                 `json:"description"`
-	ApplicationID uint                 `json:"application_id" binding:"required"`
-	Variants     []CreateVariantRequest `json:"variants" binding:"required,min=2"`
-	Config       map[string]interface{} `json:"config"`
+	Name          string                 `json:"name" binding:"required,min=1,max=255"`
+	Description   string                 `json:"description"`
+	ApplicationID uint                   `json:"application_id" binding:"required"`
+	Variants      []CreateVariantRequest `json:"variants" binding:"required,min=2"`
+	Config        map[string]interface{} `json:"config"`
 }
 
 type CreateVariantRequest struct {
@@ -39,20 +39,20 @@ type CreateVariantRequest struct {
 }
 
 type UpdateABTestRequest struct {
-	Name        *string                `json:"name" binding:"omitempty,max=255"`
-	Description *string                `json:"description"`
+	Name        *string                 `json:"name" binding:"omitempty,max=255"`
+	Description *string                 `json:"description"`
 	Variants    *[]CreateVariantRequest `json:"variants"`
 	Config      *map[string]interface{} `json:"config"`
 }
 
 type ListABTestsQuery struct {
-	Page         int    `form:"page,default=1"`
-	PageSize     int    `form:"page_size,default=10"`
-	Keyword      string `form:"keyword"`
-	ApplicationID uint  `form:"application_id"`
-	Status       string `form:"status"`
-	SortField    string `form:"sort_field"`
-	SortOrder    string `form:"sort_order"`
+	Page          int    `form:"page,default=1"`
+	PageSize      int    `form:"page_size,default=10"`
+	Keyword       string `form:"keyword"`
+	ApplicationID uint   `form:"application_id"`
+	Status        string `form:"status"`
+	SortField     string `form:"sort_field"`
+	SortOrder     string `form:"sort_order"`
 }
 
 func ListABTests(c *gin.Context) {

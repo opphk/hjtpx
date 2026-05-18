@@ -3,13 +3,17 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"io"
@@ -56,22 +60,22 @@ type EnhancedSignatureConfig struct {
 }
 
 type EnhancedSignatureResult struct {
-	Valid           bool
-	Reason          string
-	Timestamp       int64
-	Nonce           string
-	Signature       string
-	Sequence        int64
-	ElapsedTime     time.Duration
-	ErrorCode       string
-	ClientIP        string
-	RequestPath     string
-	ReplayDetected  bool
-	IntegrityValid  bool
+	Valid          bool
+	Reason         string
+	Timestamp      int64
+	Nonce          string
+	Signature      string
+	Sequence       int64
+	ElapsedTime    time.Duration
+	ErrorCode      string
+	ClientIP       string
+	RequestPath    string
+	ReplayDetected bool
+	IntegrityValid bool
 }
 
 type nonceRecord struct {
-	timestamp  time.Time
+	timestamp   time.Time
 	hashedNonce string
 	count       int
 }
@@ -103,7 +107,7 @@ var defaultEnhancedSignatureConfig = EnhancedSignatureConfig{
 	SecretKey:             "enhanced-secret-key-change-in-production",
 	Algorithm:             "SHA256",
 	TimestampTolerance:    5 * time.Minute,
-	RequireTimestamp:       true,
+	RequireTimestamp:      true,
 	RequireNonce:          true,
 	NonceCacheTTL:         24 * time.Hour,
 	SignatureHeader:       "X-Signature",
@@ -123,7 +127,7 @@ var defaultEnhancedSignatureConfig = EnhancedSignatureConfig{
 	RateLimitPerIPWindow:  time.Minute,
 	EnableIntegrityCheck:  true,
 	BodyIntegrityHeader:   "X-Body-Integrity",
-	AdditionalHeaders:    []string{"X-Request-ID", "X-Forwarded-For"},
+	AdditionalHeaders:     []string{"X-Request-ID", "X-Forwarded-For"},
 	SignatureVersion:      "2.0",
 	DebugMode:             false,
 }
@@ -188,7 +192,7 @@ func (n *enhancedNonceCache) markUsed(nonce string) {
 	defer n.mu.Unlock()
 	hashedNonce := hashNonce(nonce)
 	n.records[hashedNonce] = &nonceRecord{
-		timestamp:  time.Now(),
+		timestamp:   time.Now(),
 		hashedNonce: hashedNonce,
 		count:       1,
 	}
@@ -484,8 +488,8 @@ func EnhancedSignatureVerification(config ...EnhancedSignatureConfig) gin.Handle
 				result.Reason = "rate limit exceeded"
 				result.ErrorCode = "RATE_LIMIT_EXCEEDED"
 				c.AbortWithStatusJSON(429, gin.H{
-					"error":   "rate_limit_exceeded",
-					"message": "Too many requests from this IP",
+					"error":       "rate_limit_exceeded",
+					"message":     "Too many requests from this IP",
 					"retry_after": cfg.RateLimitPerIPWindow.Seconds(),
 				})
 				return
@@ -823,12 +827,12 @@ func RequireEnhancedSignature() gin.HandlerFunc {
 }
 
 type EnhancedSignatureInfo struct {
-	Algorithm           string `json:"algorithm"`
-	Timestamp           int64  `json:"timestamp"`
-	NonceRequired       bool   `json:"nonce_required"`
-	Tolerance           string `json:"tolerance"`
-	Version             string `json:"version"`
-	Features            struct {
+	Algorithm     string `json:"algorithm"`
+	Timestamp     int64  `json:"timestamp"`
+	NonceRequired bool   `json:"nonce_required"`
+	Tolerance     string `json:"tolerance"`
+	Version       string `json:"version"`
+	Features      struct {
 		HMAC_SHA512      bool `json:"hmac_sha512"`
 		DoubleSignature  bool `json:"double_signature"`
 		SequenceCheck    bool `json:"sequence_check"`
@@ -841,10 +845,10 @@ func GetEnhancedSignatureInfo() EnhancedSignatureInfo {
 	cfg := defaultEnhancedSignatureConfig
 	info := EnhancedSignatureInfo{
 		Algorithm:     cfg.Algorithm,
-		Timestamp:      time.Now().Unix(),
-		NonceRequired:  cfg.RequireNonce,
-		Tolerance:      cfg.TimestampTolerance.String(),
-		Version:        cfg.SignatureVersion,
+		Timestamp:     time.Now().Unix(),
+		NonceRequired: cfg.RequireNonce,
+		Tolerance:     cfg.TimestampTolerance.String(),
+		Version:       cfg.SignatureVersion,
 	}
 	info.Features.HMAC_SHA512 = cfg.EnableHMAC_SHA512
 	info.Features.DoubleSignature = cfg.EnableDoubleSignature
@@ -940,5 +944,425 @@ func CreateSignatureMiddlewareChain() []gin.HandlerFunc {
 			c.Next()
 		},
 		EnhancedSignatureVerification(),
+	}
+}
+
+type Ed25519Config struct {
+	Enabled          bool
+	PublicKeyPath    string
+	PrivateKeyPath   string
+	SignatureTTL     time.Duration
+	RequireSignature bool
+}
+
+func (e *Ed25519Config) Load() error {
+	return nil
+}
+
+func GenerateEd25519KeyPair() ([]byte, []byte, error) {
+	return nil, nil, fmt.Errorf("Ed25519 not supported in standard Go crypto library, use golang.org/x/crypto/ed25519")
+}
+
+func SignEd25519(message, privateKey []byte) ([]byte, error) {
+	return nil, fmt.Errorf("Ed25519 not supported, use golang.org/x/crypto/ed25519")
+}
+
+func VerifyEd25519(message, signature, publicKey []byte) (bool, error) {
+	return false, fmt.Errorf("Ed25519 not supported, use golang.org/x/crypto/ed25519")
+}
+
+type RequestEncryptionConfig struct {
+	Enabled                     bool
+	EncryptionKey               []byte
+	Algorithm                   string
+	EnablePayloadEncryption     bool
+	EnableResponseEncryption    bool
+	KeyRotationInterval         time.Duration
+	CurrentKeyVersion           int
+	KeyHistory                  [][]byte
+	EnablePerfectForwardSecrecy bool
+}
+
+var defaultRequestEncryptionConfig = RequestEncryptionConfig{
+	Enabled:                     false,
+	Algorithm:                   "AES-256-GCM",
+	EnablePayloadEncryption:     false,
+	EnableResponseEncryption:    false,
+	KeyRotationInterval:         24 * time.Hour,
+	CurrentKeyVersion:           1,
+	KeyHistory:                  make([][]byte, 0),
+	EnablePerfectForwardSecrecy: false,
+}
+
+type EncryptedRequest struct {
+	Version       int    `json:"v"`
+	KeyVersion    int    `json:"kv"`
+	EncryptedData string `json:"d"`
+	IV            string `json:"iv"`
+	AuthTag       string `json:"tag"`
+	Timestamp     int64  `json:"t"`
+	Signature     string `json:"s"`
+}
+
+func EncryptRequestBody(body []byte, config RequestEncryptionConfig) (*EncryptedRequest, error) {
+	if !config.Enabled || !config.EnablePayloadEncryption {
+		return nil, fmt.Errorf("request encryption not enabled")
+	}
+
+	if len(config.EncryptionKey) == 0 {
+		return nil, fmt.Errorf("encryption key not set")
+	}
+
+	block, err := aes.NewCipher(config.EncryptionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, body, nil)
+
+	nonceSize := gcm.NonceSize()
+	encryptedData := ciphertext[nonceSize:]
+	authTag := ciphertext[:nonceSize]
+
+	signature := sha256.Sum256(append(body, nonce...))
+
+	return &EncryptedRequest{
+		Version:       1,
+		KeyVersion:    config.CurrentKeyVersion,
+		EncryptedData: base64.StdEncoding.EncodeToString(encryptedData),
+		IV:            base64.StdEncoding.EncodeToString(nonce),
+		AuthTag:       base64.StdEncoding.EncodeToString(authTag),
+		Timestamp:     time.Now().Unix(),
+		Signature:     hex.EncodeToString(signature[:]),
+	}, nil
+}
+
+func DecryptRequestBody(encrypted *EncryptedRequest, config RequestEncryptionConfig) ([]byte, error) {
+	if !config.Enabled || !config.EnablePayloadEncryption {
+		return nil, fmt.Errorf("request encryption not enabled")
+	}
+
+	var key []byte
+	if encrypted.KeyVersion < config.CurrentKeyVersion {
+		if encrypted.KeyVersion-1 < len(config.KeyHistory) {
+			key = config.KeyHistory[encrypted.KeyVersion-1]
+		} else {
+			return nil, fmt.Errorf("key version not found in history")
+		}
+	} else {
+		key = config.EncryptionKey
+	}
+
+	nonce, err := base64.StdEncoding.DecodeString(encrypted.IV)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedData, err := base64.StdEncoding.DecodeString(encrypted.EncryptedData)
+	if err != nil {
+		return nil, err
+	}
+
+	authTag, err := base64.StdEncoding.DecodeString(encrypted.AuthTag)
+	if err != nil {
+		return nil, err
+	}
+
+	ciphertext := append(authTag, encryptedData...)
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signature := sha256.Sum256(append(plaintext, nonce...))
+	if hex.EncodeToString(signature[:]) != encrypted.Signature {
+		return nil, fmt.Errorf("signature verification failed")
+	}
+
+	return plaintext, nil
+}
+
+func RotateEncryptionKey(config *RequestEncryptionConfig) error {
+	if len(config.KeyHistory) >= 10 {
+		config.KeyHistory = config.KeyHistory[1:]
+	}
+
+	config.KeyHistory = append(config.KeyHistory, config.EncryptionKey)
+
+	newKey := make([]byte, len(config.EncryptionKey))
+	if _, err := io.ReadFull(rand.Reader, newKey); err != nil {
+		return err
+	}
+
+	config.EncryptionKey = newKey
+	config.CurrentKeyVersion++
+
+	return nil
+}
+
+func EnhancedRequestEncryption() gin.HandlerFunc {
+	config := defaultRequestEncryptionConfig
+	config.Enabled = true
+
+	return func(c *gin.Context) {
+		if !config.EnablePayloadEncryption {
+			c.Next()
+			return
+		}
+
+		if c.Request.Body == nil {
+			c.Next()
+			return
+		}
+
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		if c.GetHeader("X-Encrypted") == "true" {
+			encrypted := &EncryptedRequest{}
+			if err := json.Unmarshal(body, encrypted); err == nil {
+				decrypted, err := DecryptRequestBody(encrypted, config)
+				if err == nil {
+					c.Request.Body = io.NopCloser(bytes.NewBuffer(decrypted))
+					c.Set("decrypted_body", decrypted)
+				}
+			}
+		} else {
+			encrypted, err := EncryptRequestBody(body, config)
+			if err == nil {
+				c.Set("encrypted_request", encrypted)
+				c.Header("X-Encrypted", "true")
+			}
+		}
+
+		c.Next()
+	}
+}
+
+type DoubleSignatureConfig struct {
+	Enabled            bool
+	PrimaryAlgorithm   string
+	SecondaryAlgorithm string
+	PrimaryKey         []byte
+	SecondaryKey       []byte
+	VerifyOrder        string
+	RequireBothValid   bool
+}
+
+func (d *DoubleSignatureConfig) Validate() error {
+	if !d.Enabled {
+		return nil
+	}
+
+	if len(d.PrimaryKey) == 0 {
+		return fmt.Errorf("primary key required for double signature")
+	}
+
+	if len(d.SecondaryKey) == 0 {
+		return fmt.Errorf("secondary key required for double signature")
+	}
+
+	if d.RequireBothValid && d.PrimaryAlgorithm == d.SecondaryAlgorithm {
+		return fmt.Errorf("algorithms must be different when both signatures required")
+	}
+
+	return nil
+}
+
+func GenerateDualSignature(message []byte, config DoubleSignatureConfig) (string, string, error) {
+	if err := config.Validate(); err != nil {
+		return "", "", err
+	}
+
+	primarySig := hmac.New(sha256.New, config.PrimaryKey)
+	primarySig.Write(message)
+	primarySignature := hex.EncodeToString(primarySig.Sum(nil))
+
+	secondarySig := hmac.New(sha512.New, config.SecondaryKey)
+	secondarySig.Write(message)
+	secondarySignature := hex.EncodeToString(secondarySig.Sum(nil))
+
+	return primarySignature, secondarySignature, nil
+}
+
+func VerifyDualSignature(message []byte, primarySig, secondarySig string, config DoubleSignatureConfig) (bool, bool, error) {
+	if err := config.Validate(); err != nil {
+		return false, false, err
+	}
+
+	primaryValid := false
+	if config.PrimaryAlgorithm == "SHA256" {
+		expectedPrimary := hmac.New(sha256.New, config.PrimaryKey)
+		expectedPrimary.Write(message)
+		primaryValid = hmac.Equal([]byte(primarySig), expectedPrimary.Sum(nil))
+	} else if config.PrimaryAlgorithm == "SHA512" {
+		expectedPrimary := hmac.New(sha512.New, config.PrimaryKey)
+		expectedPrimary.Write(message)
+		primaryValid = hmac.Equal([]byte(primarySig), expectedPrimary.Sum(nil))
+	}
+
+	secondaryValid := false
+	if config.SecondaryAlgorithm == "SHA256" {
+		expectedSecondary := hmac.New(sha256.New, config.SecondaryKey)
+		expectedSecondary.Write(message)
+		secondaryValid = hmac.Equal([]byte(secondarySig), expectedSecondary.Sum(nil))
+	} else if config.SecondaryAlgorithm == "SHA512" {
+		expectedSecondary := hmac.New(sha512.New, config.SecondaryKey)
+		expectedSecondary.Write(message)
+		secondaryValid = hmac.Equal([]byte(secondarySig), expectedSecondary.Sum(nil))
+	}
+
+	return primaryValid, secondaryValid, nil
+}
+
+type AntiReplayConfig struct {
+	WindowSize           time.Duration
+	MaxRequestsPerWindow int
+	EnableSlidingWindow  bool
+	EnableBloomFilter    bool
+	BloomFilterSize      int
+	BloomFilterHashCount int
+	CacheBackend         string
+}
+
+type BloomFilter struct {
+	bitArray  []bool
+	size      int
+	hashCount int
+}
+
+func NewBloomFilter(size, hashCount int) *BloomFilter {
+	return &BloomFilter{
+		bitArray:  make([]bool, size),
+		size:      size,
+		hashCount: hashCount,
+	}
+}
+
+func (b *BloomFilter) Add(item string) {
+	for i := 0; i < b.hashCount; i++ {
+		hash := sha256.Sum256(append([]byte(item), byte(i)))
+		index := binary.BigEndian.Uint64(hash[:]) % uint64(b.size)
+		b.bitArray[index] = true
+	}
+}
+
+func (b *BloomFilter) Contains(item string) bool {
+	for i := 0; i < b.hashCount; i++ {
+		hash := sha256.Sum256(append([]byte(item), byte(i)))
+		index := binary.BigEndian.Uint64(hash[:]) % uint64(b.size)
+		if !b.bitArray[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *BloomFilter) FalsePositiveRate() float64 {
+	k := float64(b.hashCount)
+	m := float64(b.size)
+	n := float64(b.countItems())
+	return math.Pow(1-math.Exp(-k*n/m), k)
+}
+
+func (b *BloomFilter) countItems() int {
+	count := 0
+	for _, v := range b.bitArray {
+		if v {
+			count++
+		}
+	}
+	return count
+}
+
+var globalBloomFilter = NewBloomFilter(1000000, 7)
+
+func CheckReplay(nonce string) bool {
+	if globalBloomFilter.Contains(nonce) {
+		return true
+	}
+	globalBloomFilter.Add(nonce)
+	return false
+}
+
+func EnhancedAntiReplay(config AntiReplayConfig) gin.HandlerFunc {
+	requestCounts := make(map[string][]time.Time)
+	mu := sync.Mutex{}
+
+	return func(c *gin.Context) {
+		if !config.EnableSlidingWindow && !config.EnableBloomFilter {
+			c.Next()
+			return
+		}
+
+		nonce := c.GetHeader("X-Nonce")
+		if nonce == "" {
+			c.Next()
+			return
+		}
+
+		if config.EnableBloomFilter {
+			if CheckReplay(nonce) {
+				c.AbortWithStatusJSON(429, gin.H{
+					"error":   "replay_detected",
+					"message": "Nonce already used",
+				})
+				return
+			}
+		}
+
+		if config.EnableSlidingWindow {
+			mu.Lock()
+			clientIP := c.ClientIP()
+			now := time.Now()
+			windowStart := now.Add(-config.WindowSize)
+
+			times := requestCounts[clientIP]
+			validTimes := make([]time.Time, 0)
+			for _, t := range times {
+				if t.After(windowStart) {
+					validTimes = append(validTimes, t)
+				}
+			}
+
+			if len(validTimes) >= config.MaxRequestsPerWindow {
+				mu.Unlock()
+				c.AbortWithStatusJSON(429, gin.H{
+					"error":   "rate_limit_exceeded",
+					"message": fmt.Sprintf("Maximum %d requests per %v", config.MaxRequestsPerWindow, config.WindowSize),
+				})
+				return
+			}
+
+			validTimes = append(validTimes, now)
+			requestCounts[clientIP] = validTimes
+			mu.Unlock()
+		}
+
+		c.Next()
 	}
 }

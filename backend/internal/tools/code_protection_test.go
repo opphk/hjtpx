@@ -391,15 +391,15 @@ func TestFullEncryptionDecryptionCycle(t *testing.T) {
 
 	testData := map[string]interface{}{
 		"string":   "Hello, World! 你好！",
-		"number":    42,
-		"float":     3.14159,
-		"boolean":   true,
-		"null":      nil,
-		"array":     []int{1, 2, 3},
-		"nested":    map[string]interface{}{"key": "value"},
-		"unicode":   "日本語テスト",
-		"special":   "!@#$%^&*()",
-		"longtext":  strings.Repeat("Lorem ipsum ", 100),
+		"number":   42,
+		"float":    3.14159,
+		"boolean":  true,
+		"null":     nil,
+		"array":    []int{1, 2, 3},
+		"nested":   map[string]interface{}{"key": "value"},
+		"unicode":  "日本語テスト",
+		"special":  "!@#$%^&*()",
+		"longtext": strings.Repeat("Lorem ipsum ", 100),
 	}
 
 	encrypted, err := crypto.EncryptParams(testData)

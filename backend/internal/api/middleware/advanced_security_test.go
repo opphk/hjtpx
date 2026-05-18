@@ -289,10 +289,10 @@ func TestCSRFTokenMiddleware(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			router := gin.New()
 			router.Use(CSRFTokenMiddleware(CSRFTokenMiddlewareConfig{
-				Enabled:      true,
-				CookieName:   "csrf_token",
-				HeaderName:   "X-CSRF-Token",
-				SafeMethods:  []string{"GET", "HEAD", "OPTIONS"},
+				Enabled:     true,
+				CookieName:  "csrf_token",
+				HeaderName:  "X-CSRF-Token",
+				SafeMethods: []string{"GET", "HEAD", "OPTIONS"},
 			}))
 			router.GET("/test", func(c *gin.Context) {
 				c.String(http.StatusOK, "OK")

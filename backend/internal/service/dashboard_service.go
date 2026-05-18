@@ -21,17 +21,17 @@ type DashboardService struct {
 }
 
 type DashboardData struct {
-	Summary          *Summary                `json:"summary"`
-	Trend            []TrendData             `json:"trend"`
-	RiskDistribution *RiskDistributionData   `json:"risk_distribution"`
-	CaptchaType      []CaptchaTypeData       `json:"captcha_type"`
+	Summary          *Summary              `json:"summary"`
+	Trend            []TrendData           `json:"trend"`
+	RiskDistribution *RiskDistributionData `json:"risk_distribution"`
+	CaptchaType      []CaptchaTypeData     `json:"captcha_type"`
 }
 
 type Summary struct {
-	TotalRequests    int64   `json:"total_requests"`
-	PassRate         float64 `json:"pass_rate"`
-	BlockRate        float64 `json:"block_rate"`
-	AvgResponseTime  int64   `json:"avg_response_time"`
+	TotalRequests   int64   `json:"total_requests"`
+	PassRate        float64 `json:"pass_rate"`
+	BlockRate       float64 `json:"block_rate"`
+	AvgResponseTime int64   `json:"avg_response_time"`
 }
 
 type TrendData struct {
@@ -258,11 +258,11 @@ func (s *DashboardService) getCaptchaTypeStats() ([]CaptchaTypeData, error) {
 	defer rows.Close()
 
 	typeMap := map[string]string{
-		"slider":   "滑动验证",
-		"click":    "点选验证",
-		"image":    "图片验证",
-		"text":     "文字验证",
-		"gesture":  "手势验证",
+		"slider":  "滑动验证",
+		"click":   "点选验证",
+		"image":   "图片验证",
+		"text":    "文字验证",
+		"gesture": "手势验证",
 	}
 
 	for rows.Next() {

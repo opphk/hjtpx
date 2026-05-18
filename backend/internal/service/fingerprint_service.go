@@ -11,31 +11,31 @@ import (
 )
 
 type FingerprintData struct {
-	FingerprintID string    `json:"fingerprint_id"`
-	DeviceID      string    `json:"device_id"`
-	IP            string    `json:"ip"`
-	UserAgent     string    `json:"user_agent"`
-	Accept        string    `json:"accept"`
-	AcceptLanguage string   `json:"accept_language"`
-	AcceptEncoding string   `json:"accept_encoding"`
-	Connection    string    `json:"connection"`
-	ScreenInfo    string    `json:"screen_info"`
-	Timezone      string    `json:"timezone"`
-	CanvasHash     string    `json:"canvas_hash"`
-	WebGLHash    string    `json:"webgl_hash"`
-	FirstSeen    time.Time `json:"first_seen"`
-	LastSeen     time.Time `json:"last_seen"`
-	RequestCount int       `json:"request_count"`
-	IsBlacklisted bool     `json:"is_blacklisted"`
-	BlacklistReason string   `json:"blacklist_reason"`
-	RiskScore    float64   `json:"risk_score"`
+	FingerprintID   string    `json:"fingerprint_id"`
+	DeviceID        string    `json:"device_id"`
+	IP              string    `json:"ip"`
+	UserAgent       string    `json:"user_agent"`
+	Accept          string    `json:"accept"`
+	AcceptLanguage  string    `json:"accept_language"`
+	AcceptEncoding  string    `json:"accept_encoding"`
+	Connection      string    `json:"connection"`
+	ScreenInfo      string    `json:"screen_info"`
+	Timezone        string    `json:"timezone"`
+	CanvasHash      string    `json:"canvas_hash"`
+	WebGLHash       string    `json:"webgl_hash"`
+	FirstSeen       time.Time `json:"first_seen"`
+	LastSeen        time.Time `json:"last_seen"`
+	RequestCount    int       `json:"request_count"`
+	IsBlacklisted   bool      `json:"is_blacklisted"`
+	BlacklistReason string    `json:"blacklist_reason"`
+	RiskScore       float64   `json:"risk_score"`
 }
 
 type BehaviorPattern struct {
-	RequestTimes  []time.Time `json:"request_times"`
-	RequestPaths []string   `json:"request_paths"`
-	Methods      []string   `json:"methods"`
-	StartTime    time.Time  `json:"start_time"`
+	RequestTimes []time.Time `json:"request_times"`
+	RequestPaths []string    `json:"request_paths"`
+	Methods      []string    `json:"methods"`
+	StartTime    time.Time   `json:"start_time"`
 }
 
 type FingerprintService struct {
@@ -130,22 +130,22 @@ func (s *FingerprintService) ExtractFingerprintData(r *http.Request, additionalD
 	}
 
 	fp := &FingerprintData{
-		FingerprintID: fingerprintID,
-		IP:            s.getRealIP(r),
-		UserAgent:     r.UserAgent(),
-		Accept:        r.Header.Get("Accept"),
+		FingerprintID:  fingerprintID,
+		IP:             s.getRealIP(r),
+		UserAgent:      r.UserAgent(),
+		Accept:         r.Header.Get("Accept"),
 		AcceptLanguage: r.Header.Get("Accept-Language"),
 		AcceptEncoding: r.Header.Get("Accept-Encoding"),
-		Connection:    r.Header.Get("Connection"),
-		ScreenInfo:    additionalData["screen_info"],
-		Timezone:      additionalData["timezone"],
+		Connection:     r.Header.Get("Connection"),
+		ScreenInfo:     additionalData["screen_info"],
+		Timezone:       additionalData["timezone"],
 		CanvasHash:     additionalData["canvas_hash"],
-		WebGLHash:    additionalData["webgl_hash"],
-		FirstSeen:    time.Now(),
-		LastSeen:     time.Now(),
-		RequestCount: 1,
-		IsBlacklisted: false,
-		RiskScore:    0,
+		WebGLHash:      additionalData["webgl_hash"],
+		FirstSeen:      time.Now(),
+		LastSeen:       time.Now(),
+		RequestCount:   1,
+		IsBlacklisted:  false,
+		RiskScore:      0,
 	}
 
 	s.fingerprints[fingerprintID] = fp
@@ -158,7 +158,7 @@ func (s *FingerprintService) trackBehavior(fingerprintID string, r *http.Request
 	behavior, exists := s.behaviors[fingerprintID]
 	if !exists {
 		behavior = &BehaviorPattern{
-			RequestTimes:  make([]time.Time, 0),
+			RequestTimes: make([]time.Time, 0),
 			RequestPaths: make([]string, 0),
 			Methods:      make([]string, 0),
 			StartTime:    time.Now(),
@@ -493,9 +493,9 @@ func max(values []float64) float64 {
 }
 
 type FingerprintAnalysisResult struct {
-	Fingerprint    *FingerprintData
-	IsAnomaly      bool
-	AnomalyReason  string
+	Fingerprint     *FingerprintData
+	IsAnomaly       bool
+	AnomalyReason   string
 	RiskScore       float64
 	PatternAnalysis map[string]interface{}
 }
@@ -506,9 +506,9 @@ func (s *FingerprintService) AnalyzeFingerprint(r *http.Request, additionalData 
 	patternAnalysis := s.AnalyzeRequestPattern(fp.FingerprintID)
 
 	return &FingerprintAnalysisResult{
-		Fingerprint:    fp,
-		IsAnomaly:      isAnomaly,
-		AnomalyReason:  reason,
+		Fingerprint:     fp,
+		IsAnomaly:       isAnomaly,
+		AnomalyReason:   reason,
 		RiskScore:       riskScore,
 		PatternAnalysis: patternAnalysis,
 	}

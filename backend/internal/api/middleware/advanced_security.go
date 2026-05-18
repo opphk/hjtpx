@@ -12,9 +12,9 @@ import (
 )
 
 type HTTPSConfig struct {
-	Enabled       bool
-	ExcludePaths  []string
-	RedirectCode  int
+	Enabled      bool
+	ExcludePaths []string
+	RedirectCode int
 }
 
 var defaultHTTPSConfig = HTTPSConfig{
@@ -298,13 +298,13 @@ func SecurityHeadersMiddleware(config ...SecurityHeadersMiddlewareConfig) gin.Ha
 }
 
 type CSRFTokenMiddlewareConfig struct {
-	Enabled        bool
-	HeaderName     string
-	FormFieldName  string
-	CookieName     string
-	ExcludePaths   []string
-	SafeMethods    []string
-	RedisEnabled   bool
+	Enabled       bool
+	HeaderName    string
+	FormFieldName string
+	CookieName    string
+	ExcludePaths  []string
+	SafeMethods   []string
+	RedisEnabled  bool
 }
 
 var defaultCSRFTokenConfig = CSRFTokenMiddlewareConfig{
@@ -472,11 +472,11 @@ func invalidateCSRFToken(sessionID, token string) {
 }
 
 type RateLimitMiddlewareConfig struct {
-	Enabled       bool
-	MaxRequests   int
-	Window        time.Duration
-	ExcludePaths  []string
-	KeyFunc       func(*gin.Context) string
+	Enabled      bool
+	MaxRequests  int
+	Window       time.Duration
+	ExcludePaths []string
+	KeyFunc      func(*gin.Context) string
 }
 
 var defaultRateLimitConfig = RateLimitMiddlewareConfig{
@@ -495,8 +495,8 @@ func RateLimitMiddleware(config ...RateLimitMiddlewareConfig) gin.HandlerFunc {
 	}
 
 	type clientRequest struct {
-		count    int
-		resetAt  time.Time
+		count   int
+		resetAt time.Time
 	}
 
 	requests := make(map[string]*clientRequest)
@@ -541,8 +541,8 @@ func RateLimitMiddleware(config ...RateLimitMiddlewareConfig) gin.HandlerFunc {
 			c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", client.resetAt.Unix()))
 
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":   "rate_limit_exceeded",
-				"message": "Too many requests",
+				"error":       "rate_limit_exceeded",
+				"message":     "Too many requests",
 				"retry_after": retryAfter,
 			})
 			mu.Unlock()

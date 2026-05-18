@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/hjtpx/hjtpx/docs"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/router"
 	"github.com/hjtpx/hjtpx/internal/repository"
@@ -23,7 +24,6 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/postgres"
 	"github.com/hjtpx/hjtpx/pkg/redis"
-	_ "github.com/hjtpx/hjtpx/docs"
 	"golang.org/x/crypto/bcrypt"
 )
 

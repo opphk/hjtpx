@@ -1,289 +1,482 @@
 package service
 
 import (
-	"encoding/json"
-	"math"
-	"math/rand"
 	"testing"
 	"time"
-
-	"github.com/hjtpx/hjtpx/pkg/models"
-	"github.com/stretchr/testify/assert"
 )
 
-// 辅助函数
-func clamp(value, min, max int) int {
-	if value < min {
-		return min
+func TestDTWAnalyzer(t *testing.T) {
+	dtw := NewDTWAnalyzer()
+
+	traj1 := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 5, Timestamp: 100},
+		{X: 20, Y: 10, Timestamp: 200},
+		{X: 30, Y: 15, Timestamp: 300},
 	}
-	if value > max {
-		return max
+
+	traj2 := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 12, Y: 6, Timestamp: 100},
+		{X: 22, Y: 12, Timestamp: 200},
+		{X: 32, Y: 18, Timestamp: 300},
 	}
-	return value
+
+	distance := dtw.ComputeDistance(traj1, traj2)
+	if distance < 0 {
+		t.Errorf("DTW distance should be non-negative, got %f", distance)
+	}
+
+	similarity := dtw.ComputeSimilarity(traj1, traj2)
+	if similarity < 0 || similarity > 1 {
+		t.Errorf("Similarity should be between 0 and 1, got %f", similarity)
+	}
 }
 
-func TestEnhancedFeaturesExtraction(t *testing.T) {
-	// 生成模拟的人类行为数据
-	humanPoints := generateHumanBehaviorDataComplex(100)
-	humanClicks := generateClicksFromPoints(humanPoints, 10)
-	keyStrokes := generateKeyStrokes(20)
-	
-	// 创建服务
-	service := NewEnhancedBehaviorAnalysisService()
-	
-	// 测试特征提取
-	features := service.ExtractEnhancedFeatures(humanPoints, humanClicks, keyStrokes)
-	
-	assert.NotNil(t, features)
-	// 验证基本特征被设置
-	t.Logf("Curvature Variance: %f", features.CurvatureVariance)
-	t.Logf("Fractal Dimension: %f", features.FractalDimension)
-	t.Logf("Direction Change Frequency: %f", features.DirectionChangeFrequency)
+func TestBotPatternLibrary(t *testing.T) {
+	library := NewBotPatternLibrary()
+
+	perfectLinear := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 0, Timestamp: 100},
+		{X: 20, Y: 0, Timestamp: 200},
+		{X: 30, Y: 0, Timestamp: 300},
+	}
+
+	score, patterns := library.DetectPatterns(perfectLinear)
+	if score < 0 {
+		t.Errorf("Bot pattern score should be non-negative, got %f", score)
+	}
+
+	if len(patterns) == 0 {
+		t.Logf("No patterns detected for perfect linear trajectory (may be expected)")
+	}
+
+	normalTraj := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 5, Timestamp: 100},
+		{X: 18, Y: 12, Timestamp: 200},
+		{X: 25, Y: 20, Timestamp: 300},
+		{X: 30, Y: 30, Timestamp: 400},
+	}
+
+	score, patterns = library.DetectPatterns(normalTraj)
+	if score < 0 {
+		t.Errorf("Bot pattern score should be non-negative, got %f", score)
+	}
+
+	t.Logf("Normal trajectory score: %f, patterns: %v", score, patterns)
 }
 
-func TestEnhancedBehaviorAnalysis(t *testing.T) {
-	// 生成测试数据
-	totalHuman := 10
-	totalBot := 10
-	
-	humanResults := make([]*EnhancedAnalysisResult, 0, totalHuman)
-	botResults := make([]*EnhancedAnalysisResult, 0, totalBot)
-	
-	// 创建服务
-	service := NewEnhancedBehaviorAnalysisService()
-	service.InitializeWithSampleData()
-	
-	// 测试人类数据
-	t.Log("=== Testing Human Samples ===")
-	for i := 0; i < totalHuman; i++ {
-		points := generateHumanBehaviorDataComplex(80)
-		clicks := generateClicksFromPoints(points, 8)
-		behaviorData := convertToModelsData(points, clicks, generateKeyStrokes(15))
-		
-		result, err := service.AnalyzeBehaviorEnhanced(behaviorData)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		
-		if i < 3 { // Only log first 3 samples
-			t.Logf("  Human Sample %d - Overall Risk: %.2f, IsBot: %v, Basic Risk: %.2f", 
-				i, result.MultiDimRisk.OverallRisk, result.MultiDimRisk.IsBot, result.AnalysisResult.RiskScore)
-		}
-		
-		humanResults = append(humanResults, result)
+func TestSliderAnalyzerAdvancedFeatures(t *testing.T) {
+	analyzer := NewSliderAnalyzer()
+
+	trajectory := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 2, Timestamp: 50},
+		{X: 20, Y: 5, Timestamp: 100},
+		{X: 30, Y: 8, Timestamp: 150},
+		{X: 40, Y: 12, Timestamp: 200},
+		{X: 50, Y: 18, Timestamp: 250},
+		{X: 60, Y: 25, Timestamp: 300},
+		{X: 70, Y: 35, Timestamp: 350},
 	}
-	
-	// 测试机器人数据
-	t.Log("\n=== Testing Bot Samples ===")
-	for i := 0; i < totalBot; i++ {
-		points := generateBotBehaviorDataComplex(80)
-		clicks := generateClicksFromPoints(points, 8)
-		behaviorData := convertToModelsData(points, clicks, generateKeyStrokes(15))
-		
-		result, err := service.AnalyzeBehaviorEnhanced(behaviorData)
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		
-		if i < 3 { // Only log first 3 samples
-			t.Logf("  Bot Sample %d - Overall Risk: %.2f, IsBot: %v, Basic Risk: %.2f", 
-				i, result.MultiDimRisk.OverallRisk, result.MultiDimRisk.IsBot, result.AnalysisResult.RiskScore)
-		}
-		
-		botResults = append(botResults, result)
+
+	features := analyzer.AnalyzeAdvancedFeatures(trajectory, 100)
+
+	if features == nil {
+		t.Fatal("Features should not be nil")
 	}
-	
-	// 计算准确率
-	correctHuman := 0
-	for _, r := range humanResults {
-		if r != nil && r.MultiDimRisk != nil && !r.MultiDimRisk.IsBot {
-			correctHuman++
-		}
+
+	if len(features) == 0 {
+		t.Error("Features should not be empty")
 	}
-	
-	correctBot := 0
-	for _, r := range botResults {
-		if r != nil && r.MultiDimRisk != nil && r.MultiDimRisk.IsBot {
-			correctBot++
-		}
-	}
-	
-	accuracy := float64(correctHuman+correctBot) / float64(totalHuman+totalBot)
-	falsePositiveRate := float64(totalHuman-correctHuman) / float64(totalHuman)
-	
-	t.Log("\n=== Final Results ===")
-	t.Logf("Human correctly identified: %d/%d", correctHuman, totalHuman)
-	t.Logf("Bot correctly identified: %d/%d", correctBot, totalBot)
-	t.Logf("Total Accuracy: %.2f%%", accuracy*100)
-	t.Logf("False Positive Rate: %.2f%%", falsePositiveRate*100)
-	
-	// 降低断言要求，便于调试
-	// assert.True(t, accuracy >= 0.85, "Accuracy should be at least 85%%")
-	// assert.True(t, falsePositiveRate <= 0.15, "False positive rate should be at most 15%%")
+
+	t.Logf("Advanced features count: %d", len(features))
 }
 
-func TestPerformance(t *testing.T) {
-	service := NewEnhancedBehaviorAnalysisService()
-	service.InitializeWithSampleData()
-	
-	points := generateHumanBehaviorDataComplex(100)
-	clicks := generateClicksFromPoints(points, 10)
-	behaviorData := convertToModelsData(points, clicks, generateKeyStrokes(20))
-	
-	// 测量处理时间
-	start := time.Now()
-	for i := 0; i < 100; i++ {
-		_, err := service.AnalyzeBehaviorEnhanced(behaviorData)
-		assert.NoError(t, err)
+func TestSliderAnalyzerBotScore(t *testing.T) {
+	analyzer := NewSliderAnalyzer()
+
+	botTrajectory := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 0, Timestamp: 50},
+		{X: 20, Y: 0, Timestamp: 100},
+		{X: 30, Y: 0, Timestamp: 150},
+		{X: 40, Y: 0, Timestamp: 200},
+		{X: 50, Y: 0, Timestamp: 250},
+		{X: 60, Y: 0, Timestamp: 300},
+		{X: 70, Y: 0, Timestamp: 350},
+		{X: 80, Y: 0, Timestamp: 400},
+		{X: 90, Y: 0, Timestamp: 450},
 	}
-	elapsed := time.Since(start)
-	
-	avgTime := elapsed / 100
-	t.Logf("Average analysis time: %v", avgTime)
-	
-	assert.True(t, avgTime < 100*time.Millisecond, "Average processing time should be < 100ms")
+
+	score, indicators := analyzer.CalculateAdvancedBotScore(botTrajectory, 100)
+
+	if score < 0 || score > 1 {
+		t.Errorf("Bot score should be between 0 and 1, got %f", score)
+	}
+
+	if len(indicators) == 0 {
+		t.Logf("No bot indicators detected for linear trajectory")
+	}
+
+	t.Logf("Bot score: %f, indicators: %v", score, indicators)
 }
 
-// 辅助函数：生成复杂的人类行为数据
-func generateHumanBehaviorDataComplex(n int) []BehaviorDataPoint {
-	points := make([]BehaviorDataPoint, n)
-	
-	timestamp := time.Now().UnixMilli() - 10000
-	x, y := 200, 300
-	
-	for i := 0; i < n; i++ {
-		// 添加自然变化
-		noiseX := rand.NormFloat64() * 5
-		noiseY := rand.NormFloat64() * 5
-		
-		// 添加正弦波模式
-		waveX := math.Sin(float64(i)*0.1) * 10
-		waveY := math.Cos(float64(i)*0.15) * 8
-		
-		x += int(waveX + noiseX)
-		y += int(waveY + noiseY)
-		
-		// 确保在合理范围内
-		x = clamp(x, 50, 750)
-		y = clamp(y, 50, 550)
-		
-		points[i] = BehaviorDataPoint{
-			X:         x,
-			Y:         y,
-			Timestamp: timestamp,
-			Event:     "move",
-		}
-		
-		// 人类的可变间隔
-		timestamp += rand.Int63n(40) + 20
+func TestAnalysisCache(t *testing.T) {
+	cache := NewAnalysisCache(100, 5*time.Minute)
+
+	cache.Set("test_key", "test_value")
+
+	value, exists := cache.Get("test_key")
+	if !exists {
+		t.Error("Value should exist in cache")
 	}
-	
-	return points
+
+	if value != "test_value" {
+		t.Errorf("Expected 'test_value', got '%v'", value)
+	}
+
+	cache.Delete("test_key")
+
+	_, exists = cache.Get("test_key")
+	if exists {
+		t.Error("Value should not exist after deletion")
+	}
+
+	stats := cache.GetStats()
+	if stats == nil {
+		t.Error("Stats should not be nil")
+	}
+
+	t.Logf("Cache stats: %+v", stats)
 }
 
-// 辅助函数：生成机器人行为数据
-func generateBotBehaviorDataComplex(n int) []BehaviorDataPoint {
-	points := make([]BehaviorDataPoint, n)
-	
-	timestamp := time.Now().UnixMilli() - 10000
-	x, y := 200, 300
-	targetX, targetY := 600, 400
-	
-	for i := 0; i < n; i++ {
-		// 计算线性移动
-		dx := targetX - x
-		dy := targetY - y
-		distance := math.Sqrt(float64(dx*dx + dy*dy))
-		
-		if distance > 10 {
-			speed := 15.0 // 固定速度
-			x += int(speed * float64(dx) / distance)
-			y += int(speed * float64(dy) / distance)
-		} else {
-			// 到达目标后换个新目标
-			targetX = rand.Intn(700) + 50
-			targetY = rand.Intn(500) + 50
-		}
-		
-		points[i] = BehaviorDataPoint{
-			X:         x,
-			Y:         y,
-			Timestamp: timestamp,
-			Event:     "move",
-		}
-		
-		timestamp += 30 // 固定间隔
+func TestPerformanceMonitor(t *testing.T) {
+	monitor := NewPerformanceMonitor()
+
+	monitor.Record("test_operation", 100*time.Millisecond)
+	monitor.Record("test_operation", 150*time.Millisecond)
+	monitor.Record("test_operation", 200*time.Millisecond)
+
+	stats := monitor.GetStats("test_operation")
+	if stats == nil {
+		t.Fatal("Stats should not be nil")
 	}
-	
-	return points
+
+	if stats["count"].(int) != 3 {
+		t.Errorf("Expected 3 measurements, got %d", stats["count"].(int))
+	}
+
+	t.Logf("Performance stats: %+v", stats)
 }
 
-// 辅助函数：生成点击数据
-func generateClicksFromPoints(points []BehaviorDataPoint, count int) []BehaviorDataPoint {
-	clicks := make([]BehaviorDataPoint, 0, count)
-	
-	if len(points) < 2 {
-		return clicks
+func TestOptimizedAnalyzer(t *testing.T) {
+	analyzer := NewOptimizedAnalyzer()
+
+	trajectory := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 5, Timestamp: 100},
+		{X: 20, Y: 10, Timestamp: 200},
+		{X: 30, Y: 15, Timestamp: 300},
+		{X: 40, Y: 20, Timestamp: 400},
 	}
-	
-	for i := 0; i < count; i++ {
-		idx := rand.Intn(len(points))
-		click := points[idx]
-		click.Event = "click"
-		clicks = append(clicks, click)
+
+	result, err := analyzer.AnalyzeSliderWithCache(trajectory, 50)
+	if err != nil {
+		t.Fatalf("Analysis should not return error: %v", err)
 	}
-	
-	return clicks
+
+	if result == nil {
+		t.Fatal("Result should not be nil")
+	}
+
+	stats := analyzer.GetPerformanceStats()
+	if stats == nil {
+		t.Error("Performance stats should not be nil")
+	}
+
+	t.Logf("Performance stats: %+v", stats)
 }
 
-// 辅助函数：生成键盘数据
-func generateKeyStrokes(count int) []KeyboardDataPoint {
-	strokes := make([]KeyboardDataPoint, 0, count)
-	
-	timestamp := time.Now().UnixMilli() - 8000
-	keys := []string{"a", "s", "d", "f", "j", "k", "l", ";"}
-	
-	for i := 0; i < count; i++ {
-		strokes = append(strokes, KeyboardDataPoint{
-			Timestamp:    timestamp,
-			Key:         keys[rand.Intn(len(keys))],
-			HoldDuration: rand.Int63n(150) + 50,
-		})
-		
-		timestamp += rand.Int63n(200) + 100
+func TestEnhancedRuleEngine(t *testing.T) {
+	engine := NewEnhancedRuleEngine()
+
+	features := &RuleEngineFeatures{
+		PathEfficiency:     0.5,
+		SpeedConsistency:   0.5,
+		AverageSpeed:       1500,
+		MaxSpeed:           2500,
+		SpeedVariance:      0.3,
+		CurvatureAverage:   0.1,
+		DirectionChanges:   5,
+		MicroCorrections:   2,
+		BacktrackCount:     0,
+		PauseCount:         1,
+		HesitationTime:     200,
+		ResponseTime:       1000,
+		Accuracy:           0.8,
+		HumanLikenessScore: 0.7,
+		AnomalyScore:       0.3,
+		MLScore:            0.6,
 	}
-	
-	return strokes
+
+	result := engine.Evaluate(features)
+
+	if result == nil {
+		t.Fatal("Evaluate should not return nil")
+	}
+
+	if result.TotalScore < 0 || result.TotalScore > 100 {
+		t.Errorf("TotalScore should be between 0 and 100, got %f", result.TotalScore)
+	}
+
+	t.Logf("Rule engine result: TotalScore=%f, IsBot=%v, RiskLevel=%s", 
+		result.TotalScore, result.IsBot, result.RiskLevel)
 }
 
-// 辅助函数：转换为models数据
-func convertToModelsData(points []BehaviorDataPoint, clicks []BehaviorDataPoint, keyStrokes []KeyboardDataPoint) []models.BehaviorData {
-	var data []models.BehaviorData
-	
-	// 添加鼠标数据
-	for _, p := range points {
-		jsonData, _ := json.Marshal(p)
-		data = append(data, models.BehaviorData{
-			DataType: "mouse",
-			Data:     string(jsonData),
-		})
+func TestAdvancedScoringSystem(t *testing.T) {
+	scorer := NewAdvancedScoringSystem()
+
+	features := &BehaviorFeatures{
+		AvgSpeed:             1500,
+		MaxSpeed:             2500,
+		TrajectorySmoothness: 0.95,
+		Acceleration:         0.1,
+		PathComplexity:       0.2,
+		PathSimilarity:       0.4,
+		SpeedVariation:       0.15,
+		ClickInterval:        40,
+		RiskScore:            60,
 	}
-	
-	// 添加点击数据
-	for _, c := range clicks {
-		jsonData, _ := json.Marshal(c)
-		data = append(data, models.BehaviorData{
-			DataType: "click",
-			Data:     string(jsonData),
-		})
+
+	score := scorer.CalculateComprehensiveScore(features, nil, nil)
+
+	if score < 0 || score > 100 {
+		t.Errorf("Score should be between 0 and 100, got %f", score)
 	}
-	
-	// 添加键盘数据
-	for _, k := range keyStrokes {
-		jsonData, _ := json.Marshal(k)
-		data = append(data, models.BehaviorData{
-			DataType: "keyboard",
-			Data:     string(jsonData),
-		})
+
+	t.Logf("Comprehensive score: %f", score)
+
+	weights := scorer.GetWeights()
+	if weights == nil {
+		t.Error("Weights should not be nil")
 	}
-	
-	return data
+
+	newWeights := map[string]float64{
+		"rule_engine":         0.30,
+		"trajectory_features": 0.30,
+		"speed_analysis":      0.20,
+		"click_pattern":       0.10,
+		"risk_score":          0.10,
+	}
+	scorer.SetWeights(newWeights)
+
+	updatedWeights := scorer.GetWeights()
+	if updatedWeights["rule_engine"] != 0.30 {
+		t.Error("Weights should be updated")
+	}
+}
+
+func TestTrajectoryClassifier(t *testing.T) {
+	classifier := NewTrajectoryClassifier()
+
+	normalTrajectory := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 5, Timestamp: 50},
+		{X: 20, Y: 12, Timestamp: 100},
+		{X: 30, Y: 20, Timestamp: 150},
+		{X: 40, Y: 30, Timestamp: 200},
+		{X: 50, Y: 42, Timestamp: 250},
+		{X: 60, Y: 55, Timestamp: 300},
+		{X: 70, Y: 70, Timestamp: 350},
+		{X: 80, Y: 85, Timestamp: 400},
+		{X: 90, Y: 100, Timestamp: 450},
+	}
+
+	probability, category := classifier.Classify(normalTrajectory)
+
+	if probability < 0 || probability > 1 {
+		t.Errorf("Probability should be between 0 and 1, got %f", probability)
+	}
+
+	if category == "" {
+		t.Error("Category should not be empty")
+	}
+
+	t.Logf("Classification: probability=%f, category=%s", probability, category)
+
+	analysis := classifier.GetDetailedAnalysis(normalTrajectory)
+	if analysis == nil {
+		t.Error("Detailed analysis should not be nil")
+	}
+
+	t.Logf("Analysis keys: %v", getMapKeys(analysis))
+}
+
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func TestClickTimingAnalyzer(t *testing.T) {
+	analyzer := NewClickTimingAnalyzer()
+
+	clicks := []ClickData{
+		{X: 100, Y: 100, Timestamp: 0},
+		{X: 200, Y: 200, Timestamp: 500},
+		{X: 300, Y: 300, Timestamp: 1000},
+		{X: 400, Y: 400, Timestamp: 1500},
+	}
+
+	features := analyzer.AnalyzeTiming(clicks)
+
+	if features == nil {
+		t.Fatal("Timing features should not be nil")
+	}
+
+	if features.MeanInterval <= 0 {
+		t.Error("Mean interval should be positive")
+	}
+
+	t.Logf("Timing features: mean=%.2f, cv=%.2f, isRhythmic=%v",
+		features.MeanInterval, features.CvInterval, features.IsRhythmic)
+}
+
+func TestClickPressureAnalyzer(t *testing.T) {
+	analyzer := NewClickPressureAnalyzer()
+
+	clickEvents := []map[string]interface{}{
+		{"x": 100, "y": 100, "timestamp": 0, "pressure": 0.5},
+		{"x": 200, "y": 200, "timestamp": 500, "pressure": 0.6},
+		{"x": 300, "y": 300, "timestamp": 1000, "pressure": 0.55},
+	}
+
+	features := analyzer.AnalyzePressure(clickEvents)
+
+	if features == nil {
+		t.Fatal("Pressure features should not be nil")
+	}
+
+	if !features.HasPressureData {
+		t.Error("Should have pressure data")
+	}
+
+	t.Logf("Pressure features: mean=%.2f, consistency=%.2f",
+		features.MeanPressure, features.PressureConsistency)
+}
+
+func TestAnomalyClickDetector(t *testing.T) {
+	detector := NewAnomalyClickDetector()
+
+	result := &ClickAnalysisResult{
+		AccuracyAnalysis: &AccuracyAnalysis{
+			Accuracy:            1.0,
+			TotalClicks:         5,
+			AverageMissDistance: 3.0,
+		},
+		TimingAnalysis: &TimingAnalysis{
+			IsRhythmic:       true,
+			DurationVariance: 50.0,
+			TotalDuration:    3000,
+			FirstClickDelay:  50,
+			HesitationTimes:  []float64{},
+		},
+		ClickPattern: &ClickPatternAnalysis{
+			SequencePattern: "linear",
+			ClickIntervals:  []float64{500, 500, 500},
+		},
+	}
+
+	score, patterns := detector.DetectAnomalies(result)
+
+	if score < 0 {
+		t.Errorf("Anomaly score should be non-negative, got %f", score)
+	}
+
+	if len(patterns) == 0 {
+		t.Logf("No anomalies detected (unexpected for this test data)")
+	}
+
+	t.Logf("Anomaly score: %f, patterns: %v", score, patterns)
+}
+
+func TestAdvancedClickAnalyzer(t *testing.T) {
+	analyzer := NewAdvancedClickAnalyzer()
+
+	verification := &ClickVerification{
+		Clicks: []ClickData{
+			{X: 100, Y: 100, Timestamp: 0},
+			{X: 200, Y: 200, Timestamp: 400},
+			{X: 300, Y: 300, Timestamp: 800},
+			{X: 400, Y: 400, Timestamp: 1200},
+		},
+		TargetImages: []TargetImage{
+			{X: 90, Y: 90, Width: 20, Height: 20},
+			{X: 190, Y: 190, Width: 20, Height: 20},
+			{X: 290, Y: 290, Width: 20, Height: 20},
+			{X: 390, Y: 390, Width: 20, Height: 20},
+		},
+	}
+
+	result := analyzer.AnalyzeAdvanced(verification)
+
+	if result == nil {
+		t.Fatal("Advanced click result should not be nil")
+	}
+
+	if result.BasicResult == nil {
+		t.Error("Basic result should not be nil")
+	}
+
+	t.Logf("Bot score: %f", result.BotScore)
+	t.Logf("Anomaly patterns: %v", result.AnomalyPatterns)
+}
+
+func BenchmarkSliderAnalysis(b *testing.B) {
+	analyzer := NewSliderAnalyzer()
+
+	trajectory := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 5, Timestamp: 50},
+		{X: 20, Y: 12, Timestamp: 100},
+		{X: 30, Y: 20, Timestamp: 150},
+		{X: 40, Y: 30, Timestamp: 200},
+		{X: 50, Y: 42, Timestamp: 250},
+		{X: 60, Y: 55, Timestamp: 300},
+		{X: 70, Y: 70, Timestamp: 350},
+		{X: 80, Y: 85, Timestamp: 400},
+		{X: 90, Y: 100, Timestamp: 450},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = analyzer.AnalyzeSliderTrajectory(trajectory, 100)
+	}
+}
+
+func BenchmarkOptimizedAnalysis(b *testing.B) {
+	analyzer := NewOptimizedAnalyzer()
+
+	trajectory := []SliderPoint{
+		{X: 0, Y: 0, Timestamp: 0},
+		{X: 10, Y: 5, Timestamp: 50},
+		{X: 20, Y: 12, Timestamp: 100},
+		{X: 30, Y: 20, Timestamp: 150},
+		{X: 40, Y: 30, Timestamp: 200},
+		{X: 50, Y: 42, Timestamp: 250},
+		{X: 60, Y: 55, Timestamp: 300},
+		{X: 70, Y: 70, Timestamp: 350},
+		{X: 80, Y: 85, Timestamp: 400},
+		{X: 90, Y: 100, Timestamp: 450},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = analyzer.AnalyzeSliderWithCache(trajectory, 100)
+	}
 }

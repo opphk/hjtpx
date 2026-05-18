@@ -19,23 +19,23 @@ import (
 
 type SystemMetrics struct {
 	CPU struct {
-		Usage       float64 `json:"usage"`
-		Count       int     `json:"count"`
+		Usage       float64   `json:"usage"`
+		Count       int       `json:"count"`
 		PerCore     []float64 `json:"per_core"`
-		Temperature float64 `json:"temperature,omitempty"`
+		Temperature float64   `json:"temperature,omitempty"`
 	} `json:"cpu"`
 	Memory struct {
-		Total       uint64  `json:"total"`
-		Used        uint64  `json:"used"`
-		Available   uint64  `json:"available"`
+		Total        uint64  `json:"total"`
+		Used         uint64  `json:"used"`
+		Available    uint64  `json:"available"`
 		UsagePercent float64 `json:"usage_percent"`
 	} `json:"memory"`
 	Disk struct {
-		Total       uint64  `json:"total"`
-		Used        uint64  `json:"used"`
-		Free        uint64  `json:"free"`
+		Total        uint64  `json:"total"`
+		Used         uint64  `json:"used"`
+		Free         uint64  `json:"free"`
 		UsagePercent float64 `json:"usage_percent"`
-		MountPoint  string  `json:"mount_point"`
+		MountPoint   string  `json:"mount_point"`
 	} `json:"disk"`
 	Network struct {
 		BytesSent   uint64 `json:"bytes_sent"`
@@ -43,45 +43,45 @@ type SystemMetrics struct {
 		PacketsSent uint64 `json:"packets_sent"`
 		PacketsRecv uint64 `json:"packets_recv"`
 	} `json:"network"`
-	Uptime   time.Duration `json:"uptime"`
-	LoadAvg  float64      `json:"load_avg"`
-	Procs    int           `json:"procs"`
-	Time     int64         `json:"timestamp"`
+	Uptime  time.Duration `json:"uptime"`
+	LoadAvg float64       `json:"load_avg"`
+	Procs   int           `json:"procs"`
+	Time    int64         `json:"timestamp"`
 }
 
 type APIMetrics struct {
-	TotalRequests    uint64            `json:"total_requests"`
-	SuccessRequests  uint64            `json:"success_requests"`
-	FailedRequests   uint64            `json:"failed_requests"`
-	RequestsPerSec   float64           `json:"requests_per_second"`
-	AvgResponseTime  float64           `json:"avg_response_time"`
-	MinResponseTime  float64           `json:"min_response_time"`
-	MaxResponseTime  float64           `json:"max_response_time"`
-	ErrorRate        float64           `json:"error_rate"`
-	SuccessRate      float64           `json:"success_rate"`
-	StatusCodes      map[string]uint64 `json:"status_codes"`
-	TopEndpoints     []EndpointMetric  `json:"top_endpoints"`
-	Time             int64             `json:"timestamp"`
+	TotalRequests   uint64            `json:"total_requests"`
+	SuccessRequests uint64            `json:"success_requests"`
+	FailedRequests  uint64            `json:"failed_requests"`
+	RequestsPerSec  float64           `json:"requests_per_second"`
+	AvgResponseTime float64           `json:"avg_response_time"`
+	MinResponseTime float64           `json:"min_response_time"`
+	MaxResponseTime float64           `json:"max_response_time"`
+	ErrorRate       float64           `json:"error_rate"`
+	SuccessRate     float64           `json:"success_rate"`
+	StatusCodes     map[string]uint64 `json:"status_codes"`
+	TopEndpoints    []EndpointMetric  `json:"top_endpoints"`
+	Time            int64             `json:"timestamp"`
 }
 
 type EndpointMetric struct {
-	Path         string  `json:"path"`
-	Method       string  `json:"method"`
-	Requests     uint64  `json:"requests"`
-	AvgTime      float64 `json:"avg_time"`
-	MaxTime      float64 `json:"max_time"`
-	ErrorRate    float64 `json:"error_rate"`
+	Path           string  `json:"path"`
+	Method         string  `json:"method"`
+	Requests       uint64  `json:"requests"`
+	AvgTime        float64 `json:"avg_time"`
+	MaxTime        float64 `json:"max_time"`
+	ErrorRate      float64 `json:"error_rate"`
 	RequestsPerSec float64 `json:"requests_per_second"`
 }
 
 type RequestMetric struct {
-	Path        string        `json:"path"`
-	Method      string        `json:"method"`
-	StatusCode  int           `json:"status_code"`
-	Duration    time.Duration `json:"duration"`
-	IP          string        `json:"ip"`
-	UserAgent   string        `json:"user_agent"`
-	Timestamp   time.Time     `json:"timestamp"`
+	Path       string        `json:"path"`
+	Method     string        `json:"method"`
+	StatusCode int           `json:"status_code"`
+	Duration   time.Duration `json:"duration"`
+	IP         string        `json:"ip"`
+	UserAgent  string        `json:"user_agent"`
+	Timestamp  time.Time     `json:"timestamp"`
 }
 
 type MetricsCollector struct {
@@ -98,7 +98,7 @@ type MetricsCollector struct {
 
 var (
 	metricsCollectorInstance *MetricsCollector
-	metricsOnce               sync.Once
+	metricsOnce              sync.Once
 )
 
 func GetMetricsCollector() *MetricsCollector {
@@ -312,8 +312,8 @@ func (m *MetricsCollector) GetRealtimeData() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"system": m.systemMetrics,
-		"api":    m.apiMetrics,
+		"system":  m.systemMetrics,
+		"api":     m.apiMetrics,
 		"history": m.history,
 	}
 }
@@ -351,25 +351,25 @@ func (m *MetricsCollector) GetSystemStatus() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"overall":     overallStatus,
-		"cpu":         cpuStatus,
-		"memory":      memStatus,
-		"disk":        diskStatus,
-		"uptime":      m.systemMetrics.Uptime.String(),
-		"procs":       m.systemMetrics.Procs,
-		"load_avg":    m.systemMetrics.LoadAvg,
-		"timestamp":   time.Now().Unix(),
+		"overall":   overallStatus,
+		"cpu":       cpuStatus,
+		"memory":    memStatus,
+		"disk":      diskStatus,
+		"uptime":    m.systemMetrics.Uptime.String(),
+		"procs":     m.systemMetrics.Procs,
+		"load_avg":  m.systemMetrics.LoadAvg,
+		"timestamp": time.Now().Unix(),
 	}
 }
 
 type AlertInfo struct {
-	ID          int       `json:"id"`
-	Type        string    `json:"type"`
-	Severity    string    `json:"severity"`
-	Message     string    `json:"message"`
-	Timestamp   int64     `json:"timestamp"`
-	Acknowledged bool     `json:"acknowledged"`
-	Icon        string    `json:"icon"`
+	ID           int    `json:"id"`
+	Type         string `json:"type"`
+	Severity     string `json:"severity"`
+	Message      string `json:"message"`
+	Timestamp    int64  `json:"timestamp"`
+	Acknowledged bool   `json:"acknowledged"`
+	Icon         string `json:"icon"`
 }
 
 func (m *MetricsCollector) CheckAlerts() []AlertInfo {
@@ -380,101 +380,101 @@ func (m *MetricsCollector) CheckAlerts() []AlertInfo {
 
 	if m.systemMetrics.CPU.Usage > 90 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_cpu",
-			Severity:    "critical",
-			Message:     "CPU 使用率超过 90%",
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_cpu",
+			Severity:     "critical",
+			Message:      "CPU 使用率超过 90%",
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "cpu",
+			Icon:         "cpu",
 		})
 	} else if m.systemMetrics.CPU.Usage > 75 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_cpu",
-			Severity:    "warning",
-			Message:     "CPU 使用率超过 75%",
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_cpu",
+			Severity:     "warning",
+			Message:      "CPU 使用率超过 75%",
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "cpu",
+			Icon:         "cpu",
 		})
 	}
 
 	if m.systemMetrics.Memory.UsagePercent > 90 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_memory",
-			Severity:    "critical",
-			Message:     "内存使用率超过 90%",
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_memory",
+			Severity:     "critical",
+			Message:      "内存使用率超过 90%",
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "memory",
+			Icon:         "memory",
 		})
 	} else if m.systemMetrics.Memory.UsagePercent > 80 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_memory",
-			Severity:    "warning",
-			Message:     "内存使用率超过 80%",
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_memory",
+			Severity:     "warning",
+			Message:      "内存使用率超过 80%",
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "memory",
+			Icon:         "memory",
 		})
 	}
 
 	if m.systemMetrics.Disk.UsagePercent > 95 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_disk",
-			Severity:    "critical",
-			Message:     "磁盘使用率超过 95%",
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_disk",
+			Severity:     "critical",
+			Message:      "磁盘使用率超过 95%",
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "hdd",
+			Icon:         "hdd",
 		})
 	} else if m.systemMetrics.Disk.UsagePercent > 85 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_disk",
-			Severity:    "warning",
-			Message:     "磁盘使用率超过 85%",
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_disk",
+			Severity:     "warning",
+			Message:      "磁盘使用率超过 85%",
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "hdd",
+			Icon:         "hdd",
 		})
 	}
 
 	if m.apiMetrics.ErrorRate > 10 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_error_rate",
-			Severity:    "critical",
-			Message:     fmt.Sprintf("API 错误率超过 10%% (当前: %.2f%%)", m.apiMetrics.ErrorRate),
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_error_rate",
+			Severity:     "critical",
+			Message:      fmt.Sprintf("API 错误率超过 10%% (当前: %.2f%%)", m.apiMetrics.ErrorRate),
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "exclamation-triangle",
+			Icon:         "exclamation-triangle",
 		})
 	} else if m.apiMetrics.ErrorRate > 5 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "high_error_rate",
-			Severity:    "warning",
-			Message:     fmt.Sprintf("API 错误率超过 5%% (当前: %.2f%%)", m.apiMetrics.ErrorRate),
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "high_error_rate",
+			Severity:     "warning",
+			Message:      fmt.Sprintf("API 错误率超过 5%% (当前: %.2f%%)", m.apiMetrics.ErrorRate),
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "exclamation-triangle",
+			Icon:         "exclamation-triangle",
 		})
 	}
 
 	if m.apiMetrics.AvgResponseTime > 5000 {
 		alerts = append(alerts, AlertInfo{
-			ID:          generateAlertID(),
-			Type:        "slow_response",
-			Severity:    "warning",
-			Message:     fmt.Sprintf("API 平均响应时间超过 5秒 (当前: %.2fms)", m.apiMetrics.AvgResponseTime),
-			Timestamp:   time.Now().Unix(),
+			ID:           generateAlertID(),
+			Type:         "slow_response",
+			Severity:     "warning",
+			Message:      fmt.Sprintf("API 平均响应时间超过 5秒 (当前: %.2fms)", m.apiMetrics.AvgResponseTime),
+			Timestamp:    time.Now().Unix(),
 			Acknowledged: false,
-			Icon:        "clock",
+			Icon:         "clock",
 		})
 	}
 

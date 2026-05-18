@@ -20,16 +20,16 @@ func initOWASPService() {
 }
 
 type OWASPConfig struct {
-	Enabled         bool
-	EnforceHeaders  bool
-	EnforceHTTPS    bool
+	Enabled           bool
+	EnforceHeaders    bool
+	EnforceHTTPS      bool
 	BlockNonCompliant bool
 }
 
 var DefaultOWASPConfig = OWASPConfig{
-	Enabled:         true,
-	EnforceHeaders:  true,
-	EnforceHTTPS:    false,
+	Enabled:           true,
+	EnforceHeaders:    true,
+	EnforceHTTPS:      false,
 	BlockNonCompliant: false,
 }
 
@@ -66,9 +66,9 @@ func OWASPSecurityMiddleware(config ...OWASPConfig) gin.HandlerFunc {
 
 		if cfg.BlockNonCompliant && !compliance["compliant"].(bool) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-				"error":        "OWASP compliance check failed",
-				"code":         http.StatusBadRequest,
-				"compliance":   compliance,
+				"error":      "OWASP compliance check failed",
+				"code":       http.StatusBadRequest,
+				"compliance": compliance,
 			})
 			return
 		}

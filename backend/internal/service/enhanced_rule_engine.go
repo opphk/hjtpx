@@ -10,89 +10,89 @@ import (
 )
 
 type EnhancedRule struct {
-	Name         string
-	Condition    func(*RuleEngineFeatures) bool
-	Weight       float64
-	Priority     int
-	Description  string
-	Category     string
-	Severity     float64
-	Enabled      bool
+	Name          string
+	Condition     func(*RuleEngineFeatures) bool
+	Weight        float64
+	Priority      int
+	Description   string
+	Category      string
+	Severity      float64
+	Enabled       bool
 	LastTriggered time.Time
 	TriggerCount  int
 	ruleMapKey    string
 }
 
 type EnhancedRuleEngine struct {
-	rules         []EnhancedRule
-	ruleMap       map[string]*EnhancedRule
-	categories    map[string][]string
-	weights       map[string]float64
-	threshold     float64
-	mu            sync.RWMutex
+	rules              []EnhancedRule
+	ruleMap            map[string]*EnhancedRule
+	categories         map[string][]string
+	weights            map[string]float64
+	threshold          float64
+	mu                 sync.RWMutex
 	performanceTracker *PerformanceTracker
 }
 
 type PerformanceTracker struct {
-	EvaluationCount    int64
-	AverageExecTime    float64
-	RuleHitCounts      map[string]int64
-	CategoryHitCounts  map[string]int64
-	mu                 sync.Mutex
+	EvaluationCount   int64
+	AverageExecTime   float64
+	RuleHitCounts     map[string]int64
+	CategoryHitCounts map[string]int64
+	mu                sync.Mutex
 }
 
 type RuleEngineFeatures struct {
-	SliderFeatures    *SliderFeatures        `json:"slider_features,omitempty"`
-	ClickFeatures    *ClickPatternAnalysis   `json:"click_features,omitempty"`
-	TimingFeatures   *TimingAnalysis        `json:"timing_features,omitempty"`
-	AccuracyFeatures *AccuracyAnalysis      `json:"accuracy_features,omitempty"`
+	SliderFeatures   *SliderFeatures       `json:"slider_features,omitempty"`
+	ClickFeatures    *ClickPatternAnalysis `json:"click_features,omitempty"`
+	TimingFeatures   *TimingAnalysis       `json:"timing_features,omitempty"`
+	AccuracyFeatures *AccuracyAnalysis     `json:"accuracy_features,omitempty"`
 
-	PathEfficiency        float64 `json:"path_efficiency"`
-	SpeedConsistency      float64 `json:"speed_consistency"`
-	AverageSpeed          float64 `json:"average_speed"`
-	MaxSpeed             float64 `json:"max_speed"`
-	SpeedVariance        float64 `json:"speed_variance"`
-	CurvatureAverage     float64 `json:"curvature_average"`
-	CurvatureVariance    float64 `json:"curvature_variance"`
-	DirectionChanges     int     `json:"direction_changes"`
-	MicroCorrections     int     `json:"micro_corrections"`
-	BacktrackCount       int     `json:"backtrack_count"`
-	PauseCount           int     `json:"pause_count"`
-	TotalPauseDuration   float64 `json:"total_pause_duration"`
-	HesitationTime       float64 `json:"hesitation_time"`
-	ResponseTime         float64 `json:"response_time"`
-	ClickRegularity      float64 `json:"click_regularity"`
-	PositionEntropy      float64 `json:"position_entropy"`
-	Accuracy             float64 `json:"accuracy"`
-	ClusteringScore      float64 `json:"clustering_score"`
-	JitterScore          float64 `json:"jitter_score"`
-	SmoothnessScore      float64 `json:"smoothness_score"`
-	HumanLikenessScore   float64 `json:"human_likeness_score"`
-	AnomalyScore         float64 `json:"anomaly_score"`
-	MLScore             float64 `json:"ml_score"`
-	FractalDimension     float64 `json:"fractal_dimension"`
-	FourierFrequency     float64 `json:"fourier_frequency"`
+	PathEfficiency     float64 `json:"path_efficiency"`
+	SpeedConsistency   float64 `json:"speed_consistency"`
+	AverageSpeed       float64 `json:"average_speed"`
+	MaxSpeed           float64 `json:"max_speed"`
+	SpeedVariance      float64 `json:"speed_variance"`
+	CurvatureAverage   float64 `json:"curvature_average"`
+	CurvatureVariance  float64 `json:"curvature_variance"`
+	DirectionChanges   int     `json:"direction_changes"`
+	MicroCorrections   int     `json:"micro_corrections"`
+	BacktrackCount     int     `json:"backtrack_count"`
+	PauseCount         int     `json:"pause_count"`
+	TotalPauseDuration float64 `json:"total_pause_duration"`
+	HesitationTime     float64 `json:"hesitation_time"`
+	ResponseTime       float64 `json:"response_time"`
+	ClickRegularity    float64 `json:"click_regularity"`
+	PositionEntropy    float64 `json:"position_entropy"`
+	Accuracy           float64 `json:"accuracy"`
+	ClusteringScore    float64 `json:"clustering_score"`
+	JitterScore        float64 `json:"jitter_score"`
+	SmoothnessScore    float64 `json:"smoothness_score"`
+	HumanLikenessScore float64 `json:"human_likeness_score"`
+	AnomalyScore       float64 `json:"anomaly_score"`
+	MLScore            float64 `json:"ml_score"`
+	FractalDimension   float64 `json:"fractal_dimension"`
+	FourierFrequency   float64 `json:"fourier_frequency"`
 }
 
 type RuleEngineResult struct {
-	TotalScore       float64             `json:"total_score"`
-	CategoryScores   map[string]float64  `json:"category_scores"`
-	TriggeredRules   []string            `json:"triggered_rules"`
-	RuleScores       map[string]float64  `json:"rule_scores"`
-	IsBot            bool                `json:"is_bot"`
-	Confidence       float64             `json:"confidence"`
-	RiskLevel        string              `json:"risk_level"`
-	Recommendations  []string            `json:"recommendations"`
-	AnalysisTime     time.Duration       `json:"analysis_time"`
+	TotalScore      float64            `json:"total_score"`
+	CategoryScores  map[string]float64 `json:"category_scores"`
+	TriggeredRules  []string           `json:"triggered_rules"`
+	RuleScores      map[string]float64 `json:"rule_scores"`
+	IsBot           bool               `json:"is_bot"`
+	Confidence      float64            `json:"confidence"`
+	RiskLevel       string             `json:"risk_level"`
+	Recommendations []string           `json:"recommendations"`
+	AnalysisTime    time.Duration      `json:"analysis_time"`
 }
 
 func NewEnhancedRuleEngine() *EnhancedRuleEngine {
 	engine := &EnhancedRuleEngine{
-		rules:         make([]EnhancedRule, 0),
-		ruleMap:       make(map[string]*EnhancedRule),
-		categories:    make(map[string][]string),
-		weights:       make(map[string]float64),
-		threshold:     0.5,
+		rules:      make([]EnhancedRule, 0),
+		ruleMap:    make(map[string]*EnhancedRule),
+		categories: make(map[string][]string),
+		weights:    make(map[string]float64),
+		threshold:  0.5,
 		performanceTracker: &PerformanceTracker{
 			RuleHitCounts:     make(map[string]int64),
 			CategoryHitCounts: make(map[string]int64),
@@ -615,14 +615,14 @@ func (ere *EnhancedRuleEngine) initializeRules() {
 
 func (ere *EnhancedRuleEngine) initializeWeights() {
 	ere.weights = map[string]float64{
-		"speed":     0.20,
+		"speed":      0.20,
 		"trajectory": 0.25,
-		"behavior":  0.15,
-		"click":     0.15,
-		"accuracy":  0.10,
-		"general":   0.10,
-		"ml":        0.05,
-		"combined":  0.05,
+		"behavior":   0.15,
+		"click":      0.15,
+		"accuracy":   0.10,
+		"general":    0.10,
+		"ml":         0.05,
+		"combined":   0.05,
 	}
 }
 
@@ -631,9 +631,9 @@ func (ere *EnhancedRuleEngine) Evaluate(features *RuleEngineFeatures) *RuleEngin
 
 	if features == nil {
 		return &RuleEngineResult{
-			IsBot:   false,
+			IsBot:      false,
 			Confidence: 0,
-			RiskLevel: "unknown",
+			RiskLevel:  "unknown",
 		}
 	}
 
@@ -919,7 +919,7 @@ func (ere *EnhancedRuleEngine) GetPerformanceStats() map[string]interface{} {
 		"evaluation_count":    ere.performanceTracker.EvaluationCount,
 		"average_exec_time":   ere.performanceTracker.AverageExecTime,
 		"rule_hit_counts":     ere.performanceTracker.RuleHitCounts,
-		"category_hit_counts":  ere.performanceTracker.CategoryHitCounts,
+		"category_hit_counts": ere.performanceTracker.CategoryHitCounts,
 	}
 
 	return stats
@@ -976,13 +976,13 @@ func CreateEnhancedFeaturesFromSliderResult(result *SliderAnalysisResult) *RuleE
 	}
 
 	features := &RuleEngineFeatures{
-		SliderFeatures:   result.Features,
-		PathEfficiency:  result.Trajectory.PathEfficiency,
-		AverageSpeed:     result.Trajectory.AverageSpeed,
-		MaxSpeed:         result.Trajectory.MaxSpeed,
-		SpeedVariance:    result.Trajectory.SpeedVariance,
-		AnomalyScore:     result.AnomalyScore,
-		MLScore:          result.MLScore,
+		SliderFeatures: result.Features,
+		PathEfficiency: result.Trajectory.PathEfficiency,
+		AverageSpeed:   result.Trajectory.AverageSpeed,
+		MaxSpeed:       result.Trajectory.MaxSpeed,
+		SpeedVariance:  result.Trajectory.SpeedVariance,
+		AnomalyScore:   result.AnomalyScore,
+		MLScore:        result.MLScore,
 	}
 
 	if result.Features != nil {

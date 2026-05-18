@@ -20,10 +20,10 @@ func TestQuotaManagementService_CreateOrUpdateQuota(t *testing.T) {
 	key := "test-quota-key"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           1000,
+		Type:             QuotaTypeDaily,
+		Limit:            1000,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	err := service.CreateOrUpdateQuota(ctx, key, config)
@@ -42,10 +42,10 @@ func TestQuotaManagementService_GetQuota(t *testing.T) {
 	key := "test-get-quota"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           500,
+		Type:             QuotaTypeDaily,
+		Limit:            500,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	_ = service.CreateOrUpdateQuota(ctx, key, config)
@@ -62,10 +62,10 @@ func TestQuotaManagementService_GetQuotaStatus(t *testing.T) {
 	key := "test-quota-status"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           1000,
+		Type:             QuotaTypeDaily,
+		Limit:            1000,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	_ = service.CreateOrUpdateQuota(ctx, key, config)
@@ -82,10 +82,10 @@ func TestQuotaManagementService_ConsumeQuota(t *testing.T) {
 	key := "test-consume-quota"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           10,
+		Type:             QuotaTypeDaily,
+		Limit:            10,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	_ = service.CreateOrUpdateQuota(ctx, key, config)
@@ -110,10 +110,10 @@ func TestQuotaManagementService_ResetQuota(t *testing.T) {
 	key := "test-reset-quota"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           100,
+		Type:             QuotaTypeDaily,
+		Limit:            100,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	_ = service.CreateOrUpdateQuota(ctx, key, config)
@@ -136,10 +136,10 @@ func TestQuotaManagementService_DeleteQuota(t *testing.T) {
 	key := "test-delete-quota"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           100,
+		Type:             QuotaTypeDaily,
+		Limit:            100,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	_ = service.CreateOrUpdateQuota(ctx, key, config)
@@ -161,10 +161,10 @@ func TestQuotaManagementService_ListQuotas(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		key := "test-list-quota-" + string(rune(i))
 		config := &QuotaConfig{
-			Type:            QuotaTypeDaily,
-			Limit:           int64(100 * (i + 1)),
+			Type:             QuotaTypeDaily,
+			Limit:            int64(100 * (i + 1)),
 			WarningThreshold: 80.0,
-			HardLimit:       true,
+			HardLimit:        true,
 		}
 		_ = service.CreateOrUpdateQuota(ctx, key, config)
 	}
@@ -180,10 +180,10 @@ func TestQuotaManagementService_CheckQuotaWarning(t *testing.T) {
 	key := "test-warning-quota"
 
 	config := &QuotaConfig{
-		Type:            QuotaTypeDaily,
-		Limit:           100,
+		Type:             QuotaTypeDaily,
+		Limit:            100,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	}
 
 	_ = service.CreateOrUpdateQuota(ctx, key, config)
@@ -208,7 +208,7 @@ func TestQuotaManagementService_CheckQuotaWarning(t *testing.T) {
 func TestCalculateResetTime(t *testing.T) {
 	// 测试各种配额类型的重置时间计算
 	testCases := []struct {
-		name     string
+		name      string
 		quotaType QuotaType
 	}{
 		{"per-minute", QuotaTypePerMinute},

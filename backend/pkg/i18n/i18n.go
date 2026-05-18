@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	translations     map[string]map[string]string
-	mu               sync.RWMutex
-	defaultLang      = "zh-CN"
+	translations   map[string]map[string]string
+	mu             sync.RWMutex
+	defaultLang    = "zh-CN"
 	supportedLangs = []string{
 		"zh-CN",
 		"en-US",
@@ -29,9 +29,9 @@ var (
 )
 
 type LocaleConfig struct {
-	DefaultLang   string   `json:"default_lang"`
-	SupportedLangs []string `json:"supported_langs"`
-	TranslationsDir string `json:"translations_dir"`
+	DefaultLang     string   `json:"default_lang"`
+	SupportedLangs  []string `json:"supported_langs"`
+	TranslationsDir string   `json:"translations_dir"`
 }
 
 func Init(config LocaleConfig) error {

@@ -10,12 +10,12 @@ func TestFingerprintDatabase_AddFingerprint(t *testing.T) {
 
 	fp := &FingerprintAnalysis{
 		FingerprintID:    "test_fp_001",
-		CanvasHash:      "canvas123",
-		WebGLHash:       "webgl456",
-		UserAgent:       "Mozilla/5.0",
+		CanvasHash:       "canvas123",
+		WebGLHash:        "webgl456",
+		UserAgent:        "Mozilla/5.0",
 		ScreenResolution: "1920x1080",
-		Timezone:        "Asia/Shanghai",
-		Language:        "zh-CN",
+		Timezone:         "Asia/Shanghai",
+		Language:         "zh-CN",
 	}
 
 	db.AddFingerprint(fp)
@@ -43,35 +43,35 @@ func TestFingerprintDatabase_CalculateSimilarity(t *testing.T) {
 
 	fp1 := &FingerprintAnalysis{
 		FingerprintID:    "fp1",
-		CanvasHash:      "hash1",
-		WebGLHash:       "webgl1",
-		UserAgent:       "Mozilla/5.0",
+		CanvasHash:       "hash1",
+		WebGLHash:        "webgl1",
+		UserAgent:        "Mozilla/5.0",
 		ScreenResolution: "1920x1080",
-		Timezone:        "UTC",
-		Language:        "en-US",
-		Platform:        "Win32",
+		Timezone:         "UTC",
+		Language:         "en-US",
+		Platform:         "Win32",
 	}
 
 	fp2 := &FingerprintAnalysis{
 		FingerprintID:    "fp2",
-		CanvasHash:      "hash1",
-		WebGLHash:       "webgl1",
-		UserAgent:       "Mozilla/5.0",
+		CanvasHash:       "hash1",
+		WebGLHash:        "webgl1",
+		UserAgent:        "Mozilla/5.0",
 		ScreenResolution: "1920x1080",
-		Timezone:        "UTC",
-		Language:        "en-US",
-		Platform:        "Win32",
+		Timezone:         "UTC",
+		Language:         "en-US",
+		Platform:         "Win32",
 	}
 
 	fp3 := &FingerprintAnalysis{
 		FingerprintID:    "fp3",
-		CanvasHash:      "hash2",
-		WebGLHash:       "webgl2",
-		UserAgent:       "Chrome/90.0",
+		CanvasHash:       "hash2",
+		WebGLHash:        "webgl2",
+		UserAgent:        "Chrome/90.0",
 		ScreenResolution: "1366x768",
-		Timezone:        "America/New_York",
-		Language:        "en-US",
-		Platform:        "MacIntel",
+		Timezone:         "America/New_York",
+		Language:         "en-US",
+		Platform:         "MacIntel",
 	}
 
 	similarity1 := db.CalculateSimilarity(fp1, fp2)
@@ -96,23 +96,23 @@ func TestFingerprintDatabase_FindSimilarFingerprints(t *testing.T) {
 	fps := []*FingerprintAnalysis{
 		{
 			FingerprintID:    "fp1",
-			CanvasHash:      "hash1",
-			WebGLHash:       "webgl1",
-			UserAgent:       "Mozilla/5.0",
+			CanvasHash:       "hash1",
+			WebGLHash:        "webgl1",
+			UserAgent:        "Mozilla/5.0",
 			ScreenResolution: "1920x1080",
 		},
 		{
 			FingerprintID:    "fp2",
-			CanvasHash:      "hash1",
-			WebGLHash:       "webgl1",
-			UserAgent:       "Mozilla/5.0",
+			CanvasHash:       "hash1",
+			WebGLHash:        "webgl1",
+			UserAgent:        "Mozilla/5.0",
 			ScreenResolution: "1920x1080",
 		},
 		{
 			FingerprintID:    "fp3",
-			CanvasHash:      "hash2",
-			WebGLHash:       "webgl2",
-			UserAgent:       "Chrome/90.0",
+			CanvasHash:       "hash2",
+			WebGLHash:        "webgl2",
+			UserAgent:        "Chrome/90.0",
 			ScreenResolution: "1366x768",
 		},
 	}
@@ -274,16 +274,16 @@ func TestFingerprintAnalyzer_AnalyzeFingerprint(t *testing.T) {
 	analyzer := NewFingerprintAnalyzer()
 
 	data := map[string]interface{}{
-		"canvas_hash":        "canvas_test_hash",
-		"webgl_hash":        "webgl_test_hash",
-		"audio_hash":        "audio_test_hash",
-		"user_agent":        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-		"screen_resolution":  "1920x1080",
-		"timezone":           "Asia/Shanghai",
-		"language":           "zh-CN",
-		"platform":           "Win32",
+		"canvas_hash":          "canvas_test_hash",
+		"webgl_hash":           "webgl_test_hash",
+		"audio_hash":           "audio_test_hash",
+		"user_agent":           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+		"screen_resolution":    "1920x1080",
+		"timezone":             "Asia/Shanghai",
+		"language":             "zh-CN",
+		"platform":             "Win32",
 		"hardware_concurrency": float64(8),
-		"device_memory":      float64(16),
+		"device_memory":        float64(16),
 	}
 
 	fp, anomaly, err := analyzer.AnalyzeFingerprint(data)
@@ -312,9 +312,9 @@ func TestFingerprintAnalyzer_DetectBotIndicators(t *testing.T) {
 	analyzer := NewFingerprintAnalyzer()
 
 	testCases := []struct {
-		name       string
-		userAgent  string
-		expectBot  bool
+		name      string
+		userAgent string
+		expectBot bool
 	}{
 		{"Chrome on Windows", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", false},
 		{"Headless Chrome", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/91.0.4472.0 Safari/537.36", true},
@@ -352,12 +352,12 @@ func TestFingerprintAnalyzer_CalculateConfidence(t *testing.T) {
 		{
 			name: "Complete data",
 			data: map[string]interface{}{
-				"canvas_hash":        "hash1",
+				"canvas_hash":       "hash1",
 				"webgl_hash":        "hash2",
 				"audio_hash":        "hash3",
 				"font_hash":         "hash4",
 				"user_agent":        "Mozilla/5.0",
-				"screen_resolution":  "1920x1080",
+				"screen_resolution": "1920x1080",
 			},
 			minExpected: 0.8,
 		},
@@ -439,13 +439,13 @@ func TestFingerprintAnalyzer_ExtendedAnalysis(t *testing.T) {
 	analyzer := NewFingerprintAnalyzer()
 
 	data := map[string]interface{}{
-		"canvas_hash":        "test_hash",
-		"webgl_hash":        "webgl_hash",
-		"user_agent":        "Mozilla/5.0",
-		"webrtc_ips":        []interface{}{"192.168.1.1", "10.0.0.1"},
-		"connection_type":   "wifi",
-		"request_interval":  float64(0.5),
-		"request_paths":     []interface{}{"/api/v1/captcha", "/api/v1/verify"},
+		"canvas_hash":      "test_hash",
+		"webgl_hash":       "webgl_hash",
+		"user_agent":       "Mozilla/5.0",
+		"webrtc_ips":       []interface{}{"192.168.1.1", "10.0.0.1"},
+		"connection_type":  "wifi",
+		"request_interval": float64(0.5),
+		"request_paths":    []interface{}{"/api/v1/captcha", "/api/v1/verify"},
 	}
 
 	extended, err := analyzer.AnalyzeWithExtendedMetrics(data)
@@ -540,8 +540,8 @@ func TestExportImport(t *testing.T) {
 
 	originalFp := &FingerprintAnalysis{
 		FingerprintID: "export_test",
-		CanvasHash:   "export_hash",
-		WebGLHash:    "webgl_export",
+		CanvasHash:    "export_hash",
+		WebGLHash:     "webgl_export",
 	}
 	db.AddFingerprint(originalFp)
 
@@ -579,8 +579,8 @@ func TestDatabase_ConcurrentAccess(t *testing.T) {
 		go func(idx int) {
 			for j := 0; j < 100; j++ {
 				fp := &FingerprintAnalysis{
-					FingerprintID:    "concurrent_fp",
-					CanvasHash:      "hash",
+					FingerprintID: "concurrent_fp",
+					CanvasHash:    "hash",
 				}
 				db.AddFingerprint(fp)
 				db.GetFingerprint("concurrent_fp")

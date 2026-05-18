@@ -28,11 +28,11 @@ func (w *responseWriter) WriteString(s string) (int, error) {
 }
 
 type PerformanceStats struct {
-	TotalRequests   int64
-	TotalDuration   int64
-	SlowRequests    int64
-	RequestCount     map[string]int64
-	mu              sync.RWMutex
+	TotalRequests int64
+	TotalDuration int64
+	SlowRequests  int64
+	RequestCount  map[string]int64
+	mu            sync.RWMutex
 }
 
 var stats = &PerformanceStats{
@@ -76,18 +76,18 @@ func GetPerformanceStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_requests":   stats.TotalRequests,
+		"total_requests":  stats.TotalRequests,
 		"avg_duration_ms": avgDuration,
-		"slow_requests":    stats.SlowRequests,
-		"request_count":    stats.RequestCount,
+		"slow_requests":   stats.SlowRequests,
+		"request_count":   stats.RequestCount,
 	}
 }
 
 func GzipCompression() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.GetHeader("Accept-Encoding") == "" || 
-		   c.GetBool("gzip_disabled") || 
-		   c.GetHeader("Content-Encoding") != "" {
+		if c.GetHeader("Accept-Encoding") == "" ||
+			c.GetBool("gzip_disabled") ||
+			c.GetHeader("Content-Encoding") != "" {
 			c.Next()
 			return
 		}

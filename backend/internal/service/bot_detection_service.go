@@ -3,9 +3,11 @@ package service
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -74,23 +76,23 @@ type BotFingerprintData struct {
 }
 
 type BotBehaviorData struct {
-	IP             string
-	RequestTimes   []time.Time
-	RequestPaths   []string
-	Methods        []string
-	RequestCount   int
-	LastActivity   time.Time
-	AvgInterval    float64
-	IsRegular      bool
+	IP           string
+	RequestTimes []time.Time
+	RequestPaths []string
+	Methods      []string
+	RequestCount int
+	LastActivity time.Time
+	AvgInterval  float64
+	IsRegular    bool
 }
 
 type BotDetectionResult struct {
-	IsBot          bool
-	ShouldBlock    bool
-	RiskScore      float64
-	Reasons        []string
-	ChallengeType  string
-	Confidence     float64
+	IsBot         bool
+	ShouldBlock   bool
+	RiskScore     float64
+	Reasons       []string
+	ChallengeType string
+	Confidence    float64
 }
 
 type BotDetectionService struct {
@@ -339,4 +341,528 @@ func (s *BotDetectionService) RemoveFromBlacklist(ip string) {
 			fp.IsBlacklisted = false
 		}
 	}
+}
+
+type AutomationToolType string
+
+const (
+	ToolSelenium   AutomationToolType = "selenium"
+	ToolPhantomJS  AutomationToolType = "phantomjs"
+	ToolPuppeteer  AutomationToolType = "puppeteer"
+	ToolPlaywright AutomationToolType = "playwright"
+	ToolHeadless   AutomationToolType = "headless"
+	ToolWebDriver  AutomationToolType = "webdriver"
+	ToolGeneric    AutomationToolType = "generic_bot"
+)
+
+type AutomationDetectionResult struct {
+	ToolType             AutomationToolType    `json:"tool_type"`
+	IsAutomated          bool                  `json:"is_automated"`
+	Confidence           float64               `json:"confidence"`
+	DetectionMethods     []string              `json:"detection_methods"`
+	Indicators           []string              `json:"indicators"`
+	Score                float64               `json:"score"`
+	BehavioralIndicators *BehavioralIndicators `json:"behavioral_indicators"`
+}
+
+type BehavioralIndicators struct {
+	RequestPattern     string   `json:"request_pattern"`
+	NavigationFlow     []string `json:"navigation_flow"`
+	MouseMovement      bool     `json:"mouse_movement"`
+	KeyboardPatterns   bool     `json:"keyboard_patterns"`
+	TimingAnomalies    bool     `json:"timing_anomalies"`
+	SessionConsistency float64  `json:"session_consistency"`
+	IsHumanLike        bool     `json:"is_human_like"`
+}
+
+type EnhancedBotDetectionService struct {
+	*BotDetectionService
+	behaviorPatterns     map[string][]time.Time
+	sessionData          map[string]*BotSessionInfo
+	knownAutomationTools map[AutomationToolType]*AutomationToolSignature
+}
+
+type BotSessionInfo struct {
+	SessionID        string
+	StartTime        time.Time
+	RequestCount     int
+	RequestIntervals []time.Duration
+	LastRequestTime  time.Time
+	NavigationPaths  []string
+}
+
+type AutomationToolSignature struct {
+	Type       AutomationToolType
+	Name       string
+	Patterns   []*regexp.Regexp
+	Indicators []string
+	Weight     float64
+}
+
+func NewEnhancedBotDetectionService() *EnhancedBotDetectionService {
+	service := &EnhancedBotDetectionService{
+		BotDetectionService:  NewBotDetectionService(),
+		behaviorPatterns:     make(map[string][]time.Time),
+		sessionData:          make(map[string]*BotSessionInfo),
+		knownAutomationTools: make(map[AutomationToolType]*AutomationToolSignature),
+	}
+
+	service.initializeAutomationSignatures()
+	return service
+}
+
+func (s *EnhancedBotDetectionService) initializeAutomationSignatures() {
+	s.knownAutomationTools[ToolSelenium] = &AutomationToolSignature{
+		Type: ToolSelenium,
+		Name: "Selenium",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)selenium`),
+			regexp.MustCompile(`(?i)webdriver.*selenium`),
+			regexp.MustCompile(`(?i)selenium::webdriver`),
+		},
+		Indicators: []string{
+			"__selenium_evaluate",
+			"__webdriver_script_fn",
+			"Selenium.prototype",
+			"selenium_webdriver",
+		},
+		Weight: 0.85,
+	}
+
+	s.knownAutomationTools[ToolPhantomJS] = &AutomationToolSignature{
+		Type: ToolPhantomJS,
+		Name: "PhantomJS",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)phantomjs`),
+			regexp.MustCompile(`(?i)phantom\.js`),
+		},
+		Indicators: []string{
+			"phantom",
+			"callPhantom",
+			"_phantom",
+		},
+		Weight: 0.90,
+	}
+
+	s.knownAutomationTools[ToolPuppeteer] = &AutomationToolSignature{
+		Type: ToolPuppeteer,
+		Name: "Puppeteer",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)puppeteer`),
+			regexp.MustCompile(`(?i)headless.*chrome`),
+			regexp.MustCompile(`(?i)chrome\-headless`),
+		},
+		Indicators: []string{
+			"$cdc_asdjflasutopfhvcZLmcfl_",
+			"$chrome_asyncScriptInfo",
+			"__puppeteer_evaluation_script",
+		},
+		Weight: 0.88,
+	}
+
+	s.knownAutomationTools[ToolPlaywright] = &AutomationToolSignature{
+		Type: ToolPlaywright,
+		Name: "Playwright",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)playwright`),
+		},
+		Indicators: []string{
+			"__playwright__",
+			"__pw_api_hooks__",
+			"__pw_resume__",
+			"__pw_timeout__",
+		},
+		Weight: 0.87,
+	}
+
+	s.knownAutomationTools[ToolHeadless] = &AutomationToolSignature{
+		Type: ToolHeadless,
+		Name: "Headless Browser",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)headless`),
+			regexp.MustCompile(`(?i)chrome\-headless`),
+			regexp.MustCompile(`(?i)firefox\-headless`),
+		},
+		Indicators: []string{
+			"navigator.webdriver",
+			"headless_detected",
+		},
+		Weight: 0.75,
+	}
+
+	s.knownAutomationTools[ToolWebDriver] = &AutomationToolSignature{
+		Type: ToolWebDriver,
+		Name: "WebDriver",
+		Patterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)webdriver`),
+			regexp.MustCompile(`(?i)chrome\-automation`),
+		},
+		Indicators: []string{
+			"webdriver",
+			"__webdriver_evaluate",
+			"__driver_evaluate",
+		},
+		Weight: 0.82,
+	}
+}
+
+func (s *EnhancedBotDetectionService) DetectAutomationTool(r *http.Request, additionalData map[string]interface{}) *AutomationDetectionResult {
+	result := &AutomationDetectionResult{
+		DetectionMethods:     make([]string, 0),
+		Indicators:           make([]string, 0),
+		BehavioralIndicators: &BehavioralIndicators{},
+	}
+
+	userAgent := r.UserAgent()
+	ip := getClientIP(r)
+
+	s.analyzeHeadersForAutomation(r, result)
+	s.analyzeUserAgentForAutomation(userAgent, result)
+	s.analyzeAdditionalData(additionalData, result)
+	s.analyzeBehavior(ip, result)
+	s.calculateFinalScore(result)
+
+	return result
+}
+
+func (s *EnhancedBotDetectionService) analyzeHeadersForAutomation(r *http.Request, result *AutomationDetectionResult) {
+	type headerInfo struct {
+		indicator string
+		weight    float64
+	}
+
+	automationHeaders := map[string]headerInfo{
+		"X-WDAuthToken":      {indicator: "automation_token", weight: 0.9},
+		"X-Crawlera-Profile": {indicator: "crawlera_profile", weight: 0.85},
+		"X-Crawlera-UA":      {indicator: "crawlera_ua", weight: 0.80},
+		"X-Amzn-Trace-Id":    {indicator: "amazon_trace", weight: 0.30},
+		"X-Forwarded-For":    {indicator: "proxy_header", weight: 0.40},
+		"Via":                {indicator: "proxy_header", weight: 0.35},
+		"X-ProxyID":          {indicator: "proxy_id", weight: 0.60},
+	}
+
+	for header, info := range automationHeaders {
+		value := r.Header.Get(header)
+		if value != "" {
+			result.Indicators = append(result.Indicators, info.indicator)
+			result.Score += info.weight * 100
+			result.DetectionMethods = append(result.DetectionMethods, "header:"+header)
+		}
+	}
+
+	if r.Header.Get("Sec-Ch-Ua-Platform") == "" && r.Header.Get("Sec-Ch-Ua") != "" {
+		result.Indicators = append(result.Indicators, "missing_platform_header")
+		result.Score += 20
+		result.DetectionMethods = append(result.DetectionMethods, "missing_sec_ch_ua_platform")
+	}
+
+	if r.Header.Get("Sec-Fetch-Site") == "" {
+		result.Indicators = append(result.Indicators, "missing_fetch_site")
+		result.Score += 15
+	}
+
+	if r.Header.Get("Accept-Language") == "" {
+		result.Indicators = append(result.Indicators, "missing_accept_language")
+		result.Score += 10
+	}
+}
+
+func (s *EnhancedBotDetectionService) analyzeUserAgentForAutomation(ua string, result *AutomationDetectionResult) {
+	result.DetectionMethods = append(result.DetectionMethods, "user_agent_analysis")
+
+	for toolType, signature := range s.knownAutomationTools {
+		for _, pattern := range signature.Patterns {
+			if pattern.MatchString(ua) {
+				result.Indicators = append(result.Indicators, fmt.Sprintf("ua_match:%s", toolType))
+				result.Score += signature.Weight * 100
+				result.ToolType = toolType
+				result.DetectionMethods = append(result.DetectionMethods, fmt.Sprintf("pattern:%s", toolType))
+				break
+			}
+		}
+	}
+
+	commonBotPatterns := []string{
+		`curl/\d+\.\d+`,
+		`wget/\d+\.\d+`,
+		`python-requests/\d+\.\d+`,
+		`scrapy/\d+\.\d+`,
+		`apache-httpclient/\d+`,
+		`java/\d+\.\d+`,
+		`go-http-client`,
+		`node-fetch/\d+`,
+		`axios/\d+`,
+	}
+
+	for _, pattern := range commonBotPatterns {
+		re := regexp.MustCompile(pattern)
+		if re.MatchString(ua) {
+			result.Indicators = append(result.Indicators, "known_library")
+			result.Score += 60
+			result.DetectionMethods = append(result.DetectionMethods, "known_library:"+pattern)
+		}
+	}
+
+	versionPatterns := regexp.MustCompile(`(?:chrome|firefox|safari|edge)/(\d+)\.(\d+)\.(\d+)`)
+	matches := versionPatterns.FindStringSubmatch(ua)
+	if matches != nil {
+		majorVersion := 0
+		fmt.Sscanf(matches[1], "%d", &majorVersion)
+		if majorVersion > 0 && majorVersion < 50 {
+			result.Indicators = append(result.Indicators, "old_browser_version")
+			result.Score += 25
+		}
+	}
+}
+
+func (s *EnhancedBotDetectionService) analyzeAdditionalData(data map[string]interface{}, result *AutomationDetectionResult) {
+	if data == nil {
+		return
+	}
+
+	result.DetectionMethods = append(result.DetectionMethods, "additional_data_analysis")
+
+	if navigatorProps, ok := data["navigator_properties"].(map[string]interface{}); ok {
+		if webdriver, ok := navigatorProps["webdriver"].(bool); ok && webdriver {
+			result.Indicators = append(result.Indicators, "navigator.webdriver=true")
+			result.Score += 80
+			result.DetectionMethods = append(result.DetectionMethods, "navigator_webdriver")
+		}
+
+		if plugins, ok := navigatorProps["plugins"].([]interface{}); ok && len(plugins) == 0 {
+			result.Indicators = append(result.Indicators, "no_plugins")
+			result.Score += 30
+		}
+
+		if languages, ok := navigatorProps["languages"].([]interface{}); ok && len(languages) == 0 {
+			result.Indicators = append(result.Indicators, "no_languages")
+			result.Score += 25
+		}
+	}
+
+	if canvasData, ok := data["canvas_fingerprint"].(string); ok && canvasData != "" {
+		result.DetectionMethods = append(result.DetectionMethods, "canvas_analysis")
+		canvasHash := fmt.Sprintf("%x", sha256.Sum256([]byte(canvasData)))
+		if s.isCommonCanvasHash(canvasHash) {
+			result.Indicators = append(result.Indicators, "common_canvas_hash")
+			result.Score += 20
+		}
+	}
+
+	if webglData, ok := data["webgl_renderer"].(string); ok {
+		if strings.Contains(strings.ToLower(webglData), "swiftshader") ||
+			strings.Contains(strings.ToLower(webglData), "llvmpipe") ||
+			strings.Contains(strings.ToLower(webglData), "software") {
+			result.Indicators = append(result.Indicators, "software_renderer")
+			result.Score += 45
+			result.DetectionMethods = append(result.DetectionMethods, "software_webgl")
+		}
+	}
+
+	if timingData, ok := data["timing_data"].(map[string]interface{}); ok {
+		if loadTime, ok := timingData["load_time"].(float64); ok {
+			if loadTime < 100 {
+				result.Indicators = append(result.Indicators, "fast_load_time")
+				result.Score += 35
+			}
+		}
+	}
+}
+
+func (s *EnhancedBotDetectionService) analyzeBehavior(ip string, result *AutomationDetectionResult) {
+	result.DetectionMethods = append(result.DetectionMethods, "behavior_analysis")
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	timingData := s.behaviorPatterns[ip]
+	if len(timingData) < 5 {
+		result.BehavioralIndicators.IsHumanLike = true
+		return
+	}
+
+	intervals := make([]time.Duration, 0)
+	for i := 1; i < len(timingData); i++ {
+		interval := timingData[i].Sub(timingData[i-1])
+		intervals = append(intervals, interval)
+	}
+
+	avgInterval := s.calculateAverageInterval(intervals)
+	variance := s.calculateIntervalVariance(intervals, avgInterval)
+
+	if variance < 50*time.Millisecond && avgInterval < 2*time.Second {
+		result.BehavioralIndicators.TimingAnomalies = true
+		result.BehavioralIndicators.RequestPattern = "too_regular"
+		result.Score += 40
+		result.Indicators = append(result.Indicators, "regular_timing_pattern")
+	}
+
+	if avgInterval < 500*time.Millisecond {
+		result.Score += 30
+		result.Indicators = append(result.Indicators, "fast_requests")
+	}
+
+	if len(intervals) > 0 {
+		maxInterval := intervals[0]
+		minInterval := intervals[0]
+		for _, interval := range intervals {
+			if interval > maxInterval {
+				maxInterval = interval
+			}
+			if interval < minInterval {
+				minInterval = interval
+			}
+		}
+
+		ratio := float64(maxInterval) / float64(minInterval)
+		if ratio < 1.5 && avgInterval < 3*time.Second {
+			result.BehavioralIndicators.IsHumanLike = false
+			result.Score += 35
+			result.Indicators = append(result.Indicators, "mechanical_behavior")
+		}
+	}
+
+	result.BehavioralIndicators.IsHumanLike = result.Score < 50
+}
+
+func (s *EnhancedBotDetectionService) calculateAverageInterval(intervals []time.Duration) time.Duration {
+	if len(intervals) == 0 {
+		return 0
+	}
+
+	var sum time.Duration
+	for _, interval := range intervals {
+		sum += interval
+	}
+
+	return sum / time.Duration(len(intervals))
+}
+
+func (s *EnhancedBotDetectionService) calculateIntervalVariance(intervals []time.Duration, avg time.Duration) time.Duration {
+	if len(intervals) == 0 {
+		return 0
+	}
+
+	var sumSq float64
+	for _, interval := range intervals {
+		diff := float64(interval - avg)
+		sumSq += diff * diff
+	}
+
+	variance := sumSq / float64(len(intervals))
+	return time.Duration(math.Sqrt(variance))
+}
+
+func (s *EnhancedBotDetectionService) calculateFinalScore(result *AutomationDetectionResult) {
+	result.Score = math.Min(result.Score, 100)
+	result.Confidence = result.Score / 100.0
+	result.IsAutomated = result.Score >= 60
+
+	if len(result.Indicators) >= 5 && result.Score >= 40 {
+		result.IsAutomated = true
+		result.Confidence = math.Min(result.Confidence+0.2, 1.0)
+	}
+
+	if result.ToolType == "" && result.IsAutomated {
+		result.ToolType = ToolGeneric
+	}
+}
+
+func (s *EnhancedBotDetectionService) isCommonCanvasHash(hash string) bool {
+	commonHashes := map[string]bool{
+		"a1b2c3d4e5f6": true,
+		"1234567890ab": true,
+		"ffffffffffff": true,
+		"000000000000": true,
+	}
+	return commonHashes[hash]
+}
+
+func (s *EnhancedBotDetectionService) RecordRequest(ip string, path string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	s.behaviorPatterns[ip] = append(s.behaviorPatterns[ip], now)
+
+	if len(s.behaviorPatterns[ip]) > 1000 {
+		s.behaviorPatterns[ip] = s.behaviorPatterns[ip][len(s.behaviorPatterns[ip])-500:]
+	}
+
+	if _, exists := s.sessionData[ip]; !exists {
+		s.sessionData[ip] = &BotSessionInfo{
+			SessionID:        fmt.Sprintf("session_%s_%d", ip, now.Unix()),
+			StartTime:        now,
+			RequestCount:     0,
+			RequestIntervals: []time.Duration{},
+			NavigationPaths:  []string{},
+		}
+	}
+
+	session := s.sessionData[ip]
+	session.RequestCount++
+	session.LastRequestTime = now
+	session.NavigationPaths = append(session.NavigationPaths, path)
+
+	if len(session.NavigationPaths) > 100 {
+		session.NavigationPaths = session.NavigationPaths[len(session.NavigationPaths)-50:]
+	}
+}
+
+func (s *EnhancedBotDetectionService) GetSessionInfo(ip string) *BotSessionInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if session, exists := s.sessionData[ip]; exists {
+		return session
+	}
+
+	return nil
+}
+
+func (s *EnhancedBotDetectionService) DetectAutomatedScriptPattern(ip string) (bool, float64) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	session := s.sessionData[ip]
+	if session == nil || session.RequestCount < 10 {
+		return false, 0
+	}
+
+	score := 0.0
+
+	if len(session.NavigationPaths) > 0 {
+		uniquePaths := make(map[string]bool)
+		for _, path := range session.NavigationPaths {
+			uniquePaths[path] = true
+		}
+
+		pathDiversity := float64(len(uniquePaths)) / float64(len(session.NavigationPaths))
+		if pathDiversity < 0.1 {
+			score += 40
+		} else if pathDiversity < 0.3 {
+			score += 20
+		}
+	}
+
+	if len(session.RequestIntervals) > 5 {
+		avgInterval := s.calculateAverageInterval(session.RequestIntervals)
+		if avgInterval < 1*time.Second {
+			score += 35
+		} else if avgInterval < 3*time.Second {
+			score += 15
+		}
+	}
+
+	sessionDuration := time.Since(session.StartTime)
+	if sessionDuration > 0 && session.RequestCount > 0 {
+		requestsPerMinute := float64(session.RequestCount) / sessionDuration.Minutes()
+		if requestsPerMinute > 100 {
+			score += 40
+		} else if requestsPerMinute > 50 {
+			score += 20
+		}
+	}
+
+	return score >= 60, math.Min(score, 100)
 }

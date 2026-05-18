@@ -11,37 +11,37 @@ import (
 
 // TokenBucketConfig 令牌桶配置
 type TokenBucketConfig struct {
-	Rate        float64       // 每秒填充的令牌数
-	Capacity    float64       // 桶的最大容量
-	BurstSize   float64       // 突发流量大小
-	InitialTokens float64     // 初始令牌数
+	Rate          float64 // 每秒填充的令牌数
+	Capacity      float64 // 桶的最大容量
+	BurstSize     float64 // 突发流量大小
+	InitialTokens float64 // 初始令牌数
 }
 
 // TokenBucketResult 令牌桶限流结果
 type TokenBucketResult struct {
-	Allowed      bool          // 是否允许请求
-	Tokens       float64       // 当前令牌数
-	Capacity     float64       // 桶容量
-	RetryAfter   time.Duration // 重试等待时间
-	WaitTime     time.Duration // 建议等待时间
-	IsBurst      bool          // 是否为突发请求
+	Allowed    bool          // 是否允许请求
+	Tokens     float64       // 当前令牌数
+	Capacity   float64       // 桶容量
+	RetryAfter time.Duration // 重试等待时间
+	WaitTime   time.Duration // 建议等待时间
+	IsBurst    bool          // 是否为突发请求
 }
 
 // TokenBucket 令牌桶结构
 type TokenBucket struct {
-	mu          sync.Mutex
-	key         string
-	capacity    float64
-	rate        float64
-	tokens      float64
-	lastRefill  time.Time
-	burstSize   float64
+	mu         sync.Mutex
+	key        string
+	capacity   float64
+	rate       float64
+	tokens     float64
+	lastRefill time.Time
+	burstSize  float64
 }
 
 // TokenBucketRateLimitService 令牌桶限流服务
 type TokenBucketRateLimitService struct {
-	buckets map[string]*TokenBucket
-	mu      sync.RWMutex
+	buckets      map[string]*TokenBucket
+	mu           sync.RWMutex
 	redisEnabled bool
 }
 
@@ -50,17 +50,17 @@ const (
 )
 
 var defaultTokenBucketConfig = TokenBucketConfig{
-	Rate:         10,
-	Capacity:     100,
-	BurstSize:    50,
+	Rate:          10,
+	Capacity:      100,
+	BurstSize:     50,
 	InitialTokens: 100,
 }
 
 // NewTokenBucketRateLimitService 创建令牌桶限流服务
 func NewTokenBucketRateLimitService() *TokenBucketRateLimitService {
 	service := &TokenBucketRateLimitService{
-		buckets:       make(map[string]*TokenBucket),
-		redisEnabled:  redis.Client != nil,
+		buckets:      make(map[string]*TokenBucket),
+		redisEnabled: redis.Client != nil,
 	}
 	go service.cleanupExpiredBuckets()
 	return service
@@ -78,12 +78,12 @@ func (s *TokenBucketRateLimitService) getBucket(key string, config *TokenBucketC
 		// 再次检查，避免竞态条件
 		if bucket, exists = s.buckets[key]; !exists {
 			bucket = &TokenBucket{
-				key:         key,
-				capacity:    config.Capacity,
-				rate:        config.Rate,
-				tokens:      config.InitialTokens,
-				lastRefill:  time.Now(),
-				burstSize:   config.BurstSize,
+				key:        key,
+				capacity:   config.Capacity,
+				rate:       config.Rate,
+				tokens:     config.InitialTokens,
+				lastRefill: time.Now(),
+				burstSize:  config.BurstSize,
 			}
 			s.buckets[key] = bucket
 		}
@@ -287,7 +287,7 @@ func (s *TokenBucketRateLimitService) CheckAppTokenBucketLimit(
 // ResetBucket 重置令牌桶
 func (s *TokenBucketRateLimitService) ResetBucket(ctx context.Context, key string) error {
 	bucketKey := tokenBucketPrefix + key
-	
+
 	s.mu.Lock()
 	delete(s.buckets, bucketKey)
 	s.mu.Unlock()
@@ -309,12 +309,12 @@ func (s *TokenBucketRateLimitService) GetBucketStats(key string) map[string]inte
 		defer bucket.mu.Unlock()
 		bucket.refill()
 		return map[string]interface{}{
-			"key":          bucket.key,
-			"tokens":       bucket.tokens,
-			"capacity":     bucket.capacity,
-			"rate":         bucket.rate,
-			"burst_size":   bucket.burstSize,
-			"last_refill":  bucket.lastRefill,
+			"key":         bucket.key,
+			"tokens":      bucket.tokens,
+			"capacity":    bucket.capacity,
+			"rate":        bucket.rate,
+			"burst_size":  bucket.burstSize,
+			"last_refill": bucket.lastRefill,
 		}
 	}
 	return nil
@@ -341,11 +341,11 @@ func (s *TokenBucketRateLimitService) cleanupExpiredBuckets() {
 
 // TrafficShaper 流量整形器
 type TrafficShaper struct {
-	queue     chan func()
-	bucket    *TokenBucket
-	wg        sync.WaitGroup
-	closed    bool
-	mu        sync.Mutex
+	queue  chan func()
+	bucket *TokenBucket
+	wg     sync.WaitGroup
+	closed bool
+	mu     sync.Mutex
 }
 
 // NewTrafficShaper 创建流量整形器
@@ -354,7 +354,7 @@ func NewTrafficShaper(config *TokenBucketConfig) *TrafficShaper {
 		config = &defaultTokenBucketConfig
 	}
 	shaper := &TrafficShaper{
-		queue:  make(chan func(), 1000),
+		queue: make(chan func(), 1000),
 		bucket: &TokenBucket{
 			capacity:   config.Capacity,
 			rate:       config.Rate,

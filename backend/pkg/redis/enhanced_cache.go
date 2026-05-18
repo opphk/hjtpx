@@ -17,18 +17,18 @@ import (
 )
 
 var (
-	ErrCacheMiss      = errors.New("cache miss")
-	ErrCacheDisabled  = errors.New("cache disabled")
-	ErrCircuitOpen    = errors.New("circuit breaker open")
-	ErrLockTimeout    = errors.New("lock timeout")
-	ErrKeyNotFound    = errors.New("key not found")
+	ErrCacheMiss     = errors.New("cache miss")
+	ErrCacheDisabled = errors.New("cache disabled")
+	ErrCircuitOpen   = errors.New("circuit breaker open")
+	ErrLockTimeout   = errors.New("lock timeout")
+	ErrKeyNotFound   = errors.New("key not found")
 )
 
 const (
 	DefaultMaxCacheSize      = 10000
-	DefaultL1TTL            = 5 * time.Minute
-	DefaultL2TTL            = 30 * time.Minute
-	DefaultLockTimeout      = 10 * time.Second
+	DefaultL1TTL             = 5 * time.Minute
+	DefaultL2TTL             = 30 * time.Minute
+	DefaultLockTimeout       = 10 * time.Second
 	DefaultCompressThreshold = 1024 // 1KB
 )
 
@@ -41,33 +41,33 @@ const (
 )
 
 type CacheConfig struct {
-	Enabled          bool
-	L1Enabled        bool
-	L2Enabled        bool
-	L1Size           int
-	L1TTL            time.Duration
-	L2TTL            time.Duration
-	CompressEnabled  bool
+	Enabled           bool
+	L1Enabled         bool
+	L2Enabled         bool
+	L1Size            int
+	L1TTL             time.Duration
+	L2TTL             time.Duration
+	CompressEnabled   bool
 	CompressThreshold int
-	StatsEnabled     bool
-	HotKeyThreshold  int64
-	BreakerThreshold int
-	BreakerTimeout   time.Duration
+	StatsEnabled      bool
+	HotKeyThreshold   int64
+	BreakerThreshold  int
+	BreakerTimeout    time.Duration
 }
 
 var DefaultCacheConfig = &CacheConfig{
-	Enabled:          true,
-	L1Enabled:        true,
-	L2Enabled:        true,
-	L1Size:           DefaultMaxCacheSize,
-	L1TTL:            DefaultL1TTL,
-	L2TTL:            DefaultL2TTL,
-	CompressEnabled:  true,
+	Enabled:           true,
+	L1Enabled:         true,
+	L2Enabled:         true,
+	L1Size:            DefaultMaxCacheSize,
+	L1TTL:             DefaultL1TTL,
+	L2TTL:             DefaultL2TTL,
+	CompressEnabled:   true,
 	CompressThreshold: DefaultCompressThreshold,
-	StatsEnabled:     true,
-	HotKeyThreshold:  100,
-	BreakerThreshold: 5,
-	BreakerTimeout:   30 * time.Second,
+	StatsEnabled:      true,
+	HotKeyThreshold:   100,
+	BreakerThreshold:  5,
+	BreakerTimeout:    30 * time.Second,
 }
 
 type l1Entry struct {
@@ -91,26 +91,26 @@ type EnhancedCache struct {
 }
 
 type l1Metrics struct {
-	hits       atomic.Int64
-	misses     atomic.Int64
-	evictions  atomic.Int64
-	size       atomic.Int64
+	hits      atomic.Int64
+	misses    atomic.Int64
+	evictions atomic.Int64
+	size      atomic.Int64
 }
 
 type CacheStats struct {
-	Hits           atomic.Int64
-	Misses         atomic.Int64
-	Sets           atomic.Int64
-	Deletes        atomic.Int64
-	Compressed     atomic.Int64
-	Decompressed   atomic.Int64
-	L1Hits         atomic.Int64
-	L1Misses       atomic.Int64
-	L2Hits         atomic.Int64
-	L2Misses       atomic.Int64
-	Errors         atomic.Int64
-	TotalLatency   atomic.Int64
-	RequestCount   atomic.Int64
+	Hits         atomic.Int64
+	Misses       atomic.Int64
+	Sets         atomic.Int64
+	Deletes      atomic.Int64
+	Compressed   atomic.Int64
+	Decompressed atomic.Int64
+	L1Hits       atomic.Int64
+	L1Misses     atomic.Int64
+	L2Hits       atomic.Int64
+	L2Misses     atomic.Int64
+	Errors       atomic.Int64
+	TotalLatency atomic.Int64
+	RequestCount atomic.Int64
 }
 
 type CircuitBreaker struct {
@@ -133,13 +133,13 @@ type HotKeyInfo struct {
 }
 
 type CacheEntry struct {
-	Key       string
-	Value     []byte
-	TTL       time.Duration
-	Version   int64
-	Tags      []string
+	Key        string
+	Value      []byte
+	TTL        time.Duration
+	Version    int64
+	Tags       []string
 	Compressed bool
-	Level     CacheLevel
+	Level      CacheLevel
 }
 
 type GetOptions struct {
@@ -149,16 +149,16 @@ type GetOptions struct {
 }
 
 type SetOptions struct {
-	Level      CacheLevel
-	TTL        time.Duration
-	Version    int64
-	Tags       []string
-	Compress   bool
+	Level    CacheLevel
+	TTL      time.Duration
+	Version  int64
+	Tags     []string
+	Compress bool
 }
 
 type DeleteOptions struct {
-	Level   CacheLevel
-	ByTag   bool
+	Level CacheLevel
+	ByTag bool
 }
 
 func NewEnhancedCache(config *CacheConfig) *EnhancedCache {

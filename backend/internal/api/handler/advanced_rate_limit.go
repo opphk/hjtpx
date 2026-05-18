@@ -33,18 +33,18 @@ func NewAdvancedRateLimitHandler() *AdvancedRateLimitHandler {
 
 // CheckTokenBucketRequest 检查令牌桶请求
 type CheckTokenBucketRequest struct {
-	Key    string                  `json:"key" binding:"required"`
+	Key    string                     `json:"key" binding:"required"`
 	Config *service.TokenBucketConfig `json:"config"`
 }
 
 // CheckTokenBucketResponse 检查令牌桶响应
 type CheckTokenBucketResponse struct {
-	Allowed    bool          `json:"allowed"`
-	Tokens     float64       `json:"tokens"`
-	Capacity   float64       `json:"capacity"`
-	RetryAfter float64       `json:"retry_after_seconds"`
-	WaitTime   float64       `json:"wait_time_seconds"`
-	IsBurst    bool          `json:"is_burst"`
+	Allowed    bool    `json:"allowed"`
+	Tokens     float64 `json:"tokens"`
+	Capacity   float64 `json:"capacity"`
+	RetryAfter float64 `json:"retry_after_seconds"`
+	WaitTime   float64 `json:"wait_time_seconds"`
+	IsBurst    bool    `json:"is_burst"`
 }
 
 // CheckTokenBucket 检查令牌桶限流
@@ -111,12 +111,12 @@ func (h *AdvancedRateLimitHandler) ResetTokenBucket(c *gin.Context) {
 
 // GetBucketStatsResponse 获取桶统计响应
 type GetBucketStatsResponse struct {
-	Key         string    `json:"key"`
-	Tokens      float64   `json:"tokens"`
-	Capacity    float64   `json:"capacity"`
-	Rate        float64   `json:"rate"`
-	BurstSize   float64   `json:"burst_size"`
-	LastRefill  string    `json:"last_refill"`
+	Key        string  `json:"key"`
+	Tokens     float64 `json:"tokens"`
+	Capacity   float64 `json:"capacity"`
+	Rate       float64 `json:"rate"`
+	BurstSize  float64 `json:"burst_size"`
+	LastRefill string  `json:"last_refill"`
 }
 
 // GetBucketStats 获取桶统计
@@ -142,12 +142,12 @@ func (h *AdvancedRateLimitHandler) GetBucketStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, GetBucketStatsResponse{
-		Key:         stats["key"].(string),
-		Tokens:      stats["tokens"].(float64),
-		Capacity:    stats["capacity"].(float64),
-		Rate:        stats["rate"].(float64),
-		BurstSize:   stats["burst_size"].(float64),
-		LastRefill:  stats["last_refill"].(string),
+		Key:        stats["key"].(string),
+		Tokens:     stats["tokens"].(float64),
+		Capacity:   stats["capacity"].(float64),
+		Rate:       stats["rate"].(float64),
+		BurstSize:  stats["burst_size"].(float64),
+		LastRefill: stats["last_refill"].(string),
 	})
 }
 
@@ -155,8 +155,8 @@ func (h *AdvancedRateLimitHandler) GetBucketStats(c *gin.Context) {
 
 // CreateQuotaRequest 创建配额请求
 type CreateQuotaRequest struct {
-	Key      string            `json:"key" binding:"required"`
-	Config   *service.QuotaConfig `json:"config" binding:"required"`
+	Key    string               `json:"key" binding:"required"`
+	Config *service.QuotaConfig `json:"config" binding:"required"`
 }
 
 // CreateQuota 创建配额
@@ -234,7 +234,7 @@ type ConsumeQuotaRequest struct {
 
 // ConsumeQuotaResponse 消费配额响应
 type ConsumeQuotaResponse struct {
-	Allowed bool                 `json:"allowed"`
+	Allowed bool                    `json:"allowed"`
 	Status  *GetQuotaStatusResponse `json:"status"`
 }
 
@@ -346,13 +346,13 @@ type ListQuotasResponse struct {
 
 // QuotaInfo 配额信息
 type QuotaInfo struct {
-	Key          string  `json:"key"`
-	Type         string  `json:"type"`
-	Limit        int64   `json:"limit"`
-	Used         int64   `json:"used"`
-	Remaining    int64   `json:"remaining"`
-	ResetAt      string  `json:"reset_at"`
-	Percentage   float64 `json:"percentage"`
+	Key        string  `json:"key"`
+	Type       string  `json:"type"`
+	Limit      int64   `json:"limit"`
+	Used       int64   `json:"used"`
+	Remaining  int64   `json:"remaining"`
+	ResetAt    string  `json:"reset_at"`
+	Percentage float64 `json:"percentage"`
 }
 
 // ListQuotas 列出所有配额
@@ -398,20 +398,20 @@ func (h *AdvancedRateLimitHandler) ListQuotas(c *gin.Context) {
 
 // CombinedCheckRequest 综合检查请求
 type CombinedCheckRequest struct {
-	IP           string                  `json:"ip"`
-	UserID       uint                    `json:"user_id"`
-	AppID        uint                    `json:"app_id"`
-	TokenBucketKey string                 `json:"token_bucket_key"`
-	QuotaKey     string                  `json:"quota_key"`
+	IP                string                     `json:"ip"`
+	UserID            uint                       `json:"user_id"`
+	AppID             uint                       `json:"app_id"`
+	TokenBucketKey    string                     `json:"token_bucket_key"`
+	QuotaKey          string                     `json:"quota_key"`
 	TokenBucketConfig *service.TokenBucketConfig `json:"token_bucket_config"`
 }
 
 // CombinedCheckResponse 综合检查响应
 type CombinedCheckResponse struct {
-	Allowed           bool                  `json:"allowed"`
+	Allowed           bool                      `json:"allowed"`
 	TokenBucketResult *CheckTokenBucketResponse `json:"token_bucket_result"`
-	QuotaResult       *ConsumeQuotaResponse  `json:"quota_result"`
-	Reason            string                `json:"reason"`
+	QuotaResult       *ConsumeQuotaResponse     `json:"quota_result"`
+	Reason            string                    `json:"reason"`
 }
 
 // CombinedCheck 综合限流检查

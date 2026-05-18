@@ -20,11 +20,11 @@ import (
 
 type ReplayProtectionConfig struct {
 	TimestampTolerance time.Duration
-	NonceCacheTTL     time.Duration
-	EnableBodyHash    bool
-	RequireSignature  bool
-	SecretKey         string
-	MaxClockSkew      time.Duration
+	NonceCacheTTL      time.Duration
+	EnableBodyHash     bool
+	RequireSignature   bool
+	SecretKey          string
+	MaxClockSkew       time.Duration
 }
 
 type NonceEntry struct {
@@ -33,19 +33,19 @@ type NonceEntry struct {
 }
 
 type ReplayProtectionService struct {
-	nonceCache   map[string]*NonceEntry
-	cacheMutex   sync.RWMutex
-	config       ReplayProtectionConfig
-	usedNonces   map[string]time.Time
-	nonceMutex   sync.RWMutex
+	nonceCache map[string]*NonceEntry
+	cacheMutex sync.RWMutex
+	config     ReplayProtectionConfig
+	usedNonces map[string]time.Time
+	nonceMutex sync.RWMutex
 }
 
 var defaultReplayConfig = ReplayProtectionConfig{
 	TimestampTolerance: 5 * time.Minute,
-	NonceCacheTTL:     24 * time.Hour,
-	EnableBodyHash:    true,
-	RequireSignature:  true,
-	MaxClockSkew:      30 * time.Second,
+	NonceCacheTTL:      24 * time.Hour,
+	EnableBodyHash:     true,
+	RequireSignature:   true,
+	MaxClockSkew:       30 * time.Second,
 }
 
 func NewReplayProtectionService(config ...ReplayProtectionConfig) *ReplayProtectionService {

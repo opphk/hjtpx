@@ -22,9 +22,9 @@ type ThreeDCaptchaRequest struct {
 }
 
 type ThreeDVerifyRequest struct {
-	SessionID string                 `json:"sessionID" binding:"required"`
-	Puzzle    *captcha.ThreeDPuzzle  `json:"puzzle" binding:"required"`
-	RiskScore float64                `json:"riskScore"`
+	SessionID string                `json:"sessionID" binding:"required"`
+	Puzzle    *captcha.ThreeDPuzzle `json:"puzzle" binding:"required"`
+	RiskScore float64               `json:"riskScore"`
 }
 
 func CreateThreeDCaptcha(c *gin.Context) {

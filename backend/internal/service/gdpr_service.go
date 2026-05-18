@@ -14,11 +14,11 @@ import (
 )
 
 var (
-	ErrExportRequestNotFound = errors.New("导出请求未找到")
+	ErrExportRequestNotFound   = errors.New("导出请求未找到")
 	ErrDeletionRequestNotFound = errors.New("删除请求未找到")
-	ErrExportProcessing = errors.New("导出正在处理中")
-	ErrDeletionProcessing = errors.New("删除正在处理中")
-	ErrInvalidExportFormat = errors.New("无效的导出格式")
+	ErrExportProcessing        = errors.New("导出正在处理中")
+	ErrDeletionProcessing      = errors.New("删除正在处理中")
+	ErrInvalidExportFormat     = errors.New("无效的导出格式")
 )
 
 // GDPRService GDPR服务
@@ -36,11 +36,11 @@ func (s *GDPRService) GetConsent(userID uint) (*models.UserConsent, error) {
 	if err != nil {
 		// 如果不存在，返回默认设置
 		return &models.UserConsent{
-			UserID:                userID,
-			ConsentMarketing:      false,
-			ConsentAnalytics:      true,
+			UserID:                 userID,
+			ConsentMarketing:       false,
+			ConsentAnalytics:       true,
 			ConsentPersonalization: true,
-			ConsentDataSharing:    false,
+			ConsentDataSharing:     false,
 		}, nil
 	}
 	return &consent, nil
@@ -50,13 +50,13 @@ func (s *GDPRService) GetConsent(userID uint) (*models.UserConsent, error) {
 func (s *GDPRService) UpdateConsent(userID uint, consent *models.UserConsent, clientIP, userAgent string) (*models.UserConsent, error) {
 	var existing models.UserConsent
 	err := database.DB.Where("user_id = ?", userID).First(&existing).Error
-	
+
 	now := time.Now()
 	consent.UserID = userID
 	consent.ConsentUpdatedAt = now
 	consent.ConsentIP = clientIP
 	consent.ConsentUserAgent = userAgent
-	
+
 	if err != nil {
 		// 创建新记录
 		consent.CreatedAt = now
@@ -65,22 +65,22 @@ func (s *GDPRService) UpdateConsent(userID uint, consent *models.UserConsent, cl
 		}
 		return consent, nil
 	}
-	
+
 	// 更新现有记录
 	updates := map[string]interface{}{
-		"consent_marketing":      consent.ConsentMarketing,
-		"consent_analytics":      consent.ConsentAnalytics,
+		"consent_marketing":       consent.ConsentMarketing,
+		"consent_analytics":       consent.ConsentAnalytics,
 		"consent_personalization": consent.ConsentPersonalization,
 		"consent_data_sharing":    consent.ConsentDataSharing,
 		"consent_updated_at":      now,
 		"consent_ip":              clientIP,
 		"consent_user_agent":      userAgent,
 	}
-	
+
 	if err := database.DB.Model(&existing).Updates(updates).Error; err != nil {
 		return nil, err
 	}
-	
+
 	database.DB.First(&existing, existing.ID)
 	return &existing, nil
 }
@@ -90,28 +90,28 @@ func (s *GDPRService) RequestDataExport(userID uint, format string) (*models.Dat
 	if format != "json" && format != "csv" {
 		return nil, ErrInvalidExportFormat
 	}
-	
+
 	// 检查是否有正在进行的导出
 	var existing models.DataExportRequest
 	err := database.DB.Where("user_id = ? AND status IN ?", userID, []string{"pending", "processing"}).First(&existing).Error
 	if err == nil {
 		return nil, ErrExportProcessing
 	}
-	
+
 	request := &models.DataExportRequest{
 		UserID:       userID,
 		ExportFormat: format,
 		Status:       "pending",
 		RequestedAt:  time.Now(),
 	}
-	
+
 	if err := database.DB.Create(request).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 异步处理导出（这里简化为同步处理）
 	go s.processDataExport(request.ID)
-	
+
 	return request, nil
 }
 
@@ -121,10 +121,10 @@ func (s *GDPRService) processDataExport(requestID uint) {
 	if err := database.DB.First(&request, requestID).Error; err != nil {
 		return
 	}
-	
+
 	// 更新状态为处理中
 	database.DB.Model(&request).Update("status", "processing")
-	
+
 	// 获取用户数据
 	userData, err := s.collectUserData(request.UserID)
 	if err != nil {
@@ -134,7 +134,7 @@ func (s *GDPRService) processDataExport(requestID uint) {
 		})
 		return
 	}
-	
+
 	// 创建导出目录
 	exportDir := "./exports"
 	if err := os.MkdirAll(exportDir, 0755); err != nil {
@@ -144,17 +144,17 @@ func (s *GDPRService) processDataExport(requestID uint) {
 		})
 		return
 	}
-	
+
 	// 生成文件
 	fileName := fmt.Sprintf("user_data_%d_%s.%s", request.UserID, time.Now().Format("20060102150405"), request.ExportFormat)
 	filePath := filepath.Join(exportDir, fileName)
-	
+
 	if request.ExportFormat == "json" {
 		err = s.exportToJSON(userData, filePath)
 	} else {
 		err = s.exportToCSV(userData, filePath)
 	}
-	
+
 	if err != nil {
 		database.DB.Model(&request).Updates(map[string]interface{}{
 			"status": "failed",
@@ -162,7 +162,7 @@ func (s *GDPRService) processDataExport(requestID uint) {
 		})
 		return
 	}
-	
+
 	// 更新状态为完成
 	now := time.Now()
 	database.DB.Model(&request).Updates(map[string]interface{}{
@@ -178,35 +178,35 @@ func (s *GDPRService) collectUserData(userID uint) (map[string]interface{}, erro
 	if err := database.DB.First(&user, userID).Error; err != nil {
 		return nil, errors.New("用户未找到")
 	}
-	
+
 	// 获取用户应用
 	var applications []models.Application
 	database.DB.Where("user_id = ?", userID).Find(&applications)
-	
+
 	// 获取用户验证记录
 	var verifications []models.Verification
 	database.DB.Where("user_id = ?", userID).Find(&verifications)
-	
+
 	// 获取用户同意设置
 	var consent models.UserConsent
 	database.DB.Where("user_id = ?", userID).First(&consent)
-	
+
 	return map[string]interface{}{
 		"user": map[string]interface{}{
-			"id":         user.ID,
-			"username":   user.Username,
-			"email":      user.Email,
-			"nickname":   user.Nickname,
-			"avatar":     user.Avatar,
-			"phone":      user.Phone,
-			"bio":        user.Bio,
+			"id":          user.ID,
+			"username":    user.Username,
+			"email":       user.Email,
+			"nickname":    user.Nickname,
+			"avatar":      user.Avatar,
+			"phone":       user.Phone,
+			"bio":         user.Bio,
 			"is_verified": user.IsVerified,
-			"status":     user.Status,
-			"created_at": user.CreatedAt,
+			"status":      user.Status,
+			"created_at":  user.CreatedAt,
 		},
-		"applications": applications,
+		"applications":  applications,
 		"verifications": verifications,
-		"consent": consent,
+		"consent":       consent,
 	}, nil
 }
 
@@ -217,7 +217,7 @@ func (s *GDPRService) exportToJSON(data map[string]interface{}, filePath string)
 		return err
 	}
 	defer file.Close()
-	
+
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(data)
@@ -230,19 +230,19 @@ func (s *GDPRService) exportToCSV(data map[string]interface{}, filePath string) 
 		return err
 	}
 	defer file.Close()
-	
+
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
-	
+
 	// 写入用户信息头部
 	userData := data["user"].(map[string]interface{})
 	writer.Write([]string{"Section", "Field", "Value"})
-	
+
 	// 写入用户信息
 	for k, v := range userData {
 		writer.Write([]string{"User", k, fmt.Sprintf("%v", v)})
 	}
-	
+
 	// 写入应用信息
 	if apps, ok := data["applications"].([]models.Application); ok {
 		for _, app := range apps {
@@ -251,7 +251,7 @@ func (s *GDPRService) exportToCSV(data map[string]interface{}, filePath string) 
 			writer.Write([]string{"Application", "Description", app.Description})
 		}
 	}
-	
+
 	return nil
 }
 
@@ -272,21 +272,21 @@ func (s *GDPRService) RequestDataDeletion(userID uint, reason string) (*models.D
 	if err == nil {
 		return nil, ErrDeletionProcessing
 	}
-	
+
 	request := &models.DataDeletionRequest{
 		UserID:      userID,
 		Status:      "pending",
 		RequestedAt: time.Now(),
 		Reason:      reason,
 	}
-	
+
 	if err := database.DB.Create(request).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 异步处理删除请求
 	go s.processDataDeletion(request.ID)
-	
+
 	return request, nil
 }
 
@@ -296,10 +296,10 @@ func (s *GDPRService) processDataDeletion(requestID uint) {
 	if err := database.DB.First(&request, requestID).Error; err != nil {
 		return
 	}
-	
+
 	// 更新状态为处理中
 	database.DB.Model(&request).Update("status", "processing")
-	
+
 	// 获取用户数据并创建快照
 	var user models.User
 	if err := database.DB.First(&user, request.UserID).Error; err != nil {
@@ -309,38 +309,38 @@ func (s *GDPRService) processDataDeletion(requestID uint) {
 		})
 		return
 	}
-	
+
 	// 创建用户数据快照
 	userData, _ := json.Marshal(map[string]interface{}{
 		"user": user,
 	})
-	
+
 	snapshot := &models.UserDataSnapshot{
 		UserID:       request.UserID,
 		UserData:     string(userData),
 		DeletedAt:    time.Now(),
 		RetentionEnd: time.Now().AddDate(0, 6, 0), // 保留6个月
 	}
-	
+
 	if err := database.DB.Create(snapshot).Error; err != nil {
 		// 继续处理，即使快照创建失败
 	}
-	
+
 	// 软删除用户数据（更新状态）
 	auditLog := fmt.Sprintf("User data deletion requested at %s by user %d", time.Now().Format(time.RFC3339), request.UserID)
-	
+
 	// 更新用户状态
 	database.DB.Model(&user).Update("status", "deleted")
-	
+
 	// 更新验证记录（软删除）
 	database.DB.Model(&models.Verification{}).Where("user_id = ?", request.UserID).Update("deleted_at", time.Now())
-	
+
 	// 完成删除请求
 	now := time.Now()
 	database.DB.Model(&request).Updates(map[string]interface{}{
-		"status":      "completed",
+		"status":       "completed",
 		"processed_at": now,
-		"audit_log":   auditLog,
+		"audit_log":    auditLog,
 	})
 }
 

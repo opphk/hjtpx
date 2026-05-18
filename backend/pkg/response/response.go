@@ -70,13 +70,13 @@ func TooManyRequests(c *gin.Context, message string) {
 }
 
 const (
-	CodeSuccess          = 0
-	CodeInvalidParams    = 400
-	CodeUnauthorized     = 401
-	CodeForbidden        = 403
-	CodeNotFound         = 404
-	CodeServerError      = 500
-	CodeTooManyRequests  = 429
+	CodeSuccess         = 0
+	CodeInvalidParams   = 400
+	CodeUnauthorized    = 401
+	CodeForbidden       = 403
+	CodeNotFound        = 404
+	CodeServerError     = 500
+	CodeTooManyRequests = 429
 )
 
 func Fail(c *gin.Context, code int, message string) {

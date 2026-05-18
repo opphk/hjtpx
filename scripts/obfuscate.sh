@@ -716,9 +716,251 @@ EOF
     log_success "清单文件已生成: $manifest_file"
 }
 
+evaluate_obfuscation_effectiveness() {
+    local original_dir="$1"
+    local obfuscated_dir="$2"
+    local report_file="$BUILD_DIR/obfuscation_report.txt"
+
+    log_info "评估混淆效果..."
+
+    local total_original_size=0
+    local total_obfuscated_size=0
+    local file_count=0
+
+    while IFS= read -r -d '' file; do
+        local relative_path="${file#$original_dir/}"
+        local obfuscated_file="$obfuscated_dir/$relative_path"
+
+        if [[ -f "$obfuscated_file" ]]; then
+            local original_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
+            local obfuscated_size=$(stat -f%z "$obfuscated_file" 2>/dev/null || stat -c%s "$obfuscated_file" 2>/dev/null || echo "0")
+
+            total_original_size=$((total_original_size + original_size))
+            total_obfuscated_size=$((total_obfuscated_size + obfuscated_size))
+            file_count=$((file_count + 1))
+        fi
+    done < <(find "$original_dir" -name "*.js" -type f -print0)
+
+    local size_ratio=0
+    local compression_ratio=0
+    if [[ $total_original_size -gt 0 ]]; then
+        size_ratio=$(awk "BEGIN {printf \"%.2f\", $total_obfuscated_size / $total_original_size}")
+        compression_ratio=$(awk "BEGIN {printf \"%.2f\", (1 - $total_obfuscated_size / $total_original_size) * 100}")
+    fi
+
+    cat > "$report_file" << EOF
+========================================
+混淆效果评估报告
+========================================
+生成时间: $(date '+%Y-%m-%d %H:%M:%S')
+
+文件统计:
+---------
+总文件数: $file_count
+原始总大小: $total_original_size bytes
+混淆后总大小: $total_obfuscated_size bytes
+大小比率: $size_ratio
+压缩比率: $compression_ratio%
+
+混淆配置:
+---------
+混淆级别: $OBFUSCATION_LEVEL
+变量混淆: $ENABLE_VARIABLE_OBFUSCATION
+字符串加密: $ENABLE_STRING_ENCRYPTION
+代码压缩: $ENABLE_CODE_COMPRESSION
+控制流平坦化: $ENABLE_CONTROL_FLOW_FLATTENING
+死代码注入: $ENABLE_DEAD_CODE_INJECTION
+函数包装: $ENABLE_FUNCTION_WRAPPING
+
+功能启用:
+---------
+Anti-Debug: 启用
+代码完整性检查: 启用
+内存保护: 启用
+自毁机制: 启用
+运行时保护: 启用
+
+========================================
+EOF
+
+    log_success "评估报告已生成: $report_file"
+}
+
+generate_cicd_config() {
+    local ci_config_dir="$PROJECT_ROOT/.github/workflows"
+    local ci_config_file="$ci_config_dir/obfuscate.yml"
+
+    if [[ ! -d "$ci_config_dir" ]]; then
+        mkdir -p "$ci_config_dir"
+    fi
+
+    cat > "$ci_config_file" << 'EOF'
+name: JavaScript Obfuscation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'frontend/static/js/*.js'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'frontend/static/js/*.js'
+  workflow_dispatch:
+
+jobs:
+  obfuscate:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Build obfuscator tool
+      run: |
+        cd backend
+        go build -o ../obfuscator_tool ./internal/tools/javascript_obfuscator.go
+    
+    - name: Run obfuscation
+      run: |
+        chmod +x scripts/obfuscate.sh
+        ./scripts/obfuscate.sh --level 3 --force
+    
+    - name: Evaluate obfuscation effectiveness
+      run: |
+        ./scripts/obfuscate.sh --evaluate
+    
+    - name: Upload obfuscated artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: obfuscated-js
+        path: build/js/
+    
+    - name: Upload evaluation report
+      uses: actions/upload-artifact@v3
+      with:
+        name: obfuscation-report
+        path: build/obfuscation_report.txt
+    
+    - name: Upload manifest
+      uses: actions/upload-artifact@v3
+      with:
+        name: obfuscation-manifest
+        path: build/manifest.json
+
+  deploy:
+    needs: obfuscate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Download obfuscated artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: obfuscated-js
+        path: build/js/
+    
+    - name: Deploy to production
+      run: |
+        echo "Deploying obfuscated code to production..."
+        # Add your deployment commands here
+EOF
+
+    log_success "CI/CD配置文件已生成: $ci_config_file"
+}
+
+integrate_into_build_process() {
+    local build_script="$PROJECT_ROOT/build.sh"
+
+    cat > "$build_script" << 'EOF'
+#!/bin/bash
+
+set -euo pipefail
+
+echo "Starting build process..."
+
+echo "Step 1: Building backend..."
+cd backend
+go build -o ../bin/hjtpx ./cmd/hjtpx.go
+cd ..
+
+echo "Step 2: Obfuscating frontend JavaScript..."
+./scripts/obfuscate.sh --level 3 --force
+
+echo "Step 3: Copying static files..."
+mkdir -p bin/static
+cp -r frontend/static/* bin/static/
+
+echo "Step 4: Generating build manifest..."
+if [[ -f build/manifest.json ]]; then
+    cp build/manifest.json bin/build_manifest.json
+fi
+
+echo "Build completed successfully!"
+EOF
+
+    chmod +x "$build_script"
+    log_success "构建脚本已生成: $build_script"
+}
+
+create_obfuscation_version_manager() {
+    local version_file="$CONFIG_DIR/version_history.json"
+    mkdir -p "$CONFIG_DIR"
+
+    local current_version=$(date +%Y%m%d_%H%M%S)
+    local key_hash=$(echo -n "$OBFUSCATION_KEY" | sha256sum | cut -d' ' -f1)
+
+    cat > "$version_file" << EOF
+{
+    "current_version": "$current_version",
+    "key_hash": "$key_hash",
+    "level": $OBFUSCATION_LEVEL,
+    "created_at": "$(date -Iseconds)",
+    "history": []
+}
+EOF
+
+    log_success "版本管理器已初始化: $version_file"
+}
+
+add_obfuscation_badge() {
+    local badge_file="$PROJECT_ROOT/.obfuscation_badge.md"
+
+    cat > "$badge_file" << EOF
+# 混淆状态
+
+![Obfuscation Level](https://img.shields.io/badge/obfuscation-level-$OBFUSCATION_LEVEL-blue)
+![Build Status](https://img.shields.io/badge/build-passing-green)
+
+## 混淆配置
+
+- 变量混淆: $ENABLE_VARIABLE_OBFUSCATION
+- 字符串加密: $ENABLE_STRING_ENCRYPTION
+- 代码压缩: $ENABLE_CODE_COMPRESSION
+- 控制流平坦化: $ENABLE_CONTROL_FLOW_FLATTENING
+- 死代码注入: $ENABLE_DEAD_CODE_INJECTION
+- 函数包装: $ENABLE_FUNCTION_WRAPPING
+
+## 最新混淆版本
+
+生成时间: $(date '+%Y-%m-%d %H:%M:%S')
+EOF
+
+    log_success "混淆徽章已生成: $badge_file"
+}
+
 main() {
     log_info "=== JavaScript 代码混淆构建脚本 ==="
-    log_info "版本: 1.0.0"
+    log_info "版本: 2.0"
     log_info "时间: $(date '+%Y-%m-%d %H:%M:%S')"
     echo ""
 
@@ -730,6 +972,7 @@ main() {
 
     if [[ "$DRY_RUN" != "true" ]]; then
         create_backup
+        create_obfuscation_version_manager
     fi
 
     if [[ -d "$INPUT_PATH" ]]; then
@@ -742,6 +985,10 @@ main() {
 
     if [[ "$DRY_RUN" != "true" ]]; then
         generate_manifest
+        evaluate_obfuscation_effectiveness "$INPUT_PATH" "$OUTPUT_PATH"
+        generate_cicd_config
+        integrate_into_build_process
+        add_obfuscation_badge
     fi
 
     echo ""

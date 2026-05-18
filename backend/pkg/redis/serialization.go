@@ -75,17 +75,17 @@ func (gs *GobSerializer) Unmarshal(data []byte, v interface{}) error {
 }
 
 type OptimizedSerializer struct {
-	jsonSerializer  *JSONSerializer
-	gobSerializer   *GobSerializer
-	defaultFormat  SerializationFormat
+	jsonSerializer       *JSONSerializer
+	gobSerializer        *GobSerializer
+	defaultFormat        SerializationFormat
 	compressionThreshold int
 }
 
 func NewOptimizedSerializer() *OptimizedSerializer {
 	return &OptimizedSerializer{
-		jsonSerializer:  NewJSONSerializer(),
-		gobSerializer:   NewGobSerializer(),
-		defaultFormat:  SerializationJSON,
+		jsonSerializer:       NewJSONSerializer(),
+		gobSerializer:        NewGobSerializer(),
+		defaultFormat:        SerializationJSON,
 		compressionThreshold: 1024,
 	}
 }
@@ -144,10 +144,10 @@ func (os *OptimizedSerializer) SetDefaultFormat(format SerializationFormat) {
 }
 
 type CachedSerializer struct {
-	serializer  Serializer
-	cache       sync.Map
+	serializer   Serializer
+	cache        sync.Map
 	maxCacheSize int
-	mu          sync.RWMutex
+	mu           sync.RWMutex
 }
 
 func NewCachedSerializer(serializer Serializer, maxCacheSize int) *CachedSerializer {
@@ -155,7 +155,7 @@ func NewCachedSerializer(serializer Serializer, maxCacheSize int) *CachedSeriali
 		maxCacheSize = 1000
 	}
 	return &CachedSerializer{
-		serializer:  serializer,
+		serializer:   serializer,
 		maxCacheSize: maxCacheSize,
 	}
 }
@@ -193,11 +193,11 @@ func (cs *CachedSerializer) evictIfNeeded() {
 }
 
 type ConnectionPoolMonitor struct {
-	client          goredis.Cmdable
-	mu             sync.RWMutex
+	client             goredis.Cmdable
+	mu                 sync.RWMutex
 	collectionInterval time.Duration
-	ctx            context.Context
-	cancel         context.CancelFunc
+	ctx                context.Context
+	cancel             context.CancelFunc
 }
 
 func NewConnectionPoolMonitor(client goredis.Cmdable, collectionInterval time.Duration) *ConnectionPoolMonitor {
@@ -207,10 +207,10 @@ func NewConnectionPoolMonitor(client goredis.Cmdable, collectionInterval time.Du
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cpm := &ConnectionPoolMonitor{
-		client:              client,
-		collectionInterval:  collectionInterval,
-		ctx:                 ctx,
-		cancel:              cancel,
+		client:             client,
+		collectionInterval: collectionInterval,
+		ctx:                ctx,
+		cancel:             cancel,
 	}
 
 	go cpm.startMonitoring()
@@ -252,9 +252,9 @@ func (cpm *ConnectionPoolMonitor) Close() {
 }
 
 type PerformanceOptimizer struct {
-	serializer      *OptimizedSerializer
-	poolMonitor     *ConnectionPoolMonitor
-	batchOperator   *BatchOperator
+	serializer    *OptimizedSerializer
+	poolMonitor   *ConnectionPoolMonitor
+	batchOperator *BatchOperator
 }
 
 func NewPerformanceOptimizer(client goredis.Cmdable) *PerformanceOptimizer {
@@ -278,11 +278,11 @@ func (po *PerformanceOptimizer) Close() {
 }
 
 type LazyLoader struct {
-	cache     *EnhancedCache
-	loader    func(ctx context.Context, key string) (interface{}, error)
-	ttl       time.Duration
-	mu        sync.Mutex
-	loading   map[string]chan struct{}
+	cache   *EnhancedCache
+	loader  func(ctx context.Context, key string) (interface{}, error)
+	ttl     time.Duration
+	mu      sync.Mutex
+	loading map[string]chan struct{}
 }
 
 func NewLazyLoader(cache *EnhancedCache, ttl time.Duration, loader func(ctx context.Context, key string) (interface{}, error)) *LazyLoader {
@@ -385,11 +385,11 @@ func (pb *PrefetchBuffer) Size() int {
 }
 
 type AdaptiveTtlManager struct {
-	defaultTtl    time.Duration
-	minTtl        time.Duration
-	maxTtl        time.Duration
-	accessCounts  *sync.Map
-	mu            sync.Mutex
+	defaultTtl   time.Duration
+	minTtl       time.Duration
+	maxTtl       time.Duration
+	accessCounts *sync.Map
+	mu           sync.Mutex
 }
 
 func NewAdaptiveTtlManager(defaultTtl, minTtl, maxTtl time.Duration) *AdaptiveTtlManager {
@@ -443,7 +443,7 @@ func (atm *AdaptiveTtlManager) Reset() {
 }
 
 var (
-	globalOptimizer *PerformanceOptimizer
+	globalOptimizer     *PerformanceOptimizer
 	globalOptimizerOnce sync.Once
 )
 

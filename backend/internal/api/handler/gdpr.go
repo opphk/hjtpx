@@ -33,10 +33,10 @@ func GetGDPRHandler() *GDPRHandler {
 
 // UpdateConsentRequest 更新同意设置的请求结构
 type UpdateConsentRequest struct {
-	ConsentMarketing      bool `json:"consent_marketing"`
-	ConsentAnalytics      bool `json:"consent_analytics"`
+	ConsentMarketing       bool `json:"consent_marketing"`
+	ConsentAnalytics       bool `json:"consent_analytics"`
 	ConsentPersonalization bool `json:"consent_personalization"`
-	ConsentDataSharing    bool `json:"consent_data_sharing"`
+	ConsentDataSharing     bool `json:"consent_data_sharing"`
 }
 
 // DataExportRequest 数据导出请求结构
@@ -101,10 +101,10 @@ func (h *GDPRHandler) UpdateConsent(c *gin.Context) {
 	}
 
 	consent := &models.UserConsent{
-		ConsentMarketing:      req.ConsentMarketing,
-		ConsentAnalytics:      req.ConsentAnalytics,
+		ConsentMarketing:       req.ConsentMarketing,
+		ConsentAnalytics:       req.ConsentAnalytics,
 		ConsentPersonalization: req.ConsentPersonalization,
-		ConsentDataSharing:    req.ConsentDataSharing,
+		ConsentDataSharing:     req.ConsentDataSharing,
 	}
 
 	clientIP := c.ClientIP()

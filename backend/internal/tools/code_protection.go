@@ -206,14 +206,14 @@ func (p *Protector) Protect(code string) (string, error) {
 
 func (p *Protector) ProtectWithLevel(code string, level int) (string, error) {
 	config := ObfuscatorConfig{
-		EnableVariableObfuscation:  true,
-		EnableStringEncryption:     level >= 2,
-		EnableCodeCompression:      true,
+		EnableVariableObfuscation:   true,
+		EnableStringEncryption:      level >= 2,
+		EnableCodeCompression:       true,
 		EnableControlFlowFlattening: level >= 2,
-		EnableDeadCodeInjection:    level >= 3,
-		EnableFunctionWrapping:     true,
-		RemoveComments:            true,
-		StringEncryptionKey:        p.crypto.GetSecretKey(),
+		EnableDeadCodeInjection:     level >= 3,
+		EnableFunctionWrapping:      true,
+		RemoveComments:              true,
+		StringEncryptionKey:         p.crypto.GetSecretKey(),
 	}
 
 	obfuscator := NewObfuscator(config)
@@ -345,10 +345,10 @@ func (p *ParameterProtector) DecryptRequestParams(encryptedData string) (map[str
 }
 
 type SignatureValidator struct {
-	secretKey       []byte
-	timestampTTL    int64
-	nonceCache      map[string]int64
-	maxNonceCache   int
+	secretKey     []byte
+	timestampTTL  int64
+	nonceCache    map[string]int64
+	maxNonceCache int
 }
 
 func NewSignatureValidator(secretKey []byte) *SignatureValidator {
@@ -462,7 +462,7 @@ func (v *SignatureValidator) markNonceUsed(nonce string) {
 func (v *SignatureValidator) cleanupNonceCache() {
 	now := currentTime.Unix()
 	for nonce, ts := range v.nonceCache {
-		if (now-ts) > v.timestampTTL*2 {
+		if (now - ts) > v.timestampTTL*2 {
 			delete(v.nonceCache, nonce)
 		}
 	}

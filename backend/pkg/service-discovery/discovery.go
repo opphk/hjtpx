@@ -7,13 +7,13 @@ import (
 
 // ServiceInstance 服务实例
 type ServiceInstance struct {
-	ID         string            `json:"id"`
-	Name       string            `json:"name"`
-	Address    string            `json:"address"`
-	Port       int               `json:"port"`
-	Healthy    bool              `json:"healthy"`
-	LastHeartbeat time.Time      `json:"last_heartbeat"`
-	Metadata   map[string]string `json:"metadata"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Address       string            `json:"address"`
+	Port          int               `json:"port"`
+	Healthy       bool              `json:"healthy"`
+	LastHeartbeat time.Time         `json:"last_heartbeat"`
+	Metadata      map[string]string `json:"metadata"`
 }
 
 // Registry 服务注册器

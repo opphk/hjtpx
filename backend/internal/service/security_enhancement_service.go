@@ -247,9 +247,9 @@ type InputValidationResult struct {
 }
 
 type InputValidator struct {
-	sqlPatterns     []*regexp.Regexp
-	xssPatterns     []*regexp.Regexp
-	cmdInjPatterns  []*regexp.Regexp
+	sqlPatterns    []*regexp.Regexp
+	xssPatterns    []*regexp.Regexp
+	cmdInjPatterns []*regexp.Regexp
 }
 
 func NewInputValidator() *InputValidator {
@@ -307,19 +307,19 @@ func (v *InputValidator) SanitizeInput(input string) string {
 }
 
 type SecurityHeadersConfig struct {
-	CSP               string
-	HSTS              string
-	XFrameOptions     string
+	CSP                 string
+	HSTS                string
+	XFrameOptions       string
 	XContentTypeOptions string
-	XXSSProtection    string
-	ReferrerPolicy    string
+	XXSSProtection      string
+	ReferrerPolicy      string
 }
 
 var DefaultSecurityHeaders = SecurityHeadersConfig{
-	CSP: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-	HSTS: "max-age=31536000; includeSubDomains; preload",
-	XFrameOptions: "DENY",
+	CSP:                 "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+	HSTS:                "max-age=31536000; includeSubDomains; preload",
+	XFrameOptions:       "DENY",
 	XContentTypeOptions: "nosniff",
-	XXSSProtection: "1; mode=block",
-	ReferrerPolicy: "strict-origin-when-cross-origin",
+	XXSSProtection:      "1; mode=block",
+	ReferrerPolicy:      "strict-origin-when-cross-origin",
 }

@@ -12,14 +12,14 @@ import (
 
 // VisualizationData 可视化数据
 type VisualizationData struct {
-	Title string
+	Title  string
 	Charts []ChartData
 }
 
 // ChartData 单个图表数据
 type ChartData struct {
-	Title string
-	Type string
+	Title  string
+	Type   string
 	Labels []string
 	Values []interface{}
 }
@@ -35,7 +35,7 @@ func NewVisualizationExporter() *VisualizationExporter {
 // ExportHTML 导出HTML格式的可视化报告
 func (v *VisualizationExporter) ExportHTML(data VisualizationData) ([]byte, error) {
 	var buf bytes.Buffer
-	
+
 	// 创建页面
 	_, _ = buf.WriteString(fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -56,7 +56,7 @@ func (v *VisualizationExporter) ExportHTML(data VisualizationData) ([]byte, erro
     <h1 class="report-title">%s</h1>
     <div class="export-time">Export Time: %s</div>
 `, data.Title, data.Title, time.Now().Format("2006-01-02 15:04:05")))
-	
+
 	// 生成图表
 	for i, chart := range data.Charts {
 		chartID := fmt.Sprintf("chart_%d", i)
@@ -73,11 +73,11 @@ func (v *VisualizationExporter) ExportHTML(data VisualizationData) ([]byte, erro
     </script>
 `, chart.Title, chartID, i, chartID, i, i, i, generateEChartsOption(chart), i, i))
 	}
-	
+
 	_, _ = buf.WriteString(`
 </body>
 </html>`)
-	
+
 	return buf.Bytes(), nil
 }
 
@@ -109,7 +109,7 @@ func GenerateLogVisualization(logs []models.VerificationLog, title string) Visua
 	charts = append(charts, createLineChart("Daily Verification Trend", dateStats))
 
 	return VisualizationData{
-		Title: title,
+		Title:  title,
 		Charts: charts,
 	}
 }
@@ -128,7 +128,7 @@ func generateEChartsOption(chart ChartData) string {
 		for i, label := range chart.Labels {
 			seriesData[i] = map[string]interface{}{
 				"value": chart.Values[i],
-				"name": label,
+				"name":  label,
 			}
 		}
 		return fmt.Sprintf(`{
@@ -140,7 +140,7 @@ func generateEChartsOption(chart ChartData) string {
 				data: %s
 			}]
 		}`, chart.Title, toJSON(seriesData))
-	
+
 	case "line":
 		return fmt.Sprintf(`{
 			title: { text: '%s', left: 'center' },
@@ -153,7 +153,7 @@ func generateEChartsOption(chart ChartData) string {
 				smooth: true
 			}]
 		}`, chart.Title, toJSON(chart.Labels), toJSON(chart.Values))
-	
+
 	default: // bar
 		return fmt.Sprintf(`{
 			title: { text: '%s', left: 'center' },
@@ -176,8 +176,8 @@ func createPieChart(title string, data map[string]int) ChartData {
 		values = append(values, v)
 	}
 	return ChartData{
-		Title: title,
-		Type: "pie",
+		Title:  title,
+		Type:   "pie",
 		Labels: labels,
 		Values: values,
 	}
@@ -191,8 +191,8 @@ func createBarChart(title string, data map[string]int) ChartData {
 		values = append(values, v)
 	}
 	return ChartData{
-		Title: title,
-		Type: "bar",
+		Title:  title,
+		Type:   "bar",
 		Labels: labels,
 		Values: values,
 	}
@@ -207,8 +207,8 @@ func createLineChart(title string, data map[string]int) ChartData {
 		values = append(values, v)
 	}
 	return ChartData{
-		Title: title,
-		Type: "line",
+		Title:  title,
+		Type:   "line",
 		Labels: labels,
 		Values: values,
 	}

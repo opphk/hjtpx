@@ -30,16 +30,16 @@ type RiskLog struct {
 }
 
 type RiskResult struct {
-	RiskLevel        RiskLevel            `json:"risk_level"`
-	RiskScore        float64              `json:"risk_score"`
-	PositionScore    float64              `json:"position_score"`
-	TraceScore       float64              `json:"trace_score"`
-	EnvScore         float64              `json:"env_score"`
-	RiskFactors      []string             `json:"risk_factors"`
-	Action           string               `json:"action"`
-	RecommendVerify  bool                 `json:"recommend_verify"`
-	HumanProbability float64              `json:"human_probability"`
-	Details          map[string]float64   `json:"details,omitempty"`
+	RiskLevel        RiskLevel          `json:"risk_level"`
+	RiskScore        float64            `json:"risk_score"`
+	PositionScore    float64            `json:"position_score"`
+	TraceScore       float64            `json:"trace_score"`
+	EnvScore         float64            `json:"env_score"`
+	RiskFactors      []string           `json:"risk_factors"`
+	Action           string             `json:"action"`
+	RecommendVerify  bool               `json:"recommend_verify"`
+	HumanProbability float64            `json:"human_probability"`
+	Details          map[string]float64 `json:"details,omitempty"`
 }
 
 type RiskContext struct {
@@ -71,31 +71,31 @@ type RiskContext struct {
 }
 
 type RiskRule struct {
-	Name             string                     `json:"name"`
-	Condition        func(*RiskContext) bool   `json:"-"`
-	ConditionConfig  map[string]interface{}     `json:"condition_config,omitempty"`
-	Action           string                     `json:"action"`
-	Score            float64                    `json:"score"`
-	Priority         int                        `json:"priority"`
-	Enabled          bool                       `json:"enabled"`
-	Reason           string                     `json:"reason"`
+	Name            string                  `json:"name"`
+	Condition       func(*RiskContext) bool `json:"-"`
+	ConditionConfig map[string]interface{}  `json:"condition_config,omitempty"`
+	Action          string                  `json:"action"`
+	Score           float64                 `json:"score"`
+	Priority        int                     `json:"priority"`
+	Enabled         bool                    `json:"enabled"`
+	Reason          string                  `json:"reason"`
 }
 
 type RiskStatistics struct {
-	TotalCount     int64              `json:"total_count"`
-	PassCount      int64              `json:"pass_count"`
-	ReviewCount    int64              `json:"review_count"`
-	BlockCount     int64              `json:"block_count"`
-	AvgRiskScore   float64            `json:"avg_risk_score"`
-	RiskLevelStats map[string]int64   `json:"risk_level_stats"`
-	TopRiskFactors []RiskFactorStat   `json:"top_risk_factors"`
-	TrendByHour    []HourlyStat       `json:"trend_by_hour"`
-	TopOffenders   []IPStat           `json:"top_offenders"`
+	TotalCount     int64            `json:"total_count"`
+	PassCount      int64            `json:"pass_count"`
+	ReviewCount    int64            `json:"review_count"`
+	BlockCount     int64            `json:"block_count"`
+	AvgRiskScore   float64          `json:"avg_risk_score"`
+	RiskLevelStats map[string]int64 `json:"risk_level_stats"`
+	TopRiskFactors []RiskFactorStat `json:"top_risk_factors"`
+	TrendByHour    []HourlyStat     `json:"trend_by_hour"`
+	TopOffenders   []IPStat         `json:"top_offenders"`
 }
 
 type RiskFactorStat struct {
 	Factor   string  `json:"factor"`
-	Count   int64   `json:"count"`
+	Count    int64   `json:"count"`
 	AvgScore float64 `json:"avg_score"`
 }
 

@@ -13,7 +13,7 @@ func TestHealthCheck(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
+		name string
 	}{
 		{
 			name: "returns health status",
@@ -42,7 +42,7 @@ func TestReadiness(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
+		name string
 	}{
 		{
 			name: "returns readiness status",

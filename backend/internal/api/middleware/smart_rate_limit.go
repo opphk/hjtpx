@@ -16,10 +16,10 @@ func init() {
 }
 
 type SmartRateLimitConfig struct {
-	Enabled        bool
-	KeyFunc        func(c *gin.Context) string
-	ExcludePaths   []string
-	RiskScoreFunc  func(c *gin.Context) float64
+	Enabled       bool
+	KeyFunc       func(c *gin.Context) string
+	ExcludePaths  []string
+	RiskScoreFunc func(c *gin.Context) float64
 }
 
 var defaultSmartRateLimitConfig = SmartRateLimitConfig{

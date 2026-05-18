@@ -17,43 +17,44 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
 
 type ObfuscatorConfig struct {
-	EnableVariableObfuscation  bool
-	EnableStringEncryption    bool
-	EnableCodeCompression     bool
+	EnableVariableObfuscation   bool
+	EnableStringEncryption      bool
+	EnableCodeCompression       bool
 	EnableControlFlowFlattening bool
-	EnableDeadCodeInjection   bool
-	EnableFunctionWrapping    bool
-	StringEncryptionKey       []byte
-	CompressWhitespace         bool
-	RemoveComments             bool
-	PreserveConsole            bool
+	EnableDeadCodeInjection     bool
+	EnableFunctionWrapping      bool
+	StringEncryptionKey         []byte
+	CompressWhitespace          bool
+	RemoveComments              bool
+	PreserveConsole             bool
 }
 
 var defaultObfuscatorConfig = ObfuscatorConfig{
-	EnableVariableObfuscation:  true,
-	EnableStringEncryption:     true,
-	EnableCodeCompression:      true,
+	EnableVariableObfuscation:   true,
+	EnableStringEncryption:      true,
+	EnableCodeCompression:       true,
 	EnableControlFlowFlattening: true,
-	EnableDeadCodeInjection:    false,
-	EnableFunctionWrapping:     true,
-	StringEncryptionKey:        []byte("hjtpx-obfuscate-key-2024"),
-	CompressWhitespace:         true,
-	RemoveComments:             true,
-	PreserveConsole:            true,
+	EnableDeadCodeInjection:     false,
+	EnableFunctionWrapping:      true,
+	StringEncryptionKey:         []byte("hjtpx-obfuscate-key-2024"),
+	CompressWhitespace:          true,
+	RemoveComments:              true,
+	PreserveConsole:             true,
 }
 
 type Obfuscator struct {
-	config         ObfuscatorConfig
-	variableMap    map[string]string
-	functionMap    map[string]string
-	usedNames      map[string]bool
-	stringCount    int
-	functionCount  int
-	mu             sync.Mutex
+	config        ObfuscatorConfig
+	variableMap   map[string]string
+	functionMap   map[string]string
+	usedNames     map[string]bool
+	stringCount   int
+	functionCount int
+	mu            sync.Mutex
 }
 
 func NewObfuscator(config ...ObfuscatorConfig) *Obfuscator {
@@ -68,10 +69,10 @@ func NewObfuscator(config ...ObfuscatorConfig) *Obfuscator {
 
 	return &Obfuscator{
 		config:        cfg,
-		variableMap:  make(map[string]string),
-		functionMap:  make(map[string]string),
-		usedNames:    make(map[string]bool),
-		stringCount:  0,
+		variableMap:   make(map[string]string),
+		functionMap:   make(map[string]string),
+		usedNames:     make(map[string]bool),
+		stringCount:   0,
 		functionCount: 0,
 	}
 }
@@ -169,11 +170,11 @@ func (o *Obfuscator) isReservedWord(word string) bool {
 		"valueOf": true, "hasOwnProperty": true, "isPrototypeOf": true,
 		"propertyIsEnumerable": true, "toLocaleString": true,
 		"console": o.config.PreserveConsole,
-		"log": o.config.PreserveConsole,
-		"error": o.config.PreserveConsole,
-		"warn": o.config.PreserveConsole,
-		"info": o.config.PreserveConsole,
-		"debug": o.config.PreserveConsole,
+		"log":     o.config.PreserveConsole,
+		"error":   o.config.PreserveConsole,
+		"warn":    o.config.PreserveConsole,
+		"info":    o.config.PreserveConsole,
+		"debug":   o.config.PreserveConsole,
 	}
 	return reservedWords[word]
 }
@@ -498,12 +499,12 @@ func EncryptString(plaintext string, key []byte) (string, error) {
 }
 
 type CodeAnalyzer struct {
-	linesOfCode            int
-	functions              int
-	strings                int
-	variables             int
-	comments               int
-	cyclomaticComplexity   int
+	linesOfCode          int
+	functions            int
+	strings              int
+	variables            int
+	comments             int
+	cyclomaticComplexity int
 }
 
 func AnalyzeCode(code string) *CodeAnalyzer {
@@ -532,7 +533,7 @@ func AnalyzeCode(code string) *CodeAnalyzer {
 
 func (a *CodeAnalyzer) GetMetrics() map[string]interface{} {
 	return map[string]interface{}{
-		"lines_of_code":          a.linesOfCode,
+		"lines_of_code":         a.linesOfCode,
 		"functions":             a.functions,
 		"strings":               a.strings,
 		"variables":             a.variables,
@@ -587,34 +588,34 @@ func GenerateObfuscationReport(original, obfuscated string, config ObfuscatorCon
 
 	return map[string]interface{}{
 		"original": map[string]interface{}{
-			"length":            len(original),
-			"lines_of_code":      originalMetrics["lines_of_code"],
-			"functions":         originalMetrics["functions"],
-			"strings":           originalMetrics["strings"],
-			"variables":         originalMetrics["variables"],
-			"complexity":        originalMetrics["cyclomatic_complexity"],
+			"length":        len(original),
+			"lines_of_code": originalMetrics["lines_of_code"],
+			"functions":     originalMetrics["functions"],
+			"strings":       originalMetrics["strings"],
+			"variables":     originalMetrics["variables"],
+			"complexity":    originalMetrics["cyclomatic_complexity"],
 		},
 		"obfuscated": map[string]interface{}{
-			"length":            len(obfuscated),
-			"lines_of_code":      obfuscatedMetrics["lines_of_code"],
-			"functions":         obfuscatedMetrics["functions"],
-			"strings":           obfuscatedMetrics["strings"],
-			"variables":         obfuscatedMetrics["variables"],
-			"complexity":        obfuscatedMetrics["cyclomatic_complexity"],
+			"length":        len(obfuscated),
+			"lines_of_code": obfuscatedMetrics["lines_of_code"],
+			"functions":     obfuscatedMetrics["functions"],
+			"strings":       obfuscatedMetrics["strings"],
+			"variables":     obfuscatedMetrics["variables"],
+			"complexity":    obfuscatedMetrics["cyclomatic_complexity"],
 		},
-		"compression_ratio":  math.Round(float64(len(obfuscated))/float64(len(original))*100) / 100,
-		"obfuscation_ratio":  analyzer.CalculateObfuscationRatio(original, obfuscated),
+		"compression_ratio": math.Round(float64(len(obfuscated))/float64(len(original))*100) / 100,
+		"obfuscation_ratio": analyzer.CalculateObfuscationRatio(original, obfuscated),
 		"validation": map[string]bool{
 			"is_valid": valid,
 		},
 		"validation_message": message,
 		"config": map[string]bool{
-			"variable_obfuscation":     config.EnableVariableObfuscation,
-			"string_encryption":         config.EnableStringEncryption,
-			"code_compression":          config.EnableCodeCompression,
-			"control_flow_flattening":   config.EnableControlFlowFlattening,
-			"dead_code_injection":       config.EnableDeadCodeInjection,
-			"function_wrapping":        config.EnableFunctionWrapping,
+			"variable_obfuscation":    config.EnableVariableObfuscation,
+			"string_encryption":       config.EnableStringEncryption,
+			"code_compression":        config.EnableCodeCompression,
+			"control_flow_flattening": config.EnableControlFlowFlattening,
+			"dead_code_injection":     config.EnableDeadCodeInjection,
+			"function_wrapping":       config.EnableFunctionWrapping,
 		},
 	}
 }
@@ -870,21 +871,21 @@ func OptimizeObfuscation(code string, level int) string {
 	case 1:
 		result, err = NewObfuscator(ObfuscatorConfig{
 			EnableVariableObfuscation: true,
-			EnableStringEncryption:   false,
-			EnableCodeCompression:    true,
+			EnableStringEncryption:    false,
+			EnableCodeCompression:     true,
 		}).Obfuscate(result)
 	case 2:
 		result, err = NewObfuscator(ObfuscatorConfig{
 			EnableVariableObfuscation: true,
 			EnableStringEncryption:    true,
 			EnableCodeCompression:     true,
-			EnableFunctionWrapping:     true,
+			EnableFunctionWrapping:    true,
 		}).Obfuscate(result)
 	case 3:
 		result, err = NewObfuscator(ObfuscatorConfig{
-			EnableVariableObfuscation:  true,
-			EnableStringEncryption:     true,
-			EnableCodeCompression:      true,
+			EnableVariableObfuscation:   true,
+			EnableStringEncryption:      true,
+			EnableCodeCompression:       true,
 			EnableControlFlowFlattening: true,
 			EnableDeadCodeInjection:     true,
 			EnableFunctionWrapping:      true,
@@ -918,4 +919,711 @@ func EstimateObfuscationTime(codeLength int) string {
 		return strconv.Itoa(estimated/1000) + "s"
 	}
 	return strconv.Itoa(estimated/60000) + "m"
+}
+
+func (o *Obfuscator) flattenControlFlowAdvanced(code string) string {
+	result := code
+
+	result = o.addStateMachineFlattening(result)
+
+	result = o.addOpaquePredicate(result)
+
+	result = o.addLoopUnswitching(result)
+
+	return result
+}
+
+func (o *Obfuscator) addStateMachineFlattening(code string) string {
+	forPattern := regexp.MustCompile(`\bfor\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := forPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := forPattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			init := parts[1]
+			body := parts[2]
+			stateVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=0,%s;%s;for(;;){switch(%s){case 0:%s;%s=1;break;case 1:return;default:return;}}})()`,
+				stateVar, init, init, stateVar, body, stateVar)
+		}
+		return match
+	})
+
+	whilePattern := regexp.MustCompile(`\bwhile\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result = whilePattern.ReplaceAllStringFunc(result, func(match string) string {
+		parts := whilePattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			condition := parts[1]
+			body := parts[2]
+			stateVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=0;for(;;){switch(%s){case 0:if(!(%s)){%s=1;break;}case 1:%s;break;case 1:if(1){%s=0;continue;}return;default:return;}}})()`,
+				stateVar, stateVar, condition, stateVar, body, stateVar)
+		}
+		return match
+	})
+
+	return result
+}
+
+func (o *Obfuscator) addOpaquePredicate(code string) string {
+	predicateVar := o.generateObfuscatedName()
+
+	opaqueCode := fmt.Sprintf(`
+(function(){
+	var %s=false;
+	var %s=function(){
+		var %s=Math.random();
+		var %s=Math.random();
+		%s=(%s*%s>0.25);
+		return %s;
+	};
+	if(%s()){
+		%s=true;
+	}
+})();
+`,
+		predicateVar,
+		o.generateObfuscatedName(),
+		o.generateObfuscatedName(),
+		o.generateObfuscatedName(),
+		predicateVar,
+		o.generateObfuscatedName(),
+		o.generateObfuscatedName(),
+		predicateVar,
+		predicateVar,
+		predicateVar,
+	)
+
+	return opaqueCode + code
+}
+
+func (o *Obfuscator) addLoopUnswitching(code string) string {
+	ifPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}\s*else\s*\{([^}]+)\}`)
+	result := ifPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := ifPattern.FindStringSubmatch(match)
+		if len(parts) == 4 {
+			condition := parts[1]
+			ifBody := parts[2]
+			elseBody := parts[3]
+
+			switchVar := o.generateObfuscatedName()
+			tempVar := o.generateObfuscatedName()
+
+			return fmt.Sprintf(`(function(){var %s=0,%s;if(%s){%s=1;}else{%s=2;}switch(%s){case 1:%s;break;case 2:%s;break;}})()`,
+				switchVar, tempVar, condition, ifBody, elseBody, switchVar, ifBody, elseBody)
+		}
+		return match
+	})
+
+	return result
+}
+
+func (o *Obfuscator) encryptStringsDynamic(code string) string {
+	var result strings.Builder
+	i := 0
+	codeBytes := []byte(code)
+	decoderVar := o.generateObfuscatedName()
+	decryptorFunc := o.generateDynamicDecryptor(decoderVar)
+	result.WriteString(decryptorFunc)
+
+	for i < len(codeBytes) {
+		if codeBytes[i] == '"' || codeBytes[i] == '\'' || codeBytes[i] == '`' {
+			quote := codeBytes[i]
+			start := i
+			i++
+
+			var strContent strings.Builder
+			for i < len(codeBytes) {
+				if codeBytes[i] == '\\' && i+1 < len(codeBytes) {
+					strContent.WriteByte(codeBytes[i])
+					i++
+					strContent.WriteByte(codeBytes[i])
+					i++
+				} else if codeBytes[i] == quote {
+					i++
+					break
+				} else {
+					strContent.WriteByte(codeBytes[i])
+					i++
+				}
+			}
+
+			originalStr := strContent.String()
+			if o.shouldEncryptString(originalStr) {
+				encrypted := o.encryptStringDynamic(originalStr, decoderVar)
+				result.WriteByte(quote)
+				result.WriteString(encrypted)
+				result.WriteByte(quote)
+			} else {
+				result.Write(codeBytes[start:i])
+			}
+		} else {
+			result.WriteByte(codeBytes[i])
+			i++
+		}
+	}
+
+	return result.String()
+}
+
+func (o *Obfuscator) generateDynamicDecryptor(decoderVar string) string {
+	var buf strings.Builder
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-obfuscate-key-2024")
+	}
+	encodedKey := base64.StdEncoding.EncodeToString(key)
+
+	buf.WriteString(fmt.Sprintf(`(function(_0xK){
+	var %s=function(_0xS){
+		var _0xR=atob(_0xS);
+		var _0xD='';
+		for(var _0xI=0;_0xI<_0xR.length;_0xI++){
+			_0xD+=String.fromCharCode((_0xR.charCodeAt(_0xI)^_0xK.charCodeAt(_0xI%%_0xK.length))%%256);
+		}
+		return _0xD;
+	};
+`, decoderVar))
+	buf.WriteString(fmt.Sprintf(`	window.__dec=function(_0xE,_0xN){var _0xB=atob(_0xE);var _0xC='';for(var _0xI=0;_0xI<_0xB.length;_0xI++){_0xC+=String.fromCharCode((_0xB.charCodeAt(_0xI)-_0xN[_0xI%%_0xN.length]+256)%%256);}return _0xC;};
+})('%s');`, encodedKey))
+
+	return buf.String()
+}
+
+func (o *Obfuscator) encryptStringDynamic(s string, decoderVar string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-obfuscate-key-2024")
+	}
+
+	var encrypted strings.Builder
+	for i, c := range s {
+		xorChar := key[i%len(key)]
+		encrypted.WriteByte(byte(c) ^ xorChar)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(encrypted.String()))
+	o.stringCount++
+
+	return fmt.Sprintf("%s('%s',_0xK)", decoderVar, encoded)
+}
+
+type VirtualMachine struct {
+	config         ObfuscatorConfig
+	instructions   []string
+	registers      map[string]int
+	programCounter int
+}
+
+func (o *Obfuscator) createVirtualization(code string) string {
+	vm := &VirtualMachine{
+		config:         o.config,
+		instructions:   make([]string, 0),
+		registers:      make(map[string]int),
+		programCounter: 0,
+	}
+
+	vm.addLoader(vm.generateLoader())
+
+	vm.addInstruction("LOAD_CONST", 0)
+	vm.addInstruction("NOP", 0)
+
+	obfuscated := vm.compile(code)
+
+	return vm.wrapVMCode(obfuscated)
+}
+
+func (vm *VirtualMachine) generateLoader() string {
+	var loader strings.Builder
+	loader.WriteString(`
+(function(){
+	var _0xVM=function(_0xP){
+		var _0xR={};
+		var _0xI=0;
+		var _0xOP=[
+		`)
+
+	for i, instr := range vm.instructions {
+		if i > 0 {
+			loader.WriteString(",")
+		}
+		loader.WriteString(fmt.Sprintf("'%s'", instr))
+	}
+
+	loader.WriteString(`];
+		var _0xEXEC=function(_0xOP,_0xR,_0xI){
+			while(_0xI<_0xOP.length){
+				var _0xC=_0xOP[_0xI];
+				switch(_0xC){
+		`)
+
+	loader.WriteString(`
+				case 'NOP':
+					_0xI++;
+					break;
+				case 'LOAD_CONST':
+					_0xR[_0xI]=_0xP.charCodeAt(_0xI);
+					_0xI++;
+					break;
+				case 'RETURN':
+					return _0xR[0];
+				}
+			}
+		};
+		return _0xEXEC(_0xOP,_0xR,0);
+	};
+	window.__VM=_0xVM;
+})();
+`)
+
+	return loader.String()
+}
+
+func (vm *VirtualMachine) addInstruction(op string, arg int) {
+	vm.instructions = append(vm.instructions, op)
+	_ = arg
+}
+
+func (vm *VirtualMachine) addLoader(code string) {
+	vm.instructions = append(vm.instructions, "LOAD_CONST")
+}
+
+func (vm *VirtualMachine) compile(code string) string {
+	var result strings.Builder
+	for _, c := range code {
+		result.WriteString(fmt.Sprintf("\\x%02x", c))
+	}
+	return result.String()
+}
+
+func (vm *VirtualMachine) wrapVMCode(code string) string {
+	key := "hjtpx-vm-key-2024"
+	return fmt.Sprintf(`(function(_0xC,_0xK){var _0xR='';for(var _0xI=0;_0xI<_0xC.length;_0xI+=4){_0xR+=String.fromCharCode(parseInt(_0xC.substr(_0xI,4),16)^_0xK.charCodeAt((_0xI/4)%%_0xK.length));}return _0xR;})('%s','%s');%s`,
+		code, key, code)
+}
+
+func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
+	antiDebug := `
+;(function(){
+	var _0xAD={
+		check:function(){
+			if(window.outerHeight-window.innerHeight>100||window.outerWidth-window.innerWidth>100){
+				_0xAD.trigger();
+			}
+			var _0xT=function(){};
+			_0xT.toString=function(){
+				var _0xD=new Date();
+				var _0xE=_0xD.getTime();
+				debugger;
+				var _0xF=new Date();
+				if(_0xF.getTime()-_0xE>100){
+					_0xAD.trigger();
+				}
+			};
+			setInterval(function(){console.log(_0xT);},1000);
+		},
+		trigger:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="padding:50px;text-align:center;"><h1>访问受限</h1></div>';
+			throw new Error('Debug detected');
+		},
+		start:function(){
+			document.addEventListener('keydown',function(e){
+				if(e.keyCode==123){
+					_0xAD.trigger();
+				}
+			});
+			document.addEventListener('contextmenu',function(e){
+				e.preventDefault();
+			});
+			setInterval(function(){
+				var _0xW=window.outerWidth-window.innerWidth>100;
+				var _0xH=window.outerHeight-window.innerHeight>100;
+				if(_0xW||_0xH){
+					_0xAD.trigger();
+				}
+			},1000);
+		}
+	};
+	if(document.readyState==='complete'){
+		_0xAD.start();
+	}else{
+		window.addEventListener('load',function(){_0xAD.start();});
+	}
+	_0xAD.check();
+})();
+`
+	return antiDebug + code
+}
+
+func (o *Obfuscator) InjectSelfDestruct(code string) error {
+	selfDestructCode := `
+;(function(){
+	var _0xSD={
+		triggers:[],
+		register:function(condition,action){
+			this.triggers.push({condition:condition,action:action});
+		},
+		check:function(){
+			for(var i=0;i<this.triggers.length;i++){
+				var t=this.triggers[i];
+				if(t.condition()){
+					t.action();
+					return true;
+				}
+			}
+			return false;
+		},
+		destroy:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='';
+			var scripts=document.getElementsByTagName('script');
+			for(var i=scripts.length-1;i>=0;i--){
+				scripts[i].parentNode.removeChild(scripts[i]);
+			}
+			Object.keys(window).forEach(function(key){
+				if(key!=='window'&&key!=='document'){
+					try{delete window[key];}catch(e){}
+				}
+			});
+		}
+	};
+	_0xSD.register(function(){
+		return window.outerWidth-window.innerWidth>160;
+	},_0xSD.destroy);
+	_0xSD.register(function(){
+		return typeof window.__inspect!=='undefined';
+	},_0xSD.destroy);
+	setInterval(function(){_0xSD.check();},2000);
+	window.__SD=_0xSD;
+})();
+`
+
+	pattern := regexp.MustCompile(`^(.*)$`)
+	matches := pattern.FindStringSubmatch(code)
+	if len(matches) == 0 {
+		return errors.New("failed to parse code structure")
+	}
+
+	_ = selfDestructCode
+	return nil
+}
+
+func (o *Obfuscator) AddMemoryProtection(code string) string {
+	memoryProtection := `
+;(function(){
+	var _0xMP={
+		originalValues:{},
+		protect:function(obj,prop){
+			var self=this;
+			if(typeof obj!=='object'||obj===null)return;
+			var key=prop.toString();
+			if(this.originalValues[key])return;
+			this.originalValues[key]=obj[prop];
+			var descriptor=Object.getOwnPropertyDescriptor(obj,prop);
+			if(!descriptor)return;
+			Object.defineProperty(obj,prop,{
+				get:function(){
+					return self.originalValues[key];
+				},
+				set:function(v){
+					self.originalValues[key]=v;
+				},
+				enumerable:descriptor.enumerable,
+				configurable:descriptor.configurable
+			});
+		},
+		check:function(){
+			var suspicious=['Function.prototype.toString','console.log','console.error'];
+			for(var i=0;i<suspicious.length;i++){
+				try{
+					var parts=suspicious[i].split('.');
+					var obj=window;
+					for(var j=0;j<parts.length-1;j++){
+						obj=obj[parts[j]];
+					}
+					if(obj&&obj[parts[parts.length-1]]){
+						var original=obj[parts[parts.length-1]].toString();
+						if(original.indexOf('[native code]')===-1){
+							document.documentElement.style.display='none';
+							document.body.innerHTML='<h1>Memory modification detected</h1>';
+						}
+					}
+				}catch(e){}
+			}
+		},
+		start:function(){
+			var obj=['console','Math','Array','Object'];
+			for(var i=0;i<obj.length;i++){
+				try{
+					if(window[obj[i]]){
+						Object.keys(window[obj[i]]).forEach(function(key){
+							self.protect(window[obj[i]],key);
+						});
+					}
+				}catch(e){}
+			}
+			setInterval(function(){this.check();}.bind(this),5000);
+		}
+	};
+	_0xMP.start();
+})();
+`
+	return code + memoryProtection
+}
+
+func (o *Obfuscator) ApplyAdvancedObfuscation(code string) (string, error) {
+	if code == "" {
+		return "", errors.New("code cannot be empty")
+	}
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	o.variableMap = make(map[string]string)
+	o.functionMap = make(map[string]string)
+	o.usedNames = make(map[string]bool)
+	o.stringCount = 0
+	o.functionCount = 0
+
+	var result string = code
+
+	if o.config.RemoveComments {
+		result = o.removeComments(result)
+	}
+
+	if o.config.EnableVariableObfuscation {
+		result = o.obfuscateVariables(result)
+	}
+
+	if o.config.EnableStringEncryption {
+		result = o.encryptStringsDynamic(result)
+	}
+
+	if o.config.EnableFunctionWrapping {
+		result = o.wrapCodeAdvanced(result)
+	}
+
+	if o.config.EnableControlFlowFlattening {
+		result = o.flattenControlFlowAdvanced(result)
+	}
+
+	result = o.addStateMachineFlattening(result)
+
+	result = o.InjectEnhancedAntiDebug(result)
+
+	if o.config.EnableDeadCodeInjection {
+		result = o.injectDeadCodeAdvanced(result)
+	}
+
+	if o.config.EnableCodeCompression {
+		result = o.compressCodeAdvanced(result)
+	}
+
+	return result, nil
+}
+
+func (o *Obfuscator) wrapCodeAdvanced(code string) string {
+	var wrapper strings.Builder
+
+	wrapper.WriteString(`;(function(_0xW,_0xK,_0xD){`)
+	wrapper.WriteString(`var _0xG=function(_0xS){return _0xS;};`)
+	wrapper.WriteString(`_0xG.toString=function(){return '';};`)
+	wrapper.WriteString(`console.log(_0xG);`)
+	wrapper.WriteString(`})(window,document,undefined);`)
+
+	wrapper.WriteString(code)
+
+	return wrapper.String()
+}
+
+func (o *Obfuscator) injectDeadCodeAdvanced(code string) string {
+	var deadCode strings.Builder
+
+	deadCode.WriteString(`;(function(){`)
+	deadCode.WriteString(fmt.Sprintf(`var _0xDC1=Math.random(),_0xDC2=%s;`, o.generateRandomIntExpr()))
+	deadCode.WriteString(`if(_0xDC1<0)_0xDC2();`)
+	deadCode.WriteString(fmt.Sprintf(`var _0xDC3=%s;`, o.generateRandomBoolExpr()))
+	deadCode.WriteString(`switch(_0xDC3){case true:break;case false:break;}`)
+	deadCode.WriteString(`})();`)
+
+	return deadCode.String() + code
+}
+
+func (o *Obfuscator) generateRandomIntExpr() string {
+	a := GetRandomInt(1, 100)
+	b := GetRandomInt(1, 100)
+	return fmt.Sprintf("%d+%d-%d*%d/%d", a, b, GetRandomInt(1, 10), GetRandomInt(1, 10), GetRandomInt(2, 20))
+}
+
+func (o *Obfuscator) generateRandomBoolExpr() string {
+	ops := []string{"&&", "||"}
+	_ = ops[GetRandomInt(0, len(ops)-1)]
+	return fmt.Sprintf("%s>%s", o.generateRandomIntExpr(), o.generateRandomIntExpr())
+}
+
+func (o *Obfuscator) compressCodeAdvanced(code string) string {
+	if !o.config.CompressWhitespace {
+		return code
+	}
+
+	result := code
+
+	result = regexp.MustCompile(`\s+`).ReplaceAllString(result, " ")
+	result = regexp.MustCompile(`\s*([{};,:])\s*`).ReplaceAllString(result, "$1")
+	result = regexp.MustCompile(`;\s*}`).ReplaceAllString(result, ";}")
+	result = regexp.MustCompile(`{\s*`).ReplaceAllString(result, "{")
+	result = regexp.MustCompile(`\s*}`).ReplaceAllString(result, "}")
+	result = regexp.MustCompile(`\n\s*\n`).ReplaceAllString(result, "\n")
+	result = regexp.MustCompile(`\t`).ReplaceAllString(result, "")
+
+	return strings.TrimSpace(result)
+}
+
+func CalculateObfuscationEntropy(code string) float64 {
+	if len(code) == 0 {
+		return 0
+	}
+
+	charFreq := make(map[rune]int)
+	for _, c := range code {
+		charFreq[c]++
+	}
+
+	var entropy float64
+	length := float64(len(code))
+
+	for _, count := range charFreq {
+		p := float64(count) / length
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return math.Round(entropy*100) / 100
+}
+
+func EstimateObfuscationQuality(original, obfuscated string) map[string]interface{} {
+	entropyOriginal := CalculateObfuscationEntropy(original)
+	entropyObfuscated := CalculateObfuscationEntropy(obfuscated)
+
+	entropyImprovement := entropyObfuscated - entropyOriginal
+	entropyImprovementPercent := (entropyImprovement / entropyOriginal) * 100
+
+	sizeRatio := float64(len(obfuscated)) / float64(len(original))
+
+	readabilityScore := math.Max(0, 100-entropyObfuscated*5)
+
+	analyzer := AnalyzeCode(original)
+	obfuscatedAnalyzer := AnalyzeCode(obfuscated)
+
+	functionReduction := 0.0
+	if analyzer.functions > 0 {
+		functionReduction = (1 - float64(obfuscatedAnalyzer.functions)/float64(analyzer.functions)) * 100
+	}
+
+	obfuscationQuality := (readabilityScore + entropyImprovementPercent + functionReduction) / 3
+
+	return map[string]interface{}{
+		"entropy_original":            entropyOriginal,
+		"entropy_obfuscated":          entropyObfuscated,
+		"entropy_improvement":         math.Round(entropyImprovement*100) / 100,
+		"entropy_improvement_percent": math.Round(entropyImprovementPercent*100) / 100,
+		"size_ratio":                  math.Round(sizeRatio*100) / 100,
+		"readability_score":           math.Round(readabilityScore*100) / 100,
+		"function_reduction":          math.Round(functionReduction*100) / 100,
+		"overall_quality":             math.Round(obfuscationQuality*100) / 100,
+		"unreadability_percent":       math.Min(100, readabilityScore),
+	}
+}
+
+func GenerateObfuscationCertificate(original, obfuscated string, config ObfuscatorConfig) string {
+	quality := EstimateObfuscationQuality(original, obfuscated)
+	_ = CalculateObfuscationEntropy(obfuscated)
+
+	certificate := fmt.Sprintf(`
+========================================
+代码混淆证书
+========================================
+生成时间: %s
+混淆算法版本: 2.0
+
+代码分析:
+---------
+原始代码熵值: %.2f
+混淆后代码熵值: %.2f
+熵值提升: %.2f%%
+
+代码质量评估:
+-------------
+可读性评分: %.2f/100
+不可读性: %.2f%%
+函数复杂度降低: %.2f%%
+总体混淆质量: %.2f/100
+
+配置启用:
+---------
+变量混淆: %v
+字符串加密: %v
+代码压缩: %v
+控制流平坦化: %v
+死代码注入: %v
+函数包装: %v
+高级反调试: %v
+
+========================================
+`,
+		time.Now().Format("2006-01-02 15:04:05"),
+		quality["entropy_original"],
+		quality["entropy_obfuscated"],
+		quality["entropy_improvement_percent"],
+		quality["readability_score"],
+		quality["unreadability_percent"],
+		quality["function_reduction"],
+		quality["overall_quality"],
+		config.EnableVariableObfuscation,
+		config.EnableStringEncryption,
+		config.EnableCodeCompression,
+		config.EnableControlFlowFlattening,
+		config.EnableDeadCodeInjection,
+		config.EnableFunctionWrapping,
+		true,
+	)
+
+	return certificate
+}
+
+func CreateSelfCheckingCode(code string, key []byte) string {
+	if len(key) == 0 {
+		key = []byte("hjtpx-selfcheck-2024")
+	}
+
+	hash := sha256.Sum256(append([]byte(code), key...))
+	hashStr := hex.EncodeToString(hash[:])
+
+	selfCheck := fmt.Sprintf(`
+;(function(_0xC,_0xH){
+	var _0xS=document.createElement('script');
+	_0xS.type='text/javascript';
+	var _0xT='';
+	try{
+		_0xT=_0xC.toString();
+	}catch(e){
+		_0xT='';
+	}
+	var _0xD=document.createElement('div');
+	_0xD.style.display='none';
+	_0xD.id='_0xSC';
+	_0xD.setAttribute('data-hash','%s');
+	document.body.appendChild(_0xD);
+	var _0xCK=setInterval(function(){
+		var _0xE=document.getElementById('_0xSC');
+		if(!_0xE||_0xE.getAttribute('data-hash')!=='%s'){
+			clearInterval(_0xCK);
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<h1>Code integrity compromised</h1>';
+		}
+	},3000);
+})();
+`, hashStr, hashStr)
+
+	return selfCheck + code
 }

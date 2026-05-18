@@ -7,15 +7,14 @@ import (
 )
 
 func TestNewWhitelabelService(t *testing.T) {
-	// 测试创建服务
-	service := NewWhitelabelService(nil, nil)
+	service := NewWhitelabelService()
 	assert.NotNil(t, service)
 }
 
 func TestGetDefaultConfig(t *testing.T) {
-	service := NewWhitelabelService(nil, nil)
+	service := NewWhitelabelService()
 	config := service.GetDefaultConfig()
-	
+
 	assert.Equal(t, defaultBrandName, config.BrandName)
 	assert.Equal(t, defaultPrimary, config.PrimaryColor)
 	assert.Equal(t, defaultSuccess, config.SuccessColor)
@@ -25,8 +24,8 @@ func TestGetDefaultConfig(t *testing.T) {
 }
 
 func TestValidateConfig(t *testing.T) {
-	service := NewWhitelabelService(nil, nil)
-	
+	service := NewWhitelabelService()
+
 	tests := []struct {
 		name    string
 		config  WhitelabelConfig
@@ -100,7 +99,7 @@ func TestValidateConfig(t *testing.T) {
 			wantErr: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := service.ValidateConfig(tt.config)
@@ -139,7 +138,7 @@ func TestDarkenColor(t *testing.T) {
 			expected: "#24963e",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := darkenColor(tt.hex, tt.percent)
@@ -150,8 +149,8 @@ func TestDarkenColor(t *testing.T) {
 }
 
 func TestGenerateCSS(t *testing.T) {
-	service := NewWhitelabelService(nil, nil)
-	
+	service := NewWhitelabelService()
+
 	css := service.GenerateCSS()
 	assert.NotEmpty(t, css)
 	assert.Contains(t, css, "Whitelabel theme is disabled")
@@ -174,7 +173,7 @@ func TestWhitelabelConfigStructure(t *testing.T) {
 		CustomCSS:    ".custom { color: red; }",
 		IsEnabled:    true,
 	}
-	
+
 	assert.Equal(t, "Test Corp", config.BrandName)
 	assert.Equal(t, "#ff0000", config.PrimaryColor)
 	assert.Equal(t, "#00ff00", config.SuccessColor)

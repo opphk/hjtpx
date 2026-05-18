@@ -14,65 +14,65 @@ import (
 )
 
 type FingerprintAnalysis struct {
-	FingerprintID       string                 `json:"fingerprint_id"`
-	IP                 string                 `json:"ip"`
-	CanvasHash         string                 `json:"canvas_hash"`
-	WebGLHash          string                 `json:"webgl_hash"`
-	AudioHash          string                 `json:"audio_hash"`
-	FontHash           string                 `json:"font_hash"`
-	PluginHash         string                 `json:"plugin_hash"`
-	UserAgent          string                 `json:"user_agent"`
-	ScreenResolution   string                 `json:"screen_resolution"`
-	Timezone           string                 `json:"timezone"`
-	Language           string                 `json:"language"`
-	Platform           string                 `json:"platform"`
-	HardwareConcurrency int                   `json:"hardware_concurrency"`
-	DeviceMemory       float64                `json:"device_memory"`
-	FirstSeen          time.Time             `json:"first_seen"`
-	LastSeen           time.Time             `json:"last_seen"`
-	RequestCount       int                   `json:"request_count"`
-	Similarity         float64               `json:"similarity"`
-	RiskIndicators     []string              `json:"risk_indicators"`
-	AnomalyScore       float64               `json:"anomaly_score"`
-	Confidence         float64               `json:"confidence"`
-	ClusterID          string                `json:"cluster_id"`
-	IsKnownBot         bool                  `json:"is_known_bot"`
-	IsKnownVPN         bool                  `json:"is_known_vpn"`
+	FingerprintID       string    `json:"fingerprint_id"`
+	IP                  string    `json:"ip"`
+	CanvasHash          string    `json:"canvas_hash"`
+	WebGLHash           string    `json:"webgl_hash"`
+	AudioHash           string    `json:"audio_hash"`
+	FontHash            string    `json:"font_hash"`
+	PluginHash          string    `json:"plugin_hash"`
+	UserAgent           string    `json:"user_agent"`
+	ScreenResolution    string    `json:"screen_resolution"`
+	Timezone            string    `json:"timezone"`
+	Language            string    `json:"language"`
+	Platform            string    `json:"platform"`
+	HardwareConcurrency int       `json:"hardware_concurrency"`
+	DeviceMemory        float64   `json:"device_memory"`
+	FirstSeen           time.Time `json:"first_seen"`
+	LastSeen            time.Time `json:"last_seen"`
+	RequestCount        int       `json:"request_count"`
+	Similarity          float64   `json:"similarity"`
+	RiskIndicators      []string  `json:"risk_indicators"`
+	AnomalyScore        float64   `json:"anomaly_score"`
+	Confidence          float64   `json:"confidence"`
+	ClusterID           string    `json:"cluster_id"`
+	IsKnownBot          bool      `json:"is_known_bot"`
+	IsKnownVPN          bool      `json:"is_known_vpn"`
 }
 
 type FingerprintDatabase struct {
-	fingerprints map[string]*FingerprintAnalysis
-	clusters     map[string][]string
+	fingerprints    map[string]*FingerprintAnalysis
+	clusters        map[string][]string
 	similarityIndex map[string][]string
-	mu           sync.RWMutex
-	stats        *AnalysisStats
+	mu              sync.RWMutex
+	stats           *AnalysisStats
 }
 
 type AnalysisStats struct {
-	TotalFingerprints int64                  `json:"total_fingerprints"`
-	BotFingerprints   int64                  `json:"bot_fingerprints"`
-	VPNFingerprints   int64                  `json:"vpn_fingerprints"`
-	AvgAnomalyScore   float64                `json:"avg_anomaly_score"`
-	HighRiskCount     int64                  `json:"high_risk_count"`
-	MediumRiskCount   int64                  `json:"medium_risk_count"`
-	LowRiskCount      int64                  `json:"low_risk_count"`
-	ClustersCount     int                    `json:"clusters_count"`
+	TotalFingerprints int64   `json:"total_fingerprints"`
+	BotFingerprints   int64   `json:"bot_fingerprints"`
+	VPNFingerprints   int64   `json:"vpn_fingerprints"`
+	AvgAnomalyScore   float64 `json:"avg_anomaly_score"`
+	HighRiskCount     int64   `json:"high_risk_count"`
+	MediumRiskCount   int64   `json:"medium_risk_count"`
+	LowRiskCount      int64   `json:"low_risk_count"`
+	ClustersCount     int     `json:"clusters_count"`
 }
 
 type SimilarityResult struct {
-	FingerprintID string  `json:"fingerprint_id"`
-	Similarity   float64 `json:"similarity"`
-	CommonFields []string `json:"common_fields"`
-	DiffFields   []string `json:"diff_fields"`
+	FingerprintID string   `json:"fingerprint_id"`
+	Similarity    float64  `json:"similarity"`
+	CommonFields  []string `json:"common_fields"`
+	DiffFields    []string `json:"diff_fields"`
 }
 
 type AnomalyResult struct {
-	IsAnomaly    bool     `json:"is_anomaly"`
-	AnomalyType  string   `json:"anomaly_type"`
-	Score        float64  `json:"score"`
-	Indicators   []string `json:"indicators"`
-	Reasons      []string `json:"reasons"`
-	Severity     string   `json:"severity"`
+	IsAnomaly   bool     `json:"is_anomaly"`
+	AnomalyType string   `json:"anomaly_type"`
+	Score       float64  `json:"score"`
+	Indicators  []string `json:"indicators"`
+	Reasons     []string `json:"reasons"`
+	Severity    string   `json:"severity"`
 }
 
 type ClusterInfo struct {
@@ -87,8 +87,8 @@ type ClusterInfo struct {
 
 func NewFingerprintDatabase() *FingerprintDatabase {
 	return &FingerprintDatabase{
-		fingerprints:   make(map[string]*FingerprintAnalysis),
-		clusters:       make(map[string][]string),
+		fingerprints:    make(map[string]*FingerprintAnalysis),
+		clusters:        make(map[string][]string),
 		similarityIndex: make(map[string][]string),
 		stats: &AnalysisStats{
 			TotalFingerprints: 0,
@@ -171,8 +171,8 @@ func (db *FingerprintDatabase) CalculateSimilarity(fp1, fp2 *FingerprintAnalysis
 	for _, field := range fields {
 		totalWeight += field.weight
 		if fmt.Sprintf("%v", field.val1) == fmt.Sprintf("%v", field.val2) &&
-		   fmt.Sprintf("%v", field.val1) != "" &&
-		   fmt.Sprintf("%v", field.val2) != "" {
+			fmt.Sprintf("%v", field.val1) != "" &&
+			fmt.Sprintf("%v", field.val2) != "" {
 			matchWeight += field.weight
 		}
 	}
@@ -446,7 +446,7 @@ func (db *FingerprintDatabase) GetCluster(clusterID string) *ClusterInfo {
 	info := &ClusterInfo{
 		ClusterID:      clusterID,
 		Size:           len(fpIDs),
-		FingerprintIDs:  fpIDs,
+		FingerprintIDs: fpIDs,
 		CommonFeatures: make([]string, 0),
 		RiskLevel:      "low",
 	}
@@ -635,7 +635,7 @@ func (db *FingerprintDatabase) ImportData(data []byte) error {
 
 	type ImportData struct {
 		Fingerprints map[string]*FingerprintAnalysis `json:"fingerprints"`
-		Clusters     map[string][]string            `json:"clusters"`
+		Clusters     map[string][]string             `json:"clusters"`
 	}
 
 	var importData ImportData
@@ -657,18 +657,18 @@ func (db *FingerprintDatabase) ImportData(data []byte) error {
 }
 
 type FingerprintAnalyzer struct {
-	database    *FingerprintDatabase
-	knownBots   map[string]bool
-	knownVPNs    map[string]bool
+	database            *FingerprintDatabase
+	knownBots           map[string]bool
+	knownVPNs           map[string]bool
 	confidenceThreshold float64
-	mu          sync.RWMutex
+	mu                  sync.RWMutex
 }
 
 func NewFingerprintAnalyzer() *FingerprintAnalyzer {
 	return &FingerprintAnalyzer{
-		database:          NewFingerprintDatabase(),
-		knownBots:         make(map[string]bool),
-		knownVPNs:         make(map[string]bool),
+		database:            NewFingerprintDatabase(),
+		knownBots:           make(map[string]bool),
+		knownVPNs:           make(map[string]bool),
 		confidenceThreshold: 0.85,
 	}
 }
@@ -678,20 +678,20 @@ func (a *FingerprintAnalyzer) AnalyzeFingerprint(data map[string]interface{}) (*
 	defer a.mu.Unlock()
 
 	fp := &FingerprintAnalysis{
-		FingerprintID: generateFingerprintID(data),
-		CanvasHash:    getString(data, "canvas_hash"),
-		WebGLHash:     getString(data, "webgl_hash"),
-		AudioHash:     getString(data, "audio_hash"),
-		FontHash:      getString(data, "font_hash"),
-		PluginHash:    getString(data, "plugin_hash"),
-		UserAgent:     getString(data, "user_agent"),
+		FingerprintID:    generateFingerprintID(data),
+		CanvasHash:       getString(data, "canvas_hash"),
+		WebGLHash:        getString(data, "webgl_hash"),
+		AudioHash:        getString(data, "audio_hash"),
+		FontHash:         getString(data, "font_hash"),
+		PluginHash:       getString(data, "plugin_hash"),
+		UserAgent:        getString(data, "user_agent"),
 		ScreenResolution: getString(data, "screen_resolution"),
-		Timezone:      getString(data, "timezone"),
-		Language:      getString(data, "language"),
-		Platform:      getString(data, "platform"),
-		FirstSeen:     time.Now(),
-		LastSeen:      time.Now(),
-		RequestCount:  1,
+		Timezone:         getString(data, "timezone"),
+		Language:         getString(data, "language"),
+		Platform:         getString(data, "platform"),
+		FirstSeen:        time.Now(),
+		LastSeen:         time.Now(),
+		RequestCount:     1,
 	}
 
 	if hwConcurrency, ok := data["hardware_concurrency"].(float64); ok {
@@ -721,7 +721,7 @@ func (a *FingerprintAnalyzer) AnalyzeFingerprint(data map[string]interface{}) (*
 
 func (a *FingerprintAnalyzer) detectBotIndicators(fp *FingerprintAnalysis) {
 	botPatterns := []struct {
-		pattern  string
+		pattern   string
 		indicator string
 	}{
 		{"headless", "headless_browser"},
@@ -857,12 +857,12 @@ func getString(data map[string]interface{}, key string) string {
 }
 
 type ExtendedFingerprintAnalysis struct {
-	BaseAnalysis *FingerprintAnalysis
-	NetworkAnalysis map[string]interface{} `json:"network_analysis"`
-	BehavioralAnalysis map[string]interface{} `json:"behavioral_analysis"`
+	BaseAnalysis         *FingerprintAnalysis
+	NetworkAnalysis      map[string]interface{} `json:"network_analysis"`
+	BehavioralAnalysis   map[string]interface{} `json:"behavioral_analysis"`
 	HistoricalComparison map[string]interface{} `json:"historical_comparison"`
-	AccuracyScore float64 `json:"accuracy_score"`
-	PredictionScore float64 `json:"prediction_score"`
+	AccuracyScore        float64                `json:"accuracy_score"`
+	PredictionScore      float64                `json:"prediction_score"`
 }
 
 func (a *FingerprintAnalyzer) AnalyzeWithExtendedMetrics(data map[string]interface{}) (*ExtendedFingerprintAnalysis, error) {
@@ -872,12 +872,12 @@ func (a *FingerprintAnalyzer) AnalyzeWithExtendedMetrics(data map[string]interfa
 	}
 
 	extended := &ExtendedFingerprintAnalysis{
-		BaseAnalysis:          base,
-		NetworkAnalysis:       a.analyzeNetworkMetrics(data),
-		BehavioralAnalysis:    a.analyzeBehavioralMetrics(data),
-		HistoricalComparison:  a.compareWithHistory(base),
-		AccuracyScore:         a.calculateAccuracyScore(base),
-		PredictionScore:       a.calculatePredictionScore(base, anomaly),
+		BaseAnalysis:         base,
+		NetworkAnalysis:      a.analyzeNetworkMetrics(data),
+		BehavioralAnalysis:   a.analyzeBehavioralMetrics(data),
+		HistoricalComparison: a.compareWithHistory(base),
+		AccuracyScore:        a.calculateAccuracyScore(base),
+		PredictionScore:      a.calculatePredictionScore(base, anomaly),
 	}
 
 	return extended, nil
@@ -989,4 +989,508 @@ func (a *FingerprintAnalyzer) calculatePredictionScore(fp *FingerprintAnalysis, 
 	}
 
 	return math.Min(score, 100)
+}
+
+type EnhancedFingerprintMetrics struct {
+	CanvasMetrics       *CanvasMetrics       `json:"canvas_metrics"`
+	WebGLMetrics        *WebGLMetrics        `json:"webgl_metrics"`
+	FontMetrics         *FontMetrics         `json:"font_metrics"`
+	ScreenMetrics       *ScreenMetrics       `json:"screen_metrics"`
+	UniquenessScore     float64              `json:"uniqueness_score"`
+	BrowserSignature    string               `json:"browser_signature"`
+	MultiBrowserCompare *MultiBrowserCompare `json:"multi_browser_compare"`
+}
+
+type CanvasMetrics struct {
+	Hash                 string   `json:"hash"`
+	RgbaDistribution     []int    `json:"rgba_distribution"`
+	NoiseLevel           float64  `json:"noise_level"`
+	RenderingConsistency float64  `json:"rendering_consistency"`
+	IsHeadlessRenderer   bool     `json:"is_headless_renderer"`
+	SoftwareRenderer     bool     `json:"software_renderer"`
+	Details              []string `json:"details"`
+}
+
+type WebGLMetrics struct {
+	Hash                string   `json:"hash"`
+	Vendor              string   `json:"vendor"`
+	Renderer            string   `json:"renderer"`
+	MaxTextureSize      int      `json:"max_texture_size"`
+	MaxRenderbufferSize int      `json:"max_renderbuffer_size"`
+	MaxVertexAttribs    int      `json:"max_vertex_attribs"`
+	SupportedExtensions int      `json:"supported_extensions"`
+	UnmaskedVendor      string   `json:"unmasked_vendor"`
+	UnmaskedRenderer    string   `json:"unmasked_renderer"`
+	IsSoftwareRenderer  bool     `json:"is_software_renderer"`
+	IsVirtualGPU        bool     `json:"is_virtual_gpu"`
+	PrecisionLoss       bool     `json:"precision_loss"`
+	Details             []string `json:"details"`
+}
+
+type FontMetrics struct {
+	Hash                string   `json:"hash"`
+	DetectedFonts       []string `json:"detected_fonts"`
+	FontCount           int      `json:"font_count"`
+	CommonFontMissing   []string `json:"common_font_missing"`
+	FontFamilyDiversity float64  `json:"font_family_diversity"`
+	IsLimitedFontSet    bool     `json:"is_limited_font_set"`
+}
+
+type ScreenMetrics struct {
+	Resolution         string  `json:"resolution"`
+	ColorDepth         int     `json:"color_depth"`
+	PixelRatio         float64 `json:"pixel_ratio"`
+	AvailWidth         int     `json:"avail_width"`
+	AvailHeight        int     `json:"avail_height"`
+	DevicePixelRatio   float64 `json:"device_pixel_ratio"`
+	Orientation        string  `json:"orientation"`
+	IsCommonResolution bool    `json:"is_common_resolution"`
+}
+
+type MultiBrowserCompare struct {
+	ComparedBrowsers  []string  `json:"compared_browsers"`
+	SimilarityScores  []float64 `json:"similarity_scores"`
+	IsUniqueSignature bool      `json:"is_unique_signature"`
+	CollisionRisk     float64   `json:"collision_risk"`
+}
+
+func (a *FingerprintAnalyzer) AnalyzeEnhancedMetrics(data map[string]interface{}) (*EnhancedFingerprintMetrics, error) {
+	metrics := &EnhancedFingerprintMetrics{}
+
+	metrics.CanvasMetrics = a.analyzeCanvasEnhanced(data)
+	metrics.WebGLMetrics = a.analyzeWebGLEnhanced(data)
+	metrics.FontMetrics = a.analyzeFontsEnhanced(data)
+	metrics.ScreenMetrics = a.analyzeScreenEnhanced(data)
+	metrics.BrowserSignature = a.generateBrowserSignature(data)
+	metrics.MultiBrowserCompare = a.compareWithKnownBrowsers(data)
+	metrics.UniquenessScore = a.calculateUniquenessScore(metrics)
+
+	return metrics, nil
+}
+
+func (a *FingerprintAnalyzer) analyzeCanvasEnhanced(data map[string]interface{}) *CanvasMetrics {
+	metrics := &CanvasMetrics{
+		Details: make([]string, 0),
+	}
+
+	if hash, ok := data["canvas_hash"].(string); ok {
+		metrics.Hash = hash
+	}
+
+	if rgbaData, ok := data["canvas_rgba_distribution"].([]interface{}); ok {
+		for _, v := range rgbaData {
+			if fv, ok := v.(float64); ok {
+				metrics.RgbaDistribution = append(metrics.RgbaDistribution, int(fv))
+			}
+		}
+	}
+
+	if noiseLevel, ok := data["canvas_noise_level"].(float64); ok {
+		metrics.NoiseLevel = noiseLevel
+		if noiseLevel < 0.01 {
+			metrics.IsHeadlessRenderer = true
+			metrics.Details = append(metrics.Details, "low_noise_headless")
+		}
+	}
+
+	if consistency, ok := data["canvas_rendering_consistency"].(float64); ok {
+		metrics.RenderingConsistency = consistency
+		if consistency > 0.99 {
+			metrics.Details = append(metrics.Details, "too_consistent_rendering")
+		}
+	}
+
+	if renderer, ok := data["canvas_renderer"].(string); ok {
+		if strings.Contains(strings.ToLower(renderer), "swiftshader") ||
+			strings.Contains(strings.ToLower(renderer), "llvmpipe") ||
+			strings.Contains(strings.ToLower(renderer), "mesa") {
+			metrics.SoftwareRenderer = true
+			metrics.IsHeadlessRenderer = true
+			metrics.Details = append(metrics.Details, "software_renderer_detected")
+		}
+	}
+
+	return metrics
+}
+
+func (a *FingerprintAnalyzer) analyzeWebGLEnhanced(data map[string]interface{}) *WebGLMetrics {
+	metrics := &WebGLMetrics{
+		Details: make([]string, 0),
+	}
+
+	if hash, ok := data["webgl_hash"].(string); ok {
+		metrics.Hash = hash
+	}
+
+	if vendor, ok := data["webgl_vendor"].(string); ok {
+		metrics.Vendor = vendor
+		metrics.UnmaskedVendor = vendor
+	}
+
+	if renderer, ok := data["webgl_renderer"].(string); ok {
+		metrics.Renderer = renderer
+		metrics.UnmaskedRenderer = renderer
+
+		softwarePatterns := []string{"swiftshader", "llvmpipe", "mesa", "virtual", "software"}
+		for _, pattern := range softwarePatterns {
+			if strings.Contains(strings.ToLower(renderer), pattern) {
+				metrics.IsSoftwareRenderer = true
+				metrics.Details = append(metrics.Details, "software_renderer:"+pattern)
+				break
+			}
+		}
+
+		virtualPatterns := []string{"virtual", "vmware", "virtualbox", "parallels", "qemu", "kvm"}
+		for _, pattern := range virtualPatterns {
+			if strings.Contains(strings.ToLower(renderer), pattern) {
+				metrics.IsVirtualGPU = true
+				metrics.Details = append(metrics.Details, "virtual_gpu:"+pattern)
+				break
+			}
+		}
+	}
+
+	if maxTexSize, ok := data["webgl_max_texture_size"].(float64); ok {
+		metrics.MaxTextureSize = int(maxTexSize)
+		if maxTexSize <= 1024 {
+			metrics.Details = append(metrics.Details, "limited_texture_size")
+		}
+	}
+
+	if maxRbSize, ok := data["webgl_max_renderbuffer_size"].(float64); ok {
+		metrics.MaxRenderbufferSize = int(maxRbSize)
+	}
+
+	if maxAttribs, ok := data["webgl_max_vertex_attribs"].(float64); ok {
+		metrics.MaxVertexAttribs = int(maxAttribs)
+		if maxAttribs <= 8 {
+			metrics.Details = append(metrics.Details, "limited_vertex_attribs")
+		}
+	}
+
+	if extensions, ok := data["webgl_extensions_count"].(float64); ok {
+		metrics.SupportedExtensions = int(extensions)
+		if extensions < 10 {
+			metrics.Details = append(metrics.Details, "limited_extensions")
+		}
+	}
+
+	if precision, ok := data["webgl_precision_loss"].(bool); ok && precision {
+		metrics.PrecisionLoss = true
+		metrics.Details = append(metrics.Details, "precision_loss_detected")
+	}
+
+	return metrics
+}
+
+func (a *FingerprintAnalyzer) analyzeFontsEnhanced(data map[string]interface{}) *FontMetrics {
+	metrics := &FontMetrics{
+		DetectedFonts:     make([]string, 0),
+		CommonFontMissing: make([]string, 0),
+	}
+
+	if hash, ok := data["font_hash"].(string); ok {
+		metrics.Hash = hash
+	}
+
+	if fonts, ok := data["detected_fonts"].([]interface{}); ok {
+		for _, font := range fonts {
+			if fontStr, ok := font.(string); ok {
+				metrics.DetectedFonts = append(metrics.DetectedFonts, fontStr)
+			}
+		}
+		metrics.FontCount = len(metrics.DetectedFonts)
+	}
+
+	commonFonts := []string{"Arial", "Helvetica", "Times New Roman", "Verdana", "Georgia", "Tahoma", "Segoe UI", "Roboto", "Open Sans"}
+	for _, common := range commonFonts {
+		found := false
+		for _, detected := range metrics.DetectedFonts {
+			if strings.Contains(strings.ToLower(detected), strings.ToLower(common)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			metrics.CommonFontMissing = append(metrics.CommonFontMissing, common)
+		}
+	}
+
+	if metrics.FontCount < 3 {
+		metrics.IsLimitedFontSet = true
+	}
+
+	if metrics.FontCount > 0 {
+		fontFamilies := make(map[string]bool)
+		for _, font := range metrics.DetectedFonts {
+			family := strings.Split(font, " ")[0]
+			fontFamilies[family] = true
+		}
+		metrics.FontFamilyDiversity = float64(len(fontFamilies)) / float64(metrics.FontCount)
+	}
+
+	return metrics
+}
+
+func (a *FingerprintAnalyzer) analyzeScreenEnhanced(data map[string]interface{}) *ScreenMetrics {
+	metrics := &ScreenMetrics{}
+
+	if resolution, ok := data["screen_resolution"].(string); ok {
+		metrics.Resolution = resolution
+	}
+
+	if colorDepth, ok := data["screen_color_depth"].(float64); ok {
+		metrics.ColorDepth = int(colorDepth)
+	}
+
+	if pixelRatio, ok := data["screen_pixel_ratio"].(float64); ok {
+		metrics.PixelRatio = pixelRatio
+		metrics.DevicePixelRatio = pixelRatio
+	}
+
+	if availWidth, ok := data["screen_avail_width"].(float64); ok {
+		metrics.AvailWidth = int(availWidth)
+	}
+
+	if availHeight, ok := data["screen_avail_height"].(float64); ok {
+		metrics.AvailHeight = int(availHeight)
+	}
+
+	if orientation, ok := data["screen_orientation"].(string); ok {
+		metrics.Orientation = orientation
+	}
+
+	commonResolutions := []string{
+		"1920x1080", "1366x768", "1536x864", "1440x900", "1280x720",
+		"1280x800", "1600x900", "2560x1440", "3840x2160",
+		"1680x1050", "1280x1024", "1024x768",
+	}
+
+	for _, common := range commonResolutions {
+		if metrics.Resolution == common {
+			metrics.IsCommonResolution = true
+			break
+		}
+	}
+
+	return metrics
+}
+
+func (a *FingerprintAnalyzer) generateBrowserSignature(data map[string]interface{}) string {
+	components := make([]string, 0)
+
+	if ua, ok := data["user_agent"].(string); ok {
+		maxLen := len(ua)
+		if maxLen > 50 {
+			maxLen = 50
+		}
+		components = append(components, "ua:"+ua[:maxLen])
+	}
+
+	if canvas, ok := data["canvas_hash"].(string); ok {
+		maxLen := len(canvas)
+		if maxLen > 16 {
+			maxLen = 16
+		}
+		components = append(components, "cnv:"+canvas[:maxLen])
+	}
+
+	if webgl, ok := data["webgl_renderer"].(string); ok {
+		maxLen := len(webgl)
+		if maxLen > 30 {
+			maxLen = 30
+		}
+		components = append(components, "wgl:"+webgl[:maxLen])
+	}
+
+	if fonts, ok := data["detected_fonts"].([]interface{}); ok {
+		fontCount := len(fonts)
+		components = append(components, fmt.Sprintf("fc:%d", fontCount))
+	}
+
+	if screen, ok := data["screen_resolution"].(string); ok {
+		components = append(components, "scr:"+screen)
+	}
+
+	if tz, ok := data["timezone"].(string); ok {
+		components = append(components, "tz:"+tz)
+	}
+
+	return strings.Join(components, "|")
+}
+
+func (a *FingerprintAnalyzer) compareWithKnownBrowsers(data map[string]interface{}) *MultiBrowserCompare {
+	compare := &MultiBrowserCompare{
+		ComparedBrowsers: make([]string, 0),
+		SimilarityScores: make([]float64, 0),
+	}
+
+	knownBrowserPatterns := map[string][]string{
+		"Chrome":  {"Chrome", "Chromium"},
+		"Firefox": {"Firefox", "Gecko"},
+		"Safari":  {"Safari", "WebKit"},
+		"Edge":    {"Edge", "Edg"},
+		"Opera":   {"Opera", "OPR"},
+	}
+
+	ua := getString(data, "user_agent")
+
+	for browser, patterns := range knownBrowserPatterns {
+		matchCount := 0
+		for _, pattern := range patterns {
+			if strings.Contains(ua, pattern) {
+				matchCount++
+			}
+		}
+		if matchCount > 0 {
+			compare.ComparedBrowsers = append(compare.ComparedBrowsers, browser)
+		}
+	}
+
+	compare.IsUniqueSignature = len(compare.ComparedBrowsers) == 1
+
+	if len(compare.ComparedBrowsers) > 1 {
+		compare.CollisionRisk = 0.7
+	} else if len(compare.ComparedBrowsers) == 0 {
+		compare.CollisionRisk = 0.5
+	} else {
+		compare.CollisionRisk = 0.1
+	}
+
+	return compare
+}
+
+func (a *FingerprintAnalyzer) calculateUniquenessScore(metrics *EnhancedFingerprintMetrics) float64 {
+	score := 50.0
+
+	if metrics.CanvasMetrics != nil && metrics.CanvasMetrics.Hash != "" {
+		if !metrics.CanvasMetrics.IsHeadlessRenderer && !metrics.CanvasMetrics.SoftwareRenderer {
+			score += 15
+		}
+		if metrics.CanvasMetrics.NoiseLevel > 0.01 {
+			score += 10
+		}
+	}
+
+	if metrics.WebGLMetrics != nil {
+		if !metrics.WebGLMetrics.IsSoftwareRenderer && !metrics.WebGLMetrics.IsVirtualGPU {
+			score += 15
+		}
+		if metrics.WebGLMetrics.SupportedExtensions > 10 {
+			score += 5
+		}
+	}
+
+	if metrics.FontMetrics != nil {
+		if !metrics.FontMetrics.IsLimitedFontSet {
+			score += 10
+		}
+		if metrics.FontMetrics.FontFamilyDiversity > 0.5 {
+			score += 5
+		}
+	}
+
+	if metrics.ScreenMetrics != nil && !metrics.ScreenMetrics.IsCommonResolution {
+		score += 5
+	}
+
+	if metrics.MultiBrowserCompare != nil && metrics.MultiBrowserCompare.IsUniqueSignature {
+		score += 10
+	}
+
+	return math.Min(score, 100)
+}
+
+type CanvasSimilarityAnalyzer struct {
+	database *FingerprintDatabase
+}
+
+func NewCanvasSimilarityAnalyzer(db *FingerprintDatabase) *CanvasSimilarityAnalyzer {
+	return &CanvasSimilarityAnalyzer{
+		database: db,
+	}
+}
+
+func (c *CanvasSimilarityAnalyzer) CalculateCanvasSimilarity(hash1, hash2 string) float64 {
+	if hash1 == "" || hash2 == "" {
+		return 0
+	}
+
+	if hash1 == hash2 {
+		return 100.0
+	}
+
+	similarChars := 0
+	minLen := len(hash1)
+	if len(hash2) < minLen {
+		minLen = len(hash2)
+	}
+
+	for i := 0; i < minLen; i++ {
+		if hash1[i] == hash2[i] {
+			similarChars++
+		}
+	}
+
+	avgLen := (len(hash1) + len(hash2)) / 2
+	return float64(similarChars) / float64(avgLen) * 100
+}
+
+func (c *CanvasSimilarityAnalyzer) FindSimilarCanvas(hash string, threshold float64) []*FingerprintAnalysis {
+	similar := make([]*FingerprintAnalysis, 0)
+
+	fingerprints := c.database.GetAllFingerprints()
+	for _, fp := range fingerprints {
+		if fp.CanvasHash == "" {
+			continue
+		}
+
+		similarity := c.CalculateCanvasSimilarity(hash, fp.CanvasHash)
+		if similarity >= threshold {
+			similar = append(similar, fp)
+		}
+	}
+
+	sort.Slice(similar, func(i, j int) bool {
+		iSim := c.CalculateCanvasSimilarity(hash, similar[i].CanvasHash)
+		jSim := c.CalculateCanvasSimilarity(hash, similar[j].CanvasHash)
+		return iSim > jSim
+	})
+
+	return similar
+}
+
+func (c *CanvasSimilarityAnalyzer) AnalyzeCanvasFingerprint(data map[string]interface{}) *CanvasMetrics {
+	metrics := &CanvasMetrics{
+		Details: make([]string, 0),
+	}
+
+	if hash, ok := data["canvas_hash"].(string); ok {
+		metrics.Hash = hash
+	}
+
+	if rgbaData, ok := data["canvas_rgba_distribution"].([]interface{}); ok {
+		for _, v := range rgbaData {
+			if fv, ok := v.(float64); ok {
+				metrics.RgbaDistribution = append(metrics.RgbaDistribution, int(fv))
+			}
+		}
+	}
+
+	if noiseLevel, ok := data["canvas_noise_level"].(float64); ok {
+		metrics.NoiseLevel = noiseLevel
+		if noiseLevel < 0.005 {
+			metrics.IsHeadlessRenderer = true
+			metrics.Details = append(metrics.Details, "possible_headless")
+		}
+	}
+
+	if consistency, ok := data["canvas_rendering_consistency"].(float64); ok {
+		metrics.RenderingConsistency = consistency
+		if consistency > 0.999 {
+			metrics.Details = append(metrics.Details, "suspiciously_consistent")
+		}
+	}
+
+	return metrics
 }

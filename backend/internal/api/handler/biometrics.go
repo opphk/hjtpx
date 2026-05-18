@@ -22,14 +22,14 @@ func GetBiometricsHandler() *BiometricsHandler {
 
 // RegisterBiometricProfileRequest 注册生物特征档案请求
 type RegisterBiometricProfileRequest struct {
-	UserID         string               `json:"user_id" binding:"required"`
+	UserID         string                  `json:"user_id" binding:"required"`
 	KeyboardSample *service.KeyboardSample `json:"keyboard_sample,omitempty"`
 	MouseSample    *service.MouseSample    `json:"mouse_sample,omitempty"`
 }
 
 // VerifyBiometricsRequest 生物特征验证请求
 type VerifyBiometricsRequest struct {
-	UserID         string               `json:"user_id" binding:"required"`
+	UserID         string                  `json:"user_id" binding:"required"`
 	KeyboardSample *service.KeyboardSample `json:"keyboard_sample,omitempty"`
 	MouseSample    *service.MouseSample    `json:"mouse_sample,omitempty"`
 }

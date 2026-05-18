@@ -130,7 +130,7 @@ func TestProxyDetectionService_DetectProxy_ScoreCalculation(t *testing.T) {
 	service := NewProxyDetectionService()
 
 	testCases := []struct {
-		name           string
+		name          string
 		ip            string
 		headers       map[string]string
 		minScore      float64
@@ -138,7 +138,7 @@ func TestProxyDetectionService_DetectProxy_ScoreCalculation(t *testing.T) {
 		expectedLevel string
 	}{
 		{
-			name:           "Clean IP",
+			name:          "Clean IP",
 			ip:            "203.0.113.1",
 			headers:       map[string]string{},
 			minScore:      0,
@@ -146,7 +146,7 @@ func TestProxyDetectionService_DetectProxy_ScoreCalculation(t *testing.T) {
 			expectedLevel: "minimal",
 		},
 		{
-			name:           "Single proxy header",
+			name:          "Single proxy header",
 			ip:            "203.0.113.1",
 			headers:       map[string]string{"X-Forwarded-For": "192.0.2.1"},
 			minScore:      25,
@@ -154,7 +154,7 @@ func TestProxyDetectionService_DetectProxy_ScoreCalculation(t *testing.T) {
 			expectedLevel: "low",
 		},
 		{
-			name:           "Multiple proxy headers",
+			name:          "Multiple proxy headers",
 			ip:            "203.0.113.1",
 			headers:       map[string]string{"X-Forwarded-For": "192.0.2.1,192.0.2.2,192.0.2.3"},
 			minScore:      40,
@@ -185,36 +185,36 @@ func TestProxyDetectionService_AnalyzeConnection(t *testing.T) {
 	service := NewProxyDetectionService()
 
 	testCases := []struct {
-		name              string
-		measurements      []time.Duration
-		expectProxy       bool
-		expectVPN         bool
-		minAnomalyScore  float64
+		name            string
+		measurements    []time.Duration
+		expectProxy     bool
+		expectVPN       bool
+		minAnomalyScore float64
 	}{
 		{
 			name:         "Normal connection",
 			measurements: []time.Duration{10 * time.Millisecond, 12 * time.Millisecond, 11 * time.Millisecond},
-			expectProxy: false,
-			expectVPN:   false,
+			expectProxy:  false,
+			expectVPN:    false,
 		},
 		{
 			name:         "High latency connection",
 			measurements: []time.Duration{300 * time.Millisecond, 280 * time.Millisecond, 320 * time.Millisecond},
-			expectProxy: true,
-			expectVPN:   false,
+			expectProxy:  true,
+			expectVPN:    false,
 		},
 		{
 			name:         "VPN-like connection",
 			measurements: []time.Duration{150 * time.Millisecond, 180 * time.Millisecond, 140 * time.Millisecond},
-			expectProxy: false,
-			expectVPN:   true,
+			expectProxy:  false,
+			expectVPN:    true,
 		},
 		{
-			name:              "Empty measurements",
-			measurements:      []time.Duration{},
-			expectProxy:       false,
-			expectVPN:         false,
-			minAnomalyScore:   0,
+			name:            "Empty measurements",
+			measurements:    []time.Duration{},
+			expectProxy:     false,
+			expectVPN:       false,
+			minAnomalyScore: 0,
 		},
 	}
 
@@ -279,10 +279,10 @@ func TestProxyDetectionService_RealtimeCheck(t *testing.T) {
 	service := NewProxyDetectionService()
 
 	testCases := []struct {
-		name            string
-		req             *RealtimeCheckRequest
+		name             string
+		req              *RealtimeCheckRequest
 		expectSuspicious bool
-		minScore        float64
+		minScore         float64
 	}{
 		{
 			name: "Clean request",
@@ -292,7 +292,7 @@ func TestProxyDetectionService_RealtimeCheck(t *testing.T) {
 				UserAgent: "Mozilla/5.0",
 			},
 			expectSuspicious: false,
-			minScore:        0,
+			minScore:         0,
 		},
 		{
 			name: "Request with proxy headers",
@@ -302,7 +302,7 @@ func TestProxyDetectionService_RealtimeCheck(t *testing.T) {
 				UserAgent: "Mozilla/5.0",
 			},
 			expectSuspicious: true,
-			minScore:        25,
+			minScore:         25,
 		},
 		{
 			name: "Request with automation UA",
@@ -312,7 +312,7 @@ func TestProxyDetectionService_RealtimeCheck(t *testing.T) {
 				UserAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/91.0.4472.0 Safari/537.36",
 			},
 			expectSuspicious: true,
-			minScore:        25,
+			minScore:         25,
 		},
 		{
 			name: "Multi-hop proxy",
@@ -322,7 +322,7 @@ func TestProxyDetectionService_RealtimeCheck(t *testing.T) {
 				UserAgent: "Mozilla/5.0",
 			},
 			expectSuspicious: true,
-			minScore:        20,
+			minScore:         20,
 		},
 	}
 
@@ -347,9 +347,9 @@ func TestProxyDetectionService_RealtimeCheck_RiskLevel(t *testing.T) {
 	service := NewProxyDetectionService()
 
 	testCases := []struct {
-		name        string
-		score       float64
-		expected    string
+		name     string
+		score    float64
+		expected string
 	}{
 		{"High risk", 80, "high"},
 		{"Medium risk", 55, "medium"},
@@ -611,25 +611,25 @@ func TestProxyDetection_DetectionMethods(t *testing.T) {
 	service := NewProxyDetectionService()
 
 	testCases := []struct {
-		name          string
-		ip           string
-		headers      map[string]string
-		expectedMin  int
+		name        string
+		ip          string
+		headers     map[string]string
+		expectedMin int
 	}{
 		{
-			name:         "Clean connection",
+			name:        "Clean connection",
 			ip:          "203.0.113.1",
 			headers:     map[string]string{},
 			expectedMin: 0,
 		},
 		{
-			name:         "With proxy header",
+			name:        "With proxy header",
 			ip:          "203.0.113.1",
 			headers:     map[string]string{"X-Forwarded-For": "192.0.2.1"},
 			expectedMin: 1,
 		},
 		{
-			name:         "With multiple headers",
+			name:        "With multiple headers",
 			ip:          "203.0.113.1",
 			headers:     map[string]string{"X-Forwarded-For": "192.0.2.1", "Via": "proxy"},
 			expectedMin: 2,

@@ -16,16 +16,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/hjtpx/hjtpx/pkg/crypto"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrInvalidToken2      = errors.New("invalid token")
-	ErrTokenExpired2      = errors.New("token expired")
-	ErrPasswordTooWeak   = errors.New("password is too weak")
+	ErrInvalidToken2    = errors.New("invalid token")
+	ErrTokenExpired2    = errors.New("token expired")
+	ErrPasswordTooWeak  = errors.New("password is too weak")
 	ErrInvalidCSRFToken = errors.New("invalid CSRF token")
 )
 
@@ -42,8 +42,8 @@ func NewSecurityService(redisClient *redis.Client) *SecurityService {
 		ctx:   context.Background(),
 		inputPatterns: map[string]*regexp.Regexp{
 			"sql_keywords": regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|create|alter|exec|execute|script|javascript|onerror|onload)`),
-			"sql_chars":   regexp.MustCompile(`(?i)(['";\\]|(\-\-)|(\/\*))`),
-			"cmd_chars":   regexp.MustCompile(`(?i)(\|\||&&|;|` + "`" + `|\$\(|\$\{)`),
+			"sql_chars":    regexp.MustCompile(`(?i)(['";\\]|(\-\-)|(\/\*))`),
+			"cmd_chars":    regexp.MustCompile(`(?i)(\|\||&&|;|` + "`" + `|\$\(|\$\{)`),
 		},
 		xssPatterns: []*regexp.Regexp{
 			regexp.MustCompile(`(?i)(<script[^>]*>.*?</script>)`),
@@ -214,8 +214,8 @@ func NewJWTSecurity(redisClient *redis.Client, secret string) *JWTSecurity {
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
-	ExpiresIn   int    `json:"expires_in"`
-	TokenType   string `json:"token_type"`
+	ExpiresIn    int    `json:"expires_in"`
+	TokenType    string `json:"token_type"`
 }
 
 func (s *JWTSecurity) CreateTokenPair(userID int64) (*TokenPair, error) {
@@ -254,8 +254,8 @@ func (s *JWTSecurity) CreateTokenPair(userID int64) (*TokenPair, error) {
 	return &TokenPair{
 		AccessToken:  accessTokenString,
 		RefreshToken: refreshTokenString,
-		ExpiresIn:   900,
-		TokenType:   "Bearer",
+		ExpiresIn:    900,
+		TokenType:    "Bearer",
 	}, nil
 }
 
@@ -363,15 +363,15 @@ func (s *JWTSecurity) ValidateToken(tokenString string) (*jwt.MapClaims, error) 
 }
 
 type CSRFSecurity struct {
-	redis     *redis.Client
-	ctx       context.Context
+	redis      *redis.Client
+	ctx        context.Context
 	expiration time.Duration
 }
 
 func NewCSRFSecurity(redisClient *redis.Client) *CSRFSecurity {
 	return &CSRFSecurity{
-		redis:     redisClient,
-		ctx:       context.Background(),
+		redis:      redisClient,
+		ctx:        context.Background(),
 		expiration: 24 * time.Hour,
 	}
 }
@@ -495,56 +495,56 @@ func (v *RequestValidator) ValidateMap(data map[string]string, rules map[string]
 }
 
 type SecurityConfig struct {
-	EnableHTTPSRedirect    bool
-	EnableSecurityHeaders  bool
-	EnableCSRFProtection    bool
-	EnableRateLimit         bool
-	EnableInputValidation  bool
+	EnableHTTPSRedirect          bool
+	EnableSecurityHeaders        bool
+	EnableCSRFProtection         bool
+	EnableRateLimit              bool
+	EnableInputValidation        bool
 	EnableSQLInjectionProtection bool
-	EnableXSSProtection    bool
+	EnableXSSProtection          bool
 }
 
 var DefaultSecurityConfig = SecurityConfig{
-	EnableHTTPSRedirect:    true,
-	EnableSecurityHeaders:  true,
-	EnableCSRFProtection:   true,
-	EnableRateLimit:        true,
-	EnableInputValidation:  true,
+	EnableHTTPSRedirect:          true,
+	EnableSecurityHeaders:        true,
+	EnableCSRFProtection:         true,
+	EnableRateLimit:              true,
+	EnableInputValidation:        true,
 	EnableSQLInjectionProtection: true,
-	EnableXSSProtection:    true,
+	EnableXSSProtection:          true,
 }
 
 type SecurityPolicy struct {
-	MaxLoginAttempts     int
-	LockoutDuration      time.Duration
-	PasswordMinLength    int
-	PasswordRequireUpper bool
-	PasswordRequireLower bool
-	PasswordRequireDigit bool
+	MaxLoginAttempts       int
+	LockoutDuration        time.Duration
+	PasswordMinLength      int
+	PasswordRequireUpper   bool
+	PasswordRequireLower   bool
+	PasswordRequireDigit   bool
 	PasswordRequireSpecial bool
-	SessionTimeout       time.Duration
-	CSRFTokenExpiration  time.Duration
+	SessionTimeout         time.Duration
+	CSRFTokenExpiration    time.Duration
 }
 
 var DefaultSecurityPolicy = SecurityPolicy{
-	MaxLoginAttempts:     5,
-	LockoutDuration:       15 * time.Minute,
-	PasswordMinLength:     8,
-	PasswordRequireUpper:  true,
-	PasswordRequireLower:  true,
-	PasswordRequireDigit:  true,
+	MaxLoginAttempts:       5,
+	LockoutDuration:        15 * time.Minute,
+	PasswordMinLength:      8,
+	PasswordRequireUpper:   true,
+	PasswordRequireLower:   true,
+	PasswordRequireDigit:   true,
 	PasswordRequireSpecial: true,
-	SessionTimeout:        24 * time.Hour,
-	CSRFTokenExpiration:   24 * time.Hour,
+	SessionTimeout:         24 * time.Hour,
+	CSRFTokenExpiration:    24 * time.Hour,
 }
 
 type SecurityMetrics struct {
-	TotalRequests      int64 `json:"total_requests"`
-	BlockedRequests    int64 `json:"blocked_requests"`
+	TotalRequests        int64 `json:"total_requests"`
+	BlockedRequests      int64 `json:"blocked_requests"`
 	SQLInjectionAttempts int64 `json:"sql_injection_attempts"`
-	XSSAttempts        int64 `json:"xss_attempts"`
-	CSRFAttempts       int64 `json:"csrf_attempts"`
-	RateLimitedRequests int64 `json:"rate_limited_requests"`
+	XSSAttempts          int64 `json:"xss_attempts"`
+	CSRFAttempts         int64 `json:"csrf_attempts"`
+	RateLimitedRequests  int64 `json:"rate_limited_requests"`
 }
 
 var securityMetrics = &SecurityMetrics{}
@@ -577,10 +577,10 @@ func generateSecureToken() string {
 }
 
 type EncryptedConfig struct {
-	Version    int    `json:"v"`
-	Algorithm  string `json:"a"`
-	Data       string `json:"d"`
-	EncryptedAt int64 `json:"e"`
+	Version     int    `json:"v"`
+	Algorithm   string `json:"a"`
+	Data        string `json:"d"`
+	EncryptedAt int64  `json:"e"`
 }
 
 func (e *ConfigEncryptor) EncryptConfig(data interface{}) (string, error) {

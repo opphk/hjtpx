@@ -11,12 +11,12 @@ import (
 )
 
 type PerformanceOptimizer struct {
-	db             *gorm.DB
-	config         *config.Config
-	indexReady     bool
-	indexMu        sync.RWMutex
-	preparedStmts  map[string]*gorm.DB
-	stmtMu         sync.RWMutex
+	db            *gorm.DB
+	config        *config.Config
+	indexReady    bool
+	indexMu       sync.RWMutex
+	preparedStmts map[string]*gorm.DB
+	stmtMu        sync.RWMutex
 }
 
 var globalOptimizer *PerformanceOptimizer
@@ -211,7 +211,7 @@ func (o *PerformanceOptimizer) createIndexIfNotExists(tableName string, columns 
 	}
 
 	createSQL := fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)", uniqueStr, indexName, tableName, columnsStr)
-	
+
 	if whereClause != "" {
 		createSQL += " WHERE " + whereClause
 	}
@@ -276,27 +276,27 @@ func (o *PerformanceOptimizer) EnableQueryStatistics() error {
 
 func (o *PerformanceOptimizer) OptimizeQuery(tableName string, columns []string, where map[string]interface{}, orderBy string, limit, offset int) *gorm.DB {
 	query := o.db.Table(tableName)
-	
+
 	if len(columns) > 0 {
 		query = query.Select(columns)
 	}
-	
+
 	if len(where) > 0 {
 		query = query.Where(where)
 	}
-	
+
 	if orderBy != "" {
 		query = query.Order(orderBy)
 	}
-	
+
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	if offset > 0 {
 		query = query.Offset(offset)
 	}
-	
+
 	return query
 }
 

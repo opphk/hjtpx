@@ -495,3 +495,165 @@ func ExtractFeaturesFromDataPoints(trajectory []BehaviorDataPoint) *BehaviorFeat
 
 	return ExtractFeatures(points)
 }
+
+type AdvancedScoringSystem struct {
+	weights map[string]float64
+}
+
+func NewAdvancedScoringSystem() *AdvancedScoringSystem {
+	return &AdvancedScoringSystem{
+		weights: map[string]float64{
+			"rule_engine":         0.25,
+			"trajectory_features": 0.25,
+			"speed_analysis":      0.20,
+			"click_pattern":       0.15,
+			"risk_score":          0.15,
+		},
+	}
+}
+
+func (ass *AdvancedScoringSystem) CalculateComprehensiveScore(features *BehaviorFeatures, sliderFeatures *SliderFeatures, clickResult *ClickAnalysisResult) float64 {
+	if features == nil {
+		return 50.0
+	}
+
+	ruleEngine := NewEnhancedRuleEngine()
+	ruleResult := ruleEngine.Evaluate(&RuleEngineFeatures{
+		SliderFeatures: sliderFeatures,
+	})
+	ruleScore := ruleResult.TotalScore * 100
+
+	trajectoryScore := ass.evaluateTrajectoryScore(sliderFeatures)
+
+	speedScore := ass.evaluateSpeedScore(features)
+
+	clickScore := ass.evaluateClickScore(clickResult)
+
+	riskScore := features.RiskScore
+
+	finalScore := ass.weights["rule_engine"]*ruleScore +
+		ass.weights["trajectory_features"]*trajectoryScore +
+		ass.weights["speed_analysis"]*speedScore +
+		ass.weights["click_pattern"]*clickScore +
+		ass.weights["risk_score"]*riskScore
+
+	return math.Min(finalScore, 100)
+}
+
+func (ass *AdvancedScoringSystem) evaluateTrajectoryScore(features *SliderFeatures) float64 {
+	if features == nil {
+		return 50.0
+	}
+
+	score := 50.0
+
+	if features.PathEfficiency > 0.98 {
+		score += 25
+	} else if features.PathEfficiency > 0.95 {
+		score += 15
+	} else if features.PathEfficiency > 0.9 {
+		score += 10
+	}
+
+	if features.SpeedConsistency > 0.95 {
+		score += 20
+	} else if features.SpeedConsistency > 0.9 {
+		score += 10
+	}
+
+	if features.HumanLikenessScore < 0.3 {
+		score += 25
+	} else if features.HumanLikenessScore < 0.5 {
+		score += 15
+	}
+
+	if features.CurvatureAverage < 0.01 {
+		score += 15
+	} else if features.CurvatureAverage < 0.05 {
+		score += 10
+	}
+
+	if features.JitterScore < 0.05 {
+		score += 15
+	} else if features.JitterScore < 0.1 {
+		score += 10
+	}
+
+	if features.MicroCorrections == 0 && features.TotalDuration > 500 {
+		score += 15
+	}
+
+	if features.PauseCount == 0 && features.TotalDuration > 1000 {
+		score += 10
+	}
+
+	return math.Min(score, 100)
+}
+
+func (ass *AdvancedScoringSystem) evaluateSpeedScore(features *BehaviorFeatures) float64 {
+	if features == nil {
+		return 50.0
+	}
+
+	score := 50.0
+
+	if features.AvgSpeed > 1500 {
+		score += 20
+	} else if features.AvgSpeed > 1000 {
+		score += 10
+	}
+
+	if features.MaxSpeed > 2500 {
+		score += 15
+	} else if features.MaxSpeed > 2000 {
+		score += 10
+	}
+
+	if features.SpeedVariation < 0.1 {
+		score += 20
+	} else if features.SpeedVariation < 0.2 {
+		score += 10
+	}
+
+	return math.Min(score, 100)
+}
+
+func (ass *AdvancedScoringSystem) evaluateClickScore(result *ClickAnalysisResult) float64 {
+	if result == nil {
+		return 50.0
+	}
+
+	score := 50.0
+
+	if result.ClickPattern != nil {
+		if result.ClickPattern.Regularity > 0.95 {
+			score += 15
+		}
+
+		if result.ClickPattern.ClusteringScore < 0.2 {
+			score += 10
+		}
+	}
+
+	if result.TimingAnalysis != nil {
+		if result.TimingAnalysis.IsRhythmic {
+			score += 15
+		}
+
+		if result.TimingAnalysis.TimingPattern == "very_fast" {
+			score += 10
+		}
+	}
+
+	return math.Min(score, 100)
+}
+
+func (ass *AdvancedScoringSystem) SetWeights(weights map[string]float64) {
+	for key, weight := range weights {
+		ass.weights[key] = weight
+	}
+}
+
+func (ass *AdvancedScoringSystem) GetWeights() map[string]float64 {
+	return ass.weights
+}

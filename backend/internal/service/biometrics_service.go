@@ -9,75 +9,75 @@ import (
 
 // BiometricProfile 生物识别特征档案
 type BiometricProfile struct {
-	UserID           string              `json:"user_id"`
-	CreatedAt        time.Time           `json:"created_at"`
-	UpdatedAt        time.Time           `json:"updated_at"`
-	KeyboardProfile  KeyboardBiometrics  `json:"keyboard_profile"`
-	MouseProfile     MouseBiometrics     `json:"mouse_profile"`
+	UserID            string             `json:"user_id"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
+	KeyboardProfile   KeyboardBiometrics `json:"keyboard_profile"`
+	MouseProfile      MouseBiometrics    `json:"mouse_profile"`
 	VerificationCount int                `json:"verification_count"`
-	ConfidenceScore  float64            `json:"confidence_score"`
+	ConfidenceScore   float64            `json:"confidence_score"`
 }
 
 // KeyboardBiometrics 键盘生物特征
 type KeyboardBiometrics struct {
-	AverageHoldTime     float64            `json:"average_hold_time"`
-	HoldTimeStdDev      float64            `json:"hold_time_std_dev"`
-	AverageFlightTime   float64            `json:"average_flight_time"`
-	FlightTimeStdDev    float64            `json:"flight_time_std_dev"`
-	TypingSpeed         float64            `json:"typing_speed"`
-	KeyPairTimings      map[string]float64 `json:"key_pair_timings"`
-	CommonKeys          map[string]float64 `json:"common_keys"`
-	ErrorRate           float64            `json:"error_rate"`
+	AverageHoldTime   float64            `json:"average_hold_time"`
+	HoldTimeStdDev    float64            `json:"hold_time_std_dev"`
+	AverageFlightTime float64            `json:"average_flight_time"`
+	FlightTimeStdDev  float64            `json:"flight_time_std_dev"`
+	TypingSpeed       float64            `json:"typing_speed"`
+	KeyPairTimings    map[string]float64 `json:"key_pair_timings"`
+	CommonKeys        map[string]float64 `json:"common_keys"`
+	ErrorRate         float64            `json:"error_rate"`
 }
 
 // MouseBiometrics 鼠标生物特征
 type MouseBiometrics struct {
-	AverageSpeed        float64            `json:"average_speed"`
-	SpeedStdDev         float64            `json:"speed_std_dev"`
-	AccelerationPattern float64            `json:"acceleration_pattern"`
-	PathEfficiency      float64            `json:"path_efficiency"`
-	CurvatureAverage    float64            `json:"curvature_average"`
-	ClickTiming         float64            `json:"click_timing"`
-	ClickPrecision      float64            `json:"click_precision"`
-	MotionEntropy       float64            `json:"motion_entropy"`
+	AverageSpeed        float64 `json:"average_speed"`
+	SpeedStdDev         float64 `json:"speed_std_dev"`
+	AccelerationPattern float64 `json:"acceleration_pattern"`
+	PathEfficiency      float64 `json:"path_efficiency"`
+	CurvatureAverage    float64 `json:"curvature_average"`
+	ClickTiming         float64 `json:"click_timing"`
+	ClickPrecision      float64 `json:"click_precision"`
+	MotionEntropy       float64 `json:"motion_entropy"`
 }
 
 // KeyboardSample 键盘输入样本
 type KeyboardSample struct {
-	KeyEvents      []KeyEvent         `json:"key_events"`
-	Timestamp      int64              `json:"timestamp"`
+	KeyEvents []KeyEvent `json:"key_events"`
+	Timestamp int64      `json:"timestamp"`
 }
 
 // KeyEvent 按键事件
 type KeyEvent struct {
-	Key           string `json:"key"`
-	Type          string `json:"type"` // keydown, keyup
-	Timestamp     int64  `json:"timestamp"`
-	KeyCode       int    `json:"key_code"`
+	Key       string `json:"key"`
+	Type      string `json:"type"` // keydown, keyup
+	Timestamp int64  `json:"timestamp"`
+	KeyCode   int    `json:"key_code"`
 }
 
 // MouseSample 鼠标移动样本
 type MouseSample struct {
-	MouseEvents  []MouseEvent        `json:"mouse_events"`
-	Timestamp    int64               `json:"timestamp"`
+	MouseEvents []MouseEvent `json:"mouse_events"`
+	Timestamp   int64        `json:"timestamp"`
 }
 
 // MouseEvent 鼠标事件
 type MouseEvent struct {
-	Type         string `json:"type"` // mousemove, click, mousedown, mouseup
-	X            int    `json:"x"`
-	Y            int    `json:"y"`
-	Timestamp    int64  `json:"timestamp"`
-	Button       int    `json:"button,omitempty"`
+	Type      string `json:"type"` // mousemove, click, mousedown, mouseup
+	X         int    `json:"x"`
+	Y         int    `json:"y"`
+	Timestamp int64  `json:"timestamp"`
+	Button    int    `json:"button,omitempty"`
 }
 
 // VerificationResult 生物识别验证结果
 type VerificationResult struct {
-	IsVerified       bool    `json:"is_verified"`
-	Confidence       float64 `json:"confidence"`
-	KeyboardScore    float64 `json:"keyboard_score"`
-	MouseScore       float64 `json:"mouse_score"`
-	Details          string  `json:"details"`
+	IsVerified    bool    `json:"is_verified"`
+	Confidence    float64 `json:"confidence"`
+	KeyboardScore float64 `json:"keyboard_score"`
+	MouseScore    float64 `json:"mouse_score"`
+	Details       string  `json:"details"`
 }
 
 // BiometricsService 生物识别服务
@@ -101,8 +101,8 @@ func (s *BiometricsService) RegisterProfile(userID string, keyboardSample *Keybo
 	profile, exists := s.profiles[userID]
 	if !exists {
 		profile = &BiometricProfile{
-			UserID:           userID,
-			CreatedAt:        time.Now(),
+			UserID:    userID,
+			CreatedAt: time.Now(),
 			KeyboardProfile: KeyboardBiometrics{
 				KeyPairTimings: make(map[string]float64),
 				CommonKeys:     make(map[string]float64),
@@ -205,7 +205,7 @@ func (s *BiometricsService) extractKeyboardFeatures(sample *KeyboardSample) Keyb
 			flightTime := float64(event.Timestamp - sample.KeyEvents[i-1].Timestamp)
 			if flightTime > 0 {
 				flightTimes = append(flightTimes, flightTime)
-				
+
 				// 记录按键对时序
 				prevKey := fmt.Sprintf("%s:%d", sample.KeyEvents[i-1].Key, sample.KeyEvents[i-1].KeyCode)
 				pairKey := fmt.Sprintf("%s→%s", prevKey, key)
@@ -223,7 +223,7 @@ func (s *BiometricsService) extractKeyboardFeatures(sample *KeyboardSample) Keyb
 	if len(flightTimes) > 0 {
 		features.AverageFlightTime = mean(flightTimes)
 		features.FlightTimeStdDev = stdDev(flightTimes)
-		features.TypingSpeed = float64(len(flightTimes)) / (float64(flightTimes[len(flightTimes)-1] - flightTimes[0]) / 1000)
+		features.TypingSpeed = float64(len(flightTimes)) / (float64(flightTimes[len(flightTimes)-1]-flightTimes[0]) / 1000)
 	}
 
 	// 计算常用键分布
@@ -246,7 +246,7 @@ func (s *BiometricsService) extractMouseFeatures(sample *MouseSample) MouseBiome
 
 	moveEvents := []MouseEvent{}
 	clickEvents := []MouseEvent{}
-	
+
 	for _, event := range sample.MouseEvents {
 		if event.Type == "mousemove" {
 			moveEvents = append(moveEvents, event)
@@ -271,7 +271,7 @@ func (s *BiometricsService) extractMouseFeatures(sample *MouseSample) MouseBiome
 		dy := float64(moveEvents[i].Y - moveEvents[i-1].Y)
 		distance := math.Sqrt(dx*dx + dy*dy)
 		dt := float64(moveEvents[i].Timestamp - moveEvents[i-1].Timestamp)
-		
+
 		if dt > 0 {
 			speed := distance / dt
 			speeds = append(speeds, speed)
@@ -455,11 +455,11 @@ func (s *BiometricsService) calculateSimilarityScore(value1, value2, maxDiffRati
 	}
 
 	diffRatio := math.Abs(value1-value2) / math.Max(value1, value2)
-	
+
 	if diffRatio <= maxDiffRatio {
 		return 1.0 - (diffRatio / maxDiffRatio)
 	}
-	
+
 	return 0.0
 }
 
@@ -521,7 +521,7 @@ func (s *BiometricsService) calculateMotionEntropy(events []MouseEvent) float64 
 	// 分桶统计
 	bucketSize := 50
 	buckets := make(map[string]int)
-	
+
 	for _, event := range events {
 		bucketX := event.X / bucketSize
 		bucketY := event.Y / bucketSize

@@ -16,8 +16,8 @@ type OWASPRisk struct {
 }
 
 type OWASPService struct {
-	risks       map[string]*OWASPRisk
-	validators  map[string]func(*http.Request) (bool, string)
+	risks      map[string]*OWASPRisk
+	validators map[string]func(*http.Request) (bool, string)
 }
 
 func NewOWASPService() *OWASPService {

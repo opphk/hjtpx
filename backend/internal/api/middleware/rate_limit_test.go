@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -405,7 +406,7 @@ func TestQuotaMiddleware_DefaultOptions(t *testing.T) {
 func TestQuotaMiddleware_CustomOptions(t *testing.T) {
 	r := setupTestRouter()
 	options := &QuotaOptions{
-		Type:      QuotaTypeDaily,
+		Type:      service.QuotaTypeDaily,
 		Limit:     10000,
 		HardLimit: true,
 	}
@@ -426,7 +427,7 @@ func TestQuotaMiddleware_CustomOptions(t *testing.T) {
 func TestQuotaMiddleware_WithUserID(t *testing.T) {
 	r := setupTestRouter()
 	options := &QuotaOptions{
-		Type:      QuotaTypeDaily,
+		Type:      service.QuotaTypeDaily,
 		Limit:     5000,
 		HardLimit: true,
 	}
@@ -446,7 +447,7 @@ func TestQuotaMiddleware_WithUserID(t *testing.T) {
 func TestQuotaMiddleware_WithAppID(t *testing.T) {
 	r := setupTestRouter()
 	options := &QuotaOptions{
-		Type:      QuotaTypeHourly,
+		Type:      service.QuotaTypeHourly,
 		Limit:     1000,
 		HardLimit: true,
 	}
@@ -479,7 +480,7 @@ func TestAdvancedCombinedMiddleware(t *testing.T) {
 		InitialTokens: 100,
 	}
 	quotaOptions := &QuotaOptions{
-		Type:      QuotaTypeDaily,
+		Type:      service.QuotaTypeDaily,
 		Limit:     10000,
 		HardLimit: true,
 	}

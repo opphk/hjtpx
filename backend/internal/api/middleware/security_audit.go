@@ -30,8 +30,8 @@ type SecurityAuditConfig struct {
 }
 
 var DefaultSecurityAuditConfig = SecurityAuditConfig{
-	Enabled:        true,
-	LogRequestBody: false,
+	Enabled:         true,
+	LogRequestBody:  false,
 	LogResponseBody: false,
 }
 

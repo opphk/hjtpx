@@ -1279,7 +1279,7 @@ func TestSliderAnalyzer_HighAccuracy(t *testing.T) {
 	assert.Greater(t, accuracy, 0.80, "准确率应大于80%")
 }
 
-func BenchmarkSliderAnalysis(b *testing.B) {
+func BenchmarkSliderAnalysisAlt(b *testing.B) {
 	analyzer := NewSliderAnalyzer()
 	trajectory := GenerateHumanLikeSliderTrajectory(100, 200, 500, 200, 3000)
 

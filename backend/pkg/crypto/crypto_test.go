@@ -8,9 +8,9 @@ import (
 
 func TestGenerateRandomString(t *testing.T) {
 	tests := []struct {
-		name           string
-		length         int
-		expectError    bool
+		name        string
+		length      int
+		expectError bool
 	}{
 		{
 			name:        "length 8",
@@ -137,8 +137,8 @@ func TestVerifyPassword(t *testing.T) {
 
 func TestHashSHA256(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  []byte
+		name  string
+		input []byte
 	}{
 		{
 			name:  "empty string",
@@ -168,8 +168,8 @@ func TestHashSHA256(t *testing.T) {
 
 func TestHashSHA1(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  []byte
+		name  string
+		input []byte
 	}{
 		{
 			name:  "empty string",

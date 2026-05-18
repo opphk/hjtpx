@@ -11,14 +11,14 @@ import (
 // ========== 用户行为分析 ==========
 
 type UserBehaviorAnalysis struct {
-	TotalVerifications       int64         `json:"totalVerifications"`
-	SuccessRate              float64       `json:"successRate"`
-	AvgVerificationTime      float64       `json:"avgVerificationTime"`
-	CompletionRateTrend      []TrendPoint  `json:"completionRateTrend"`
-	VerificationTimeStats    TimeStats     `json:"verificationTimeStats"`
-	CaptchaTypePreference    []TypeCount   `json:"captchaTypePreference"`
-	TimeDistributionHeatmap  [][]int       `json:"timeDistributionHeatmap"`
-	ActiveUserDistribution   []HourlyCount `json:"activeUserDistribution"`
+	TotalVerifications      int64         `json:"totalVerifications"`
+	SuccessRate             float64       `json:"successRate"`
+	AvgVerificationTime     float64       `json:"avgVerificationTime"`
+	CompletionRateTrend     []TrendPoint  `json:"completionRateTrend"`
+	VerificationTimeStats   TimeStats     `json:"verificationTimeStats"`
+	CaptchaTypePreference   []TypeCount   `json:"captchaTypePreference"`
+	TimeDistributionHeatmap [][]int       `json:"timeDistributionHeatmap"`
+	ActiveUserDistribution  []HourlyCount `json:"activeUserDistribution"`
 }
 
 type TrendPoint struct {
@@ -120,13 +120,13 @@ func generateHourlyDistribution() []HourlyCount {
 // ========== 攻击趋势分析 ==========
 
 type AttackTrendAnalysis struct {
-	DetectionRateTrend     []TrendPoint    `json:"detectionRateTrend"`
-	AttackTypeDistribution []TypeCount     `json:"attackTypeDistribution"`
-	GeoDistribution        []GeoCount      `json:"geoDistribution"`
-	TimePatternAnalysis    TimePattern     `json:"timePatternAnalysis"`
-	RiskScoreDistribution  []ScoreBin      `json:"riskScoreDistribution"`
-	RecentAttacks          []AttackRecord  `json:"recentAttacks"`
-	Alerts                 []AlertItem     `json:"alerts"`
+	DetectionRateTrend     []TrendPoint   `json:"detectionRateTrend"`
+	AttackTypeDistribution []TypeCount    `json:"attackTypeDistribution"`
+	GeoDistribution        []GeoCount     `json:"geoDistribution"`
+	TimePatternAnalysis    TimePattern    `json:"timePatternAnalysis"`
+	RiskScoreDistribution  []ScoreBin     `json:"riskScoreDistribution"`
+	RecentAttacks          []AttackRecord `json:"recentAttacks"`
+	Alerts                 []AlertItem    `json:"alerts"`
 }
 
 type GeoCount struct {
@@ -155,11 +155,11 @@ type AttackRecord struct {
 }
 
 type AlertItem struct {
-	ID        string    `json:"id"`
-	Severity  string    `json:"severity"`
-	Message   string    `json:"message"`
-	Time      time.Time `json:"time"`
-	Resolved  bool      `json:"resolved"`
+	ID       string    `json:"id"`
+	Severity string    `json:"severity"`
+	Message  string    `json:"message"`
+	Time     time.Time `json:"time"`
+	Resolved bool      `json:"resolved"`
 }
 
 func GetAttackTrendAnalysis(c *gin.Context) {
@@ -218,7 +218,7 @@ func generateRecentAttacks() []AttackRecord {
 	now := time.Now()
 	attackTypes := []string{"暴力破解", "爬虫攻击", "IP欺诈", "设备指纹异常", "会话劫持"}
 	statuses := []string{"blocked", "flagged", "reviewed"}
-	
+
 	for i := 0; i < 10; i++ {
 		attacks[i] = AttackRecord{
 			ID:        "ATTACK-" + strconv.Itoa(1000+i),
@@ -243,14 +243,14 @@ func generateAlerts() []AlertItem {
 		"验证失败率异常波动",
 		"新风险规则触发",
 	}
-	
+
 	for i := 0; i < 5; i++ {
 		alerts[i] = AlertItem{
-			ID:        "ALERT-" + strconv.Itoa(2000+i),
-			Severity:  severities[i%4],
-			Message:   messages[i],
-			Time:      now.Add(-time.Duration(i*60) * time.Minute),
-			Resolved:  i >= 3,
+			ID:       "ALERT-" + strconv.Itoa(2000+i),
+			Severity: severities[i%4],
+			Message:  messages[i],
+			Time:     now.Add(-time.Duration(i*60) * time.Minute),
+			Resolved: i >= 3,
 		}
 	}
 	return alerts
@@ -266,38 +266,38 @@ type ReportRequest struct {
 }
 
 type ReportResponse struct {
-	ReportID      string        `json:"reportId"`
-	ReportType    string        `json:"reportType"`
-	GeneratedAt   time.Time     `json:"generatedAt"`
-	StartDate     string        `json:"startDate"`
-	EndDate       string        `json:"endDate"`
-	Summary       ReportSummary `json:"summary"`
-	KeyMetrics    []MetricItem  `json:"keyMetrics"`
-	Anomalies     []Anomaly     `json:"anomalies"`
-	Recommendations []string    `json:"recommendations"`
-	DownloadURL   string        `json:"downloadUrl"`
+	ReportID        string        `json:"reportId"`
+	ReportType      string        `json:"reportType"`
+	GeneratedAt     time.Time     `json:"generatedAt"`
+	StartDate       string        `json:"startDate"`
+	EndDate         string        `json:"endDate"`
+	Summary         ReportSummary `json:"summary"`
+	KeyMetrics      []MetricItem  `json:"keyMetrics"`
+	Anomalies       []Anomaly     `json:"anomalies"`
+	Recommendations []string      `json:"recommendations"`
+	DownloadURL     string        `json:"downloadUrl"`
 }
 
 type ReportSummary struct {
-	TotalRequests   int64   `json:"totalRequests"`
-	SuccessRate     float64 `json:"successRate"`
-	AttackDetected  int64   `json:"attackDetected"`
-	RiskReduction   float64 `json:"riskReduction"`
+	TotalRequests  int64   `json:"totalRequests"`
+	SuccessRate    float64 `json:"successRate"`
+	AttackDetected int64   `json:"attackDetected"`
+	RiskReduction  float64 `json:"riskReduction"`
 }
 
 type MetricItem struct {
-	Name        string  `json:"name"`
-	Value       float64 `json:"value"`
-	Unit        string  `json:"unit"`
-	Change      float64 `json:"change"`
-	IsPositive  bool    `json:"isPositive"`
+	Name       string  `json:"name"`
+	Value      float64 `json:"value"`
+	Unit       string  `json:"unit"`
+	Change     float64 `json:"change"`
+	IsPositive bool    `json:"isPositive"`
 }
 
 type Anomaly struct {
-	Time        string  `json:"time"`
-	Type        string  `json:"type"`
-	Description string  `json:"description"`
-	Severity    string  `json:"severity"`
+	Time        string `json:"time"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	Severity    string `json:"severity"`
 }
 
 func GenerateRiskReport(c *gin.Context) {
@@ -306,7 +306,7 @@ func GenerateRiskReport(c *gin.Context) {
 		response.BadRequest(c, "无效的请求参数")
 		return
 	}
-	
+
 	if req.StartDate == "" {
 		req.StartDate = time.Now().AddDate(0, 0, -7).Format("2006-01-02")
 	}
@@ -316,7 +316,7 @@ func GenerateRiskReport(c *gin.Context) {
 	if req.Format == "" {
 		req.Format = "pdf"
 	}
-	
+
 	report := ReportResponse{
 		ReportID:    "REPORT-" + strconv.FormatInt(time.Now().Unix(), 10),
 		ReportType:  req.ReportType,
@@ -358,35 +358,35 @@ func GenerateRiskReport(c *gin.Context) {
 		},
 		DownloadURL: "/api/v1/admin/analytics/report/download/" + strconv.FormatInt(time.Now().Unix(), 10),
 	}
-	
+
 	response.Success(c, report)
 }
 
 // ========== 自定义报表 ==========
 
 type ReportConfig struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Metrics     []string               `json:"metrics"`
-	TimeRange   TimeRangeConfig        `json:"timeRange"`
-	Filters     map[string]interface{} `json:"filters"`
-	Visualization string               `json:"visualization"`
-	Schedule    ScheduleConfig         `json:"schedule"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description"`
+	Metrics       []string               `json:"metrics"`
+	TimeRange     TimeRangeConfig        `json:"timeRange"`
+	Filters       map[string]interface{} `json:"filters"`
+	Visualization string                 `json:"visualization"`
+	Schedule      ScheduleConfig         `json:"schedule"`
+	CreatedAt     time.Time              `json:"createdAt"`
+	UpdatedAt     time.Time              `json:"updatedAt"`
 }
 
 type TimeRangeConfig struct {
-	Type   string `json:"type"`
-	Start  string `json:"start"`
-	End    string `json:"end"`
+	Type  string `json:"type"`
+	Start string `json:"start"`
+	End   string `json:"end"`
 }
 
 type ScheduleConfig struct {
-	Enabled  bool   `json:"enabled"`
+	Enabled   bool   `json:"enabled"`
 	Frequency string `json:"frequency"`
-	Email    string `json:"email"`
+	Email     string `json:"email"`
 }
 
 var reportConfigs []ReportConfig
@@ -395,28 +395,28 @@ func ListReportConfigs(c *gin.Context) {
 	if len(reportConfigs) == 0 {
 		reportConfigs = []ReportConfig{
 			{
-				ID:          "config-1",
-				Name:        "日常监控报表",
-				Description: "每日系统运行状态监控",
-				Metrics:     []string{"totalRequests", "successRate", "avgResponseTime", "attackCount"},
-				TimeRange:   TimeRangeConfig{Type: "daily", Start: "", End: ""},
-				Filters:     map[string]interface{}{},
+				ID:            "config-1",
+				Name:          "日常监控报表",
+				Description:   "每日系统运行状态监控",
+				Metrics:       []string{"totalRequests", "successRate", "avgResponseTime", "attackCount"},
+				TimeRange:     TimeRangeConfig{Type: "daily", Start: "", End: ""},
+				Filters:       map[string]interface{}{},
 				Visualization: "dashboard",
-				Schedule:    ScheduleConfig{Enabled: true, Frequency: "daily", Email: "admin@example.com"},
-				CreatedAt:   time.Now().AddDate(0, 0, -7),
-				UpdatedAt:   time.Now().AddDate(0, 0, -1),
+				Schedule:      ScheduleConfig{Enabled: true, Frequency: "daily", Email: "admin@example.com"},
+				CreatedAt:     time.Now().AddDate(0, 0, -7),
+				UpdatedAt:     time.Now().AddDate(0, 0, -1),
 			},
 			{
-				ID:          "config-2",
-				Name:        "安全分析报表",
-				Description: "安全攻击趋势分析",
-				Metrics:     []string{"attackCount", "detectionRate", "riskScore", "blockedIPs"},
-				TimeRange:   TimeRangeConfig{Type: "weekly", Start: "", End: ""},
-				Filters:     map[string]interface{}{"severity": "high"},
+				ID:            "config-2",
+				Name:          "安全分析报表",
+				Description:   "安全攻击趋势分析",
+				Metrics:       []string{"attackCount", "detectionRate", "riskScore", "blockedIPs"},
+				TimeRange:     TimeRangeConfig{Type: "weekly", Start: "", End: ""},
+				Filters:       map[string]interface{}{"severity": "high"},
 				Visualization: "charts",
-				Schedule:    ScheduleConfig{Enabled: false, Frequency: "", Email: ""},
-				CreatedAt:   time.Now().AddDate(0, 0, -14),
-				UpdatedAt:   time.Now().AddDate(0, 0, -3),
+				Schedule:      ScheduleConfig{Enabled: false, Frequency: "", Email: ""},
+				CreatedAt:     time.Now().AddDate(0, 0, -14),
+				UpdatedAt:     time.Now().AddDate(0, 0, -3),
 			},
 		}
 	}
@@ -429,12 +429,12 @@ func CreateReportConfig(c *gin.Context) {
 		response.BadRequest(c, "无效的请求参数")
 		return
 	}
-	
+
 	config.ID = "config-" + strconv.Itoa(len(reportConfigs)+1)
 	config.CreatedAt = time.Now()
 	config.UpdatedAt = time.Now()
 	reportConfigs = append(reportConfigs, config)
-	
+
 	response.Success(c, config)
 }
 
@@ -456,7 +456,7 @@ func UpdateReportConfig(c *gin.Context) {
 		response.BadRequest(c, "无效的请求参数")
 		return
 	}
-	
+
 	for i, existing := range reportConfigs {
 		if existing.ID == id {
 			config.ID = id
@@ -485,12 +485,12 @@ func DeleteReportConfig(c *gin.Context) {
 // ========== 数据可视化数据 ==========
 
 type VisualizationData struct {
-	PieChart      PieChartData      `json:"pieChart"`
-	BarChart      BarChartData      `json:"barChart"`
-	LineChart     LineChartData     `json:"lineChart"`
-	RadarChart    RadarChartData    `json:"radarChart"`
-	FunnelChart   FunnelChartData   `json:"funnelChart"`
-	ScatterChart  ScatterChartData  `json:"scatterChart"`
+	PieChart     PieChartData     `json:"pieChart"`
+	BarChart     BarChartData     `json:"barChart"`
+	LineChart    LineChartData    `json:"lineChart"`
+	RadarChart   RadarChartData   `json:"radarChart"`
+	FunnelChart  FunnelChartData  `json:"funnelChart"`
+	ScatterChart ScatterChartData `json:"scatterChart"`
 }
 
 type PieChartData struct {
@@ -499,7 +499,7 @@ type PieChartData struct {
 }
 
 type BarChartData struct {
-	Labels   []string `json:"labels"`
+	Labels   []string  `json:"labels"`
 	Datasets []Dataset `json:"datasets"`
 }
 
@@ -509,13 +509,13 @@ type Dataset struct {
 }
 
 type LineChartData struct {
-	Labels   []string `json:"labels"`
+	Labels   []string      `json:"labels"`
 	Datasets []LineDataset `json:"datasets"`
 }
 
 type LineDataset struct {
-	Label string        `json:"label"`
-	Data  []float64     `json:"data"`
+	Label string    `json:"label"`
+	Data  []float64 `json:"data"`
 }
 
 type RadarChartData struct {

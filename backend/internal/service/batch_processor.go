@@ -18,7 +18,7 @@ type BatchResult[T any] struct {
 
 type BatchProcessor[T any] struct {
 	workerCount int
-	maxRetries int
+	maxRetries  int
 }
 
 func NewBatchProcessor[T any](workerCount int) *BatchProcessor[T] {
@@ -27,7 +27,7 @@ func NewBatchProcessor[T any](workerCount int) *BatchProcessor[T] {
 	}
 	return &BatchProcessor[T]{
 		workerCount: workerCount,
-		maxRetries: 3,
+		maxRetries:  3,
 	}
 }
 

@@ -19,7 +19,7 @@ func TestNewGDPRService(t *testing.T) {
 func TestGetConsent(t *testing.T) {
 	service := NewGDPRService()
 	userID := uint(1)
-	
+
 	consent, err := service.GetConsent(userID)
 	assert.NoError(t, err)
 	assert.NotNil(t, consent)
@@ -33,14 +33,14 @@ func TestGetConsent(t *testing.T) {
 func TestUpdateConsent(t *testing.T) {
 	service := NewGDPRService()
 	userID := uint(1)
-	
+
 	newConsent := &models.UserConsent{
-		ConsentMarketing:      true,
-		ConsentAnalytics:      false,
+		ConsentMarketing:       true,
+		ConsentAnalytics:       false,
 		ConsentPersonalization: false,
-		ConsentDataSharing:    true,
+		ConsentDataSharing:     true,
 	}
-	
+
 	updatedConsent, err := service.UpdateConsent(userID, newConsent, "127.0.0.1", "test-agent")
 	assert.NoError(t, err)
 	assert.NotNil(t, updatedConsent)
@@ -55,7 +55,7 @@ func TestUpdateConsent(t *testing.T) {
 func TestRequestDataExport_InvalidFormat(t *testing.T) {
 	service := NewGDPRService()
 	userID := uint(1)
-	
+
 	request, err := service.RequestDataExport(userID, "invalid")
 	assert.Error(t, err)
 	assert.Nil(t, request)
@@ -65,7 +65,7 @@ func TestRequestDataExport_InvalidFormat(t *testing.T) {
 func TestRequestDataExport_ValidFormat(t *testing.T) {
 	service := NewGDPRService()
 	userID := uint(1)
-	
+
 	request, err := service.RequestDataExport(userID, "json")
 	// 这里可能会返回错误因为数据库没有实际连接，但至少应该测试错误处理
 	if err == nil {
@@ -80,7 +80,7 @@ func TestRequestDataDeletion(t *testing.T) {
 	service := NewGDPRService()
 	userID := uint(1)
 	reason := "测试删除原因"
-	
+
 	request, err := service.RequestDataDeletion(userID, reason)
 	// 同样，这里可能返回数据库相关错误，但测试函数结构
 	if err == nil {
@@ -101,24 +101,24 @@ func TestExportToJSON(t *testing.T) {
 	testDir := "./test-exports"
 	os.MkdirAll(testDir, 0755)
 	defer os.RemoveAll(testDir)
-	
+
 	testFile := filepath.Join(testDir, "test.json")
 	testData := map[string]interface{}{
-		"name": "test",
+		"name":  "test",
 		"value": 123,
 	}
-	
+
 	err := service.exportToJSON(testData, testFile)
 	assert.NoError(t, err)
-	
+
 	// 验证文件是否创建成功
 	_, err = os.Stat(testFile)
 	assert.NoError(t, err)
-	
+
 	// 验证文件内容
 	content, err := os.ReadFile(testFile)
 	assert.NoError(t, err)
-	
+
 	var result map[string]interface{}
 	err = json.Unmarshal(content, &result)
 	assert.NoError(t, err)
@@ -131,7 +131,7 @@ func TestExportToCSV(t *testing.T) {
 	testDir := "./test-exports"
 	os.MkdirAll(testDir, 0755)
 	defer os.RemoveAll(testDir)
-	
+
 	testFile := filepath.Join(testDir, "test.csv")
 	testData := map[string]interface{}{
 		"user": map[string]interface{}{
@@ -139,10 +139,10 @@ func TestExportToCSV(t *testing.T) {
 			"name": "test",
 		},
 	}
-	
+
 	err := service.exportToCSV(testData, testFile)
 	assert.NoError(t, err)
-	
+
 	// 验证文件是否创建成功
 	_, err = os.Stat(testFile)
 	assert.NoError(t, err)
@@ -150,7 +150,7 @@ func TestExportToCSV(t *testing.T) {
 
 func TestGetExportRequest_NotFound(t *testing.T) {
 	service := NewGDPRService()
-	
+
 	request, err := service.GetExportRequest(9999)
 	assert.Error(t, err)
 	assert.Nil(t, request)
@@ -158,7 +158,7 @@ func TestGetExportRequest_NotFound(t *testing.T) {
 
 func TestGetDeletionRequest_NotFound(t *testing.T) {
 	service := NewGDPRService()
-	
+
 	request, err := service.GetDeletionRequest(9999)
 	assert.Error(t, err)
 	assert.Nil(t, request)

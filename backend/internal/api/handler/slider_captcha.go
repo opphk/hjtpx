@@ -16,10 +16,10 @@ func InitSliderCaptchaHandler(gen *captcha.GeneratorService, ver *captcha.Verifi
 
 // SliderCaptchaRequest 滑动验证码创建请求
 type SliderCaptchaRequest struct {
-	Width        int    `json:"width"`         // 验证码图片宽度
-	Height       int    `json:"height"`        // 验证码图片高度
-	SliderWidth  int    `json:"slider_width"`  // 滑动块宽度
-	SliderHeight int    `json:"slider_height"` // 滑动块高度
+	Width        int `json:"width"`         // 验证码图片宽度
+	Height       int `json:"height"`        // 验证码图片高度
+	SliderWidth  int `json:"slider_width"`  // 滑动块宽度
+	SliderHeight int `json:"slider_height"` // 滑动块高度
 }
 
 // SliderVerifyRequest 滑动验证码验证请求

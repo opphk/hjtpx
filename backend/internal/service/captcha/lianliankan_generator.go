@@ -20,11 +20,11 @@ type LianLianKanTile struct {
 }
 
 type LianLianKanBoard struct {
-	Tiles       [][]LianLianKanTile `json:"tiles"`
-	Width       int                 `json:"width"`
-	Height      int                 `json:"height"`
-	PairCount   int                 `json:"pair_count"`
-	Shuffled    bool                `json:"shuffled"`
+	Tiles     [][]LianLianKanTile `json:"tiles"`
+	Width     int                 `json:"width"`
+	Height    int                 `json:"height"`
+	PairCount int                 `json:"pair_count"`
+	Shuffled  bool                `json:"shuffled"`
 }
 
 type CreateLianLianKanRequest struct {
@@ -37,11 +37,11 @@ type CreateLianLianKanRequest struct {
 }
 
 type CreateLianLianKanResponse struct {
-	SessionID  string            `json:"session_id"`
-	Board      *LianLianKanBoard `json:"board"`
-	ExpiresIn  int64             `json:"expires_in"`
-	ExpiresAt  int64             `json:"expires_at"`
-	TileIcons  []string          `json:"tile_icons"`
+	SessionID string            `json:"session_id"`
+	Board     *LianLianKanBoard `json:"board"`
+	ExpiresIn int64             `json:"expires_in"`
+	ExpiresAt int64             `json:"expires_at"`
+	TileIcons []string          `json:"tile_icons"`
 }
 
 type LianLianKanGeneratorService struct {

@@ -17,8 +17,8 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	SlowQueryThresholdMs int                     `yaml:"slow_query_threshold_ms"`
-	QueryOptimization    QueryOptimizationConfig `yaml:"query_optimization"`
+	SlowQueryThresholdMs int                       `yaml:"slow_query_threshold_ms"`
+	QueryOptimization    QueryOptimizationConfig   `yaml:"query_optimization"`
 	ReadWriteSeparation  ReadWriteSeparationConfig `yaml:"read_write_separation"`
 	ConnectionPool       ConnectionPoolConfig      `yaml:"connection_pool"`
 	DataArchiving        DataArchivingConfig       `yaml:"data_archiving"`
@@ -34,11 +34,11 @@ type QueryOptimizationConfig struct {
 }
 
 type ReadWriteSeparationConfig struct {
-	Enabled              bool           `yaml:"enabled"`
-	Master               DatabaseNode   `yaml:"master"`
-	Slaves               []DatabaseNode `yaml:"slaves"`
-	LoadBalanceStrategy  string         `yaml:"load_balance_strategy"`
-	AutoFailover         bool           `yaml:"auto_failover"`
+	Enabled             bool           `yaml:"enabled"`
+	Master              DatabaseNode   `yaml:"master"`
+	Slaves              []DatabaseNode `yaml:"slaves"`
+	LoadBalanceStrategy string         `yaml:"load_balance_strategy"`
+	AutoFailover        bool           `yaml:"auto_failover"`
 }
 
 type DatabaseNode struct {
@@ -52,11 +52,11 @@ type DatabaseNode struct {
 }
 
 type ConnectionPoolConfig struct {
-	MaxOpenConns        int  `yaml:"max_open_conns"`
-	MaxIdleConns        int  `yaml:"max_idle_conns"`
-	ConnMaxLifetimeSecs int  `yaml:"conn_max_lifetime_secs"`
-	ConnMaxIdleTimeSecs int  `yaml:"conn_max_idle_time_secs"`
-	HealthCheckInterval int  `yaml:"health_check_interval_secs"`
+	MaxOpenConns        int `yaml:"max_open_conns"`
+	MaxIdleConns        int `yaml:"max_idle_conns"`
+	ConnMaxLifetimeSecs int `yaml:"conn_max_lifetime_secs"`
+	ConnMaxIdleTimeSecs int `yaml:"conn_max_idle_time_secs"`
+	HealthCheckInterval int `yaml:"health_check_interval_secs"`
 }
 
 type DataArchivingConfig struct {
@@ -79,18 +79,18 @@ type MonitoringConfig struct {
 }
 
 type AlertConfig struct {
-	Enabled          bool `yaml:"enabled"`
-	DefaultTimeout   int  `yaml:"default_timeout_secs"`
-	MaxAlertCount    int  `yaml:"max_alert_count"`
-	SlackEnabled     bool `yaml:"slack_enabled"`
-	WebhookEnabled   bool `yaml:"webhook_enabled"`
+	Enabled        bool `yaml:"enabled"`
+	DefaultTimeout int  `yaml:"default_timeout_secs"`
+	MaxAlertCount  int  `yaml:"max_alert_count"`
+	SlackEnabled   bool `yaml:"slack_enabled"`
+	WebhookEnabled bool `yaml:"webhook_enabled"`
 }
 
 type I18nConfig struct {
-	DefaultLang       string   `yaml:"default_lang"`
-	SupportedLangs    []string `yaml:"supported_langs"`
-	TranslationsDir   string   `yaml:"translations_dir"`
-	DefaultTimezone   string   `yaml:"default_timezone"`
+	DefaultLang        string   `yaml:"default_lang"`
+	SupportedLangs     []string `yaml:"supported_langs"`
+	TranslationsDir    string   `yaml:"translations_dir"`
+	DefaultTimezone    string   `yaml:"default_timezone"`
 	SupportedTimezones []string `yaml:"supported_timezones"`
 }
 
@@ -234,10 +234,10 @@ func LoadConfig() *Config {
 			WebhookEnabled: getEnvAsBool("ALERT_WEBHOOK_ENABLED", true),
 		},
 		I18n: I18nConfig{
-			DefaultLang:       getEnv("DEFAULT_LANG", "zh-CN"),
-			SupportedLangs: []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "de-DE", "es-ES", "pt-BR", "it-IT", "ru-RU", "ar-SA"},
-			TranslationsDir:  getEnv("TRANSLATIONS_DIR", "translations"),
-			DefaultTimezone:  getEnv("DEFAULT_TIMEZONE", "Asia/Shanghai"),
+			DefaultLang:        getEnv("DEFAULT_LANG", "zh-CN"),
+			SupportedLangs:     []string{"zh-CN", "en-US", "ja-JP", "ko-KR", "fr-FR", "de-DE", "es-ES", "pt-BR", "it-IT", "ru-RU", "ar-SA"},
+			TranslationsDir:    getEnv("TRANSLATIONS_DIR", "translations"),
+			DefaultTimezone:    getEnv("DEFAULT_TIMEZONE", "Asia/Shanghai"),
 			SupportedTimezones: []string{"Asia/Shanghai", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney", "Pacific/Auckland"},
 		},
 		Backup: BackupConfig{
@@ -245,18 +245,18 @@ func LoadConfig() *Config {
 			BackupDir:               getEnv("BACKUP_DIR", "./backups"),
 			AutoBackupEnabled:       getEnvAsBool("BACKUP_AUTO_ENABLED", true),
 			AutoBackupIntervalHours: getEnvAsInt("BACKUP_AUTO_INTERVAL_HOURS", 24),
-			IncrementalEnabled:        getEnvAsBool("BACKUP_INCREMENTAL_ENABLED", true),
+			IncrementalEnabled:      getEnvAsBool("BACKUP_INCREMENTAL_ENABLED", true),
 			IncrementalIntervalMins: getEnvAsInt("BACKUP_INCREMENTAL_INTERVAL_MINS", 60),
 			RemoteBackupEnabled:     getEnvAsBool("BACKUP_REMOTE_ENABLED", false),
 			RemoteBackupType:        getEnv("BACKUP_REMOTE_TYPE", "s3"),
 			RemoteBackupPath:        getEnv("BACKUP_REMOTE_PATH", ""),
-			RemoteBackupEndpoint:   getEnv("BACKUP_REMOTE_ENDPOINT", ""),
-			RemoteBackupAccessKey:  getEnv("BACKUP_REMOTE_ACCESS_KEY", ""),
-			RemoteBackupSecretKey:  getEnv("BACKUP_REMOTE_SECRET_KEY", ""),
+			RemoteBackupEndpoint:    getEnv("BACKUP_REMOTE_ENDPOINT", ""),
+			RemoteBackupAccessKey:   getEnv("BACKUP_REMOTE_ACCESS_KEY", ""),
+			RemoteBackupSecretKey:   getEnv("BACKUP_REMOTE_SECRET_KEY", ""),
 			RetentionDays:           getEnvAsInt("BACKUP_RETENTION_DAYS", 30),
-			CompressionEnabled:     getEnvAsBool("BACKUP_COMPRESSION_ENABLED", true),
-			EncryptionEnabled:     getEnvAsBool("BACKUP_ENCRYPTION_ENABLED", false),
-			EncryptionKey:         getEnv("BACKUP_ENCRYPTION_KEY", ""),
+			CompressionEnabled:      getEnvAsBool("BACKUP_COMPRESSION_ENABLED", true),
+			EncryptionEnabled:       getEnvAsBool("BACKUP_ENCRYPTION_ENABLED", false),
+			EncryptionKey:           getEnv("BACKUP_ENCRYPTION_KEY", ""),
 		},
 	}
 }

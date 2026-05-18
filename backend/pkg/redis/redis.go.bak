@@ -1,0 +1,730 @@
+package redis
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/hjtpx/hjtpx/pkg/config"
+	"github.com/redis/go-redis/v9"
+)
+
+var (
+	Client    *redis.Client
+	Cluster   *redis.ClusterClient
+	ctx       = context.Background()
+	clientMu  sync.RWMutex
+	clusterMu sync.RWMutex
+)
+
+type RedisClient struct {
+	client *redis.Client
+}
+
+type PoolStats struct {
+	TotalConns      uint32
+	IdleConns       uint32
+	StaleConns      uint32
+	MetricsTotal    uint32
+	MetricsHits     uint32
+	MetricsMisses   uint32
+	MetricsTimeouts uint32
+}
+
+type Config struct {
+	PoolSize      int
+	MinIdleConns  int
+	MaxIdleConns  int
+	MaxRetries    int
+	DialTimeout   time.Duration
+	ReadTimeout   time.Duration
+	WriteTimeout  time.Duration
+	PoolTimeout   time.Duration
+	PoolMaxIdle   int
+	PoolMinIdle   int
+	PoolMaxActive int
+}
+
+var defaultConfig = &Config{
+	PoolSize:      100,
+	MinIdleConns:  10,
+	MaxIdleConns:  50,
+	MaxRetries:    3,
+	DialTimeout:   5 * time.Second,
+	ReadTimeout:   3 * time.Second,
+	WriteTimeout:  3 * time.Second,
+	PoolTimeout:   4 * time.Second,
+	PoolMaxIdle:   50,
+	PoolMinIdle:   10,
+	PoolMaxActive: 100,
+}
+
+func GetContext() context.Context {
+	return ctx
+}
+
+func ConnectRedis(cfg *config.RedisConfig) error {
+	clientMu.Lock()
+	defer clientMu.Unlock()
+
+	Client = redis.NewClient(&redis.Options{
+		Addr:         fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
+		Password:     cfg.Password,
+		DB:           cfg.DB,
+		MaxRetries:   cfg.MaxRetries,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+		PoolSize:     100,
+		MinIdleConns: 10,
+		PoolTimeout:  4 * time.Second,
+	})
+
+	if err := Client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("failed to ping redis: %w", err)
+	}
+
+	go monitorPoolHealth(Client)
+
+	return nil
+}
+
+func monitorPoolHealth(client *redis.Client) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		stats := client.PoolStats()
+		if stats.Timeouts > 10 {
+			log.Printf("[REDIS_WARNING] High timeout count: %d", stats.Timeouts)
+		}
+		if stats.StaleConns > 5 {
+			log.Printf("[REDIS_WARNING] High stale connection count: %d", stats.StaleConns)
+		}
+	}
+}
+
+func CloseRedis() error {
+	clientMu.Lock()
+	defer clientMu.Unlock()
+
+	if Cluster != nil {
+		if err := Cluster.Close(); err != nil {
+			return err
+		}
+		Cluster = nil
+	}
+
+	if Client != nil {
+		return Client.Close()
+	}
+	return nil
+}
+
+func GetClient() *redis.Client {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
+	return Client
+}
+
+func NewRedisClient(cfg *Config) (*RedisClient, error) {
+	if cfg == nil {
+		cfg = defaultConfig
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:         "localhost:6379",
+		PoolSize:     cfg.PoolSize,
+		MinIdleConns: cfg.MinIdleConns,
+		MaxRetries:   cfg.MaxRetries,
+		DialTimeout:  cfg.DialTimeout,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		PoolTimeout:  cfg.PoolTimeout,
+	})
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to create redis client: %w", err)
+	}
+
+	return &RedisClient{
+		client: client,
+	}, nil
+}
+
+func (rc *RedisClient) SetPoolConfig(cfg *Config) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	if cfg == nil {
+		cfg = defaultConfig
+	}
+
+	opts := &redis.Options{
+		PoolSize:     cfg.PoolSize,
+		MinIdleConns: cfg.MinIdleConns,
+		MaxRetries:   cfg.MaxRetries,
+		DialTimeout:  cfg.DialTimeout,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		PoolTimeout:  cfg.PoolTimeout,
+	}
+
+	_ = opts
+
+	return nil
+}
+
+func (rc *RedisClient) GetPoolStats() *PoolStats {
+	if rc == nil || rc.client == nil {
+		return &PoolStats{}
+	}
+
+	stats := rc.client.PoolStats()
+
+	return &PoolStats{
+		TotalConns:      stats.TotalConns,
+		IdleConns:       stats.IdleConns,
+		StaleConns:      stats.StaleConns,
+		MetricsTotal:    stats.Hits + stats.Misses,
+		MetricsHits:     stats.Hits,
+		MetricsMisses:   stats.Misses,
+		MetricsTimeouts: stats.Timeouts,
+	}
+}
+
+func (rc *RedisClient) Get(ctx context.Context, key string) (string, error) {
+	if rc == nil || rc.client == nil {
+		return "", fmt.Errorf("redis client is nil")
+	}
+	return rc.client.Get(ctx, key).Result()
+}
+
+func (rc *RedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	return rc.client.Set(ctx, key, value, expiration).Err()
+}
+
+func (rc *RedisClient) Delete(ctx context.Context, keys ...string) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return rc.client.Del(ctx, keys...).Err()
+}
+
+func (rc *RedisClient) Exists(ctx context.Context, keys ...string) (int64, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis client is nil")
+	}
+	return rc.client.Exists(ctx, keys...).Result()
+}
+
+func (rc *RedisClient) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+	return rc.client.Expire(ctx, key, expiration).Err()
+}
+
+func (rc *RedisClient) TTL(ctx context.Context, key string) (time.Duration, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis client is nil")
+	}
+	return rc.client.TTL(ctx, key).Result()
+}
+
+func (rc *RedisClient) Incr(ctx context.Context, key string) (int64, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis client is nil")
+	}
+	return rc.client.Incr(ctx, key).Result()
+}
+
+func (rc *RedisClient) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis client is nil")
+	}
+	return rc.client.IncrBy(ctx, key, value).Result()
+}
+
+func (rc *RedisClient) Close() error {
+	if rc == nil || rc.client == nil {
+		return nil
+	}
+	return rc.client.Close()
+}
+
+type RedisCluster struct {
+	client *redis.ClusterClient
+}
+
+func NewRedisCluster(addrs []string) (*RedisCluster, error) {
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("no addresses provided")
+	}
+
+	client := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs:    addrs,
+		PoolSize: 100,
+	})
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect to redis cluster: %w", err)
+	}
+
+	clusterMu.Lock()
+	Cluster = client
+	clusterMu.Unlock()
+
+	return &RedisCluster{client: client}, nil
+}
+
+func (rc *RedisCluster) Set(ctx context.Context, key string, value interface{}) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.Set(ctx, key, value, 0).Err()
+}
+
+func (rc *RedisCluster) SetWithTTL(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.Set(ctx, key, value, ttl).Err()
+}
+
+func (rc *RedisCluster) Get(ctx context.Context, key string) (string, error) {
+	if rc == nil || rc.client == nil {
+		return "", fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.Get(ctx, key).Result()
+}
+
+func (rc *RedisCluster) Delete(ctx context.Context, keys ...string) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis cluster client is nil")
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	return rc.client.Del(ctx, keys...).Err()
+}
+
+func (rc *RedisCluster) Exists(ctx context.Context, keys ...string) (int64, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.Exists(ctx, keys...).Result()
+}
+
+func (rc *RedisCluster) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	if rc == nil || rc.client == nil {
+		return fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.Expire(ctx, key, expiration).Err()
+}
+
+func (rc *RedisCluster) TTL(ctx context.Context, key string) (time.Duration, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.TTL(ctx, key).Result()
+}
+
+func (rc *RedisCluster) Incr(ctx context.Context, key string) (int64, error) {
+	if rc == nil || rc.client == nil {
+		return 0, fmt.Errorf("redis cluster client is nil")
+	}
+	return rc.client.Incr(ctx, key).Result()
+}
+
+func (rc *RedisCluster) Close() error {
+	clusterMu.Lock()
+	defer clusterMu.Unlock()
+
+	if rc == nil || rc.client == nil {
+		return nil
+	}
+
+	err := rc.client.Close()
+	Cluster = nil
+	return err
+}
+
+func GetClusterClient() *redis.ClusterClient {
+	clusterMu.RLock()
+	defer clusterMu.RUnlock()
+	return Cluster
+}
+
+type ConnectionMetrics struct {
+	TotalConnections  int64
+	ActiveConnections int64
+	IdleConnections  int64
+	StaleConnections int64
+	Timeouts         int64
+	TotalHits       int64
+	TotalMisses     int64
+	HitRate         float64
+}
+
+type MetricsCollector struct {
+	mu               sync.RWMutex
+	totalConnections int64
+	activeConnections int64
+	idleConnections  int64
+	staleConnections int64
+	timeouts         int64
+	hits             int64
+	misses           int64
+	startTime        time.Time
+}
+
+var globalMetricsCollector *MetricsCollector
+
+func init() {
+	globalMetricsCollector = &MetricsCollector{
+		startTime: time.Now(),
+	}
+	go globalMetricsCollector.collectMetrics()
+}
+
+func (mc *MetricsCollector) collectMetrics() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if Client != nil {
+			stats := Client.PoolStats()
+			atomic.StoreInt64(&mc.totalConnections, int64(stats.TotalConns))
+			atomic.StoreInt64(&mc.idleConnections, int64(stats.IdleConns))
+			atomic.StoreInt64(&mc.staleConnections, int64(stats.StaleConns))
+			atomic.StoreInt64(&mc.timeouts, int64(stats.Timeouts))
+			atomic.StoreInt64(&mc.hits, int64(stats.Hits))
+			atomic.StoreInt64(&mc.misses, int64(stats.Misses))
+
+			total := atomic.LoadInt64(&mc.hits) + atomic.LoadInt64(&mc.misses)
+			if total > 0 {
+				hitRate := float64(atomic.LoadInt64(&mc.hits)) / float64(total) * 100
+				atomic.StoreInt64(&mc.activeConnections, int64(stats.TotalConns))
+			}
+		}
+	}
+}
+
+func GetConnectionMetrics() *ConnectionMetrics {
+	metrics := &ConnectionMetrics{}
+
+	metrics.TotalConnections = atomic.LoadInt64(&globalMetricsCollector.totalConnections)
+	metrics.ActiveConnections = atomic.LoadInt64(&globalMetricsCollector.activeConnections)
+	metrics.IdleConnections = atomic.LoadInt64(&globalMetricsCollector.idleConnections)
+	metrics.StaleConnections = atomic.LoadInt64(&globalMetricsCollector.staleConnections)
+	metrics.Timeouts = atomic.LoadInt64(&globalMetricsCollector.timeouts)
+	metrics.TotalHits = atomic.LoadInt64(&globalMetricsCollector.hits)
+	metrics.TotalMisses = atomic.LoadInt64(&globalMetricsCollector.misses)
+
+	total := metrics.TotalHits + metrics.TotalMisses
+	if total > 0 {
+		metrics.HitRate = float64(metrics.TotalHits) / float64(total) * 100
+	}
+
+	return metrics
+}
+
+type PoolConfigOptimizer struct {
+	client           *redis.Client
+	maxOpenConns    int
+	maxIdleConns    int
+	minIdleConns    int
+	connMaxLifetime time.Duration
+	connMaxIdleTime time.Duration
+	healthCheckInterval time.Duration
+}
+
+func NewPoolConfigOptimizer(client *redis.Client) *PoolConfigOptimizer {
+	return &PoolConfigOptimizer{
+		client:             client,
+		maxOpenConns:      100,
+		maxIdleConns:      50,
+		minIdleConns:      10,
+		connMaxLifetime:   30 * time.Minute,
+		connMaxIdleTime:   10 * time.Minute,
+		healthCheckInterval: 30 * time.Second,
+	}
+}
+
+func (p *PoolConfigOptimizer) Optimize() error {
+	if p.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	go p.monitorAndAdjust()
+	return nil
+}
+
+func (p *PoolConfigOptimizer) monitorAndAdjust() {
+	ticker := time.NewTicker(p.healthCheckInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		stats := p.client.PoolStats()
+
+		if stats.Timeouts > 20 {
+			p.maxOpenConns = int(float64(p.maxOpenConns) * 0.8)
+			if p.maxOpenConns < 10 {
+				p.maxOpenConns = 10
+			}
+		}
+
+		if stats.IdleConns < p.minIdleConns/2 {
+			p.minIdleConns = stats.IdleConns / 2
+			if p.minIdleConns < 5 {
+				p.minIdleConns = 5
+			}
+		}
+	}
+}
+
+func (p *PoolConfigOptimizer) GetCurrentConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"max_open_conns":     p.maxOpenConns,
+		"max_idle_conns":     p.maxIdleConns,
+		"min_idle_conns":     p.minIdleConns,
+		"conn_max_lifetime": p.connMaxLifetime.String(),
+		"conn_max_idle_time": p.connMaxIdleTime.String(),
+	}
+}
+
+type CacheKeyGenerator struct {
+	prefix string
+	version int
+}
+
+func NewCacheKeyGenerator(prefix string) *CacheKeyGenerator {
+	return &CacheKeyGenerator{
+		prefix:  prefix,
+		version: 1,
+	}
+}
+
+func (kg *CacheKeyGenerator) Generate(keys ...string) string {
+	if len(keys) == 0 {
+		return kg.prefix
+	}
+	return fmt.Sprintf("%s:%s", kg.prefix, keys[0])
+}
+
+func (kg *CacheKeyGenerator) GenerateWithVersion(version int64, keys ...string) string {
+	base := kg.Generate(keys...)
+	return fmt.Sprintf("%s:v%d", base, version)
+}
+
+func (kg *CacheKeyGenerator) GeneratePattern() string {
+	return kg.prefix + ":*"
+}
+
+type DistributedLock struct {
+	client *redis.Client
+	key    string
+	value  string
+	ttl    time.Duration
+}
+
+func NewDistributedLock(client *redis.Client, key string, value string, ttl time.Duration) *DistributedLock {
+	return &DistributedLock{
+		client: client,
+		key:    key,
+		value:  value,
+		ttl:    ttl,
+	}
+}
+
+func (l *DistributedLock) Acquire(ctx context.Context) (bool, error) {
+	if l.client == nil {
+		return false, fmt.Errorf("redis client is nil")
+	}
+
+	result, err := l.client.SetNX(ctx, l.key, l.value, l.ttl).Result()
+	if err != nil {
+		return false, err
+	}
+
+	return result, nil
+}
+
+func (l *DistributedLock) Release(ctx context.Context) error {
+	if l.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+		else
+			return 0
+		end
+	`
+
+	_, err := l.client.Eval(ctx, script, []string{l.key}, l.value).Result()
+	return err
+}
+
+func (l *DistributedLock) Extend(ctx context.Context, ttl time.Duration) error {
+	if l.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("pexpire", KEYS[1], ARGV[2])
+		else
+			return 0
+		end
+	`
+
+	_, err := l.client.Eval(ctx, script, []string{l.key}, l.value, ttl.Milliseconds()).Result()
+	return err
+}
+
+type CacheWarmer interface {
+	Warmup(ctx context.Context) error
+	GetStatus() map[string]interface{}
+}
+
+type SimpleCacheWarmer struct {
+	client  *redis.Client
+	tasks   map[string]func(context.Context) error
+	status  map[string]string
+	mu      sync.RWMutex
+}
+
+func NewSimpleCacheWarmer(client *redis.Client) *SimpleCacheWarmer {
+	return &SimpleCacheWarmer{
+		client: client,
+		tasks:  make(map[string]func(context.Context) error),
+		status: make(map[string]string),
+	}
+}
+
+func (w *SimpleCacheWarmer) AddTask(name string, task func(context.Context) error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.tasks[name] = task
+	w.status[name] = "pending"
+}
+
+func (w *SimpleCacheWarmer) Warmup(ctx context.Context) error {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	for name, task := range w.tasks {
+		w.mu.RUnlock()
+		w.mu.Lock()
+		w.status[name] = "running"
+		w.mu.Unlock()
+		w.mu.RLock()
+
+		if err := task(ctx); err != nil {
+			w.mu.Lock()
+			w.status[name] = "failed"
+			w.mu.Unlock()
+			w.mu.RLock()
+			log.Printf("[CACHE_WARMUP_ERROR] Task %s failed: %v", name, err)
+			continue
+		}
+
+		w.mu.Lock()
+		w.status[name] = "completed"
+		w.mu.Unlock()
+		w.mu.RLock()
+	}
+
+	return nil
+}
+
+func (w *SimpleCacheWarmer) GetStatus() map[string]interface{} {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	status := make(map[string]interface{})
+	for name, s := range w.status {
+		status[name] = s
+	}
+	return status
+}
+
+type PipelineOptimizer struct {
+	client  *redis.Client
+	batchSize int
+}
+
+func NewPipelineOptimizer(client *redis.Client, batchSize int) *PipelineOptimizer {
+	if batchSize <= 0 {
+		batchSize = 100
+	}
+	return &PipelineOptimizer{
+		client:  client,
+		batchSize: batchSize,
+	}
+}
+
+func (p *PipelineOptimizer) PipelineSet(ctx context.Context, items map[string]string, ttl time.Duration) error {
+	if p.client == nil {
+		return fmt.Errorf("redis client is nil")
+	}
+
+	pipe := p.client.Pipeline()
+
+	for key, value := range items {
+		pipe.Set(ctx, key, value, ttl)
+	}
+
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (p *PipelineOptimizer) PipelineGet(ctx context.Context, keys []string) (map[string]string, error) {
+	if p.client == nil {
+		return nil, fmt.Errorf("redis client is nil")
+	}
+
+	result := make(map[string]string)
+
+	for i := 0; i < len(keys); i += p.batchSize {
+		end := i + p.batchSize
+		if end > len(keys) {
+			end = len(keys)
+		}
+
+		batch := keys[i:end]
+		pipe := p.client.Pipeline()
+
+		cmds := make([]*redis.StringCmd, len(batch))
+		for j, key := range batch {
+			cmds[j] = pipe.Get(ctx, key)
+		}
+
+		_, err := pipe.Exec(ctx)
+		if err != nil && err != redis.Nil {
+			continue
+		}
+
+		for j, cmd := range cmds {
+			val, err := cmd.Result()
+			if err == nil {
+				result[batch[j]] = val
+			}
+		}
+	}
+
+	return result, nil
+}

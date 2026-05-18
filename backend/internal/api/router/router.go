@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/hjtpx/hjtpx/internal/api/handler"
 	"github.com/hjtpx/hjtpx/internal/api/middleware"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/i18n"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func SetupRouter() *gin.Engine {
@@ -43,7 +43,7 @@ func SetupRouter() *gin.Engine {
 	})
 
 	r.LoadHTMLGlob(filepath.Join(".", "templates", "*"))
-	
+
 	cfg := config.GetConfig()
 	backupHandler := handler.GetBackupHandler(cfg)
 
@@ -121,28 +121,28 @@ func SetupRouter() *gin.Engine {
 		})
 
 		adminRouter.GET("/config", func(c *gin.Context) {
-		c.HTML(200, "config.html", gin.H{
-			"title": "系统配置",
+			c.HTML(200, "config.html", gin.H{
+				"title": "系统配置",
+			})
 		})
-	})
 
-	adminRouter.GET("/whitelabel", func(c *gin.Context) {
-		c.HTML(200, "whitelabel.html", gin.H{
-			"title": "主题设置",
+		adminRouter.GET("/whitelabel", func(c *gin.Context) {
+			c.HTML(200, "whitelabel.html", gin.H{
+				"title": "主题设置",
+			})
 		})
-	})
 
-	adminRouter.GET("/behavior-analytics", func(c *gin.Context) {
-		c.HTML(200, "behavior-analytics.html", gin.H{
-			"title": "用户行为分析",
+		adminRouter.GET("/behavior-analytics", func(c *gin.Context) {
+			c.HTML(200, "behavior-analytics.html", gin.H{
+				"title": "用户行为分析",
+			})
 		})
-	})
 
-	adminRouter.GET("/adaptive-config", func(c *gin.Context) {
-		c.HTML(200, "adaptive-config.html", gin.H{
-			"title": "自适应难度配置",
+		adminRouter.GET("/adaptive-config", func(c *gin.Context) {
+			c.HTML(200, "adaptive-config.html", gin.H{
+				"title": "自适应难度配置",
+			})
 		})
-	})
 
 		adminRouter.GET("/api/dashboard", handler.GetDashboardData)
 		adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
@@ -160,7 +160,7 @@ func SetupRouter() *gin.Engine {
 		adminRouter.PUT("/api/config", handler.UpdateConfig)
 		adminRouter.GET("/api/config/export", handler.ExportConfig)
 		adminRouter.POST("/api/config/reset", handler.ResetConfig)
-		
+
 		// 白标主题 API
 		adminRouter.GET("/api/whitelabel", handler.GetWhitelabelConfig)
 		adminRouter.PUT("/api/whitelabel", handler.UpdateWhitelabelConfig)
@@ -190,51 +190,51 @@ func SetupRouter() *gin.Engine {
 			captcha.POST("/lianliankan/verify", handler.VerifyLianLianKanCaptcha)
 			captcha.GET("/lianliankan/status/:session_id", handler.GetLianLianKanCaptchaStatus)
 			captcha.GET("/lianliankan/check/:session_id", handler.CheckLianLianKanCaptchaValid)
-			
+
 			captcha.POST("/voice/create", handler.CreateVoiceCaptcha)
-		captcha.POST("/voice/verify", handler.VerifyVoiceCaptcha)
-		
-		captcha.POST("/3d/create", handler.CreateThreeDCaptcha)
-		captcha.POST("/3d/verify", handler.VerifyThreeDCaptcha)
-		captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
-		captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
-	}
+			captcha.POST("/voice/verify", handler.VerifyVoiceCaptcha)
 
-	// 高级限流 API
-	advancedRateLimit := api.Group("/advanced-rate-limit")
-	{
-		arHandler := handler.NewAdvancedRateLimitHandler()
-		
-		// 令牌桶限流
-		tokenBucket := advancedRateLimit.Group("/token-bucket")
-		{
-			tokenBucket.POST("/check", arHandler.CheckTokenBucket)
-			tokenBucket.POST("/reset", arHandler.ResetTokenBucket)
-			tokenBucket.GET("/stats", arHandler.GetBucketStats)
+			captcha.POST("/3d/create", handler.CreateThreeDCaptcha)
+			captcha.POST("/3d/verify", handler.VerifyThreeDCaptcha)
+			captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
+			captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
 		}
-		
-		// 配额管理
-		quota := advancedRateLimit.Group("/quota")
-		{
-			quota.POST("/create", arHandler.CreateQuota)
-			quota.GET("/status", arHandler.GetQuotaStatus)
-			quota.POST("/consume", arHandler.ConsumeQuota)
-			quota.POST("/reset", arHandler.ResetQuota)
-			quota.DELETE("/delete", arHandler.DeleteQuota)
-			quota.GET("/list", arHandler.ListQuotas)
-		}
-		
-		// 综合限流
-		advancedRateLimit.POST("/combined-check", arHandler.CombinedCheck)
-	}
 
-	// WebSocket 验证路由
-	websocket := api.Group("/websocket")
-	{
-		websocket.GET("/verify", handler.WebSocketVerificationHandler)
-		websocket.GET("/stats", handler.GetWebSocketStats)
-		websocket.POST("/broadcast", handler.BroadcastWebSocketMessage)
-	}
+		// 高级限流 API
+		advancedRateLimit := api.Group("/advanced-rate-limit")
+		{
+			arHandler := handler.NewAdvancedRateLimitHandler()
+
+			// 令牌桶限流
+			tokenBucket := advancedRateLimit.Group("/token-bucket")
+			{
+				tokenBucket.POST("/check", arHandler.CheckTokenBucket)
+				tokenBucket.POST("/reset", arHandler.ResetTokenBucket)
+				tokenBucket.GET("/stats", arHandler.GetBucketStats)
+			}
+
+			// 配额管理
+			quota := advancedRateLimit.Group("/quota")
+			{
+				quota.POST("/create", arHandler.CreateQuota)
+				quota.GET("/status", arHandler.GetQuotaStatus)
+				quota.POST("/consume", arHandler.ConsumeQuota)
+				quota.POST("/reset", arHandler.ResetQuota)
+				quota.DELETE("/delete", arHandler.DeleteQuota)
+				quota.GET("/list", arHandler.ListQuotas)
+			}
+
+			// 综合限流
+			advancedRateLimit.POST("/combined-check", arHandler.CombinedCheck)
+		}
+
+		// WebSocket 验证路由
+		websocket := api.Group("/websocket")
+		{
+			websocket.GET("/verify", handler.WebSocketVerificationHandler)
+			websocket.GET("/stats", handler.GetWebSocketStats)
+			websocket.POST("/broadcast", handler.BroadcastWebSocketMessage)
+		}
 
 		auth := api.Group("/auth")
 		{
@@ -312,7 +312,7 @@ func SetupRouter() *gin.Engine {
 		}
 
 		admin := api.Group("/admin")
-	admin.Use(middleware.AuthMiddleware())
+		admin.Use(middleware.AuthMiddleware())
 		{
 			admin.GET("/stats", handler.GetStats)
 			admin.GET("/users", handler.ListUsers)
@@ -366,10 +366,10 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/alerts/history", handler.ListAlertHistory)
 			admin.POST("/alerts/history/:id/acknowledge", handler.AcknowledgeAlert)
 			admin.POST("/alerts/history/:id/resolve", handler.ResolveAlert)
-			
+
 			// 行为分析
 			admin.GET("/behavior-analytics", handler.GetBehaviorAnalytics)
-			
+
 			// 备份管理
 			admin.GET("/backups", backupHandler.ListBackups)
 			admin.POST("/backups", backupHandler.CreateBackup)

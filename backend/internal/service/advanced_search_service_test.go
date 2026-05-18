@@ -14,7 +14,7 @@ func TestNewAdvancedSearchService(t *testing.T) {
 
 func TestBuildQuery(t *testing.T) {
 	service := NewAdvancedSearchService()
-	
+
 	// 测试基本查询构建
 	conditions := []SearchCondition{
 		{
@@ -28,7 +28,7 @@ func TestBuildQuery(t *testing.T) {
 			Value:    50.0,
 		},
 	}
-	
+
 	// 这个测试只是验证函数能正常调用，实际数据库测试需要测试数据库环境
 	// 我们在这个简单测试中不连接真实数据库
 	t.Log("BuildQuery test passed - function call successful")
@@ -38,10 +38,10 @@ func TestBuildQuery(t *testing.T) {
 
 func TestApplyCondition(t *testing.T) {
 	service := NewAdvancedSearchService()
-	
+
 	testCases := []struct {
-		name     string
-		cond     SearchCondition
+		name string
+		cond SearchCondition
 	}{
 		{
 			name: "Equals operator",
@@ -84,7 +84,7 @@ func TestApplyCondition(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// 验证函数能正常处理各种操作符
@@ -97,7 +97,7 @@ func TestApplyCondition(t *testing.T) {
 
 func TestApplySort(t *testing.T) {
 	service := NewAdvancedSearchService()
-	
+
 	sortOptions := []SortOption{
 		{
 			Field: "created_at",
@@ -108,7 +108,7 @@ func TestApplySort(t *testing.T) {
 			Order: "asc",
 		},
 	}
-	
+
 	// 验证函数能正常调用
 	t.Log("ApplySort test passed - function call successful")
 	_ = sortOptions
@@ -122,15 +122,15 @@ func TestSearchConditions(t *testing.T) {
 		Operator: OpEquals,
 		Value:    "test_value",
 	}
-	
+
 	if condition.Field != "field_name" {
 		t.Errorf("Expected field name 'field_name', got '%s'", condition.Field)
 	}
-	
+
 	if condition.Operator != OpEquals {
 		t.Errorf("Expected operator 'eq', got '%s'", condition.Operator)
 	}
-	
+
 	if condition.Value != "test_value" {
 		t.Errorf("Expected value 'test_value', got '%v'", condition.Value)
 	}
@@ -154,15 +154,15 @@ func TestAdvancedSearchQuery(t *testing.T) {
 		Page:     1,
 		PageSize: 20,
 	}
-	
+
 	if query.Page != 1 {
 		t.Errorf("Expected page 1, got %d", query.Page)
 	}
-	
+
 	if query.PageSize != 20 {
 		t.Errorf("Expected page size 20, got %d", query.PageSize)
 	}
-	
+
 	if len(query.Conditions) != 1 {
 		t.Errorf("Expected 1 condition, got %d", len(query.Conditions))
 	}
@@ -177,11 +177,11 @@ func TestSavedSearch(t *testing.T) {
 		CreatedBy:   1,
 		CreatedAt:   time.Now(),
 	}
-	
+
 	if search.Name != "Test Search" {
 		t.Errorf("Expected name 'Test Search', got '%s'", search.Name)
 	}
-	
+
 	if search.EntityType != "logs" {
 		t.Errorf("Expected entity type 'logs', got '%s'", search.EntityType)
 	}
@@ -204,7 +204,7 @@ func TestSearchOperators(t *testing.T) {
 		OpIsNotNull,
 		OpBetween,
 	}
-	
+
 	expectedOperators := []string{
 		"eq",
 		"ne",
@@ -221,7 +221,7 @@ func TestSearchOperators(t *testing.T) {
 		"is_not_null",
 		"between",
 	}
-	
+
 	for i, op := range operators {
 		if string(op) != expectedOperators[i] {
 			t.Errorf("Expected operator '%s', got '%s'", expectedOperators[i], op)

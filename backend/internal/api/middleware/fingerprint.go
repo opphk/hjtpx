@@ -11,16 +11,16 @@ import (
 var fingerprintService = service.NewFingerprintService()
 
 type FingerprintConfig struct {
-	Enabled        bool
-	CheckBlacklist bool
-	BlockAnomaly    bool
+	Enabled          bool
+	CheckBlacklist   bool
+	BlockAnomaly     bool
 	AnomalyThreshold float64
 }
 
 var defaultFingerprintConfig = FingerprintConfig{
-	Enabled:        true,
-	CheckBlacklist: true,
-	BlockAnomaly:    false,
+	Enabled:          true,
+	CheckBlacklist:   true,
+	BlockAnomaly:     false,
 	AnomalyThreshold: 50.0,
 }
 

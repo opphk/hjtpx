@@ -1346,10 +1346,483 @@ class EnvironmentDetector {
         return { detected: score > 10, score: Math.min(score, 100), detections };
     }
 
+    async detectVirtualization() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            const vmPatterns = [
+                { pattern: /vmware|virtualbox|parallels|qemu|kvm/i, name: 'vm_detected' },
+                { pattern: /xen/i, name: 'xen_vm' },
+                { pattern: /hyperv/i, name: 'hyperv_vm' }
+            ];
+            for (const vm of vmPatterns) {
+                if (vm.pattern.test(ua)) {
+                    score += 35;
+                    detections.push(vm.name);
+                }
+            }
+
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+                        const vmRendererPatterns = [
+                            { pattern: /vmware|virtualbox|parallels/i, name: 'vm_renderer' },
+                            { pattern: /swiftshader|llvmpipe|mesa/i, name: 'software_renderer_vm' }
+                        ];
+                        for (const r of vmRendererPatterns) {
+                            if (r.pattern.test(renderer)) {
+                                score += 40;
+                                detections.push(r.name);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+
+            if (navigator.hardwareConcurrency) {
+                if (navigator.hardwareConcurrency === 1) {
+                    score += 20;
+                    detections.push('single_core_vm');
+                } else if (navigator.hardwareConcurrency > 16) {
+                    score += 15;
+                    detections.push('high_cores_vm');
+                }
+            }
+        } catch (e) {
+            score += 25;
+            detections.push('virtualization_error');
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectEmulator() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            const emulatorPatterns = [
+                { pattern: /android.*emulator/i, name: 'android_emulator' },
+                { pattern: /iphone.*simulator|ipad.*simulator/i, name: 'ios_simulator' },
+                { pattern: /bluestacks/i, name: 'bluestacks' },
+                { pattern: /nox|genymotion/i, name: 'android_genymotion' }
+            ];
+            for (const emu of emulatorPatterns) {
+                if (emu.pattern.test(ua)) {
+                    score += 45;
+                    detections.push(emu.name);
+                }
+            }
+
+            if (navigator.maxTouchPoints === 0 && /mobile|android|iphone/i.test(ua)) {
+                score += 30;
+                detections.push('mobile_no_touch');
+            }
+
+            if (navigator.platform) {
+                const platform = navigator.platform.toLowerCase();
+                if (platform.includes('linux') && /mobile|android/i.test(ua)) {
+                    score += 35;
+                    detections.push('linux_android_emulator');
+                }
+            }
+        } catch (e) {
+            score += 20;
+            detections.push('emulator_error');
+        }
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectContainer() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            const containerPatterns = [
+                { pattern: /docker/i, name: 'docker' },
+                { pattern: /kubernetes|k8s/i, name: 'kubernetes' },
+                { pattern: /lxc/i, name: 'lxc_container' }
+            ];
+            for (const container of containerPatterns) {
+                if (container.pattern.test(ua)) {
+                    score += 50;
+                    detections.push(container.name);
+                }
+            }
+
+            try {
+                const response = await fetch('/.dockerenv', { method: 'HEAD' }).catch(() => null);
+                if (response && response.ok) {
+                    score += 60;
+                    detections.push('dockerenv_file');
+                }
+            } catch (e) {}
+
+            try {
+                if (navigator.storage && navigator.storage.estimate) {
+                    const estimate = await navigator.storage.estimate();
+                    if (estimate.quota === 0) {
+                        score += 35;
+                        detections.push('zero_quota_container');
+                    }
+                }
+            } catch (e) {}
+        } catch (e) {
+            score += 25;
+            detections.push('container_error');
+        }
+        return { detected: score > 40, score: Math.min(score, 100), detections };
+    }
+
+    async detectMultiBoxing() {
+        let score = 0;
+        const detections = [];
+        try {
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                if (conn.type === 'wifi' && conn.rtt === 0 && conn.downlink === 0) {
+                    score += 40;
+                    detections.push('suspicious_connection');
+                }
+            }
+
+            if (screen.width === 0 || screen.height === 0) {
+                score += 30;
+                detections.push('zero_screen');
+            }
+
+            if (navigator.deviceMemory === 0.25 || navigator.deviceMemory === 0.5) {
+                score += 25;
+                detections.push('minimal_memory_multi');
+            }
+
+            const now = Date.now();
+            if (this.lastDetection && (now - this.lastDetection) < 1000) {
+                score += 35;
+                detections.push('rapid_detection');
+            }
+            this.lastDetection = now;
+        } catch (e) {
+            score += 20;
+            detections.push('multibox_error');
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectVPNConnection() {
+        let score = 0;
+        const detections = [];
+        try {
+            const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+            if (rtcPeerConnection) {
+                const ips = new Set();
+                const pc = new rtcPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+                pc.createDataChannel('');
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    const sdp = pc.localDescription.sdp;
+                    const lines = sdp.split('\n');
+                    for (const line of lines) {
+                        if (line.indexOf('candidate') > -1) {
+                            const parts = line.split(' ');
+                            if (parts[4] && parts[4] !== '0.0.0.0') {
+                                const ip = parts[4];
+                                if (!ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+                                    score += 50;
+                                    detections.push('external_ip_detected');
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+                pc.close();
+            }
+
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                if (conn.type === 'vpn' || conn.type === 'pptp' || conn.type === 'tunnel') {
+                    score += 55;
+                    detections.push('vpn_connection_type');
+                }
+                if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') {
+                    score += 20;
+                    detections.push('slow_connection_vpn');
+                }
+            }
+        } catch (e) {
+            score += 15;
+            detections.push('vpn_error');
+        }
+        return { detected: score > 40, score: Math.min(score, 100), detections };
+    }
+
+    async detectTorNetwork() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/tor|onion/i.test(ua)) {
+                score += 60;
+                detections.push('tor_user_agent');
+            }
+
+            const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+            if (rtcPeerConnection) {
+                const pc = new rtcPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+                pc.createDataChannel('');
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    const sdp = pc.localDescription.sdp;
+                    if (/tls|inject_host_overwrite/i.test(sdp)) {
+                        score += 50;
+                        detections.push('tor_sdp_signature');
+                    }
+                } catch (e) {}
+                pc.close();
+            }
+        } catch (e) {
+            score += 25;
+            detections.push('tor_error');
+        }
+        return { detected: score > 45, score: Math.min(score, 100), detections };
+    }
+
+    async collectEnhancedEnvironmentData() {
+        const data = {};
+        try {
+            data.canvasHash = await this.generateCanvasHash();
+        } catch (e) {
+            data.canvasHash = '';
+        }
+        try {
+            data.webglHash = await this.generateWebGLHash();
+        } catch (e) {
+            data.webglHash = '';
+        }
+        try {
+            data.webglRenderer = this.getWebGLRenderer();
+        } catch (e) {
+            data.webglRenderer = '';
+        }
+        try {
+            data.webglVendor = this.getWebGLVendor();
+        } catch (e) {
+            data.webglVendor = '';
+        }
+        try {
+            data.audioHash = await this.generateAudioHash();
+        } catch (e) {
+            data.audioHash = '';
+        }
+        try {
+            data.fonts = await this.detectFonts();
+        } catch (e) {
+            data.fonts = [];
+        }
+        try {
+            data.plugins = Array.from(navigator.plugins || []).map(p => p.name);
+        } catch (e) {
+            data.plugins = [];
+        }
+        try {
+            data.languages = navigator.languages || [navigator.language];
+        } catch (e) {
+            data.languages = [];
+        }
+        try {
+            data.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch (e) {
+            data.timezone = '';
+        }
+        try {
+            data.screen = {
+                width: screen.width,
+                height: screen.height,
+                colorDepth: screen.colorDepth,
+                pixelRatio: window.devicePixelRatio,
+                availWidth: screen.availWidth,
+                availHeight: screen.availHeight
+            };
+        } catch (e) {
+            data.screen = {};
+        }
+        try {
+            data.hardware = {
+                concurrency: navigator.hardwareConcurrency,
+                memory: navigator.deviceMemory,
+                maxTouchPoints: navigator.maxTouchPoints
+            };
+        } catch (e) {
+            data.hardware = {};
+        }
+        try {
+            data.connection = navigator.connection ? {
+                type: navigator.connection.type,
+                effectiveType: navigator.connection.effectiveType,
+                rtt: navigator.connection.rtt,
+                downlink: navigator.connection.downlink
+            } : {};
+        } catch (e) {
+            data.connection = {};
+        }
+        return data;
+    }
+
+    async generateCanvasHash() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 280;
+        canvas.height = 80;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
+
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.font = '11pt Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 2, 15);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.font = '18pt Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 4, 45);
+
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgb(255,0,255)';
+        ctx.beginPath();
+        ctx.arc(50, 50, 50, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+
+        const dataURL = canvas.toDataURL();
+        return this.hashString(dataURL);
+    }
+
+    async generateWebGLHash() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return '';
+
+        const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        const combined = `${vendor}~${renderer}`;
+        return this.hashString(combined);
+    }
+
+    getWebGLRenderer() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return '';
+
+        return gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+    }
+
+    getWebGLVendor() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return '';
+
+        return gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '';
+    }
+
+    async generateAudioHash() {
+        try {
+            const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            if (!AudioContext) return '';
+
+            const ctx = new AudioContext(1, 44100, 44100);
+            const osc = ctx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(10000, ctx.currentTime);
+            const compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-50, ctx.currentTime);
+            compressor.knee.setValueAtTime(40, ctx.currentTime);
+            compressor.ratio.setValueAtTime(12, ctx.currentTime);
+            compressor.attack.setValueAtTime(0, ctx.currentTime);
+            compressor.release.setValueAtTime(0.25, ctx.currentTime);
+            osc.connect(compressor);
+            compressor.connect(ctx.destination);
+            osc.start(0);
+
+            const buffer = await ctx.startRendering();
+            const channelData = buffer.getChannelData(0);
+            let hash = 0;
+            for (let i = 0; i < 1000; i++) {
+                hash = ((hash << 5) - hash) + channelData[i];
+                hash = hash & hash;
+            }
+            return hash.toString(16);
+        } catch (e) {
+            return '';
+        }
+    }
+
+    async detectFonts() {
+        const baseFonts = ['monospace', 'sans-serif', 'serif'];
+        const testFonts = [
+            'Arial', 'Helvetica', 'Times New Roman', 'Courier New',
+            'Verdana', 'Georgia', 'Palatino', 'Garamond',
+            'Impact', 'Comic Sans MS', 'Trebuchet MS', 'Lucida Console',
+            'Tahoma', 'Segoe UI', 'Roboto', 'Open Sans'
+        ];
+        const detected = [];
+
+        try {
+            const el = document.createElement('div');
+            el.style.cssText = 'position:absolute;left:-9999px;font-size:72px;visibility:hidden;white-space:nowrap';
+            el.textContent = 'mmmmmmmmmmlli';
+            document.body.appendChild(el);
+
+            const baseWidths = {};
+            for (const base of baseFonts) {
+                el.style.fontFamily = base;
+                baseWidths[base] = el.offsetWidth;
+            }
+
+            for (const font of testFonts) {
+                for (const base of baseFonts) {
+                    el.style.fontFamily = `"${font}", ${base}`;
+                    if (el.offsetWidth !== baseWidths[base]) {
+                        detected.push(font);
+                        break;
+                    }
+                }
+            }
+
+            document.body.removeChild(el);
+        } catch (e) {}
+
+        return detected;
+    }
+
+    hashString(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(16);
+    }
+
     async runAll() {
         const chainResult = await this.runChain();
         const fingerprint = this.generateFingerprint();
-        return Object.assign(chainResult, { fingerprint });
+        const enhancedData = await this.collectEnhancedEnvironmentData();
+        return Object.assign(chainResult, { fingerprint, enhancedData });
     }
 
     generateFingerprint() {

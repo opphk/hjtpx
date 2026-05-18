@@ -33,18 +33,18 @@ type ClusterConfig struct {
 }
 
 type EnhancedRedisClient struct {
-	mu         sync.RWMutex
-	config     *ClusterConfig
-	standalone *goredis.Client
-	cluster    *goredis.ClusterClient
-	sentinel   *goredis.SentinelClient
-	readClient goredis.Cmdable
+	mu          sync.RWMutex
+	config      *ClusterConfig
+	standalone  *goredis.Client
+	cluster     *goredis.ClusterClient
+	sentinel    *goredis.SentinelClient
+	readClient  goredis.Cmdable
 	writeClient goredis.Cmdable
 }
 
 var (
 	globalEnhancedRedisClient *EnhancedRedisClient
-	globalEnhancedRedisOnce sync.Once
+	globalEnhancedRedisOnce   sync.Once
 )
 
 func NewEnhancedRedisClient(config *ClusterConfig) (*EnhancedRedisClient, error) {
@@ -124,17 +124,17 @@ func (erc *EnhancedRedisClient) connectSentinel() error {
 	}
 
 	failoverOptions := &goredis.FailoverOptions{
-		MasterName:       erc.config.MasterName,
-		SentinelAddrs:    erc.config.Addrs,
-		Password:         erc.config.Password,
-		DB:               erc.config.DB,
-		PoolSize:         erc.config.PoolSize,
-		MinIdleConns:     erc.config.MinIdleConns,
-		MaxIdleConns:     erc.config.MaxIdleConns,
-		DialTimeout:      erc.config.DialTimeout,
-		ReadTimeout:      erc.config.ReadTimeout,
-		WriteTimeout:     erc.config.WriteTimeout,
-		ReplicaOnly:      erc.config.ReadWriteSplit,
+		MasterName:    erc.config.MasterName,
+		SentinelAddrs: erc.config.Addrs,
+		Password:      erc.config.Password,
+		DB:            erc.config.DB,
+		PoolSize:      erc.config.PoolSize,
+		MinIdleConns:  erc.config.MinIdleConns,
+		MaxIdleConns:  erc.config.MaxIdleConns,
+		DialTimeout:   erc.config.DialTimeout,
+		ReadTimeout:   erc.config.ReadTimeout,
+		WriteTimeout:  erc.config.WriteTimeout,
+		ReplicaOnly:   erc.config.ReadWriteSplit,
 	}
 
 	erc.standalone = goredis.NewFailoverClient(failoverOptions)
@@ -161,15 +161,15 @@ func (erc *EnhancedRedisClient) connectCluster() error {
 	}
 
 	erc.cluster = goredis.NewClusterClient(&goredis.ClusterOptions{
-		Addrs:        erc.config.Addrs,
-		Password:     erc.config.Password,
-		PoolSize:     erc.config.PoolSize,
-		MinIdleConns: erc.config.MinIdleConns,
-		MaxIdleConns: erc.config.MaxIdleConns,
-		DialTimeout:  erc.config.DialTimeout,
-		ReadTimeout:  erc.config.ReadTimeout,
-		WriteTimeout: erc.config.WriteTimeout,
-		ReadOnly:     erc.config.ReadWriteSplit,
+		Addrs:          erc.config.Addrs,
+		Password:       erc.config.Password,
+		PoolSize:       erc.config.PoolSize,
+		MinIdleConns:   erc.config.MinIdleConns,
+		MaxIdleConns:   erc.config.MaxIdleConns,
+		DialTimeout:    erc.config.DialTimeout,
+		ReadTimeout:    erc.config.ReadTimeout,
+		WriteTimeout:   erc.config.WriteTimeout,
+		ReadOnly:       erc.config.ReadWriteSplit,
 		RouteByLatency: erc.config.ReadWriteSplit,
 	})
 
@@ -311,9 +311,9 @@ func GetEnhancedRedisClient() *EnhancedRedisClient {
 }
 
 type PipelineExecutor struct {
-	client  goredis.Cmdable
-	cmds    []goredis.Cmder
-	ctx     context.Context
+	client goredis.Cmdable
+	cmds   []goredis.Cmder
+	ctx    context.Context
 }
 
 func NewPipelineExecutor(ctx context.Context, client goredis.Cmdable) *PipelineExecutor {
@@ -340,8 +340,8 @@ func (pe *PipelineExecutor) Exec() ([]goredis.Cmder, error) {
 }
 
 type BatchOperator struct {
-	client     goredis.Cmdable
-	batchSize  int
+	client    goredis.Cmdable
+	batchSize int
 }
 
 func NewBatchOperator(client goredis.Cmdable, batchSize int) *BatchOperator {

@@ -13,11 +13,11 @@ import (
 )
 
 type QueryCache struct {
-	mu         sync.RWMutex
-	cache      map[string]cacheEntry
-	maxSize    int
-	ttl        time.Duration
-	enabled    bool
+	mu      sync.RWMutex
+	cache   map[string]cacheEntry
+	maxSize int
+	ttl     time.Duration
+	enabled bool
 }
 
 type cacheEntry struct {

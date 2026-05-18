@@ -20,16 +20,16 @@ func initBotDetectionService() {
 }
 
 type BotDetectionMiddlewareConfig struct {
-	Enabled         bool
-	ExcludePaths    []string
-	BlockThreshold  float64
-	ChallengeMode   bool
+	Enabled        bool
+	ExcludePaths   []string
+	BlockThreshold float64
+	ChallengeMode  bool
 }
 
 var DefaultBotDetectionConfig = BotDetectionMiddlewareConfig{
-	Enabled:         true,
-	BlockThreshold:  0.7,
-	ChallengeMode:   true,
+	Enabled:        true,
+	BlockThreshold: 0.7,
+	ChallengeMode:  true,
 }
 
 func BotDetectionMiddleware(config ...BotDetectionMiddlewareConfig) gin.HandlerFunc {

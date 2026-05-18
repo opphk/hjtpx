@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/robfig/cron/v3"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/export"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"github.com/robfig/cron/v3"
 )
 
 // ScheduledExportService 定时导出服务
@@ -47,16 +47,16 @@ func (s *ScheduledExportService) CreateScheduledExport(task *models.ScheduledExp
 func (s *ScheduledExportService) UpdateScheduledExport(task *models.ScheduledExport) error {
 	// 移除旧的调度
 	s.removeTask(task.ID)
-	
+
 	if err := database.DB.Save(task).Error; err != nil {
 		return err
 	}
-	
+
 	// 添加新的调度
 	if task.IsEnabled {
 		s.scheduleTask(task)
 	}
-	
+
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (s *ScheduledExportService) loadScheduledTasks() {
 	if err := database.DB.Where("is_enabled = ?", true).Find(&tasks).Error; err != nil {
 		return
 	}
-	
+
 	for _, task := range tasks {
 		s.scheduleTask(&task)
 	}
@@ -108,7 +108,7 @@ func (s *ScheduledExportService) scheduleTask(task *models.ScheduledExport) {
 	_, err := s.cronScheduler.AddFunc(task.CronExpression, func() {
 		_ = s.executeTask(task)
 	})
-	
+
 	if err == nil {
 		s.calculateNextRun(task)
 		_ = database.DB.Save(task).Error
@@ -125,7 +125,7 @@ func (s *ScheduledExportService) executeTask(task *models.ScheduledExport) error
 	task.LastRunAt = &now
 	task.LastStatus = "running"
 	_ = database.DB.Save(task).Error
-	
+
 	// 执行导出
 	history, err := s.performExport(task)
 	if err != nil {
@@ -134,17 +134,17 @@ func (s *ScheduledExportService) executeTask(task *models.ScheduledExport) error
 		_ = database.DB.Save(task).Error
 		return err
 	}
-	
+
 	task.LastStatus = "success"
 	task.LastErrorMessage = ""
 	s.calculateNextRun(task)
 	_ = database.DB.Save(task).Error
-	
+
 	// 记录导出历史
 	if history != nil {
 		_ = database.DB.Create(history).Error
 	}
-	
+
 	return nil
 }
 
@@ -154,11 +154,11 @@ func (s *ScheduledExportService) performExport(task *models.ScheduledExport) (*m
 	if task.Filters != "" {
 		_ = json.Unmarshal([]byte(task.Filters), &filters)
 	}
-	
+
 	// 获取数据
 	var logs []models.VerificationLog
 	query := database.DB.Model(&models.VerificationLog{}).Preload("Application")
-	
+
 	// 应用过滤条件
 	if appID, ok := filters["application_id"].(float64); ok {
 		query = query.Where("application_id = ?", uint(appID))
@@ -166,11 +166,11 @@ func (s *ScheduledExportService) performExport(task *models.ScheduledExport) (*m
 	if status, ok := filters["status"].(string); ok {
 		query = query.Where("status = ?", status)
 	}
-	
+
 	if err := query.Order("created_at DESC").Find(&logs).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// 导出数据
 	exportData := export.ConvertLogsToExportData(logs, task.Name)
 	exporter := export.GetExporter(task.ExportFormat)
@@ -178,10 +178,10 @@ func (s *ScheduledExportService) performExport(task *models.ScheduledExport) (*m
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 这里应该保存文件到存储服务，现在简化处理
 	filePath := fmt.Sprintf("/tmp/export_%d_%s.%s", task.ID, time.Now().Format("20060102150405"), task.ExportFormat)
-	
+
 	// 创建导出历史记录
 	history := &models.ExportHistory{
 		ScheduledExportID: &task.ID,
@@ -194,7 +194,7 @@ func (s *ScheduledExportService) performExport(task *models.ScheduledExport) (*m
 		Status:            "completed",
 		TriggeredBy:       "scheduler",
 	}
-	
+
 	return history, nil
 }
 
@@ -258,13 +258,13 @@ func NewExportHistoryService() *ExportHistoryService {
 func (s *ExportHistoryService) ListExportHistory(page, pageSize int) ([]models.ExportHistory, int64, error) {
 	var histories []models.ExportHistory
 	var total int64
-	
+
 	offset := (page - 1) * pageSize
-	
+
 	if err := database.DB.Model(&models.ExportHistory{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	
+
 	if err := database.DB.Preload("ScheduledExport").
 		Order("created_at DESC").
 		Offset(offset).
@@ -272,6 +272,6 @@ func (s *ExportHistoryService) ListExportHistory(page, pageSize int) ([]models.E
 		Find(&histories).Error; err != nil {
 		return nil, 0, err
 	}
-	
+
 	return histories, total, nil
 }

@@ -136,7 +136,7 @@ func TestCreateChannel(t *testing.T) {
 			name:        "invalid channel type",
 			channelType: "invalid",
 			config:      map[string]interface{}{},
-			wantErr: true,
+			wantErr:     true,
 		},
 	}
 

@@ -12,9 +12,9 @@ import (
 var rateLimitService = service.NewRateLimitService()
 
 var (
-	tokenBucketRateLimitService     *service.TokenBucketRateLimitService
-	quotaManagementService          *service.QuotaManagementService
-	advancedRateLimitServicesOnce   sync.Once
+	tokenBucketRateLimitService   *service.TokenBucketRateLimitService
+	quotaManagementService        *service.QuotaManagementService
+	advancedRateLimitServicesOnce sync.Once
 )
 
 func initAdvancedRateLimitServices() {
@@ -273,22 +273,22 @@ func GetRateLimitService() *service.RateLimitService {
 
 // TokenBucketOptions 令牌桶配置
 type TokenBucketOptions struct {
-	Rate         float64
-	Capacity     float64
-	BurstSize    float64
+	Rate          float64
+	Capacity      float64
+	BurstSize     float64
 	InitialTokens float64
 }
 
 // TokenBucketRateLimitMiddleware 令牌桶限流中间件
 func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc {
 	advancedRateLimitServicesOnce.Do(initAdvancedRateLimitServices)
-	
+
 	return func(c *gin.Context) {
 		if options == nil {
 			options = &TokenBucketOptions{
-				Rate:         10,
-				Capacity:     100,
-				BurstSize:    50,
+				Rate:          10,
+				Capacity:      100,
+				BurstSize:     50,
 				InitialTokens: 100,
 			}
 		}
@@ -302,9 +302,9 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 		}
 
 		config := &service.TokenBucketConfig{
-			Rate:         options.Rate,
-			Capacity:     options.Capacity,
-			BurstSize:    options.BurstSize,
+			Rate:          options.Rate,
+			Capacity:      options.Capacity,
+			BurstSize:     options.BurstSize,
 			InitialTokens: options.InitialTokens,
 		}
 
@@ -335,20 +335,20 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 
 // QuotaOptions 配额配置
 type QuotaOptions struct {
-	Type   service.QuotaType
-	Limit  int64
+	Type      service.QuotaType
+	Limit     int64
 	HardLimit bool
 }
 
 // QuotaMiddleware 配额中间件
 func QuotaMiddleware(options *QuotaOptions) gin.HandlerFunc {
 	advancedRateLimitServicesOnce.Do(initAdvancedRateLimitServices)
-	
+
 	return func(c *gin.Context) {
 		if options == nil {
 			options = &QuotaOptions{
-				Type:   service.QuotaTypeDaily,
-				Limit:  10000,
+				Type:      service.QuotaTypeDaily,
+				Limit:     10000,
 				HardLimit: true,
 			}
 		}
@@ -380,10 +380,10 @@ func QuotaMiddleware(options *QuotaOptions) gin.HandlerFunc {
 		_, err := quotaManagementService.GetQuota(c.Request.Context(), key)
 		if err == nil {
 			config := &service.QuotaConfig{
-				Type:         options.Type,
-				Limit:        options.Limit,
+				Type:             options.Type,
+				Limit:            options.Limit,
 				WarningThreshold: 80,
-				HardLimit:    options.HardLimit,
+				HardLimit:        options.HardLimit,
 			}
 			_ = quotaManagementService.CreateOrUpdateQuota(c.Request.Context(), key, config)
 		}

@@ -31,8 +31,8 @@ type VerifyLianLianKanRequest struct {
 }
 
 type VerifyLianLianKanResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
+	Success bool    `json:"success"`
+	Message string  `json:"message"`
 	Score   float64 `json:"score"`
 }
 

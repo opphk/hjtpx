@@ -9,13 +9,13 @@ import (
 )
 
 type CacheMetricsCollector struct {
-	stats            *CacheStats
-	hotKeys          *sync.Map
-	keyAccessCount   *sync.Map
-	queryLatency     *LatencyHistogram
-	memoryUsage      *MemoryStats
-	mu               sync.RWMutex
-	started          time.Time
+	stats          *CacheStats
+	hotKeys        *sync.Map
+	keyAccessCount *sync.Map
+	queryLatency   *LatencyHistogram
+	memoryUsage    *MemoryStats
+	mu             sync.RWMutex
+	started        time.Time
 }
 
 type LatencyHistogram struct {
@@ -31,30 +31,30 @@ type MemoryStats struct {
 }
 
 type DetailedMetrics struct {
-	Uptime            time.Duration                `json:"uptime"`
-	HitRate           float64                      `json:"hit_rate"`
-	TotalRequests     int64                        `json:"total_requests"`
-	Hits              int64                        `json:"hits"`
-	Misses            int64                        `json:"misses"`
-	Sets              int64                        `json:"sets"`
-	Deletes           int64                        `json:"deletes"`
-	Errors            int64                        `json:"errors"`
-	AverageLatency    time.Duration                `json:"average_latency"`
-	P95Latency        time.Duration                `json:"p95_latency"`
-	P99Latency        time.Duration                `json:"p99_latency"`
-	L1HitRate         float64                      `json:"l1_hit_rate"`
-	L2HitRate         float64                      `json:"l2_hit_rate"`
-	CompressedCount   int64                        `json:"compressed_count"`
-	DecompressedCount int64                        `json:"decompressed_count"`
-	HotKeys           []HotKeyMetric               `json:"hot_keys"`
-	MemoryUsage       MemoryStats                  `json:"memory_usage"`
-	LatencyDistribution map[string]int64           `json:"latency_distribution"`
+	Uptime              time.Duration    `json:"uptime"`
+	HitRate             float64          `json:"hit_rate"`
+	TotalRequests       int64            `json:"total_requests"`
+	Hits                int64            `json:"hits"`
+	Misses              int64            `json:"misses"`
+	Sets                int64            `json:"sets"`
+	Deletes             int64            `json:"deletes"`
+	Errors              int64            `json:"errors"`
+	AverageLatency      time.Duration    `json:"average_latency"`
+	P95Latency          time.Duration    `json:"p95_latency"`
+	P99Latency          time.Duration    `json:"p99_latency"`
+	L1HitRate           float64          `json:"l1_hit_rate"`
+	L2HitRate           float64          `json:"l2_hit_rate"`
+	CompressedCount     int64            `json:"compressed_count"`
+	DecompressedCount   int64            `json:"decompressed_count"`
+	HotKeys             []HotKeyMetric   `json:"hot_keys"`
+	MemoryUsage         MemoryStats      `json:"memory_usage"`
+	LatencyDistribution map[string]int64 `json:"latency_distribution"`
 }
 
 type HotKeyMetric struct {
-	Key         string        `json:"key"`
-	AccessCount int64         `json:"access_count"`
-	LastAccess  time.Time     `json:"last_access"`
+	Key         string    `json:"key"`
+	AccessCount int64     `json:"access_count"`
+	LastAccess  time.Time `json:"last_access"`
 }
 
 func NewCacheMetricsCollector() *CacheMetricsCollector {
@@ -236,23 +236,23 @@ func (cmc *CacheMetricsCollector) GetDetailedMetrics() *DetailedMetrics {
 	}
 
 	return &DetailedMetrics{
-		Uptime:            time.Since(cmc.started),
-		HitRate:           hitRate,
-		TotalRequests:     totalRequests,
-		Hits:              hits,
-		Misses:            misses,
-		Sets:              cmc.stats.Sets.Load(),
-		Deletes:           cmc.stats.Deletes.Load(),
-		Errors:            cmc.stats.Errors.Load(),
-		AverageLatency:    avgLatency,
-		P95Latency:        cmc.queryLatency.Percentile(0.95),
-		P99Latency:        cmc.queryLatency.Percentile(0.99),
-		L1HitRate:         l1HitRate,
-		L2HitRate:         l2HitRate,
-		CompressedCount:   cmc.stats.Compressed.Load(),
-		DecompressedCount: cmc.stats.Decompressed.Load(),
-		HotKeys:           cmc.getHotKeys(),
-		MemoryUsage:       *cmc.memoryUsage,
+		Uptime:              time.Since(cmc.started),
+		HitRate:             hitRate,
+		TotalRequests:       totalRequests,
+		Hits:                hits,
+		Misses:              misses,
+		Sets:                cmc.stats.Sets.Load(),
+		Deletes:             cmc.stats.Deletes.Load(),
+		Errors:              cmc.stats.Errors.Load(),
+		AverageLatency:      avgLatency,
+		P95Latency:          cmc.queryLatency.Percentile(0.95),
+		P99Latency:          cmc.queryLatency.Percentile(0.99),
+		L1HitRate:           l1HitRate,
+		L2HitRate:           l2HitRate,
+		CompressedCount:     cmc.stats.Compressed.Load(),
+		DecompressedCount:   cmc.stats.Decompressed.Load(),
+		HotKeys:             cmc.getHotKeys(),
+		MemoryUsage:         *cmc.memoryUsage,
 		LatencyDistribution: cmc.queryLatency.GetDistribution(),
 	}
 }
@@ -434,10 +434,10 @@ func (am *AlertManager) CheckErrorRate(metrics *DetailedMetrics, threshold float
 }
 
 var (
-	globalMetricsCollector *CacheMetricsCollector
+	globalMetricsCollector     *CacheMetricsCollector
 	globalMetricsCollectorOnce sync.Once
-	globalAlertManager *AlertManager
-	globalAlertManagerOnce sync.Once
+	globalAlertManager         *AlertManager
+	globalAlertManagerOnce     sync.Once
 )
 
 func GetGlobalMetricsCollector() *CacheMetricsCollector {

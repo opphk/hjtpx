@@ -844,3 +844,378 @@
     }
 
 })(typeof window !== 'undefined' ? window : this);
+
+(function() {
+    'use strict';
+
+    var RuntimeProtection = (function() {
+        var originalCode = null;
+        var integrityHash = null;
+        var protectionActive = false;
+        var monitorInterval = null;
+        var memorySnapshots = {};
+        var selfDestructTriggered = false;
+
+        function computeSHA256(data) {
+            var encoder = new TextEncoder();
+            var dataBuffer = encoder.encode(data);
+            return crypto.subtle.digest('SHA-256', dataBuffer).then(function(hash) {
+                var bytes = new Uint8Array(hash);
+                var binary = '';
+                for (var i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return btoa(binary);
+            });
+        }
+
+        function takeMemorySnapshot() {
+            var snapshot = {
+                timestamp: Date.now(),
+                functions: [],
+                objects: {}
+            };
+
+            if (window.Function) {
+                var originalToString = Function.prototype.toString;
+                var functionKeys = Object.keys(window.Function.prototype);
+                functionKeys.forEach(function(key) {
+                    try {
+                        var desc = Object.getOwnPropertyDescriptor(window.Function.prototype, key);
+                        if (desc && desc.value) {
+                            snapshot.functions.push({
+                                key: key,
+                                type: typeof desc.value
+                            });
+                        }
+                    } catch (e) {}
+                });
+            }
+
+            memorySnapshots[snapshot.timestamp] = snapshot;
+            
+            var maxSnapshots = 5;
+            var timestamps = Object.keys(memorySnapshots).sort();
+            if (timestamps.length > maxSnapshots) {
+                var oldTimestamps = timestamps.slice(0, timestamps.length - maxSnapshots);
+                oldTimestamps.forEach(function(ts) {
+                    delete memorySnapshots[ts];
+                });
+            }
+
+            return snapshot;
+        }
+
+        function detectMemoryModification() {
+            if (window.Function && Function.prototype.toString) {
+                var originalToString = Function.prototype.toString.toString();
+                if (originalToString.indexOf('[native code]') === -1) {
+                    return true;
+                }
+            }
+
+            if (window.console && console.log) {
+                var originalLog = console.log.toString();
+                if (originalLog.indexOf('[native code]') === -1) {
+                    return true;
+                }
+            }
+
+            try {
+                var testFunc = function() { return 'test'; };
+                var funcString = testFunc.toString();
+                if (funcString.indexOf('test') === -1) {
+                    return true;
+                }
+            } catch (e) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function detectCodeTampering() {
+            if (!integrityHash) {
+                return false;
+            }
+
+            var scripts = document.getElementsByTagName('script');
+            for (var i = 0; i < scripts.length; i++) {
+                var script = scripts[i];
+                if (script.src && script.src.indexOf('crypto-utils') !== -1) {
+                    var scriptContent = script.innerHTML || script.textContent;
+                    if (scriptContent && scriptContent.length > 0) {
+                        return computeSHA256(scriptContent).then(function(hash) {
+                            return hash !== integrityHash;
+                        });
+                    }
+                }
+            }
+
+            return Promise.resolve(false);
+        }
+
+        function triggerSelfDestruct() {
+            if (selfDestructTriggered) {
+                return;
+            }
+            selfDestructTriggered = true;
+
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+
+            if (document.documentElement) {
+                document.documentElement.style.display = 'none';
+            }
+
+            if (document.body) {
+                document.body.innerHTML = '<div style="padding:50px;text-align:center;font-family:sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;">' +
+                    '<h1 style="color:#ff0000;">安全警告</h1>' +
+                    '<p>检测到代码篡改或异常访问行为</p>' +
+                    '<p>系统已自动保护</p>' +
+                    '</div>';
+            }
+
+            setTimeout(function() {
+                var scripts = document.getElementsByTagName('script');
+                for (var i = scripts.length - 1; i >= 0; i--) {
+                    scripts[i].parentNode.removeChild(scripts[i]);
+                }
+
+                if (document.head) {
+                    var metas = document.head.getElementsByTagName('meta');
+                    for (var j = metas.length - 1; j >= 0; j--) {
+                        metas[j].parentNode.removeChild(metas[j]);
+                    }
+                }
+
+                Object.keys(window).forEach(function(key) {
+                    if (key !== 'window' && key !== 'document' && key !== 'location' && key !== 'navigator') {
+                        try {
+                            if (typeof window[key] === 'function') {
+                                (function(k) {
+                                    try {
+                                        delete window[k];
+                                        window[k] = function() {};
+                                    } catch (e) {}
+                                })(key);
+                            }
+                        } catch (e) {}
+                    }
+                });
+            }, 100);
+
+            throw new Error('Security violation detected');
+        }
+
+        function detectDevTools() {
+            var threshold = 160;
+            if (window.outerWidth - window.innerWidth > threshold ||
+                window.outerHeight - window.innerHeight > threshold) {
+                return true;
+            }
+
+            var startTime = Date.now();
+            debugger;
+            var endTime = Date.now();
+            if (endTime - startTime > 100) {
+                return true;
+            }
+
+            var enabled = false;
+            (function(x) {
+                var d = document.createElement('div');
+                d.innerHTML = '<x id="__y"/>';
+                d.style.visibility = 'hidden';
+                document.head.appendChild(d);
+                Object.defineProperty(x, 'inspect', {
+                    get: function() {
+                        enabled = true;
+                        return function() {};
+                    }
+                });
+            })(window);
+
+            if (window.__y && window.__y.id === '__y') {
+                enabled = true;
+            }
+
+            if (enabled) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function startProtection(options) {
+            options = options || {};
+            options.checkInterval = options.checkInterval || 2000;
+            options.enableSelfDestruct = options.enableSelfDestruct !== false;
+            options.enableMemoryProtection = options.enableMemoryProtection !== false;
+
+            var scriptContent = '';
+            var scripts = document.getElementsByTagName('script');
+            for (var i = 0; i < scripts.length; i++) {
+                if (scripts[i].src && scripts[i].src.indexOf('crypto-utils') !== -1) {
+                    scriptContent = scripts[i].innerHTML || scripts[i].textContent;
+                    break;
+                }
+            }
+
+            if (scriptContent) {
+                computeSHA256(scriptContent).then(function(hash) {
+                    integrityHash = hash;
+                });
+            }
+
+            takeMemorySnapshot();
+
+            monitorInterval = setInterval(function() {
+                if (detectMemoryModification()) {
+                    console.error('Memory modification detected');
+                    if (options.enableSelfDestruct) {
+                        triggerSelfDestruct();
+                    }
+                }
+
+                if (detectDevTools()) {
+                    console.error('Developer tools detected');
+                    if (options.enableSelfDestruct) {
+                        triggerSelfDestruct();
+                    }
+                }
+
+                if (options.enableMemoryProtection) {
+                    takeMemorySnapshot();
+                }
+
+                detectCodeTampering().then(function(tampered) {
+                    if (tampered) {
+                        console.error('Code tampering detected');
+                        if (options.enableSelfDestruct) {
+                            triggerSelfDestruct();
+                        }
+                    }
+                });
+            }, options.checkInterval);
+
+            document.addEventListener('keydown', function(e) {
+                if (e.keyCode === 123) {
+                    e.preventDefault();
+                    if (options.enableSelfDestruct) {
+                        triggerSelfDestruct();
+                    }
+                }
+            });
+
+            document.addEventListener('contextmenu', function(e) {
+                if (options.preventRightClick) {
+                    e.preventDefault();
+                }
+            });
+
+            protectionActive = true;
+        }
+
+        function stopProtection() {
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+            protectionActive = false;
+        }
+
+        function getProtectionStatus() {
+            return {
+                active: protectionActive,
+                selfDestructTriggered: selfDestructTriggered,
+                hasIntegrityHash: integrityHash !== null,
+                snapshotCount: Object.keys(memorySnapshots).length,
+                monitorRunning: monitorInterval !== null
+            };
+        }
+
+        function initializeRuntimeProtection(options) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    startProtection(options);
+                });
+            } else {
+                startProtection(options);
+            }
+
+            return {
+                start: startProtection,
+                stop: stopProtection,
+                status: getProtectionStatus,
+                snapshot: takeMemorySnapshot,
+                selfDestruct: triggerSelfDestruct
+            };
+        }
+
+        return initializeRuntimeProtection;
+    })();
+
+    if (typeof window !== 'undefined') {
+        window.RuntimeProtection = RuntimeProtection;
+    }
+
+    if (typeof CryptoUtils !== 'undefined') {
+        CryptoUtils.RuntimeProtection = RuntimeProtection;
+    }
+
+    if (typeof CryptoUtils !== 'undefined') {
+        CryptoUtils.initializeRuntimeProtection = function(options) {
+            return RuntimeProtection(options);
+        };
+
+        CryptoUtils.verifyRuntimeIntegrity = function() {
+            return detectCodeTampering();
+        };
+
+        CryptoUtils.protectMemory = function() {
+            return takeMemorySnapshot();
+        };
+
+        CryptoUtils.emergencyShutdown = function() {
+            triggerSelfDestruct();
+        };
+    }
+
+    function detectCodeTampering() {
+        if (!integrityHash) {
+            return Promise.resolve(false);
+        }
+
+        var scripts = document.getElementsByTagName('script');
+        for (var i = 0; i < scripts.length; i++) {
+            var script = scripts[i];
+            if (script.src && script.src.indexOf('crypto-utils') !== -1) {
+                var scriptContent = script.innerHTML || script.textContent;
+                if (scriptContent && scriptContent.length > 0) {
+                    return computeSHA256(scriptContent).then(function(hash) {
+                        return hash !== integrityHash;
+                    });
+                }
+            }
+        }
+
+        return Promise.resolve(false);
+    }
+
+    function computeSHA256(data) {
+        var encoder = new TextEncoder();
+        var dataBuffer = encoder.encode(data);
+        return crypto.subtle.digest('SHA-256', dataBuffer).then(function(hash) {
+            var bytes = new Uint8Array(hash);
+            var binary = '';
+            for (var i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        });
+    }
+
+})();

@@ -18,7 +18,7 @@ func TestNewThreeDVerifierService(t *testing.T) {
 
 func TestGetGridSizeByDifficulty(t *testing.T) {
 	service := NewThreeDGeneratorService(nil, nil)
-	
+
 	tests := []struct {
 		difficulty string
 		expected   int
@@ -41,19 +41,19 @@ func TestGetGridSizeByDifficulty(t *testing.T) {
 
 func TestGeneratePuzzle(t *testing.T) {
 	service := NewThreeDGeneratorService(nil, nil)
-	
+
 	difficulties := []string{"easy", "medium", "hard", "expert"}
-	
+
 	for _, difficulty := range difficulties {
 		t.Run(difficulty, func(t *testing.T) {
 			gridSize := service.getGridSizeByDifficulty(difficulty)
 			puzzle := service.generatePuzzle(gridSize, difficulty)
-			
+
 			assert.NotNil(t, puzzle)
 			assert.Equal(t, gridSize, puzzle.GridSize)
 			assert.Equal(t, difficulty, puzzle.Difficulty)
 			assert.Len(t, puzzle.Pieces, gridSize*gridSize)
-			
+
 			// 验证每个拼图块
 			for _, piece := range puzzle.Pieces {
 				assert.NotEmpty(t, piece.Type)
@@ -71,7 +71,7 @@ func TestPieceColorsAndTypes(t *testing.T) {
 		assert.Equal(t, '#', rune(color[0]))
 		assert.Len(t, color, 7)
 	}
-	
+
 	// 验证类型列表
 	assert.Greater(t, len(pieceTypes), 0)
 	expectedTypes := []string{"cube", "cylinder", "sphere", "cone", "torus"}
@@ -83,15 +83,15 @@ func TestPieceColorsAndTypes(t *testing.T) {
 func TestGenerate3DSessionID(t *testing.T) {
 	// 测试generateSessionID函数（虽然是私有的，但我们可以通过Create方法间接测试）
 	service := NewThreeDGeneratorService(nil, nil)
-	
+
 	req := &CreateThreeDRequest{
 		Difficulty: "medium",
 	}
-	
+
 	result, err := service.Create(nil, req)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, result.SessionID)
-	
+
 	// 再次生成，验证ID不同
 	result2, err := service.Create(nil, req)
 	assert.NoError(t, err)
@@ -126,13 +126,13 @@ func TestThreeDPuzzleStructure(t *testing.T) {
 				Scale:     0.8,
 			},
 		},
-		GridSize:    2,
-		Difficulty:  "easy",
+		GridSize:   2,
+		Difficulty: "easy",
 		TargetRotX: 180,
 		TargetRotY: 90,
 		TargetRotZ: 0,
 	}
-	
+
 	assert.NotNil(t, puzzle)
 	assert.Equal(t, 2, puzzle.GridSize)
 	assert.Equal(t, "easy", puzzle.Difficulty)
@@ -145,17 +145,17 @@ func TestFindPieceByID(t *testing.T) {
 		{ID: 1, Type: "sphere"},
 		{ID: 2, Type: "cylinder"},
 	}
-	
+
 	// 测试找到的情况
 	found := findPieceByID(pieces, 1)
 	assert.NotNil(t, found)
 	assert.Equal(t, 1, found.ID)
 	assert.Equal(t, "sphere", found.Type)
-	
+
 	// 测试找不到的情况
 	notFound := findPieceByID(pieces, 999)
 	assert.Nil(t, notFound)
-	
+
 	// 测试空切片
 	emptyFound := findPieceByID([]ThreeDPiece{}, 0)
 	assert.Nil(t, emptyFound)
@@ -274,7 +274,7 @@ func TestThreeDPieceCopy(t *testing.T) {
 		RotationZ: 180,
 		Scale:     0.9,
 	}
-	
+
 	// 手动复制
 	copy := ThreeDPiece{
 		ID:        original.ID,
@@ -288,9 +288,9 @@ func TestThreeDPieceCopy(t *testing.T) {
 		RotationZ: original.RotationZ,
 		Scale:     original.Scale,
 	}
-	
+
 	assert.Equal(t, original, copy)
-	
+
 	// 修改copy不影响original
 	copy.RotationX = 0
 	assert.NotEqual(t, original.RotationX, copy.RotationX)
@@ -298,12 +298,12 @@ func TestThreeDPieceCopy(t *testing.T) {
 
 func TestCreateThreeDRequestValidation(t *testing.T) {
 	req := &CreateThreeDRequest{
-		Difficulty: "medium",
-		ClientIP:   "127.0.0.1",
-		UserAgent:  "Test User Agent",
+		Difficulty:  "medium",
+		ClientIP:    "127.0.0.1",
+		UserAgent:   "Test User Agent",
 		Fingerprint: "test-fingerprint",
 	}
-	
+
 	assert.Equal(t, "medium", req.Difficulty)
 	assert.Equal(t, "127.0.0.1", req.ClientIP)
 	assert.Equal(t, "Test User Agent", req.UserAgent)
@@ -312,16 +312,16 @@ func TestCreateThreeDRequestValidation(t *testing.T) {
 
 func TestVerifyThreeDRequestValidation(t *testing.T) {
 	puzzle := &ThreeDPuzzle{
-		GridSize: 3,
+		GridSize:   3,
 		Difficulty: "medium",
 	}
-	
+
 	req := &VerifyThreeDRequest{
 		SessionID: "test-session-id",
 		Puzzle:    puzzle,
 		RiskScore: 0.5,
 	}
-	
+
 	assert.Equal(t, "test-session-id", req.SessionID)
 	assert.NotNil(t, req.Puzzle)
 	assert.Equal(t, 0.5, req.RiskScore)
@@ -329,17 +329,17 @@ func TestVerifyThreeDRequestValidation(t *testing.T) {
 
 func TestCreateThreeDResponseStructure(t *testing.T) {
 	puzzle := &ThreeDPuzzle{
-		GridSize: 3,
+		GridSize:   3,
 		Difficulty: "medium",
 	}
-	
+
 	resp := &CreateThreeDResponse{
 		SessionID: "test-session",
 		Puzzle:    puzzle,
 		ExpiresIn: 300,
 		ExpiresAt: 1234567890,
 	}
-	
+
 	assert.Equal(t, "test-session", resp.SessionID)
 	assert.NotNil(t, resp.Puzzle)
 	assert.Equal(t, int64(300), resp.ExpiresIn)
@@ -352,7 +352,7 @@ func TestVerifyThreeDResultStructure(t *testing.T) {
 		Message: "验证成功",
 		Score:   95.5,
 	}
-	
+
 	assert.True(t, result.Success)
 	assert.Equal(t, "验证成功", result.Message)
 	assert.Equal(t, 95.5, result.Score)

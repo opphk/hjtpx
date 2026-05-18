@@ -1292,19 +1292,17 @@ func GetClickCaptcha(c *gin.Context) {
 // VerifyRequest 验证码验证请求参数
 // @Description 验证验证码时发送的请求结构，支持滑动验证码和点击验证码
 type VerifyRequest struct {
-	SessionID       string              `json:"session_id" binding:"required"` // 会话 ID
-	Type            string              `json:"type" binding:"required"`      // 验证码类型: slider 或 click
-	X               int                 `json:"x"`                            // 滑动验证码 X 坐标
-	Y               int                 `json:"y"`                            // 滑动验证码 Y 坐标
-	Points          [][2]int            `json:"points"`                       // 点击验证码坐标数组
-	ClickSequence   []int               `json:"click_sequence"`               // 点击顺序
-	BehaviorData    []BehaviorDataPoint `json:"behavior_data"`                // 行为分析数据
-	SpeedData       json.RawMessage     `json:"speed_data,omitempty" swaggerignore:"true"` // 速度数据 (内部使用)
-	ApplicationID   uint                `json:"application_id"`               // 应用 ID
+	SessionID       string              `json:"session_id" binding:"required"`                   // 会话 ID
+	Type            string              `json:"type" binding:"required"`                         // 验证码类型: slider 或 click
+	X               int                 `json:"x"`                                               // 滑动验证码 X 坐标
+	Y               int                 `json:"y"`                                               // 滑动验证码 Y 坐标
+	Points          [][2]int            `json:"points"`                                          // 点击验证码坐标数组
+	ClickSequence   []int               `json:"click_sequence"`                                  // 点击顺序
+	BehaviorData    []BehaviorDataPoint `json:"behavior_data"`                                   // 行为分析数据
+	SpeedData       json.RawMessage     `json:"speed_data,omitempty" swaggerignore:"true"`       // 速度数据 (内部使用)
+	ApplicationID   uint                `json:"application_id"`                                  // 应用 ID
 	EnvironmentData json.RawMessage     `json:"environment_data,omitempty" swaggerignore:"true"` // 环境检测数据 (内部使用)
 }
-
-
 
 // VerifyCaptcha 验证码验证
 // @Summary 验证用户输入

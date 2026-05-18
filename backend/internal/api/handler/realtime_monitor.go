@@ -58,18 +58,18 @@ type Message struct {
 }
 
 type RealtimeDataPayload struct {
-	Type       string                 `json:"type"`
-	Data       map[string]interface{} `json:"data"`
-	Timestamp  int64                  `json:"timestamp"`
+	Type      string                 `json:"type"`
+	Data      map[string]interface{} `json:"data"`
+	Timestamp int64                  `json:"timestamp"`
 }
 
 type AlertPayload struct {
-	ID         int       `json:"id"`
-	Type       string    `json:"type"`
-	Severity   string    `json:"severity"`
-	Message    string    `json:"message"`
-	Timestamp  int64     `json:"timestamp"`
-	Icon       string    `json:"icon"`
+	ID        int    `json:"id"`
+	Type      string `json:"type"`
+	Severity  string `json:"severity"`
+	Message   string `json:"message"`
+	Timestamp int64  `json:"timestamp"`
+	Icon      string `json:"icon"`
 }
 
 type HeartbeatPayload struct {
@@ -240,7 +240,12 @@ func startDataPushService() {
 					{"name": "API 服务器 1", "status": "online", "icon": "server"},
 					{"name": "API 服务器 2", "status": "online", "icon": "server"},
 					{"name": "数据库主库", "status": "online", "icon": "database"},
-					{"name": "Redis 集群", "status": func() string { if rand.Float32() > 0.7 { return "warning" }; return "online" }(), "icon": "memory"},
+					{"name": "Redis 集群", "status": func() string {
+						if rand.Float32() > 0.7 {
+							return "warning"
+						}
+						return "online"
+					}(), "icon": "memory"},
 					{"name": "负载均衡器", "status": "online", "icon": "network-wired"},
 				},
 			},

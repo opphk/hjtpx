@@ -32,9 +32,9 @@ const (
 
 // SearchCondition 单个搜索条件
 type SearchCondition struct {
-	Field    string        `json:"field"`
+	Field    string         `json:"field"`
 	Operator SearchOperator `json:"operator"`
-	Value    interface{}   `json:"value"`
+	Value    interface{}    `json:"value"`
 }
 
 // SortOption 排序选项
@@ -62,13 +62,13 @@ type SearchResult struct {
 
 // SavedSearch 保存的搜索
 type SavedSearch struct {
-	ID          uint              `gorm:"primaryKey" json:"id"`
-	Name        string            `gorm:"size:255;not null" json:"name"`
-	EntityType  string            `gorm:"size:50;not null;index" json:"entity_type"` // logs, applications, blacklist
-	Query       string            `gorm:"type:text" json:"query"` // JSON格式的AdvancedSearchQuery
-	Description string            `gorm:"type:text" json:"description"`
-	CreatedBy   uint              `gorm:"index" json:"created_by"`
-	CreatedAt   time.Time         `json:"created_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"size:255;not null" json:"name"`
+	EntityType  string    `gorm:"size:50;not null;index" json:"entity_type"` // logs, applications, blacklist
+	Query       string    `gorm:"type:text" json:"query"`                    // JSON格式的AdvancedSearchQuery
+	Description string    `gorm:"type:text" json:"description"`
+	CreatedBy   uint      `gorm:"index" json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // TableName 指定表名

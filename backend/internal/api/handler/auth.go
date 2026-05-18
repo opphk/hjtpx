@@ -23,10 +23,10 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应数据
 type LoginResponse struct {
-	Token        string    `json:"token"`         // 访问令牌
+	Token        string    `json:"token"`                   // 访问令牌
 	RefreshToken string    `json:"refresh_token,omitempty"` // 刷新令牌
-	ExpiresIn    int64     `json:"expires_in"`    // 过期时间(秒)
-	User         AdminInfo `json:"user"`          // 用户信息
+	ExpiresIn    int64     `json:"expires_in"`              // 过期时间(秒)
+	User         AdminInfo `json:"user"`                    // 用户信息
 }
 
 type RefreshTokenRequest struct {
@@ -383,11 +383,11 @@ func AdminDashboard(c *gin.Context) {
 			IsSuperAdmin: admin.IsSuperAdmin,
 		},
 		"stats": gin.H{
-			"total_verifications":  totalVerifications,
-			"today_verifications":   todayVerifications,
-			"blocked_requests":      blockedRequests,
-			"active_users":          activeUsers,
-			"active_applications":   activeApps,
+			"total_verifications": totalVerifications,
+			"today_verifications": todayVerifications,
+			"blocked_requests":    blockedRequests,
+			"active_users":        activeUsers,
+			"active_applications": activeApps,
 		},
 		"recent_activity": logEntries,
 	})

@@ -13,48 +13,48 @@ import (
 type QuotaType string
 
 const (
-	QuotaTypeDaily    QuotaType = "daily"
-	QuotaTypeWeekly   QuotaType = "weekly"
-	QuotaTypeMonthly  QuotaType = "monthly"
-	QuotaTypeHourly   QuotaType = "hourly"
+	QuotaTypeDaily     QuotaType = "daily"
+	QuotaTypeWeekly    QuotaType = "weekly"
+	QuotaTypeMonthly   QuotaType = "monthly"
+	QuotaTypeHourly    QuotaType = "hourly"
 	QuotaTypePerMinute QuotaType = "per_minute"
 )
 
 // QuotaStatus 配额状态
 type QuotaStatus struct {
-	Used        int64         // 已使用
-	Limit       int64         // 限制
-	Remaining   int64         // 剩余
-	ResetAt     time.Time     // 重置时间
-	Type        QuotaType     // 配额类型
-	Percentage  float64       // 使用百分比
+	Used       int64     // 已使用
+	Limit      int64     // 限制
+	Remaining  int64     // 剩余
+	ResetAt    time.Time // 重置时间
+	Type       QuotaType // 配额类型
+	Percentage float64   // 使用百分比
 }
 
 // QuotaConfig 配额配置
 type QuotaConfig struct {
-	Type         QuotaType    // 配额类型
-	Limit        int64        // 配额限制
-	WarningThreshold float64  // 警告阈值（百分比）
-	HardLimit    bool         // 是否硬限制
+	Type             QuotaType // 配额类型
+	Limit            int64     // 配额限制
+	WarningThreshold float64   // 警告阈值（百分比）
+	HardLimit        bool      // 是否硬限制
 }
 
 // Quota 配额结构
 type Quota struct {
-	Key          string       // 配额键
-	Type         QuotaType    // 配额类型
-	Limit        int64        // 限制
-	Used         int64        // 已使用
-	CreatedAt    time.Time    // 创建时间
-	UpdatedAt    time.Time    // 更新时间
-	ResetAt      time.Time    // 下次重置时间
-	WarningThreshold float64  // 警告阈值
-	HardLimit    bool         // 是否硬限制
+	Key              string    // 配额键
+	Type             QuotaType // 配额类型
+	Limit            int64     // 限制
+	Used             int64     // 已使用
+	CreatedAt        time.Time // 创建时间
+	UpdatedAt        time.Time // 更新时间
+	ResetAt          time.Time // 下次重置时间
+	WarningThreshold float64   // 警告阈值
+	HardLimit        bool      // 是否硬限制
 }
 
 // QuotaManagementService 配额管理服务
 type QuotaManagementService struct {
-	quotas map[string]*Quota
-	mu     sync.RWMutex
+	quotas       map[string]*Quota
+	mu           sync.RWMutex
 	redisEnabled bool
 }
 
@@ -64,16 +64,16 @@ const (
 
 var defaultQuotaConfigs = map[string]QuotaConfig{
 	"default_daily": {
-		Type:            QuotaTypeDaily,
-		Limit:           10000,
+		Type:             QuotaTypeDaily,
+		Limit:            10000,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	},
 	"default_hourly": {
-		Type:            QuotaTypeHourly,
-		Limit:           1000,
+		Type:             QuotaTypeHourly,
+		Limit:            1000,
 		WarningThreshold: 80.0,
-		HardLimit:       true,
+		HardLimit:        true,
 	},
 }
 

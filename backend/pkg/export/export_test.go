@@ -4,40 +4,40 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetExporter(t *testing.T) {
 	tests := []struct {
-		name        string
-		format      string
-		expectType  interface{}
+		name       string
+		format     string
+		expectType interface{}
 	}{
 		{
-			name:        "get CSV exporter",
-			format:      FormatCSV,
-			expectType:  &CSVExporter{},
+			name:       "get CSV exporter",
+			format:     FormatCSV,
+			expectType: &CSVExporter{},
 		},
 		{
-			name:        "get Excel exporter",
-			format:      FormatExcel,
-			expectType:  &ExcelExporter{},
+			name:       "get Excel exporter",
+			format:     FormatExcel,
+			expectType: &ExcelExporter{},
 		},
 		{
-			name:        "get PDF exporter",
-			format:      FormatPDF,
-			expectType:  &PDFExporter{},
+			name:       "get PDF exporter",
+			format:     FormatPDF,
+			expectType: &PDFExporter{},
 		},
 		{
-			name:        "get JSON exporter",
-			format:      FormatJSON,
-			expectType:  &JSONExporter{},
+			name:       "get JSON exporter",
+			format:     FormatJSON,
+			expectType: &JSONExporter{},
 		},
 		{
-			name:        "default to CSV exporter",
-			format:      "unknown",
-			expectType:  &CSVExporter{},
+			name:       "default to CSV exporter",
+			format:     "unknown",
+			expectType: &CSVExporter{},
 		},
 	}
 
@@ -172,15 +172,15 @@ func TestGenerateLogVisualization(t *testing.T) {
 	}
 
 	vizData := GenerateLogVisualization(logs, "Test Visualization")
-	
+
 	assert.Equal(t, "Test Visualization", vizData.Title)
 	assert.Len(t, vizData.Charts, 3) // status, type, and date charts
-	
+
 	// Check status chart
 	statusChart := vizData.Charts[0]
 	assert.Equal(t, "Verification Status Distribution", statusChart.Title)
 	assert.Equal(t, "pie", statusChart.Type)
-	
+
 	// Check type chart
 	typeChart := vizData.Charts[1]
 	assert.Equal(t, "Captcha Type Distribution", typeChart.Title)
@@ -193,10 +193,10 @@ func TestVisualizationExporter_ExportHTML(t *testing.T) {
 		Title: "Test Visualization Report",
 		Charts: []ChartData{
 			{
-				Title:   "Test Chart",
-				Type:    "bar",
-				Labels:  []string{"A", "B", "C"},
-				Values:  []interface{}{10, 20, 30},
+				Title:  "Test Chart",
+				Type:   "bar",
+				Labels: []string{"A", "B", "C"},
+				Values: []interface{}{10, 20, 30},
 			},
 		},
 	}

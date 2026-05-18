@@ -3,8 +3,8 @@ package service
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewABTestService(t *testing.T) {
@@ -21,8 +21,8 @@ func TestCreateABTestInputValidation(t *testing.T) {
 		{
 			name: "valid input",
 			input: CreateABTestInput{
-				Name:         "Test A/B",
-				Description:  "Test Description",
+				Name:          "Test A/B",
+				Description:   "Test Description",
 				ApplicationID: 1,
 				Variants: []CreateVariantInput{
 					{Name: "Control", IsControl: true, TrafficPercent: 50},
@@ -34,7 +34,7 @@ func TestCreateABTestInputValidation(t *testing.T) {
 		{
 			name: "empty name",
 			input: CreateABTestInput{
-				Name:         "",
+				Name:          "",
 				ApplicationID: 1,
 				Variants: []CreateVariantInput{
 					{Name: "Control", TrafficPercent: 50},
@@ -46,7 +46,7 @@ func TestCreateABTestInputValidation(t *testing.T) {
 		{
 			name: "invalid traffic - not 100",
 			input: CreateABTestInput{
-				Name:         "Test A/B",
+				Name:          "Test A/B",
 				ApplicationID: 1,
 				Variants: []CreateVariantInput{
 					{Name: "Control", TrafficPercent: 60},
@@ -58,9 +58,9 @@ func TestCreateABTestInputValidation(t *testing.T) {
 		{
 			name: "no variants",
 			input: CreateABTestInput{
-				Name:         "Test A/B",
+				Name:          "Test A/B",
 				ApplicationID: 1,
-				Variants:     []CreateVariantInput{},
+				Variants:      []CreateVariantInput{},
 			},
 			wantErr: true,
 		},
@@ -96,7 +96,7 @@ func TestSelectVariantByHash(t *testing.T) {
 		Name           string
 		TrafficPercent int
 	}
-	
+
 	variants := []testVariant{
 		{ID: 1, Name: "Control", TrafficPercent: 50},
 		{ID: 2, Name: "Variant A", TrafficPercent: 50},
@@ -118,13 +118,13 @@ func TestCalculateConfidence(t *testing.T) {
 	service := NewABTestService()
 
 	tests := []struct {
-		name           string
-		cVisitors      int64
-		cConversions   int64
-		vVisitors      int64
-		vConversions   int64
-		expectedMin    float64
-		expectedMax    float64
+		name         string
+		cVisitors    int64
+		cConversions int64
+		vVisitors    int64
+		vConversions int64
+		expectedMin  float64
+		expectedMax  float64
 	}{
 		{
 			name:         "no visitors",
@@ -229,7 +229,7 @@ func TestGenerateRecommendations(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			recommendations := service.generateRecommendations(tt.variants, tt.status)
 			assert.Len(t, recommendations, tt.expectCount)
-			
+
 			if tt.expectWinnerHint {
 				hasWinnerRec := false
 				for _, r := range recommendations {
@@ -332,8 +332,8 @@ func TestUpdateABTestInput(t *testing.T) {
 
 func TestVariantStats(t *testing.T) {
 	tests := []struct {
-		name   string
-		stats  VariantStats
+		name  string
+		stats VariantStats
 	}{
 		{
 			name: "control variant",

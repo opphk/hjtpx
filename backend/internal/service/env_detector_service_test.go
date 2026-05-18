@@ -104,9 +104,9 @@ func TestEnvironmentDetector_DetectAutomation(t *testing.T) {
 		{
 			name: "Abnormal language settings - empty languages",
 			envInfo: &EnvInfo{
-				UserAgent:  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-				Languages:  []string{},
-				Language:   "",
+				UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				Languages: []string{},
+				Language:  "",
 			},
 			expected: true,
 		},
@@ -144,10 +144,10 @@ func TestEnvironmentDetector_CalculateEnvScore(t *testing.T) {
 	detector := newTestEnvDetector()
 
 	tests := []struct {
-		name         string
-		envInfo      *EnvInfo
-		minExpected  float64
-		maxExpected  float64
+		name        string
+		envInfo     *EnvInfo
+		minExpected float64
+		maxExpected float64
 	}{
 		{
 			name: "Normal browser environment",
@@ -223,10 +223,10 @@ func TestEnvironmentDetector_EvaluateRisk(t *testing.T) {
 	detector := newTestEnvDetector()
 
 	tests := []struct {
-		name       string
-		envInfo    *EnvInfo
-		riskLevel  string
-		hasAction  bool
+		name      string
+		envInfo   *EnvInfo
+		riskLevel string
+		hasAction bool
 	}{
 		{
 			name: "High risk - automation detected",
@@ -239,18 +239,18 @@ func TestEnvironmentDetector_EvaluateRisk(t *testing.T) {
 		{
 			name: "High risk - some issues",
 			envInfo: &EnvInfo{
-				UserAgent:            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-				Platform:             "Win32",
-				Languages:            []string{"en-US"},
-				Language:             "en-US",
+				UserAgent:           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				Platform:            "Win32",
+				Languages:           []string{"en-US"},
+				Language:            "en-US",
 				CanvasFingerprint:   "",
-				WebGLRenderer:        "",
-				WebGLVendor:          "NVIDIA",
-				Plugins:              []string{"Chrome PDF Plugin"},
-				Fonts:                []string{"Arial", "Helvetica", "Times"},
-				ScreenWidth:          1920,
-				ScreenHeight:         1080,
-				HardwareConcurrency:   4,
+				WebGLRenderer:       "",
+				WebGLVendor:         "NVIDIA",
+				Plugins:             []string{"Chrome PDF Plugin"},
+				Fonts:               []string{"Arial", "Helvetica", "Times"},
+				ScreenWidth:         1920,
+				ScreenHeight:        1080,
+				HardwareConcurrency: 4,
 			},
 			riskLevel: "high",
 			hasAction: true,

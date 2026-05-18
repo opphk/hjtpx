@@ -2,9 +2,16 @@ package service
 
 import (
 	"context"
+	"crypto/md5"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
+	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/config"
@@ -17,6 +24,9 @@ type QueryOptimizer struct {
 	slowQueryThreshold       time.Duration
 	enableQueryCache         bool
 	queryCacheTTL            time.Duration
+	queryTimeout             time.Duration
+	enableQueryRewrite       bool
+	maxCacheSize             int
 }
 
 type QueryOption func(*QueryOptimizer)
@@ -48,6 +58,9 @@ func NewQueryOptimizer(opts ...QueryOption) *QueryOptimizer {
 		slowQueryThreshold:       time.Duration(cfg.Database.SlowQueryThresholdMs) * time.Millisecond,
 		enableQueryCache:         cfg.Database.QueryOptimization.EnableQueryCache,
 		queryCacheTTL:            time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second,
+		queryTimeout:             30 * time.Second,
+		enableQueryRewrite:       true,
+		maxCacheSize:             cfg.Database.QueryOptimization.MaxQueryCacheSize,
 	}
 
 	for _, opt := range opts {
@@ -58,28 +71,175 @@ func NewQueryOptimizer(opts ...QueryOption) *QueryOptimizer {
 }
 
 type QueryMetrics struct {
-	TotalQueries  int64
-	SlowQueries   int64
-	FailedQueries int64
-	AvgDuration   time.Duration
-	MaxDuration   time.Duration
-	MinDuration   time.Duration
-	CacheHits     int64
-	CacheMisses   int64
+	TotalQueries   int64
+	SlowQueries    int64
+	FailedQueries  int64
+	AvgDuration    time.Duration
+	MaxDuration    time.Duration
+	MinDuration    time.Duration
+	CacheHits      int64
+	CacheMisses    int64
+	TimeoutQueries int64
 }
 
 type QueryMetricsCollector struct {
-	mu            sync.RWMutex
-	totalQueries  int64
-	slowQueries   int64
-	failedQueries int64
-	cacheHits     int64
-	cacheMisses   int64
-	durations     []time.Duration
+	mu             sync.RWMutex
+	totalQueries   int64
+	slowQueries    int64
+	failedQueries  int64
+	cacheHits      int64
+	cacheMisses    int64
+	timeoutQueries int64
+	durations      []time.Duration
+	maxDuration    time.Duration
 }
 
 var queryMetrics = &QueryMetricsCollector{
 	durations: make([]time.Duration, 0),
+}
+
+type QueryCacheEntry struct {
+	Value      interface{}
+	Expiration time.Time
+	QueryHash  string
+	AccessTime time.Time
+	HitCount   int64
+}
+
+type QueryCache struct {
+	mu      sync.RWMutex
+	entries map[string]*QueryCacheEntry
+	maxSize int
+	ttl     time.Duration
+	hits    int64
+	misses  int64
+}
+
+var queryCache *QueryCache
+
+func init() {
+	cfg := config.GetConfig()
+	queryCache = &QueryCache{
+		entries: make(map[string]*QueryCacheEntry),
+		maxSize: cfg.Database.QueryOptimization.MaxQueryCacheSize,
+		ttl:     time.Duration(cfg.Database.QueryOptimization.QueryCacheTTLSecs) * time.Second,
+	}
+	go queryCache.startCleanup()
+}
+
+func (qc *QueryCache) generateKey(query string, args ...interface{}) string {
+	data := query
+	for _, arg := range args {
+		argBytes, _ := json.Marshal(arg)
+		data += string(argBytes)
+	}
+	hash := md5.Sum([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
+func (qc *QueryCache) Get(key string) (interface{}, bool) {
+	qc.mu.RLock()
+	entry, exists := qc.entries[key]
+	qc.mu.RUnlock()
+
+	if !exists {
+		atomic.AddInt64(&qc.misses, 1)
+		return nil, false
+	}
+
+	if time.Now().After(entry.Expiration) {
+		qc.mu.Lock()
+		delete(qc.entries, key)
+		qc.mu.Unlock()
+		atomic.AddInt64(&qc.misses, 1)
+		return nil, false
+	}
+
+	atomic.AddInt64(&qc.hits, 1)
+	atomic.AddInt64(&entry.HitCount, 1)
+	entry.AccessTime = time.Now()
+	return entry.Value, true
+}
+
+func (qc *QueryCache) Set(key string, value interface{}) {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	if len(qc.entries) >= qc.maxSize {
+		qc.evictLRU()
+	}
+
+	qc.entries[key] = &QueryCacheEntry{
+		Value:      value,
+		Expiration: time.Now().Add(qc.ttl),
+		QueryHash:  key,
+		AccessTime: time.Now(),
+		HitCount:   0,
+	}
+}
+
+func (qc *QueryCache) evictLRU() {
+	var oldestKey string
+	var oldestTime time.Time
+
+	for k, v := range qc.entries {
+		if oldestKey == "" || v.AccessTime.Before(oldestTime) {
+			oldestKey = k
+			oldestTime = v.AccessTime
+		}
+	}
+
+	if oldestKey != "" {
+		delete(qc.entries, oldestKey)
+	}
+}
+
+func (qc *QueryCache) startCleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		qc.cleanupExpired()
+	}
+}
+
+func (qc *QueryCache) cleanupExpired() {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+
+	now := time.Now()
+	for k, v := range qc.entries {
+		if now.After(v.Expiration) {
+			delete(qc.entries, k)
+		}
+	}
+}
+
+func (qc *QueryCache) Clear() {
+	qc.mu.Lock()
+	defer qc.mu.Unlock()
+	qc.entries = make(map[string]*QueryCacheEntry)
+	atomic.StoreInt64(&qc.hits, 0)
+	atomic.StoreInt64(&qc.misses, 0)
+}
+
+func (qc *QueryCache) GetStats() map[string]interface{} {
+	qc.mu.RLock()
+	defer qc.mu.RUnlock()
+
+	total := atomic.LoadInt64(&qc.hits) + atomic.LoadInt64(&qc.misses)
+	hitRate := float64(0)
+	if total > 0 {
+		hitRate = float64(atomic.LoadInt64(&qc.hits)) / float64(total) * 100
+	}
+
+	return map[string]interface{}{
+		"size":     len(qc.entries),
+		"max_size": qc.maxSize,
+		"hits":     atomic.LoadInt64(&qc.hits),
+		"misses":   atomic.LoadInt64(&qc.misses),
+		"hit_rate": hitRate,
+	}
 }
 
 func (q *QueryOptimizer) OptimizeQuery(query string) string {
@@ -93,7 +253,60 @@ func (q *QueryOptimizer) OptimizeQuery(query string) string {
 	optimized = strings.ReplaceAll(optimized, "OR '1'='1'", "")
 	optimized = strings.ReplaceAll(optimized, "or '1'='1'", "")
 
+	optimized = q.optimizeLikePatterns(optimized)
+	optimized = q.optimizeNotInPatterns(optimized)
+	optimized = q.optimizeOrConditions(optimized)
+	optimized = q.optimizeCountQueries(optimized)
+
 	return optimized
+}
+
+func (q *QueryOptimizer) optimizeLikePatterns(query string) string {
+	likeRegex := regexp.MustCompile(`LIKE '%([^%]+)%'`)
+	matches := likeRegex.FindAllStringSubmatch(query, -1)
+
+	for _, match := range matches {
+		if len(match) > 1 {
+			pattern := match[0]
+			term := match[1]
+
+			if len(term) > 3 {
+				optimizedPattern := fmt.Sprintf("LIKE '%%%s%%'", term[:len(term)/2])
+
+				query = strings.Replace(query, pattern, optimizedPattern, 1)
+			}
+		}
+	}
+
+	return query
+}
+
+func (q *QueryOptimizer) optimizeNotInPatterns(query string) string {
+	notInRegex := regexp.MustCompile(`NOT IN\s*\(\s*SELECT`)
+	if notInRegex.MatchString(query) {
+		query = regexp.MustCompile(`NOT IN\s*\(\s*SELECT`).ReplaceAllString(query, "NOT EXISTS (SELECT")
+		query = strings.Replace(query, ")", ")", 1)
+	}
+
+	return query
+}
+
+func (q *QueryOptimizer) optimizeOrConditions(query string) string {
+	orCount := strings.Count(query, " OR ")
+	if orCount > 3 {
+		query = strings.Replace(query, " OR ", " UNION ", orCount/2)
+	}
+
+	return query
+}
+
+func (q *QueryOptimizer) optimizeCountQueries(query string) string {
+	countRegex := regexp.MustCompile(`(?i)SELECT\s+COUNT\(\*?\)\s+FROM`)
+	if countRegex.MatchString(query) {
+		query = regexp.MustCompile(`(?i)SELECT\s+COUNT`).ReplaceAllString(query, "SELECT COUNT /*+ INDEX(*) */")
+	}
+
+	return query
 }
 
 func (q *QueryOptimizer) ShouldUseIndex(table string, whereClause string) bool {
@@ -168,6 +381,72 @@ func (q *QueryOptimizer) CheckIndexes(db *gorm.DB, tableName string) ([]map[stri
 		WHERE tablename = '%s'
 	`, tableName)).Scan(&indexes).Error
 	return indexes, err
+}
+
+func (q *QueryOptimizer) SuggestIndexes(db *gorm.DB, tableName string) ([]string, error) {
+	var suggestions []string
+
+	var slowQueries []struct {
+		Query string `gorm:"column:query"`
+		Calls int64  `gorm:"column:calls"`
+		Time  int64  `gorm:"column:total"`
+	}
+
+	err := db.Raw(`
+		SELECT query, calls, total 
+		FROM pg_stat_statements 
+		WHERE query LIKE '%` + tableName + `%' 
+		AND total > 1000000
+		ORDER BY total DESC 
+		LIMIT 10
+	`).Scan(&slowQueries).Error
+
+	if err != nil {
+		return suggestions, nil
+	}
+
+	for _, sq := range slowQueries {
+		if strings.Contains(sq.Query, "WHERE") {
+			whereClause := strings.Split(sq.Query, "WHERE")[1]
+			whereClause = strings.Split(whereClause, "ORDER")[0]
+			whereClause = strings.Split(whereClause, "LIMIT")[0]
+
+			fields := strings.Split(whereClause, "AND")
+			var indexedFields []string
+			for _, field := range fields {
+				field = strings.TrimSpace(field)
+				if strings.Contains(field, "=") {
+					fieldName := strings.Split(field, "=")[0]
+					fieldName = strings.TrimSpace(fieldName)
+					indexedFields = append(indexedFields, fieldName)
+				}
+			}
+
+			if len(indexedFields) > 0 {
+				suggestion := fmt.Sprintf("CREATE INDEX idx_%s_%s ON %s (%s)",
+					tableName, strings.Join(indexedFields, "_"), tableName, strings.Join(indexedFields, ", "))
+				suggestions = append(suggestions, suggestion)
+			}
+		}
+	}
+
+	return suggestions, nil
+}
+
+func (q *QueryOptimizer) ExecuteWithTimeout(ctx context.Context, db *gorm.DB, query string, dest interface{}, args ...interface{}) error {
+	queryCtx, cancel := context.WithTimeout(ctx, q.queryTimeout)
+	defer cancel()
+
+	result := db.WithContext(queryCtx).Raw(query, args...).Scan(dest)
+	if result.Error != nil {
+		if queryCtx.Err() == context.DeadlineExceeded {
+			atomic.AddInt64(&queryMetrics.timeoutQueries, 1)
+			return fmt.Errorf("query timeout exceeded: %w", result.Error)
+		}
+		return result.Error
+	}
+
+	return nil
 }
 
 func CreateIndexes(db *gorm.DB) error {
@@ -364,6 +643,7 @@ func GetQueryMetrics() *QueryMetrics {
 	metrics.FailedQueries = queryMetrics.failedQueries
 	metrics.CacheHits = queryMetrics.cacheHits
 	metrics.CacheMisses = queryMetrics.cacheMisses
+	metrics.TimeoutQueries = queryMetrics.timeoutQueries
 
 	if len(queryMetrics.durations) > 0 {
 		var totalDuration time.Duration
@@ -397,12 +677,47 @@ func ResetQueryMetrics() {
 	queryMetrics.failedQueries = 0
 	queryMetrics.cacheHits = 0
 	queryMetrics.cacheMisses = 0
+	queryMetrics.timeoutQueries = 0
 	queryMetrics.durations = nil
+}
+
+func RecordQueryMetrics(duration time.Duration, isSlow bool, err error) {
+	queryMetrics.mu.Lock()
+	defer queryMetrics.mu.Unlock()
+
+	queryMetrics.totalQueries++
+	queryMetrics.durations = append(queryMetrics.durations, duration)
+
+	if len(queryMetrics.durations) > 10000 {
+		queryMetrics.durations = queryMetrics.durations[len(queryMetrics.durations)-5000:]
+	}
+
+	if isSlow {
+		queryMetrics.slowQueries++
+	}
+
+	if err != nil {
+		queryMetrics.failedQueries++
+	}
+
+	if duration > queryMetrics.maxDuration {
+		queryMetrics.maxDuration = duration
+	}
+}
+
+func RecordCacheHit() {
+	atomic.AddInt64(&queryMetrics.cacheHits, 1)
+}
+
+func RecordCacheMiss() {
+	atomic.AddInt64(&queryMetrics.cacheMisses, 1)
 }
 
 type DBOptimizer struct {
 	db             *gorm.DB
 	queryOptimizer *QueryOptimizer
+	readReplica    *gorm.DB
+	useReplica     atomic.Bool
 }
 
 func NewDBOptimizer(db *gorm.DB, opts ...QueryOption) *DBOptimizer {
@@ -432,8 +747,10 @@ func (o *DBOptimizer) EnableQueryLogging() error {
 			duration := time.Since(start)
 			sql := db.Statement.SQL.String()
 
+			RecordQueryMetrics(duration, duration > o.queryOptimizer.slowQueryThreshold, db.Error)
+
 			if duration > o.queryOptimizer.slowQueryThreshold {
-				fmt.Printf("[SLOW_QUERY] Duration: %v, Query: %s\n", duration, sql)
+				log.Printf("[SLOW_QUERY] Duration: %v, Query: %s\n", duration, sql)
 			}
 		})
 	})
@@ -508,6 +825,28 @@ func (o *DBOptimizer) Restore(tableName string, ids []uint) error {
 		Update("deleted_at", nil).Error
 }
 
+func (o *DBOptimizer) CachedQuery(ctx context.Context, cacheKey string, dest interface{}, queryFunc func() error, ttl ...time.Duration) error {
+	if cached, ok := queryCache.Get(cacheKey); ok {
+		RecordCacheHit()
+		if cachedData, err := json.Marshal(cached); err == nil {
+			json.Unmarshal(cachedData, dest)
+			return nil
+		}
+	}
+
+	RecordCacheMiss()
+	if err := queryFunc(); err != nil {
+		return err
+	}
+
+	queryCache.Set(cacheKey, dest)
+	return nil
+}
+
+func (o *DBOptimizer) InvalidateQueryCache(pattern string) {
+	queryCache.Clear()
+}
+
 func HealthCheckDB(ctx context.Context, db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -528,4 +867,58 @@ func HealthCheckDB(ctx context.Context, db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+func (o *DBOptimizer) OptimizeComplexQuery(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	optimizedQuery := o.queryOptimizer.OptimizeQuery(query)
+
+	if len(args) > 0 {
+		optimizedQuery = fmt.Sprintf(optimizedQuery, args...)
+	}
+
+	return o.db.WithContext(ctx).Raw(optimizedQuery).Rows()
+}
+
+func (o *DBOptimizer) SetReadReplica(db *gorm.DB) {
+	o.readReplica = db
+}
+
+func (o *DBOptimizer) UseReadReplica(enable bool) {
+	o.useReplica.Store(enable)
+}
+
+func (o *DBOptimizer) ReadFromReplica(queryFunc func(*gorm.DB) *gorm.DB) *gorm.DB {
+	if o.useReplica.Load() && o.readReplica != nil {
+		return queryFunc(o.readReplica)
+	}
+	return queryFunc(o.db)
+}
+
+type QueryPlan struct {
+	Query       string
+	Plan        string
+	Cost        float64
+	EstimatedMs float64
+}
+
+func (o *DBOptimizer) AnalyzeQueryPlan(query string) (*QueryPlan, error) {
+	var plan string
+	err := o.db.Raw("EXPLAIN (FORMAT JSON) " + query).Scan(&plan).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &QueryPlan{
+		Query: query,
+		Plan:  plan,
+		Cost:  0,
+	}, nil
+}
+
+func (o *DBOptimizer) VacuumTable(tableName string) error {
+	return o.db.Exec(fmt.Sprintf("VACUUM ANALYZE %s", tableName)).Error
+}
+
+func (o *DBOptimizer) ReindexTable(tableName string) error {
+	return o.db.Exec(fmt.Sprintf("REINDEX TABLE %s", tableName)).Error
 }

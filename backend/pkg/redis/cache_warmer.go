@@ -7,22 +7,22 @@ import (
 )
 
 type WarmupTask struct {
-	Name        string
-	Key         string
-	TTL         time.Duration
-	Frequency   time.Duration
-	Loader      func(ctx context.Context) ([]byte, error)
-	Enabled     bool
+	Name      string
+	Key       string
+	TTL       time.Duration
+	Frequency time.Duration
+	Loader    func(ctx context.Context) ([]byte, error)
+	Enabled   bool
 }
 
 type CacheWarmer struct {
-	tasks       map[string]*WarmupTask
-	mu          sync.RWMutex
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-	cache       *EnhancedCache
-	running     bool
+	tasks   map[string]*WarmupTask
+	mu      sync.RWMutex
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	cache   *EnhancedCache
+	running bool
 }
 
 func NewCacheWarmer(cache *EnhancedCache) *CacheWarmer {
@@ -275,10 +275,10 @@ type AdaptiveRefresher struct {
 }
 
 type keyStat struct {
-	accessCount     int
-	lastAccess      time.Time
-	refreshCount    int
-	avgRefreshTime  time.Duration
+	accessCount    int
+	lastAccess     time.Time
+	refreshCount   int
+	avgRefreshTime time.Duration
 }
 
 func NewAdaptiveRefresher(cache *EnhancedCache) *AdaptiveRefresher {

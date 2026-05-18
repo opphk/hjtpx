@@ -72,29 +72,29 @@ type EnvDetectionReport struct {
 }
 
 type EnvVerifyRequest struct {
-	SessionID      string                 `json:"session_id"`
-	Type           string                 `json:"type"`
-	X              int                    `json:"x"`
-	Y              int                    `json:"y"`
-	Points         [][2]int              `json:"points"`
-	ClickSequence  []int                 `json:"click_sequence"`
-	BehaviorData   []BehaviorDataPoint    `json:"behavior_data"`
-	SpeedData      json.RawMessage        `json:"speed_data,omitempty"`
-	ApplicationID  uint                  `json:"application_id"`
-	EnvironmentEnv EnvInfo               `json:"environment_env"`
-	Fingerprint    string                 `json:"fingerprint"`
-	IPAddress      string                 `json:"ip_address"`
-	UserAgent      string                 `json:"user_agent"`
+	SessionID      string              `json:"session_id"`
+	Type           string              `json:"type"`
+	X              int                 `json:"x"`
+	Y              int                 `json:"y"`
+	Points         [][2]int            `json:"points"`
+	ClickSequence  []int               `json:"click_sequence"`
+	BehaviorData   []BehaviorDataPoint `json:"behavior_data"`
+	SpeedData      json.RawMessage     `json:"speed_data,omitempty"`
+	ApplicationID  uint                `json:"application_id"`
+	EnvironmentEnv EnvInfo             `json:"environment_env"`
+	Fingerprint    string              `json:"fingerprint"`
+	IPAddress      string              `json:"ip_address"`
+	UserAgent      string              `json:"user_agent"`
 }
 
 type EnvVerifyResponse struct {
-	Success      bool     `json:"success"`
-	Message      string   `json:"message"`
-	RiskLevel    string   `json:"risk_level"`
-	RiskScore    float64  `json:"risk_score"`
-	RiskFactors  []string `json:"risk_factors"`
-	Action       string   `json:"action"`
-	CaptchaPass  bool     `json:"captcha_pass"`
+	Success     bool     `json:"success"`
+	Message     string   `json:"message"`
+	RiskLevel   string   `json:"risk_level"`
+	RiskScore   float64  `json:"risk_score"`
+	RiskFactors []string `json:"risk_factors"`
+	Action      string   `json:"action"`
+	CaptchaPass bool     `json:"captcha_pass"`
 }
 
 func NewEnvDetectorService() *EnvDetectorService {

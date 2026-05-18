@@ -11,20 +11,20 @@ import (
 type SecurityEventType string
 
 const (
-	EventLoginAttempt       SecurityEventType = "login_attempt"
-	EventLoginSuccess       SecurityEventType = "login_success"
-	EventLoginFailure       SecurityEventType = "login_failure"
-	EventAccessDenied       SecurityEventType = "access_denied"
-	EventCSRFDetected       SecurityEventType = "csrf_detected"
-	EventSQLInjection       SecurityEventType = "sql_injection"
-	EventXSSAttempt         SecurityEventType = "xss_attempt"
-	EventRateLimitHit       SecurityEventType = "rate_limit_hit"
-	EventBotDetected        SecurityEventType = "bot_detected"
-	EventDDoSAttempt        SecurityEventType = "ddos_attempt"
-	EventSuspiciousActivity SecurityEventType = "suspicious_activity"
+	EventLoginAttempt        SecurityEventType = "login_attempt"
+	EventLoginSuccess        SecurityEventType = "login_success"
+	EventLoginFailure        SecurityEventType = "login_failure"
+	EventAccessDenied        SecurityEventType = "access_denied"
+	EventCSRFDetected        SecurityEventType = "csrf_detected"
+	EventSQLInjection        SecurityEventType = "sql_injection"
+	EventXSSAttempt          SecurityEventType = "xss_attempt"
+	EventRateLimitHit        SecurityEventType = "rate_limit_hit"
+	EventBotDetected         SecurityEventType = "bot_detected"
+	EventDDoSAttempt         SecurityEventType = "ddos_attempt"
+	EventSuspiciousActivity  SecurityEventType = "suspicious_activity"
 	EventPrivilegeEscalation SecurityEventType = "privilege_escalation"
-	EventDataAccess         SecurityEventType = "data_access"
-	EventConfigChange       SecurityEventType = "config_change"
+	EventDataAccess          SecurityEventType = "data_access"
+	EventConfigChange        SecurityEventType = "config_change"
 )
 
 type SecurityEvent struct {
@@ -44,13 +44,13 @@ type SecurityEvent struct {
 }
 
 type SecurityAuditService struct {
-	events        []*SecurityEvent
-	eventBuffer   chan *SecurityEvent
-	alertHandlers []func(event *SecurityEvent)
-	mu            sync.RWMutex
-	maxEvents     int
+	events         []*SecurityEvent
+	eventBuffer    chan *SecurityEvent
+	alertHandlers  []func(event *SecurityEvent)
+	mu             sync.RWMutex
+	maxEvents      int
 	severityLevels map[SecurityEventType]string
-	asyncMode     bool // 控制是否使用异步模式，测试时可以设置为false
+	asyncMode      bool // 控制是否使用异步模式，测试时可以设置为false
 }
 
 func NewSecurityAuditService() *SecurityAuditService {
@@ -61,20 +61,20 @@ func NewSecurityAuditService() *SecurityAuditService {
 		maxEvents:     10000,
 		asyncMode:     true,
 		severityLevels: map[SecurityEventType]string{
-			EventLoginAttempt:       "info",
-			EventLoginSuccess:       "info",
-			EventLoginFailure:       "warning",
-			EventAccessDenied:       "warning",
-			EventCSRFDetected:       "high",
-			EventSQLInjection:       "critical",
-			EventXSSAttempt:         "high",
-			EventRateLimitHit:       "warning",
-			EventBotDetected:        "medium",
-			EventDDoSAttempt:        "critical",
-			EventSuspiciousActivity: "medium",
+			EventLoginAttempt:        "info",
+			EventLoginSuccess:        "info",
+			EventLoginFailure:        "warning",
+			EventAccessDenied:        "warning",
+			EventCSRFDetected:        "high",
+			EventSQLInjection:        "critical",
+			EventXSSAttempt:          "high",
+			EventRateLimitHit:        "warning",
+			EventBotDetected:         "medium",
+			EventDDoSAttempt:         "critical",
+			EventSuspiciousActivity:  "medium",
 			EventPrivilegeEscalation: "critical",
-			EventDataAccess:         "info",
-			EventConfigChange:       "high",
+			EventDataAccess:          "info",
+			EventConfigChange:        "high",
 		},
 	}
 	go service.processEvents()
@@ -207,9 +207,9 @@ func (s *SecurityAuditService) DetectIntrusionAttempts(r *http.Request) []*Secur
 	query := r.URL.RawQuery
 
 	suspiciousPatterns := map[string]SecurityEventType{
-		`(\%27)|(\')|(\-\-)|(\%23)|(#)`: EventSQLInjection,
-		`(\%3C)|<((\%2F)|\/)*[a-z0-9\%]+`: EventXSSAttempt,
-		`(alert|script|javascript)`: EventXSSAttempt,
+		`(\%27)|(\')|(\-\-)|(\%23)|(#)`:       EventSQLInjection,
+		`(\%3C)|<((\%2F)|\/)*[a-z0-9\%]+`:     EventXSSAttempt,
+		`(alert|script|javascript)`:           EventXSSAttempt,
 		`(union|select|insert|update|delete)`: EventSQLInjection,
 	}
 

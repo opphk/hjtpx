@@ -152,8 +152,8 @@ func TestGeneratorService_Create(t *testing.T) {
 	generator := NewGeneratorService(nil, nil)
 
 	req := &CreateCaptchaRequest{
-		Width:       320,
-		Height:      160,
+		Width:        320,
+		Height:       160,
 		SliderWidth:  40,
 		SliderHeight: 40,
 	}
@@ -173,8 +173,8 @@ func TestGeneratorService_Create_CustomDimensions(t *testing.T) {
 	generator := NewGeneratorService(nil, nil)
 
 	req := &CreateCaptchaRequest{
-		Width:       400,
-		Height:      200,
+		Width:        400,
+		Height:       200,
 		SliderWidth:  50,
 		SliderHeight: 50,
 	}
@@ -216,13 +216,13 @@ func TestGeneratorService_DeleteSession(t *testing.T) {
 func TestVerifierService_Verify_ExpiredSession(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-expired",
-			Status:     "pending",
+			SessionID:   "test-expired",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(-1 * time.Hour),
-			GapX:       100,
-			GapY:       50,
+			GapX:        100,
+			GapY:        50,
 		},
 	}
 
@@ -241,13 +241,13 @@ func TestVerifierService_Verify_ExpiredSession(t *testing.T) {
 func TestVerifierService_Verify_MaxAttempts(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-max-attempts",
-			Status:     "pending",
+			SessionID:   "test-max-attempts",
+			Status:      "pending",
 			VerifyCount: 3,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(5 * time.Minute),
-			GapX:       100,
-			GapY:       50,
+			GapX:        100,
+			GapY:        50,
 		},
 	}
 
@@ -266,13 +266,13 @@ func TestVerifierService_Verify_MaxAttempts(t *testing.T) {
 func TestVerifierService_Verify_AlreadyVerified(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-verified",
-			Status:     "verified",
+			SessionID:   "test-verified",
+			Status:      "verified",
 			VerifyCount: 0,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(5 * time.Minute),
-			GapX:       100,
-			GapY:       50,
+			GapX:        100,
+			GapY:        50,
 		},
 	}
 
@@ -292,23 +292,23 @@ func TestVerifierService_Verify_AlreadyVerified(t *testing.T) {
 func TestVerifierService_Verify_CorrectPosition(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-correct",
-			Status:     "pending",
+			SessionID:   "test-correct",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(5 * time.Minute),
-			GapX:       100,
-			GapY:       50,
+			GapX:        100,
+			GapY:        50,
 		},
 	}
 
 	req := &VerifyRequest{
-		SessionID: "test-correct",
-		PositionX: 100,
-		PositionY: 50,
-		RiskScore: 80,
+		SessionID:  "test-correct",
+		PositionX:  100,
+		PositionY:  50,
+		RiskScore:  80,
 		TraceScore: 85,
-		EnvScore: 90,
+		EnvScore:   90,
 	}
 
 	result, err := verifierService.Verify(context.Background(), req)
@@ -322,13 +322,13 @@ func TestVerifierService_Verify_CorrectPosition(t *testing.T) {
 func TestVerifierService_Verify_WrongPosition(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-wrong",
-			Status:     "pending",
+			SessionID:   "test-wrong",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(5 * time.Minute),
-			GapX:       100,
-			GapY:       50,
+			GapX:        100,
+			GapY:        50,
 		},
 	}
 
@@ -349,8 +349,8 @@ func TestVerifierService_Verify_WrongPosition(t *testing.T) {
 func TestVerifierService_CheckSessionValid(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-valid",
-			Status:     "pending",
+			SessionID:   "test-valid",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(5 * time.Minute),
@@ -365,8 +365,8 @@ func TestVerifierService_CheckSessionValid(t *testing.T) {
 func TestVerifierService_CheckSessionValid_Expired(t *testing.T) {
 	verifierService := &mockVerifierService{
 		session: &models.CaptchaSession{
-			SessionID:  "test-expired",
-			Status:     "pending",
+			SessionID:   "test-expired",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
 			ExpiredAt:   time.Now().Add(-1 * time.Hour),
@@ -493,7 +493,7 @@ func (m *mockVerifierService) CheckSessionValid(ctx context.Context, sessionID s
 
 func TestGenerateRandomDigits(t *testing.T) {
 	tests := []struct {
-		name string
+		name   string
 		length int
 	}{
 		{"default length (4)", 4},
@@ -542,8 +542,8 @@ func TestGenerateSilence(t *testing.T) {
 
 func TestMathSin(t *testing.T) {
 	tests := []struct {
-		name string
-		input float64
+		name   string
+		input  float64
 		minVal float64
 		maxVal float64
 	}{
@@ -569,7 +569,7 @@ func TestVoiceGeneratorService_Generate(t *testing.T) {
 
 	req := &VoiceCaptchaRequest{
 		Language: "zh-CN",
-		Length: 4,
+		Length:   4,
 	}
 
 	resp, err := generator.Generate(context.Background(), req)
@@ -586,7 +586,7 @@ func TestVoiceGeneratorService_Generate_English(t *testing.T) {
 
 	req := &VoiceCaptchaRequest{
 		Language: "en-US",
-		Length: 6,
+		Length:   6,
 	}
 
 	resp, err := generator.Generate(context.Background(), req)
@@ -650,18 +650,18 @@ func (m *mockVoiceVerifierService) Verify(ctx context.Context, req *VoiceVerifyR
 func TestVoiceVerifierService_Verify_CorrectCode(t *testing.T) {
 	verifier := &mockVoiceVerifierService{
 		session: &models.VoiceCaptchaSession{
-			SessionID: "test-correct",
-			Code: "1234",
-			Status: "pending",
+			SessionID:   "test-correct",
+			Code:        "1234",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
-			ExpiredAt: time.Now().Add(5 * time.Minute),
+			ExpiredAt:   time.Now().Add(5 * time.Minute),
 		},
 	}
 
 	req := &VoiceVerifyRequest{
 		SessionID: "test-correct",
-		Code: "1234",
+		Code:      "1234",
 	}
 
 	result, err := verifier.Verify(context.Background(), req)
@@ -673,18 +673,18 @@ func TestVoiceVerifierService_Verify_CorrectCode(t *testing.T) {
 func TestVoiceVerifierService_Verify_WrongCode(t *testing.T) {
 	verifier := &mockVoiceVerifierService{
 		session: &models.VoiceCaptchaSession{
-			SessionID: "test-wrong",
-			Code: "1234",
-			Status: "pending",
+			SessionID:   "test-wrong",
+			Code:        "1234",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
-			ExpiredAt: time.Now().Add(5 * time.Minute),
+			ExpiredAt:   time.Now().Add(5 * time.Minute),
 		},
 	}
 
 	req := &VoiceVerifyRequest{
 		SessionID: "test-wrong",
-		Code: "4321",
+		Code:      "4321",
 	}
 
 	result, err := verifier.Verify(context.Background(), req)
@@ -696,18 +696,18 @@ func TestVoiceVerifierService_Verify_WrongCode(t *testing.T) {
 func TestVoiceVerifierService_Verify_ExpiredSession(t *testing.T) {
 	verifier := &mockVoiceVerifierService{
 		session: &models.VoiceCaptchaSession{
-			SessionID: "test-expired",
-			Code: "1234",
-			Status: "pending",
+			SessionID:   "test-expired",
+			Code:        "1234",
+			Status:      "pending",
 			VerifyCount: 0,
 			MaxAttempts: 3,
-			ExpiredAt: time.Now().Add(-1 * time.Hour),
+			ExpiredAt:   time.Now().Add(-1 * time.Hour),
 		},
 	}
 
 	req := &VoiceVerifyRequest{
 		SessionID: "test-expired",
-		Code: "1234",
+		Code:      "1234",
 	}
 
 	result, err := verifier.Verify(context.Background(), req)
@@ -719,18 +719,18 @@ func TestVoiceVerifierService_Verify_ExpiredSession(t *testing.T) {
 func TestVoiceVerifierService_Verify_MaxAttempts(t *testing.T) {
 	verifier := &mockVoiceVerifierService{
 		session: &models.VoiceCaptchaSession{
-			SessionID: "test-max-attempts",
-			Code: "1234",
-			Status: "pending",
+			SessionID:   "test-max-attempts",
+			Code:        "1234",
+			Status:      "pending",
 			VerifyCount: 3,
 			MaxAttempts: 3,
-			ExpiredAt: time.Now().Add(5 * time.Minute),
+			ExpiredAt:   time.Now().Add(5 * time.Minute),
 		},
 	}
 
 	req := &VoiceVerifyRequest{
 		SessionID: "test-max-attempts",
-		Code: "1234",
+		Code:      "1234",
 	}
 
 	result, err := verifier.Verify(context.Background(), req)
@@ -742,18 +742,18 @@ func TestVoiceVerifierService_Verify_MaxAttempts(t *testing.T) {
 func TestVoiceVerifierService_Verify_AlreadyVerified(t *testing.T) {
 	verifier := &mockVoiceVerifierService{
 		session: &models.VoiceCaptchaSession{
-			SessionID: "test-verified",
-			Code: "1234",
-			Status: "verified",
+			SessionID:   "test-verified",
+			Code:        "1234",
+			Status:      "verified",
 			VerifyCount: 0,
 			MaxAttempts: 3,
-			ExpiredAt: time.Now().Add(5 * time.Minute),
+			ExpiredAt:   time.Now().Add(5 * time.Minute),
 		},
 	}
 
 	req := &VoiceVerifyRequest{
 		SessionID: "test-verified",
-		Code: "1234",
+		Code:      "1234",
 	}
 
 	result, err := verifier.Verify(context.Background(), req)

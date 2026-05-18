@@ -21,12 +21,12 @@ type HeatmapPoint struct {
 }
 
 type Trajectory struct {
-	UserID    string                `json:"userId"`
-	SessionID string                `json:"sessionId"`
-	Points    []BehaviorDataPoint   `json:"points"`
-	StartTime string                `json:"startTime"`
-	EndTime   string                `json:"endTime"`
-	Duration  int64                 `json:"duration"`
+	UserID    string              `json:"userId"`
+	SessionID string              `json:"sessionId"`
+	Points    []BehaviorDataPoint `json:"points"`
+	StartTime string              `json:"startTime"`
+	EndTime   string              `json:"endTime"`
+	Duration  int64               `json:"duration"`
 }
 
 type Anomaly struct {
@@ -52,7 +52,7 @@ type BehaviorSummary struct {
 	AvgSessionDuration float64 `json:"avgSessionDuration"`
 	AvgMouseSpeed      float64 `json:"avgMouseSpeed"`
 	ClickCount         int64   `json:"clickCount"`
-	KeyboardEventCount int64  `json:"keyboardEventCount"`
+	KeyboardEventCount int64   `json:"keyboardEventCount"`
 	AnomalyCount       int64   `json:"anomalyCount"`
 	HighRiskUsers      int64   `json:"highRiskUsers"`
 }
@@ -74,7 +74,7 @@ func (s *BehaviorAnalyticsService) GetBehaviorSummary(period string) (*BehaviorS
 
 func (s *BehaviorAnalyticsService) GetHeatmapData(period string) ([]HeatmapPoint, error) {
 	heatmap := make([]HeatmapPoint, 0)
-	
+
 	gridSize := 20
 	for x := 0; x < 1920; x += gridSize {
 		for y := 0; y < 1080; y += gridSize {
@@ -96,29 +96,29 @@ func (s *BehaviorAnalyticsService) GetHeatmapData(period string) ([]HeatmapPoint
 
 func (s *BehaviorAnalyticsService) GetRecentTrajectories(limit int) ([]Trajectory, error) {
 	trajectories := make([]Trajectory, 0, limit)
-	
+
 	userIDs := []string{"user_1", "user_2", "user_3", "user_4", "user_5", "user_6", "user_7", "user_8"}
 	sessionIDs := []string{"session_001", "session_002", "session_003", "session_004", "session_005"}
-	
+
 	for i := 0; i < limit; i++ {
 		pointCount := rand.Intn(50) + 10
 		points := make([]BehaviorDataPoint, 0, pointCount)
-		
+
 		startX, startY := rand.Intn(1600)+100, rand.Intn(800)+100
 		currentX, currentY := startX, startY
 		startTime := time.Now().Add(-time.Duration(rand.Intn(3600)) * time.Second).UnixMilli()
-		
+
 		for j := 0; j < pointCount; j++ {
 			event := "move"
 			if rand.Float64() > 0.9 {
 				event = "click"
 			}
-			
+
 			currentX += rand.Intn(100) - 50
 			currentY += rand.Intn(100) - 50
 			currentX = maxInt(0, minInt(currentX, 1920))
 			currentY = maxInt(0, minInt(currentY, 1080))
-			
+
 			points = append(points, BehaviorDataPoint{
 				X:         currentX,
 				Y:         currentY,
@@ -126,7 +126,7 @@ func (s *BehaviorAnalyticsService) GetRecentTrajectories(limit int) ([]Trajector
 				Event:     event,
 			})
 		}
-		
+
 		duration := int64(pointCount * 100)
 		trajectories = append(trajectories, Trajectory{
 			UserID:    userIDs[i%len(userIDs)],
@@ -271,7 +271,7 @@ func (s *BehaviorAnalyticsService) exportCSV(period string) ([]byte, error) {
 	csvContent := "用户行为分析报表\n"
 	csvContent += "导出时间," + time.Now().Format("2006-01-02 15:04:05") + "\n"
 	csvContent += "时间范围," + period + "\n\n"
-	
+
 	csvContent += "指标,数值\n"
 	csvContent += fmt.Sprintf("总会话数,%d\n", summary.TotalSessions)
 	csvContent += fmt.Sprintf("总交互数,%d\n", summary.TotalInteractions)
@@ -320,15 +320,15 @@ type RadarIndicator struct {
 }
 
 type RadarSeriesData struct {
-	Value     []int               `json:"value"`
-	Name      string              `json:"name"`
-	ItemStyle map[string]string   `json:"itemStyle,omitempty"`
-	AreaStyle map[string]float64  `json:"areaStyle,omitempty"`
+	Value     []int              `json:"value"`
+	Name      string             `json:"name"`
+	ItemStyle map[string]string  `json:"itemStyle,omitempty"`
+	AreaStyle map[string]float64 `json:"areaStyle,omitempty"`
 }
 
 type RadarData struct {
-	Indicator []RadarIndicator   `json:"indicator"`
-	Data      []RadarSeriesData  `json:"data"`
+	Indicator []RadarIndicator  `json:"indicator"`
+	Data      []RadarSeriesData `json:"data"`
 }
 
 func (s *BehaviorAnalyticsService) GetSankeyData(period string) (*SankeyData, error) {

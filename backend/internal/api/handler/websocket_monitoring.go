@@ -65,15 +65,15 @@ func generateMockData() {
 		metrics := map[string]interface{}{
 			"type": "metrics",
 			"payload": map[string]interface{}{
-				"total_requests":     totalRequests,
-				"success_count":      successCount,
-				"fail_count":         failCount,
-				"qps":                100 + rand.Float64()*200,
-				"avg_response_time":  50 + rand.Float64()*200,
-				"cpu_usage":          40 + rand.Float64()*30,
-				"memory_usage":       55 + rand.Float64()*20,
-				"disk_usage":         30 + rand.Float64()*10,
-				"requests":           100 + rand.Intn(200),
+				"total_requests":    totalRequests,
+				"success_count":     successCount,
+				"fail_count":        failCount,
+				"qps":               100 + rand.Float64()*200,
+				"avg_response_time": 50 + rand.Float64()*200,
+				"cpu_usage":         40 + rand.Float64()*30,
+				"memory_usage":      55 + rand.Float64()*20,
+				"disk_usage":        30 + rand.Float64()*10,
+				"requests":          100 + rand.Intn(200),
 				"captcha_types": map[string]interface{}{
 					"slider":  20 + rand.Intn(40),
 					"click":   15 + rand.Intn(30),
@@ -96,7 +96,12 @@ func generateMockData() {
 					{"name": "API 服务器 1", "status": "online", "icon": "server"},
 					{"name": "API 服务器 2", "status": "online", "icon": "server"},
 					{"name": "数据库主库", "status": "online", "icon": "database"},
-					{"name": "Redis 集群", "status": func() string { if rand.Float32() > 0.7 { return "warning" }; return "online" }(), "icon": "memory"},
+					{"name": "Redis 集群", "status": func() string {
+						if rand.Float32() > 0.7 {
+							return "warning"
+						}
+						return "online"
+					}(), "icon": "memory"},
 					{"name": "负载均衡器", "status": "online", "icon": "network-wired"},
 				},
 			},
@@ -231,22 +236,22 @@ func GetMonitoringData(c *gin.Context) {
 func GetAlerts(c *gin.Context) {
 	response.Success(c, []gin.H{
 		{
-			"id":             1,
-			"type":           "high_cpu",
-			"message":        "Redis 内存使用率较高",
-			"severity":       "warning",
-			"timestamp":      time.Now().Add(-5 * time.Minute).Unix(),
-			"acknowledged":   false,
-			"icon":           "memory",
+			"id":           1,
+			"type":         "high_cpu",
+			"message":      "Redis 内存使用率较高",
+			"severity":     "warning",
+			"timestamp":    time.Now().Add(-5 * time.Minute).Unix(),
+			"acknowledged": false,
+			"icon":         "memory",
 		},
 		{
-			"id":             2,
-			"type":           "info",
-			"message":        "系统自动备份完成",
-			"severity":       "info",
-			"timestamp":      time.Now().Add(-10 * time.Minute).Unix(),
-			"acknowledged":   false,
-			"icon":           "check-circle",
+			"id":           2,
+			"type":         "info",
+			"message":      "系统自动备份完成",
+			"severity":     "info",
+			"timestamp":    time.Now().Add(-10 * time.Minute).Unix(),
+			"acknowledged": false,
+			"icon":         "check-circle",
 		},
 	})
 }
@@ -263,9 +268,9 @@ func AcknowledgeAlert(c *gin.Context) {
 // GetSystemMetrics 获取系统指标
 func GetSystemMetrics(c *gin.Context) {
 	response.Success(c, gin.H{
-		"cpu": []float64{42.3, 45.1, 47.8, 44.5, 46.2},
+		"cpu":    []float64{42.3, 45.1, 47.8, 44.5, 46.2},
 		"memory": []float64{60.2, 62.5, 63.1, 61.8, 62.8},
-		"disk": []float64{34.5, 34.7, 34.9, 35.0, 35.1},
+		"disk":   []float64{34.5, 34.7, 34.9, 35.0, 35.1},
 		"network": gin.H{
 			"in":  125000,
 			"out": 98000,
@@ -279,7 +284,7 @@ func GetRequestMetrics(c *gin.Context) {
 		"total_requests":        123456,
 		"requests_per_second":   156,
 		"average_response_time": 123,
-		"error_rate":           2.8,
+		"error_rate":            2.8,
 		"status_codes": gin.H{
 			"200": 118000,
 			"400": 3000,
@@ -294,18 +299,18 @@ func GetApiStats(c *gin.Context) {
 	response.Success(c, gin.H{
 		"endpoints": []gin.H{
 			{
-				"path":         "/api/v1/captcha/slider",
-				"method":       "GET",
-				"requests":     50000,
-				"avg_time":     85,
-				"error_rate":   1.2,
+				"path":       "/api/v1/captcha/slider",
+				"method":     "GET",
+				"requests":   50000,
+				"avg_time":   85,
+				"error_rate": 1.2,
 			},
 			{
-				"path":         "/api/v1/captcha/click",
-				"method":       "GET",
-				"requests":     45000,
-				"avg_time":     92,
-				"error_rate":   1.5,
+				"path":       "/api/v1/captcha/click",
+				"method":     "GET",
+				"requests":   45000,
+				"avg_time":   92,
+				"error_rate": 1.5,
 			},
 		},
 	})

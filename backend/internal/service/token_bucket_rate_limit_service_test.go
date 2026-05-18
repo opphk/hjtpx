@@ -98,9 +98,8 @@ func TestTrafficShaper(t *testing.T) {
 	defer shaper.Close()
 
 	// 测试提交任务
-	taskExecuted := false
 	success := shaper.Submit(func() {
-		taskExecuted = true
+		// 任务会被执行
 	})
 	assert.True(t, success)
 

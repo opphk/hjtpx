@@ -13,9 +13,9 @@ import (
 )
 
 type ThreeDPuzzle struct {
-	Pieces      []ThreeDPiece `json:"pieces"`
-	GridSize    int           `json:"gridSize"`
-	Difficulty  string        `json:"difficulty"`
+	Pieces     []ThreeDPiece `json:"pieces"`
+	GridSize   int           `json:"gridSize"`
+	Difficulty string        `json:"difficulty"`
 	TargetRotX float64       `json:"targetRotX"`
 	TargetRotY float64       `json:"targetRotY"`
 	TargetRotZ float64       `json:"targetRotZ"`
@@ -35,17 +35,17 @@ type ThreeDPiece struct {
 }
 
 type CreateThreeDRequest struct {
-	Difficulty string `json:"difficulty"`
-	ClientIP   string `json:"clientIP"`
-	UserAgent  string `json:"userAgent"`
+	Difficulty  string `json:"difficulty"`
+	ClientIP    string `json:"clientIP"`
+	UserAgent   string `json:"userAgent"`
 	Fingerprint string `json:"fingerprint"`
 }
 
 type CreateThreeDResponse struct {
-	SessionID  string        `json:"sessionID"`
-	Puzzle     *ThreeDPuzzle `json:"puzzle"`
-	ExpiresIn  int64         `json:"expiresIn"`
-	ExpiresAt  int64         `json:"expiresAt"`
+	SessionID string        `json:"sessionID"`
+	Puzzle    *ThreeDPuzzle `json:"puzzle"`
+	ExpiresIn int64         `json:"expiresIn"`
+	ExpiresAt int64         `json:"expiresAt"`
 }
 
 type ThreeDGeneratorService struct {
@@ -177,9 +177,9 @@ func (s *ThreeDGeneratorService) generatePuzzle(gridSize int, difficulty string)
 	}
 
 	return &ThreeDPuzzle{
-		Pieces:      pieces,
-		GridSize:    gridSize,
-		Difficulty:  difficulty,
+		Pieces:     pieces,
+		GridSize:   gridSize,
+		Difficulty: difficulty,
 		TargetRotX: targetRotX,
 		TargetRotY: targetRotY,
 		TargetRotZ: targetRotZ,

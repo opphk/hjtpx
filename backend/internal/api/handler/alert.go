@@ -38,27 +38,27 @@ type UpdateAlertChannelRequest struct {
 }
 
 type CreateAlertRuleRequest struct {
-	Name              string   `json:"name" binding:"required,min=1,max=255"`
-	EventType         string   `json:"event_type" binding:"required"`
-	Condition         string   `json:"condition"`
-	Severity          string   `json:"severity" binding:"required,oneof=info warning error critical"`
-	ChannelIDs        []uint   `json:"channel_ids" binding:"required"`
-	IsEnabled         bool     `json:"is_enabled"`
-	AggregationWindow int      `json:"aggregation_window" binding:"min=1"`
-	Threshold         int      `json:"threshold" binding:"min=1"`
-	Description       string   `json:"description" binding:"max=1000"`
+	Name              string `json:"name" binding:"required,min=1,max=255"`
+	EventType         string `json:"event_type" binding:"required"`
+	Condition         string `json:"condition"`
+	Severity          string `json:"severity" binding:"required,oneof=info warning error critical"`
+	ChannelIDs        []uint `json:"channel_ids" binding:"required"`
+	IsEnabled         bool   `json:"is_enabled"`
+	AggregationWindow int    `json:"aggregation_window" binding:"min=1"`
+	Threshold         int    `json:"threshold" binding:"min=1"`
+	Description       string `json:"description" binding:"max=1000"`
 }
 
 type UpdateAlertRuleRequest struct {
-	Name              *string  `json:"name" binding:"omitempty,min=1,max=255"`
-	EventType         *string  `json:"event_type"`
-	Condition         *string  `json:"condition"`
-	Severity          *string  `json:"severity" binding:"omitempty,oneof=info warning error critical"`
-	ChannelIDs        []uint   `json:"channel_ids"`
-	IsEnabled         *bool    `json:"is_enabled"`
-	AggregationWindow *int     `json:"aggregation_window" binding:"omitempty,min=1"`
-	Threshold         *int     `json:"threshold" binding:"omitempty,min=1"`
-	Description       *string  `json:"description" binding:"omitempty,max=1000"`
+	Name              *string `json:"name" binding:"omitempty,min=1,max=255"`
+	EventType         *string `json:"event_type"`
+	Condition         *string `json:"condition"`
+	Severity          *string `json:"severity" binding:"omitempty,oneof=info warning error critical"`
+	ChannelIDs        []uint  `json:"channel_ids"`
+	IsEnabled         *bool   `json:"is_enabled"`
+	AggregationWindow *int    `json:"aggregation_window" binding:"omitempty,min=1"`
+	Threshold         *int    `json:"threshold" binding:"omitempty,min=1"`
+	Description       *string `json:"description" binding:"omitempty,max=1000"`
 }
 
 type ResolveAlertRequest struct {
@@ -308,10 +308,10 @@ func ListAlerts(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{
-		"items":      alerts,
-		"total":      total,
-		"page":       query.Page,
-		"page_size":  query.PageSize,
+		"items":     alerts,
+		"total":     total,
+		"page":      query.Page,
+		"page_size": query.PageSize,
 	})
 }
 

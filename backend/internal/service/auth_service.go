@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	ErrTokenInvalid  = errors.New("token is invalid")
+	ErrTokenInvalid     = errors.New("token is invalid")
 	ErrTokenExpiredAuth = errors.New("token is expired")
-	ErrTokenNotReady = errors.New("token service not ready")
+	ErrTokenNotReady    = errors.New("token service not ready")
 )
 
 type AuthService interface {

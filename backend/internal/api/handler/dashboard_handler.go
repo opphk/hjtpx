@@ -96,11 +96,11 @@ func (h *DashboardHandler) getRecentVerifications(limit int) ([]map[string]inter
 	defer rows.Close()
 
 	typeMap := map[string]string{
-		"slider":   "滑动验证",
-		"click":    "点选验证",
-		"image":    "图片验证",
-		"text":     "文字验证",
-		"gesture":  "手势验证",
+		"slider":  "滑动验证",
+		"click":   "点选验证",
+		"image":   "图片验证",
+		"text":    "文字验证",
+		"gesture": "手势验证",
 	}
 
 	for rows.Next() {

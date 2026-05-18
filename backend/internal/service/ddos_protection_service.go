@@ -8,21 +8,21 @@ import (
 )
 
 type DDoSCheckResult struct {
-	Allowed      bool
-	Reason       string
-	IPStats      *IPStatistics
-	RetryAfter   int
+	Allowed    bool
+	Reason     string
+	IPStats    *IPStatistics
+	RetryAfter int
 }
 
 type IPStatistics struct {
-	IP             string
-	RequestCount   int
-	BlockedCount   int
-	FirstSeen      time.Time
-	LastSeen       time.Time
-	Rate           float64
-	IsAnomaly      bool
-	IsBlacklisted  bool
+	IP            string
+	RequestCount  int
+	BlockedCount  int
+	FirstSeen     time.Time
+	LastSeen      time.Time
+	Rate          float64
+	IsAnomaly     bool
+	IsBlacklisted bool
 }
 
 type DDoSTrafficData struct {

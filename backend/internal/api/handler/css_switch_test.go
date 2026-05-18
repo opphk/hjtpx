@@ -15,7 +15,7 @@ func TestGetCSSSource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
+		name string
 	}{
 		{
 			name: "returns css source",
@@ -41,8 +41,8 @@ func TestSetCSSSource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
-		requestBody    interface{}
+		name        string
+		requestBody interface{}
 	}{
 		{
 			name: "valid cdn source",
@@ -72,7 +72,7 @@ func TestSetCSSSource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			
+
 			var req *http.Request
 			if tt.requestBody == nil {
 				req, _ = http.NewRequest("POST", "/css-source", nil)

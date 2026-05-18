@@ -14,53 +14,53 @@ import (
 
 type EnvironmentDetectionHandler struct {
 	fingerprintAnalyzer *service.FingerprintAnalyzer
-	proxyDetector      *service.ProxyDetectionService
+	proxyDetector       *service.ProxyDetectionService
 }
 
 func NewEnvironmentDetectionHandler() *EnvironmentDetectionHandler {
 	return &EnvironmentDetectionHandler{
 		fingerprintAnalyzer: service.NewFingerprintAnalyzer(),
-		proxyDetector:      service.NewProxyDetectionService(),
+		proxyDetector:       service.NewProxyDetectionService(),
 	}
 }
 
 type EnvironmentDetectionRequest struct {
-	Fingerprint    string                 `json:"fingerprint" binding:"required"`
-	CanvasHash     string                 `json:"canvas_hash"`
-	WebGLHash      string                 `json:"webgl_hash"`
-	AudioHash      string                 `json:"audio_hash"`
-	FontHash       string                 `json:"font_hash"`
-	PluginHash     string                 `json:"plugin_hash"`
-	ScreenResolution string               `json:"screen_resolution"`
-	Timezone       string                 `json:"timezone"`
-	Language       string                 `json:"language"`
-	Platform       string                 `json:"platform"`
-	UserAgent      string                 `json:"user_agent"`
-	IPAddress      string                 `json:"ip_address"`
-	Headers        map[string]string      `json:"headers"`
-	WebRTCIPs      []string               `json:"webrtc_ips"`
-	ConnectionType string                 `json:"connection_type"`
-	HardwareConcurrency int               `json:"hardware_concurrency"`
-	DeviceMemory   float64                `json:"device_memory"`
-	RiskScore      float64                `json:"risk_score"`
-	DetectionResults map[string]interface{} `json:"detection_results"`
+	Fingerprint         string                 `json:"fingerprint" binding:"required"`
+	CanvasHash          string                 `json:"canvas_hash"`
+	WebGLHash           string                 `json:"webgl_hash"`
+	AudioHash           string                 `json:"audio_hash"`
+	FontHash            string                 `json:"font_hash"`
+	PluginHash          string                 `json:"plugin_hash"`
+	ScreenResolution    string                 `json:"screen_resolution"`
+	Timezone            string                 `json:"timezone"`
+	Language            string                 `json:"language"`
+	Platform            string                 `json:"platform"`
+	UserAgent           string                 `json:"user_agent"`
+	IPAddress           string                 `json:"ip_address"`
+	Headers             map[string]string      `json:"headers"`
+	WebRTCIPs           []string               `json:"webrtc_ips"`
+	ConnectionType      string                 `json:"connection_type"`
+	HardwareConcurrency int                    `json:"hardware_concurrency"`
+	DeviceMemory        float64                `json:"device_memory"`
+	RiskScore           float64                `json:"risk_score"`
+	DetectionResults    map[string]interface{} `json:"detection_results"`
 }
 
 type EnvironmentDetectionResponse struct {
-	Success       bool                     `json:"success"`
-	FingerprintID string                   `json:"fingerprint_id"`
-	RiskLevel    string                   `json:"risk_level"`
-	RiskScore    float64                  `json:"risk_score"`
-	IsBot        bool                     `json:"is_bot"`
-	IsVPN        bool                     `json:"is_vpn"`
-	IsProxy      bool                     `json:"is_proxy"`
-	IsTor        bool                     `json:"is_tor"`
-	Confidence   float64                  `json:"confidence"`
-	Indicators   []string                 `json:"indicators"`
-	Analysis     *DetectionAnalysis        `json:"analysis,omitempty"`
-	ProxyResult  *service.ProxyDetection   `json:"proxy_result,omitempty"`
-	Recommendations []string               `json:"recommendations"`
-	Timestamp    time.Time                `json:"timestamp"`
+	Success         bool                    `json:"success"`
+	FingerprintID   string                  `json:"fingerprint_id"`
+	RiskLevel       string                  `json:"risk_level"`
+	RiskScore       float64                 `json:"risk_score"`
+	IsBot           bool                    `json:"is_bot"`
+	IsVPN           bool                    `json:"is_vpn"`
+	IsProxy         bool                    `json:"is_proxy"`
+	IsTor           bool                    `json:"is_tor"`
+	Confidence      float64                 `json:"confidence"`
+	Indicators      []string                `json:"indicators"`
+	Analysis        *DetectionAnalysis      `json:"analysis,omitempty"`
+	ProxyResult     *service.ProxyDetection `json:"proxy_result,omitempty"`
+	Recommendations []string                `json:"recommendations"`
+	Timestamp       time.Time               `json:"timestamp"`
 }
 
 type DetectionAnalysis struct {
@@ -69,32 +69,32 @@ type DetectionAnalysis struct {
 	AnomalyType    string                   `json:"anomaly_type"`
 	Severity       string                   `json:"severity"`
 	SimilarFingers []SimilarFingerprintInfo `json:"similar_fingerprints,omitempty"`
-	ClusterInfo    *service.ClusterInfo      `json:"cluster_info,omitempty"`
+	ClusterInfo    *service.ClusterInfo     `json:"cluster_info,omitempty"`
 }
 
 type SimilarFingerprintInfo struct {
 	FingerprintID string   `json:"fingerprint_id"`
-	Similarity   float64  `json:"similarity"`
-	CommonFields []string  `json:"common_fields"`
-	DiffFields   []string  `json:"diff_fields"`
+	Similarity    float64  `json:"similarity"`
+	CommonFields  []string `json:"common_fields"`
+	DiffFields    []string `json:"diff_fields"`
 }
 
 type FingerprintAnalysisRequest struct {
-	Fingerprint string `form:"fingerprint" binding:"required"`
+	Fingerprint string  `form:"fingerprint" binding:"required"`
 	Threshold   float64 `form:"threshold"`
 }
 
 type FingerprintAnalysisResponse struct {
-	Success bool                    `json:"success"`
+	Success bool                     `json:"success"`
 	Data    *FingerprintDataResponse `json:"data"`
 }
 
 type FingerprintDataResponse struct {
-	Fingerprint    *service.FingerprintAnalysis `json:"fingerprint"`
-	AnomalyResult  *service.AnomalyResult       `json:"anomaly"`
-	SimilarFps     []SimilarFingerprintInfo    `json:"similar_fingerprints"`
-	Stats          *service.AnalysisStats        `json:"stats"`
-	Clusters       []*service.ClusterInfo       `json:"clusters"`
+	Fingerprint   *service.FingerprintAnalysis `json:"fingerprint"`
+	AnomalyResult *service.AnomalyResult       `json:"anomaly"`
+	SimilarFps    []SimilarFingerprintInfo     `json:"similar_fingerprints"`
+	Stats         *service.AnalysisStats       `json:"stats"`
+	Clusters      []*service.ClusterInfo       `json:"clusters"`
 }
 
 type ProxyCheckRequest struct {
@@ -102,26 +102,26 @@ type ProxyCheckRequest struct {
 }
 
 type ProxyCheckResponse struct {
-	Success     bool                    `json:"success"`
-	Data       *ProxyCheckData          `json:"data"`
+	Success bool            `json:"success"`
+	Data    *ProxyCheckData `json:"data"`
 }
 
 type ProxyCheckData struct {
-	IPAddress    string                   `json:"ip_address"`
-	IsProxy     bool                     `json:"is_proxy"`
-	IsVPN       bool                     `json:"is_vpn"`
-	IsTor       bool                     `json:"is_tor"`
-	IsDatacenter bool                    `json:"is_datacenter"`
-	RiskLevel   string                   `json:"risk_level"`
-	Score       float64                  `json:"score"`
-	Confidence  float64                  `json:"confidence"`
-	Country     string                   `json:"country"`
-	ISP         string                   `json:"isp"`
-	ASN         string                   `json:"asn"`
-	DetectionMethods []string             `json:"detection_methods"`
-	Hosing      bool                     `json:"hosting"`
-	Mobile      bool                     `json:"mobile"`
-	LastChecked time.Time                `json:"last_checked"`
+	IPAddress        string    `json:"ip_address"`
+	IsProxy          bool      `json:"is_proxy"`
+	IsVPN            bool      `json:"is_vpn"`
+	IsTor            bool      `json:"is_tor"`
+	IsDatacenter     bool      `json:"is_datacenter"`
+	RiskLevel        string    `json:"risk_level"`
+	Score            float64   `json:"score"`
+	Confidence       float64   `json:"confidence"`
+	Country          string    `json:"country"`
+	ISP              string    `json:"isp"`
+	ASN              string    `json:"asn"`
+	DetectionMethods []string  `json:"detection_methods"`
+	Hosing           bool      `json:"hosting"`
+	Mobile           bool      `json:"mobile"`
+	LastChecked      time.Time `json:"last_checked"`
 }
 
 func (h *EnvironmentDetectionHandler) DetectEnvironment(c *gin.Context) {
@@ -159,20 +159,20 @@ func (h *EnvironmentDetectionHandler) DetectEnvironment(c *gin.Context) {
 	}
 
 	analysisData := map[string]interface{}{
-		"canvas_hash":        req.CanvasHash,
-		"webgl_hash":         req.WebGLHash,
-		"audio_hash":         req.AudioHash,
-		"font_hash":          req.FontHash,
-		"plugin_hash":        req.PluginHash,
-		"screen_resolution":   req.ScreenResolution,
-		"timezone":           req.Timezone,
-		"language":           req.Language,
-		"platform":           req.Platform,
-		"user_agent":         req.UserAgent,
-		"webrtc_ips":         req.WebRTCIPs,
-		"connection_type":    req.ConnectionType,
+		"canvas_hash":          req.CanvasHash,
+		"webgl_hash":           req.WebGLHash,
+		"audio_hash":           req.AudioHash,
+		"font_hash":            req.FontHash,
+		"plugin_hash":          req.PluginHash,
+		"screen_resolution":    req.ScreenResolution,
+		"timezone":             req.Timezone,
+		"language":             req.Language,
+		"platform":             req.Platform,
+		"user_agent":           req.UserAgent,
+		"webrtc_ips":           req.WebRTCIPs,
+		"connection_type":      req.ConnectionType,
 		"hardware_concurrency": req.HardwareConcurrency,
-		"device_memory":      req.DeviceMemory,
+		"device_memory":        req.DeviceMemory,
 	}
 
 	fpAnalysis, anomalyResult, err := h.fingerprintAnalyzer.AnalyzeFingerprint(analysisData)
@@ -187,26 +187,26 @@ func (h *EnvironmentDetectionHandler) DetectEnvironment(c *gin.Context) {
 	proxyResult, err := h.proxyDetector.DetectProxy(req.IPAddress, headers)
 	if err != nil {
 		proxyResult = &service.ProxyDetection{
-			IPAddress:   req.IPAddress,
-			IsProxy:     false,
-			IsVPN:       false,
-			IsTor:       false,
-			RiskLevel:   "unknown",
-			Score:       0,
-			Confidence:  0,
+			IPAddress:  req.IPAddress,
+			IsProxy:    false,
+			IsVPN:      false,
+			IsTor:      false,
+			RiskLevel:  "unknown",
+			Score:      0,
+			Confidence: 0,
 		}
 	}
 
 	riskScore := calculateCombinedRiskScore(req.RiskScore, fpAnalysis, anomalyResult, proxyResult)
 
 	response := &EnvironmentDetectionResponse{
-		Success:        true,
-		FingerprintID:  fpAnalysis.FingerprintID,
-		RiskScore:      riskScore,
-		Confidence:     fpAnalysis.Confidence,
-		Indicators:     fpAnalysis.RiskIndicators,
+		Success:         true,
+		FingerprintID:   fpAnalysis.FingerprintID,
+		RiskScore:       riskScore,
+		Confidence:      fpAnalysis.Confidence,
+		Indicators:      fpAnalysis.RiskIndicators,
 		Recommendations: generateRecommendations(riskScore, proxyResult, anomalyResult),
-		Timestamp:      time.Now(),
+		Timestamp:       time.Now(),
 	}
 
 	if riskScore > 70 {
@@ -238,9 +238,9 @@ func (h *EnvironmentDetectionHandler) DetectEnvironment(c *gin.Context) {
 			}
 			analysis.SimilarFingers = append(analysis.SimilarFingers, SimilarFingerprintInfo{
 				FingerprintID: sim.FingerprintID,
-				Similarity:   sim.Similarity,
-				CommonFields: sim.CommonFields,
-				DiffFields:   sim.DiffFields,
+				Similarity:    sim.Similarity,
+				CommonFields:  sim.CommonFields,
+				DiffFields:    sim.DiffFields,
 			})
 		}
 	}
@@ -286,9 +286,9 @@ func (h *EnvironmentDetectionHandler) GetFingerprintAnalysis(c *gin.Context) {
 	for _, sim := range similarFps {
 		similarFpInfos = append(similarFpInfos, SimilarFingerprintInfo{
 			FingerprintID: sim.FingerprintID,
-			Similarity:   sim.Similarity,
-			CommonFields: sim.CommonFields,
-			DiffFields:   sim.DiffFields,
+			Similarity:    sim.Similarity,
+			CommonFields:  sim.CommonFields,
+			DiffFields:    sim.DiffFields,
 		})
 	}
 
@@ -336,21 +336,21 @@ func (h *EnvironmentDetectionHandler) CheckProxy(c *gin.Context) {
 	}
 
 	response := &ProxyCheckData{
-		IPAddress:     proxyResult.IPAddress,
-		IsProxy:      proxyResult.IsProxy,
-		IsVPN:        proxyResult.IsVPN,
-		IsTor:        proxyResult.IsTor,
-		IsDatacenter: proxyResult.IsDatacenter,
-		RiskLevel:    proxyResult.RiskLevel,
-		Score:        proxyResult.Score,
-		Confidence:   proxyResult.Confidence,
-		Country:      proxyResult.Country,
-		ISP:          proxyResult.ISP,
-		ASN:          proxyResult.ASN,
+		IPAddress:        proxyResult.IPAddress,
+		IsProxy:          proxyResult.IsProxy,
+		IsVPN:            proxyResult.IsVPN,
+		IsTor:            proxyResult.IsTor,
+		IsDatacenter:     proxyResult.IsDatacenter,
+		RiskLevel:        proxyResult.RiskLevel,
+		Score:            proxyResult.Score,
+		Confidence:       proxyResult.Confidence,
+		Country:          proxyResult.Country,
+		ISP:              proxyResult.ISP,
+		ASN:              proxyResult.ASN,
 		DetectionMethods: proxyResult.DetectionMethods,
-		Hosing:       proxyResult.Hosting,
-		Mobile:       proxyResult.Mobile,
-		LastChecked:  proxyResult.LastChecked,
+		Hosing:           proxyResult.Hosting,
+		Mobile:           proxyResult.Mobile,
+		LastChecked:      proxyResult.LastChecked,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -365,14 +365,14 @@ func (h *EnvironmentDetectionHandler) GetDetectionStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total_fingerprints":  stats.TotalFingerprints,
-			"bot_fingerprints":    stats.BotFingerprints,
-			"vpn_fingerprints":    stats.VPNFingerprints,
-			"avg_anomaly_score":   stats.AvgAnomalyScore,
-			"high_risk_count":     stats.HighRiskCount,
-			"medium_risk_count":   stats.MediumRiskCount,
-			"low_risk_count":      stats.LowRiskCount,
-			"clusters_count":      stats.ClustersCount,
+			"total_fingerprints": stats.TotalFingerprints,
+			"bot_fingerprints":   stats.BotFingerprints,
+			"vpn_fingerprints":   stats.VPNFingerprints,
+			"avg_anomaly_score":  stats.AvgAnomalyScore,
+			"high_risk_count":    stats.HighRiskCount,
+			"medium_risk_count":  stats.MediumRiskCount,
+			"low_risk_count":     stats.LowRiskCount,
+			"clusters_count":     stats.ClustersCount,
 		},
 	})
 }
@@ -383,12 +383,12 @@ func (h *EnvironmentDetectionHandler) GetClusters(c *gin.Context) {
 	clusterInfos := make([]map[string]interface{}, 0)
 	for _, cluster := range clusters {
 		clusterInfos = append(clusterInfos, map[string]interface{}{
-			"cluster_id":       cluster.ClusterID,
-			"size":             cluster.Size,
-			"common_features":  cluster.CommonFeatures,
-			"risk_level":       cluster.RiskLevel,
-			"first_seen":       cluster.FirstSeen,
-			"last_seen":        cluster.LastSeen,
+			"cluster_id":      cluster.ClusterID,
+			"size":            cluster.Size,
+			"common_features": cluster.CommonFeatures,
+			"risk_level":      cluster.RiskLevel,
+			"first_seen":      cluster.FirstSeen,
+			"last_seen":       cluster.LastSeen,
 		})
 	}
 
@@ -579,9 +579,9 @@ func (h *EnvironmentDetectionHandler) CleanupOldData(c *gin.Context) {
 	removed := db.CleanupOldData(maxAge)
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"removed":    removed,
-		"max_age":    maxAgeStr,
+		"success": true,
+		"removed": removed,
+		"max_age": maxAgeStr,
 	})
 }
 

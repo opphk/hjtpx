@@ -146,7 +146,7 @@ func sendNewChallenge(session *service.WebSocketSession, svc *service.WebSocketS
 	challengeType := challengeTypes[rand.Intn(len(challengeTypes))]
 
 	challengeData := generateChallengeData(challengeType)
-	
+
 	_, err := svc.SendChallenge(session.ID, challengeType, challengeData)
 	if err != nil {
 		sendErrorResponse(session, "CHALLENGE_FAILED", "Failed to send challenge", svc)
@@ -203,13 +203,13 @@ func verifyAnswer(answer service.AnswerPayload) bool {
 func calculateRiskScore(answer service.AnswerPayload) int {
 	// 模拟风险评估，范围 0-100，分数越低越安全
 	baseScore := rand.Intn(50)
-	
+
 	if answer.Data != nil {
 		if speed, ok := answer.Data["speed"].(float64); ok && speed > 1000 {
 			baseScore += 30
 		}
 	}
-	
+
 	if baseScore > 100 {
 		baseScore = 100
 	}
@@ -223,13 +223,13 @@ func sendErrorResponse(session *service.WebSocketSession, code string, message s
 		Message: message,
 	}
 	payloadBytes, _ := json.Marshal(errorPayload)
-	
+
 	msg := service.WebSocketMessage{
 		Type:      service.MessageTypeError,
 		Payload:   payloadBytes,
 		Timestamp: time.Now().Unix(),
 	}
-	
+
 	svc.SendMessage(session.ID, msg)
 }
 
@@ -237,7 +237,7 @@ func sendErrorResponse(session *service.WebSocketSession, code string, message s
 func GetWebSocketStats(c *gin.Context) {
 	svc := GetWebSocketService()
 	sessions := svc.GetActiveSessions()
-	
+
 	response.Success(c, gin.H{
 		"active_sessions": len(sessions),
 		"session_ids":     sessions,
@@ -259,15 +259,15 @@ func BroadcastWebSocketMessage(c *gin.Context) {
 
 	svc := GetWebSocketService()
 	payloadBytes, _ := json.Marshal(req.Payload)
-	
+
 	msg := service.WebSocketMessage{
 		Type:      req.Type,
 		Payload:   payloadBytes,
 		Timestamp: time.Now().Unix(),
 	}
-	
+
 	svc.BroadcastMessage(msg)
-	
+
 	response.Success(c, gin.H{
 		"message": "Broadcast message sent",
 		"type":    req.Type,

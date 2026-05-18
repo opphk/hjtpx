@@ -25,19 +25,19 @@ func GetBehaviorAnalyticsHandler() *BehaviorAnalyticsHandler {
 }
 
 type BehaviorHeatmapPoint struct {
-	X     int     `json:"x"`
-	Y     int     `json:"y"`
-	Count int     `json:"count"`
+	X         int     `json:"x"`
+	Y         int     `json:"y"`
+	Count     int     `json:"count"`
 	Intensity float64 `json:"intensity"`
 }
 
 type BehaviorTrajectory struct {
-	UserID       string                `json:"userId"`
-	SessionID    string                `json:"sessionId"`
-	Points       []BehaviorDataPoint   `json:"points"`
-	StartTime    string                `json:"startTime"`
-	EndTime      string                `json:"endTime"`
-	Duration     int64                 `json:"duration"`
+	UserID    string              `json:"userId"`
+	SessionID string              `json:"sessionId"`
+	Points    []BehaviorDataPoint `json:"points"`
+	StartTime string              `json:"startTime"`
+	EndTime   string              `json:"endTime"`
+	Duration  int64               `json:"duration"`
 }
 
 type BehaviorDataPoint struct {
@@ -48,31 +48,31 @@ type BehaviorDataPoint struct {
 }
 
 type AnomalyPattern struct {
-	PatternID    string  `json:"patternId"`
-	Type         string  `json:"type"`
-	Description  string  `json:"description"`
-	Severity     string  `json:"severity"`
-	Count        int     `json:"count"`
+	PatternID     string `json:"patternId"`
+	Type          string `json:"type"`
+	Description   string `json:"description"`
+	Severity      string `json:"severity"`
+	Count         int    `json:"count"`
 	AffectedUsers int    `json:"affectedUsers"`
-	FirstSeen    string  `json:"firstSeen"`
-	LastSeen     string  `json:"lastSeen"`
+	FirstSeen     string `json:"firstSeen"`
+	LastSeen      string `json:"lastSeen"`
 }
 
 type RiskScoreDistribution struct {
-	Range  string  `json:"range"`
-	Count  int     `json:"count"`
+	Range      string  `json:"range"`
+	Count      int     `json:"count"`
 	Percentage float64 `json:"percentage"`
 }
 
 type BehaviorSummary struct {
-	TotalSessions        int64   `json:"totalSessions"`
-	TotalInteractions    int64   `json:"totalInteractions"`
-	AvgSessionDuration   float64 `json:"avgSessionDuration"`
-	AvgMouseSpeed        float64 `json:"avgMouseSpeed"`
-	ClickCount           int64   `json:"clickCount"`
-	KeyboardEventCount   int64   `json:"keyboardEventCount"`
-	AnomalyCount         int64   `json:"anomalyCount"`
-	HighRiskUsers        int64   `json:"highRiskUsers"`
+	TotalSessions      int64   `json:"totalSessions"`
+	TotalInteractions  int64   `json:"totalInteractions"`
+	AvgSessionDuration float64 `json:"avgSessionDuration"`
+	AvgMouseSpeed      float64 `json:"avgMouseSpeed"`
+	ClickCount         int64   `json:"clickCount"`
+	KeyboardEventCount int64   `json:"keyboardEventCount"`
+	AnomalyCount       int64   `json:"anomalyCount"`
+	HighRiskUsers      int64   `json:"highRiskUsers"`
 }
 
 func GetBehaviorAnalytics(c *gin.Context) {
@@ -122,13 +122,13 @@ func GetBehaviorAnalytics(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"summary":         summary,
-		"heatmap":         heatmapData,
-		"trajectories":    trajectories,
-		"anomalies":       anomalies,
+		"summary":          summary,
+		"heatmap":          heatmapData,
+		"trajectories":     trajectories,
+		"anomalies":        anomalies,
 		"riskDistribution": riskDistribution,
-		"sankeyData":      sankeyData,
-		"radarData":       radarData,
+		"sankeyData":       sankeyData,
+		"radarData":        radarData,
 	})
 }
 

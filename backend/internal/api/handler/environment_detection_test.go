@@ -31,12 +31,12 @@ func TestEnvironmentDetectionHandler_DetectEnvironment(t *testing.T) {
 		{
 			name: "Valid request with basic data",
 			body: map[string]interface{}{
-				"fingerprint": "test_fingerprint_001",
-				"canvas_hash": "canvas123",
-				"webgl_hash": "webgl456",
-				"user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+				"fingerprint":       "test_fingerprint_001",
+				"canvas_hash":       "canvas123",
+				"webgl_hash":        "webgl456",
+				"user_agent":        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 				"screen_resolution": "1920x1080",
-				"risk_score": 25.0,
+				"risk_score":        25.0,
 			},
 			expectedStatus: http.StatusOK,
 			checkSuccess:   true,
@@ -44,9 +44,9 @@ func TestEnvironmentDetectionHandler_DetectEnvironment(t *testing.T) {
 		{
 			name: "Request with VPN indicators",
 			body: map[string]interface{}{
-				"fingerprint": "test_fingerprint_002",
-				"canvas_hash": "canvas789",
-				"risk_score": 45.0,
+				"fingerprint":     "test_fingerprint_002",
+				"canvas_hash":     "canvas789",
+				"risk_score":      45.0,
 				"connection_type": "vpn",
 			},
 			expectedStatus: http.StatusOK,
@@ -57,8 +57,8 @@ func TestEnvironmentDetectionHandler_DetectEnvironment(t *testing.T) {
 			body: map[string]interface{}{
 				"fingerprint": "test_fingerprint_003",
 				"canvas_hash": "canvas999",
-				"user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/91.0.4472.0 Safari/537.36",
-				"risk_score": 85.0,
+				"user_agent":  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/91.0.4472.0 Safari/537.36",
+				"risk_score":  85.0,
 			},
 			expectedStatus: http.StatusOK,
 			checkSuccess:   true,
@@ -67,7 +67,7 @@ func TestEnvironmentDetectionHandler_DetectEnvironment(t *testing.T) {
 			name: "Missing fingerprint",
 			body: map[string]interface{}{
 				"canvas_hash": "canvas123",
-				"risk_score": 25.0,
+				"risk_score":  25.0,
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkSuccess:   false,
@@ -76,7 +76,7 @@ func TestEnvironmentDetectionHandler_DetectEnvironment(t *testing.T) {
 			name: "Invalid risk score (negative)",
 			body: map[string]interface{}{
 				"fingerprint": "test_fp",
-				"risk_score": -10.0,
+				"risk_score":  -10.0,
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkSuccess:   false,
@@ -85,7 +85,7 @@ func TestEnvironmentDetectionHandler_DetectEnvironment(t *testing.T) {
 			name: "Invalid risk score (over 100)",
 			body: map[string]interface{}{
 				"fingerprint": "test_fp",
-				"risk_score": 150.0,
+				"risk_score":  150.0,
 			},
 			expectedStatus: http.StatusBadRequest,
 			checkSuccess:   false,
@@ -127,10 +127,10 @@ func TestEnvironmentDetectionHandler_DetectEnvironment_ProxyHeaders(t *testing.T
 	router.POST("/api/v1/detect/environment", handler.DetectEnvironment)
 
 	testCases := []struct {
-		name           string
-		headers        map[string]string
-		expectVPN      bool
-		expectProxy    bool
+		name        string
+		headers     map[string]string
+		expectVPN   bool
+		expectProxy bool
 	}{
 		{
 			name: "No proxy headers",
@@ -166,7 +166,7 @@ func TestEnvironmentDetectionHandler_DetectEnvironment_ProxyHeaders(t *testing.T
 			body := map[string]interface{}{
 				"fingerprint": "proxy_test_fp",
 				"canvas_hash": "canvas_hash",
-				"risk_score": 30.0,
+				"risk_score":  30.0,
 			}
 			bodyBytes, _ := json.Marshal(body)
 
@@ -214,9 +214,9 @@ func TestEnvironmentDetectionHandler_GetFingerprintAnalysis(t *testing.T) {
 	body := map[string]interface{}{
 		"fingerprint": fingerprint,
 		"canvas_hash": "canvas_test_hash",
-		"webgl_hash": "webgl_test_hash",
-		"user_agent": "Mozilla/5.0",
-		"risk_score": 20.0,
+		"webgl_hash":  "webgl_test_hash",
+		"user_agent":  "Mozilla/5.0",
+		"risk_score":  20.0,
 	}
 	bodyBytes, _ := json.Marshal(body)
 
@@ -389,9 +389,9 @@ func TestEnvironmentDetectionHandler_GetClusters(t *testing.T) {
 		body := map[string]interface{}{
 			"fingerprint": "cluster_test_fp_" + string(rune('0'+i)),
 			"canvas_hash": "cluster_hash",
-			"webgl_hash": "webgl_hash",
-			"user_agent": "Mozilla/5.0",
-			"risk_score": 30.0,
+			"webgl_hash":  "webgl_hash",
+			"user_agent":  "Mozilla/5.0",
+			"risk_score":  30.0,
 		}
 		bodyBytes, _ := json.Marshal(body)
 		req, _ := http.NewRequest("POST", "/api/v1/detect/environment", bytes.NewBuffer(bodyBytes))
@@ -595,10 +595,10 @@ func TestEnvironmentDetectionHandler_GetVPNPatterns(t *testing.T) {
 
 func TestCalculateCombinedRiskScore(t *testing.T) {
 	testCases := []struct {
-		name           string
-		clientScore    float64
-		minExpected    float64
-		maxExpected    float64
+		name        string
+		clientScore float64
+		minExpected float64
+		maxExpected float64
 	}{
 		{"Low client score", 20, 0, 30},
 		{"Medium client score", 50, 30, 70},
@@ -621,10 +621,10 @@ func TestCalculateCombinedRiskScore(t *testing.T) {
 
 func TestGenerateRecommendations(t *testing.T) {
 	testCases := []struct {
-		name          string
-		riskScore     float64
-		minRecs       int
-		expectHigh    bool
+		name       string
+		riskScore  float64
+		minRecs    int
+		expectHigh bool
 	}{
 		{"High risk", 85, 1, true},
 		{"Medium risk", 55, 1, false},
@@ -682,7 +682,7 @@ func TestEnvironmentDetectionHandler_ExportImportFingerprintData(t *testing.T) {
 	body := map[string]interface{}{
 		"fingerprint": "export_test_fp",
 		"canvas_hash": "canvas_hash",
-		"risk_score": 30.0,
+		"risk_score":  30.0,
 	}
 	bodyBytes, _ := json.Marshal(body)
 

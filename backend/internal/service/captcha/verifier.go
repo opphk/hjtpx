@@ -13,7 +13,7 @@ import (
 
 type VerifierService struct {
 	sessionCache *cache.SessionCache
-	captchaRepo *db.CaptchaRepository
+	captchaRepo  *db.CaptchaRepository
 }
 
 type VerifyRequest struct {
@@ -27,15 +27,15 @@ type VerifyRequest struct {
 
 type VerifyResult struct {
 	Success      bool    `json:"success"`
-	Message     string  `json:"message"`
-	Score       float64 `json:"score"`
+	Message      string  `json:"message"`
+	Score        float64 `json:"score"`
 	PositionDiff int     `json:"position_diff"`
 }
 
 func NewVerifierService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *VerifierService {
 	return &VerifierService{
 		sessionCache: sessionCache,
-		captchaRepo: captchaRepo,
+		captchaRepo:  captchaRepo,
 	}
 }
 
@@ -47,17 +47,17 @@ func (v *VerifierService) Verify(ctx context.Context, req *VerifyRequest) (*Veri
 
 	if time.Now().After(session.ExpiredAt) {
 		return &VerifyResult{
-			Success:  false,
-			Message:  "验证码已过期",
-			Score:    0,
+			Success: false,
+			Message: "验证码已过期",
+			Score:   0,
 		}, nil
 	}
 
 	if session.VerifyCount >= session.MaxAttempts {
 		return &VerifyResult{
-			Success:  false,
-			Message:  "验证次数已用完",
-			Score:    0,
+			Success: false,
+			Message: "验证次数已用完",
+			Score:   0,
 		}, nil
 	}
 
@@ -65,9 +65,9 @@ func (v *VerifierService) Verify(ctx context.Context, req *VerifyRequest) (*Veri
 
 	if session.Status == "verified" {
 		return &VerifyResult{
-			Success:  true,
-			Message:  "验证码已验证通过",
-			Score:    100,
+			Success: true,
+			Message: "验证码已验证通过",
+			Score:   100,
 		}, nil
 	}
 

@@ -270,7 +270,7 @@ func TestEnhancedNonceCacheCleanup(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		nonce := "test-nonce-" + strconv.Itoa(i)
 		nonceRecord := &nonceRecord{
-			timestamp:  time.Now().Add(-25 * time.Hour),
+			timestamp:   time.Now().Add(-25 * time.Hour),
 			hashedNonce: hashNonce(nonce),
 			count:       1,
 		}
@@ -905,4 +905,305 @@ func containsHelper(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestRequestEncryptionConfig(t *testing.T) {
+	config := defaultRequestEncryptionConfig
+
+	if config.Algorithm != "AES-256-GCM" {
+		t.Error("Default algorithm should be AES-256-GCM")
+	}
+	if config.KeyRotationInterval != 24*time.Hour {
+		t.Error("Default key rotation interval should be 24 hours")
+	}
+	if config.CurrentKeyVersion != 1 {
+		t.Error("Default key version should be 1")
+	}
+}
+
+func TestEncryptRequestBody(t *testing.T) {
+	config := RequestEncryptionConfig{
+		Enabled:                 true,
+		EnablePayloadEncryption: true,
+		EncryptionKey:           []byte("test-key-1234567890abcdef"),
+		Algorithm:               "AES-256-GCM",
+		CurrentKeyVersion:       1,
+	}
+
+	body := []byte(`{"test": "data"}`)
+
+	encrypted, err := EncryptRequestBody(body, config)
+	if err != nil {
+		t.Fatalf("EncryptRequestBody failed: %v", err)
+	}
+
+	if encrypted.Version != 1 {
+		t.Error("Encrypted version should be 1")
+	}
+	if encrypted.KeyVersion != 1 {
+		t.Error("Key version should match current version")
+	}
+	if encrypted.EncryptedData == "" {
+		t.Error("Encrypted data should not be empty")
+	}
+}
+
+func TestDecryptRequestBody(t *testing.T) {
+	config := RequestEncryptionConfig{
+		Enabled:                 true,
+		EnablePayloadEncryption: true,
+		EncryptionKey:           []byte("test-key-1234567890abcdef"),
+		Algorithm:               "AES-256-GCM",
+		CurrentKeyVersion:       1,
+	}
+
+	originalBody := []byte(`{"test": "data"}`)
+
+	encrypted, err := EncryptRequestBody(originalBody, config)
+	if err != nil {
+		t.Fatalf("EncryptRequestBody failed: %v", err)
+	}
+
+	decrypted, err := DecryptRequestBody(encrypted, config)
+	if err != nil {
+		t.Fatalf("DecryptRequestBody failed: %v", err)
+	}
+
+	if string(decrypted) != string(originalBody) {
+		t.Errorf("Decrypted body should match original, got %s", string(decrypted))
+	}
+}
+
+func TestRotateEncryptionKey(t *testing.T) {
+	config := RequestEncryptionConfig{
+		Enabled:                 true,
+		EnablePayloadEncryption: true,
+		EncryptionKey:           []byte("old-key-1234567890abcdef"),
+		CurrentKeyVersion:       1,
+		KeyHistory:              make([][]byte, 0),
+	}
+
+	err := RotateEncryptionKey(&config)
+	if err != nil {
+		t.Fatalf("RotateEncryptionKey failed: %v", err)
+	}
+
+	if config.CurrentKeyVersion != 2 {
+		t.Error("Key version should be incremented")
+	}
+	if len(config.KeyHistory) != 1 {
+		t.Error("Old key should be in history")
+	}
+}
+
+func TestDoubleSignatureConfig(t *testing.T) {
+	config := DoubleSignatureConfig{
+		Enabled:            true,
+		PrimaryAlgorithm:   "SHA256",
+		SecondaryAlgorithm: "SHA512",
+		PrimaryKey:         []byte("primary-key-1234567890"),
+		SecondaryKey:       []byte("secondary-key-1234567890"),
+	}
+
+	err := config.Validate()
+	if err != nil {
+		t.Errorf("Valid config should pass validation: %v", err)
+	}
+}
+
+func TestDoubleSignatureConfigMissingPrimaryKey(t *testing.T) {
+	config := DoubleSignatureConfig{
+		Enabled:            true,
+		PrimaryAlgorithm:   "SHA256",
+		SecondaryAlgorithm: "SHA512",
+		PrimaryKey:         nil,
+		SecondaryKey:       []byte("secondary-key-1234567890"),
+	}
+
+	err := config.Validate()
+	if err == nil {
+		t.Error("Missing primary key should fail validation")
+	}
+}
+
+func TestGenerateDualSignature(t *testing.T) {
+	config := DoubleSignatureConfig{
+		Enabled:            true,
+		PrimaryAlgorithm:   "SHA256",
+		SecondaryAlgorithm: "SHA512",
+		PrimaryKey:         []byte("primary-key-1234567890"),
+		SecondaryKey:       []byte("secondary-key-1234567890"),
+	}
+
+	message := []byte("test message")
+
+	primarySig, secondarySig, err := GenerateDualSignature(message, config)
+	if err != nil {
+		t.Fatalf("GenerateDualSignature failed: %v", err)
+	}
+
+	if primarySig == "" {
+		t.Error("Primary signature should not be empty")
+	}
+	if secondarySig == "" {
+		t.Error("Secondary signature should not be empty")
+	}
+}
+
+func TestVerifyDualSignature(t *testing.T) {
+	config := DoubleSignatureConfig{
+		Enabled:            true,
+		PrimaryAlgorithm:   "SHA256",
+		SecondaryAlgorithm: "SHA512",
+		PrimaryKey:         []byte("primary-key-1234567890"),
+		SecondaryKey:       []byte("secondary-key-1234567890"),
+	}
+
+	message := []byte("test message")
+
+	primarySig, secondarySig, _ := GenerateDualSignature(message, config)
+
+	primaryValid, secondaryValid, err := VerifyDualSignature(message, primarySig, secondarySig, config)
+	if err != nil {
+		t.Fatalf("VerifyDualSignature failed: %v", err)
+	}
+
+	if !primaryValid {
+		t.Error("Primary signature should be valid")
+	}
+	if !secondaryValid {
+		t.Error("Secondary signature should be valid")
+	}
+}
+
+func TestBloomFilter(t *testing.T) {
+	filter := NewBloomFilter(100, 3)
+
+	item := "test-item"
+	filter.Add(item)
+
+	if !filter.Contains(item) {
+		t.Error("Bloom filter should contain added item")
+	}
+
+	if filter.Contains("non-existent-item") {
+		t.Error("Bloom filter should not contain non-existent item")
+	}
+}
+
+func TestBloomFilterFalsePositiveRate(t *testing.T) {
+	filter := NewBloomFilter(1000, 5)
+
+	for i := 0; i < 100; i++ {
+		filter.Add("item" + strconv.Itoa(i))
+	}
+
+	fpr := filter.FalsePositiveRate()
+	if fpr < 0 || fpr > 1 {
+		t.Error("False positive rate should be between 0 and 1")
+	}
+}
+
+func TestCheckReplay(t *testing.T) {
+	nonce := "test-nonce-replay-check"
+
+	firstCheck := CheckReplay(nonce)
+	if firstCheck {
+		t.Error("First check should return false (not in filter)")
+	}
+
+	secondCheck := CheckReplay(nonce)
+	if !secondCheck {
+		t.Error("Second check should return true (now in filter)")
+	}
+}
+
+func TestEnhancedAntiReplayMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	config := AntiReplayConfig{
+		WindowSize:           time.Minute,
+		MaxRequestsPerWindow: 10,
+		EnableSlidingWindow:  true,
+		EnableBloomFilter:    true,
+	}
+
+	router := gin.New()
+	router.Use(EnhancedAntiReplay(config))
+	router.GET("/api/test", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
+
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.Header.Set("X-Nonce", "test-nonce-anti-replay")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Valid request should return 200, got %d", w.Code)
+	}
+}
+
+func TestEnhancedRequestEncryptionMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(EnhancedRequestEncryption())
+	router.POST("/api/test", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
+
+	body := []byte(`{"test": "data"}`)
+	req := httptest.NewRequest("POST", "/api/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Valid request should return 200, got %d", w.Code)
+	}
+}
+
+func TestEd25519Config(t *testing.T) {
+	config := Ed25519Config{
+		Enabled:          false,
+		SignatureTTL:     time.Hour,
+		RequireSignature: true,
+	}
+
+	if config.Enabled {
+		t.Error("Ed25519 should be disabled by default")
+	}
+	if config.SignatureTTL != time.Hour {
+		t.Error("Signature TTL should be 1 hour")
+	}
+}
+
+func TestEnhancedSignatureResultFields(t *testing.T) {
+	result := EnhancedSignatureResult{
+		Valid:          true,
+		Reason:         "signature valid",
+		Timestamp:      time.Now().Unix(),
+		Nonce:          "test-nonce",
+		Signature:      "test-signature",
+		Sequence:       1,
+		ElapsedTime:    time.Millisecond * 50,
+		ErrorCode:      "",
+		ClientIP:       "127.0.0.1",
+		RequestPath:    "/api/test",
+		ReplayDetected: false,
+		IntegrityValid: true,
+	}
+
+	if !result.Valid {
+		t.Error("Result should be valid")
+	}
+	if result.ReplayDetected {
+		t.Error("Replay should not be detected")
+	}
+	if !result.IntegrityValid {
+		t.Error("Integrity should be valid")
+	}
 }

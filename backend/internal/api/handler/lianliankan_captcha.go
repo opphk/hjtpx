@@ -26,10 +26,10 @@ type LianLianKanCaptchaRequest struct {
 }
 
 type LianLianKanVerifyRequest struct {
-	SessionID string                  `json:"session_id" binding:"required"`
+	SessionID string                    `json:"session_id" binding:"required"`
 	Board     *captcha.LianLianKanBoard `json:"board" binding:"required"`
 	Pairs     []captcha.LianLianKanPair `json:"pairs" binding:"required"`
-	RiskScore float64                 `json:"risk_score"`
+	RiskScore float64                   `json:"risk_score"`
 }
 
 func CreateLianLianKanCaptcha(c *gin.Context) {

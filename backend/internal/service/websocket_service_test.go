@@ -82,7 +82,7 @@ func TestChallengePayload(t *testing.T) {
 
 func TestAnswerPayload(t *testing.T) {
 	data := map[string]interface{}{
-		"position": 123,
+		"position":   123,
 		"trajectory": []int{1, 2, 3},
 	}
 	payload := AnswerPayload{
@@ -123,7 +123,7 @@ func TestErrorPayload(t *testing.T) {
 func TestGenerateVerificationToken(t *testing.T) {
 	sessionID := "test-session-123"
 	token := GenerateVerificationToken(sessionID)
-	
+
 	assert.NotEmpty(t, token)
 	assert.Contains(t, token, "hjtpx_")
 	assert.Contains(t, token, sessionID)

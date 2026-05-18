@@ -47,8 +47,8 @@ type SessionService interface {
 }
 
 type sessionService struct {
-	adminRepo    repository.AdminRepository
-	redisClient  *goredis.Client
+	adminRepo   repository.AdminRepository
+	redisClient *goredis.Client
 }
 
 func NewSessionService(adminRepo repository.AdminRepository, redisClient *goredis.Client) SessionService {

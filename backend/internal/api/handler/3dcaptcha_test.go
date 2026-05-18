@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service/captcha"
@@ -31,7 +30,7 @@ func TestCreateThreeDCaptcha(t *testing.T) {
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/api/v1/captcha/3d/create", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -74,7 +73,7 @@ func TestCreateThreeDCaptcha_DifferentDifficulties(t *testing.T) {
 			jsonBody, _ := json.Marshal(reqBody)
 			req, _ := http.NewRequest("POST", "/api/v1/captcha/3d/create", bytes.NewReader(jsonBody))
 			req.Header.Set("Content-Type", "application/json")
-			
+
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
@@ -201,7 +200,7 @@ func TestPieceColorsAndTypes(t *testing.T) {
 
 	assert.Greater(t, len(colors), 0)
 	assert.Greater(t, len(types), 0)
-	
+
 	// 验证颜色格式
 	for _, color := range colors {
 		assert.Equal(t, '#', rune(color[0]))
@@ -225,8 +224,8 @@ func TestThreeDPuzzleStructure(t *testing.T) {
 				Scale:     0.8,
 			},
 		},
-		GridSize:    3,
-		Difficulty:  "medium",
+		GridSize:   3,
+		Difficulty: "medium",
 		TargetRotX: 180,
 		TargetRotY: 90,
 		TargetRotZ: 0,
@@ -281,7 +280,7 @@ func TestThreeDCaptchaE2E(t *testing.T) {
 	jsonBody, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/api/v1/captcha/3d/create", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -298,9 +297,9 @@ func TestThreeDCaptchaE2E(t *testing.T) {
 
 	// Create a puzzle with correct rotations
 	verifyPuzzle := &captcha.ThreeDPuzzle{
-		Pieces:      make([]captcha.ThreeDPiece, len(createResp.Puzzle.Pieces)),
-		GridSize:    createResp.Puzzle.GridSize,
-		Difficulty:  createResp.Puzzle.Difficulty,
+		Pieces:     make([]captcha.ThreeDPiece, len(createResp.Puzzle.Pieces)),
+		GridSize:   createResp.Puzzle.GridSize,
+		Difficulty: createResp.Puzzle.Difficulty,
 		TargetRotX: createResp.Puzzle.TargetRotX,
 		TargetRotY: createResp.Puzzle.TargetRotY,
 		TargetRotZ: createResp.Puzzle.TargetRotZ,
@@ -319,7 +318,7 @@ func TestThreeDCaptchaE2E(t *testing.T) {
 	verifyJSON, _ := json.Marshal(verifyReq)
 	verifyHTTPReq, _ := http.NewRequest("POST", "/api/v1/captcha/3d/verify", bytes.NewReader(verifyJSON))
 	verifyHTTPReq.Header.Set("Content-Type", "application/json")
-	
+
 	verifyW := httptest.NewRecorder()
 	r.ServeHTTP(verifyW, verifyHTTPReq)
 
