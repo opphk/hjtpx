@@ -12,39 +12,84 @@ import (
 )
 
 type DataArchiver struct {
-	enabled          bool
-	archiveThreshold time.Duration
-	archivePrefix    string
-	cleanupEnabled   bool
-	cleanupThreshold time.Duration
-	archiveStats     *ArchiveStats
+	enabled           bool
+	archiveThreshold  time.Duration
+	archivePrefix     string
+	cleanupEnabled    bool
+	cleanupThreshold  time.Duration
+	archiveStats      *ArchiveStats
+	archiveStrategies []ArchiveStrategy
+	scheduler         *ArchiveScheduler
+	mu                sync.RWMutex
 }
 
 type ArchiveStats struct {
-	TotalArchivedRecords int64
-	TotalCleanedRecords  int64
-	LastArchiveTime      time.Time
-	LastCleanupTime      time.Time
-	ArchiveErrors        int64
-	CleanupErrors        int64
+	TotalArchivedRecords    int64
+	TotalCleanedRecords     int64
+	LastArchiveTime         time.Time
+	LastCleanupTime         time.Time
+	LastFullOptimizeTime    time.Time
+	ArchiveErrors           int64
+	CleanupErrors           int64
+	OptimizationCycles      int64
+	TablesProcessed         []string
+	CurrentOperation        string
+}
+
+type ArchiveMetrics struct {
+	TableName          string    `json:"table_name"`
+	RecordsArchived     int64     `json:"records_archived"`
+	RecordsCleaned      int64     `json:"records_cleaned"`
+	ArchiveSize         int64     `json:"archive_size_bytes"`
+	OriginalSize        int64     `json:"original_size_bytes"`
+	CompressionRatio    float64   `json:"compression_ratio"`
+	OperationDuration   float64   `json:"operation_duration_seconds"`
+	LastOperationAt     time.Time `json:"last_operation_at"`
 }
 
 var archiver *DataArchiver
 var globalArchiveStats ArchiveStats
+var archiveMetrics = make(map[string]*ArchiveMetrics)
+var metricsMu sync.RWMutex
 
 func InitDataArchiving(cfg *config.Config) {
 	archiver = &DataArchiver{
-		enabled:          cfg.Database.DataArchiving.Enabled,
-		archiveThreshold: time.Duration(cfg.Database.DataArchiving.ArchiveThresholdDays) * 24 * time.Hour,
-		archivePrefix:    cfg.Database.DataArchiving.ArchiveTablePrefix,
-		cleanupEnabled:   cfg.Database.DataArchiving.AutoCleanupEnabled,
-		cleanupThreshold: time.Duration(cfg.Database.DataArchiving.CleanupThresholdDays) * 24 * time.Hour,
-		archiveStats:     &globalArchiveStats,
+		enabled:           cfg.Database.DataArchiving.Enabled,
+		archiveThreshold:  time.Duration(cfg.Database.DataArchiving.ArchiveThresholdDays) * 24 * time.Hour,
+		archivePrefix:     cfg.Database.DataArchiving.ArchiveTablePrefix,
+		cleanupEnabled:    cfg.Database.DataArchiving.AutoCleanupEnabled,
+		cleanupThreshold:  time.Duration(cfg.Database.DataArchiving.CleanupThresholdDays) * 24 * time.Hour,
+		archiveStats:      &globalArchiveStats,
+		archiveStrategies: make([]ArchiveStrategy, 0),
+		scheduler:         NewArchiveScheduler(),
 	}
 
+	registerDefaultStrategies()
+
 	if archiver.enabled {
-		log.Println("Data archiving initialized")
+		log.Println("Data archiving initialized with auto-archiving enabled")
 		go archiver.startAutoArchiving(cfg)
+		go archiver.startMetricsCollector()
+	}
+}
+
+func registerDefaultStrategies() {
+	strategies := []struct {
+		table      string
+		dateField  string
+		strategy   string
+		threshold  time.Duration
+	}{
+		{"verification_logs", "created_at", "time_based", 30 * 24 * time.Hour},
+		{"risk_logs", "created_at", "time_based", 30 * 24 * time.Hour},
+		{"security_logs", "created_at", "time_based", 90 * 24 * time.Hour},
+		{"admin_login_logs", "created_at", "time_based", 90 * 24 * time.Hour},
+		{"blacklist", "created_at", "time_based", 365 * 24 * time.Hour},
+	}
+
+	for _, s := range strategies {
+		strategy := NewTimeBasedArchiveStrategy(s.table, s.dateField, s.threshold)
+		archiver.AddStrategy(strategy)
 	}
 }
 
@@ -52,11 +97,19 @@ func GetArchiver() *DataArchiver {
 	return archiver
 }
 
+func (a *DataArchiver) AddStrategy(strategy ArchiveStrategy) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.archiveStrategies = append(a.archiveStrategies, strategy)
+	a.scheduler.AddStrategy(strategy)
+}
+
 func (a *DataArchiver) ArchiveTable(tableName string, dateField string, olderThan time.Time) (int64, error) {
 	if !a.enabled {
 		return 0, fmt.Errorf("archiving not enabled")
 	}
 
+	startTime := time.Now()
 	archiveTableName := a.archivePrefix + tableName
 
 	if err := a.ensureArchiveTableExists(tableName, archiveTableName); err != nil {
@@ -110,6 +163,8 @@ func (a *DataArchiver) ArchiveTable(tableName string, dateField string, olderTha
 
 	atomic.AddInt64(&globalArchiveStats.TotalArchivedRecords, count)
 	globalArchiveStats.LastArchiveTime = time.Now()
+
+	a.updateMetrics(tableName, count, 0, time.Since(startTime).Seconds())
 
 	log.Printf("Archived %d records from %s to %s", count, tableName, archiveTableName)
 	return count, nil
@@ -236,6 +291,8 @@ func (a *DataArchiver) CleanupArchive(tableName string, olderThan time.Time) (in
 		cutoffDate = time.Now().Add(-a.cleanupThreshold)
 	}
 
+	startTime := time.Now()
+
 	result := DB.Table(archiveTableName).
 		Where("created_at < ?", cutoffDate).
 		Delete(nil)
@@ -247,6 +304,8 @@ func (a *DataArchiver) CleanupArchive(tableName string, olderThan time.Time) (in
 
 	atomic.AddInt64(&globalArchiveStats.TotalCleanedRecords, result.RowsAffected)
 	globalArchiveStats.LastCleanupTime = time.Now()
+
+	a.updateMetrics(tableName, 0, result.RowsAffected, time.Since(startTime).Seconds())
 
 	log.Printf("Cleaned up %d records from archive %s", result.RowsAffected, archiveTableName)
 	return result.RowsAffected, nil
@@ -315,16 +374,30 @@ func (a *DataArchiver) GetArchiveStats(tableName string) (map[string]interface{}
 		return nil, err
 	}
 
+	var mainSize, archiveSize int64
+	DB.Raw("SELECT pg_total_relation_size(?)", tableName).Scan(&mainSize)
+	DB.Raw("SELECT pg_total_relation_size(?)", archiveTableName).Scan(&archiveSize)
+
 	return map[string]interface{}{
 		"main_table_count":    mainCount,
 		"archive_table_count": archiveCount,
 		"total_records":       mainCount + archiveCount,
-		"archive_ratio":       float64(archiveCount) / float64(mainCount+archiveCount) * 100,
+		"archive_ratio":        float64(archiveCount) / float64(mainCount+archiveCount) * 100,
+		"main_table_size":     mainSize,
+		"archive_table_size":  archiveSize,
 	}, nil
 }
 
 func (a *DataArchiver) GetGlobalArchiveStats() *ArchiveStats {
 	return &globalArchiveStats
+}
+
+func (a *DataArchiver) GetAllArchiveStats() map[string]interface{} {
+	stats := map[string]interface{}{
+		"global": a.GetGlobalArchiveStats(),
+		"metrics": a.GetAllMetrics(),
+	}
+	return stats
 }
 
 func (a *DataArchiver) RestoreFromArchive(tableName string, ids []interface{}) (int64, error) {
@@ -399,30 +472,168 @@ func (a *DataArchiver) startAutoArchiving(cfg *config.Config) {
 }
 
 func (a *DataArchiver) runScheduledArchiving() {
-	tables := []string{
-		"verification_logs",
-		"risk_logs",
-		"audit_logs",
+	a.mu.RLock()
+	strategies := a.archiveStrategies
+	a.mu.RUnlock()
+
+	ctx := context.Background()
+	for _, strategy := range strategies {
+		if err := strategy.Execute(ctx); err != nil {
+			log.Printf("Scheduled archiving failed for strategy %s: %v", strategy.GetName(), err)
+		}
 	}
+}
 
-	for _, table := range tables {
-		stats, err := a.GetArchiveStats(table)
-		if err != nil {
-			continue
-		}
+func (a *DataArchiver) startMetricsCollector() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
 
-		ratio, ok := stats["archive_ratio"].(float64)
-		if !ok {
-			continue
-		}
+	for range ticker.C {
+		a.refreshMetrics()
+	}
+}
 
-		if ratio > 50 {
-			_, err := a.ArchiveTable(table, "created_at", time.Now().Add(-a.archiveThreshold))
-			if err != nil {
-				log.Printf("Auto archive failed for %s: %v", table, err)
+func (a *DataArchiver) refreshMetrics() {
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+
+	for tableName := range archiveMetrics {
+		if stats, err := a.GetArchiveStats(tableName); err == nil {
+			if m, ok := archiveMetrics[tableName]; ok {
+				if size, ok := stats["archive_table_size"].(int64); ok {
+					m.ArchiveSize = size
+				}
+				if size, ok := stats["main_table_size"].(int64); ok {
+					m.OriginalSize = size
+				}
+				if m.OriginalSize > 0 {
+					m.CompressionRatio = float64(m.ArchiveSize) / float64(m.OriginalSize)
+				}
 			}
 		}
 	}
+}
+
+func (a *DataArchiver) updateMetrics(tableName string, archived, cleaned int64, duration float64) {
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+
+	if _, ok := archiveMetrics[tableName]; !ok {
+		archiveMetrics[tableName] = &ArchiveMetrics{
+			TableName: tableName,
+		}
+	}
+
+	m := archiveMetrics[tableName]
+	m.RecordsArchived += archived
+	m.RecordsCleaned += cleaned
+	m.OperationDuration += duration
+	m.LastOperationAt = time.Now()
+}
+
+func (a *DataArchiver) GetAllMetrics() map[string]*ArchiveMetrics {
+	metricsMu.RLock()
+	defer metricsMu.RUnlock()
+
+	result := make(map[string]*ArchiveMetrics)
+	for k, v := range archiveMetrics {
+		result[k] = v
+	}
+	return result
+}
+
+func (a *DataArchiver) GetTableMetrics(tableName string) *ArchiveMetrics {
+	metricsMu.RLock()
+	defer metricsMu.RUnlock()
+	return archiveMetrics[tableName]
+}
+
+func (a *DataArchiver) ExecuteFullOptimization(ctx context.Context) error {
+	atomic.AddInt64(&globalArchiveStats.OptimizationCycles, 1)
+	globalArchiveStats.CurrentOperation = "full_optimization"
+
+	if err := a.executeTimeBasedArchiving(ctx); err != nil {
+		log.Printf("Time-based archiving failed: %v", err)
+	}
+
+	if err := a.executeCleanup(ctx); err != nil {
+		log.Printf("Archive cleanup failed: %v", err)
+	}
+
+	if err := a.vacuumTables(ctx); err != nil {
+		log.Printf("VACUUM failed: %v", err)
+	}
+
+	globalArchiveStats.LastFullOptimizeTime = time.Now()
+	globalArchiveStats.CurrentOperation = ""
+
+	return nil
+}
+
+func (a *DataArchiver) executeTimeBasedArchiving(ctx context.Context) error {
+	a.mu.RLock()
+	strategies := a.archiveStrategies
+	a.mu.RUnlock()
+
+	for _, strategy := range strategies {
+		if err := strategy.Execute(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *DataArchiver) executeCleanup(ctx context.Context) error {
+	tables := []string{"verification_logs", "risk_logs", "security_logs", "admin_login_logs"}
+
+	for _, table := range tables {
+		if _, err := a.CleanupArchive(table, time.Time{}); err != nil {
+			log.Printf("Cleanup failed for %s: %v", table, err)
+		}
+	}
+
+	return nil
+}
+
+func (a *DataArchiver) vacuumTables(ctx context.Context) error {
+	tables := []string{
+		"users", "admins", "applications",
+		"verifications", "verification_logs",
+		"blacklist", "device_fingerprints",
+	}
+
+	for _, table := range tables {
+		if err := DB.WithContext(ctx).Exec("VACUUM ANALYZE " + table).Error; err != nil {
+			log.Printf("VACUUM ANALYZE failed for %s: %v", table, err)
+		}
+	}
+
+	return nil
+}
+
+func (a *DataArchiver) SetArchiveThreshold(days int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.archiveThreshold = time.Duration(days) * 24 * time.Hour
+}
+
+func (a *DataArchiver) SetCleanupThreshold(days int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cleanupThreshold = time.Duration(days) * 24 * time.Hour
+}
+
+func (a *DataArchiver) Enable(enabled bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.enabled = enabled
+}
+
+func (a *DataArchiver) EnableCleanup(enabled bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cleanupEnabled = enabled
 }
 
 type HotColdSeparator struct {
@@ -543,6 +754,10 @@ func NewTimeBasedArchiveStrategy(tableName, dateField string, threshold time.Dur
 	}
 }
 
+func (s *TimeBasedArchiveStrategy) SetArchiver(a *DataArchiver) {
+	s.archiver = a
+}
+
 func (s *TimeBasedArchiveStrategy) Execute(ctx context.Context) error {
 	s.mu.Lock()
 	s.status = "running"
@@ -560,7 +775,7 @@ func (s *TimeBasedArchiveStrategy) Execute(ctx context.Context) error {
 }
 
 func (s *TimeBasedArchiveStrategy) GetName() string {
-	return "time_based_archive"
+	return fmt.Sprintf("time_based_%s", s.tableName)
 }
 
 func (s *TimeBasedArchiveStrategy) GetStatus() string {
@@ -587,6 +802,10 @@ func NewSizeBasedArchiveStrategy(tableName, dateField string, maxSize int64) *Si
 	}
 }
 
+func (s *SizeBasedArchiveStrategy) SetArchiver(a *DataArchiver) {
+	s.archiver = a
+}
+
 func (s *SizeBasedArchiveStrategy) Execute(ctx context.Context) error {
 	s.mu.Lock()
 	s.status = "running"
@@ -609,7 +828,7 @@ func (s *SizeBasedArchiveStrategy) Execute(ctx context.Context) error {
 
 	excess := count - s.maxSize
 	batchSize := int64(1000)
-	cutoff := time.Now().Add(-30 * 24 * time.Hour)
+	cutoff := time.Now().Add(30 * 24 * time.Hour)
 
 	for i := int64(0); i < excess; i += batchSize {
 		select {
@@ -628,7 +847,7 @@ func (s *SizeBasedArchiveStrategy) Execute(ctx context.Context) error {
 }
 
 func (s *SizeBasedArchiveStrategy) GetName() string {
-	return "size_based_archive"
+	return fmt.Sprintf("size_based_%s", s.tableName)
 }
 
 func (s *SizeBasedArchiveStrategy) GetStatus() string {
@@ -679,7 +898,7 @@ func (s *ArchiveScheduler) GetStrategies() []ArchiveStrategy {
 }
 
 type CompressionArchiver struct {
-	enabled          bool
+	enabled           bool
 	compressionLevel int
 }
 
@@ -688,7 +907,7 @@ func NewCompressionArchiver(level int) *CompressionArchiver {
 		level = 6
 	}
 	return &CompressionArchiver{
-		enabled:          true,
+		enabled:           true,
 		compressionLevel: level,
 	}
 }

@@ -73,6 +73,19 @@ class EnvironmentDetectorEnhanced {
             { name: 'detectSelenium', category: 'automation' },
             { name: 'detectChromeRuntime', category: 'automation' },
             { name: 'detectAutomationFrameworks', category: 'automation' },
+            { name: 'detectVMWare', category: 'vm' },
+            { name: 'detectVirtualBox', category: 'vm' },
+            { name: 'detectQEMU', category: 'vm' },
+            { name: 'detectAndroidEmulator', category: 'emulator' },
+            { name: 'detectIOSSimulator', category: 'emulator' },
+            { name: 'detectChromeDevTools', category: 'debug' },
+            { name: 'detectFirebug', category: 'debug' },
+            { name: 'detectSeleniumWebDriver', category: 'automation' },
+            { name: 'detectPuppeteerEnhanced', category: 'automation' },
+            { name: 'detectPlaywrightEnhanced', category: 'automation' },
+            { name: 'detectAppium', category: 'automation' },
+            { name: 'detectCypress', category: 'automation' },
+            { name: 'detectAutomationExtra', category: 'automation' },
             { name: 'detectVirtualization', category: 'environment' },
             { name: 'detectSandbox', category: 'environment' },
             { name: 'detectCanvasEnhanced', category: 'fingerprint' },
@@ -2147,6 +2160,617 @@ class EnvironmentDetectorEnhanced {
             detections.push('speech_error');
         }
         return { detected: score > 10, score: Math.min(score, 100), detections };
+    }
+
+    async detectSpeech() {
+        let score = 0;
+        const detections = [];
+        try {
+            if ('speechSynthesis' in window) {
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length === 0) {
+                    score += 15;
+                    detections.push('no_speech_voices');
+                }
+            } else {
+                score += 20;
+                detections.push('no_speech_api');
+            }
+        } catch (e) {
+            score += 15;
+            detections.push('speech_error');
+        }
+        return { detected: score > 10, score: Math.min(score, 100), detections };
+    }
+
+    async detectVMWare() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/vmware/i.test(ua)) {
+                score += 50;
+                detections.push('vmware_in_ua');
+            }
+
+            if (document.documentElement.attributes.length > 50) {
+                score += 15;
+                detections.push('many_dom_attributes');
+            }
+
+            const testDiv = document.createElement('div');
+            testDiv.setAttribute('id', 'vm_detect_test');
+            testDiv.setAttribute('data-vmware-host', 'true');
+            document.body.appendChild(testDiv);
+
+            try {
+                const computed = window.getComputedStyle(testDiv);
+                if (computed.display === 'none' && window.vm_detect_test !== undefined) {
+                    score += 20;
+                    detections.push('vm_marker_detected');
+                }
+            } catch (e) {}
+
+            document.body.removeChild(testDiv);
+
+            try {
+                const diskSpace = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null;
+                if (diskSpace && diskSpace.quota < 1000000000) {
+                    score += 10;
+                    detections.push('low_disk_space');
+                }
+            } catch (e) {}
+
+            const screenCanvas = document.createElement('canvas');
+            const screenCtx = screenCanvas.getContext('2d');
+            if (screenCtx) {
+                screenCtx.fillStyle = '#ff0000';
+                screenCtx.fillRect(0, 0, 10, 10);
+                const data = screenCtx.getImageData(5, 5, 1, 1).data;
+                if (data[0] !== 255 || data[1] !== 0 || data[2] !== 0) {
+                    score += 15;
+                    detections.push('screen_canvas_manipulated');
+                }
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('vmware_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectVirtualBox() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/virtualbox|vbox/i.test(ua)) {
+                score += 50;
+                detections.push('virtualbox_in_ua');
+            }
+
+            const screenProps = [screen.width, screen.height, screen.colorDepth];
+            const suspiciousResolutions = ['800x600', '1024x768', '1280x720'];
+            const currentRes = `${screen.width}x${screen.height}`;
+            if (suspiciousResolutions.includes(currentRes)) {
+                score += 15;
+                detections.push('suspicious_resolution');
+            }
+
+            try {
+                const protocols = window.chrome && window.chrome.protocols ? Object.keys(window.chrome.protocols) : [];
+                if (protocols.length === 0) {
+                    score += 10;
+                    detections.push('no_chrome_protocols');
+                }
+            } catch (e) {}
+
+            const canvas2 = document.createElement('canvas');
+            canvas2.width = 200;
+            canvas2.height = 50;
+            const ctx2 = canvas2.getContext('2d');
+            if (ctx2) {
+                ctx2.font = '14px Arial';
+                ctx2.fillText('VirtualBox Test', 10, 30);
+                const imgData = ctx2.getImageData(0, 0, 200, 50);
+                let nonZero = 0;
+                for (let i = 0; i < imgData.data.length; i += 4) {
+                    if (imgData.data[i] > 0 || imgData.data[i+1] > 0 || imgData.data[i+2] > 0) {
+                        nonZero++;
+                    }
+                }
+                if (nonZero < 100) {
+                    score += 20;
+                    detections.push('low_canvas_activity');
+                }
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('virtualbox_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectQEMU() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/qemu|kvm|bochs/i.test(ua)) {
+                score += 50;
+                detections.push('qemu_in_ua');
+            }
+
+            const cpuCount = navigator.hardwareConcurrency;
+            if (cpuCount && cpuCount === 1) {
+                score += 20;
+                detections.push('single_cpu');
+            }
+
+            const mem = navigator.deviceMemory;
+            if (mem && mem <= 2) {
+                score += 15;
+                detections.push('low_memory');
+            }
+
+            try {
+                const testArray = new Uint8Array(10);
+                for (let i = 0; i < 10; i++) {
+                    testArray[i] = i;
+                }
+                if (testArray.length !== 10) {
+                    score += 25;
+                    detections.push('typed_array_manipulation');
+                }
+            } catch (e) {
+                score += 15;
+                detections.push('typed_array_error');
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('qemu_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectAndroidEmulator() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/android.*emulator|genymotion|blue[\s_-]?stacks/i.test(ua)) {
+                score += 50;
+                detections.push('android_emulator_in_ua');
+            }
+
+            if (/goldfish/i.test(ua)) {
+                score += 30;
+                detections.push('goldfish_gpu');
+            }
+
+            const platform = navigator.platform || '';
+            if (/android/i.test(platform) && !/linux/i.test(ua)) {
+                score += 20;
+                detections.push('suspicious_android_platform');
+            }
+
+            const touchPoints = navigator.maxTouchPoints || 0;
+            if (touchPoints === 1) {
+                score += 15;
+                detections.push('single_touch_point');
+            }
+
+            try {
+                const gl = document.createElement('canvas').getContext('webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        if (/goldfish|llvmpipe|swiftshader/i.test(renderer)) {
+                            score += 35;
+                            detections.push('emulator_gpu_renderer');
+                        }
+                    }
+                }
+            } catch (e) {}
+
+            const screenW = screen.width;
+            const screenH = screen.height;
+            const commonEmuSizes = ['320x480', '480x800', '720x1280', '1080x1920'];
+            const currentSize = `${screenW}x${screenH}`;
+            if (commonEmuSizes.includes(currentSize)) {
+                score += 15;
+                detections.push('emulator_resolution');
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('android_emulator_error: ' + e.message);
+        }
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectIOSSimulator() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/iphonesimulator|ipadsimulator|corellium/i.test(ua)) {
+                score += 50;
+                detections.push('ios_simulator_in_ua');
+            }
+
+            const platform = navigator.platform || '';
+            if (/iPhone|iPad|iPod/i.test(platform) && /Intel Mac/i.test(ua)) {
+                score += 35;
+                detections.push('ios_on_intel_mac');
+            }
+
+            const maxTouch = navigator.maxTouchPoints || 0;
+            if (maxTouch === 0 || maxTouch > 10) {
+                score += 20;
+                detections.push('suspicious_touch_points');
+            }
+
+            const screenAvail = screen.availWidth + screen.availHeight;
+            if (screenAvail === 0) {
+                score += 25;
+                detections.push('no_available_screen');
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('ios_simulator_error: ' + e.message);
+        }
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectChromeDevTools() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/devtools|inspect/i.test(ua)) {
+                score += 45;
+                detections.push('devtools_in_ua');
+            }
+
+            const threshold = 160;
+            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+
+            if (widthThreshold || heightThreshold) {
+                score += 40;
+                detections.push('devtools_open');
+            }
+
+            const startTime = performance.now();
+            debugger;
+            const endTime = performance.now();
+            if (endTime - startTime > 100) {
+                score += 30;
+                detections.push('debugger_detected');
+            }
+
+            const testElement = document.createElement('div');
+            testElement.id = 'test' + Math.random();
+            document.body.appendChild(testElement);
+            const element = document.getElementById(testElement.id);
+            if (!element) {
+                score += 20;
+                detections.push('element_not_found');
+            } else {
+                document.body.removeChild(element);
+            }
+
+            const consoleDiv = document.createElement('div');
+            consoleDiv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;z-index:9999;background:#fff';
+            consoleDiv.id = 'console-detector';
+            document.body.appendChild(consoleDiv);
+            const rect = consoleDiv.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+                score += 25;
+                detections.push('devtools_likely_open');
+            }
+            document.body.removeChild(consoleDiv);
+
+        } catch (e) {
+            score += 30;
+            detections.push('devtools_error: ' + e.message);
+        }
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectFirebug() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/firebug/i.test(ua)) {
+                score += 50;
+                detections.push('firebug_in_ua');
+            }
+
+            if (window.console && window.console.firebug) {
+                score += 55;
+                detections.push('firebug_object_present');
+            }
+
+            const fbMatch = /firebug[\s\S]*?/i.exec(navigator.userAgent || '');
+            if (fbMatch) {
+                score += 45;
+                detections.push('firebug_signature_in_ua');
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('firebug_error: ' + e.message);
+        }
+        return { detected: score > 40, score: Math.min(score, 100), detections };
+    }
+
+    async detectSeleniumWebDriver() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/selenium|webdriver/i.test(ua)) {
+                score += 50;
+                detections.push('selenium_in_ua');
+            }
+
+            if (navigator.webdriver === true) {
+                score += 55;
+                detections.push('navigator_webdriver_true');
+            }
+
+            const seleniumProps = [
+                '__selenium_evaluate', '__webdriver_evaluate',
+                '__selenium', '__webdriver_script_fn',
+                '__driver_evaluate', '__fxdriver_evaluate'
+            ];
+
+            for (const prop of seleniumProps) {
+                if (window[prop] !== undefined || document[prop] !== undefined) {
+                    score += 45;
+                    detections.push(`selenium_prop: ${prop}`);
+                    break;
+                }
+            }
+
+            const webdriverAttr = document.documentElement.getAttribute('webdriver');
+            if (webdriverAttr !== null) {
+                score += 50;
+                detections.push('webdriver_attr_present');
+            }
+
+            try {
+                const testFunc = new Function('return ' + 'window.__selenium');
+                if (testFunc()) {
+                    score += 40;
+                    detections.push('selenium_evaluate_found');
+                }
+            } catch (e) {}
+
+        } catch (e) {
+            score += 30;
+            detections.push('selenium_error: ' + e.message);
+        }
+        return { detected: score > 40, score: Math.min(score, 100), detections };
+    }
+
+    async detectPuppeteerEnhanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/puppeteer/i.test(ua)) {
+                score += 55;
+                detections.push('puppeteer_in_ua');
+            }
+
+            if (/HeadlessChrome/i.test(ua)) {
+                score += 50;
+                detections.push('headless_chrome_in_ua');
+            }
+
+            if (document.$cdc_asdjflasutopfhvcZLmcfl_) {
+                score += 60;
+                detections.push('puppeteer_cdc_marker');
+            }
+
+            if (document.$chrome_asyncScriptInfo) {
+                score += 50;
+                detections.push('chrome_async_info');
+            }
+
+            const chromeProps = ['chrome', 'runtime', 'loadTimes', 'csi', 'app'];
+            let missingChromeProps = 0;
+            for (const prop of chromeProps) {
+                if (!window.chrome || window.chrome[prop] === undefined) {
+                    missingChromeProps++;
+                }
+            }
+            if (missingChromeProps >= 3) {
+                score += 35;
+                detections.push('many_missing_chrome_props');
+            }
+
+        } catch (e) {
+            score += 30;
+            detections.push('puppeteer_error: ' + e.message);
+        }
+        return { detected: score > 40, score: Math.min(score, 100), detections };
+    }
+
+    async detectPlaywrightEnhanced() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/playwright/i.test(ua)) {
+                score += 55;
+                detections.push('playwright_in_ua');
+            }
+
+            const playwrightGlobals = ['__playwright__', '__pw_tags', '__pw_resume__', '__pw_inspect__'];
+            for (const global of playwrightGlobals) {
+                if (window[global] !== undefined) {
+                    score += 60;
+                    detections.push(`playwright_global: ${global}`);
+                    break;
+                }
+            }
+
+            try {
+                const testEl = document.createElement('div');
+                testEl.setAttribute('onfocus', 'return __pw_resume__()');
+                if (testEl.onfocus !== null) {
+                    score += 50;
+                    detections.push('playwright_onfocus_hook');
+                }
+            } catch (e) {}
+
+            const cdpKeys = Object.keys(window).filter(key =>
+                key.includes('__pw') || key.includes('playwright') || key.includes('__playwright')
+            );
+            if (cdpKeys.length > 0) {
+                score += 45;
+                detections.push('playwright_keys_found');
+            }
+
+        } catch (e) {
+            score += 30;
+            detections.push('playwright_error: ' + e.message);
+        }
+        return { detected: score > 45, score: Math.min(score, 100), detections };
+    }
+
+    async detectAppium() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/appium|uicatalog/i.test(ua)) {
+                score += 50;
+                detections.push('appium_in_ua');
+            }
+
+            const appiumIndicators = ['WebDriver', 'Selenium', 'Appium', 'UICatalog'];
+            let matchCount = 0;
+            for (const indicator of appiumIndicators) {
+                if (ua.includes(indicator)) {
+                    matchCount++;
+                }
+            }
+            if (matchCount >= 2) {
+                score += 40;
+                detections.push('multiple_appium_indicators');
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('appium_error: ' + e.message);
+        }
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectCypress() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            if (/cypress/i.test(ua)) {
+                score += 55;
+                detections.push('cypress_in_ua');
+            }
+
+            const cypressKeys = Object.keys(window).filter(key =>
+                key.includes('Cypress') || key.includes('__cypress') || key.includes('cypress')
+            );
+            if (cypressKeys.length > 0) {
+                score += 60;
+                detections.push('cypress_keys_found');
+            }
+
+            if (window.Cypress !== undefined) {
+                score += 65;
+                detections.push('cypress_object_present');
+            }
+
+        } catch (e) {
+            score += 30;
+            detections.push('cypress_error: ' + e.message);
+        }
+        return { detected: score > 45, score: Math.min(score, 100), detections };
+    }
+
+    async detectAutomationExtra() {
+        let score = 0;
+        const detections = [];
+        try {
+            const ua = navigator.userAgent || '';
+            const automationKeywords = ['automated', 'bot', 'crawler', 'spider', 'scraper'];
+            for (const keyword of automationKeywords) {
+                if (keyword.toLowerCase() === keyword) {
+                    if (new RegExp(keyword, 'i').test(ua)) {
+                        score += 40;
+                        detections.push(`automation_keyword: ${keyword}`);
+                        break;
+                    }
+                }
+            }
+
+            const permissions = navigator.permissions || null;
+            if (permissions) {
+                try {
+                    const result = await permissions.query({ name: 'notifications' });
+                    if (result.state === 'denied') {
+                        score += 15;
+                        detections.push('notifications_denied');
+                    }
+                } catch (e) {
+                    score += 20;
+                    detections.push('permissions_query_failed');
+                }
+            }
+
+            try {
+                const testLocalStorage = localStorage.getItem('__webdriver');
+                if (testLocalStorage !== null) {
+                    score += 35;
+                    detections.push('webdriver_localstorage');
+                }
+            } catch (e) {
+                score += 10;
+                detections.push('localstorage_blocked');
+            }
+
+            try {
+                const testSessionStorage = sessionStorage.getItem('__webdriver');
+                if (testSessionStorage !== null) {
+                    score += 30;
+                    detections.push('webdriver_sessionstorage');
+                }
+            } catch (e) {
+                score += 10;
+                detections.push('sessionstorage_blocked');
+            }
+
+            const allCookiesEnabled = navigator.cookieEnabled;
+            if (!allCookiesEnabled) {
+                score += 15;
+                detections.push('cookies_disabled');
+            }
+
+        } catch (e) {
+            score += 25;
+            detections.push('automation_extra_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     getHeader(name) {

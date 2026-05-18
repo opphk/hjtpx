@@ -17,6 +17,7 @@ class VerifyCaptchaRequest
     public $answer;
     public $connections;
     public $targetPosition;
+    public $timeSpent;
 
     public function toArray(): array
     {
@@ -62,7 +63,62 @@ class VerifyCaptchaRequest
         if ($this->targetPosition !== null) {
             $data['target_position'] = $this->targetPosition;
         }
+        if ($this->timeSpent !== null) {
+            $data['time_spent'] = $this->timeSpent;
+        }
 
         return $data;
+    }
+
+    public static function forSlider(
+        string $sessionId,
+        int $x,
+        int $y = null,
+        array $trajectory = null
+    ): self {
+        $request = new self();
+        $request->sessionId = $sessionId;
+        $request->type = 'slider';
+        $request->x = $x;
+        $request->y = $y;
+        $request->trajectory = $trajectory;
+        return $request;
+    }
+
+    public static function forClick(
+        string $sessionId,
+        array $points,
+        array $clickSequence = null
+    ): self {
+        $request = new self();
+        $request->sessionId = $sessionId;
+        $request->type = 'click';
+        $request->points = $points;
+        $request->clickSequence = $clickSequence;
+        return $request;
+    }
+
+    public static function forVoice(
+        string $sessionId,
+        string $answer
+    ): self {
+        $request = new self();
+        $request->sessionId = $sessionId;
+        $request->type = 'voice';
+        $request->answer = $answer;
+        return $request;
+    }
+
+    public static function forLianliankan(
+        string $sessionId,
+        array $connections,
+        int $timeSpent = null
+    ): self {
+        $request = new self();
+        $request->sessionId = $sessionId;
+        $request->type = 'lianliankan';
+        $request->connections = $connections;
+        $request->timeSpent = $timeSpent;
+        return $request;
     }
 }

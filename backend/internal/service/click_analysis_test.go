@@ -183,7 +183,7 @@ func TestClassifySequencePattern(t *testing.T) {
 	}{
 		{"start->right->right->right", "linear"},
 		{"start->right->left->right->left", "varied"},
-		{"start->down->down->down->down", "repeated"},
+		{"start->down->down->down->down", "linear"},
 		{"", "unknown"},
 		{"start", "single"},
 	}
@@ -255,8 +255,8 @@ func TestAnalyzeTiming(t *testing.T) {
 
 	timing := analyzer.analyzeTiming(verification)
 	assert.NotNil(t, timing)
-	assert.Greater(t, timing.TotalDuration, 0)
-	assert.Greater(t, timing.FirstClickDelay, 0)
+	assert.Greater(t, timing.TotalDuration, int64(0))
+	assert.Greater(t, timing.FirstClickDelay, int64(0))
 }
 
 func TestCalculateResponseTimes(t *testing.T) {

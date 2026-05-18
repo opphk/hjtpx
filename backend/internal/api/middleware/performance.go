@@ -131,7 +131,7 @@ var gzipPool = sync.Pool{
 	},
 }
 
-func CacheControl(maxAge time.Duration) gin.HandlerFunc {
+func CacheControlHeader(maxAge time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Cache-Control", "public, max-age="+strconv.Itoa(int(maxAge.Seconds())))
 		c.Header("Expires", time.Now().Add(maxAge).Format(http.TimeFormat))
@@ -140,7 +140,7 @@ func CacheControl(maxAge time.Duration) gin.HandlerFunc {
 	}
 }
 
-func NoCache() gin.HandlerFunc {
+func NoCacheHeader() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 		c.Header("Pragma", "no-cache")

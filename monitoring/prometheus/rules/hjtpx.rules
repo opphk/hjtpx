@@ -64,6 +64,69 @@ groups:
           summary: "HJTPX high blocked request rate"
           description: "HJTPX blocked request rate is above 10/s for more than 5 minutes"
 
+      - alert: HJTXPCaptchaFailureRate
+        expr: rate(captcha_verify_failed_total[5m]) / rate(captcha_verify_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high captcha failure rate"
+          description: "HJTPX captcha verification failure rate is above 10%"
+
+      - alert: HJTXPApiLatencySpike
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX API latency spike"
+          description: "HJTPX 99th percentile latency is above 5 seconds"
+
+      - alert: HJTXPConnectionPoolExhausted
+        expr: rate(http_connections_active[5m]) / rate(http_connections_max[5m]) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX connection pool nearly exhausted"
+          description: "HJTPX connection pool usage is above 90%"
+
+      - alert: HJTXPServiceUnresponsive
+        expr: sum(rate(http_requests_total[5m])) by (job) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX service unresponsive"
+          description: "HJTPX service is not receiving any requests for 5 minutes"
+
+      - alert: HJTXPDiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX disk space low"
+          description: "Disk space usage is above 85%"
+
+      - alert: HJTXPDiskIOHigh
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX disk I/O high"
+          description: "Disk I/O utilization is above 80%"
+
+      - alert: HJTXPNetworkPacketLoss
+        expr: rate(node_network_receive_errors_total[5m]) + rate(node_network_transmit_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX network packet loss detected"
+          description: "Network packet loss rate is above 10 per second"
+
   - name: database
     rules:
       - alert: PostgreSQLDown
@@ -92,6 +155,60 @@ groups:
         annotations:
           summary: "PostgreSQL slow queries"
           description: "PostgreSQL average query time is above 1 second"
+
+      - alert: PostgreSQLTransactionConflicts
+        expr: rate(pg_stat_database_conflicts_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL transaction conflicts"
+          description: "PostgreSQL is experiencing transaction conflicts"
+
+      - alert: PostgreSQLDeadlocks
+        expr: rate(pg_stat_database_deadlocks[5m]) > 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: "PostgreSQL has detected deadlocks"
+
+      - alert: PostgreSQLReplicationLag
+        expr: pg_replication_lag_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication lag"
+          description: "PostgreSQL replication lag is above 30 seconds"
+
+      - alert: PostgreSQLLongRunningTransactions
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL long running transactions"
+          description: "PostgreSQL has transactions running longer than 5 minutes"
+
+      - alert: PostgreSQLConnectionLimitReached
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection limit reached"
+          description: "PostgreSQL is about to reach max connections"
+
+      - alert: PostgreSQLCacheHitRatioLow
+        expr: 1 - (pg_stat_database_blks_hit / pg_stat_database_blks_read) > 0.9
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "PostgreSQL cache hit ratio low"
+          description: "PostgreSQL cache hit ratio is below 10%"
 
   - name: redis
     rules:
@@ -122,6 +239,42 @@ groups:
           summary: "Redis high eviction rate"
           description: "Redis is evicting keys at a high rate"
 
+      - alert: RedisOutOfMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis out of memory"
+          description: "Redis is about to use all available memory"
+
+      - alert: RedisHighCommandLatency
+        expr: rate(redis_command_duration_seconds_sum[5m]) / rate(redis_command_duration_seconds_count[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high command latency"
+          description: "Redis command execution is slow"
+
+      - alert: RedisConnectedClientsHigh
+        expr: redis_connected_clients > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high number of connected clients"
+          description: "Redis has more than 10000 connected clients"
+
+      - alert: RedisReplicationBroken
+        expr: redis_replication_offset_seconds == 0 and redis_role_replica == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis replication broken"
+          description: "Redis replica is not replicating from master"
+
   - name: nginx
     rules:
       - alert: NginxDown
@@ -150,3 +303,218 @@ groups:
         annotations:
           summary: "Nginx high latency"
           description: "Nginx 95th percentile latency is above 2 seconds"
+
+      - alert: NginxSSLCertificateExpiring
+        expr: nginx_ssl_certificate_expiry_seconds < 604800
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx SSL certificate expiring"
+          description: "SSL certificate expires in less than 7 days"
+
+      - alert: NginxTooManyConnections
+        expr: nginx_connections_active > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nginx too many active connections"
+          description: "Nginx has more than 10000 active connections"
+
+  - name: logging
+    rules:
+      - alert: HighErrorLogRate
+        expr: rate(log_messages_total{level="error"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error log rate"
+          description: "Error log rate is above 100 per second"
+
+      - alert: CriticalErrorLogDetected
+        expr: rate(log_messages_total{level="critical"}[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error logs detected"
+          description: "Critical error logs are being generated"
+
+      - alert: LogVolumeAnomaly
+        expr: rate(log_messages_total[5m]) > 10 * avg_over_time(rate(log_messages_total[5m])[1h:5m])
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Log volume anomaly detected"
+          description: "Log volume is 10x higher than average"
+
+      - alert: LokiWriteFailures
+        expr: rate(loki_write_status_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki write failures"
+          description: "Loki is experiencing write failures"
+
+      - alert: LokiQueryLatencyHigh
+        expr: histogram_quantile(0.95, rate(loki_logql_evaluations_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki query latency high"
+          description: "Loki query latency is above 5 seconds"
+
+  - name: infrastructure
+    rules:
+      - alert: HostHighCPU
+        expr: 100 - (avg by(instance)(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host high CPU usage"
+          description: "Host CPU usage is above 80%"
+
+      - alert: HostOutOfMemory
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Host out of memory"
+          description: "Host memory usage is above 90%"
+
+      - alert: HostDiskSpaceLow
+        expr: (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk space low"
+          description: "Host disk space usage is above 85%"
+
+      - alert: HostNetworkInHigh
+        expr: rate(node_network_receive_bytes_total[5m]) > 100000000
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Host high network ingress"
+          description: "Host network ingress is above 100MB/s"
+
+      - alert: HostNetworkOutHigh
+        expr: rate(node_network_transmit_bytes_total[5m]) > 100000000
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Host high network egress"
+          description: "Host network egress is above 100MB/s"
+
+      - alert: ContainerHighCPU
+        expr: sum by(container_name)(rate(container_cpu_usage_seconds_total[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high CPU usage"
+          description: "Container CPU usage is above 2 cores"
+
+      - alert: ContainerHighMemory
+        expr: sum by(container_name)(container_memory_usage_bytes) / sum by(container_name)(container_spec_memory_limit_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container memory usage is above 90% of limit"
+
+      - alert: ContainerRestartingFrequently
+        expr: rate(container_restart_count[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container is restarting frequently"
+
+  - name: captcha-specific
+    rules:
+      - alert: CaptchaGenerationFailureRate
+        expr: rate(captcha_generate_failed_total[5m]) / rate(captcha_generate_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Captcha generation failure rate high"
+          description: "Captcha generation failure rate is above 5%"
+
+      - alert: CaptchaVerificationLatencyHigh
+        expr: histogram_quantile(0.95, rate(captcha_verify_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Captcha verification latency high"
+          description: "Captcha verification 95th percentile is above 500ms"
+
+      - alert: CaptchaQueueLengthHigh
+        expr: captcha_queue_length > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Captcha queue length high"
+          description: "Captcha processing queue has more than 1000 items"
+
+      - alert: CaptchaActiveUsersAnomaly
+        expr: captcha_active_users > 10 * avg_over_time(captcha_active_users[1h])
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Captcha active users anomaly"
+          description: "Active users count is 10x higher than average"
+
+  - name: security
+    rules:
+      - alert: SecurityEventDetected
+        expr: rate(security_events_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Security events detected"
+          description: "High rate of security events detected"
+
+      - alert: BruteForceAttackSuspected
+        expr: rate(login_failed_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Brute force attack suspected"
+          description: "High rate of failed login attempts detected"
+
+      - alert: DDoSAttackSuspected
+        expr: rate(http_requests_total[5m]) > 10000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DDoS attack suspected"
+          description: "Request rate is extremely high, possible DDoS attack"
+
+      - alert: SuspiciousIPActivity
+        expr: rate(blocked_ips_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Suspicious IP activity"
+          description: "High rate of blocked IP activity"

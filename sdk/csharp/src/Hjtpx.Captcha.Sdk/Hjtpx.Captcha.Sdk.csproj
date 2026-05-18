@@ -8,16 +8,45 @@
     <PackageId>Hjtpx.Captcha.Sdk</PackageId>
     <Version>1.0.0</Version>
     <Authors>HJTPX</Authors>
-    <Description>HJTPX 验证码系统 C# SDK</Description>
+    <Company>HJTPX</Company>
+    <Product>HJTPX Captcha SDK</Product>
+    <Description>HJTPX 验证码系统 C# SDK - 支持多种验证码类型的完整解决方案</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/hjtpx/captcha</PackageProjectUrl>
     <RepositoryUrl>https://github.com/hjtpx/captcha</RepositoryUrl>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <RepositoryType>git</RepositoryType>
+    <PackageIcon>images\icon.png</PackageIcon>
+    <PackageReadmeFile>docs\README.md</PackageReadmeFile>
+    <PackageTags>captcha;verification;security;slider;click;rotation;gesture;jigsaw;voice;connect;3d;hjtpx</PackageTags>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DocumentationFile>bin\$(Configuration)\$(TargetFramework)\Hjtpx.Captcha.Sdk.xml</DocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.4" />
     <PackageReference Include="System.Text.Json" Version="6.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="docs\README.md">
+      <Pack>true</Pack>
+      <PackagePath>docs\</PackagePath>
+    </None>
+    <None Update="..\..\LICENSE">
+      <Pack>true</Pack>
+      <PackagePath>LICENSE</PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>

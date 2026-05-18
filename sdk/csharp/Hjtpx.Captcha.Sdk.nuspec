@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>Hjtpx.Captcha.Sdk</id>
+    <version>1.0.0</version>
+    <title>HJTPX Captcha SDK</title>
+    <authors>HJTPX</authors>
+    <owners>HJTPX</owners>
+    <description>HJTPX 验证码系统 C# SDK - 支持多种验证码类型的完整解决方案</description>
+    <summary>C# SDK for HJTPX Captcha System with support for slider, click, rotation, gesture, jigsaw, voice, connect, and 3D captchas.</summary>
+    <releaseNotes>
+      <![CDATA[
+      ## 1.0.0
+      - 初始版本发布
+      - 支持滑块、点击、旋转、手势、拼图、语音、连连看、3D 验证码
+      - 内置连接池管理
+      - 自动重试机制
+      - HMAC-SHA256 签名验证
+      - 完整的异步 API
+      ]]>
+    </releaseNotes>
+    <tags>captcha verification security slider click rotation gesture jigsaw voice connect 3d hjtpx</tags>
+    <projectUrl>https://github.com/hjtpx/captcha</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/hjtpx/captcha/main/logo.png</iconUrl>
+    <license type="expression">MIT</license>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <copyright>Copyright 2024 HJTPX</copyright>
+    <language>zh-CN</language>
+    <readme>docs/README.md</readme>
+    <dependencies>
+      <group targetFramework=".NETStandard2.1">
+        <dependency id="Microsoft.Extensions.Http" version="6.0.0" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="6.0.4" />
+        <dependency id="System.Text.Json" version="6.0.9" />
+      </group>
+    </dependencies>
+    <frameworkAssemblies>
+      <frameworkAssembly assemblyName="System.Net.Http" />
+    </frameworkAssemblies>
+    <references>
+      <group targetFramework=".NETStandard2.1">
+        <reference file="Hjtpx.Captcha.Sdk.dll" />
+      </group>
+    </references>
+  </metadata>
+  <files>
+    <file src="src/Hjtpx.Captcha.Sdk\bin\Release\netstandard2.1\Hjtpx.Captcha.Sdk.dll" target="lib\netstandard2.1\Hjtpx.Captcha.Sdk.dll" />
+    <file src="src\Hjtpx.Captcha.Sdk\bin\Release\netstandard2.1\Hjtpx.Captcha.Sdk.pdb" target="lib\netstandard2.1\Hjtpx.Captcha.Sdk.pdb" />
+    <file src="src\Hjtpx.Captcha.Sdk\bin\Release\netstandard2.1\Hjtpx.Captcha.Sdk.xml" target="lib\netstandard2.1\Hjtpx.Captcha.Sdk.xml" />
+    <file src="README.md" target="docs\README.md" />
+    <file src="LICENSE" target="LICENSE" />
+  </files>
+</package>

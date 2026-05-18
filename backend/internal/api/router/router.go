@@ -144,6 +144,60 @@ func SetupRouter() *gin.Engine {
 			})
 		})
 
+		adminRouter.GET("/advanced-analytics", func(c *gin.Context) {
+			c.HTML(200, "advanced-analytics.html", gin.H{
+				"title": "高级分析",
+			})
+		})
+
+		adminRouter.GET("/real-time-screen", func(c *gin.Context) {
+			c.HTML(200, "real-time-screen.html", gin.H{
+				"title": "实时大屏",
+			})
+		})
+
+		adminRouter.GET("/applications", func(c *gin.Context) {
+			c.HTML(200, "applications.html", gin.H{
+				"title": "应用管理",
+			})
+		})
+
+		adminRouter.GET("/risk-rules", func(c *gin.Context) {
+			c.HTML(200, "risk-rules.html", gin.H{
+				"title": "风控规则",
+			})
+		})
+
+		adminRouter.GET("/blacklist", func(c *gin.Context) {
+			c.HTML(200, "blacklist.html", gin.H{
+				"title": "黑名单管理",
+			})
+		})
+
+		adminRouter.GET("/notifications", func(c *gin.Context) {
+			c.HTML(200, "notifications.html", gin.H{
+				"title": "通知管理",
+			})
+		})
+
+		adminRouter.GET("/audit-logs", func(c *gin.Context) {
+			c.HTML(200, "audit-logs.html", gin.H{
+				"title": "审计日志",
+			})
+		})
+
+		adminRouter.GET("/ab-testing", func(c *gin.Context) {
+			c.HTML(200, "ab-testing.html", gin.H{
+				"title": "A/B测试",
+			})
+		})
+
+		adminRouter.GET("/monitoring", func(c *gin.Context) {
+			c.HTML(200, "monitoring.html", gin.H{
+				"title": "系统监控",
+			})
+		})
+
 		adminRouter.GET("/api/dashboard", handler.GetDashboardData)
 		adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
 		adminRouter.GET("/api/system-status", handler.GetSystemStatus)
@@ -265,6 +319,19 @@ func SetupRouter() *gin.Engine {
 			adaptive.GET("/captcha-difficulty", handler.GetDifficultyForCaptcha)
 		}
 
+		ai := api.Group("/ai")
+		{
+			aiHandler := handler.NewAIRecommendationHandler()
+
+			ai.GET("/recommend/captcha", aiHandler.GetCaptchaRecommendation)
+			ai.POST("/recommend/captcha", aiHandler.GetCaptchaRecommendation)
+			ai.GET("/recommend/captcha/query", aiHandler.GetRecommendationByQuery)
+			ai.POST("/recommend/difficulty", aiHandler.GetDifficultyRecommendation)
+			ai.POST("/history/update", aiHandler.UpdateUserHistory)
+			ai.GET("/stats/types", aiHandler.GetCaptchaTypeStats)
+			ai.GET("/stats/user", aiHandler.GetUserStats)
+		}
+
 		behavior := api.Group("/behavior")
 		{
 			behavior.GET("/heatmap", handler.GetBehaviorHeatmap)
@@ -279,6 +346,19 @@ func SetupRouter() *gin.Engine {
 		{
 			verify.POST("/email", handler.VerifyEmail)
 			verify.POST("/phone", handler.VerifyPhone)
+		}
+
+		// 风控路由
+		risk := api.Group("/risk")
+		{
+			risk.POST("/evaluate", handler.EvaluateRisk)
+			risk.GET("/rules", handler.GetRiskRules)
+			risk.PUT("/rules", handler.UpdateRiskRules)
+			risk.PUT("/weights", handler.UpdateRiskWeights)
+			risk.GET("/statistics", handler.GetRiskStatistics)
+			risk.GET("/device/:device_id", handler.GetDeviceRiskProfile)
+			risk.GET("/ip/:ip_address", handler.GetIPRiskProfile)
+			risk.POST("/profile/reset", handler.ResetRiskProfile)
 		}
 
 		// MFA 路由
@@ -379,6 +459,20 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/backups/:id/verify", backupHandler.VerifyBackup)
 			admin.POST("/backups/cleanup", backupHandler.CleanupOldBackups)
 			admin.GET("/backup-config", backupHandler.GetBackupConfig)
+		}
+
+		// 增强环境检测 API
+		detect := api.Group("/detect")
+		{
+			enhancedHandler := handler.NewEnvironmentDetectionEnhancedHandler()
+			detect.POST("/enhanced", enhancedHandler.DetectEnhancedEnvironment)
+			detect.POST("/verify", enhancedHandler.VerifyEnhancedEnvironment)
+			detect.GET("/stats", enhancedHandler.GetEnhancedDetectionStats)
+			detect.GET("/types", enhancedHandler.GetSupportedDetectionTypes)
+			detect.POST("/batch", enhancedHandler.BatchDetectEnhanced)
+			detect.POST("/validate-headers", enhancedHandler.ValidateEnhancedHeaders)
+			detect.GET("/report/:fingerprint", enhancedHandler.GetDetectionReportByFingerprint)
+			detect.GET("/accuracy", enhancedHandler.GetDetectionAccuracy)
 		}
 	}
 

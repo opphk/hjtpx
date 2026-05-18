@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">验证日志</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" id="toggleAdvancedSearch">
+                                <i class="fas fa-filter"></i> 高级搜索
+                            </button>
+                            <button type="button" class="btn btn-tool" id="exportBtn">
+                                <i class="fas fa-download"></i> 导出
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 高级搜索区域 -->
+                        <div id="advancedSearchSection" class="mb-4" style="display: none;">
+                            <div class="card card-outline card-primary">
+                                <div class="card-header">
+                                    <h5 class="card-title">高级搜索</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="add-condition-form" class="mb-3"></div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <h6>搜索条件</h6>
+                                            <div id="search-conditions"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>排序选项</h6>
+                                            <div id="sort-options"></div>
+                                            <div class="mt-2">
+                                                <button class="btn btn-sm btn-success" onclick="addSortOption()">
+                                                    <i class="bi bi-plus"></i> 添加排序
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <button class="btn btn-primary" onclick="executeAdvancedSearch()">
+                                                <i class="fas fa-search"></i> 执行搜索
+                                            </button>
+                                            <button class="btn btn-secondary" onclick="clearSearchConditions()">
+                                                <i class="fas fa-times"></i> 清空条件
+                                            </button>
+                                        </div>
+                                        <div class="col-md-6 text-end">
+                                            <button class="btn btn-info" onclick="showSaveSearchModal()">
+                                                <i class="fas fa-save"></i> 保存搜索
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 保存的搜索 -->
+                            <div class="card card-outline card-info">
+                                <div class="card-header">
+                                    <h5 class="card-title">保存的搜索</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="saved-searches"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 基本搜索 -->
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <select class="form-control" id="filterStatus">
+                                    <option value="">全部状态</option>
+                                    <option value="success">成功</option>
+                                    <option value="failed">失败</option>
+                                    <option value="blocked">拦截</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-control" id="filterRiskLevel">
+                                    <option value="">全部风险</option>
+                                    <option value="low">低风险</option>
+                                    <option value="medium">中风险</option>
+                                    <option value="high">高风险</option>
+                                    <option value="critical">极高风险</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="date" class="form-control" id="filterStartDate">
+                            </div>
+                            <div class="col-md-3">
+                                <input type="date" class="form-control" id="filterEndDate">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary" id="searchBtn">
+                                    <i class="fas fa-search"></i> 搜索
+                                </button>
+                            </div>
+                        </div>
+
+                        <table id="logsTable" class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>会话ID</th>
+                                    <th>状态</th>
+                                    <th>风险等级</th>
+                                    <th>风险评分</th>
+                                    <th>IP地址</th>
+                                    <th>时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsTableBody">
+                            </tbody>
+                        </table>
+
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <nav>
+                                    <ul class="pagination justify-content-center" id="pagination">
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="modal fade" id="detailModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">日志详情</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body" id="detailContent">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 保存搜索模态框 -->
+<div class="modal fade" id="saveSearchModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">保存搜索条件</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="searchName">搜索名称</label>
+                    <input type="text" class="form-control" id="searchName" placeholder="输入搜索名称">
+                </div>
+                <div class="form-group">
+                    <label for="searchDescription">描述（可选）</label>
+                    <textarea class="form-control" id="searchDescription" rows="3" placeholder="输入描述"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveCurrentSearch()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/admin/static/js/advanced-search.js"></script>
+<script>
+let currentPage = 1;
+const pageSize = 20;
+let searchInstance = null;
+
+$(function() {
+    // 初始化高级搜索
+    searchInstance = initAdvancedSearch('logs');
+    
+    // 重写搜索成功回调
+    searchInstance.onSearchSuccess = function(data) {
+        renderTable(data.data || []);
+        renderPagination(data.total || 0, data.page || 1);
+    };
+
+    loadLogs();
+
+    $('#searchBtn').click(function() {
+        currentPage = 1;
+        loadLogs();
+    });
+
+    $('#exportBtn').click(function() {
+        exportLogs();
+    });
+    
+    // 高级搜索开关
+    $('#toggleAdvancedSearch').click(function() {
+        $('#advancedSearchSection').toggle();
+    });
+});
+
+function loadLogs() {
+    const filters = {
+        page: currentPage,
+        page_size: pageSize
+    };
+
+    const status = $('#filterStatus').val();
+    if (status) {
+        filters.status = status;
+    }
+
+    const riskLevel = $('#filterRiskLevel').val();
+    if (riskLevel) {
+        filters.risk_level = riskLevel;
+    }
+
+    const startDate = $('#filterStartDate').val();
+    if (startDate) {
+        filters.start_date = startDate;
+    }
+
+    const endDate = $('#filterEndDate').val();
+    if (endDate) {
+        filters.end_date = endDate;
+    }
+
+    $.get('/admin/api/logs', filters, function(response) {
+        if (response.code === 0) {
+            renderTable(response.data.logs || []);
+            renderPagination(response.data.total || 0, response.data.page || 1);
+        } else {
+            renderTable([]);
+            renderPagination(0, 1);
+        }
+    }).fail(function() {
+        renderTable([]);
+        renderPagination(0, 1);
+    });
+}
+
+function renderTable(logs) {
+    const tbody = $('#logsTableBody');
+    tbody.empty();
+
+    if (logs.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center">暂无数据</td></tr>');
+        return;
+    }
+
+    logs.forEach(log => {
+        const statusClass = getStatusBadgeClass(log.status || log.result);
+        const statusText = getStatusText(log.status || log.result);
+        const riskClass = getRiskBadgeClass(log.risk_level);
+        const riskText = getRiskLevelText(log.risk_level);
+
+        const sessionId = log.session_id || '';
+        const displaySessionId = sessionId.length > 16 ? sessionId.substring(0, 16) + '...' : sessionId;
+
+        const row = `
+            <tr>
+                <td>${log.id}</td>
+                <td title="${sessionId}">${displaySessionId}</td>
+                <td><span class="badge badge-${statusClass}">${statusText}</span></td>
+                <td><span class="badge badge-${riskClass}">${riskText}</span></td>
+                <td>${(log.risk_score || 0).toFixed(1)}</td>
+                <td>${log.ip_address || '-'}</td>
+                <td>${formatDate(log.created_at)}</td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="showDetail(${log.id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(row);
+    });
+}
+
+function getStatusBadgeClass(status) {
+    const map = {
+        'success': 'success',
+        'passed': 'success',
+        'failed': 'danger',
+        'failure': 'danger',
+        'blocked': 'warning',
+        'block': 'warning',
+        'pending': 'secondary'
+    };
+    return map[status] || 'secondary';
+}
+
+function getStatusText(status) {
+    const map = {
+        'success': '成功',
+        'passed': '成功',
+        'failed': '失败',
+        'failure': '失败',
+        'blocked': '拦截',
+        'block': '拦截',
+        'pending': '待处理'
+    };
+    return map[status] || status;
+}
+
+function getRiskBadgeClass(level) {
+    const map = {
+        'low': 'success',
+        'medium': 'warning',
+        'high': 'danger',
+        'critical': 'dark'
+    };
+    return map[level] || 'secondary';
+}
+
+function getRiskLevelText(level) {
+    const map = {
+        'low': '低风险',
+        'medium': '中风险',
+        'high': '高风险',
+        'critical': '极高风险'
+    };
+    return map[level] || level || '未知';
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function renderPagination(total, currentPageNum) {
+    const totalPages = Math.ceil(total / pageSize);
+    const pagination = $('#pagination');
+    pagination.empty();
+
+    if (totalPages <= 1) {
+        return;
+    }
+
+    const startPage = Math.max(1, currentPageNum - 2);
+    const endPage = Math.min(totalPages, currentPageNum + 2);
+
+    if (currentPageNum > 1) {
+        pagination.append(`<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${currentPageNum - 1}); return false;">上一页</a></li>`);
+    }
+
+    if (startPage > 1) {
+        pagination.append(`<li class="page-item"><a class="page-link" href="#" onclick="goToPage(1); return false;">1</a></li>`);
+        if (startPage > 2) {
+            pagination.append(`<li class="page-item disabled"><a class="page-link">...</a></li>`);
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const active = i === currentPageNum ? 'active' : '';
+        pagination.append(`<li class="page-item ${active}"><a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a></li>`);
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            pagination.append(`<li class="page-item disabled"><a class="page-link">...</a></li>`);
+        }
+        pagination.append(`<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a></li>`);
+    }
+
+    if (currentPageNum < totalPages) {
+        pagination.append(`<li class="page-item"><a class="page-link" href="#" onclick="goToPage(${currentPageNum + 1}); return false;">下一页</a></li>`);
+    }
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadLogs();
+}
+
+function showDetail(id) {
+    $.get('/admin/api/logs/' + id, function(response) {
+        if (response.code === 0) {
+            const log = response.data;
+            let html = '<div class="table-responsive"><table class="table table-sm">';
+            html += '<tr><th width="30%">ID</th><td>' + log.id + '</td></tr>';
+            html += '<tr><th>会话ID</th><td>' + (log.session_id || '-') + '</td></tr>';
+            html += '<tr><th>验证码类型</th><td>' + (log.captcha_type || '-') + '</td></tr>';
+            html += '<tr><th>状态</th><td><span class="badge badge-' + getStatusBadgeClass(log.status) + '">' + getStatusText(log.status) + '</span></td></tr>';
+            html += '<tr><th>风险等级</th><td><span class="badge badge-' + getRiskBadgeClass(log.risk_level) + '">' + getRiskLevelText(log.risk_level) + '</span></td></tr>';
+            html += '<tr><th>风险评分</th><td>' + (log.risk_score || 0).toFixed(2) + '</td></tr>';
+            html += '<tr><th>IP地址</th><td>' + (log.ip_address || '-') + '</td></tr>';
+            html += '<tr><th>User Agent</th><td>' + (log.user_agent || '-') + '</td></tr>';
+            html += '<tr><th>耗时</th><td>' + (log.duration || 0) + ' ms</td></tr>';
+            html += '<tr><th>创建时间</th><td>' + formatDate(log.created_at) + '</td></tr>';
+            if (log.analysis_result) {
+                html += '<tr><th>分析结果</th><td><pre style="max-height: 200px; overflow: auto;">' + JSON.stringify(JSON.parse(log.analysis_result), null, 2) + '</pre></td></tr>';
+            }
+            html += '</table></div>';
+            $('#detailContent').html(html);
+            $('#detailModal').modal('show');
+        }
+    });
+}
+
+function exportLogs() {
+    const params = [];
+    const status = $('#filterStatus').val();
+    if (status) params.push('status=' + encodeURIComponent(status));
+
+    const riskLevel = $('#filterRiskLevel').val();
+    if (riskLevel) params.push('risk_level=' + encodeURIComponent(riskLevel));
+
+    const startDate = $('#filterStartDate').val();
+    if (startDate) params.push('start_date=' + encodeURIComponent(startDate));
+
+    const endDate = $('#filterEndDate').val();
+    if (endDate) params.push('end_date=' + encodeURIComponent(endDate));
+
+    const queryString = params.length > 0 ? '?' + params.join('&') : '';
+    window.location.href = '/admin/api/logs/export' + queryString;
+}
+
+// 高级搜索辅助函数
+function executeAdvancedSearch() {
+    if (searchInstance) {
+        searchInstance.page = 1;
+        searchInstance.search();
+    }
+}
+
+function clearSearchConditions() {
+    if (searchInstance) {
+        searchInstance.clearConditions();
+        searchInstance.sortOptions = [];
+        searchInstance.renderSortOptions();
+    }
+}
+
+function showSaveSearchModal() {
+    $('#saveSearchModal').modal('show');
+}
+
+function saveCurrentSearch() {
+    const name = $('#searchName').val();
+    const description = $('#searchDescription').val();
+    
+    if (!name) {
+        alert('请输入搜索名称');
+        return;
+    }
+    
+    if (searchInstance) {
+        searchInstance.saveSearch(name, description).then(() => {
+            $('#saveSearchModal').modal('hide');
+            $('#searchName').val('');
+            $('#searchDescription').val('');
+        });
+    }
+}
+
+function addSortOption() {
+    const field = prompt('请输入排序字段（例如：created_at, risk_score）：');
+    if (!field) return;
+    
+    const order = confirm('是否降序排序？（确定=降序，取消=升序）') ? 'desc' : 'asc';
+    
+    if (searchInstance) {
+        searchInstance.addSortOption(field, order);
+    }
+}
+</script>
+{% endblock %}

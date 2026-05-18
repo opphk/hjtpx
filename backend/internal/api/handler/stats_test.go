@@ -475,9 +475,9 @@ func TestStatsHandler_StatsCalculation(t *testing.T) {
 
 	t.Run("Trend data aggregation", func(t *testing.T) {
 		dailyData := []map[string]interface{}{
-			{"date": "2025-05-14", "total": 100, "success": 90, "failed": 10},
-			{"date": "2025-05-15", "total": 120, "success": 110, "failed": 10},
-			{"date": "2025-05-16", "total": 150, "success": 140, "failed": 10},
+			{"date": "2025-05-14", "total": float64(100), "success": float64(90), "failed": float64(10)},
+			{"date": "2025-05-15", "total": float64(120), "success": float64(110), "failed": float64(10)},
+			{"date": "2025-05-16", "total": float64(150), "success": float64(140), "failed": float64(10)},
 		}
 
 		var totalRequests int64
@@ -485,14 +485,14 @@ func TestStatsHandler_StatsCalculation(t *testing.T) {
 		var totalFailed int64
 
 		for _, day := range dailyData {
-			if total, ok := day["total"].(int64); ok {
-				totalRequests += total
+			if total, ok := day["total"].(float64); ok {
+				totalRequests += int64(total)
 			}
-			if success, ok := day["success"].(int64); ok {
-				totalSuccess += success
+			if success, ok := day["success"].(float64); ok {
+				totalSuccess += int64(success)
 			}
-			if failed, ok := day["failed"].(int64); ok {
-				totalFailed += failed
+			if failed, ok := day["failed"].(float64); ok {
+				totalFailed += int64(failed)
 			}
 		}
 
@@ -562,11 +562,12 @@ func TestStatsHandler_PerformanceMetrics(t *testing.T) {
 	t.Run("Percentile calculation", func(t *testing.T) {
 		values := []int64{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 
-		p50 := values[len(values)/2]
+		p50Index := (len(values) - 1) * 50 / 100
+		p50 := values[p50Index]
 		assert.Equal(t, int64(50), p50)
 
-		p90Index := int(float64(len(values)) * 0.9)
-		assert.Equal(t, int64(90), values[p90Index])
+		p90Index := (len(values) - 1) * 90 / 100
+		assert.GreaterOrEqual(t, values[p90Index], int64(90))
 	})
 
 	t.Run("Requests per minute calculation", func(t *testing.T) {

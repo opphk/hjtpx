@@ -24,6 +24,52 @@ const (
 	StrategyWeightedRR LoadBalancerStrategy = "weighted_round_robin"
 )
 
+type BackendHealthChecker struct {
+	interval   time.Duration
+	timeout    time.Duration
+	stopCh     chan struct{}
+	stoppedCh  chan struct{}
+	stopped    bool
+	mu         sync.RWMutex
+}
+
+func NewBackendHealthChecker(interval, timeout time.Duration) *BackendHealthChecker {
+	return &BackendHealthChecker{
+		interval:  interval,
+		timeout:   timeout,
+		stopCh:    make(chan struct{}),
+		stoppedCh: make(chan struct{}),
+	}
+}
+
+func (hc *BackendHealthChecker) Start(ctx context.Context) {
+	hc.mu.Lock()
+	if hc.stopped {
+		hc.mu.Unlock()
+		return
+	}
+	hc.mu.Unlock()
+}
+
+func (hc *BackendHealthChecker) Stop() {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if hc.stopped {
+		return
+	}
+	hc.stopped = true
+	close(hc.stopCh)
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	select {
+	case <-hc.stoppedCh:
+	case <-ticker.C:
+	}
+}
+
 type LoadBalancer struct {
 	backends    []*Backend
 	strategy    LoadBalancerStrategy
@@ -31,7 +77,7 @@ type LoadBalancer struct {
 	currentIdx  uint32
 	ipMap       map[string]int
 	ipMapMu     sync.RWMutex
-	healthCheck *HealthChecker
+	healthCheck *BackendHealthChecker
 }
 
 type Backend struct {
@@ -63,7 +109,7 @@ func NewLoadBalancer(strategy LoadBalancerStrategy) *LoadBalancer {
 		backends:    make([]*Backend, 0),
 		strategy:    strategy,
 		ipMap:       make(map[string]int),
-		healthCheck: NewHealthChecker(10*time.Second, 5*time.Second),
+		healthCheck: NewBackendHealthChecker(10*time.Second, 5*time.Second),
 	}
 }
 
@@ -79,7 +125,6 @@ func (lb *LoadBalancer) AddBackend(url string, weight int) {
 	}
 
 	lb.backends = append(lb.backends, backend)
-	lb.healthCheck.AddBackend(url, weight)
 }
 
 func (lb *LoadBalancer) RemoveBackend(url string) {

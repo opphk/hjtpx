@@ -171,13 +171,25 @@ func TestAlertService_parseCondition(t *testing.T) {
 			name:      "equality no match",
 			condition: `status == "error"`,
 			context:   map[string]interface{}{"status": "success"},
-			expected:  true, // Simple parser defaults to true for now
+			expected:  false,
 		},
 		{
-			name:      "inequality",
+			name:      "equality missing key",
+			condition: `status == "error"`,
+			context:   map[string]interface{}{"level": "warning"},
+			expected:  true,
+		},
+		{
+			name:      "inequality match",
 			condition: `level != "info"`,
 			context:   map[string]interface{}{"level": "warning"},
 			expected:  true,
+		},
+		{
+			name:      "inequality no match",
+			condition: `level != "info"`,
+			context:   map[string]interface{}{"level": "info"},
+			expected:  false,
 		},
 	}
 
@@ -186,9 +198,7 @@ func TestAlertService_parseCondition(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := service.parseCondition(tt.condition, tt.context)
-			// With our simple parser, most cases return true
-			// This is acceptable for basic functionality
-			assert.True(t, result)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -248,7 +258,11 @@ func TestAlertService_jsonToContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := service.jsonToContext(tt.jsonStr)
-			assert.NotNil(t, result)
+			if tt.name == "invalid JSON" {
+				assert.Nil(t, result)
+			} else {
+				assert.NotNil(t, result)
+			}
 		})
 	}
 }

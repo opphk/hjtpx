@@ -1121,3 +1121,234 @@ func TestCreateSelfCheckingCode(t *testing.T) {
 		t.Error("Original code should be preserved")
 	}
 }
+
+func TestAdvancedStringEncryption(t *testing.T) {
+	key := []byte("test-key-1234567890")
+	enc := NewAdvancedStringEncryption(key)
+
+	plaintext := "Hello, World!"
+	encrypted, err := enc.Encrypt(plaintext)
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	if encrypted == plaintext {
+		t.Error("Encrypted string should differ from plaintext")
+	}
+
+	decrypted, err := enc.Decrypt(encrypted)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+
+	if decrypted != plaintext {
+		t.Errorf("Decrypted should match original, got %s", decrypted)
+	}
+}
+
+func TestAdvancedStringEncryptionEmpty(t *testing.T) {
+	key := []byte("test-key-1234567890")
+	enc := NewAdvancedStringEncryption(key)
+
+	_, err := enc.Encrypt("")
+	if err == nil {
+		t.Error("Should return error for empty plaintext")
+	}
+}
+
+func TestAdvancedStringEncryptionWithSalt(t *testing.T) {
+	key := []byte("test-key-1234567890")
+	enc := NewAdvancedStringEncryption(key)
+
+	plaintext := "Hello, World!"
+	salt := "random-salt-123"
+
+	encrypted, err := enc.EncryptWithSalt(plaintext, salt)
+	if err != nil {
+		t.Fatalf("EncryptWithSalt failed: %v", err)
+	}
+
+	if !strings.Contains(encrypted, ":") {
+		t.Error("Encrypted with salt should contain salt separator")
+	}
+
+	decrypted, err := enc.DecryptWithSalt(encrypted)
+	if err != nil {
+		t.Fatalf("DecryptWithSalt failed: %v", err)
+	}
+
+	if decrypted != plaintext {
+		t.Errorf("Decrypted should match original, got %s", decrypted)
+	}
+}
+
+func TestAdvancedStringEncryptionWithSaltInvalidFormat(t *testing.T) {
+	key := []byte("test-key-1234567890")
+	enc := NewAdvancedStringEncryption(key)
+
+	_, err := enc.DecryptWithSalt("invalid-format-without-colon")
+	if err == nil {
+		t.Error("Should return error for invalid format")
+	}
+}
+
+func TestGenerateEncryptedDecoder(t *testing.T) {
+	key := []byte("test-key-1234567890")
+	enc := NewAdvancedStringEncryption(key)
+
+	decoder := enc.GenerateEncryptedDecoder()
+
+	if !strings.Contains(decoder, "atob") {
+		t.Error("Decoder should use atob for base64 decoding")
+	}
+	if !strings.Contains(decoder, "window.__es") {
+		t.Error("Decoder should set window.__es")
+	}
+}
+
+func TestControlFlowFlattener(t *testing.T) {
+	flattener := NewControlFlowFlattener()
+
+	code := `if (x > 0) { console.log("positive"); }`
+	result := flattener.Flatten(code)
+
+	if result == code {
+		t.Error("Control flow should be flattened")
+	}
+}
+
+func TestControlFlowFlattenerForLoop(t *testing.T) {
+	flattener := NewControlFlowFlattener()
+
+	code := `for (var i = 0; i < 10; i++) { sum += i; }`
+	result := flattener.Flatten(code)
+
+	if !strings.Contains(result, "switch") {
+		t.Error("Flattened for loop should use switch")
+	}
+}
+
+func TestControlFlowFlattenerWhileLoop(t *testing.T) {
+	flattener := NewControlFlowFlattener()
+
+	code := `while (true) { break; }`
+	result := flattener.Flatten(code)
+
+	if !strings.Contains(result, "switch") {
+		t.Error("Flattened while loop should use switch")
+	}
+}
+
+func TestVariableNameObfuscator(t *testing.T) {
+	obfuscator := NewVariableNameObfuscator()
+
+	name := obfuscator.ObfuscateVariable("myVariable")
+	if name == "myVariable" {
+		t.Error("Variable name should be obfuscated")
+	}
+
+	sameName := obfuscator.ObfuscateVariable("myVariable")
+	if sameName != name {
+		t.Error("Same variable should map to same obfuscated name")
+	}
+}
+
+func TestVariableNameObfuscatorReserved(t *testing.T) {
+	obfuscator := NewVariableNameObfuscator()
+
+	reserved := obfuscator.ObfuscateVariable("if")
+	if reserved != "if" {
+		t.Error("Reserved words should not be obfuscated")
+	}
+}
+
+func TestVariableNameObfuscatorCode(t *testing.T) {
+	obfuscator := NewVariableNameObfuscator()
+
+	code := `var myVariable = 10; var anotherVar = "test";`
+	result := obfuscator.ObfuscateCode(code)
+
+	if strings.Contains(result, "myVariable") {
+		t.Error("Variables should be obfuscated in code")
+	}
+}
+
+func TestVariableNameObfuscatorGetMapping(t *testing.T) {
+	obfuscator := NewVariableNameObfuscator()
+
+	obfuscator.ObfuscateVariable("testVar1")
+	obfuscator.ObfuscateVariable("testVar2")
+
+	mapping := obfuscator.GetMapping()
+
+	if len(mapping) != 2 {
+		t.Error("Mapping should contain 2 entries")
+	}
+}
+
+func TestObfuscateStringsAdvanced(t *testing.T) {
+	code := `var myvar = "hello";`
+	key := []byte("test-key-1234567890")
+
+	obf := NewObfuscator(ObfuscatorConfig{
+		StringEncryptionKey: key,
+	})
+	result, err := obf.Obfuscate(code)
+	if err != nil {
+		t.Fatalf("Obfuscate failed: %v", err)
+	}
+
+	if result == "" {
+		t.Error("Result should not be empty")
+	}
+}
+
+func TestObfuscateStringsAdvancedEmptyKey(t *testing.T) {
+	code := `var url = "https://api.example.com";`
+
+	result := ObfuscateStringsAdvanced(code, nil)
+
+	if result == "" {
+		t.Error("Result should not be empty")
+	}
+}
+
+func TestApplyControlFlowFlatteningAdvanced(t *testing.T) {
+	code := `if (x > 0) { console.log("positive"); }`
+
+	result := ApplyControlFlowFlatteningAdvanced(code)
+
+	if result == code {
+		t.Error("Control flow should be flattened")
+	}
+}
+
+func TestObfuscateVariablesAdvanced(t *testing.T) {
+	code := `var myVar = 10; var anotherVar = "test";`
+
+	result := ObfuscateVariablesAdvanced(code)
+
+	if strings.Contains(result, "myVar") || strings.Contains(result, "anotherVar") {
+		t.Error("Variables should be obfuscated")
+	}
+}
+
+func TestCreateEnhancedObfuscator(t *testing.T) {
+	config := ObfuscatorConfig{
+		StringEncryptionKey: []byte("test-key-1234567890"),
+	}
+
+	result := CreateEnhancedObfuscator(config)
+
+	if !strings.Contains(result, "atob") {
+		t.Error("Enhanced obfuscator should include decoder")
+	}
+}
+
+func TestCreateEnhancedObfuscatorEmptyKey(t *testing.T) {
+	result := CreateEnhancedObfuscator(ObfuscatorConfig{})
+
+	if result == "" {
+		t.Error("Result should not be empty")
+	}
+}

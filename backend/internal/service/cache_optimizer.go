@@ -10,16 +10,16 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 type CacheOptimizer struct {
-	cacheService      *CacheService
-	enhancedCache     *redis.EnhancedCache
-	cacheWarmer       *redis.CacheWarmer
-	adaptiveRefresher *redis.AdaptiveRefresher
-	hotKeys           map[string]int64
-	hotKeysMu         sync.RWMutex
-	initialized       bool
+	cacheService  *CacheService
+	enhancedCache *redis.EnhancedCache
+	cacheWarmer   *redis.CacheWarmer
+	hotKeys       map[string]int64
+	hotKeysMu     sync.RWMutex
+	initialized   bool
 }
 
 var (
@@ -54,7 +54,9 @@ func (co *CacheOptimizer) Initialize(ctx context.Context) error {
 	}
 
 	co.registerWarmupTasks()
-	co.cacheWarmer.Start()
+	if co.cacheWarmer != nil {
+		co.cacheWarmer.Start(ctx)
+	}
 	co.initialized = true
 
 	if err := co.WarmupCriticalData(ctx); err != nil {
@@ -65,28 +67,77 @@ func (co *CacheOptimizer) Initialize(ctx context.Context) error {
 }
 
 func (co *CacheOptimizer) registerWarmupTasks() {
-	tasks := []*redis.WarmupTask{
-		{
-			Name:      "blacklist-active",
-			Key:       "warmup:blacklist:active",
-			TTL:       5 * time.Minute,
-			Frequency: 1 * time.Minute,
-			Loader:    co.loadActiveBlacklist,
-			Enabled:   true,
-		},
-		{
-			Name:      "stats-summary",
-			Key:       "warmup:stats:summary",
-			TTL:       10 * time.Minute,
-			Frequency: 5 * time.Minute,
-			Loader:    co.loadStatsSummary,
-			Enabled:   true,
-		},
+	if co.cacheWarmer == nil {
+		return
 	}
 
-	for _, task := range tasks {
-		co.cacheWarmer.AddTask(task)
+	co.cacheWarmer.RegisterTask(&redis.WarmupTask{
+		Name:      "blacklist-active",
+		KeyPrefix: "warmup:blacklist:active",
+		Loader:    co.loadActiveBlacklistFromRedis,
+		Interval:  1 * time.Minute,
+		Priority:  1,
+		Enabled:   true,
+	})
+
+	co.cacheWarmer.RegisterTask(&redis.WarmupTask{
+		Name:      "stats-summary",
+		KeyPrefix: "warmup:stats:summary",
+		Loader:    co.loadStatsSummaryFromRedis,
+		Interval:  5 * time.Minute,
+		Priority:  2,
+		Enabled:   true,
+	})
+}
+
+func (co *CacheOptimizer) loadActiveBlacklistFromRedis(ctx context.Context, client *goredis.Client) (map[string]string, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, nil
 	}
+
+	var items []models.Blacklist
+	if err := db.Where("status = ?", "active").Find(&items).Error; err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]string)
+	for _, item := range items {
+		key := fmt.Sprintf("%s%s:%s", BlacklistCachePrefix, item.Type, item.Target)
+		data, _ := json.Marshal(item)
+		result[key] = string(data)
+	}
+
+	return result, nil
+}
+
+func (co *CacheOptimizer) loadStatsSummaryFromRedis(ctx context.Context, client *goredis.Client) (map[string]string, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, nil
+	}
+
+	stats := make(map[string]interface{})
+
+	var userCount int64
+	db.Model(&models.User{}).Count(&userCount)
+	stats["total_users"] = userCount
+
+	var appCount int64
+	db.Model(&models.Application{}).Where("is_active = ?", true).Count(&appCount)
+	stats["active_applications"] = appCount
+
+	var todayVerifications int64
+	today := time.Now().Truncate(24 * time.Hour)
+	db.Model(&models.Verification{}).Where("created_at >= ?", today).Count(&todayVerifications)
+	stats["today_verifications"] = todayVerifications
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{"stats:summary": string(data)}, nil
 }
 
 func (co *CacheOptimizer) WarmupCriticalData(ctx context.Context) error {
@@ -162,44 +213,6 @@ func (co *CacheOptimizer) warmupApplications(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func (co *CacheOptimizer) loadActiveBlacklist(ctx context.Context) ([]byte, error) {
-	db := database.GetDB()
-	if db == nil {
-		return nil, nil
-	}
-
-	var items []models.Blacklist
-	if err := db.Where("status = ?", "active").Find(&items).Error; err != nil {
-		return nil, err
-	}
-
-	return json.Marshal(items)
-}
-
-func (co *CacheOptimizer) loadStatsSummary(ctx context.Context) ([]byte, error) {
-	db := database.GetDB()
-	if db == nil {
-		return nil, nil
-	}
-
-	stats := make(map[string]interface{})
-
-	var userCount int64
-	db.Model(&models.User{}).Count(&userCount)
-	stats["total_users"] = userCount
-
-	var appCount int64
-	db.Model(&models.Application{}).Where("is_active = ?", true).Count(&appCount)
-	stats["active_applications"] = appCount
-
-	var todayVerifications int64
-	today := time.Now().Truncate(24 * time.Hour)
-	db.Model(&models.Verification{}).Where("created_at >= ?", today).Count(&todayVerifications)
-	stats["today_verifications"] = todayVerifications
-
-	return json.Marshal(stats)
 }
 
 func (co *CacheOptimizer) GetBlacklistItem(ctx context.Context, targetType, target string) (*models.Blacklist, error) {

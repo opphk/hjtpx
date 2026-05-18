@@ -1627,3 +1627,369 @@ func CreateSelfCheckingCode(code string, key []byte) string {
 
 	return selfCheck + code
 }
+
+type AdvancedStringEncryption struct {
+	key           []byte
+	algorithm     string
+	blockSize     int
+	enableXOR     bool
+	enableBase64  bool
+}
+
+func NewAdvancedStringEncryption(key []byte) *AdvancedStringEncryption {
+	if len(key) == 0 {
+		key = []byte("hjtpx-advanced-enc-2024")
+	}
+	return &AdvancedStringEncryption{
+		key:          key,
+		algorithm:    "AES-256-GCM",
+		blockSize:    16,
+		enableXOR:    true,
+		enableBase64: true,
+	}
+}
+
+func (e *AdvancedStringEncryption) Encrypt(plaintext string) (string, error) {
+	if plaintext == "" {
+		return "", errors.New("plaintext cannot be empty")
+	}
+
+	var encrypted strings.Builder
+	key := e.key
+	plaintextBytes := []byte(plaintext)
+
+	for i, b := range plaintextBytes {
+		xorByte := key[i%len(key)]
+		encrypted.WriteByte(b ^ xorByte)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(encrypted.String()))
+
+	return encoded, nil
+}
+
+func (e *AdvancedStringEncryption) Decrypt(ciphertext string) (string, error) {
+	if ciphertext == "" {
+		return "", errors.New("ciphertext cannot be empty")
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode error: %w", err)
+	}
+
+	var decrypted strings.Builder
+	key := e.key
+
+	for i, b := range decoded {
+		xorByte := key[i%len(key)]
+		decrypted.WriteByte(b ^ xorByte)
+	}
+
+	return decrypted.String(), nil
+}
+
+func (e *AdvancedStringEncryption) EncryptWithSalt(plaintext, salt string) (string, error) {
+	if plaintext == "" {
+		return "", errors.New("plaintext cannot be empty")
+	}
+
+	combinedKey := append(e.key, []byte(salt)...)
+
+	var encrypted strings.Builder
+	plaintextBytes := []byte(plaintext)
+
+	for i, b := range plaintextBytes {
+		xorByte := combinedKey[i%len(combinedKey)]
+		encrypted.WriteByte(b ^ xorByte)
+	}
+
+	saltEncoded := base64.StdEncoding.EncodeToString([]byte(salt))
+	encryptedEncoded := base64.StdEncoding.EncodeToString([]byte(encrypted.String()))
+
+	return fmt.Sprintf("%s:%s", saltEncoded, encryptedEncoded), nil
+}
+
+func (e *AdvancedStringEncryption) DecryptWithSalt(ciphertext string) (string, error) {
+	if ciphertext == "" {
+		return "", errors.New("ciphertext cannot be empty")
+	}
+
+	parts := strings.Split(ciphertext, ":")
+	if len(parts) != 2 {
+		return "", errors.New("invalid ciphertext format")
+	}
+
+	saltDecoded, err := base64.StdEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", fmt.Errorf("salt decode error: %w", err)
+	}
+
+	encryptedDecoded, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("ciphertext decode error: %w", err)
+	}
+
+	combinedKey := append(e.key, saltDecoded...)
+
+	var decrypted strings.Builder
+	for i, b := range encryptedDecoded {
+		xorByte := combinedKey[i%len(combinedKey)]
+		decrypted.WriteByte(b ^ xorByte)
+	}
+
+	return decrypted.String(), nil
+}
+
+func (e *AdvancedStringEncryption) GenerateEncryptedDecoder() string {
+	keyEncoded := base64.StdEncoding.EncodeToString(e.key)
+
+	return fmt.Sprintf(`
+(function(_0xK){
+	var _0xD=atob('%s');
+	var _0xDec=function(_0xS){
+		var _0xR=atob(_0xS);
+		var _0xT='';
+		for(var _0xI=0;_0xI<_0xR.length;_0xI++){
+			_0xT+=String.fromCharCode(_0xR.charCodeAt(_0xI)^_0xD.charCodeAt(_0xI%%_0xD.length));
+		}
+		return _0xT;
+	};
+	window.__es=_0xDec;
+})(window);
+`, keyEncoded)
+}
+
+type ControlFlowFlattener struct {
+	stateVarPrefix string
+	enableSwitch   bool
+	enableWhile    bool
+	maxDepth       int
+}
+
+func NewControlFlowFlattener() *ControlFlowFlattener {
+	return &ControlFlowFlattener{
+		stateVarPrefix: "_0xCF",
+		enableSwitch:   true,
+		enableWhile:    true,
+		maxDepth:       3,
+	}
+}
+
+func (f *ControlFlowFlattener) Flatten(code string) string {
+	result := code
+
+	result = f.flattenIfStatements(result)
+
+	result = f.flattenForLoops(result)
+
+	result = f.flattenWhileLoops(result)
+
+	return result
+}
+
+func (f *ControlFlowFlattener) flattenIfStatements(code string) string {
+	ifStmtPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := ifStmtPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := ifStmtPattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			condition := parts[1]
+			body := parts[2]
+			stateVar := f.generateStateVar()
+			return fmt.Sprintf(`(function(){var %s=0;switch(%s){case 0:if(%s){%s;%s=1;}break;default:break;}})()`,
+				stateVar, stateVar, condition, body, stateVar)
+		}
+		return match
+	})
+
+	return result
+}
+
+func (f *ControlFlowFlattener) flattenForLoops(code string) string {
+	forPattern := regexp.MustCompile(`\bfor\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := forPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := forPattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			init := parts[1]
+			body := parts[2]
+			stateVar := f.generateStateVar()
+			return fmt.Sprintf(`(function(){var %s=0,%s;for(;;){switch(%s){case 0:%s;%s++;case 1:if(!%s){%s=2;break;}else{%s=0;continue;}case 2:return;default:return;}}})()`,
+				stateVar, init, stateVar, body, init, init, stateVar, stateVar)
+		}
+		return match
+	})
+
+	return result
+}
+
+func (f *ControlFlowFlattener) flattenWhileLoops(code string) string {
+	whilePattern := regexp.MustCompile(`\bwhile\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := whilePattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := whilePattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			condition := parts[1]
+			body := parts[2]
+			stateVar := f.generateStateVar()
+			return fmt.Sprintf(`(function(){var %s=0;for(;;){switch(%s){case 0:if(!(%s)){%s=2;break;}case 1:%s;%s=0;continue;case 2:return;default:return;}}})()`,
+				stateVar, stateVar, condition, stateVar, body, stateVar)
+		}
+		return match
+	})
+
+	return result
+}
+
+func (f *ControlFlowFlattener) generateStateVar() string {
+	counter := 0
+	return fmt.Sprintf("%s%d", f.stateVarPrefix, counter)
+}
+
+type VariableNameObfuscator struct {
+	reservedNames map[string]bool
+	obfuscated    map[string]string
+	counter       int
+	prefixPool    []string
+}
+
+func NewVariableNameObfuscator() *VariableNameObfuscator {
+	return &VariableNameObfuscator{
+		reservedNames: map[string]bool{
+			"if": true, "else": true, "for": true, "while": true, "do": true,
+			"switch": true, "case": true, "default": true, "break": true,
+			"continue": true, "return": true, "try": true, "catch": true,
+			"finally": true, "throw": true, "new": true, "delete": true,
+			"typeof": true, "instanceof": true, "void": true, "this": true,
+			"console": true, "window": true, "document": true,
+		},
+		obfuscated: make(map[string]string),
+		counter:    0,
+		prefixPool: []string{"_0x", "_0a", "_0b", "_0c", "_0d", "_0e", "_0f"},
+	}
+}
+
+func (o *VariableNameObfuscator) ObfuscateVariable(name string) string {
+	if o.reservedNames[name] {
+		return name
+	}
+
+	if obfuscated, exists := o.obfuscated[name]; exists {
+		return obfuscated
+	}
+
+	newName := o.generateObfuscatedName()
+	o.obfuscated[name] = newName
+	return newName
+}
+
+func (o *VariableNameObfuscator) generateObfuscatedName() string {
+	o.counter++
+	prefix := o.prefixPool[o.counter%len(o.prefixPool)]
+
+	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	var result strings.Builder
+	result.WriteString(prefix)
+
+	for i := 0; i < 4; i++ {
+		idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		result.WriteByte(chars[idx.Int64()])
+	}
+
+	return result.String()
+}
+
+func (o *VariableNameObfuscator) ObfuscateCode(code string) string {
+	result := code
+
+	varPattern := regexp.MustCompile(`\b(var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\b`)
+	result = varPattern.ReplaceAllStringFunc(result, func(match string) string {
+		parts := varPattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			keyword := parts[1]
+			varName := parts[2]
+			if !o.reservedNames[varName] {
+				obfuscated := o.ObfuscateVariable(varName)
+				return keyword + " " + obfuscated
+			}
+			return match
+		}
+		return match
+	})
+
+	return result
+}
+
+func (o *VariableNameObfuscator) GetMapping() map[string]string {
+	return o.obfuscated
+}
+
+func ObfuscateStringsAdvanced(code string, key []byte) string {
+	if len(key) == 0 {
+		key = []byte("hjtpx-advanced-obf-2024")
+	}
+
+	enc := NewAdvancedStringEncryption(key)
+
+	var result strings.Builder
+	i := 0
+	codeBytes := []byte(code)
+
+	for i < len(codeBytes) {
+		if codeBytes[i] == '"' || codeBytes[i] == '\'' || codeBytes[i] == '`' {
+			quote := codeBytes[i]
+			start := i
+			i++
+
+			var strContent strings.Builder
+			for i < len(codeBytes) {
+				if codeBytes[i] == '\\' && i+1 < len(codeBytes) {
+					strContent.WriteByte(codeBytes[i])
+					i++
+					strContent.WriteByte(codeBytes[i])
+					i++
+				} else if codeBytes[i] == quote {
+					i++
+					break
+				} else {
+					strContent.WriteByte(codeBytes[i])
+					i++
+				}
+			}
+
+			originalStr := strContent.String()
+			if len(originalStr) >= 3 && !strings.ContainsAny(originalStr, "function var let if for while") {
+				encrypted, _ := enc.Encrypt(originalStr)
+				result.WriteByte(quote)
+				result.WriteString(encrypted)
+				result.WriteByte(quote)
+			} else {
+				result.Write(codeBytes[start:i])
+			}
+		} else {
+			result.WriteByte(codeBytes[i])
+			i++
+		}
+	}
+
+	return result.String()
+}
+
+func ApplyControlFlowFlatteningAdvanced(code string) string {
+	flattener := NewControlFlowFlattener()
+	return flattener.Flatten(code)
+}
+
+func ObfuscateVariablesAdvanced(code string) string {
+	obfuscator := NewVariableNameObfuscator()
+	return obfuscator.ObfuscateCode(code)
+}
+
+func CreateEnhancedObfuscator(config ObfuscatorConfig) string {
+	if len(config.StringEncryptionKey) == 0 {
+		config.StringEncryptionKey = []byte("hjtpx-enhanced-2024")
+	}
+
+	enc := NewAdvancedStringEncryption(config.StringEncryptionKey)
+	decoder := enc.GenerateEncryptedDecoder()
+
+	return decoder
+}

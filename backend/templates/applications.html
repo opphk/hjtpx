@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>墨盾验证 · 管理后台 · 应用管理</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="bg-dark d-flex flex-column">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-icon"><i class="fas fa-shield-halved"></i></div>
+            <div>
+                <div class="sidebar-brand-text">墨盾验证</div>
+                <div class="sidebar-brand-sub">· 管理后台 ·</div>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
+            <a class="nav-link" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
+            <a class="nav-link active" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
+            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
+            <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
+            <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
+            <a class="nav-link" href="/admin/notifications"><i class="fas fa-bell"></i><span>告警通知</span></a>
+            <a class="nav-link" href="/admin/audit-logs"><i class="fas fa-history"></i><span>审计日志</span></a>
+            <div class="sidebar-divider"></div>
+        </nav>
+        <div class="border-top border-secondary p-3 mt-auto">
+            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
+        </div>
+    </div>
+
+    <div class="main-wrapper">
+        <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
+            <div class="top-header-left">
+                <h1 class="page-title">应用管理</h1>
+                <span class="seal-stamp">墨盾</span>
+            </div>
+            <div class="top-header-right">
+                <button id="exportAppsBtn" class="btn-outline-gold"><i class="fas fa-download me-1"></i>导出</button>
+                <button id="createAppBtn" class="btn-cinnabar btn-sm"><i class="fas fa-plus me-1"></i>创建应用</button>
+                <div class="user-display">
+                    <span class="user-name" id="usernameDisplay">管理员</span>
+                    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar">A</div>
+                </div>
+            </div>
+        </header>
+        <hr class="brush-divider">
+        <main class="main-content">
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">应用总数</div>
+                            <div class="stat-value" id="totalApps">0</div>
+                            <small class="text-muted" style="font-size:12px;">活跃 <span id="activeApps">0</span></small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">API调用总量</div>
+                            <div class="stat-value" id="totalApiCalls">0</div>
+                            <small class="text-muted" style="font-size:12px;">本月</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">成功调用率</div>
+                            <div class="stat-value text-success" id="successRate">0%</div>
+                            <small class="text-muted" style="font-size:12px;">平均</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">总用户数</div>
+                            <div class="stat-value" id="totalUsers">0</div>
+                            <small class="text-muted" style="font-size:12px;">所有应用</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-key me-2" style="color:#b8924e;"></i>密钥管理设置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">自动轮换周期</label>
+                                    <select class="form-select form-select-sm" id="keyRotationPeriod">
+                                        <option value="0">不自动轮换</option>
+                                        <option value="30">30天</option>
+                                        <option value="60">60天</option>
+                                        <option value="90" selected>90天</option>
+                                        <option value="180">180天</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">密钥过期提醒</label>
+                                    <select class="form-select form-select-sm" id="keyExpiryReminder">
+                                        <option value="7" selected>提前7天</option>
+                                        <option value="14">提前14天</option>
+                                        <option value="30">提前30天</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableKeyRotation" checked>
+                                        <label class="form-check-label small" for="enableKeyRotation">启用自动密钥轮换</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="allowKeyRevocation">
+                                        <label class="form-check-label small" for="allowKeyRevocation">允许手动撤销密钥</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header"><h6><i class="fas fa-shield-alt me-2" style="color:#c23a2b;"></i>权限控制配置</h6></div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">默认权限级别</label>
+                                    <select class="form-select form-select-sm" id="defaultPermissionLevel">
+                                        <option value="read">只读</option>
+                                        <option value="write" selected>读写</option>
+                                        <option value="admin">管理</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">IP白名单模式</label>
+                                    <select class="form-select form-select-sm" id="ipWhitelistMode">
+                                        <option value="disabled" selected>禁用</option>
+                                        <option value="whitelist">白名单</option>
+                                        <option value="blacklist">黑名单</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enableApiQuota">
+                                        <label class="form-check-label small" for="enableApiQuota">启用API配额限制</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small">每日最大调用次数</label>
+                                    <input type="number" class="form-control form-control-sm" id="dailyApiQuota" value="100000" min="1000" max="10000000" step="1000">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>搜索筛选</span>
+                    <button id="toggleAdvancedSearch" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-filter"></i> 高级搜索
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- 基本搜索 -->
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label"><i class="fas fa-search me-1 text-warning"></i>搜索应用</label>
+                            <input type="text" class="form-control" id="searchApp" placeholder="输入应用名称或ID">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">状态</label>
+                            <select class="form-select" id="appStatus">
+                                <option value="">全部</option>
+                                <option value="active">活跃</option>
+                                <option value="inactive">停用</option>
+                                <option value="suspended">暂停</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">排序</label>
+                            <select class="form-select" id="appSort">
+                                <option value="created">创建时间</option>
+                                <option value="requests">请求量</option>
+                                <option value="name">名称</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="searchBtn" class="btn-ink w-100"><i class="fas fa-search me-1"></i>搜索</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 高级搜索区域 -->
+                    <div id="advancedSearchSection" class="border-top pt-3" style="display: none;">
+                        <div id="add-condition-form" class="mb-3"></div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>搜索条件</h6>
+                                <div id="search-conditions"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>排序选项</h6>
+                                <div id="sort-options"></div>
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-success" onclick="addSortOption()">
+                                        <i class="fas fa-plus"></i> 添加排序
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button class="btn btn-primary me-2" onclick="executeAdvancedSearch()">
+                                    <i class="fas fa-search"></i> 执行搜索
+                                </button>
+                                <button class="btn btn-secondary" onclick="clearSearchConditions()">
+                                    <i class="fas fa-times"></i> 清空条件
+                                </button>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button class="btn btn-info" onclick="showSaveSearchModal()">
+                                    <i class="fas fa-save"></i> 保存搜索
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 保存的搜索 -->
+                        <div class="mt-4 border-top pt-3">
+                            <h6>保存的搜索</h6>
+                            <div id="saved-searches"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="text-muted small">共 <span id="appsCount">0</span> 个应用</span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary active" data-view="table"><i class="fas fa-list"></i></button>
+                        <button class="btn btn-outline-secondary" data-view="card"><i class="fas fa-th"></i></button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" id="appsTableView">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>应用ID</th>
+                                    <th>应用名称</th>
+                                    <th>应用密钥</th>
+                                    <th>状态</th>
+                                    <th>请求量/日</th>
+                                    <th>密钥状态</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="appsTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="d-none" id="appsCardView"></div>
+                </div>
+                <div class="card-footer" id="pagination"></div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal fade" id="appModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">创建应用</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="appForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="appId">
+                        <div class="mb-3">
+                            <label class="form-label">应用名称 *</label>
+                            <input type="text" class="form-control" id="appName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">应用描述</label>
+                            <textarea class="form-control" id="appDescription" rows="3"></textarea>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">回调URL</label>
+                                <input type="url" class="form-control" id="appCallbackUrl" placeholder="https://example.com/callback">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">状态</label>
+                                <select class="form-select" id="appStatusSelect">
+                                    <option value="active">活跃</option>
+                                    <option value="inactive">停用</option>
+                                    <option value="suspended">暂停</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">验证码类型</label>
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="captchaSlide" checked>
+                                        <label class="form-check-label" for="captchaSlide">滑块验证</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="captchaClick">
+                                        <label class="form-check-label" for="captchaClick">点选验证</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="captchaRotate">
+                                        <label class="form-check-label" for="captchaRotate">旋转验证</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">权限配置</label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permVerify" checked>
+                                        <label class="form-check-label" for="permVerify">验证码验证</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permStats">
+                                        <label class="form-check-label" for="permStats">统计数据</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permManage">
+                                        <label class="form-check-label" for="permManage">应用管理</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="permWebhook">
+                                        <label class="form-check-label" for="permWebhook">Webhook</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn-ink">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="appDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">应用详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="appDetailContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="appStatsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">应用统计</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="text-muted" style="font-size:12px;margin-bottom:4px;">今日请求</div>
+                                <h4 class="fw-bold" id="modalTodayRequests">0</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="text-muted" style="font-size:12px;margin-bottom:4px;">成功率</div>
+                                <h4 class="fw-bold text-success" id="modalSuccessRate">0%</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="text-muted" style="font-size:12px;margin-bottom:4px;">平均响应</div>
+                                <h4 class="fw-bold" id="modalAvgResponse">0ms</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="text-muted" style="font-size:12px;margin-bottom:4px;">活跃用户</div>
+                                <h4 class="fw-bold" id="modalActiveUsers">0</h4>
+                            </div>
+                        </div>
+                    </div>
+                    <canvas id="appStatsChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="keyRotationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-key me-2"></i>密钥轮换</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        密钥轮换将生成新的应用密钥，旧密钥将在<strong id="gracePeriod">24小时</strong>后失效。请及时更新您的应用配置。
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">应用名称</label>
+                        <input type="text" class="form-control" id="rotationAppName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">当前密钥</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="currentAppKey" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copyCurrentKey"><i class="fas fa-copy"></i></button>
+                        </div>
+                        <small class="text-muted">有效期至: <span id="currentKeyExpiry"></span></small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新密钥</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="newAppKey" readonly>
+                            <button class="btn btn-outline-secondary" type="button" id="copyNewKey"><i class="fas fa-copy"></i></button>
+                        </div>
+                        <small class="text-success">新密钥将在确认后立即生效</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">轮换模式</label>
+                        <select class="form-select" id="rotationMode">
+                            <option value="immediate">立即生效（立即禁用旧密钥）</option>
+                            <option value="graceful" selected>优雅模式（保留旧密钥24小时）</option>
+                            <option value="scheduled">定时轮换（指定日期）</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 d-none" id="scheduledDateGroup">
+                        <label class="form-label">计划轮换时间</label>
+                        <input type="datetime-local" class="form-control" id="scheduledRotationDate">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-cinnabar" id="confirmRotationBtn"><i class="fas fa-sync me-1"></i>确认轮换</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="apiKeyManagementModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-key me-2"></i>API密钥管理</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-4">
+                        <h6>密钥列表</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>密钥</th>
+                                        <th>状态</th>
+                                        <th>创建时间</th>
+                                        <th>过期时间</th>
+                                        <th>最后使用</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="apiKeysTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="border-top pt-3">
+                        <h6>创建新密钥</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">密钥名称</label>
+                                <input type="text" class="form-control" id="newKeyName" placeholder="例如：生产环境密钥">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">过期时间</label>
+                                <select class="form-select" id="newKeyExpiry">
+                                    <option value="0">永不过期</option>
+                                    <option value="30">30天</option>
+                                    <option value="90">90天</option>
+                                    <option value="365">1年</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" id="createNewKeyBtn"><i class="fas fa-plus me-1"></i>创建</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保存搜索模态框 -->
+    <div class="modal fade" id="saveSearchModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-save me-2"></i>保存搜索条件</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">搜索名称</label>
+                        <input type="text" class="form-control" id="searchName" placeholder="输入搜索名称">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述（可选）</label>
+                        <textarea class="form-control" id="searchDescription" rows="3" placeholder="输入描述"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-ink" onclick="saveCurrentSearch()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/advanced-search.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/applications.js"></script>
+    <script>
+        let searchInstance = null;
+        
+        // 页面加载完成后初始化高级搜索
+        document.addEventListener('DOMContentLoaded', function() {
+            searchInstance = initAdvancedSearch('applications');
+            
+            // 重写搜索成功回调
+            searchInstance.onSearchSuccess = function(data) {
+                // 这里需要根据实际的应用加载函数进行适配
+                console.log('搜索成功', data);
+                // 如果有现有的渲染函数，可以在这里调用
+            };
+            
+            // 高级搜索开关
+            document.getElementById('toggleAdvancedSearch').addEventListener('click', function() {
+                const section = document.getElementById('advancedSearchSection');
+                section.style.display = section.style.display === 'none' ? 'block' : 'none';
+            });
+        });
+
+        // 高级搜索辅助函数
+        function executeAdvancedSearch() {
+            if (searchInstance) {
+                searchInstance.page = 1;
+                searchInstance.search();
+            }
+        }
+
+        function clearSearchConditions() {
+            if (searchInstance) {
+                searchInstance.clearConditions();
+                searchInstance.sortOptions = [];
+                searchInstance.renderSortOptions();
+            }
+        }
+
+        function showSaveSearchModal() {
+            const modal = new bootstrap.Modal(document.getElementById('saveSearchModal'));
+            modal.show();
+        }
+
+        function saveCurrentSearch() {
+            const name = document.getElementById('searchName').value;
+            const description = document.getElementById('searchDescription').value;
+            
+            if (!name) {
+                alert('请输入搜索名称');
+                return;
+            }
+            
+            if (searchInstance) {
+                searchInstance.saveSearch(name, description).then(() => {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('saveSearchModal'));
+                    modal.hide();
+                    document.getElementById('searchName').value = '';
+                    document.getElementById('searchDescription').value = '';
+                });
+            }
+        }
+
+        function addSortOption() {
+            const field = prompt('请输入排序字段（例如：created_at, name）：');
+            if (!field) return;
+            
+            const order = confirm('是否降序排序？（确定=降序，取消=升序）') ? 'desc' : 'asc';
+            
+            if (searchInstance) {
+                searchInstance.addSortOption(field, order);
+            }
+        }
+    </script>
+</body>
+</html>

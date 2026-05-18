@@ -177,11 +177,14 @@ func TestSlackChannel_ValidateConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			channel, _ := NewSlackChannel(tt.config)
-			err := channel.ValidateConfig()
+			channel, err := NewSlackChannel(tt.config)
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Nil(t, channel)
 			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, channel)
+				err = channel.ValidateConfig()
 				assert.NoError(t, err)
 			}
 		})
@@ -210,11 +213,14 @@ func TestWebhookChannel_ValidateConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			channel, _ := NewWebhookChannel(tt.config)
-			err := channel.ValidateConfig()
+			channel, err := NewWebhookChannel(tt.config)
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Nil(t, channel)
 			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, channel)
+				err = channel.ValidateConfig()
 				assert.NoError(t, err)
 			}
 		})

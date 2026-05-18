@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}白标主题设置 - 墨盾验证{% endblock %}
+
+{% block page_title %}白标主题设置{% endblock %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-palette mr-2"></i>企业白标主题配置</h3>
+                        <div class="card-tools">
+                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form id="whitelabelForm">
+                            <!-- 启用开关 -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch custom-switch-lg">
+                                            <input type="checkbox" class="custom-control-input" id="isEnabled" name="is_enabled">
+                                            <label class="custom-control-label" for="isEnabled">启用白标主题</label>
+                                        </div>
+                                        <small class="form-text text-muted">启用后将应用您自定义的主题配置</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 品牌信息 -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-building mr-2 text-primary"></i>品牌信息</h5>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="brandName">品牌名称</label>
+                                        <input type="text" class="form-control" id="brandName" name="brand_name" placeholder="请输入品牌名称">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Logo上传 -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-images mr-2 text-success"></i>Logo与图标</h5>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>主Logo</label>
+                                        <div class="input-group mb-2">
+                                            <input type="file" class="form-control-file" id="logoFile" accept="image/*">
+                                        </div>
+                                        <div class="custom-control custom-checkbox">
+                                            <input type="checkbox" class="custom-control-input" id="deleteLogo">
+                                            <label class="custom-control-label" for="deleteLogo">删除现有Logo</label>
+                                        </div>
+                                        <div id="logoPreview" class="mt-2">
+                                            <img id="logoImage" src="" alt="Logo预览" style="max-height: 60px; display: none;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>网站图标 (Favicon)</label>
+                                        <div class="input-group mb-2">
+                                            <input type="file" class="form-control-file" id="faviconFile" accept="image/*,.ico">
+                                        </div>
+                                        <div class="custom-control custom-checkbox">
+                                            <input type="checkbox" class="custom-control-input" id="deleteFavicon">
+                                            <label class="custom-control-label" for="deleteFavicon">删除现有Favicon</label>
+                                        </div>
+                                        <div id="faviconPreview" class="mt-2">
+                                            <img id="faviconImage" src="" alt="Favicon预览" style="max-height: 40px; display: none;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 颜色配置 -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-paint-brush mr-2 text-warning"></i>主题颜色</h5>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="primaryColor">主色调</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control" id="primaryColor" name="primary_color" value="#007bff" style="height: 38px;">
+                                            <input type="text" class="form-control" id="primaryColorText" value="#007bff">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="successColor">成功色</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control" id="successColor" name="success_color" value="#28a745" style="height: 38px;">
+                                            <input type="text" class="form-control" id="successColorText" value="#28a745">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="warningColor">警告色</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control" id="warningColor" name="warning_color" value="#ffc107" style="height: 38px;">
+                                            <input type="text" class="form-control" id="warningColorText" value="#ffc107">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="dangerColor">危险色</label>
+                                        <div class="input-group">
+                                            <input type="color" class="form-control" id="dangerColor" name="danger_color" value="#dc3545" style="height: 38px;">
+                                            <input type="text" class="form-control" id="dangerColorText" value="#dc3545">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 自定义CSS -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-code mr-2 text-info"></i>自定义CSS</h5>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group">
+                                        <label for="customCSS">自定义样式</label>
+                                        <textarea class="form-control" id="customCSS" name="custom_css" rows="6" placeholder="在此输入自定义CSS代码..."></textarea>
+                                        <small class="form-text text-muted">支持自定义CSS样式，将在系统默认样式之后加载</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 预览区域 -->
+                            <div class="row mb-4">
+                                <div class="col-12">
+                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-eye mr-2 text-secondary"></i>实时预览</h5>
+                                </div>
+                                <div class="col-12">
+                                    <div class="card card-outline">
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-3 text-center mb-3">
+                                                    <button class="btn" id="previewPrimary">主色调按钮</button>
+                                                </div>
+                                                <div class="col-md-3 text-center mb-3">
+                                                    <button class="btn" id="previewSuccess">成功按钮</button>
+                                                </div>
+                                                <div class="col-md-3 text-center mb-3">
+                                                    <button class="btn" id="previewWarning">警告按钮</button>
+                                                </div>
+                                                <div class="col-md-3 text-center mb-3">
+                                                    <button class="btn" id="previewDanger">危险按钮</button>
+                                                </div>
+                                            </div>
+                                            <div class="row mt-3">
+                                                <div class="col-md-3 text-center">
+                                                    <span class="badge" id="previewBadgePrimary">主色调徽章</span>
+                                                </div>
+                                                <div class="col-md-3 text-center">
+                                                    <span class="badge" id="previewBadgeSuccess">成功徽章</span>
+                                                </div>
+                                                <div class="col-md-3 text-center">
+                                                    <span class="badge" id="previewBadgeWarning">警告徽章</span>
+                                                </div>
+                                                <div class="col-md-3 text-center">
+                                                    <span class="badge" id="previewBadgeDanger">危险徽章</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg" id="saveBtn">
+                                    <i class="fas fa-save mr-2"></i>保存配置
+                                </button>
+                                <button type="button" class="btn btn-warning btn-lg ml-2" id="previewBtn">
+                                    <i class="fas fa-eye mr-2"></i>预览效果
+                                </button>
+                                <button type="button" class="btn btn-danger btn-lg ml-2" id="resetBtn">
+                                    <i class="fas fa-undo mr-2"></i>重置
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            主题配置保存后立即生效，自定义Logo和图标会上传到服务器存储。
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/admin/static/js/whitelabel.js"></script>
+{% endblock %}

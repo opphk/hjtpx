@@ -361,7 +361,8 @@ func TestUserHandler_ResetPassword(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := gin.Default()
+			r := gin.New()
+			r.Use(gin.Recovery())
 			handler := NewUserHandler()
 			r.POST("/reset-password", handler.ResetPassword)
 
@@ -405,7 +406,8 @@ func TestUserHandler_VerifyEmail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := gin.Default()
+			r := gin.New()
+			r.Use(gin.Recovery())
 			handler := NewUserHandler()
 			r.GET("/verify-email", handler.VerifyEmail)
 
@@ -446,7 +448,8 @@ func TestUserHandler_ResendVerification(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := gin.Default()
+			r := gin.New()
+			r.Use(gin.Recovery())
 			handler := NewUserHandler()
 			r.POST("/resend-verification", handler.ResendVerification)
 
