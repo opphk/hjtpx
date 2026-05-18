@@ -300,7 +300,7 @@ func (d *EnhancedProxyDetection) DetectProxy(ctx context.Context, ip string, hea
 
 	result.Indicators = append(result.Indicators, "starting_detection")
 
-	d.analyzeHeaders(result, headers)
+	d.AnalyzeHeaders(result, headers)
 
 	d.analyzeIP(ip, result)
 
@@ -323,7 +323,7 @@ func (d *EnhancedProxyDetection) DetectProxy(ctx context.Context, ip string, hea
 	return result, nil
 }
 
-func (d *EnhancedProxyDetection) analyzeHeaders(result *EnhancedProxyResult, headers http.Header) {
+func (d *EnhancedProxyDetection) AnalyzeHeaders(result *EnhancedProxyResult, headers http.Header) {
 	if xff := headers.Get("X-Forwarded-For"); xff != "" {
 		result.Headers.XForwardedFor = true
 		result.Headers.Forwards = append(result.Headers.Forwards, xff)
