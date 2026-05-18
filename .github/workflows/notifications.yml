@@ -146,7 +146,6 @@ jobs:
         run: |
           echo "Workflow ${{ github.event.workflow_run.name }} completed successfully!"
           echo "Run URL: ${{ github.event.workflow_run.html_url }}"
-        shell: bash
 
   pr-status-update:
     runs-on: ubuntu-latest
@@ -179,16 +178,119 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.name == 'CD'
     steps:
-      - name: Deployment success notification
-        uses: rt Buttie/wecom-notification-action@master
+      - name: Deployment success notification (DingTalk/WeChat Work)
         if: env.WECOM_WEBHOOK_URL != ''
+        uses: sectionsix/msteams-message@v2
         with:
-          webhook_url: ${{ secrets.WECOM_WEBHOOK_URL }}
-          msg: |
-            🎉 **Deployment Successful**
+          webhook_uri: ${{ secrets.WECOM_WEBHOOK_URL }}
+          message: |
+            **Deployment Successful**
 
             Repository: ${{ github.repository }}
             Branch: ${{ github.ref_name }}
             Deployed by: ${{ github.actor }}
 
             [View Deployment](${{ github.event.workflow_run.html_url }})
+        continue-on-error: true
+
+      - name: Deployment notification to Lark
+        if: env.LARK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST "${{ secrets.LARK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "msg_type": "interactive",
+              "card": {
+                "header": {
+                  "title": {
+                    "tag": "plain_text",
+                    "content": "Deployment Successful"
+                  },
+                  "template": "green"
+                },
+                "elements": [
+                  {
+                    "tag": "div",
+                    "text": {
+                      "tag": "lark_md",
+                      "content": "**Repository:** ${{ github.repository }}\n**Branch:** ${{ github.ref_name }}\n**Deployed by:** ${{ github.actor }}"
+                    }
+                  },
+                  {
+                    "tag": "action",
+                    "actions": [
+                      {
+                        "tag": "link",
+                        "text": {
+                          "tag": "plain_text",
+                          "content": "View Deployment"
+                        },
+                        "url": "${{ github.event.workflow_run.html_url }}"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }'
+        continue-on-error: true
+
+  failure-notification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Failure notification (DingTalk/WeChat Work)
+        if: env.WECOM_WEBHOOK_URL != ''
+        uses: sectionsix/msteams-message@v2
+        with:
+          webhook_uri: ${{ secrets.WECOM_WEBHOOK_URL }}
+          message: |
+            **Deployment Failed**
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Failed by: ${{ github.actor }}
+
+            [View Run](${{ github.event.workflow_run.html_url }})
+        continue-on-error: true
+
+      - name: Failure notification to Lark
+        if: env.LARK_WEBHOOK_URL != ''
+        run: |
+          curl -X POST "${{ secrets.LARK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "msg_type": "interactive",
+              "card": {
+                "header": {
+                  "title": {
+                    "tag": "plain_text",
+                    "content": "Deployment Failed"
+                  },
+                  "template": "red"
+                },
+                "elements": [
+                  {
+                    "tag": "div",
+                    "text": {
+                      "tag": "lark_md",
+                      "content": "**Repository:** ${{ github.repository }}\n**Branch:** ${{ github.ref_name }}\n**Failed by:** ${{ github.actor }}"
+                    }
+                  },
+                  {
+                    "tag": "action",
+                    "actions": [
+                      {
+                        "tag": "link",
+                        "text": {
+                          "tag": "plain_text",
+                          "content": "View Run"
+                        },
+                        "url": "${{ github.event.workflow_run.html_url }}"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }'
+        continue-on-error: true
