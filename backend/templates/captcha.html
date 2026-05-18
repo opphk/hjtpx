@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>在线体验 - 墨盾验证</title>
+    <link rel="manifest" href="/static/manifest.json">
     <link rel="preconnect" href="https://cdn.bootcdn.net">
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
@@ -16,6 +17,8 @@
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
     <script src="/static/js/environment-detector.js" defer></script>
+    <script src="/static/js/pwa.js" defer></script>
+    <script src="/static/js/websocket-client.js" defer></script>
     <style>
         :root {
             --captcha-primary: #c9a96e;
@@ -791,6 +794,194 @@
         .difficulty-dot.active {
             background: var(--captcha-primary);
         }
+
+        /* WebSocket 验证样式 */
+        .ws-verification-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .ws-status-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .ws-status-icon {
+            font-size: 1.25rem;
+        }
+
+        .ws-challenge-area {
+            min-height: 200px;
+            background: #fafafa;
+            border: 2px dashed #e0e0e0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .ws-placeholder {
+            color: #6c757d;
+            text-align: center;
+        }
+
+        .ws-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .ws-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .ws-btn-primary {
+            background: linear-gradient(135deg, var(--captcha-primary) 0%, #d4b87a 100%);
+            color: white;
+        }
+
+        .ws-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(201, 169, 110, 0.4);
+        }
+
+        .ws-btn-secondary {
+            background: var(--captcha-dark);
+            color: white;
+        }
+
+        .ws-btn-secondary:hover {
+            background: #2d2d44;
+        }
+
+        .ws-btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .ws-result-area {
+            text-align: center;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .ws-result-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .ws-result-token {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.75rem;
+            word-break: break-all;
+        }
+
+        .ws-slider-challenge,
+        .ws-click-challenge,
+        .ws-rotation-challenge,
+        .ws-gesture-challenge {
+            text-align: center;
+            width: 100%;
+        }
+
+        .ws-slider-track,
+        .ws-rotation-track {
+            position: relative;
+            width: 100%;
+            height: 44px;
+            background: #e9ecef;
+            border-radius: 22px;
+            margin: 1rem 0;
+            overflow: hidden;
+        }
+
+        .ws-slider-progress,
+        .ws-rotation-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: linear-gradient(90deg, var(--captcha-primary), #d4b87a);
+            border-radius: 22px;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .ws-slider-handle,
+        .ws-rotation-handle {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            cursor: grab;
+            font-weight: bold;
+            color: var(--captcha-primary);
+        }
+
+        .ws-slider-value,
+        .ws-rotation-value {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+
+        .ws-click-area {
+            position: relative;
+            width: 100%;
+            min-height: 150px;
+            background: #e9ecef;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .ws-click-point {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--captcha-primary);
+            border-radius: 50%;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .ws-gesture-canvas {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: crosshair;
+            margin: 1rem 0;
+        }
     </style>
     
 </head>
@@ -888,6 +1079,10 @@
             <button class="nav-link" data-type="gesture" role="tab" aria-selected="false" aria-controls="demoGesture" tabindex="0" onclick="switchCaptchaType('gesture')">
                 <i class="fas fa-paint-brush" aria-hidden="true"></i>
                 <span data-i18n="gesture">手势验证</span>
+            </button>
+            <button class="nav-link" data-type="websocket" role="tab" aria-selected="false" aria-controls="demoWebSocket" tabindex="0" onclick="switchCaptchaType('websocket')">
+                <i class="fas fa-plug" aria-hidden="true"></i>
+                <span>实时双向验证</span>
             </button>
         </div>
 
@@ -1098,6 +1293,40 @@
                                 <div class="result-banner" id="gestureResult" role="status" aria-live="polite">
                                     <i class="fas fa-check-circle" aria-hidden="true"></i>
                                     <span id="gestureResultText"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="demo-card h-100 shadow-sm fade-in" id="demoWebSocket" role="region" aria-labelledby="websocket-title">
+                        <div class="demo-card-header">
+                            <div class="icon-wrap">
+                                <i class="fas fa-plug" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="websocket-title">实时双向验证</h5>
+                                <small style="color: #6c757d;">WebSocket 实时验证</small>
+                            </div>
+                        </div>
+                        <div class="demo-card-body">
+                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;">
+                                使用 WebSocket 技术实现实时双向通信验证。支持多种验证类型的实时挑战-响应模式，提供毫秒级的验证体验。
+                            </p>
+                            <div class="captcha-demo-area" id="websocketDemoArea" role="application" aria-label="WebSocket 验证区域" aria-live="polite">
+                                <div id="websocket-container"></div>
+                            </div>
+                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                <button class="btn btn-danger btn-sm" onclick="initWebSocketDemo()" aria-label="开始体验 WebSocket 验证">
+                                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                </button>
+                                <button class="btn btn-dark btn-sm" id="wsResetBtn" style="display: none;" aria-label="重置 WebSocket 验证">
+                                    <i class="fas fa-sync me-1" aria-hidden="true"></i>重置
+                                </button>
+                                <div class="result-banner" id="websocketResult" role="status" aria-live="polite">
+                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                    <span id="websocketResultText"></span>
                                 </div>
                             </div>
                         </div>
@@ -1352,7 +1581,51 @@
                 refreshRotationCaptcha();
                 return;
             }
+            if (type === 'websocket') {
+                // WebSocket 验证模式，由 initWebSocketDemo 处理
+                return;
+            }
             initCaptcha(type);
+        }
+
+        // WebSocket 验证客户端实例
+        var websocketClient = null;
+
+        function initWebSocketDemo() {
+            // 切换到 WebSocket 验证标签
+            switchCaptchaType('websocket');
+            
+            const container = document.getElementById('websocket-container');
+            const resetBtn = document.getElementById('wsResetBtn');
+            
+            // 清理之前的实例
+            if (websocketClient) {
+                websocketClient.destroy();
+            }
+            
+            // 创建新的 WebSocket 验证客户端实例
+            websocketClient = new WebSocketCaptcha(container, {
+                apiBase: '/api/v1',
+                onSuccess: function(result) {
+                    showResult('websocket', true, '验证成功！会话ID: ' + result.sessionId);
+                    resetBtn.style.display = 'inline-flex';
+                    console.log('WebSocket 验证成功:', result);
+                },
+                onError: function(error) {
+                    showResult('websocket', false, '验证失败，请重试');
+                    resetBtn.style.display = 'inline-flex';
+                    console.log('WebSocket 验证失败:', error);
+                },
+                onReset: function() {
+                    hideResult('websocket');
+                    resetBtn.style.display = 'none';
+                    console.log('WebSocket 验证重置');
+                }
+            });
+            
+            // 初始化连接
+            websocketClient.init();
+            resetBtn.style.display = 'none';
         }
 
         function refreshCaptcha() {
@@ -1360,8 +1633,15 @@
             hideResult('click');
             hideResult('passive');
             hideResult('rotation');
+            hideResult('websocket');
             if (currentType === 'rotation') {
                 refreshRotationCaptcha();
+                return;
+            }
+            if (currentType === 'websocket') {
+                if (websocketClient && typeof websocketClient.reset === 'function') {
+                    websocketClient.reset();
+                }
                 return;
             }
             if (currentCaptcha && typeof currentCaptcha.refresh === 'function') {
@@ -1370,6 +1650,18 @@
                 initCaptcha(currentType);
             }
         }
+
+        // 页面加载完成后，为 WebSocket 重置按钮添加事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            const wsResetBtn = document.getElementById('wsResetBtn');
+            if (wsResetBtn) {
+                wsResetBtn.addEventListener('click', function() {
+                    if (websocketClient && typeof websocketClient.reset === 'function') {
+                        websocketClient.reset();
+                    }
+                });
+            }
+        });
 
         function showResult(type, success, message) {
             var resultEl = document.getElementById(type + 'Result');

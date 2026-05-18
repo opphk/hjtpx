@@ -10,6 +10,8 @@
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 白标主题CSS -->
+    <link rel="stylesheet" href="/admin/api/whitelabel/css">
     <style>
         :root {
             --primary: #007bff;
@@ -75,8 +77,8 @@
         </nav>
 
         <aside class="main-sidebar sidebar-dark-primary elevation-4" role="navigation" aria-label="侧边栏导航">
-            <a href="/admin/" class="brand-link">
-                <span class="brand-text font-weight-light">HJTPX 管理后台</span>
+            <a href="/admin/" class="brand-link" id="brand-link">
+                <span class="brand-text font-weight-light" id="brand-text">HJTPX 管理后台</span>
             </a>
 
             <div class="sidebar">
@@ -160,6 +162,12 @@
                                 <p>系统配置</p>
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a href="/admin/whitelabel" class="nav-link {% if request.path == '/admin/whitelabel' %}active{% endif %}" aria-current="{% if request.path == '/admin/whitelabel' %}page{% endif %}">
+                                <i class="nav-icon fas fa-palette" aria-hidden="true"></i>
+                                <p>主题设置</p>
+                            </a>
+                        </li>
                     </ul>
                 </nav>
             </div>
@@ -208,7 +216,46 @@
             initAdminTheme();
             initAdminErrorHandling();
             initAdminKeyboardNav();
+            initWhitelabelTheme();
         });
+
+        function initWhitelabelTheme() {
+            // 加载白标配置并应用
+            $.ajax({
+                url: '/admin/api/whitelabel',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.code === 0 && response.data && response.data.is_enabled) {
+                        const config = response.data;
+                        
+                        // 更新品牌名称
+                        if (config.brand_name) {
+                            $('#brand-text').text(config.brand_name + ' 管理后台');
+                        }
+                        
+                        // 更新Logo
+                        if (config.logo_url) {
+                            // 如果有Logo，可以在这里添加Logo展示
+                        }
+                        
+                        // 更新Favicon
+                        if (config.favicon_url) {
+                            let link = document.querySelector("link[rel~='icon']");
+                            if (!link) {
+                                link = document.createElement('link');
+                                link.rel = 'icon';
+                                document.getElementsByTagName('head')[0].appendChild(link);
+                            }
+                            link.href = config.favicon_url;
+                        }
+                    }
+                },
+                error: function() {
+                    console.log('加载白标配置失败');
+                }
+            });
+        }
 
         function initAdminTheme() {
             const themeToggle = $('#themeToggle');

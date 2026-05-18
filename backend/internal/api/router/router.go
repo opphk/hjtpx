@@ -67,6 +67,24 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
+	r.GET("/mfa-setup", func(c *gin.Context) {
+		c.HTML(200, "mfa-setup.html", gin.H{
+			"title": "MFA 设置",
+		})
+	})
+
+	r.GET("/mfa-verify", func(c *gin.Context) {
+		c.HTML(200, "mfa-verify.html", gin.H{
+			"title": "MFA 验证",
+		})
+	})
+
+	r.GET("/websocket-demo", func(c *gin.Context) {
+		c.HTML(200, "captcha.html", gin.H{
+			"title": "WebSocket 实时验证演示",
+		})
+	})
+
 	adminRouter := r.Group("/admin")
 	{
 		adminRouter.GET("/", func(c *gin.Context) {
@@ -99,6 +117,12 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
+	adminRouter.GET("/whitelabel", func(c *gin.Context) {
+		c.HTML(200, "whitelabel.html", gin.H{
+			"title": "主题设置",
+		})
+	})
+
 	adminRouter.GET("/behavior-analytics", func(c *gin.Context) {
 		c.HTML(200, "behavior-analytics.html", gin.H{
 			"title": "用户行为分析",
@@ -127,6 +151,14 @@ func SetupRouter() *gin.Engine {
 		adminRouter.PUT("/api/config", handler.UpdateConfig)
 		adminRouter.GET("/api/config/export", handler.ExportConfig)
 		adminRouter.POST("/api/config/reset", handler.ResetConfig)
+		
+		// 白标主题 API
+		adminRouter.GET("/api/whitelabel", handler.GetWhitelabelConfig)
+		adminRouter.PUT("/api/whitelabel", handler.UpdateWhitelabelConfig)
+		adminRouter.GET("/api/whitelabel/css", handler.GetWhitelabelCSS)
+		adminRouter.POST("/api/whitelabel/logo/:type", handler.UploadLogo)
+		adminRouter.DELETE("/api/whitelabel/logo/:type", handler.DeleteLogo)
+		adminRouter.POST("/api/whitelabel/reset", handler.ResetWhitelabelConfig)
 	}
 
 	api := r.Group("/api/v1")
@@ -157,6 +189,14 @@ func SetupRouter() *gin.Engine {
 		captcha.POST("/3d/verify", handler.VerifyThreeDCaptcha)
 		captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
 		captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
+	}
+
+	// WebSocket 验证路由
+	websocket := api.Group("/websocket")
+	{
+		websocket.GET("/verify", handler.WebSocketVerificationHandler)
+		websocket.GET("/stats", handler.GetWebSocketStats)
+		websocket.POST("/broadcast", handler.BroadcastWebSocketMessage)
 	}
 
 		auth := api.Group("/auth")
@@ -202,6 +242,23 @@ func SetupRouter() *gin.Engine {
 		{
 			verify.POST("/email", handler.VerifyEmail)
 			verify.POST("/phone", handler.VerifyPhone)
+		}
+
+		// MFA 路由
+		mfa := api.Group("/mfa")
+		mfa.Use(middleware.AuthMiddleware())
+		{
+			mfa.GET("/status", handler.GetMFAStatusHandler)
+			mfa.GET("/totp/generate", handler.GenerateTOTPHandler)
+			mfa.POST("/totp/verify", handler.VerifyTOTPHandler)
+			mfa.POST("/totp/enable", handler.EnableTOTPHandler)
+			mfa.POST("/sms/send", handler.SendSMSCodeHandler)
+			mfa.POST("/email/send", handler.SendEmailCodeHandler)
+			mfa.POST("/code/verify", handler.VerifyCodeHandler)
+			mfa.POST("/enable", handler.EnableMFAHandler)
+			mfa.POST("/disable", handler.DisableMFAHandler)
+			mfa.GET("/backup-codes/generate", handler.GenerateBackupCodesHandler)
+			mfa.POST("/backup-codes/verify", handler.VerifyBackupCodeHandler)
 		}
 
 		admin := api.Group("/admin")

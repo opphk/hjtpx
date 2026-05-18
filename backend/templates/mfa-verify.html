@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFA 验证 - HJTPX</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .verify-container {
+            max-width: 450px;
+            margin: 80px auto;
+        }
+        .card {
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 16px 16px 0 0 !important;
+            padding: 24px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 32px;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+        }
+        .code-input {
+            font-size: 32px;
+            letter-spacing: 12px;
+            text-align: center;
+        }
+        .method-selector {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .method-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .method-btn:hover {
+            border-color: #667eea;
+        }
+        .method-btn.active {
+            border-color: #667eea;
+            background: #e8ebff;
+        }
+        .method-btn .icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        .method-btn .label {
+            font-size: 12px;
+            color: #666;
+        }
+        .countdown {
+            color: #667eea;
+            font-weight: 600;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div class="verify-container">
+        <div class="card">
+            <div class="card-header text-center">
+                <h3 class="mb-0">🔐 两步验证</h3>
+                <p class="mb-0 mt-2 opacity-75">请验证您的身份</p>
+            </div>
+            <div class="card-body p-4">
+                <div class="method-selector">
+                    <button class="method-btn active" data-method="totp">
+                        <div class="icon">📱</div>
+                        <div class="label">认证器</div>
+                    </button>
+                    <button class="method-btn" data-method="sms">
+                        <div class="icon">💬</div>
+                        <div class="label">短信</div>
+                    </button>
+                    <button class="method-btn" data-method="email">
+                        <div class="icon">📧</div>
+                        <div class="label">邮件</div>
+                    </button>
+                    <button class="method-btn" data-method="backup">
+                        <div class="icon">🔑</div>
+                        <div class="label">备份码</div>
+                    </button>
+                </div>
+
+                <div id="totpVerify">
+                    <div class="mb-4">
+                        <label class="form-label">请输入认证器应用中的验证码</label>
+                        <input type="text" class="form-control code-input" id="totpCode" placeholder="000000" maxlength="6">
+                    </div>
+                </div>
+
+                <div id="smsVerify" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">请输入短信验证码</label>
+                        <input type="text" class="form-control code-input" id="smsCode" placeholder="000000" maxlength="6">
+                    </div>
+                    <div class="text-center mb-4">
+                        <button class="btn btn-outline-primary btn-sm" id="resendSms">
+                            重新发送验证码
+                        </button>
+                        <span id="smsCountdown" class="countdown d-none"></span>
+                    </div>
+                </div>
+
+                <div id="emailVerify" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">请输入邮件验证码</label>
+                        <input type="text" class="form-control code-input" id="emailCode" placeholder="000000" maxlength="6">
+                    </div>
+                    <div class="text-center mb-4">
+                        <button class="btn btn-outline-primary btn-sm" id="resendEmail">
+                            重新发送验证码
+                        </button>
+                        <span id="emailCountdown" class="countdown d-none"></span>
+                    </div>
+                </div>
+
+                <div id="backupVerify" style="display: none;">
+                    <div class="mb-4">
+                        <label class="form-label">请输入备份码</label>
+                        <input type="text" class="form-control" id="backupCode" placeholder="XXXXXXXX">
+                        <small class="text-muted d-block mt-2">使用备份码将消耗一个备份码，每个备份码只能使用一次。</small>
+                    </div>
+                </div>
+
+                <div class="d-grid">
+                    <button class="btn btn-primary btn-lg" id="verifyBtn">验证</button>
+                </div>
+
+                <div class="text-center mt-4">
+                    <a href="/" class="text-decoration-none text-muted small">← 返回首页</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container">
+        <div id="toast" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">提示</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/mfa.js"></script>
+</body>
+</html>

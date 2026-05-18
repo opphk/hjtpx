@@ -430,3 +430,55 @@ type VoiceCaptchaSession struct {
 func (VoiceCaptchaSession) TableName() string {
 	return "voice_captcha_sessions"
 }
+
+// UserMFA 用户多因素认证配置
+type UserMFA struct {
+	gorm.Model
+	UserID         uint      `gorm:"not null;uniqueIndex:idx_user_mfa_user" json:"user_id"`
+	MFAType        string    `gorm:"size:20;not null;index:idx_user_mfa_type" json:"mfa_type"` // totp, sms, email
+	Secret         string    `gorm:"size:255" json:"-"`
+	Phone          string    `gorm:"size:20" json:"phone,omitempty"`
+	Email          string    `gorm:"size:255" json:"email,omitempty"`
+	IsEnabled      bool      `gorm:"default:false;index:idx_user_mfa_enabled" json:"is_enabled"`
+	BackupCodes    string    `gorm:"type:text" json:"-"` // JSON数组存储备份码
+	LastVerifiedAt *time.Time `json:"last_verified_at,omitempty"`
+	User           User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (UserMFA) TableName() string {
+	return "user_mfa"
+}
+
+// AdminMFA 管理员多因素认证配置
+type AdminMFA struct {
+	gorm.Model
+	AdminID        uint      `gorm:"not null;uniqueIndex:idx_admin_mfa_admin" json:"admin_id"`
+	MFAType        string    `gorm:"size:20;not null;index:idx_admin_mfa_type" json:"mfa_type"` // totp, sms, email
+	Secret         string    `gorm:"size:255" json:"-"`
+	Phone          string    `gorm:"size:20" json:"phone,omitempty"`
+	Email          string    `gorm:"size:255" json:"email,omitempty"`
+	IsEnabled      bool      `gorm:"default:false;index:idx_admin_mfa_enabled" json:"is_enabled"`
+	BackupCodes    string    `gorm:"type:text" json:"-"` // JSON数组存储备份码
+	LastVerifiedAt *time.Time `json:"last_verified_at,omitempty"`
+	Admin          Admin     `gorm:"foreignKey:AdminID" json:"admin,omitempty"`
+}
+
+func (AdminMFA) TableName() string {
+	return "admin_mfa"
+}
+
+// MFACode 临时验证码记录（用于短信和邮箱）
+type MFACode struct {
+	gorm.Model
+	TargetType  string    `gorm:"size:20;not null;index:idx_mfa_code_target_type" json:"target_type"` // user, admin
+	TargetID    uint      `gorm:"not null;index:idx_mfa_code_target" json:"target_id"`
+	MFAType     string    `gorm:"size:20;not null" json:"mfa_type"` // sms, email
+	Code        string    `gorm:"size:20;not null" json:"code"`
+	Destination string    `gorm:"size:255;not null" json:"destination"`
+	ExpiresAt   time.Time `gorm:"not null;index:idx_mfa_code_expires" json:"expires_at"`
+	IsUsed      bool      `gorm:"default:false" json:"is_used"`
+}
+
+func (MFACode) TableName() string {
+	return "mfa_codes"
+}

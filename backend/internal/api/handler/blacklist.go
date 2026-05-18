@@ -316,3 +316,85 @@ func CheckBlacklist(c *gin.Context) {
 		"type":           blType,
 	})
 }
+
+// AdvancedSearchBlacklist 高级搜索黑名单
+func AdvancedSearchBlacklist(c *gin.Context) {
+	var query service.AdvancedSearchQuery
+	if err := c.ShouldBindJSON(&query); err != nil {
+		response.BadRequest(c, "无效的查询参数")
+		return
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	result, err := searchService.SearchBlacklist(query)
+	if err != nil {
+		response.InternalServerError(c, "搜索失败")
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// SaveBlacklistSearch 保存黑名单搜索
+func SaveBlacklistSearch(c *gin.Context) {
+	var req struct {
+		Name        string                      `json:"name" binding:"required"`
+		Description string                      `json:"description"`
+		Query       service.AdvancedSearchQuery `json:"query" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数")
+		return
+	}
+
+	adminID, _ := c.Get("admin_id")
+	var createdBy uint
+	if id, ok := adminID.(uint); ok {
+		createdBy = id
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	savedSearch, err := searchService.SaveSearch(req.Name, "blacklist", req.Query, req.Description, createdBy)
+	if err != nil {
+		response.InternalServerError(c, "保存搜索失败")
+		return
+	}
+
+	response.Success(c, savedSearch)
+}
+
+// GetSavedBlacklistSearches 获取保存的黑名单搜索
+func GetSavedBlacklistSearches(c *gin.Context) {
+	adminID, _ := c.Get("admin_id")
+	var createdBy uint
+	if id, ok := adminID.(uint); ok {
+		createdBy = id
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	searches, err := searchService.GetSavedSearches("blacklist", createdBy)
+	if err != nil {
+		response.InternalServerError(c, "获取保存的搜索失败")
+		return
+	}
+
+	response.Success(c, searches)
+}
+
+// DeleteSavedBlacklistSearch 删除保存的黑名单搜索
+func DeleteSavedBlacklistSearch(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "无效的搜索ID")
+		return
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	if err := searchService.DeleteSavedSearch(uint(id)); err != nil {
+		response.InternalServerError(c, "删除搜索失败")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "删除成功"})
+}

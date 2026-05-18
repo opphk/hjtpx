@@ -9,12 +9,70 @@
                     <div class="card-header">
                         <h3 class="card-title">验证日志</h3>
                         <div class="card-tools">
+                            <button type="button" class="btn btn-tool" id="toggleAdvancedSearch">
+                                <i class="fas fa-filter"></i> 高级搜索
+                            </button>
                             <button type="button" class="btn btn-tool" id="exportBtn">
                                 <i class="fas fa-download"></i> 导出
                             </button>
                         </div>
                     </div>
                     <div class="card-body">
+                        <!-- 高级搜索区域 -->
+                        <div id="advancedSearchSection" class="mb-4" style="display: none;">
+                            <div class="card card-outline card-primary">
+                                <div class="card-header">
+                                    <h5 class="card-title">高级搜索</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="add-condition-form" class="mb-3"></div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <h6>搜索条件</h6>
+                                            <div id="search-conditions"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6>排序选项</h6>
+                                            <div id="sort-options"></div>
+                                            <div class="mt-2">
+                                                <button class="btn btn-sm btn-success" onclick="addSortOption()">
+                                                    <i class="bi bi-plus"></i> 添加排序
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <button class="btn btn-primary" onclick="executeAdvancedSearch()">
+                                                <i class="fas fa-search"></i> 执行搜索
+                                            </button>
+                                            <button class="btn btn-secondary" onclick="clearSearchConditions()">
+                                                <i class="fas fa-times"></i> 清空条件
+                                            </button>
+                                        </div>
+                                        <div class="col-md-6 text-end">
+                                            <button class="btn btn-info" onclick="showSaveSearchModal()">
+                                                <i class="fas fa-save"></i> 保存搜索
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 保存的搜索 -->
+                            <div class="card card-outline card-info">
+                                <div class="card-header">
+                                    <h5 class="card-title">保存的搜索</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="saved-searches"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 基本搜索 -->
                         <div class="row mb-3">
                             <div class="col-md-2">
                                 <select class="form-control" id="filterStatus">
@@ -93,14 +151,51 @@
         </div>
     </div>
 </div>
+
+<!-- 保存搜索模态框 -->
+<div class="modal fade" id="saveSearchModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">保存搜索条件</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="searchName">搜索名称</label>
+                    <input type="text" class="form-control" id="searchName" placeholder="输入搜索名称">
+                </div>
+                <div class="form-group">
+                    <label for="searchDescription">描述（可选）</label>
+                    <textarea class="form-control" id="searchDescription" rows="3" placeholder="输入描述"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveCurrentSearch()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="/admin/static/js/advanced-search.js"></script>
 <script>
 let currentPage = 1;
 const pageSize = 20;
+let searchInstance = null;
 
 $(function() {
+    // 初始化高级搜索
+    searchInstance = initAdvancedSearch('logs');
+    
+    // 重写搜索成功回调
+    searchInstance.onSearchSuccess = function(data) {
+        renderTable(data.data || []);
+        renderPagination(data.total || 0, data.page || 1);
+    };
+
     loadLogs();
 
     $('#searchBtn').click(function() {
@@ -110,6 +205,11 @@ $(function() {
 
     $('#exportBtn').click(function() {
         exportLogs();
+    });
+    
+    // 高级搜索开关
+    $('#toggleAdvancedSearch').click(function() {
+        $('#advancedSearchSection').toggle();
     });
 });
 
@@ -332,6 +432,55 @@ function exportLogs() {
 
     const queryString = params.length > 0 ? '?' + params.join('&') : '';
     window.location.href = '/admin/api/logs/export' + queryString;
+}
+
+// 高级搜索辅助函数
+function executeAdvancedSearch() {
+    if (searchInstance) {
+        searchInstance.page = 1;
+        searchInstance.search();
+    }
+}
+
+function clearSearchConditions() {
+    if (searchInstance) {
+        searchInstance.clearConditions();
+        searchInstance.sortOptions = [];
+        searchInstance.renderSortOptions();
+    }
+}
+
+function showSaveSearchModal() {
+    $('#saveSearchModal').modal('show');
+}
+
+function saveCurrentSearch() {
+    const name = $('#searchName').val();
+    const description = $('#searchDescription').val();
+    
+    if (!name) {
+        alert('请输入搜索名称');
+        return;
+    }
+    
+    if (searchInstance) {
+        searchInstance.saveSearch(name, description).then(() => {
+            $('#saveSearchModal').modal('hide');
+            $('#searchName').val('');
+            $('#searchDescription').val('');
+        });
+    }
+}
+
+function addSortOption() {
+    const field = prompt('请输入排序字段（例如：created_at, risk_score）：');
+    if (!field) return;
+    
+    const order = confirm('是否降序排序？（确定=降序，取消=升序）') ? 'desc' : 'asc';
+    
+    if (searchInstance) {
+        searchInstance.addSortOption(field, order);
+    }
 }
 </script>
 {% endblock %}

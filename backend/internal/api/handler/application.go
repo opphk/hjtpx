@@ -300,3 +300,85 @@ func GetApplication(c *gin.Context) {
 
 	response.Success(c, service.ToApplicationResponse(app))
 }
+
+// AdvancedSearchApplications 高级搜索应用
+func AdvancedSearchApplications(c *gin.Context) {
+	var query service.AdvancedSearchQuery
+	if err := c.ShouldBindJSON(&query); err != nil {
+		response.BadRequest(c, "无效的查询参数")
+		return
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	result, err := searchService.SearchApplications(query)
+	if err != nil {
+		response.InternalServerError(c, "搜索失败")
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// SaveApplicationSearch 保存应用搜索
+func SaveApplicationSearch(c *gin.Context) {
+	var req struct {
+		Name        string                      `json:"name" binding:"required"`
+		Description string                      `json:"description"`
+		Query       service.AdvancedSearchQuery `json:"query" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数")
+		return
+	}
+
+	adminID, _ := c.Get("admin_id")
+	var createdBy uint
+	if id, ok := adminID.(uint); ok {
+		createdBy = id
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	savedSearch, err := searchService.SaveSearch(req.Name, "applications", req.Query, req.Description, createdBy)
+	if err != nil {
+		response.InternalServerError(c, "保存搜索失败")
+		return
+	}
+
+	response.Success(c, savedSearch)
+}
+
+// GetSavedApplicationSearches 获取保存的应用搜索
+func GetSavedApplicationSearches(c *gin.Context) {
+	adminID, _ := c.Get("admin_id")
+	var createdBy uint
+	if id, ok := adminID.(uint); ok {
+		createdBy = id
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	searches, err := searchService.GetSavedSearches("applications", createdBy)
+	if err != nil {
+		response.InternalServerError(c, "获取保存的搜索失败")
+		return
+	}
+
+	response.Success(c, searches)
+}
+
+// DeleteSavedApplicationSearch 删除保存的应用搜索
+func DeleteSavedApplicationSearch(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "无效的搜索ID")
+		return
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	if err := searchService.DeleteSavedSearch(uint(id)); err != nil {
+		response.InternalServerError(c, "删除搜索失败")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "删除成功"})
+}

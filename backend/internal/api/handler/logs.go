@@ -299,3 +299,95 @@ func GetLogStatistics(c *gin.Context) {
 
 	response.Success(c, stats)
 }
+
+// AdvancedSearchLogs 高级搜索日志
+func AdvancedSearchLogs(c *gin.Context) {
+	var query service.AdvancedSearchQuery
+	if err := c.ShouldBindJSON(&query); err != nil {
+		response.BadRequest(c, "无效的查询参数")
+		return
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	result, err := searchService.SearchLogs(query)
+	if err != nil {
+		response.InternalServerError(c, "搜索失败")
+		return
+	}
+
+	// 转换为带风险等级的格式
+	logs, ok := result.Data.([]models.VerificationLog)
+	if ok {
+		logMaps := make([]map[string]interface{}, len(logs))
+		for i, log := range logs {
+			logMaps[i] = logToMap(log)
+		}
+		result.Data = logMaps
+	}
+
+	response.Success(c, result)
+}
+
+// SaveLogSearch 保存日志搜索
+func SaveLogSearch(c *gin.Context) {
+	var req struct {
+		Name        string                      `json:"name" binding:"required"`
+		Description string                      `json:"description"`
+		Query       service.AdvancedSearchQuery `json:"query" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数")
+		return
+	}
+
+	adminID, _ := c.Get("admin_id")
+	var createdBy uint
+	if id, ok := adminID.(uint); ok {
+		createdBy = id
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	savedSearch, err := searchService.SaveSearch(req.Name, "logs", req.Query, req.Description, createdBy)
+	if err != nil {
+		response.InternalServerError(c, "保存搜索失败")
+		return
+	}
+
+	response.Success(c, savedSearch)
+}
+
+// GetSavedLogSearches 获取保存的日志搜索
+func GetSavedLogSearches(c *gin.Context) {
+	adminID, _ := c.Get("admin_id")
+	var createdBy uint
+	if id, ok := adminID.(uint); ok {
+		createdBy = id
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	searches, err := searchService.GetSavedSearches("logs", createdBy)
+	if err != nil {
+		response.InternalServerError(c, "获取保存的搜索失败")
+		return
+	}
+
+	response.Success(c, searches)
+}
+
+// DeleteSavedLogSearch 删除保存的日志搜索
+func DeleteSavedLogSearch(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "无效的搜索ID")
+		return
+	}
+
+	searchService := service.NewAdvancedSearchService()
+	if err := searchService.DeleteSavedSearch(uint(id)); err != nil {
+		response.InternalServerError(c, "删除搜索失败")
+		return
+	}
+
+	response.Success(c, gin.H{"message": "删除成功"})
+}

@@ -1,0 +1,35 @@
+{
+  "name": "hjtpx - 智能行为验证系统",
+  "short_name": "hjtpx",
+  "description": "新一代智能行为验证系统，超越极验、易盾、五秒盾的全新一代行为验证解决方案",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d6efd",
+  "theme_color": "#0d6efd",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230d6efd' rx='10'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>h</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%230d6efd' rx='20'/><text x='96' y='120' font-size='90' text-anchor='middle' fill='white'>h</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%230d6efd' rx='50'/><text x='256' y='320' font-size='240' text-anchor='middle' fill='white'>h</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": [
+    "utilities",
+    "security"
+  ],
+  "screenshots": [],
+  "iarc_rating_id": "",
+  "related_applications": [],
+  "prefer_related_applications": false
+}

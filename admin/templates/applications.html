@@ -167,8 +167,15 @@
             </div>
 
             <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>搜索筛选</span>
+                    <button id="toggleAdvancedSearch" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-filter"></i> 高级搜索
+                    </button>
+                </div>
                 <div class="card-body">
-                    <div class="row g-3 align-items-end">
+                    <!-- 基本搜索 -->
+                    <div class="row g-3 align-items-end mb-3">
                         <div class="col-md-3">
                             <label class="form-label"><i class="fas fa-search me-1 text-warning"></i>搜索应用</label>
                             <input type="text" class="form-control" id="searchApp" placeholder="输入应用名称或ID">
@@ -192,6 +199,49 @@
                         </div>
                         <div class="col-md-2">
                             <button id="searchBtn" class="btn-ink w-100"><i class="fas fa-search me-1"></i>搜索</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 高级搜索区域 -->
+                    <div id="advancedSearchSection" class="border-top pt-3" style="display: none;">
+                        <div id="add-condition-form" class="mb-3"></div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <h6>搜索条件</h6>
+                                <div id="search-conditions"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>排序选项</h6>
+                                <div id="sort-options"></div>
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-success" onclick="addSortOption()">
+                                        <i class="fas fa-plus"></i> 添加排序
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button class="btn btn-primary me-2" onclick="executeAdvancedSearch()">
+                                    <i class="fas fa-search"></i> 执行搜索
+                                </button>
+                                <button class="btn btn-secondary" onclick="clearSearchConditions()">
+                                    <i class="fas fa-times"></i> 清空条件
+                                </button>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button class="btn btn-info" onclick="showSaveSearchModal()">
+                                    <i class="fas fa-save"></i> 保存搜索
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 保存的搜索 -->
+                        <div class="mt-4 border-top pt-3">
+                            <h6>保存的搜索</h6>
+                            <div id="saved-searches"></div>
                         </div>
                     </div>
                 </div>
@@ -487,8 +537,107 @@
         </div>
     </div>
 
+    <!-- 保存搜索模态框 -->
+    <div class="modal fade" id="saveSearchModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-save me-2"></i>保存搜索条件</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">搜索名称</label>
+                        <input type="text" class="form-control" id="searchName" placeholder="输入搜索名称">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述（可选）</label>
+                        <textarea class="form-control" id="searchDescription" rows="3" placeholder="输入描述"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-gold" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn-ink" onclick="saveCurrentSearch()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/admin/static/js/advanced-search.js"></script>
     <script src="/admin/static/js/auth.js"></script>
     <script src="/admin/static/js/applications.js"></script>
+    <script>
+        let searchInstance = null;
+        
+        // 页面加载完成后初始化高级搜索
+        document.addEventListener('DOMContentLoaded', function() {
+            searchInstance = initAdvancedSearch('applications');
+            
+            // 重写搜索成功回调
+            searchInstance.onSearchSuccess = function(data) {
+                // 这里需要根据实际的应用加载函数进行适配
+                console.log('搜索成功', data);
+                // 如果有现有的渲染函数，可以在这里调用
+            };
+            
+            // 高级搜索开关
+            document.getElementById('toggleAdvancedSearch').addEventListener('click', function() {
+                const section = document.getElementById('advancedSearchSection');
+                section.style.display = section.style.display === 'none' ? 'block' : 'none';
+            });
+        });
+
+        // 高级搜索辅助函数
+        function executeAdvancedSearch() {
+            if (searchInstance) {
+                searchInstance.page = 1;
+                searchInstance.search();
+            }
+        }
+
+        function clearSearchConditions() {
+            if (searchInstance) {
+                searchInstance.clearConditions();
+                searchInstance.sortOptions = [];
+                searchInstance.renderSortOptions();
+            }
+        }
+
+        function showSaveSearchModal() {
+            const modal = new bootstrap.Modal(document.getElementById('saveSearchModal'));
+            modal.show();
+        }
+
+        function saveCurrentSearch() {
+            const name = document.getElementById('searchName').value;
+            const description = document.getElementById('searchDescription').value;
+            
+            if (!name) {
+                alert('请输入搜索名称');
+                return;
+            }
+            
+            if (searchInstance) {
+                searchInstance.saveSearch(name, description).then(() => {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('saveSearchModal'));
+                    modal.hide();
+                    document.getElementById('searchName').value = '';
+                    document.getElementById('searchDescription').value = '';
+                });
+            }
+        }
+
+        function addSortOption() {
+            const field = prompt('请输入排序字段（例如：created_at, name）：');
+            if (!field) return;
+            
+            const order = confirm('是否降序排序？（确定=降序，取消=升序）') ? 'desc' : 'asc';
+            
+            if (searchInstance) {
+                searchInstance.addSortOption(field, order);
+            }
+        }
+    </script>
 </body>
 </html>

@@ -12,7 +12,7 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
-var upgrader = websocket.Upgrader{
+var monitoringUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
@@ -134,7 +134,7 @@ func generateMockData() {
 
 // WebSocketHandler WebSocket处理函数
 func WebSocketHandler(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := monitoringUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to upgrade WebSocket connection")
 		return
