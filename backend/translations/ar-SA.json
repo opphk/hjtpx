@@ -36,6 +36,13 @@
 	"loading": "جارٍ التحميل...",
 	"confirm": "تأكيد",
 	"welcome": "مرحبًا",
+	"just_now": "الآن",
+	"minutes_ago": "منذ {0} دقيقة",
+	"hours_ago": "منذ {0} ساعة",
+	"days_ago": "منذ {0} يوم",
+	"weeks_ago": "منذ {0} أسبوع",
+	"months_ago": "منذ {0} شهر",
+	"years_ago": "منذ {0} سنة",
 	"slider_captcha": "كابتشا منزلق",
 	"click_captcha": "كابتشا بنقر",
 	"image_captcha": "كابتشا صورة",
@@ -130,5 +137,8 @@
 	"portuguese": "Português",
 	"italian": "Italiano",
 	"russian": "Русский",
-	"arabic": "العربية"
+	"arabic": "العربية",
+	"persian": "فارسی",
+	"hebrew": "עברית",
+	"urdu": "اردو"
 }

@@ -15,7 +15,10 @@ const I18n = {
         { code: 'pt-BR', name: 'Português', flag: '🇧🇷' },
         { code: 'it-IT', name: 'Italiano', flag: '🇮🇹' },
         { code: 'ru-RU', name: 'Русский', flag: '🇷🇺' },
-        { code: 'ar-SA', name: 'العربية', flag: '🇸🇦' }
+        { code: 'ar-SA', name: 'العربية', flag: '🇸🇦' },
+        { code: 'fa-IR', name: 'فارسی', flag: '🇮🇷' },
+        { code: 'he-IL', name: 'עברית', flag: '🇮🇱' },
+        { code: 'ur-PK', name: 'اردو', flag: '🇵🇰' }
     ],
     
     // 从浏览器获取语言

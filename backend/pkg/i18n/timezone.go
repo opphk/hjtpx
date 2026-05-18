@@ -61,7 +61,6 @@ var (
 		"America/Phoenix",
 		"America/Anchorage",
 		"America/Honolulu",
-		"America/Toronto",
 		"America/Santiago",
 		"America/Buenos_Aires",
 		"Africa/Cairo",
@@ -74,6 +73,26 @@ var (
 		"Asia/Dhaka",
 		"Asia/Kathmandu",
 		"Asia/Colombo",
+		"Asia/Kabul",
+		"Asia/Tashkent",
+		"Asia/Almaty",
+		"Asia/Baku",
+		"Asia/Tbilisi",
+		"Asia/Yerevan",
+		"Europe/Kiev",
+		"Europe/Minsk",
+		"Europe/Bucharest",
+		"Europe/Sofia",
+		"Europe/Belgrade",
+		"Europe/Zagreb",
+		"Europe/Sarajevo",
+		"Europe/Lisbon",
+		"Europe/Dublin",
+		"Europe/Bratislava",
+		"Europe/Ljubljana",
+		"Europe/Tallinn",
+		"Europe/Riga",
+		"Europe/Vilnius",
 	}
 )
 
@@ -199,6 +218,12 @@ func getCountryCode(tz string) string {
 		"Asia/Dhaka":          "BD",
 		"Asia/Kathmandu":      "NP",
 		"Asia/Colombo":        "LK",
+		"Asia/Kabul":          "AF",
+		"Asia/Tashkent":       "UZ",
+		"Asia/Almaty":         "KZ",
+		"Asia/Baku":           "AZ",
+		"Asia/Tbilisi":        "GE",
+		"Asia/Yerevan":        "AM",
 		"Europe/London":        "GB",
 		"Europe/Paris":         "FR",
 		"Europe/Berlin":        "DE",
@@ -216,6 +241,20 @@ func getCountryCode(tz string) string {
 		"Europe/Warsaw":        "PL",
 		"Europe/Prague":        "CZ",
 		"Europe/Athens":        "GR",
+		"Europe/Kiev":          "UA",
+		"Europe/Minsk":         "BY",
+		"Europe/Bucharest":     "RO",
+		"Europe/Sofia":         "BG",
+		"Europe/Belgrade":      "RS",
+		"Europe/Zagreb":        "HR",
+		"Europe/Sarajevo":      "BA",
+		"Europe/Lisbon":        "PT",
+		"Europe/Dublin":        "IE",
+		"Europe/Bratislava":     "SK",
+		"Europe/Ljubljana":     "SI",
+		"Europe/Tallinn":       "EE",
+		"Europe/Riga":          "LV",
+		"Europe/Vilnius":       "LT",
 		"America/New_York":     "US",
 		"America/Los_Angeles":  "US",
 		"America/Chicago":      "US",
@@ -377,4 +416,86 @@ func GetDSTInfo(tz string) map[string]interface{} {
 		"dst_name":       name1,
 		"dst_offset":     offset1,
 	}
+}
+
+func GetTimezonesByOffset() map[int][]string {
+	result := make(map[int][]string)
+
+	for _, tz := range supportedTimezones {
+		offset, err := GetTimezoneOffset(tz)
+		if err != nil {
+			continue
+		}
+
+		hours := offset / 3600
+		result[hours] = append(result[hours], tz)
+	}
+
+	return result
+}
+
+func GetTimezoneOffsetMinutes(tz string) (int, error) {
+	loc := GetLocation(tz)
+	now := time.Now().In(loc)
+	_, offset := now.Zone()
+	return offset / 60, nil
+}
+
+func IsTimezoneInDSTRange(tz string, t time.Time) bool {
+	loc := GetLocation(tz)
+
+	jan := time.Date(t.Year(), 1, 1, 12, 0, 0, 0, loc)
+	jul := time.Date(t.Year(), 7, 1, 12, 0, 0, 0, loc)
+
+	_, janOffset := jan.Zone()
+	_, julOffset := jul.Zone()
+
+	standardOffset := janOffset
+	if janOffset != julOffset {
+		if janOffset < julOffset {
+			standardOffset = janOffset
+		} else {
+			standardOffset = julOffset
+		}
+	}
+
+	_, currentOffset := t.Zone()
+
+	return currentOffset != standardOffset
+}
+
+func ConvertTimeWithDST(t time.Time, fromTz, toTz string) time.Time {
+	fromLoc := GetLocation(fromTz)
+	toLoc := GetLocation(toTz)
+
+	tInFrom := t.In(fromLoc)
+
+	_, fromOffset := tInFrom.Zone()
+	_, toOffset := time.Now().In(toLoc).Zone()
+
+	diff := toOffset - fromOffset
+
+	return tInFrom.Add(time.Duration(diff) * time.Second).In(toLoc)
+}
+
+func GetNextDSTTransition(tz string, after time.Time) (time.Time, error) {
+	for i := 0; i < 365; i++ {
+		check := after.AddDate(0, 0, i)
+		if IsTimezoneInDSTRange(tz, check) != IsTimezoneInDSTRange(tz, check.Add(time.Hour)) {
+			return check, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("no DST transition found within a year")
+}
+
+func GetPreviousDSTTransition(tz string, before time.Time) (time.Time, error) {
+	for i := 0; i < 365; i++ {
+		check := before.AddDate(0, 0, -i)
+		if i > 0 && IsTimezoneInDSTRange(tz, check) != IsTimezoneInDSTRange(tz, check.Add(-time.Hour)) {
+			return check, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("no DST transition found within a year")
 }
