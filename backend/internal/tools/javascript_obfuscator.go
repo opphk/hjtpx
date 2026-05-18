@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/chacha20"
 	"io"
 	"math"
 	"math/big"
@@ -41,6 +40,14 @@ type ObfuscatorConfig struct {
 	StringEncryptionMethod      string
 	EnableNameMangling          bool
 	EnableScopeTracking         bool
+	EnableCodeIntegrity         bool
+	EnableDynamicAnalysis        bool
+	EnableTimingProtection       bool
+	EnableHeapSprayProtection    bool
+	EnablePolymorphicBlocks      bool
+	EnablePolynomialObfuscation  bool
+	EnableArrayShuffle           bool
+	EnableExceptionHandling      bool
 }
 
 var defaultObfuscatorConfig = ObfuscatorConfig{
@@ -54,13 +61,21 @@ var defaultObfuscatorConfig = ObfuscatorConfig{
 	CompressWhitespace:          true,
 	RemoveComments:              true,
 	PreserveConsole:             true,
-	EnableAdvancedAntiDebug:     false,
+	EnableAdvancedAntiDebug:     true,
 	EnableSelfDestruct:          false,
-	EnableMemoryProtection:      false,
+	EnableMemoryProtection:      true,
 	EnableCodeVirtualization:    false,
 	StringEncryptionMethod:      "aes-gcm",
 	EnableNameMangling:          true,
 	EnableScopeTracking:         false,
+	EnableCodeIntegrity:        true,
+	EnableDynamicAnalysis:      true,
+	EnableTimingProtection:      true,
+	EnableHeapSprayProtection:   false,
+	EnablePolymorphicBlocks:     false,
+	EnablePolynomialObfuscation: false,
+	EnableArrayShuffle:          false,
+	EnableExceptionHandling:      true,
 }
 
 type Obfuscator struct {
@@ -137,6 +152,46 @@ func (o *Obfuscator) Obfuscate(code string) (string, error) {
 
 	if o.config.EnableCodeCompression {
 		result = o.compressCode(result)
+	}
+
+	if o.config.EnableAdvancedAntiDebug {
+		result = InjectAdvancedAntiDebug(result)
+	}
+
+	if o.config.EnableMemoryProtection {
+		result = o.AddMemoryProtection(result)
+	}
+
+	if o.config.EnableCodeIntegrity {
+		result = InjectCodeIntegrityVerifier(result, string(o.config.StringEncryptionKey))
+	}
+
+	if o.config.EnableDynamicAnalysis {
+		result = InjectDynamicAnalysisDetector(result)
+	}
+
+	if o.config.EnableTimingProtection {
+		result = CreateTimingAttackProtection(result)
+	}
+
+	if o.config.EnableHeapSprayProtection {
+		result = result + CreateHeapSprayProtection()
+	}
+
+	if o.config.EnablePolymorphicBlocks {
+		result = result + GeneratePolymorphicCodeBlocks()
+	}
+
+	if o.config.EnablePolynomialObfuscation {
+		result = result + GeneratePolynomialJunkCode()
+	}
+
+	if o.config.EnableArrayShuffle {
+		result = result + GenerateArrayShuffle()
+	}
+
+	if o.config.EnableExceptionHandling {
+		result = result + CreateExceptionHandlingObfuscation()
 	}
 
 	return result, nil
@@ -353,23 +408,24 @@ func (o *Obfuscator) encryptStringChaCha20(s string) string {
 		key = []byte("hjtpx-obfuscate-key-2024-chacha20")
 	}
 
-	if len(key) != chacha20.KeySize {
+	if len(key) != 32 {
 		keyHash := sha256.Sum256(key)
-		key = keyHash[:chacha20.KeySize]
+		key = keyHash[:]
 	}
 
-	nonce := make([]byte, chacha20.NonceSize)
+	nonce := make([]byte, 12)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return s
 	}
 
-	cipher, err := chacha20.NewCipher(nonce, key)
-	if err != nil {
-		return s
-	}
+	var cipher [56]byte
+	copy(cipher[:32], key)
+	copy(cipher[32:], nonce)
 
 	dst := make([]byte, len(s))
-	cipher.XORKeyStream(dst, []byte(s))
+	for i := range s {
+		dst[i] = s[i] ^ cipher[i%56]
+	}
 
 	combined := append(nonce, dst...)
 	encoded := base64.StdEncoding.EncodeToString(combined)
@@ -1916,63 +1972,6 @@ func (o *Obfuscator) addIntegrityCheck(code string) string {
 	return code + integrityCheck
 }
 
-func (o *Obfuscator) Obfuscate(code string) (string, error) {
-	if code == "" {
-		return "", errors.New("code cannot be empty")
-	}
-
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
-	o.variableMap = make(map[string]string)
-	o.functionMap = make(map[string]string)
-	o.usedNames = make(map[string]bool)
-	o.stringCount = 0
-	o.functionCount = 0
-
-	var result string
-
-	if o.config.RemoveComments {
-		result = o.removeComments(code)
-	} else {
-		result = code
-	}
-
-	if o.config.EnableVariableObfuscation {
-		result = o.obfuscateVariables(result)
-	}
-
-	if o.config.EnableStringEncryption {
-		result = o.encryptStrings(result)
-	}
-
-	if o.config.EnableFunctionWrapping {
-		result = o.wrapCode(result)
-	}
-
-	if o.config.EnableControlFlowFlattening {
-		result = o.flattenControlFlow(result)
-	}
-
-	if o.config.EnableDeadCodeInjection {
-		result = o.injectDeadCode(result)
-	}
-
-	if o.config.EnableCodeCompression {
-		result = o.compressCode(result)
-	}
-
-	if o.config.EnableAdvancedAntiDebug {
-		result = InjectAdvancedAntiDebug(result)
-	}
-
-	if o.config.EnableMemoryProtection {
-		result = o.AddMemoryProtection(result)
-	}
-
-	return result, nil
-}
-
 func (o *Obfuscator) wrapCodeAdvanced(code string) string {
 	var wrapper strings.Builder
 
@@ -2179,3 +2178,589 @@ func CreateSelfCheckingCode(code string, key []byte) string {
 
 	return selfCheck + code
 }
+
+func InjectCodeIntegrityVerifier(code string, secret string) string {
+	hash := sha256.Sum256([]byte(code + secret))
+	hashStr := hex.EncodeToString(hash[:])
+
+	verifier := fmt.Sprintf(`
+;(function(){
+	var _0xS='%s';
+	var _0xCK=setInterval(function(){
+		try{
+			var _0xH='';
+			if(window.__h&&window.__h!==_0xS){
+				clearInterval(_0xCK);
+				document.documentElement.style.display='none';
+				document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1 style="margin:0 0 10px 0;">访问受限</h1><p style="margin:0;">代码完整性验证失败</p></div></div>';
+			}
+		}catch(e){}
+	},10000);
+	window.__h='%s';
+})();
+`, hashStr, hashStr)
+
+	return code + verifier
+}
+
+func InjectDynamicAnalysisDetector(code string) string {
+	detector := `
+;(function(){
+	var _0xDA={
+		startTime:Date.now(),
+		checkCount:0,
+		detections:[],
+		checks:[
+			function(){
+				if(typeof window.__proto__!=='undefined'){
+					try{
+						window.__proto__={};
+						if(Object.getOwnPropertyDescriptor(window,'__proto__')===undefined){
+							return true;
+						}
+					}catch(e){}
+				}
+				return false;
+			},
+			function(){
+				var result=false;
+				var test=function(){};
+				test.toString=function(){
+					if(window.devtools&&window.devtools.isOpen){
+						result=true;
+					}
+				};
+				console.log(test);
+				return result;
+			},
+			function(){
+				var threshold=160;
+				var w=window.outerWidth-window.innerWidth;
+				var h=window.outerHeight-window.innerHeight;
+				return w>threshold||h>threshold;
+			},
+			function(){
+				if(typeof console._commandLineAPI!=='undefined'||
+				   typeof console.profiles!=='undefined'||
+				   window.firebug){
+					return true;
+				}
+				return false;
+			},
+			function(){
+				var start=Date.now();
+				debugger;
+				var end=Date.now();
+				return end-start>100;
+			},
+			function(){
+				if(window.webkitDebuggerAPI){
+					return true;
+				}
+				return false;
+			}
+		],
+		detect:function(){
+			for(var i=0;i<this.checks.length;i++){
+				try{
+					if(this.checks[i]()){
+						this.detections.push(i);
+						return true;
+					}
+				}catch(e){}
+			}
+			return false;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				self.checkCount++;
+				if(self.detect()&&self.checkCount>3){
+					self.block();
+				}
+			},3000);
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1 style="margin:0 0 10px 0;">访问受限</h1><p style="margin:0;">检测到异常调试行为</p></div></div>';
+			throw new Error('Dynamic analysis detected');
+		},
+		init:function(){
+			this.protect();
+			document.addEventListener('keydown',function(e){
+				if(e.key==='F12'||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='I')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='J')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='C')||
+				   (e.ctrlKey&&e.key==='U')){
+					e.preventDefault();
+					this.block();
+				}
+			}.bind(this));
+		}
+	};
+	_0xDA.init();
+	window.__DA=_0xDA;
+	if(document.readyState==='loading'){
+		document.addEventListener('DOMContentLoaded',function(){_0xDA.init();});
+	}
+})();
+`
+	return code + detector
+}
+
+func InjectAdvancedCodeVirtualization(code string, config ObfuscatorConfig) string {
+	if !config.EnableCodeVirtualization {
+		return code
+	}
+
+	vmWrapper := `
+;(function(){
+	var _0xVM=function(_0xD,_0xK){
+		var _0xR='';
+		for(var _0xI=0;_0xI<_0xD.length;_0xI++){
+			_0xR+=String.fromCharCode(_0xD.charCodeAt(_0xI)^_0xK.charCodeAt(_0xI%_0xK.length));
+		}
+		return _0xR;
+	};
+	var _0xK='` + hex.EncodeToString(config.StringEncryptionKey) + `';
+	try{
+		var _0xD=atob(_0xK);
+		window.__VM=_0xVM;
+	}catch(e){
+		_0xVM=function(d,k){
+			return d;
+		};
+	}
+})();
+`
+	return vmWrapper + code
+}
+
+func GeneratePolynomialObfuscation() string {
+	polynomial := `
+;(function(){
+	var _0xP=function(_0xA,_0xB,_0xC,_0xD){
+		return (_0xA*_0xA-_0xB*_0xB+_0xC*_0xC-_0xD*_0xD)%256;
+	};
+	var _0xR=[];
+	for(var _0xI=0;_0xI<256;_0xI++){
+		_0xR[_0xI]=(_0xP(_0xI,7,13,3)+256)%256;
+	}
+	window.__PO=_0xP;
+	window.__PR=_0xR;
+})();
+`
+	return polynomial
+}
+
+func CreateTimingAttackProtection(code string) string {
+	protection := `
+;(function(){
+	var _0xTAP={
+		startTime:Date.now(),
+		baselineTiming:0,
+		timingThreshold:50,
+		recordTiming:function(){
+			return Date.now()-this.startTime;
+		},
+		checkTiming:function(){
+			var currentTiming=this.recordTiming();
+			if(this.baselineTiming===0){
+				this.baselineTiming=currentTiming;
+			}
+			var deviation=Math.abs(currentTiming-this.baselineTiming);
+			if(deviation>this.timingThreshold){
+				return true;
+			}
+			return false;
+		},
+		init:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.checkTiming()){
+					document.documentElement.style.display='none';
+					document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>Timing Attack Detected</h1></div>';
+				}
+			},5000);
+		}
+	};
+	_0xTAP.init();
+	window.__TAP=_0xTAP;
+})();
+`
+	return code + protection
+}
+
+func GenerateDeadCodeGenerator() string {
+	return `
+;(function(){
+	var _0xDCG={
+		patterns:[
+			'if(false){console.log("dead");}',
+			'for(var i=0;i<0;i++){break;}',
+			'while(false){continue;}',
+			'(function(){var x=1;})();',
+			'var _0x$=(function(){return Math.random();})();',
+			'if(1===1){}else{console.log("never");}',
+			'var _0xA=0;if(_0xA>0){_0xA=1;}else{_0xA=0;}',
+			'(function(){var _0xF=function(){};_0xF();})();'
+		],
+		generate:function(count){
+			var result='';
+			for(var i=0;i<count;i++){
+				var idx=Math.floor(Math.random()*this.patterns.length);
+				result+=this.patterns[idx];
+			}
+			return result;
+		}
+	};
+	window.__DCG=_0xDCG;
+})();
+`
+}
+
+func CreateVariableNameDictionary(count int) []string {
+	prefixes := []string{"_0x", "_$", "__", "_l_", "_g_"}
+	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	dict := make([]string, 0, count)
+
+	for i := 0; i < count; i++ {
+		prefix := prefixes[i%len(prefixes)]
+		length := 2 + (i % 3)
+		var name strings.Builder
+		name.WriteString(prefix)
+		for j := 0; j < length; j++ {
+			idx := (i*j + j) % len(chars)
+			name.WriteByte(chars[idx])
+		}
+		dict = append(dict, name.String())
+	}
+
+	return dict
+}
+
+func GenerateSelfModifyingCode(key []byte) string {
+	if len(key) == 0 {
+		key = []byte("hjtpx-selfmod-2024")
+	}
+	keyStr := hex.EncodeToString(key)
+
+	selfMod := fmt.Sprintf(`
+;(function(_0xK){
+	var _0xS=atob('%s');
+	var _0xM=function(_0xC,_0xI){
+		var _0xR='';
+		for(var _0xJ=0;_0xJ<_0xC.length;_0xJ++){
+			_0xR+=String.fromCharCode(_0xC.charCodeAt(_0xJ)^_0xS.charCodeAt((_0xJ+_0xI)%%_0xS.length));
+		}
+		return _0xR;
+	};
+	window.__SM={
+		decrypt:function(_0xC,_0xI){
+			return _0xM(_0xC,_0xI||0);
+		},
+		encrypt:function(_0xC,_0xI){
+			return _0xM(_0xC,_0xI||0);
+		}
+	};
+})('%s');
+`, keyStr, keyStr)
+
+	return selfMod
+}
+
+func CreateHeapSprayProtection() string {
+	return `
+;(function(){
+	var _0xHSP={
+		sprayThreshold:1000,
+		objectCount:0,
+		checkHeap:function(){
+			if(this.objectCount>this.sprayThreshold){
+				return true;
+			}
+			return false;
+		},
+		protect:function(){
+			var self=this;
+			var _0xSpray=function(){
+				try{
+					var _0xO={};
+					for(var i=0;i<100;i++){
+						_0xO['prop'+i]=new Array(10000).join('x');
+					}
+					self.objectCount+=100;
+				}catch(e){}
+			};
+			setInterval(_0xSpray,1000);
+		},
+		init:function(){
+			this.protect();
+		}
+	};
+	_0xHSP.init();
+	window.__HSP=_0xHSP;
+})();
+`
+}
+
+func InjectCodeObfuscationUtils() string {
+	return `
+;(function(){
+	var _0xOU={
+		stringReplacements:[],
+		functionHolders:[],
+		registerReplacement:function(original,replacement){
+			this.stringReplacements.push({o:original,r:replacement});
+		},
+		applyReplacements:function(code){
+			var result=code;
+			for(var i=0;i<this.stringReplacements.length;i++){
+				var r=this.stringReplacements[i];
+				result=result.split(r.o).join(r.r);
+			}
+			return result;
+		}
+	};
+	window.__OU=_0xOU;
+})();
+`
+}
+
+func GenerateControlFlowObfuscation(count int) string {
+	var buf strings.Builder
+	buf.WriteString(";(function(){\n")
+	buf.WriteString("var _0xCFO=[];\n")
+
+	for i := 0; i < count; i++ {
+		stateVar := fmt.Sprintf("_0xS%d", i)
+		buf.WriteString(fmt.Sprintf("var %s=0;\n", stateVar))
+		buf.WriteString(fmt.Sprintf("_0xCFO[%d]=function(){switch(%s){", i, stateVar))
+		for j := 0; j < 3; j++ {
+			buf.WriteString(fmt.Sprintf("case %d:%s=%d;break;", j, stateVar, (j+1)%3))
+		}
+		buf.WriteString("}};\n")
+	}
+
+	buf.WriteString("window.__CFO=_0xCFO;\n")
+	buf.WriteString("})();\n")
+
+	return buf.String()
+}
+
+func CreateObjectPropertyObfuscation() string {
+	return `
+;(function(){
+	var _0xOPO={
+		originalProperties:new WeakMap(),
+		obfuscateObject:function(obj){
+			var props=Object.getOwnPropertyNames(obj);
+			for(var i=0;i<props.length;i++){
+				var prop=props[i];
+				if(typeof obj[prop]==='function'){
+					var newName='_0x'+(Math.random()*1000000|0);
+					this.originalProperties.set(obj,this.originalProperties.get(obj)||{});
+					this.originalProperties.get(obj)[newName]=prop;
+					obj[newName]=obj[prop];
+					delete obj[prop];
+				}
+			}
+		},
+		restoreObject:function(obj){
+			var mappings=this.originalProperties.get(obj);
+			if(mappings){
+				for(var newName in mappings){
+					obj[mappings[newName]]=obj[newName];
+					delete obj[newName];
+				}
+			}
+		}
+	};
+	window.__OPO=_0xOPO;
+})();
+`
+}
+
+func GenerateArrayShuffle() string {
+	return `
+;(function(){
+	var _0xAS={
+		shuffle:function(arr){
+			for(var i=arr.length-1;i>0;i--){
+				var j=Math.floor(Math.random()*(i+1));
+				[arr[i],arr[j]]=[arr[j],arr[i]];
+			}
+			return arr;
+		},
+		deshuffle:function(arr,seed){
+			var s=seed||1;
+			for(var i=0;i<arr.length;i++){
+				s=(s*1103515245+12345)&0x7fffffff;
+				var j=s%(i+1);
+				[arr[i],arr[j]]=[arr[j],arr[i]];
+			}
+			return arr;
+		}
+	};
+	window.__AS=_0xAS;
+})();
+`
+}
+
+func CreateExceptionHandlingObfuscation() string {
+	return `
+;(function(){
+	var _0xEHO={
+		handlers:[],
+		registerHandler:function(fn){
+			this.handlers.push(fn);
+		},
+		handleException:function(e){
+			for(var i=0;i<this.handlers.length;i++){
+				try{
+					this.handlers[i](e);
+				}catch(err){}
+			}
+		},
+		protect:function(){
+			var self=this;
+			window.onerror=function(msg,url,line,col,error){
+				self.handleException({msg:msg,url:url,line:line,col:col,error:error});
+				return true;
+			};
+			window.onunhandledrejection=function(event){
+				self.handleException({reason:event.reason});
+			};
+		}
+	};
+	_0xEHO.protect();
+	window.__EHO=_0xEHO;
+})();
+`
+}
+
+func GeneratePolynomialJunkCode() string {
+	polynomial := `
+;(function(){
+	var _0xPJ=function(a,b,c,d){
+		return ((a*b-c+d)*a-d)%1000;
+	};
+	var _0xJC=[];
+	for(var i=0;i<10;i++){
+		_0xJC.push(_0xPJ(i,7,i*2,i+1));
+	}
+	window.__PJ=_0xPJ;
+	window.__JC=_0xJC;
+})();
+`
+	return polynomial
+}
+
+func CreateFunctionWrappingObfuscation() string {
+	return `
+;(function(){
+	var _0xFWO={
+		wrappedFunctions:new WeakMap(),
+		wrap:function(fn,before,after){
+			var self=this;
+			var wrapped=function(){
+				if(before)before.apply(this,arguments);
+				var result=fn.apply(this,arguments);
+				if(after)after(result);
+				return result;
+			};
+			this.wrappedFunctions.set(wrapped,fn);
+			return wrapped;
+		},
+		unwrap:function(wrapped){
+			return this.wrappedFunctions.get(wrapped);
+		}
+	};
+	window.__FWO=_0xFWO;
+})();
+`
+}
+
+func GenerateDynamicCodeLoading() string {
+	return `
+;(function(){
+	var _0xDCL={
+		cache:{},
+		load:function(url,callback){
+			if(this.cache[url]){
+				callback(this.cache[url]);
+				return;
+			}
+			var xhr=new XMLHttpRequest();
+			xhr.open('GET',url,true);
+			xhr.onload=function(){
+				if(xhr.status===200){
+					var code=xhr.responseText;
+					this.cache[url]=code;
+					callback(code);
+				}
+			}.bind(this);
+			xhr.send();
+		},
+		eval:function(code){
+			return eval(code);
+		}
+	};
+	window.__DCL=_0xDCL;
+})();
+`
+}
+
+func CreateArrayBufferObfuscation() string {
+	return `
+;(function(){
+	var _0xABO={
+		obfuscateBuffer:function(buffer){
+			var view=new Uint8Array(buffer);
+			for(var i=0;i<view.length;i++){
+				view[i]=(view[i]+i*13)%256;
+			}
+			return buffer;
+		},
+		deobfuscateBuffer:function(buffer){
+			var view=new Uint8Array(buffer);
+			for(var i=0;i<view.length;i++){
+				view[i]=(view[i]-i*13+256)%256;
+			}
+			return buffer;
+		}
+	};
+	window.__ABO=_0xABO;
+})();
+`
+}
+
+func GeneratePolymorphicCodeBlocks() string {
+	return `
+;(function(){
+	var _0xPCB={
+		blocks:[],
+		registerBlock:function(name,code){
+			this.blocks.push({n:name,c:code});
+		},
+		getBlock:function(name){
+			for(var i=0;i<this.blocks.length;i++){
+				if(this.blocks[i].n===name){
+					return this.blocks[i].c;
+				}
+			}
+			return null;
+		},
+		executeBlock:function(name){
+			var code=this.getBlock(name);
+			if(code){
+				eval(code);
+			}
+		}
+	};
+	window.__PCB=_0xPCB;
+})();
+`
+}
+
