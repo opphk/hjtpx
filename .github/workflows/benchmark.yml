@@ -231,6 +231,54 @@ jobs:
           fi
         continue-on-error: true
 
+      - name: Install vegeta
+        if: always()
+        run: |
+          echo "Installing vegeta..."
+          if command -v vegeta &> /dev/null; then
+            echo "Vegeta already installed"
+          else
+            chmod +x benchmark/vegeta.sh
+            ./benchmark/vegeta.sh install || true
+          fi
+
+      - name: Run vegeta benchmarks
+        if: always()
+        run: |
+          if command -v vegeta &> /dev/null; then
+            echo "Running vegeta benchmarks..."
+            cd benchmark
+            chmod +x vegeta.sh
+            ./vegeta.sh benchmark || true
+          else
+            echo "Vegeta not available, skipping vegeta benchmarks"
+          fi
+        continue-on-error: true
+
+      - name: Install wrk
+        if: always()
+        run: |
+          echo "Installing wrk..."
+          if command -v wrk &> /dev/null; then
+            echo "wrk already installed"
+          else
+            chmod +x benchmark/wrk.sh
+            ./benchmark/wrk.sh install || true
+          fi
+
+      - name: Run wrk benchmarks
+        if: always()
+        run: |
+          if command -v wrk &> /dev/null; then
+            echo "Running wrk benchmarks..."
+            cd benchmark
+            chmod +x wrk.sh
+            ./wrk.sh benchmark || true
+          else
+            echo "wrk not available, skipping wrk benchmarks"
+          fi
+        continue-on-error: true
+
       - name: Store benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -239,6 +287,8 @@ jobs:
           path: |
             benchmark/reports/
             benchmark/baselines/
+            benchmark/reports/vegeta/
+            benchmark/reports/wrk/
             benchmark/*.prof
             benchmark/*.html
           retention-days: 30

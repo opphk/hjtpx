@@ -1,18 +1,21 @@
-.PHONY: benchmark benchmark-quick benchmark-full benchmark-baseline benchmark-compare benchmark-ci benchmark-serve help
+.PHONY: benchmark benchmark-quick benchmark-full benchmark-baseline benchmark-compare benchmark-ci benchmark-serve benchmark-vegeta benchmark-wrk benchmark-all help
 
 help:
 	@echo "Performance Benchmark Makefile"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  benchmark          Run standard benchmarks (60s duration)"
-	@echo "  benchmark-quick    Run quick benchmarks (30s duration)"
-	@echo "  benchmark-full     Run full benchmarks (120s duration)"
-	@echo "  benchmark-baseline Generate and save baseline"
-	@echo "  benchmark-compare  Compare with existing baseline"
-	@echo "  benchmark-ci       Run in CI mode"
-	@echo "  benchmark-serve    Start service and run benchmarks"
-	@echo "  benchmark-reports  Generate reports from existing results"
-	@echo "  benchmark-clean    Clean benchmark reports and profiles"
+	@echo "  benchmark            Run standard benchmarks (60s duration)"
+	@echo "  benchmark-quick      Run quick benchmarks (30s duration)"
+	@echo "  benchmark-full      Run full benchmarks (120s duration)"
+	@echo "  benchmark-baseline  Generate and save baseline"
+	@echo "  benchmark-compare   Compare with existing baseline"
+	@echo "  benchmark-ci        Run in CI mode"
+	@echo "  benchmark-serve     Start service and run benchmarks"
+	@echo "  benchmark-reports   Generate reports from existing results"
+	@echo "  benchmark-clean     Clean benchmark reports and profiles"
+	@echo "  benchmark-vegeta    Run Vegeta-based benchmarks"
+	@echo "  benchmark-wrk       Run wrk-based benchmarks"
+	@echo "  benchmark-all       Run all benchmark tools"
 
 BENCHMARK_DIR := $(shell pwd)
 REPORT_DIR := $(BENCHMARK_DIR)/reports
@@ -121,3 +124,29 @@ benchmark-clean:
 benchmark-test:
 	@echo "Running benchmark unit tests..."
 	@cd $(BENCHMARK_DIR) && go test -v -bench=. -benchmem -run=^$$
+
+benchmark-vegeta:
+	@echo "Running Vegeta benchmarks..."
+	@chmod +x $(BENCHMARK_DIR)/vegeta.sh
+	@$(BENCHMARK_DIR)/vegeta.sh all
+
+benchmark-vegeta-install:
+	@echo "Installing Vegeta..."
+	@chmod +x $(BENCHMARK_DIR)/vegeta.sh
+	@$(BENCHMARK_DIR)/vegeta.sh install
+
+benchmark-wrk:
+	@echo "Running wrk benchmarks..."
+	@chmod +x $(BENCHMARK_DIR)/wrk.sh
+	@$(BENCHMARK_DIR)/wrk.sh all
+
+benchmark-wrk-install:
+	@echo "Installing wrk..."
+	@chmod +x $(BENCHMARK_DIR)/wrk.sh
+	@$(BENCHMARK_DIR)/wrk.sh install
+
+benchmark-all:
+	@echo "Running all benchmark tools..."
+	@$(MAKE) benchmark
+	@$(MAKE) benchmark-vegeta
+	@$(MAKE) benchmark-wrk
