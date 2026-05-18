@@ -48,7 +48,7 @@ func NewDDoSProtectionService() *DDoSProtectionService {
 		trafficData:    make(map[string]*DDoSTrafficData),
 		blacklist:      make(map[string]time.Time),
 		maxIPs:         10000,
-		requestsPerMin: 100,
+		requestsPerMin: 60,
 		cleanupPeriod:  1 * time.Hour,
 	}
 	go service.cleanupLoop()
@@ -142,7 +142,7 @@ func (s *DDoSProtectionService) CheckRequest(r *http.Request) *DDoSCheckResult {
 }
 
 func (s *DDoSProtectionService) detectAnomaly(traffic *DDoSTrafficData) bool {
-	if len(traffic.RequestTimes) < 20 {
+	if len(traffic.RequestTimes) < 10 {
 		return false
 	}
 
@@ -167,7 +167,11 @@ func (s *DDoSProtectionService) detectAnomaly(traffic *DDoSTrafficData) bool {
 	stdDev := math.Sqrt(variance)
 
 	cv := stdDev / mean
-	if cv < 0.1 && mean < 500 {
+	if cv < 0.05 && mean < 500 {
+		return true
+	}
+	
+	if mean < 50 && len(traffic.RequestTimes) > 30 {
 		return true
 	}
 

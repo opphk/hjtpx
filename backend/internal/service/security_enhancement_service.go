@@ -303,6 +303,9 @@ func (v *InputValidator) SanitizeInput(input string) string {
 	sanitized := input
 	sanitized = regexp.MustCompile(`<[^>]*>`).ReplaceAllString(sanitized, "")
 	sanitized = regexp.MustCompile(`['";\\\/]`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|alter|exec|execute)`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`(?i)(eval|base64_decode|system|shell_exec|passthru)`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`(?i)(` + "`" + `|\$\(|\$\{)`).ReplaceAllString(sanitized, "")
 	return sanitized
 }
 

@@ -1,7 +1,9 @@
 package service
 
 import (
+	"bytes"
 	"html"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -77,18 +79,47 @@ func (s *OWASPService) checkCryptographicFailures(r *http.Request) (bool, string
 func (s *OWASPService) checkInjection(r *http.Request) (bool, string) {
 	query := r.URL.RawQuery
 	path := r.URL.Path
+	body := s.getRequestBody(r)
+	combined := query + path + body
+	
 	patterns := []*regexp.Regexp{
 		regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|alter)`),
 		regexp.MustCompile(`(?i)(<script|javascript:|on\w+\s*=)`),
-		regexp.MustCompile(`(?i)(exec|system|shell_exec|passthru)`),
+		regexp.MustCompile(`(?i)(exec|system|shell_exec|passthru|eval|base64_decode)`),
+		regexp.MustCompile(`(?i)(/outtmp|/etc/passwd|/etc/shadow|/root/.ssh|/.git/config)`),
+		regexp.MustCompile(`(?i)(sleep\s*\(|benchmark\(|pg_sleep|waitfor\s+delay)`),
+		regexp.MustCompile(`(?i)(load_file|into\s+outfile|into\s+dumpfile)`),
 	}
-
+	
 	for _, pattern := range patterns {
-		if pattern.MatchString(query) || pattern.MatchString(path) {
+		if pattern.MatchString(combined) {
 			return false, "Potential injection detected"
 		}
 	}
+	
+	cmdPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(;|\|\||&&)`),
+		regexp.MustCompile(`(?i)(` + "`" + `|\$\(|\$\{)`),
+		regexp.MustCompile(`(?i)(wget|curl|nc|netcat|telnet|ssh|ftp)`),
+		regexp.MustCompile(`(?i)(chmod|chown|useradd|passwd|sudo|su\s)`),
+	}
+	
+	for _, pattern := range cmdPatterns {
+		if pattern.MatchString(query) || pattern.MatchString(path) {
+			return false, "Potential command injection detected"
+		}
+	}
+	
 	return true, ""
+}
+
+func (s *OWASPService) getRequestBody(r *http.Request) string {
+	if r.Body == nil {
+		return ""
+	}
+	bodyBytes, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	return string(bodyBytes)
 }
 
 func (s *OWASPService) checkSecurityMisconfiguration(r *http.Request) (bool, string) {
@@ -114,9 +145,10 @@ func (s *OWASPService) checkSSRF(r *http.Request) (bool, string) {
 	ssrfPatterns := []string{
 		"http://127.0.0.1", "http://localhost", "http://0.0.0.0",
 		"http://[::]", "file://", "gopher://", "ftp://",
+		"http://169.254.", "http://localhost:", "http://127.1.",
 	}
 	
-	ssrfRegex := regexp.MustCompile(`(?i)(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.)`)
+	ssrfRegex := regexp.MustCompile(`(?i)(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.|127\.)`)
 	
 	for _, pattern := range ssrfPatterns {
 		if strings.Contains(query, pattern) {
@@ -126,6 +158,30 @@ func (s *OWASPService) checkSSRF(r *http.Request) (bool, string) {
 	
 	if ssrfRegex.MatchString(query) {
 		return false, "Potential SSRF attempt: internal network access"
+	}
+	
+	ipv6Patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\[::1\]`),
+		regexp.MustCompile(`(?i)\[::ffff:`),
+	}
+	
+	for _, pattern := range ipv6Patterns {
+		if pattern.MatchString(query) {
+			return false, "Potential SSRF attempt: IPv6 localhost"
+		}
+	}
+	
+	metadataPatterns := []string{
+		"metadata.google.internal",
+		"metadata.azure.com",
+		"169.254.169.254",
+		"metadata.openstack.org",
+	}
+	
+	for _, pattern := range metadataPatterns {
+		if strings.Contains(query, pattern) {
+			return false, "Potential SSRF attempt: cloud metadata endpoint"
+		}
 	}
 	
 	return true, ""
@@ -157,7 +213,9 @@ func (s *OWASPService) CheckSSRF(r *http.Request) (bool, string) {
 
 func (s *OWASPService) SanitizeInput(input string) string {
 	sanitized := html.EscapeString(input)
-	sanitized = regexp.MustCompile(`[^\w\s\-.,!?:;]`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`[^\w\s\-.,!?:;@#$%^&*()_+=\[\]{}|<>/]`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|alter|exec|execute)`).ReplaceAllString(sanitized, "")
+	sanitized = regexp.MustCompile(`(?i)(eval|base64_decode|system|shell_exec|passthru)`).ReplaceAllString(sanitized, "")
 	return sanitized
 }
 

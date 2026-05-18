@@ -1,0 +1,841 @@
+{
+  "summary": {
+    "by_category": {
+      "Authentication Failures": {
+        "failed": 1,
+        "passed": 3,
+        "total": 4
+      },
+      "Broken Access Control": {
+        "failed": 1,
+        "passed": 4,
+        "total": 5
+      },
+      "CSRF Protection": {
+        "failed": 3,
+        "passed": 4,
+        "total": 7
+      },
+      "Cryptographic Failures": {
+        "failed": 1,
+        "passed": 1,
+        "total": 2
+      },
+      "DDoS Protection": {
+        "failed": 2,
+        "passed": 2,
+        "total": 4
+      },
+      "Injection - Command": {
+        "failed": 6,
+        "passed": 1,
+        "total": 7
+      },
+      "Injection - SQL": {
+        "failed": 3,
+        "passed": 3,
+        "total": 6
+      },
+      "Injection - XSS": {
+        "passed": 7,
+        "total": 7
+      },
+      "Rate Limiting": {
+        "passed": 4,
+        "total": 4
+      },
+      "Security Misconfiguration": {
+        "failed": 2,
+        "passed": 2,
+        "total": 4
+      },
+      "Server-Side Request Forgery": {
+        "failed": 6,
+        "passed": 1,
+        "total": 7
+      }
+    },
+    "critical": 22,
+    "duration": "5.916200992s",
+    "failed": 25,
+    "high": 27,
+    "low": 0,
+    "medium": 8,
+    "pass_rate": "56.14%",
+    "passed": 32,
+    "total_tests": 57
+  },
+  "tests": [
+    {
+      "test_name": "Admin path access",
+      "owasp_id": "A01",
+      "category": "Broken Access Control",
+      "passed": false,
+      "severity": "High",
+      "description": "Access to admin configuration",
+      "request_payload": "/admin/config",
+      "expected_result": "Safe or blocked (shouldBlock=false)",
+      "actual_result": "Access to sensitive path: /admin",
+      "remediation": "Implement proper access control checks for sensitive paths"
+    },
+    {
+      "test_name": "Sensitive file access (.env)",
+      "owasp_id": "A01",
+      "category": "Broken Access Control",
+      "passed": true,
+      "severity": "High",
+      "description": "Access to environment file",
+      "request_payload": "/.env",
+      "expected_result": "Safe or blocked (shouldBlock=true)",
+      "actual_result": "Access to sensitive path: /.env",
+      "remediation": "Implement proper access control checks for sensitive paths"
+    },
+    {
+      "test_name": "Git directory access",
+      "owasp_id": "A01",
+      "category": "Broken Access Control",
+      "passed": true,
+      "severity": "High",
+      "description": "Access to git directory",
+      "request_payload": "/.git/config",
+      "expected_result": "Safe or blocked (shouldBlock=true)",
+      "actual_result": "Access to sensitive path: /config",
+      "remediation": "Implement proper access control checks for sensitive paths"
+    },
+    {
+      "test_name": "Backup file access",
+      "owasp_id": "A01",
+      "category": "Broken Access Control",
+      "passed": true,
+      "severity": "High",
+      "description": "Access to database backup",
+      "request_payload": "/backup/db.sql",
+      "expected_result": "Safe or blocked (shouldBlock=true)",
+      "actual_result": "Access to sensitive path: /backup",
+      "remediation": "Implement proper access control checks for sensitive paths"
+    },
+    {
+      "test_name": "Normal API path",
+      "owasp_id": "A01",
+      "category": "Broken Access Control",
+      "passed": true,
+      "severity": "High",
+      "description": "Normal API access",
+      "request_payload": "/api/v1/captcha/generate",
+      "expected_result": "Safe or blocked (shouldBlock=false)",
+      "actual_result": "",
+      "remediation": "Implement proper access control checks for sensitive paths"
+    },
+    {
+      "test_name": "HTTP without TLS",
+      "owasp_id": "A02",
+      "category": "Cryptographic Failures",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing TLS/HTTPS enforcement",
+      "request_payload": "Proto=",
+      "expected_result": "HTTPS enforced",
+      "actual_result": "Insecure connection (not HTTPS)",
+      "remediation": "Enforce HTTPS for all connections in production"
+    },
+    {
+      "test_name": "HTTP with X-Forwarded-Proto: https",
+      "owasp_id": "A02",
+      "category": "Cryptographic Failures",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing TLS/HTTPS enforcement",
+      "request_payload": "Proto=https",
+      "expected_result": "HTTPS enforced",
+      "actual_result": "",
+      "remediation": "Enforce HTTPS for all connections in production"
+    },
+    {
+      "test_name": "SQL UNION injection",
+      "owasp_id": "A03-SQL",
+      "category": "Injection - SQL",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing SQL injection protection",
+      "request_payload": "id=1%20UNION%20SELECT%20%2A%20FROM%20users",
+      "expected_result": "Blocked",
+      "actual_result": "Potential injection detected",
+      "remediation": "Use parameterized queries, input validation, and ORM frameworks",
+      "metrics": {
+        "detected": true
+      }
+    },
+    {
+      "test_name": "SQL SELECT injection",
+      "owasp_id": "A03-SQL",
+      "category": "Injection - SQL",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing SQL injection protection",
+      "request_payload": "q=SELECT%20password%20FROM%20admin",
+      "expected_result": "Blocked",
+      "actual_result": "Potential injection detected",
+      "remediation": "Use parameterized queries, input validation, and ORM frameworks",
+      "metrics": {
+        "detected": true
+      }
+    },
+    {
+      "test_name": "SQL DROP injection",
+      "owasp_id": "A03-SQL",
+      "category": "Injection - SQL",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing SQL injection protection",
+      "request_payload": "table=DROP%20TABLE%20sessions",
+      "expected_result": "Blocked",
+      "actual_result": "Potential injection detected",
+      "remediation": "Use parameterized queries, input validation, and ORM frameworks",
+      "metrics": {
+        "detected": true
+      }
+    },
+    {
+      "test_name": "SQL comment injection",
+      "owasp_id": "A03-SQL",
+      "category": "Injection - SQL",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing SQL injection protection",
+      "request_payload": "id=1--",
+      "expected_result": "Potentially Risky",
+      "actual_result": "",
+      "remediation": "Use parameterized queries, input validation, and ORM frameworks",
+      "metrics": {
+        "detected": false
+      }
+    },
+    {
+      "test_name": "SQL OR injection",
+      "owasp_id": "A03-SQL",
+      "category": "Injection - SQL",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing SQL injection protection",
+      "request_payload": "id=1%20OR%201%3D1",
+      "expected_result": "Potentially Risky",
+      "actual_result": "",
+      "remediation": "Use parameterized queries, input validation, and ORM frameworks",
+      "metrics": {
+        "detected": false
+      }
+    },
+    {
+      "test_name": "Normal query",
+      "owasp_id": "A03-SQL",
+      "category": "Injection - SQL",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing SQL injection protection",
+      "request_payload": "search=hello",
+      "expected_result": "Allowed",
+      "actual_result": "",
+      "remediation": "Use parameterized queries, input validation, and ORM frameworks",
+      "metrics": {
+        "detected": false
+      }
+    },
+    {
+      "test_name": "Script tag injection",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "%3Cscript%3Ealert('XSS')%3C%2Fscript%3E",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: true",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": true,
+        "sanitized_value": "%3Cscript%3Ealert(\u0026amp;#39;XSS\u0026amp;#39;)%3C%2Fscript%3E"
+      }
+    },
+    {
+      "test_name": "JavaScript protocol",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "javascript%3Aalert('XSS')",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: true",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": true,
+        "sanitized_value": "javascript%3Aalert(\u0026amp;#39;XSS\u0026amp;#39;)"
+      }
+    },
+    {
+      "test_name": "Onload event",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "%3Cimg%20src%3Dx%20onload%3Dalert('XSS')%3E",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: true",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": true,
+        "sanitized_value": "%3Cimg%20src%3Dx%20onload%3Dalert(\u0026amp;#39;XSS\u0026amp;#39;)%3E"
+      }
+    },
+    {
+      "test_name": "Onerror event",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "%3Cdiv%20onerror%3Dalert('XSS')%3E",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: true",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": true,
+        "sanitized_value": "%3Cdiv%20onerror%3Dalert(\u0026amp;#39;XSS\u0026amp;#39;)%3E"
+      }
+    },
+    {
+      "test_name": "SVG injection",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "%3Csvg%20onload%3Dalert('XSS')%3E",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: true",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": true,
+        "sanitized_value": "%3Csvg%20onload%3Dalert(\u0026amp;#39;XSS\u0026amp;#39;)%3E"
+      }
+    },
+    {
+      "test_name": "Iframe injection",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "%3Ciframe%20src%3D'evil'%3E%3C%2Fiframe%3E",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: true",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": true,
+        "sanitized_value": "%3Ciframe%20src%3D\u0026amp;#39;evil\u0026amp;#39;%3E%3C%2Fiframe%3E"
+      }
+    },
+    {
+      "test_name": "Normal text",
+      "owasp_id": "A03-XSS",
+      "category": "Injection - XSS",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing XSS injection protection",
+      "request_payload": "Hello%20World",
+      "expected_result": "Allowed",
+      "actual_result": "Sanitized: false",
+      "remediation": "Implement HTML escaping, CSP headers, and input validation",
+      "metrics": {
+        "sanitized": false,
+        "sanitized_value": "Hello%20World"
+      }
+    },
+    {
+      "test_name": "Command chaining",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "test%3B%20ls%20-la",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Pipe command",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "cat%20%2Fetc%2Fpasswd%20%7C%20grep%20root",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Backtick execution",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "%60whoami%60",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Subshell execution",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "%24(whoami)",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Double pipe",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "a%20%7C%7C%20rm%20-rf",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Semicolon separator",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": false,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "a%3B%20rm%20-rf%20%2F",
+      "expected_result": "Blocked",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Normal input",
+      "owasp_id": "A03-CMD",
+      "category": "Injection - Command",
+      "passed": true,
+      "severity": "Critical",
+      "description": "Testing command injection protection",
+      "request_payload": "hello",
+      "expected_result": "Allowed",
+      "actual_result": "Sanitized: false",
+      "remediation": "Avoid shell execution, use parameterized APIs",
+      "metrics": {
+        "sanitized": false
+      }
+    },
+    {
+      "test_name": "Apache with version",
+      "owasp_id": "A05",
+      "category": "Security Misconfiguration",
+      "passed": false,
+      "severity": "Medium",
+      "description": "Testing server header information disclosure",
+      "request_payload": "Apache/2.4.41",
+      "expected_result": "Safe: false",
+      "actual_result": "Server version exposed in header",
+      "remediation": "Hide server version information in production"
+    },
+    {
+      "test_name": "nginx with version",
+      "owasp_id": "A05",
+      "category": "Security Misconfiguration",
+      "passed": false,
+      "severity": "Medium",
+      "description": "Testing server header information disclosure",
+      "request_payload": "nginx/1.18.0",
+      "expected_result": "Safe: false",
+      "actual_result": "Server version exposed in header",
+      "remediation": "Hide server version information in production"
+    },
+    {
+      "test_name": "No server header",
+      "owasp_id": "A05",
+      "category": "Security Misconfiguration",
+      "passed": true,
+      "severity": "Medium",
+      "description": "Testing server header information disclosure",
+      "expected_result": "Safe: true",
+      "actual_result": "",
+      "remediation": "Hide server version information in production"
+    },
+    {
+      "test_name": "Custom header",
+      "owasp_id": "A05",
+      "category": "Security Misconfiguration",
+      "passed": true,
+      "severity": "Medium",
+      "description": "Testing server header information disclosure",
+      "request_payload": "MyServer",
+      "expected_result": "Safe: true",
+      "actual_result": "",
+      "remediation": "Hide server version information in production"
+    },
+    {
+      "test_name": "Protected resource without auth",
+      "owasp_id": "A07",
+      "category": "Authentication Failures",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing authentication requirements",
+      "request_payload": "/api/admin/users",
+      "expected_result": "Has auth: false, Should block: true",
+      "actual_result": "Missing authentication for protected resource",
+      "remediation": "Implement proper authentication and session management"
+    },
+    {
+      "test_name": "Protected resource with auth",
+      "owasp_id": "A07",
+      "category": "Authentication Failures",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing authentication requirements",
+      "request_payload": "/api/admin/users",
+      "expected_result": "Has auth: true, Should block: false",
+      "actual_result": "",
+      "remediation": "Implement proper authentication and session management"
+    },
+    {
+      "test_name": "Public resource without auth",
+      "owasp_id": "A07",
+      "category": "Authentication Failures",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing authentication requirements",
+      "request_payload": "/api/captcha/generate",
+      "expected_result": "Has auth: false, Should block: false",
+      "actual_result": "Missing authentication for protected resource",
+      "remediation": "Implement proper authentication and session management"
+    },
+    {
+      "test_name": "Login endpoint",
+      "owasp_id": "A07",
+      "category": "Authentication Failures",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing authentication requirements",
+      "request_payload": "/api/auth/login",
+      "expected_result": "Has auth: false, Should block: false",
+      "actual_result": "",
+      "remediation": "Implement proper authentication and session management"
+    },
+    {
+      "test_name": "Localhost access",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=http://localhost/admin",
+      "expected_result": "Blocked: true",
+      "actual_result": "Potential SSRF attempt",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "127.0.0.1 access",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=http://127.0.0.1:8080/api",
+      "expected_result": "Blocked: true",
+      "actual_result": "Potential SSRF attempt",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "Internal network",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=http://192.168.1.1",
+      "expected_result": "Blocked: true",
+      "actual_result": "Potential SSRF attempt: internal network access",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "Metadata endpoint",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=http://169.254.169.254",
+      "expected_result": "Blocked: true",
+      "actual_result": "Potential SSRF attempt",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "File protocol",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=file:///etc/passwd",
+      "expected_result": "Blocked: true",
+      "actual_result": "Potential SSRF attempt",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "Gopher protocol",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=gopher://localhost",
+      "expected_result": "Blocked: true",
+      "actual_result": "Potential SSRF attempt",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "Valid external URL",
+      "owasp_id": "A10",
+      "category": "Server-Side Request Forgery",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing SSRF protection",
+      "request_payload": "url=https://example.com/api",
+      "expected_result": "Blocked: false",
+      "actual_result": "",
+      "remediation": "Implement URL validation, use allowlists, disable unused protocols"
+    },
+    {
+      "test_name": "GET request without token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: GET, HasToken: false",
+      "expected_result": "Should pass: true",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": false
+      }
+    },
+    {
+      "test_name": "GET request with token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: GET, HasToken: true",
+      "expected_result": "Should pass: true",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": true
+      }
+    },
+    {
+      "test_name": "POST request without token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: POST, HasToken: false",
+      "expected_result": "Should pass: false",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": false
+      }
+    },
+    {
+      "test_name": "POST request with valid token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: POST, HasToken: true",
+      "expected_result": "Should pass: true",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": true
+      }
+    },
+    {
+      "test_name": "PUT request without token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: PUT, HasToken: false",
+      "expected_result": "Should pass: false",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": false
+      }
+    },
+    {
+      "test_name": "DELETE request without token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: DELETE, HasToken: false",
+      "expected_result": "Should pass: false",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": false
+      }
+    },
+    {
+      "test_name": "OPTIONS request without token",
+      "owasp_id": "A01-CSRF",
+      "category": "CSRF Protection",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing CSRF token validation",
+      "request_payload": "Method: OPTIONS, HasToken: false",
+      "expected_result": "Should pass: true",
+      "actual_result": "Middleware configured - token validation required for state-changing operations",
+      "remediation": "Use anti-CSRF tokens, SameSite cookies, and Origin validation",
+      "metrics": {
+        "has_token": false
+      }
+    },
+    {
+      "test_name": "Normal traffic (10 req/min)",
+      "owasp_id": "A07-DDoS",
+      "category": "DDoS Protection",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing DDoS rate limiting",
+      "request_payload": "Count: 10",
+      "expected_result": "Blocked: false",
+      "actual_result": "Blocked: true",
+      "remediation": "Implement rate limiting, IP blocking, and traffic analysis"
+    },
+    {
+      "test_name": "High traffic (150 req/min)",
+      "owasp_id": "A07-DDoS",
+      "category": "DDoS Protection",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing DDoS rate limiting",
+      "request_payload": "Count: 150",
+      "expected_result": "Blocked: true",
+      "actual_result": "Blocked: true",
+      "remediation": "Implement rate limiting, IP blocking, and traffic analysis"
+    },
+    {
+      "test_name": "Burst traffic (50 req/10sec)",
+      "owasp_id": "A07-DDoS",
+      "category": "DDoS Protection",
+      "passed": true,
+      "severity": "High",
+      "description": "Testing DDoS rate limiting",
+      "request_payload": "Count: 50",
+      "expected_result": "Blocked: true",
+      "actual_result": "Blocked: true",
+      "remediation": "Implement rate limiting, IP blocking, and traffic analysis"
+    },
+    {
+      "test_name": "Sustained normal (90 req/min)",
+      "owasp_id": "A07-DDoS",
+      "category": "DDoS Protection",
+      "passed": false,
+      "severity": "High",
+      "description": "Testing DDoS rate limiting",
+      "request_payload": "Count: 90",
+      "expected_result": "Blocked: false",
+      "actual_result": "Blocked: true",
+      "remediation": "Implement rate limiting, IP blocking, and traffic analysis"
+    },
+    {
+      "test_name": "Under limit (50)",
+      "owasp_id": "A07-RateLimit",
+      "category": "Rate Limiting",
+      "passed": true,
+      "severity": "Medium",
+      "description": "Testing API rate limiting",
+      "request_payload": "Count: 50",
+      "expected_result": "Limited: false",
+      "actual_result": "Limited: false",
+      "remediation": "Implement per-IP and per-user rate limits"
+    },
+    {
+      "test_name": "At limit (100)",
+      "owasp_id": "A07-RateLimit",
+      "category": "Rate Limiting",
+      "passed": true,
+      "severity": "Medium",
+      "description": "Testing API rate limiting",
+      "request_payload": "Count: 100",
+      "expected_result": "Limited: false",
+      "actual_result": "Limited: false",
+      "remediation": "Implement per-IP and per-user rate limits"
+    },
+    {
+      "test_name": "Over limit (150)",
+      "owasp_id": "A07-RateLimit",
+      "category": "Rate Limiting",
+      "passed": true,
+      "severity": "Medium",
+      "description": "Testing API rate limiting",
+      "request_payload": "Count: 150",
+      "expected_result": "Limited: true",
+      "actual_result": "Limited: true",
+      "remediation": "Implement per-IP and per-user rate limits"
+    },
+    {
+      "test_name": "Far over limit (500)",
+      "owasp_id": "A07-RateLimit",
+      "category": "Rate Limiting",
+      "passed": true,
+      "severity": "Medium",
+      "description": "Testing API rate limiting",
+      "request_payload": "Count: 500",
+      "expected_result": "Limited: true",
+      "actual_result": "Limited: true",
+      "remediation": "Implement per-IP and per-user rate limits"
+    }
+  ]
+}

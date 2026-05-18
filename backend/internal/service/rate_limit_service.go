@@ -36,9 +36,9 @@ const (
 	PrefixFailedAttempts = "failed:"
 )
 
-var DefaultIPConfig = RateLimitConfig{MaxRequests: 100, WindowSecs: 60}
-var DefaultUserConfig = RateLimitConfig{MaxRequests: 200, WindowSecs: 60}
-var DefaultAppConfig = RateLimitConfig{MaxRequests: 500, WindowSecs: 60}
+var DefaultIPConfig = RateLimitConfig{MaxRequests: 60, WindowSecs: 60}
+var DefaultUserConfig = RateLimitConfig{MaxRequests: 100, WindowSecs: 60}
+var DefaultAppConfig = RateLimitConfig{MaxRequests: 200, WindowSecs: 60}
 
 func (s *RateLimitService) CheckIPRateLimit(ctx context.Context, ip string, config *RateLimitConfig) (*RateLimitResult, error) {
 	if config == nil {
