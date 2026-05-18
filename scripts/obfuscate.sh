@@ -26,6 +26,10 @@ BACKUP_ENABLED="${BACKUP_ENABLED:-true}"
 VERBOSE="${VERBOSE:-false}"
 DRY_RUN="${DRY_RUN:-false}"
 FORCE="${FORCE:-false}"
+ENABLE_ANTI_TAMPER="${ENABLE_ANTI_TAMPER:-true}"
+ENABLE_RUNTIME_CHECK="${ENABLE_RUNTIME_CHECK:-true}"
+INTEGRITY_CHECK_INTERVAL="${INTEGRITY_CHECK_INTERVAL:-10000}"
+OBFUSCATION_STRENGTH="${OBFUSCATION_STRENGTH:-3}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -89,14 +93,15 @@ show_usage() {
     cat << EOF
 用法: $0 [选项]
 
-JavaScript代码混淆构建脚本
+JavaScript代码混淆构建脚本 v3.0
 
 选项:
     -h, --help                      显示帮助信息
     -v, --verbose                   详细输出模式
     -d, --dry-run                   模拟运行，不实际执行混淆
     -f, --force                     强制执行，跳过确认提示
-    -l, --level <1-3>               混淆级别 (1=轻量, 2=标准, 3=高级)
+    -l, --level <1-5>               混淆级别 (1=轻量, 2=标准, 3=高级, 4=增强, 5=最强)
+    -s, --strength <1-5>             混淆强度 (覆盖 --level)
     -i, --input <文件或目录>          输入文件或目录
     -o, --output <目录>              输出目录
     -k, --key <密钥>                 混淆密钥
@@ -105,6 +110,11 @@ JavaScript代码混淆构建脚本
     --no-encryption                禁用字符串加密
     --no-variables                 禁用变量名混淆
     --enable-dead-code              启用死代码注入
+    --enable-anti-tamper            启用防篡改机制 (默认启用)
+    --disable-anti-tamper           禁用防篡改机制
+    --enable-runtime-check          启用运行时代码校验 (默认启用)
+    --disable-runtime-check         禁用运行时代码校验
+    --set-check-interval <毫秒>      设置完整性检查间隔 (默认10000)
     --rollback                      回滚到上一个备份版本
     --list-backups                  列出所有备份
     --status                        显示当前混淆状态
@@ -113,16 +123,29 @@ JavaScript代码混淆构建脚本
 混淆级别:
     1 - 轻量级: 仅变量名混淆和代码压缩
     2 - 标准级: 变量混淆 + 字符串加密 + 代码压缩 + 函数包装
-    3 - 高级级: 全部功能 + 控制流扁平化 + 死代码注入
+    3 - 高级级: 全部基础功能 + 控制流扁平化 + 死代码注入
+    4 - 增强级: 高级混淆 + 防篡改机制 + 运行时校验
+    5 - 最强级: 增强混淆 + 多重校验 + 自防御机制
+
+新功能选项:
+    --enable-anti-tamper            添加代码完整性校验和标记验证
+    --enable-runtime-check           添加运行时函数完整性检查
+    --set-check-interval <ms>        设置校验检查间隔 (5000-60000ms)
 
 示例:
     $0 -l 2 -i ./frontend/static/js/main.js -o ./build/js
     $0 --level 3 --input ./frontend/static/js --output ./build/js
+    $0 --level 5 --enable-anti-tamper --enable-runtime-check
+    $0 --strength 4 --set-check-interval 8000
     $0 --rollback
     $0 --config /path/to/obfuscate.yaml
 
 环境变量:
-    OBFUSCATION_LEVEL              混淆级别 (1-3)
+    OBFUSCATION_LEVEL              混淆级别 (1-5)
+    OBFUSCATION_STRENGTH           混淆强度 (1-5)
+    ENABLE_ANTI_TAMPER             启用防篡改 (true/false)
+    ENABLE_RUNTIME_CHECK            启用运行时校验 (true/false)
+    INTEGRITY_CHECK_INTERVAL        完整性检查间隔 (毫秒)
     OBFUSCATION_KEY                混淆密钥
     VERBOSE                        详细输出
     DRY_RUN                        模拟运行
@@ -153,6 +176,11 @@ parse_arguments() {
                 shift
                 ;;
             -l|--level)
+                OBFUSCATION_LEVEL="$2"
+                shift 2
+                ;;
+            -s|--strength)
+                OBFUSCATION_STRENGTH="$2"
                 OBFUSCATION_LEVEL="$2"
                 shift 2
                 ;;
@@ -187,6 +215,26 @@ parse_arguments() {
             --enable-dead-code)
                 ENABLE_DEAD_CODE_INJECTION="true"
                 shift
+                ;;
+            --enable-anti-tamper)
+                ENABLE_ANTI_TAMPER="true"
+                shift
+                ;;
+            --disable-anti-tamper)
+                ENABLE_ANTI_TAMPER="false"
+                shift
+                ;;
+            --enable-runtime-check)
+                ENABLE_RUNTIME_CHECK="true"
+                shift
+                ;;
+            --disable-runtime-check)
+                ENABLE_RUNTIME_CHECK="false"
+                shift
+                ;;
+            --set-check-interval)
+                INTEGRITY_CHECK_INTERVAL="$2"
+                shift 2
                 ;;
             --rollback)
                 perform_rollback
@@ -317,6 +365,8 @@ apply_obfuscation_level() {
             ENABLE_CONTROL_FLOW_FLATTENING="false"
             ENABLE_DEAD_CODE_INJECTION="false"
             ENABLE_FUNCTION_WRAPPING="false"
+            ENABLE_ANTI_TAMPER="false"
+            ENABLE_RUNTIME_CHECK="false"
             ;;
         2)
             ENABLE_VARIABLE_OBFUSCATION="true"
@@ -325,6 +375,8 @@ apply_obfuscation_level() {
             ENABLE_CONTROL_FLOW_FLATTENING="false"
             ENABLE_DEAD_CODE_INJECTION="false"
             ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_ANTI_TAMPER="false"
+            ENABLE_RUNTIME_CHECK="false"
             ;;
         3)
             ENABLE_VARIABLE_OBFUSCATION="true"
@@ -333,6 +385,28 @@ apply_obfuscation_level() {
             ENABLE_CONTROL_FLOW_FLATTENING="true"
             ENABLE_DEAD_CODE_INJECTION="true"
             ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_ANTI_TAMPER="false"
+            ENABLE_RUNTIME_CHECK="false"
+            ;;
+        4)
+            ENABLE_VARIABLE_OBFUSCATION="true"
+            ENABLE_STRING_ENCRYPTION="true"
+            ENABLE_CODE_COMPRESSION="true"
+            ENABLE_CONTROL_FLOW_FLATTENING="true"
+            ENABLE_DEAD_CODE_INJECTION="true"
+            ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_ANTI_TAMPER="true"
+            ENABLE_RUNTIME_CHECK="true"
+            ;;
+        5)
+            ENABLE_VARIABLE_OBFUSCATION="true"
+            ENABLE_STRING_ENCRYPTION="true"
+            ENABLE_CODE_COMPRESSION="true"
+            ENABLE_CONTROL_FLOW_FLATTENING="true"
+            ENABLE_DEAD_CODE_INJECTION="true"
+            ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_ANTI_TAMPER="true"
+            ENABLE_RUNTIME_CHECK="true"
             ;;
     esac
 
@@ -618,12 +692,16 @@ show_status() {
 
     echo "当前配置:"
     echo "  混淆级别: $OBFUSCATION_LEVEL"
+    echo "  混淆强度: $OBFUSCATION_STRENGTH"
     echo "  变量混淆: $ENABLE_VARIABLE_OBFUSCATION"
     echo "  字符串加密: $ENABLE_STRING_ENCRYPTION"
     echo "  代码压缩: $ENABLE_CODE_COMPRESSION"
     echo "  控制流扁平化: $ENABLE_CONTROL_FLOW_FLATTENING"
     echo "  死代码注入: $ENABLE_DEAD_CODE_INJECTION"
     echo "  函数包装: $ENABLE_FUNCTION_WRAPPING"
+    echo "  防篡改机制: $ENABLE_ANTI_TAMPER"
+    echo "  运行时代码校验: $ENABLE_RUNTIME_CHECK"
+    echo "  完整性检查间隔: ${INTEGRITY_CHECK_INTERVAL}ms"
     echo "  备份启用: $BACKUP_ENABLED"
     echo ""
 

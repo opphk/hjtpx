@@ -370,32 +370,74 @@ func (o *Obfuscator) isAlreadyObfuscated(name string) bool {
 }
 
 func (o *Obfuscator) generateObfuscatedName() string {
-	prefixes := []string{"_0x", "_0x1", "_0x2", "_0x3", "_0x4", "_0x5", "_0x6", "_0x7", "_0x8", "_0x9",
-		"_0xA", "_0xB", "_0xC", "_0xD", "_0xE", "_0xF", "_0xG", "_0xH", "_0xI", "_0xJ"}
+	extendedPrefixes := []string{
+		"_0x", "_0x1", "_0x2", "_0x3", "_0x4", "_0x5", "_0x6", "_0x7", "_0x8", "_0x9",
+		"_0xA", "_0xB", "_0xC", "_0xD", "_0xE", "_0xF", "_0xG", "_0xH", "_0xI", "_0xJ",
+		"_0xK", "_0xL", "_0xM", "_0xN", "_0xO", "_0xP", "_0xQ", "_0xR", "_0xS", "_0xT",
+		"_$", "_$$", "_$$$", "__", "__$", "_l_", "_g_", "_m_", "_f_", "_c_",
+		"$_", "$_0", "$_1", "$$", "$$_", "$0_", "$1_", "___", "____",
+	}
 	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$"
+	hextable := "0123456789abcdef"
 
-	for {
-		o.functionCount++
-		if o.functionCount < len(prefixes) {
-			if !o.usedNames[prefixes[o.functionCount]] {
-				o.usedNames[prefixes[o.functionCount]] = true
-				return prefixes[o.functionCount]
-			}
-		}
+	o.functionCount++
 
-		length := 3 + o.functionCount%4
-		var name strings.Builder
+	baseIndex := o.functionCount % len(extendedPrefixes)
+	if !o.usedNames[extendedPrefixes[baseIndex]] {
+		o.usedNames[extendedPrefixes[baseIndex]] = true
+		return extendedPrefixes[baseIndex]
+	}
+
+	length := 2 + (o.functionCount % 6)
+	style := o.functionCount % 4
+
+	var name strings.Builder
+
+	switch style {
+	case 0:
 		name.WriteString("_0x")
+		for i := 0; i < length; i++ {
+			idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(hextable))))
+			name.WriteByte(hextable[idx.Int64()])
+		}
+	case 1:
+		name.WriteString("_$")
 		for i := 0; i < length; i++ {
 			idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
 			name.WriteByte(chars[idx.Int64()])
 		}
-		result := name.String()
-		if !o.usedNames[result] {
-			o.usedNames[result] = true
-			return result
+	case 2:
+		for i := 0; i < length; i++ {
+			idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+			name.WriteByte(chars[idx.Int64()])
+			if i < length-1 && i%2 == 0 {
+				name.WriteByte('_')
+			}
+		}
+	case 3:
+		idx1, _ := rand.Int(rand.Reader, big.NewInt(int64(len(extendedPrefixes))))
+		name.WriteString(extendedPrefixes[idx1.Int64()])
+		for i := 0; i < length-1; i++ {
+			idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(hextable))))
+			name.WriteByte(hextable[idx.Int64()])
 		}
 	}
+
+	result := name.String()
+	if !o.usedNames[result] {
+		o.usedNames[result] = true
+		return result
+	}
+
+	var fallback strings.Builder
+	fallback.WriteString("_0x")
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%d_%s_%d", o.functionCount, result, time.Now().UnixNano())))
+	for i := 0; i < 4; i++ {
+		fallback.WriteByte(hextable[hash[i]%16])
+	}
+	fallbackResult := fallback.String()
+	o.usedNames[fallbackResult] = true
+	return fallbackResult
 }
 
 func (o *Obfuscator) encryptStrings(code string) string {
@@ -1127,23 +1169,35 @@ func VerifyCodeSignature(code, signature, secret string) bool {
 	return signature == expected
 }
 
-type ObfuscationOptions struct {
+type ObfuscatorOptions struct {
 	Seed                  int64
 	PreservePatterns      []string
 	ExcludePatterns       []string
 	TargetObfuscationRate float64
+	ObfuscationStrength   int
+	EnableCompression      bool
+	EnableAntiTamper      bool
+	EnableRuntimeCheck    bool
+	ChecksumAlgorithm     string
+	IntegrityCheckInterval int
 }
 
-func NewObfuscationOptions() *ObfuscationOptions {
-	return &ObfuscationOptions{
+func NewObfuscatorOptions() *ObfuscatorOptions {
+	return &ObfuscatorOptions{
 		Seed:                  12345,
 		PreservePatterns:      make([]string, 0),
 		ExcludePatterns:       make([]string, 0),
 		TargetObfuscationRate: 0.7,
+		ObfuscationStrength:   3,
+		EnableCompression:     true,
+		EnableAntiTamper:      true,
+		EnableRuntimeCheck:    true,
+		ChecksumAlgorithm:     "sha256",
+		IntegrityCheckInterval: 10000,
 	}
 }
 
-func (o *ObfuscationOptions) ShouldPreserve(name string) bool {
+func (o *ObfuscatorOptions) ShouldPreserve(name string) bool {
 	for _, pattern := range o.PreservePatterns {
 		matched, _ := regexp.MatchString(pattern, name)
 		if matched {
@@ -1153,7 +1207,7 @@ func (o *ObfuscationOptions) ShouldPreserve(name string) bool {
 	return false
 }
 
-func (o *ObfuscationOptions) ShouldExclude(name string) bool {
+func (o *ObfuscatorOptions) ShouldExclude(name string) bool {
 	for _, pattern := range o.ExcludePatterns {
 		matched, _ := regexp.MatchString(pattern, name)
 		if matched {
@@ -1161,6 +1215,28 @@ func (o *ObfuscationOptions) ShouldExclude(name string) bool {
 		}
 	}
 	return false
+}
+
+func (o *ObfuscatorOptions) GetStrength() int {
+	if o.ObfuscationStrength < 1 {
+		return 1
+	}
+	if o.ObfuscationStrength > 5 {
+		return 5
+	}
+	return o.ObfuscationStrength
+}
+
+func (o *ObfuscatorOptions) IsCompressionEnabled() bool {
+	return o.EnableCompression
+}
+
+func (o *ObfuscatorOptions) IsAntiTamperEnabled() bool {
+	return o.EnableAntiTamper
+}
+
+func (o *ObfuscatorOptions) IsRuntimeCheckEnabled() bool {
+	return o.EnableRuntimeCheck
 }
 
 func GetRandomInt(min, max int) int {
@@ -4419,5 +4495,632 @@ func GenerateAdvancedCodeProtectionFinal(code string, config ObfuscatorConfig) s
 
 	return result.String()
 }
+
+type AntiTamperConfig struct {
+	EnableChecksum      bool
+	EnableMarkers       bool
+	EnableIntegrityTest bool
+	EnableMutationTest  bool
+	EnableTimeLock     bool
+	CheckInterval      int
+	MutateCode         bool
+	MarkerCount        int
+}
+
+var defaultAntiTamperConfig = AntiTamperConfig{
+	EnableChecksum:      true,
+	EnableMarkers:       true,
+	EnableIntegrityTest: true,
+	EnableMutationTest:  false,
+	EnableTimeLock:     false,
+	CheckInterval:      10000,
+	MutateCode:         false,
+	MarkerCount:        5,
+}
+
+func GenerateAntiTamperProtection(code string, secret string, config *AntiTamperConfig) string {
+	if config == nil {
+		config = &defaultAntiTamperConfig
+	}
+
+	hash := sha256.Sum256([]byte(code + secret))
+	hashStr := hex.EncodeToString(hash[:])
+
+	var protection strings.Builder
+
+	if config.EnableChecksum {
+		protection.WriteString(GenerateChecksumProtection(hashStr, config.CheckInterval))
+	}
+
+	if config.EnableMarkers {
+		protection.WriteString(GenerateMarkerProtection(hashStr, config.MarkerCount))
+	}
+
+	if config.EnableIntegrityTest {
+		protection.WriteString(GenerateIntegrityTest(hashStr, config.CheckInterval))
+	}
+
+	if config.EnableMutationTest {
+		protection.WriteString(GenerateMutationTest())
+	}
+
+	if config.EnableTimeLock {
+		protection.WriteString(GenerateTimeLock())
+	}
+
+	return protection.String() + code
+}
+
+func GenerateChecksumProtection(hash string, interval int) string {
+	return fmt.Sprintf(`
+;(function(){
+	var _0xCP={
+		hash:'%s',
+		interval:%d,
+		counter:0,
+		maxChecks:100,
+		timer:null,
+		startTime:Date.now(),
+		createChecksum:function(){
+			var s=0;
+			var code=document.body?document.body.innerHTML:'';
+			for(var i=0;i<code.length;i++){
+				s=(s+code.charCodeAt(i))%%65536;
+			}
+			return s.toString(16);
+		},
+		verify:function(){
+			if(this.counter>=this.maxChecks){
+				this.stop();
+				return true;
+			}
+			var checksum=this.createChecksum();
+			var expected=this.hash.substring(0,4);
+			if(checksum!==expected){
+				this.handleViolation();
+				return false;
+			}
+			this.counter++;
+			return true;
+		},
+		handleViolation:function(){
+			this.stop();
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:monospace;"><div style="text-align:center;"><h1 style="color:#f00;">代码校验失败</h1><p>检测到代码被篡改</p></div></div>';
+			throw new Error('Checksum verification failed');
+		},
+		start:function(){
+			var self=this;
+			this.timer=setInterval(function(){self.verify();},this.interval);
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xCP.start();
+	window.__CP=_0xCP;
+})();
+`, hash, interval)
+}
+
+func GenerateMarkerProtection(hash string, count int) string {
+	markers := make([]string, count)
+	for i := 0; i < count; i++ {
+		markers[i] = fmt.Sprintf("'_0xMP_m%d'", i)
+	}
+	markerList := strings.Join(markers, ",")
+
+	return fmt.Sprintf(`
+;(function(){
+	var _0xMP={
+		hash:'%s',
+		markers:%s,
+		verify:function(){
+			for(var i=0;i<this.markers.length;i++){
+				var el=document.getElementById(this.markers[i].replace(/'/g,''));
+				if(!el||el.getAttribute('data-v')!==this.hash){
+					this.handleViolation();
+					return false;
+				}
+			}
+			return true;
+		},
+		createMarkers:function(){
+			for(var i=0;i<this.markers.length;i++){
+				var el=document.createElement('div');
+				var id=this.markers[i].replace(/'/g,'');
+				el.id=id;
+				el.style.display='none';
+				el.setAttribute('data-v',this.hash);
+				document.body.appendChild(el);
+			}
+		},
+		handleViolation:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:monospace;"><h1>标记验证失败</h1></div>';
+			throw new Error('Marker verification failed');
+		}
+	};
+	_0xMP.createMarkers();
+	_0xMP.verify();
+	window.__MP=_0xMP;
+})();
+`, hash, "["+markerList+"]")
+}
+
+func GenerateIntegrityTest(hash string, interval int) string {
+	return fmt.Sprintf(`
+;(function(){
+	var _0xIT={
+		hash:'%s',
+		interval:%d,
+		timer:null,
+		checkCount:0,
+		maxChecks:100,
+		snapshot:null,
+		captureSnapshot:function(){
+			var elements=document.getElementsByTagName('*');
+			var hash=0;
+			for(var i=0;i<Math.min(elements.length,100);i++){
+				var el=elements[i];
+				var id=el.id||'';
+				var cls=el.className||'';
+				hash+=id.length*17+cls.length*31;
+			}
+			return hash;
+		},
+		verify:function(){
+			if(this.checkCount>=this.maxChecks){
+				this.stop();
+				return true;
+			}
+			var current=this.captureSnapshot();
+			if(this.snapshot===null){
+				this.snapshot=current;
+			}else if(Math.abs(current-this.snapshot)>1000){
+				this.handleViolation();
+				return false;
+			}
+			this.checkCount++;
+			return true;
+		},
+		handleViolation:function(){
+			this.stop();
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>完整性测试失败</h1></div>';
+			throw new Error('Integrity test failed');
+		},
+		start:function(){
+			var self=this;
+			this.timer=setInterval(function(){self.verify();},this.interval);
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xIT.start();
+	window.__IT=_0xIT;
+})();
+`, hash, interval)
+}
+
+func GenerateMutationTest() string {
+	return `
+;(function(){
+	var _0xMT={
+		originalCode:null,
+		monitorElements:[],
+		detectMutation:function(target){
+			if(!target)return false;
+			var observer=new MutationObserver(function(mutations){
+				for(var i=0;i<mutations.length;i++){
+					var m=mutations[i];
+					if(m.type==='childList'&&m.addedNodes.length>0){
+						for(var j=0;j<m.addedNodes.length;j++){
+							var node=m.addedNodes[j];
+							if(node.nodeType===1&&node.tagName!=='SCRIPT'){
+								_0xMT.handleViolation();
+								return;
+							}
+						}
+					}
+				}
+			});
+			try{
+				observer.observe(target,{childList:true,subtree:true});
+			}catch(e){}
+		},
+		handleViolation:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>DOM变异检测</h1></div>';
+			throw new Error('DOM mutation detected');
+		},
+		init:function(){
+			this.detectMutation(document.body);
+		}
+	};
+	_0xMT.init();
+	window.__MT=_0xMT;
+})();
+`
+}
+
+func GenerateTimeLock() string {
+	return `
+;(function(){
+	var _0xTL={
+		startTime:Date.now(),
+		lockedTime:5000,
+		verified:false,
+		verify:function(){
+			var elapsed=Date.now()-this.startTime;
+			if(elapsed<this.lockedTime){
+				document.documentElement.style.display='none';
+				document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>时间锁激活</h1></div>';
+				throw new Error('Time lock active');
+			}
+			this.verified=true;
+		}
+	};
+	setTimeout(function(){_0xTL.verify();},_0xTL.lockedTime);
+	window.__TL=_0xTL;
+})();
+`
+}
+
+type RuntimeValidator struct {
+	criticalFunctions map[string]string
+	hashValues        map[string]string
+	mu                sync.RWMutex
+}
+
+func NewRuntimeValidator() *RuntimeValidator {
+	return &RuntimeValidator{
+		criticalFunctions: make(map[string]string),
+		hashValues:        make(map[string]string),
+	}
+}
+
+func (v *RuntimeValidator) RegisterCriticalFunction(name string, code string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	hash := sha256.Sum256([]byte(code))
+	v.criticalFunctions[name] = hex.EncodeToString(hash[:])
+}
+
+func (v *RuntimeValidator) RegisterHash(key string, value string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.hashValues[key] = value
+}
+
+func (v *RuntimeValidator) GenerateValidatorCode() string {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	var code strings.Builder
+	code.WriteString(`
+;(function(){
+	var _0xRV={
+		functions:{`)
+
+	first := true
+	for name, hash := range v.criticalFunctions {
+		if !first {
+			code.WriteString(",")
+		}
+		code.WriteString(fmt.Sprintf("'%s':'%s'", name, hash))
+		first = false
+	}
+
+	code.WriteString(`},
+		hashes:{`)
+
+	first = true
+	for key, val := range v.hashValues {
+		if !first {
+			code.WriteString(",")
+		}
+		code.WriteString(fmt.Sprintf("'%s':'%s'", key, val))
+		first = false
+	}
+
+	code.WriteString(`},
+		checkCount:0,
+		maxChecks:50,
+		timer:null,
+		verifyFunction:function(name,fn){
+			if(!this.functions[name])return true;
+			try{
+				var code=fn.toString();
+				var hash=0;
+				for(var i=0;i<code.length;i++){
+					hash=((hash<<5)-hash)+code.charCodeAt(i);
+					hash=hash&hash;
+				}
+				var current=Math.abs(hash).toString(16);
+				return current===this.functions[name]||code.indexOf('[native code]')>-1;
+			}catch(e){return true;}
+		},
+		verifyHash:function(key,value){
+			if(!this.hashes[key])return true;
+			return value===this.hashes[key];
+		},
+		verifyAll:function(){
+			if(this.checkCount>=this.maxChecks)return true;
+			var result=true;
+			for(var name in this.functions){
+				try{
+					if(window[name]&&typeof window[name]==='function'){
+						if(!this.verifyFunction(name,window[name])){
+							result=false;
+							break;
+						}
+					}
+				}catch(e){}
+			}
+			if(!result)this.handleViolation();
+			this.checkCount++;
+			return result;
+		},
+		handleViolation:function(){
+			this.stop();
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:monospace;"><div><h1 style="color:#f00;">运行时验证失败</h1><p>关键代码已被篡改</p></div></div>';
+			throw new Error('Runtime validation failed');
+		},
+		start:function(interval){
+			var self=this;
+			this.timer=setInterval(function(){self.verifyAll();},interval||10000);
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xRV.start();
+	window.__RV=_0xRV;
+})();
+`)
+
+	return code.String()
+}
+
+func GenerateRuntimeValidationCode(code string, criticalFunctions map[string]string, secret string) string {
+	validator := NewRuntimeValidator()
+
+	for name, fnCode := range criticalFunctions {
+		validator.RegisterCriticalFunction(name, fnCode)
+	}
+
+	hash := sha256.Sum256([]byte(code + secret))
+	validator.RegisterHash("code", hex.EncodeToString(hash[:]))
+
+	return validator.GenerateValidatorCode() + code
+}
+
+func GenerateCodeTamperDetection(code string, secret string) string {
+	hash := sha256.Sum256([]byte(code + secret))
+	hashStr := hex.EncodeToString(hash[:])
+
+	segments := make([]string, 4)
+	for i := 0; i < 4; i++ {
+		start := i * 16
+		end := start + 16
+		if end > len(hashStr) {
+			end = len(hashStr)
+		}
+		segments[i] = hashStr[start:end]
+	}
+
+	return fmt.Sprintf(`
+;(function(){
+	var _0xCTD={
+		segments:['%s','%s','%s','%s'],
+		interval:8000,
+		checkCount:0,
+		maxChecks:100,
+		timer:null,
+		createSegmentHashes:function(){
+			var hashes=[];
+			var code=document.body?document.body.innerHTML:'';
+			var len=code.length/4;
+			for(var i=0;i<4;i++){
+				var seg=code.substring(Math.floor(i*len),Math.floor((i+1)*len));
+				var h=0;
+				for(var j=0;j<seg.length;j++){
+					h=((h<<5)-h)+seg.charCodeAt(j);
+					h=h&h;
+				}
+				hashes.push(Math.abs(h).toString(16));
+			}
+			return hashes;
+		},
+		verify:function(){
+			if(this.checkCount>=this.maxChecks){
+				this.stop();
+				return true;
+			}
+			var current=this.createSegmentHashes();
+			for(var i=0;i<this.segments.length;i++){
+				if(current[i]!==this.segments[i].substring(0,current[i].length)){
+					this.handleViolation();
+					return false;
+				}
+			}
+			this.checkCount++;
+			return true;
+		},
+		handleViolation:function(){
+			this.stop();
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1 style="color:#ff0000;margin:0 0 10px 0;">代码篡改检测</h1><p style="margin:0;">检测到代码完整性被破坏</p></div></div>';
+			throw new Error('Code tamper detected');
+		},
+		start:function(){
+			var self=this;
+			this.timer=setInterval(function(){self.verify();},this.interval);
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xCTD.start();
+	window.__CTD=_0xCTD;
+})();
+`, segments[0], segments[1], segments[2], segments[3])
+}
+
+func ApplyEnhancedObfuscation(code string, opts *ObfuscatorOptions) (string, error) {
+	if code == "" {
+		return "", errors.New("code cannot be empty")
+	}
+
+	if opts == nil {
+		opts = NewObfuscatorOptions()
+	}
+
+	config := ObfuscatorConfig{
+		EnableVariableObfuscation:    true,
+		EnableStringEncryption:       opts.ObfuscationStrength >= 2,
+		EnableCodeCompression:        opts.EnableCompression,
+		EnableControlFlowFlattening:  opts.ObfuscationStrength >= 3,
+		EnableDeadCodeInjection:      opts.ObfuscationStrength >= 4,
+		EnableFunctionWrapping:       true,
+		EnableAdvancedAntiDebug:      true,
+		EnableMemoryProtection:       true,
+		EnableCodeIntegrity:          opts.EnableAntiTamper,
+		EnableDynamicAnalysis:        true,
+		EnableTimingProtection:       true,
+		StringEncryptionKey:         []byte(fmt.Sprintf("hjtpx-enhanced-%d", opts.Seed)),
+		RemoveComments:              true,
+		PreserveConsole:             true,
+	}
+
+	obfuscator := NewObfuscator(config)
+	var result string
+	var err error
+
+	if opts.ObfuscationStrength >= 3 {
+		result, err = obfuscator.ApplyAdvancedObfuscation(code)
+	} else {
+		result, err = obfuscator.Obfuscate(code)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	if opts.EnableAntiTamper {
+		secret := string(config.StringEncryptionKey)
+		result = GenerateAntiTamperProtection(result, secret, &AntiTamperConfig{
+			EnableChecksum:       true,
+			EnableMarkers:       true,
+			EnableIntegrityTest: opts.EnableRuntimeCheck,
+			CheckInterval:       opts.IntegrityCheckInterval,
+			MarkerCount:         5,
+		})
+	}
+
+	if opts.EnableRuntimeCheck {
+		result = result + GenerateRuntimeValidationCode(code, map[string]string{}, string(config.StringEncryptionKey))
+	}
+
+	return result, nil
+}
+
+func GenerateSelfDefendingCode(code string, secret string) string {
+	hash := sha256.Sum256([]byte(code + secret))
+	hashStr := hex.EncodeToString(hash[:])
+
+	selfDefend := fmt.Sprintf(`
+;(function(){
+	var _0xSD={
+		codeHash:'%s',
+		originalLength:%d,
+		checkInterval:12000,
+		detectionCount:0,
+		maxDetections:3,
+		timer:null,
+		criticalPoints:[],
+		registerPoint:function(name,checkFn){
+			this.criticalPoints.push({name:name,check:checkFn});
+		},
+		verifyLength:function(){
+			var scripts=document.getElementsByTagName('script');
+			for(var i=0;i<scripts.length;i++){
+				var len=scripts[i].textContent?scripts[i].textContent.length:0;
+				if(len>0&&Math.abs(len-this.originalLength)>1000){
+					return false;
+				}
+			}
+			return true;
+		},
+		verifyPoints:function(){
+			for(var i=0;i<this.criticalPoints.length;i++){
+				var p=this.criticalPoints[i];
+				try{
+					if(!p.check()){
+						return false;
+					}
+				}catch(e){}
+			}
+			return true;
+		},
+		verify:function(){
+			if(this.detectionCount>=this.maxDetections){
+				this.handleViolation();
+				return false;
+			}
+			if(!this.verifyLength()){
+				this.detectionCount++;
+				return false;
+			}
+			if(!this.verifyPoints()){
+				this.detectionCount++;
+				return false;
+			}
+			return true;
+		},
+		handleViolation:function(){
+			this.stop();
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:monospace;"><div><h1 style="color:#ff0000;">自防御触发</h1><p>代码完整性已被破坏</p></div></div>';
+			throw new Error('Self-defense activated');
+		},
+		start:function(){
+			var self=this;
+			this.timer=setInterval(function(){
+				if(!self.verify()){
+					self.handleViolation();
+				}
+			},this.checkInterval);
+		},
+		stop:function(){
+			if(this.timer){
+				clearInterval(this.timer);
+				this.timer=null;
+			}
+		}
+	};
+	_0xSD.start();
+	window.__SDC=_0xSD;
+})();
+`, hashStr, len(code))
+
+	return selfDefend + code
+}
+
 
 

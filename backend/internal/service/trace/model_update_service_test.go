@@ -181,7 +181,7 @@ func TestModelUpdateService_GetVersion(t *testing.T) {
 	})
 
 	t.Run("Get Current Version", func(t *testing.T) {
-		err := service.ActivateVersion(ctx, "lstm", "test-v1.0")
+		_, err := service.ActivateVersion(ctx, "lstm", "test-v1.0")
 		if err != nil {
 			t.Fatalf("ActivateVersion failed: %v", err)
 		}
@@ -256,7 +256,7 @@ func TestModelUpdateService_ListVersions(t *testing.T) {
 	})
 
 	t.Run("List With Status Filter", func(t *testing.T) {
-		_ = service.ActivateVersion(ctx, "lstm", "lstm-v1.1")
+		_, _ = service.ActivateVersion(ctx, "lstm", "lstm-v1.1")
 
 		query := VersionQuery{
 			ModelType: "lstm",

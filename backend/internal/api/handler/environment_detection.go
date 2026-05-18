@@ -111,7 +111,7 @@ type ProxyCheckData struct {
 	IsProxy          bool      `json:"is_proxy"`
 	IsVPN            bool      `json:"is_vpn"`
 	IsTor            bool      `json:"is_tor"`
-	IsDatacenter     bool      `json:"is_datacenter"`
+	IsDataCenter     bool      `json:"is_data_center"`
 	RiskLevel        string    `json:"risk_level"`
 	Score            float64   `json:"score"`
 	Confidence       float64   `json:"confidence"`
@@ -340,7 +340,7 @@ func (h *EnvironmentDetectionHandler) CheckProxy(c *gin.Context) {
 		IsProxy:          proxyResult.IsProxy,
 		IsVPN:            proxyResult.IsVPN,
 		IsTor:            proxyResult.IsTor,
-		IsDatacenter:     proxyResult.IsDatacenter,
+		IsDataCenter:     proxyResult.IsDataCenter,
 		RiskLevel:        proxyResult.RiskLevel,
 		Score:            proxyResult.Score,
 		Confidence:       proxyResult.Confidence,

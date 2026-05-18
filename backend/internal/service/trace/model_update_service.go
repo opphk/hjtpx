@@ -9,8 +9,6 @@ import (
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/hjtpx/hjtpx/internal/model"
 )
 
 type ModelUpdateService struct {
@@ -644,24 +642,15 @@ func (s *ModelUpdateService) TriggerRollback(ctx context.Context, modelType stri
 	}
 
 	var rollbackVersion *ModelVersion
-	var historyKey int = -1
 
 	history := s.versionHistory[modelType]
 	for i := len(history) - 2; i >= 0; i-- {
-		v := history[i]
-		if v.Status == ModelStatusStable || v.Status == ModelStatusActive {
-			rollbackVersion = v
-			historyKey = i
-			break
-		}
-	}
 
 	if rollbackVersion == nil {
 		for i := len(history) - 2; i >= 0; i-- {
 			v := history[i]
 			if v.Status == ModelStatusDeprecated && v.VersionID != versionID {
 				rollbackVersion = v
-				historyKey = i
 				break
 			}
 		}

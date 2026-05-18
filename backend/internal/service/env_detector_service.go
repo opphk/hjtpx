@@ -11,12 +11,13 @@ import (
 )
 
 type EnvDetectorService struct {
-	envDetector     *EnvDetector
-	blacklistSvc    *BlacklistService
-	rateLimitSvc    *RateLimitService
-	mu              sync.RWMutex
-	envCache        map[string]*EnvInfo
-	cacheExpiration time.Duration
+	envDetector             *EnvDetector
+	enhancedDetection       *EnhancedEnvironmentDetection
+	blacklistSvc            *BlacklistService
+	rateLimitSvc            *RateLimitService
+	mu                      sync.RWMutex
+	envCache                map[string]*EnvInfo
+	cacheExpiration         time.Duration
 }
 
 type EnvDetector struct{}
@@ -101,11 +102,12 @@ type EnvVerifyResponse struct {
 
 func NewEnvDetectorService() *EnvDetectorService {
 	return &EnvDetectorService{
-		envDetector:     NewEnvDetectorBackend(),
-		blacklistSvc:    NewBlacklistService(),
-		rateLimitSvc:    NewRateLimitService(),
-		envCache:        make(map[string]*EnvInfo),
-		cacheExpiration: 5 * time.Minute,
+		envDetector:       NewEnvDetectorBackend(),
+		enhancedDetection: NewEnhancedEnvironmentDetection(),
+		blacklistSvc:     NewBlacklistService(),
+		rateLimitSvc:     NewRateLimitService(),
+		envCache:         make(map[string]*EnvInfo),
+		cacheExpiration:  5 * time.Minute,
 	}
 }
 
@@ -1230,4 +1232,197 @@ func (d *EnvDetector) EnhancedVMCheck(info *EnvInfo, frontendDetections []string
 	}
 
 	return report
+}
+
+func (s *EnvDetectorService) DetectHeadlessChrome(ctx context.Context, data map[string]interface{}) (bool, error) {
+	return s.enhancedDetection.DetectHeadlessChrome(ctx, data)
+}
+
+func (s *EnvDetectorService) DetectPlaywright(ctx context.Context, data map[string]interface{}) (bool, error) {
+	return s.enhancedDetection.DetectPlaywright(ctx, data)
+}
+
+func (s *EnvDetectorService) DetectSelenium(ctx context.Context, data map[string]interface{}) (bool, error) {
+	return s.enhancedDetection.DetectSelenium(ctx, data)
+}
+
+func (s *EnvDetectorService) DetectAutomationTools(ctx context.Context, data map[string]interface{}) (map[string]bool, error) {
+	return s.enhancedDetection.DetectAutomationTools(ctx, data)
+}
+
+func (s *EnvDetectorService) EnhancedVerifyWithAutomation(sessionID string, req *EnvVerifyRequest) (*EnvVerifyResponse, error) {
+	envInfo := &EnvInfo{
+		UserAgent:           req.UserAgent,
+		Platform:            req.EnvironmentEnv.Platform,
+		Language:            req.EnvironmentEnv.Language,
+		Languages:           req.EnvironmentEnv.Languages,
+		ScreenWidth:         req.EnvironmentEnv.ScreenWidth,
+		ScreenHeight:        req.EnvironmentEnv.ScreenHeight,
+		ColorDepth:          req.EnvironmentEnv.ColorDepth,
+		PixelRatio:          req.EnvironmentEnv.PixelRatio,
+		Timezone:            req.EnvironmentEnv.Timezone,
+		TimezoneOffset:      req.EnvironmentEnv.TimezoneOffset,
+		CanvasFingerprint:   req.EnvironmentEnv.CanvasFingerprint,
+		WebGLRenderer:       req.EnvironmentEnv.WebGLRenderer,
+		WebGLVendor:         req.EnvironmentEnv.WebGLVendor,
+		Plugins:             req.EnvironmentEnv.Plugins,
+		Fonts:               req.EnvironmentEnv.Fonts,
+		TouchSupport:        req.EnvironmentEnv.TouchSupport,
+		MaxTouchPoints:      req.EnvironmentEnv.MaxTouchPoints,
+		HardwareConcurrency: req.EnvironmentEnv.HardwareConcurrency,
+		Fingerprint:         req.Fingerprint,
+	}
+
+	if envInfo.UserAgent == "" {
+		envInfo.UserAgent = req.UserAgent
+	}
+
+	detectionData := map[string]interface{}{
+		"user_agent":       req.UserAgent,
+		"webgl_renderer":   envInfo.WebGLRenderer,
+		"webgl_vendor":     envInfo.WebGLVendor,
+		"canvas_hash":      envInfo.CanvasFingerprint,
+		"platform":         envInfo.Platform,
+		"languages":        envInfo.Languages,
+		"screen_width":     envInfo.ScreenWidth,
+		"screen_height":    envInfo.ScreenHeight,
+		"plugins":          envInfo.Plugins,
+		"hardware_concurrency": envInfo.HardwareConcurrency,
+	}
+
+	blacklisted, reason := s.blacklistSvc.CheckBlacklist(req.IPAddress, "ip")
+	if blacklisted {
+		return &EnvVerifyResponse{
+			Success:     false,
+			RiskLevel:   "high",
+			RiskScore:   100.0,
+			RiskFactors: []string{"IP黑名单: " + reason.Error()},
+			Action:      "block",
+			Message:     "IP已被列入黑名单",
+		}, nil
+	}
+
+	if req.Fingerprint != "" {
+		blacklisted, reason = s.blacklistSvc.CheckBlacklist(req.Fingerprint, "device_id")
+		if blacklisted {
+			return &EnvVerifyResponse{
+				Success:     false,
+				RiskLevel:   "high",
+				RiskScore:   100.0,
+				RiskFactors: []string{"设备黑名单: " + reason.Error()},
+				Action:      "block",
+				Message:     "设备已被列入黑名单",
+			}, nil
+		}
+	}
+
+	enhancedReport := s.envDetector.EnhancedEnvCheck(envInfo)
+
+	detectionResult := s.enhancedDetection.GetDetectionResult(context.Background(), detectionData)
+	if detectionResult != nil && detectionResult.Detected {
+		enhancedReport.EnvScore -= detectionResult.Confidence * 0.3
+		enhancedReport.Checks = append(enhancedReport.Checks, RiskCheckResult{
+			Name:     "enhanced_automation_detected",
+			Risk:     detectionResult.Severity,
+			Detected: true,
+			Score:    int(detectionResult.Confidence),
+			Reason:   fmt.Sprintf("工具: %s, 可信度: %.1f%%", detectionResult.ToolName, detectionResult.Confidence),
+		})
+	}
+
+	automationTools, _ := s.enhancedDetection.DetectAutomationTools(context.Background(), detectionData)
+	detectedToolCount := 0
+	detectedTools := []string{}
+	for tool, detected := range automationTools {
+		if detected {
+			detectedToolCount++
+			detectedTools = append(detectedTools, tool)
+		}
+	}
+
+	if detectedToolCount > 0 {
+		enhancedReport.EnvScore -= float64(detectedToolCount) * 10
+		enhancedReport.Checks = append(enhancedReport.Checks, RiskCheckResult{
+			Name:     "automation_tools_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    detectedToolCount * 20,
+			Reason:   fmt.Sprintf("检测到自动化工具: %s", strings.Join(detectedTools, ", ")),
+		})
+	}
+
+	headers := make(map[string]string)
+	proxyRisk := s.envDetector.CalculateProxyRiskScore(req.IPAddress, headers)
+	if proxyRisk > 30 {
+		enhancedReport.EnvScore -= proxyRisk * 0.2
+		enhancedReport.Checks = append(enhancedReport.Checks, RiskCheckResult{
+			Name:     "proxy_risk",
+			Risk:     "medium",
+			Detected: true,
+			Score:    int(proxyRisk),
+			Reason:   fmt.Sprintf("代理风险评分: %.2f", proxyRisk),
+		})
+	}
+
+	isVPN, vpnConfidence, vpnEvidence := s.envDetector.DetectVPNPatterns(envInfo, headers)
+	if isVPN {
+		enhancedReport.EnvScore -= vpnConfidence * 20
+		enhancedReport.Checks = append(enhancedReport.Checks, RiskCheckResult{
+			Name:     "vpn_detected",
+			Risk:     "medium",
+			Detected: true,
+			Score:    int(vpnConfidence * 100),
+			Reason:   strings.Join(vpnEvidence, "; "),
+		})
+	}
+
+	emulatorDetected, emulatorIndicators := s.envDetector.DetectEmulatorIndicators(envInfo)
+	if emulatorDetected {
+		enhancedReport.EnvScore -= 25
+		enhancedReport.Checks = append(enhancedReport.Checks, RiskCheckResult{
+			Name:     "emulator_detected",
+			Risk:     "medium",
+			Detected: true,
+			Score:    30,
+			Reason:   strings.Join(emulatorIndicators, "; "),
+		})
+	}
+
+	if enhancedReport.EnvScore < 0 {
+		enhancedReport.EnvScore = 0
+	}
+
+	riskLevel := "low"
+	if enhancedReport.EnvScore < 60 {
+		riskLevel = "high"
+	} else if enhancedReport.EnvScore < 80 {
+		riskLevel = "medium"
+	}
+
+	action := "pass"
+	if enhancedReport.EnvScore < 50 || emulatorDetected || (detectionResult != nil && detectionResult.Detected) {
+		action = "block"
+	} else if enhancedReport.EnvScore < 70 {
+		action = "review"
+	}
+
+	captchaPass := true
+	if action == "block" || action == "review" {
+		captchaPass = false
+	}
+
+	allRiskFactors := enhancedReport.DetectedTools
+	if detectionResult != nil && detectionResult.Detected {
+		allRiskFactors = append(allRiskFactors, fmt.Sprintf("enhanced:%s", detectionResult.ToolName))
+	}
+
+	return &EnvVerifyResponse{
+		Success:     true,
+		RiskLevel:   riskLevel,
+		RiskScore:   enhancedReport.EnvScore,
+		RiskFactors: allRiskFactors,
+		Action:      action,
+		Message:     "环境检测通过",
+		CaptchaPass: captchaPass,
+	}, nil
 }

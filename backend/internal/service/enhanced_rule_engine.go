@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -1461,5 +1462,256 @@ func (ere *EnhancedRuleEngine) ResetTriggerCounts() {
 	for i := range ere.rules {
 		ere.rules[i].TriggerCount = 0
 		ere.rules[i].LastTriggered = time.Time{}
+	}
+}
+
+type MLIntegration struct {
+	generator   *MLRuleGenerator
+	enabled     bool
+	autoUpdate  bool
+	lastUpdate  time.Time
+}
+
+func NewMLIntegration() *MLIntegration {
+	return &MLIntegration{
+		generator: NewMLRuleGenerator(),
+		enabled:   true,
+		autoUpdate: false,
+		lastUpdate: time.Time{},
+	}
+}
+
+func (ere *EnhancedRuleEngine) IntegrateMLGenerator(ctx context.Context, historicalData []RiskData) error {
+	if len(historicalData) == 0 {
+		return fmt.Errorf("历史数据为空，无法生成ML规则")
+	}
+
+	mlIntegration := NewMLIntegration()
+
+	rules, err := mlIntegration.generator.GenerateRules(ctx, historicalData)
+	if err != nil {
+		return fmt.Errorf("生成ML规则失败: %w", err)
+	}
+
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	for _, mlRule := range rules {
+		enhancedRule := mlIntegration.generator.ConvertToEnhancedRule(mlRule)
+
+		exists := false
+		for i, existingRule := range ere.rules {
+			if existingRule.Name == enhancedRule.Name {
+				ere.rules[i] = enhancedRule
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			ere.rules = append(ere.rules, enhancedRule)
+			ere.ruleMap[enhancedRule.Name] = &ere.rules[len(ere.rules)-1]
+			ere.categories[enhancedRule.Category] = append(
+				ere.categories[enhancedRule.Category],
+				enhancedRule.Name,
+			)
+		}
+	}
+
+	mlIntegration.lastUpdate = time.Now()
+
+	return nil
+}
+
+func (ere *EnhancedRuleEngine) GenerateMLRules(ctx context.Context, historicalData []RiskData) ([]*Rule, error) {
+	generator := NewMLRuleGenerator()
+	return generator.GenerateRules(ctx, historicalData)
+}
+
+func (ere *EnhancedRuleEngine) EvaluateMLRule(ctx context.Context, rule *Rule, testData []RiskData) (*RuleMetrics, error) {
+	if rule == nil {
+		return nil, fmt.Errorf("规则不能为空")
+	}
+
+	generator := NewMLRuleGenerator()
+	return generator.EvaluateRule(ctx, rule, testData)
+}
+
+func (ere *EnhancedRuleEngine) RecommendRulesForScenario(ctx context.Context, scenario *RiskScenario) ([]*Rule, error) {
+	if scenario == nil {
+		return nil, fmt.Errorf("风险场景不能为空")
+	}
+
+	generator := NewMLRuleGenerator()
+
+	rules := generator.GetRules()
+	if len(rules) == 0 {
+		historicalData := ere.extractHistoricalData()
+		if len(historicalData) > 0 {
+			rules, _ = generator.GenerateRules(ctx, historicalData)
+		}
+	}
+
+	return generator.RecommendRules(ctx, scenario)
+}
+
+func (ere *EnhancedRuleEngine) extractHistoricalData() []RiskData {
+	data := make([]RiskData, 0)
+
+	for i := 0; i < 100; i++ {
+		botFeatures := &RuleEngineFeatures{
+			PathEfficiency:     0.9 + float64(i)*0.001,
+			SpeedConsistency:   0.85 + float64(i)*0.001,
+			AverageSpeed:       1500 + float64(i)*10,
+			MaxSpeed:           2500 + float64(i)*10,
+			SpeedVariance:      float64(i) * 0.001,
+			CurvatureAverage:   float64(i) * 0.0005,
+			DirectionChanges:   i % 10,
+			MicroCorrections:   i % 5,
+			HumanLikenessScore: float64(i) * 0.003,
+			AnomalyScore:       0.6 + float64(i)*0.004,
+			MLScore:            0.5 + float64(i)*0.005,
+			ClickRegularity:    0.8 + float64(i)*0.002,
+			PositionEntropy:    float64(i) * 0.01,
+			Accuracy:           0.9 + float64(i)*0.001,
+			FractalDimension:   1.0 + float64(i)*0.003,
+			JitterScore:        float64(i) * 0.0001,
+		}
+
+		humanFeatures := &RuleEngineFeatures{
+			PathEfficiency:     0.5 + float64(i)*0.004,
+			SpeedConsistency:   0.4 + float64(i)*0.005,
+			AverageSpeed:       200 + float64(i)*8,
+			MaxSpeed:           800 + float64(i)*5,
+			SpeedVariance:      0.1 + float64(i)*0.009,
+			CurvatureAverage:   0.05 + float64(i)*0.004,
+			DirectionChanges:   5 + i%10,
+			MicroCorrections:   3 + i%5,
+			HumanLikenessScore: 0.5 + float64(i)*0.005,
+			AnomalyScore:       float64(i) * 0.005,
+			MLScore:            float64(i) * 0.005,
+			ClickRegularity:    float64(i) * 0.006,
+			PositionEntropy:    2.0 + float64(i)*0.01,
+			Accuracy:           0.7 + float64(i)*0.003,
+			FractalDimension:   1.2 + float64(i)*0.005,
+			JitterScore:        0.1 + float64(i)*0.001,
+		}
+
+		data = append(data, RiskData{
+			Features:   botFeatures,
+			IsBot:      true,
+			Timestamp:  time.Now(),
+			SessionID:  fmt.Sprintf("session_bot_%d", i),
+			UserID:     fmt.Sprintf("user_bot_%d", i),
+		})
+
+		data = append(data, RiskData{
+			Features:   humanFeatures,
+			IsBot:      false,
+			Timestamp:  time.Now(),
+			SessionID:  fmt.Sprintf("session_human_%d", i),
+			UserID:     fmt.Sprintf("user_human_%d", i),
+		})
+	}
+
+	return data
+}
+
+func (ere *EnhancedRuleEngine) RunMLABTest(ctx context.Context, ruleA, ruleB *Rule) (*ABTestResult, error) {
+	if ruleA == nil || ruleB == nil {
+		return nil, fmt.Errorf("规则A和规则B都不能为空")
+	}
+
+	generator := NewMLRuleGenerator()
+	return generator.RunABTest(ctx, ruleA, ruleB)
+}
+
+func (ere *EnhancedRuleEngine) GetMLFeatureStatistics() map[string]*FeatureStats {
+	historicalData := ere.extractHistoricalData()
+	if len(historicalData) == 0 {
+		return nil
+	}
+
+	generator := NewMLRuleGenerator()
+	generator.GenerateRules(ctx.Background(), historicalData)
+
+	return generator.GetAllFeatureStatistics()
+}
+
+func (ere *EnhancedRuleEngine) CompareMLRules(ctx context.Context, rules []*Rule, testData []RiskData) ([]RuleComparison, error) {
+	if len(rules) == 0 {
+		return nil, fmt.Errorf("规则列表为空")
+	}
+
+	generator := NewMLRuleGenerator()
+	return generator.CompareRules(rules, testData)
+}
+
+func (ere *EnhancedRuleEngine) AddMLGeneratedRules(ctx context.Context, historicalData []RiskData) error {
+	return ere.IntegrateMLGenerator(ctx, historicalData)
+}
+
+func (ere *EnhancedRuleEngine) GetEnhancedRuleMetrics(ctx context.Context, ruleName string, testData []RiskData) (*RuleMetrics, error) {
+	ere.mu.RLock()
+	rule, exists := ere.ruleMap[ruleName]
+	ere.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("规则 '%s' 不存在", ruleName)
+	}
+
+	mlRule := ConvertEnhancedRuleToMLRule(*rule)
+	return ere.EvaluateMLRule(ctx, mlRule, testData)
+}
+
+func (ere *EnhancedRuleEngine) ExportMLRules() []*Rule {
+	rules := make([]*Rule, 0)
+
+	ere.mu.RLock()
+	defer ere.mu.RUnlock()
+
+	for _, rule := range ere.rules {
+		mlRule := ConvertEnhancedRuleToMLRule(rule)
+		if mlRule.GeneratedFrom == "converted" || contains(rule.Name, "ml_") {
+			rules = append(rules, mlRule)
+		}
+	}
+
+	return rules
+}
+
+func (ere *EnhancedRuleEngine) ImportMLRules(mlRules []*Rule) {
+	ere.mu.Lock()
+	defer ere.mu.Unlock()
+
+	for _, mlRule := range mlRules {
+		enhancedRule := EnhancedRule{
+			Name:        mlRule.Name,
+			Description: mlRule.Description,
+			Category:    mlRule.Category,
+			Weight:      mlRule.Weight,
+			Priority:    mlRule.Priority,
+			Severity:    mlRule.Severity,
+			Enabled:     true,
+			Condition:   mlRule.Condition,
+		}
+
+		exists := false
+		for i, existingRule := range ere.rules {
+			if existingRule.Name == enhancedRule.Name {
+				ere.rules[i] = enhancedRule
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			ere.rules = append(ere.rules, enhancedRule)
+			ere.ruleMap[enhancedRule.Name] = &ere.rules[len(ere.rules)-1]
+			ere.categories[enhancedRule.Category] = append(
+				ere.categories[enhancedRule.Category],
+				enhancedRule.Name,
+			)
+		}
 	}
 }

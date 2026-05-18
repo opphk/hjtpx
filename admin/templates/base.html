@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/admin/api/whitelabel/css">
+    <link rel="stylesheet" href="/admin/static/css/responsive.css">
     <style>
         :root {
             --primary: #007bff;
@@ -553,6 +554,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="/admin/static/js/i18n.js"></script>
     <script src="/admin/static/js/auth.js"></script>
+    <script src="/admin/static/js/theme.js"></script>
     <script>
         $(document).ready(function() {
             initAdminTheme();
@@ -987,6 +989,167 @@
             $('#admin-ajax-loading').fadeOut(200, function() {
                 $(this).remove();
             });
+        }
+    </script>
+    <script>
+        window.AdminUI = {
+            initFormValidation: function() {
+                const forms = document.querySelectorAll('.needs-validation');
+                
+                forms.forEach(form => {
+                    form.addEventListener('submit', function(event) {
+                        if (!form.checkValidity()) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            showAdminToast('请检查表单填写是否正确', 'warning');
+                        }
+                        form.classList.add('was-validated');
+                    }, false);
+
+                    const inputs = form.querySelectorAll('.form-control, .form-select, .custom-select');
+                    inputs.forEach(input => {
+                        input.addEventListener('blur', function() {
+                            if (this.checkValidity()) {
+                                this.classList.remove('is-invalid');
+                                this.classList.add('is-valid');
+                            } else {
+                                this.classList.remove('is-valid');
+                                this.classList.add('is-invalid');
+                                const feedback = this.nextElementSibling;
+                                if (feedback && feedback.classList.contains('invalid-feedback')) {
+                                    feedback.textContent = this.validationMessage;
+                                }
+                            }
+                        });
+
+                        input.addEventListener('input', function() {
+                            if (this.value) {
+                                this.classList.remove('is-invalid');
+                            }
+                        });
+                    });
+                });
+            },
+
+            confirmAction: function(title, message, confirmText = '确认', cancelText = '取消', confirmCallback = null) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: title || '确认操作',
+                        text: message || '您确定要执行此操作吗？',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonColor: '#007bff',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: confirmText || '确认',
+                        cancelButtonText: cancelText || '取消',
+                        reverseButtons: true
+                    }).then((result) => {
+                        if (result.isConfirmed && typeof confirmCallback === 'function') {
+                            confirmCallback();
+                        }
+                    });
+                } else {
+                    if (confirm(message || '您确定要执行此操作吗？')) {
+                        if (typeof confirmCallback === 'function') {
+                            confirmCallback();
+                        }
+                    }
+                }
+            },
+
+            confirmDelete: function(itemName, deleteCallback) {
+                this.confirmAction(
+                    '确认删除',
+                    `确定要删除 ${itemName || '此项'} 吗？此操作无法撤销。`,
+                    '删除',
+                    '取消',
+                    deleteCallback
+                );
+            },
+
+            showSuccess: function(message, title = '成功') {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: title,
+                        text: message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    showAdminToast(message, 'success');
+                }
+            },
+
+            showError: function(message, title = '错误') {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: title,
+                        text: message
+                    });
+                } else {
+                    showAdminToast(message, 'error');
+                }
+            },
+
+            enhanceButtons: function() {
+                document.querySelectorAll('.btn').forEach(btn => {
+                    if (!btn.hasAttribute('data-enhanced')) {
+                        btn.setAttribute('data-enhanced', 'true');
+                        
+                        btn.addEventListener('click', function(e) {
+                            if (this.classList.contains('btn-loading')) {
+                                e.preventDefault();
+                                return;
+                            }
+
+                            if (this.classList.contains('btn-confirm')) {
+                                e.preventDefault();
+                                const message = this.getAttribute('data-confirm-message') || '确定要继续吗？';
+                                const title = this.getAttribute('data-confirm-title') || '确认操作';
+                                AdminUI.confirmAction(title, message, '确认', '取消', () => {
+                                    this.click();
+                                });
+                            }
+
+                            if (this.classList.contains('btn-delete')) {
+                                e.preventDefault();
+                                const itemName = this.getAttribute('data-item-name') || '此项';
+                                AdminUI.confirmDelete(itemName, () => {
+                                    const form = this.closest('form');
+                                    if (form) {
+                                        form.submit();
+                                    } else {
+                                        const href = this.getAttribute('href');
+                                        if (href && href !== '#') {
+                                            window.location.href = href;
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            },
+
+            init: function() {
+                this.initFormValidation();
+                this.enhanceButtons();
+                
+                document.addEventListener('DOMContentLoaded', () => {
+                    setTimeout(() => {
+                        this.initFormValidation();
+                        this.enhanceButtons();
+                    }, 100);
+                });
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => AdminUI.init());
+        } else {
+            AdminUI.init();
         }
     </script>
     {% block scripts %}{% endblock %}

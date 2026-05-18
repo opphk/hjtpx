@@ -1,702 +1,1156 @@
-let requestTrendChart, realtimeChart;
-let ws = null;
-let wsConnected = false;
-let autoRefreshInterval = null;
-let realtimeDataPoints = [];
-let previousStats = null;
-const REALTIME_UPDATE_INTERVAL = 5000;
-const MAX_REALTIME_POINTS = 60;
-const WS_RECONNECT_DELAY = 3000;
-const AUTO_REFRESH_INTERVAL = 30000;
-let isAutoRefreshEnabled = false;
+(function() {
+  'use strict';
 
-document.addEventListener('DOMContentLoaded', async () => {
-    initECharts();
-    initWebSocket();
-    setupEventListeners();
-    await loadDashboardStats();
-    await loadSystemStatus();
-    loadRecentActivity();
-    startAutoRefresh();
-    await loadExtendedStats();
-});
+  const Dashboard = {
+    charts: {
+      trend: null,
+      pie: null,
+      captchaType: null,
+      realtime: null,
+      mini: null
+    },
+    ws: null,
+    wsConnected: false,
+    realtimeDataPoints: [],
+    autoRefreshInterval: null,
+    isAutoRefreshEnabled: false,
+    previousStats: null,
+    MAX_REALTIME_POINTS: 60,
+    REALTIME_UPDATE_INTERVAL: 5000,
+    AUTO_REFRESH_DELAY: 30000,
+    WS_RECONNECT_DELAY: 3000,
 
-function toggleAutoRefresh() {
-    isAutoRefreshEnabled = !isAutoRefreshEnabled;
-    const statusEl = document.getElementById('autoRefreshStatus');
-    const btnEl = document.getElementById('autoRefreshBtn');
-    
-    if (isAutoRefreshEnabled) {
+    init: function() {
+      this.initCharts();
+      this.initWebSocket();
+      this.setupEventListeners();
+      this.loadDashboardData();
+      this.loadSystemStatus();
+      this.loadRecentVerifications();
+      this.startAutoRefresh();
+      this.initResponsiveHandlers();
+      this.showLoadingState();
+    },
+
+    initCharts: function() {
+      this.initTrendChart();
+      this.initPieChart();
+      this.initCaptchaTypeChart();
+      this.initRealtimeChart();
+      this.initMiniChart();
+
+      if (typeof ThemeManager !== 'undefined') {
+        ThemeManager.addThemeChangeListener((data) => {
+          this.updateChartsTheme(data.theme);
+        });
+      }
+    },
+
+    initResponsiveHandlers: function() {
+      let resizeTimer;
+      
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          this.resizeAllCharts();
+          this.adjustLayoutForScreenSize();
+        }, 250);
+      });
+
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+          this.resizeAllCharts();
+        }, 100);
+      });
+    },
+
+    adjustLayoutForScreenSize: function() {
+      const width = window.innerWidth;
+      const charts = ['trendChart', 'pieChart', 'captchaTypeChart', 'realtimeChart'];
+      const chartHeights = {
+        trendChart: 300,
+        pieChart: 250,
+        captchaTypeChart: 250,
+        realtimeChart: 200
+      };
+
+      if (width < 576) {
+        Object.keys(chartHeights).forEach(chartName => {
+          const chartInstance = this.charts[chartName.replace('Chart', '').toLowerCase()];
+          if (chartInstance) {
+            chartInstance.resize({ height: chartHeights[chartName] * 0.6 });
+          }
+        });
+      } else if (width < 768) {
+        Object.keys(chartHeights).forEach(chartName => {
+          const chartInstance = this.charts[chartName.replace('Chart', '').toLowerCase()];
+          if (chartInstance) {
+            chartInstance.resize({ height: chartHeights[chartName] * 0.8 });
+          }
+        });
+      } else {
+        this.resizeAllCharts();
+      }
+    },
+
+    initTrendChart: function() {
+      const container = document.getElementById('trendChart');
+      if (!container) return;
+
+      this.charts.trend = echarts.init(container);
+      this.charts.trend.setOption(this.getTrendChartOption());
+    },
+
+    initPieChart: function() {
+      const container = document.getElementById('pieChart');
+      if (!container) return;
+
+      this.charts.pie = echarts.init(container);
+      this.charts.pie.setOption(this.getPieChartOption());
+    },
+
+    initCaptchaTypeChart: function() {
+      const container = document.getElementById('captchaTypeChart');
+      if (!container) return;
+
+      this.charts.captchaType = echarts.init(container);
+      this.charts.captchaType.setOption(this.getCaptchaTypeChartOption());
+    },
+
+    initRealtimeChart: function() {
+      const container = document.getElementById('realtimeChart');
+      if (!container) return;
+
+      this.realtimeDataPoints = Array(this.MAX_REALTIME_POINTS).fill(0).map((_, i) => ({
+        time: this.formatTime(new Date(Date.now() - (this.MAX_REALTIME_POINTS - i) * 1000)),
+        value: 0
+      }));
+
+      this.charts.realtime = echarts.init(container);
+      this.charts.realtime.setOption(this.getRealtimeChartOption());
+    },
+
+    initMiniChart: function() {
+      const container = document.getElementById('requestsMiniChart');
+      if (!container) return;
+
+      this.charts.mini = echarts.init(container);
+      this.charts.mini.setOption(this.getMiniChartOption());
+    },
+
+    getChartColors: function() {
+      if (typeof ThemeManager !== 'undefined') {
+        const colors = ThemeManager.getThemeColors();
+        return {
+          text: colors.text,
+          primary: colors.primary,
+          success: colors.success,
+          warning: colors.warning,
+          danger: colors.danger,
+          grid: colors.chart.grid,
+          axis: colors.chart.axis
+        };
+      }
+
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      return {
+        text: isDark ? '#e9ecef' : '#333333',
+        primary: isDark ? '#4a9eff' : '#007bff',
+        success: isDark ? '#2fd56a' : '#28a745',
+        warning: isDark ? '#ffc107' : '#ffc107',
+        danger: isDark ? '#ff4757' : '#dc3545',
+        grid: isDark ? '#3d434a' : '#e0e0e0',
+        axis: isDark ? '#e9ecef' : '#666666'
+      };
+    },
+
+    getTrendChartOption: function() {
+      const colors = this.getChartColors();
+      return {
+        color: [colors.primary],
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: colors.chart.tooltip,
+          textStyle: { color: '#fff' },
+          axisPointer: { type: 'cross' }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '10%',
+          top: '10%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: [],
+          axisLabel: { color: colors.axis, rotate: 45 },
+          axisLine: { lineStyle: { color: colors.grid } },
+          splitLine: { show: false }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: { color: colors.axis },
+          axisLine: { lineStyle: { color: colors.grid } },
+          splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } }
+        },
+        series: [{
+          name: '验证请求',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          sampling: 'lttb',
+          itemStyle: {
+            color: colors.primary,
+            borderWidth: 2
+          },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: colors.primary + '40' },
+                { offset: 1, color: colors.primary + '05' }
+              ]
+            }
+          },
+          lineStyle: { width: 2 },
+          data: []
+        }],
+        animation: true,
+        animationDuration: 800,
+        animationEasing: 'cubicOut'
+      };
+    },
+
+    getPieChartOption: function() {
+      const colors = ['#28a745', '#ffc107', '#fd7e14', '#dc3545'];
+      return {
+        tooltip: {
+          trigger: 'item',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          textStyle: { color: '#fff' },
+          formatter: '{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          top: 'middle',
+          textStyle: { color: '#666' }
+        },
+        series: [{
+          type: 'pie',
+          radius: ['40%', '70%'],
+          center: ['60%', '50%'],
+          avoidLabelOverlap: true,
+          itemStyle: {
+            borderRadius: 4,
+            borderColor: '#fff',
+            borderWidth: 2
+          },
+          label: {
+            show: true,
+            formatter: '{b}: {d}%',
+            color: '#666'
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)'
+            },
+            label: {
+              show: true,
+              fontSize: 14,
+              fontWeight: 'bold'
+            }
+          },
+          data: []
+        }],
+        animation: true,
+        animationDuration: 1000,
+        animationEasing: 'cubicInOut'
+      };
+    },
+
+    getCaptchaTypeChartOption: function() {
+      const colors = this.getChartColors();
+      return {
+        color: [colors.primary, colors.success, colors.warning, colors.danger],
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          textStyle: { color: '#fff' }
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '10%',
+          top: '10%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: [],
+          axisLabel: { color: colors.axis, rotate: 30 },
+          axisLine: { lineStyle: { color: colors.grid } }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: { color: colors.axis },
+          axisLine: { lineStyle: { color: colors.grid } },
+          splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } }
+        },
+        series: [{
+          type: 'bar',
+          barWidth: '60%',
+          itemStyle: {
+            borderRadius: [4, 4, 0, 0],
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: colors.primary },
+                { offset: 1, color: colors.primary + '80' }
+              ]
+            }
+          },
+          data: [],
+          animationDelay: function(idx) {
+            return idx * 50;
+          }
+        }],
+        animation: true,
+        animationDuration: 1000,
+        animationEasing: 'elasticOut'
+      };
+    },
+
+    getRealtimeChartOption: function() {
+      const colors = this.getChartColors();
+      return {
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          textStyle: { color: '#fff' },
+          formatter: '{time}<br/>{value} QPS'
+        },
+        grid: {
+          left: '3%',
+          right: '4%',
+          bottom: '10%',
+          top: '10%',
+          containLabel: true
+        },
+        xAxis: {
+          type: 'category',
+          data: [],
+          axisLabel: { color: colors.axis, rotate: 45 },
+          boundaryGap: false,
+          axisLine: { lineStyle: { color: colors.grid } }
+        },
+        yAxis: {
+          type: 'value',
+          axisLabel: { color: colors.axis },
+          axisLine: { lineStyle: { color: colors.grid } },
+          splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } }
+        },
+        series: [{
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          sampling: 'lttb',
+          lineStyle: { width: 2, color: colors.success },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: colors.success + '40' },
+                { offset: 1, color: colors.success + '05' }
+              ]
+            }
+          },
+          data: [],
+          animation: false
+        }],
+        animation: false
+      };
+    },
+
+    getMiniChartOption: function() {
+      return {
+        xAxis: {
+          show: false,
+          type: 'category',
+          data: []
+        },
+        yAxis: {
+          show: false,
+          type: 'value'
+        },
+        series: [{
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          lineStyle: {
+            color: 'rgba(255,255,255,0.6)',
+            width: 1.5
+          },
+          areaStyle: {
+            color: 'rgba(255,255,255,0.25)'
+          },
+          data: []
+        }],
+        grid: {
+          left: 0,
+          right: 0,
+          top: 2,
+          bottom: 2
+        },
+        animation: false
+      };
+    },
+
+    updateChartsTheme: function(theme) {
+      const colors = this.getChartColors();
+
+      if (this.charts.trend) {
+        this.charts.trend.setOption({
+          xAxis: {
+            axisLabel: { color: colors.axis },
+            axisLine: { lineStyle: { color: colors.grid } }
+          },
+          yAxis: {
+            axisLabel: { color: colors.axis },
+            axisLine: { lineStyle: { color: colors.grid } },
+            splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } }
+          }
+        }, false);
+      }
+
+      if (this.charts.captchaType) {
+        this.charts.captchaType.setOption({
+          xAxis: {
+            axisLabel: { color: colors.axis },
+            axisLine: { lineStyle: { color: colors.grid } }
+          },
+          yAxis: {
+            axisLabel: { color: colors.axis },
+            axisLine: { lineStyle: { color: colors.grid } },
+            splitLine: { lineStyle: { color: colors.grid, type: 'dashed' } }
+          }
+        }, false);
+      }
+
+      this.resizeAllCharts();
+    },
+
+    resizeAllCharts: function() {
+      Object.values(this.charts).forEach(chart => {
+        if (chart && typeof chart.resize === 'function') {
+          chart.resize();
+        }
+      });
+    },
+
+    showLoadingState: function() {
+      const cards = document.querySelectorAll('.card');
+      cards.forEach(card => {
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'chart-loading-overlay';
+        loadingOverlay.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="sr-only">加载中...</span></div>';
+        loadingOverlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;z-index:10;';
+        card.style.position = 'relative';
+        card.appendChild(loadingOverlay);
+      });
+    },
+
+    hideLoadingState: function() {
+      const overlays = document.querySelectorAll('.chart-loading-overlay');
+      overlays.forEach(overlay => {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => overlay.remove(), 300);
+      });
+    },
+
+    initWebSocket: function() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/v1/admin/dashboard/ws`;
+
+      try {
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+          this.wsConnected = true;
+          this.updateWsStatus(true);
+          console.log('WebSocket connected');
+        };
+
+        this.ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            this.handleRealtimeData(data);
+          } catch (e) {
+            console.error('Parse WebSocket data failed:', e);
+          }
+        };
+
+        this.ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          this.wsConnected = false;
+          this.updateWsStatus(false);
+        };
+
+        this.ws.onclose = () => {
+          this.wsConnected = false;
+          this.updateWsStatus(false);
+          console.log('WebSocket disconnected, reconnecting in', this.WS_RECONNECT_DELAY, 'ms...');
+          setTimeout(() => this.initWebSocket(), this.WS_RECONNECT_DELAY);
+        };
+      } catch (e) {
+        console.error('WebSocket init failed:', e);
+        this.wsConnected = false;
+        this.updateWsStatus(false);
+        setTimeout(() => this.initWebSocket(), this.WS_RECONNECT_DELAY);
+      }
+    },
+
+    updateWsStatus: function(connected) {
+      const statusEl = document.getElementById('wsStatus');
+      if (!statusEl) return;
+
+      if (connected) {
+        statusEl.className = 'badge badge-success';
+        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已连接';
+      } else {
+        statusEl.className = 'badge badge-danger';
+        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已断开';
+      }
+    },
+
+    handleRealtimeData: function(data) {
+      if (data.type === 'metrics') {
+        this.updateRealtimeMetrics(data.payload);
+      } else if (data.type === 'verification') {
+        this.addVerificationRow(data.payload);
+      } else if (data.type === 'stats') {
+        this.updateDashboard(data.payload);
+      }
+    },
+
+    updateRealtimeMetrics: function(data) {
+      if (data.total_requests !== undefined) {
+        this.animateValue('totalRequests', 0, data.total_requests, 1000);
+      }
+
+      if (data.pass_rate !== undefined) {
+        document.getElementById('passRate').textContent = data.pass_rate.toFixed(1) + '%';
+        document.getElementById('passRateProgress').style.width = data.pass_rate + '%';
+      }
+
+      if (data.block_rate !== undefined) {
+        document.getElementById('blockRate').textContent = data.block_rate.toFixed(1) + '%';
+        document.getElementById('blockRateProgress').style.width = data.block_rate + '%';
+      }
+
+      if (data.avg_response_time !== undefined) {
+        document.getElementById('avgResponseTime').textContent = data.avg_response_time + 'ms';
+      }
+
+      if (data.qps !== undefined) {
+        document.getElementById('currentQPS').textContent = data.qps.toFixed(0) + ' QPS';
+        this.updateRealtimeChart(data.qps);
+      }
+
+      if (data.recent_requests !== undefined) {
+        this.updateMiniChart(data.recent_requests);
+      }
+
+      if (data.system_status !== undefined) {
+        this.updateSystemStatus(data.system_status);
+      }
+    },
+
+    updateRealtimeChart: function(value) {
+      if (!this.charts.realtime) return;
+
+      const now = new Date();
+      const timeLabel = this.formatTime(now);
+
+      this.realtimeDataPoints.push({ time: timeLabel, value: value });
+
+      if (this.realtimeDataPoints.length > this.MAX_REALTIME_POINTS) {
+        this.realtimeDataPoints.shift();
+      }
+
+      this.charts.realtime.setOption({
+        xAxis: {
+          data: this.realtimeDataPoints.map(p => p.time)
+        },
+        series: [{
+          data: this.realtimeDataPoints.map(p => p.value)
+        }]
+      }, false);
+    },
+
+    updateMiniChart: function(data) {
+      if (!this.charts.mini || !data || data.length === 0) return;
+
+      this.charts.mini.setOption({
+        xAxis: { data: data.map((_, i) => i) },
+        series: [{
+          data: data,
+          smooth: true
+        }]
+      }, false);
+    },
+
+    setupEventListeners: function() {
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+          refreshBtn.disabled = true;
+          const icon = refreshBtn.querySelector('i');
+          if (icon) {
+            icon.classList.add('fa-spin');
+          }
+
+          await Promise.all([
+            this.loadDashboardData(),
+            this.loadSystemStatus(),
+            this.loadRecentVerifications()
+          ]);
+
+          if (icon) {
+            icon.classList.remove('fa-spin');
+          }
+          refreshBtn.disabled = false;
+
+          if (typeof showAdminToast === 'function') {
+            showAdminToast('数据已刷新', 'success');
+          }
+        });
+      }
+
+      const autoRefreshBtn = document.getElementById('autoRefreshBtn');
+      if (autoRefreshBtn) {
+        autoRefreshBtn.addEventListener('click', () => this.toggleAutoRefresh());
+      }
+
+      const fullscreenBtn = document.getElementById('fullscreenBtn');
+      if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+      }
+
+      document.querySelectorAll('[data-period]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          document.querySelectorAll('[data-period]').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          await this.loadTrendData(e.target.dataset.period);
+        });
+      });
+    },
+
+    toggleAutoRefresh: function() {
+      this.isAutoRefreshEnabled = !this.isAutoRefreshEnabled;
+      const statusEl = document.getElementById('autoRefreshStatus');
+      const btnEl = document.getElementById('autoRefreshBtn');
+
+      if (this.isAutoRefreshEnabled) {
         statusEl.textContent = '开启';
         btnEl.classList.add('btn-success');
         btnEl.classList.remove('btn-default');
-        autoRefreshInterval = setInterval(() => {
-            loadDashboardStats();
-            loadSystemStatus();
-        }, AUTO_REFRESH_INTERVAL);
-        showToast('自动刷新已开启（每30秒）', 'info');
-    } else {
+        this.startAutoRefresh();
+        if (typeof showAdminToast === 'function') {
+          showAdminToast('自动刷新已开启（每30秒）', 'info');
+        }
+      } else {
         statusEl.textContent = '关闭';
         btnEl.classList.remove('btn-success');
         btnEl.classList.add('btn-default');
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
+        this.stopAutoRefresh();
+        if (typeof showAdminToast === 'function') {
+          showAdminToast('自动刷新已关闭', 'info');
         }
-        showToast('自动刷新已关闭', 'info');
-    }
-}
+      }
+    },
 
-async function loadExtendedStats() {
-    try {
-        const response = await fetch('/admin/api/dashboard/extended');
+    startAutoRefresh: function() {
+      if (this.autoRefreshInterval) {
+        clearInterval(this.autoRefreshInterval);
+      }
+
+      this.autoRefreshInterval = setInterval(async () => {
+        await Promise.all([
+          this.loadDashboardData(),
+          this.loadSystemStatus()
+        ]);
+      }, this.AUTO_REFRESH_DELAY);
+    },
+
+    stopAutoRefresh: function() {
+      if (this.autoRefreshInterval) {
+        clearInterval(this.autoRefreshInterval);
+        this.autoRefreshInterval = null;
+      }
+    },
+
+    async loadDashboardData() {
+      try {
+        const response = await fetch('/admin/api/dashboard');
         if (!response.ok) throw new Error('Network error');
-        
+
         const result = await response.json();
         if (result.code === 0) {
-            updateExtendedStats(result.data);
+          this.updateDashboard(result.data);
         } else {
-            loadMockExtendedStats();
+          this.loadMockData();
         }
-    } catch (error) {
-        console.error('Extended stats load failed:', error);
-        loadMockExtendedStats();
-    }
-}
+      } catch (error) {
+        console.error('Dashboard data load failed:', error);
+        this.loadMockData();
+      }
+    },
 
-function loadMockExtendedStats() {
-    updateExtendedStats({
-        total_users: Math.floor(Math.random() * 5000) + 8000,
-        total_apps: Math.floor(Math.random() * 50) + 100,
-        current_qps: Math.floor(Math.random() * 50) + 20,
-        error_rate: (Math.random() * 2 + 0.5).toFixed(2),
-        user_growth: (Math.random() * 15 + 5).toFixed(1),
-        app_growth: (Math.random() * 10 + 2).toFixed(1),
-        error_growth: (Math.random() * 5 - 3).toFixed(1)
-    });
-}
+    loadMockData: function() {
+      const mockData = {
+        summary: {
+          total_requests: Math.floor(Math.random() * 10000) + 5000,
+          pass_rate: (Math.random() * 20 + 80).toFixed(1),
+          block_rate: (Math.random() * 10 + 5).toFixed(1),
+          avg_response_time: Math.floor(Math.random() * 50) + 20
+        },
+        trend: this.generateMockTrendData(),
+        risk_distribution: {
+          low: Math.floor(Math.random() * 5000) + 3000,
+          medium: Math.floor(Math.random() * 2000) + 500,
+          high: Math.floor(Math.random() * 500) + 100,
+          critical: Math.floor(Math.random() * 100) + 20
+        },
+        captcha_type: [
+          { type: '滑动验证', count: Math.floor(Math.random() * 3000) + 2000 },
+          { type: '点选验证', count: Math.floor(Math.random() * 2000) + 1000 },
+          { type: '图片验证', count: Math.floor(Math.random() * 1500) + 500 },
+          { type: '文字验证', count: Math.floor(Math.random() * 1000) + 200 }
+        ]
+      };
+      this.updateDashboard(mockData);
+    },
 
-function updateExtendedStats(data) {
-    const totalUsersEl = document.getElementById('totalUsers');
-    const totalAppsEl = document.getElementById('totalApps');
-    const currentQPSEl = document.getElementById('currentQPSDisplay');
-    const errorRateEl = document.getElementById('errorRate');
-    const userGrowthEl = document.getElementById('userGrowth');
-    const appGrowthEl = document.getElementById('appGrowth');
-    const errorTrendEl = document.getElementById('errorTrend');
-    
-    if (totalUsersEl) {
-        animateNumber('totalUsers', data.total_users || 0);
-        if (userGrowthEl) {
-            const growth = parseFloat(data.user_growth || 0);
-            userGrowthEl.textContent = growth >= 0 ? `↑ ${growth}%` : `↓ ${Math.abs(growth)}%`;
-            userGrowthEl.className = growth >= 0 ? 'text-success' : 'text-danger';
+    generateMockTrendData: function() {
+      const data = [];
+      for (let i = 23; i >= 0; i--) {
+        const hour = new Date();
+        hour.setHours(hour.getHours() - i);
+        data.push({
+          time: hour.getHours() + ':00',
+          requests: Math.floor(Math.random() * 500) + 100
+        });
+      }
+      return data;
+    },
+
+    updateDashboard: function(data) {
+      this.hideLoadingState();
+
+      if (data.summary) {
+        this.animateValue('totalRequests', 0, data.summary.total_requests, 1000);
+        document.getElementById('passRate').textContent = data.summary.pass_rate + '%';
+        document.getElementById('blockRate').textContent = data.summary.block_rate + '%';
+        document.getElementById('avgResponseTime').textContent = data.summary.avg_response_time + 'ms';
+        document.getElementById('passRateProgress').style.width = data.summary.pass_rate + '%';
+        document.getElementById('blockRateProgress').style.width = data.summary.block_rate + '%';
+      }
+
+      if (data.trend && this.charts.trend) {
+        const labels = data.trend.map(t => t.time);
+        const values = data.trend.map(t => t.requests);
+
+        this.charts.trend.setOption({
+          xAxis: { data: labels },
+          series: [{ data: values }]
+        }, false);
+      }
+
+      if (data.risk_distribution && this.charts.pie) {
+        const riskData = [
+          { value: data.risk_distribution.low || 0, name: '低风险' },
+          { value: data.risk_distribution.medium || 0, name: '中风险' },
+          { value: data.risk_distribution.high || 0, name: '高风险' },
+          { value: data.risk_distribution.critical || 0, name: '极高风险' }
+        ];
+
+        this.charts.pie.setOption({
+          series: [{ data: riskData }]
+        }, false);
+
+        const legendHtml = riskData.map(item => {
+          const colors = ['success', 'warning', 'orange', 'danger'];
+          const colorIndex = riskData.indexOf(item);
+          return `<span class="mr-3"><i class="fas fa-circle text-${colors[colorIndex]}"></i> ${item.name}: ${item.value}</span>`;
+        }).join('');
+        document.getElementById('riskLegend').innerHTML = legendHtml;
+      }
+
+      if (data.captcha_type && this.charts.captchaType) {
+        this.charts.captchaType.setOption({
+          xAxis: {
+            data: data.captcha_type.map(c => c.type)
+          },
+          series: [{
+            data: data.captcha_type.map(c => c.count)
+          }]
+        }, false);
+      }
+    },
+
+    async loadTrendData: function(period) {
+      try {
+        const response = await fetch(`/admin/api/dashboard/trend?period=${period}`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.code === 0) {
+          this.updateTrendChart(result.data, period);
         }
-    }
-    
-    if (totalAppsEl) {
-        animateNumber('totalApps', data.total_apps || 0);
-        if (appGrowthEl) {
-            const growth = parseFloat(data.app_growth || 0);
-            appGrowthEl.textContent = growth >= 0 ? `↑ ${growth}%` : `↓ ${Math.abs(growth)}%`;
-            appGrowthEl.className = growth >= 0 ? 'text-success' : 'text-danger';
-        }
-    }
-    
-    if (currentQPSEl) {
-        animateNumber('currentQPSDisplay', data.current_qps || 0);
-    }
-    
-    if (errorRateEl) {
-        errorRateEl.textContent = (data.error_rate || 0) + '%';
-        if (errorTrendEl) {
-            const growth = parseFloat(data.error_growth || 0);
-            errorTrendEl.textContent = growth <= 0 ? `↓ ${Math.abs(growth)}%` : `↑ ${growth}%`;
-            errorTrendEl.className = growth <= 0 ? 'text-success' : 'text-danger';
-        }
-    }
-}
+      } catch (error) {
+        console.error('Trend data load failed:', error);
+      }
+    },
 
-function initECharts() {
-    initRequestTrendChart();
-    initRealtimeChart();
-}
+    updateTrendChart: function(data, period) {
+      if (!this.charts.trend || !data) return;
 
-function initRequestTrendChart() {
-    const container = document.getElementById('requestTrendChart');
-    if (!container) return;
+      const labels = period === 'hour' ?
+        data.map(t => t.time) :
+        data.map(t => t.day || t.date || t.label);
+      const values = data.map(t => t.requests || t.count);
 
-    requestTrendChart = echarts.init(container);
-    window.addEventListener('resize', () => requestTrendChart.resize());
-}
-
-function initRealtimeChart() {
-    const container = document.getElementById('realtimeChart');
-    if (!container) return;
-
-    realtimeDataPoints = Array(MAX_REALTIME_POINTS).fill(0).map((_, i) => ({
-        time: formatTime(new Date(Date.now() - (MAX_REALTIME_POINTS - i) * 5000)),
-        value: Math.floor(Math.random() * 50) + 30
-    }));
-
-    realtimeChart = echarts.init(container);
-    window.addEventListener('resize', () => realtimeChart.resize());
-
-    updateRealtimeChartInit();
-}
-
-function updateRealtimeChartInit() {
-    if (!realtimeChart) return;
-
-    realtimeChart.setOption({
+      this.charts.trend.setOption({
         xAxis: {
-            type: 'category',
-            data: realtimeDataPoints.map(p => p.time),
-            axisLabel: { color: '#666', rotate: 45 },
-            boundaryGap: false
+          data: labels,
+          axisLabel: { rotate: period === 'day' ? 45 : 0 }
         },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: '#666' }
-        },
-        series: [{
-            data: realtimeDataPoints.map(p => p.value),
-            type: 'line',
-            smooth: true,
-            areaStyle: {
-                color: {
-                    type: 'linear',
-                    x: 0, y: 0, x2: 0, y2: 1,
-                    colorStops: [
-                        { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
-                        { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
-                    ]
-                }
-            },
-            lineStyle: { color: '#10b981', width: 2 },
-            itemStyle: { color: '#10b981' },
-            symbol: 'circle',
-            symbolSize: 4
-        }],
-        tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(0,0,0,0.8)',
-            textStyle: { color: '#fff' }
-        },
-        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
-        animation: false
-    });
-}
+        series: [{ data: values }]
+      }, false);
+    },
 
-function initWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/admin/dashboard/ws`;
+    async loadSystemStatus: function() {
+      try {
+        const response = await fetch('/admin/api/system-status');
+        if (!response.ok) throw new Error('Network error');
 
-    try {
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = function() {
-            wsConnected = true;
-            updateWsStatus(true);
-            console.log('WebSocket connected');
-        };
-
-        ws.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
-                handleRealtimeData(data);
-            } catch (e) {
-                console.error('Parse WebSocket data failed:', e);
-            }
-        };
-
-        ws.onerror = function(error) {
-            console.error('WebSocket error:', error);
-            wsConnected = false;
-            updateWsStatus(false);
-        };
-
-        ws.onclose = function() {
-            wsConnected = false;
-            updateWsStatus(false);
-            console.log('WebSocket disconnected, reconnecting in', WS_RECONNECT_DELAY, 'ms...');
-            setTimeout(initWebSocket, WS_RECONNECT_DELAY);
-        };
-    } catch (e) {
-        console.error('WebSocket init failed:', e);
-        wsConnected = false;
-        updateWsStatus(false);
-        setTimeout(initWebSocket, WS_RECONNECT_DELAY);
-    }
-}
-
-function updateWsStatus(connected) {
-    const statusEl = document.getElementById('wsStatus');
-    if (!statusEl) return;
-
-    if (connected) {
-        statusEl.className = 'badge badge-success';
-        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已连接';
-    } else {
-        statusEl.className = 'badge badge-danger';
-        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已断开';
-    }
-}
-
-function handleRealtimeData(data) {
-    if (data.type === 'metrics') {
-        updateRealtimeMetrics(data.payload);
-    } else if (data.type === 'activity') {
-        addActivityRow(data.payload);
-    } else if (data.type === 'stats') {
-        updateStats(data.payload);
-    }
-}
-
-function updateRealtimeMetrics(data) {
-    if (data.total_requests !== undefined) {
-        animateNumber('totalRequests', data.total_requests);
-    }
-
-    if (data.requests_per_second !== undefined) {
-        document.getElementById('currentQPS').textContent = data.requests_per_second.toFixed(0) + ' QPS';
-        updateRealtimeChart(data.requests_per_second);
-    }
-
-    if (data.system_status) {
-        updateSystemStatus(data.system_status);
-    }
-
-    if (data.resource_usage) {
-        updateResourceUsage(data.resource_usage);
-    }
-}
-
-function addActivityRow(data) {
-    const tbody = document.getElementById('recentActivity');
-    if (!tbody) return;
-
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td><small class="text-muted">${data.time || formatTime(new Date())}</small></td>
-        <td>${escapeHtml(data.event || '-')}</td>
-        <td><code>${escapeHtml(data.user || '-')}</code></td>
-        <td><span class="badge ${getStatusBadgeClass(data.status)}">${getStatusText(data.status)}</span></td>
-    `;
-
-    tbody.insertBefore(row, tbody.firstChild);
-
-    while (tbody.children.length > 8) {
-        tbody.removeChild(tbody.lastChild);
-    }
-}
-
-function setupEventListeners() {
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', async () => {
-            await loadDashboardStats();
-            await loadSystemStatus();
-            loadRecentActivity();
-        });
-    }
-
-    const autoRefreshSwitch = document.getElementById('autoRefreshSwitch');
-    if (autoRefreshSwitch) {
-        autoRefreshSwitch.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                startAutoRefresh();
-            } else {
-                stopAutoRefresh();
-            }
-        });
-    }
-
-    const periodButtons = document.querySelectorAll('[data-period]');
-    periodButtons.forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            periodButtons.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            const period = e.target.dataset.period;
-            await loadRequestTrendData(period);
-        });
-    });
-}
-
-function startAutoRefresh() {
-    stopAutoRefresh();
-    autoRefreshInterval = setInterval(async () => {
-        await loadDashboardStats();
-        await loadSystemStatus();
-    }, REALTIME_UPDATE_INTERVAL);
-}
-
-function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-    }
-}
-
-async function loadDashboardStats() {
-    const mockData = getMockDashboardStats();
-
-    try {
-        const data = await auth.request('/admin/dashboard/stats');
-        if (data.code === 0) {
-            updateStats(data.data);
+        const result = await response.json();
+        if (result.code === 0) {
+          this.updateSystemStatus(result.data);
         } else {
-            updateStats(mockData);
+          this.loadMockSystemStatus();
         }
-    } catch (error) {
-        updateStats(mockData);
-    }
+      } catch (error) {
+        console.error('System status load failed:', error);
+        this.loadMockSystemStatus();
+      }
+    },
 
-    previousStats = {
-        totalUsers: parseInt(document.getElementById('totalUsers').textContent.replace(/[^\d]/g, '')) || 0,
-        totalApps: parseInt(document.getElementById('totalApps').textContent.replace(/[^\d]/g, '')) || 0,
-        totalRequests: parseInt(document.getElementById('totalRequests').textContent.replace(/[^\d]/g, '')) || 0,
-        totalErrors: parseInt(document.getElementById('totalErrors').textContent.replace(/[^\d]/g, '')) || 0
-    };
+    loadMockSystemStatus: function() {
+      this.updateSystemStatus({
+        database: { status: 'healthy', latency: Math.floor(Math.random() * 50) + 10 },
+        redis: { status: 'healthy', latency: Math.floor(Math.random() * 10) + 1 },
+        api: { status: 'healthy', latency: Math.floor(Math.random() * 100) + 20 },
+        storage: { status: 'healthy', latency: Math.floor(Math.random() * 30) + 5 },
+        cpu: Math.floor(Math.random() * 40) + 20,
+        memory: Math.floor(Math.random() * 30) + 40,
+        disk: Math.floor(Math.random() * 20) + 50
+      });
+    },
 
-    await loadRequestTrendData('hour');
-    updateRealtimeChart(mockData.requestsPerMinute || 0);
-}
+    updateSystemStatus: function(data) {
+      if (data.database) {
+        document.getElementById('dbLatency').textContent = data.database.latency + 'ms';
+        document.getElementById('dbStatus').className = 'info-box-icon ' +
+          (data.database.status === 'healthy' ? 'bg-success' : 'bg-danger');
+      }
 
-function getMockDashboardStats() {
-    const baseUsers = 12456;
-    const baseApps = 156;
-    const baseRequests = 8234567;
-    const baseErrors = 1234;
+      if (data.redis) {
+        document.getElementById('redisLatency').textContent = data.redis.latency + 'ms';
+        document.getElementById('redisStatus').className = 'info-box-icon ' +
+          (data.redis.status === 'healthy' ? 'bg-success' : 'bg-danger');
+      }
 
-    return {
-        totalUsers: baseUsers + Math.floor(Math.random() * 50),
-        totalApps: baseApps + Math.floor(Math.random() * 3),
-        totalRequests: baseRequests + Math.floor(Math.random() * 1000),
-        totalErrors: Math.max(0, baseErrors + Math.floor(Math.random() * 50) - 25),
-        requestsPerMinute: Math.floor(Math.random() * 100) + 50,
-        userGrowth: 12.5,
-        appGrowth: 8.2,
-        requestGrowth: 23.1,
-        errorGrowth: -5.7,
-        systemStatus: {
-            database: { status: 'healthy', latency: Math.floor(Math.random() * 50) + 10 },
-            redis: { status: 'healthy', latency: Math.floor(Math.random() * 10) + 1 },
-            api: { status: 'healthy', latency: Math.floor(Math.random() * 100) + 20 },
-            storage: { status: 'healthy', latency: Math.floor(Math.random() * 30) + 5 }
-        },
-        resourceUsage: {
-            cpu: Math.floor(Math.random() * 40) + 20,
-            memory: Math.floor(Math.random() * 30) + 40,
-            disk: Math.floor(Math.random() * 20) + 50
-        }
-    };
-}
+      if (data.api) {
+        document.getElementById('apiLatency').textContent = data.api.latency + 'ms';
+        document.getElementById('apiStatus').className = 'info-box-icon ' +
+          (data.api.status === 'healthy' ? 'bg-success' : 'bg-danger');
+      }
 
-function updateStats(stats) {
-    animateNumber('totalUsers', stats.totalUsers);
-    animateNumber('totalApps', stats.totalApps);
-    animateNumber('totalRequests', stats.totalRequests);
-    animateNumber('totalErrors', stats.totalErrors);
+      if (data.storage) {
+        document.getElementById('storageLatency').textContent = data.storage.latency + 'ms';
+        document.getElementById('storageStatus').className = 'info-box-icon ' +
+          (data.storage.status === 'healthy' ? 'bg-success' : 'bg-danger');
+      }
 
-    updateTrend('usersTrend', stats.userGrowth || 0);
-    updateTrend('appsTrend', stats.appGrowth || 0);
-    updateTrend('requestsTrend', stats.requestGrowth || 0);
-    updateTrend('errorsTrend', stats.errorGrowth || 0, true);
-
-    if (stats.systemStatus) {
-        updateSystemStatus(stats.systemStatus);
-    }
-
-    if (stats.resourceUsage) {
-        updateResourceUsage(stats.resourceUsage);
-    }
-}
-
-function updateTrend(elementId, value, isInverse = false) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-
-    const isPositive = value >= 0;
-    const displayValue = Math.abs(value).toFixed(1);
-    const iconClass = (isPositive === !isInverse) ? 'fa-arrow-up' : 'fa-arrow-down';
-    const colorClass = (isPositive === !isInverse) ? 'text-success' : 'text-danger';
-
-    el.className = colorClass;
-    el.innerHTML = `<i class="fas ${iconClass} me-1"></i>${isPositive ? '+' : '-'}${displayValue}%`;
-}
-
-function updateSystemStatus(status) {
-    const services = ['db', 'redis', 'api', 'storage'];
-    services.forEach(service => {
-        const statusEl = document.getElementById(`${service}Status`);
-        const latencyEl = document.getElementById(`${service}Latency`);
-
-        if (statusEl && status[service]) {
-            const isHealthy = status[service].status === 'healthy';
-            statusEl.className = `badge rounded-pill ${isHealthy ? 'bg-success' : 'bg-danger'}`;
-        }
-
-        if (latencyEl && status[service]) {
-            latencyEl.textContent = `${status[service].latency}ms`;
-        }
-    });
-}
-
-function updateResourceUsage(usage) {
-    if (usage.cpu !== undefined) {
-        document.getElementById('cpuUsage').textContent = `${usage.cpu}%`;
-        document.getElementById('cpuProgress').style.width = `${usage.cpu}%`;
+      if (data.cpu !== undefined) {
+        document.getElementById('cpuUsage').textContent = data.cpu + '%';
+        document.getElementById('cpuProgress').style.width = data.cpu + '%';
         const cpuBar = document.getElementById('cpuProgress');
-        cpuBar.className = `progress-bar ${usage.cpu > 80 ? 'bg-danger' : usage.cpu > 60 ? 'bg-warning' : 'bg-info'}`;
-    }
+        cpuBar.className = 'progress-bar ' +
+          (data.cpu > 80 ? 'bg-danger' : data.cpu > 60 ? 'bg-warning' : 'bg-primary');
+      }
 
-    if (usage.memory !== undefined) {
-        document.getElementById('memUsage').textContent = `${usage.memory}%`;
-        document.getElementById('memProgress').style.width = `${usage.memory}%`;
+      if (data.memory !== undefined) {
+        document.getElementById('memUsage').textContent = data.memory + '%';
+        document.getElementById('memProgress').style.width = data.memory + '%';
         const memBar = document.getElementById('memProgress');
-        memBar.className = `progress-bar ${usage.memory > 80 ? 'bg-danger' : usage.memory > 60 ? 'bg-warning' : 'bg-success'}`;
-    }
+        memBar.className = 'progress-bar ' +
+          (data.memory > 80 ? 'bg-danger' : data.memory > 60 ? 'bg-warning' : 'bg-success');
+      }
 
-    if (usage.disk !== undefined) {
-        document.getElementById('diskUsage').textContent = `${usage.disk}%`;
-        document.getElementById('diskProgress').style.width = `${usage.disk}%`;
-        const diskBar = document.getElementById('diskProgress');
-        diskBar.className = `progress-bar ${usage.disk > 90 ? 'bg-danger' : usage.disk > 70 ? 'bg-warning' : 'bg-warning'}`;
-    }
-}
+      if (data.disk !== undefined) {
+        document.getElementById('diskUsage').textContent = data.disk + '%';
+        document.getElementById('diskProgress').style.width = data.disk + '%';
+      }
+    },
 
-function animateNumber(elementId, target) {
-    const element = document.getElementById(elementId);
-    if (!element) return;
+    async loadRecentVerifications: function() {
+      try {
+        const response = await fetch('/admin/api/recent-verifications');
+        if (!response.ok) throw new Error('Network error');
 
-    const currentText = element.textContent;
-    const current = parseInt(currentText.replace(/[^\d]/g, '')) || 0;
-    const duration = 1000;
-    const startTime = performance.now();
+        const result = await response.json();
+        if (result.code === 0) {
+          this.renderRecentVerifications(result.data);
+        } else {
+          this.renderMockRecentVerifications();
+        }
+      } catch (error) {
+        console.error('Recent verifications load failed:', error);
+        this.renderMockRecentVerifications();
+      }
+    },
 
-    function update(currentTime) {
+    renderMockRecentVerifications: function() {
+      const mockData = [];
+      for (let i = 0; i < 10; i++) {
+        const date = new Date();
+        date.setMinutes(date.getMinutes() - i * 5);
+        mockData.push({
+          time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          app: 'App_' + (Math.floor(Math.random() * 10) + 1),
+          type: ['滑动验证', '点选验证', '图片验证'][Math.floor(Math.random() * 3)],
+          status: Math.random() > 0.1 ? 'success' : 'failed',
+          response_time: Math.floor(Math.random() * 100) + 20
+        });
+      }
+      this.renderRecentVerifications(mockData);
+    },
+
+    renderRecentVerifications: function(data) {
+      const tbody = document.getElementById('recentVerifications');
+      if (!tbody || !data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无数据</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.slice(0, 10).map(item => `
+        <tr class="fade-in">
+          <td><small>${item.time || '-'}</small></td>
+          <td><small>${this.escapeHtml(item.app || '-')}</small></td>
+          <td><small>${this.escapeHtml(item.type || '-')}</small></td>
+          <td><span class="badge badge-${item.status === 'success' ? 'success' : 'danger'}">${item.status === 'success' ? '成功' : '失败'}</span></td>
+          <td><small>${item.response_time || 0}ms</small></td>
+        </tr>
+      `).join('');
+    },
+
+    addVerificationRow: function(data) {
+      const tbody = document.getElementById('recentVerifications');
+      if (!tbody) return;
+
+      const time = new Date(data.timestamp || Date.now()).toLocaleTimeString('zh-CN');
+      const row = document.createElement('tr');
+      row.className = 'fade-in';
+      row.innerHTML = `
+        <td><small>${time}</small></td>
+        <td><small>${this.escapeHtml(data.app || '-')}</small></td>
+        <td><small>${this.escapeHtml(data.type || '-')}</small></td>
+        <td><span class="badge badge-${data.status === 'success' ? 'success' : 'danger'}">${data.status === 'success' ? '成功' : '失败'}</span></td>
+        <td><small>${data.response_time || 0}ms</small></td>
+      `;
+
+      tbody.insertBefore(row, tbody.firstChild);
+
+      while (tbody.children.length > 10) {
+        tbody.removeChild(tbody.lastChild);
+      }
+    },
+
+    animateValue: function(elementId, start, end, duration) {
+      const element = document.getElementById(elementId);
+      if (!element) return;
+
+      const startTime = performance.now();
+
+      const update = (currentTime) => {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        const easeProgress = easeOutQuart(progress);
-        const value = Math.floor(current + (target - current) * easeProgress);
-        element.textContent = formatNumber(value);
+        const easeProgress = 1 - Math.pow(1 - progress, 4);
+        const value = Math.floor(start + (end - start) * easeProgress);
+        element.textContent = this.formatNumber(value);
 
         if (progress < 1) {
-            requestAnimationFrame(update);
+          requestAnimationFrame(update);
         }
-    }
+      };
 
-    requestAnimationFrame(update);
-}
+      requestAnimationFrame(update);
+    },
 
-function easeOutQuart(x) {
-    return 1 - Math.pow(1 - x, 4);
-}
-
-function formatNumber(num) {
-    if (num >= 1000000) {
+    formatNumber: function(num) {
+      if (num >= 1000000) {
         return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
+      } else if (num >= 1000) {
         return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
-}
+      }
+      return num.toString();
+    },
 
-async function loadSystemStatus() {
-    try {
-        const data = await auth.request('/admin/dashboard/system-status');
-        if (data.code === 0) {
-            updateSystemStatus(data.data.status || {});
-            updateResourceUsage(data.data.resourceUsage || {});
+    formatTime: function(date) {
+      return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    },
+
+    escapeHtml: function(text) {
+      if (text === null || text === undefined) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    },
+
+    toggleFullscreen: function() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error('Fullscreen request failed:', err);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
         }
-    } catch (error) {
-        const mockStatus = getMockDashboardStats();
-        updateSystemStatus(mockStatus.systemStatus);
-        updateResourceUsage(mockStatus.resourceUsage);
-    }
-}
+      }
+    },
 
-function formatTime(date) {
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
+    exportData: function(format) {
+      const data = this.getExportData();
 
-async function loadRequestTrendData(period) {
-    const mockData = getMockTrendData(period);
+      if (format === 'csv') {
+        this.exportCSV(data);
+      } else if (format === 'excel') {
+        this.exportExcel(data);
+      } else if (format === 'json') {
+        this.exportJSON(data);
+      }
+    },
 
-    try {
-        const data = await auth.request(`/admin/dashboard/request-trend?period=${period}`);
-        if (data.code === 0) {
-            updateRequestTrendChart(data.data);
-        } else {
-            updateRequestTrendChart(mockData);
+    getExportData: function() {
+      return {
+        summary: {
+          total_requests: document.getElementById('totalRequests').textContent,
+          pass_rate: document.getElementById('passRate').textContent,
+          block_rate: document.getElementById('blockRate').textContent,
+          avg_response_time: document.getElementById('avgResponseTime').textContent
+        },
+        timestamp: new Date().toISOString()
+      };
+    },
+
+    exportCSV: function(data) {
+      const csvContent = 'data:text/csv;charset=utf-8,\uFEFF';
+      const headers = ['指标', '数值'];
+      const rows = [
+        headers,
+        ['总验证数', data.summary.total_requests],
+        ['通过率', data.summary.pass_rate],
+        ['拦截率', data.summary.block_rate],
+        ['平均响应时间', data.summary.avg_response_time],
+        ['导出时间', data.timestamp]
+      ];
+
+      const csv = csvContent + rows.map(row => row.join(',')).join('\n');
+      this.downloadFile(csv, 'dashboard_export.csv', 'text/csv');
+    },
+
+    exportExcel: function(data) {
+      let excelContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      excelContent += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet">\n';
+      excelContent += '<Worksheet ss:Name="Dashboard Data">\n';
+      excelContent += '<Table>\n';
+
+      excelContent += '<Row><Cell><Data ss:Type="String">指标</Data></Cell><Cell><Data ss:Type="String">数值</Data></Cell></Row>\n';
+      excelContent += `<Row><Cell><Data ss:Type="String">总验证数</Data></Cell><Cell><Data ss:Type="String">${data.summary.total_requests}</Data></Cell></Row>\n`;
+      excelContent += `<Row><Cell><Data ss:Type="String">通过率</Data></Cell><Cell><Data ss:Type="String">${data.summary.pass_rate}</Data></Cell></Row>\n`;
+      excelContent += `<Row><Cell><Data ss:Type="String">拦截率</Data></Cell><Cell><Data ss:Type="String">${data.summary.block_rate}</Data></Cell></Row>\n`;
+      excelContent += `<Row><Cell><Data ss:Type="String">平均响应时间</Data></Cell><Cell><Data ss:Type="String">${data.summary.avg_response_time}</Data></Cell></Row>\n`;
+      excelContent += `<Row><Cell><Data ss:Type="String">导出时间</Data></Cell><Cell><Data ss:Type="String">${data.timestamp}</Data></Cell></Row>\n`;
+
+      excelContent += '</Table>\n</Worksheet>\n</Workbook>';
+
+      this.downloadFile(excelContent, 'dashboard_export.xls', 'application/vnd.ms-excel');
+    },
+
+    exportJSON: function(data) {
+      const jsonContent = JSON.stringify(data, null, 2);
+      this.downloadFile(jsonContent, 'dashboard_export.json', 'application/json');
+    },
+
+    downloadFile: function(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    },
+
+    destroy: function() {
+      this.stopAutoRefresh();
+
+      if (this.ws) {
+        this.ws.close();
+        this.ws = null;
+      }
+
+      Object.values(this.charts).forEach(chart => {
+        if (chart && typeof chart.dispose === 'function') {
+          chart.dispose();
         }
-    } catch (error) {
-        updateRequestTrendChart(mockData);
+      });
+
+      if (typeof ThemeManager !== 'undefined') {
+        ThemeManager.removeThemeChangeListener();
+      }
+
+      console.log('Dashboard destroyed');
     }
-}
+  };
 
-function getMockTrendData(period) {
-    let labels, dataValues;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => Dashboard.init());
+  } else {
+    Dashboard.init();
+  }
 
-    if (period === 'hour') {
-        labels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
-        dataValues = Array.from({ length: 24 }, () => Math.floor(Math.random() * 5000) + 1000);
-    } else if (period === 'day') {
-        labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-        dataValues = [12000, 15000, 18000, 16000, 20000, 25000, 22000];
-    } else {
-        labels = Array.from({ length: 7 }, (_, i) => `第${i + 1}周`);
-        dataValues = [85000, 92000, 105000, 98000, 120000, 135000, 145000];
-    }
+  if (typeof window !== 'undefined') {
+    window.Dashboard = Dashboard;
+  }
+})();
 
-    return { labels, data: dataValues };
-}
-
-function updateRequestTrendChart(data) {
-    if (!requestTrendChart || !data) return;
-
-    const labels = data.labels || [];
-    const values = data.data || [];
-
-    requestTrendChart.setOption({
-        xAxis: {
-            type: 'category',
-            data: labels,
-            axisLabel: { color: '#666', rotate: 45 }
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: '#666' }
-        },
-        series: [{
-            data: values,
-            type: 'line',
-            smooth: true,
-            areaStyle: {
-                color: {
-                    type: 'linear',
-                    x: 0, y: 0, x2: 0, y2: 1,
-                    colorStops: [
-                        { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-                        { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
-                    ]
-                }
-            },
-            lineStyle: { color: '#3b82f6', width: 2 },
-            itemStyle: { color: '#3b82f6' },
-            symbol: 'circle',
-            symbolSize: 4
-        }],
-        tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(0,0,0,0.8)',
-            textStyle: { color: '#fff' },
-            padding: 12
-        },
-        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
-    }, false);
-}
-
-function updateRealtimeChart(value) {
-    if (!realtimeChart) return;
-
-    const now = new Date();
-    const timeLabel = formatTime(now);
-
-    realtimeDataPoints.push({ time: timeLabel, value: value });
-
-    if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
-        realtimeDataPoints.shift();
-    }
-
-    realtimeChart.setOption({
-        xAxis: {
-            data: realtimeDataPoints.map(p => p.time)
-        },
-        series: [{
-            data: realtimeDataPoints.map(p => p.value)
-        }]
-    }, false);
-}
-
-async function loadRecentActivity() {
-    const mockActivities = getMockActivities();
-
-    try {
-        const data = await auth.request('/admin/dashboard/activity');
-        if (data.code === 0 && data.data) {
-            renderActivityTable(data.data);
-        } else {
-            renderActivityTable(mockActivities);
-        }
-    } catch (error) {
-        renderActivityTable(mockActivities);
-    }
-}
-
-function getMockActivities() {
-    const activities = [
-        { time: getRelativeTime(0), event: '用户登录', user: 'admin', status: 'success' },
-        { time: getRelativeTime(3), event: '创建应用', user: 'developer1', status: 'success' },
-        { time: getRelativeTime(5), event: 'API请求失败', user: 'app_001', status: 'error' },
-        { time: getRelativeTime(8), event: '更新配置', user: 'admin', status: 'success' },
-        { time: getRelativeTime(12), event: '用户注册', user: 'new_user', status: 'success' },
-        { time: getRelativeTime(15), event: '验证码校验', user: 'user_123', status: 'success' },
-        { time: getRelativeTime(18), event: '批量导出', user: 'admin', status: 'success' },
-        { time: getRelativeTime(22), event: '权限变更', user: 'super_admin', status: 'success' }
-    ];
-    return activities;
-}
-
-function getRelativeTime(minutesAgo) {
-    const date = new Date(Date.now() - minutesAgo * 60 * 1000);
-    return date.toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    }).replace(/\//g, '-');
-}
-
-function renderActivityTable(activities) {
-    const tbody = document.getElementById('recentActivity');
-    if (!tbody) return;
-
-    tbody.innerHTML = activities.slice(0, 8).map(activity => `
-        <tr>
-            <td><small class="text-muted">${activity.time}</small></td>
-            <td>${escapeHtml(activity.event)}</td>
-            <td><code>${escapeHtml(activity.user)}</code></td>
-            <td><span class="badge ${getStatusBadgeClass(activity.status)}">${getStatusText(activity.status)}</span></td>
-        </tr>
-    `).join('');
-}
-
-function getStatusBadgeClass(status) {
-    const map = {
-        success: 'bg-success',
-        error: 'bg-danger',
-        pending: 'bg-warning',
-        warning: 'bg-warning'
-    };
-    return map[status] || 'bg-secondary';
-}
-
-function getStatusText(status) {
-    const map = {
-        success: '成功',
-        error: '失败',
-        pending: '处理中',
-        warning: '警告'
-    };
-    return map[status] || status;
-}
-
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
+function exportData(format) {
+  if (typeof Dashboard !== 'undefined') {
+    Dashboard.exportData(format);
+  }
 }
