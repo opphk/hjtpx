@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-ui-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="墨盾验证 - UI组件演示">
+    <title>UI组件演示 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
+    <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --ui-color-primary: #c9a96e;
+            --ui-color-primary-light: #d4b87a;
+            --ui-color-primary-dark: #b8954f;
+            --ui-color-success: #28a745;
+            --ui-color-danger: #dc3545;
+            --ui-color-warning: #ffc107;
+            --ui-color-info: #17a2b8;
+            --ui-color-dark: #1a1a2e;
+            --ui-color-light: #f8f9fa;
+            --ui-bg-primary: #ffffff;
+            --ui-bg-secondary: #f8f9fa;
+            --ui-text-primary: #1a1a2e;
+            --ui-text-secondary: #6c757d;
+            --ui-border-color: rgba(201, 169, 110, 0.2);
+            --ui-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-ui-theme="dark"] {
+            --ui-bg-primary: #2d2d44;
+            --ui-bg-secondary: #1a1a2e;
+            --ui-text-primary: #f8f9fa;
+            --ui-text-secondary: #adb5bd;
+            --ui-border-color: rgba(255, 255, 255, 0.1);
+            --ui-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--ui-bg-secondary);
+            color: var(--ui-text-primary);
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .demo-section {
+            background: var(--ui-bg-primary);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--ui-shadow);
+            transition: background 0.3s ease;
+        }
+
+        .demo-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--ui-color-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .demo-title i {
+            font-size: 1.5rem;
+        }
+
+        .demo-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 100;
+            background: var(--ui-color-primary);
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(201, 169, 110, 0.4);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(201, 169, 110, 0.5);
+        }
+
+        @keyframes toast-slide-in {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes toast-slide-out {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        @keyframes slider-captcha-shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .slider-captcha-shake {
+            animation: slider-captcha-shake 0.5s ease;
+        }
+
+        .code-block {
+            background: var(--ui-color-dark);
+            color: #e0e0e0;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        .captcha-ui-wrapper {
+            background: var(--ui-bg-secondary);
+            border-radius: 8px;
+            padding: 2rem;
+        }
+
+        .captcha-ui-wrapper.captcha-ui-success {
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .captcha-ui-wrapper.captcha-ui-error {
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        .captcha-ui-bounce {
+            animation: bounce 0.6s ease-out;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--ui-color-primary);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" id="themeToggle" title="切换主题" aria-label="切换深色/浅色主题">
+        <i class="fas fa-moon" aria-hidden="true"></i>
+    </button>
+
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="display-4 fw-bold" style="color: var(--ui-color-primary);">
+                <i class="fas fa-cubes me-3"></i>UI组件库演示
+            </h1>
+            <p class="lead" style="color: var(--ui-text-secondary);">
+                统一设计规范 · 主题定制 · 无障碍访问
+            </p>
+        </div>
+
+        <div class="demo-section" id="captchaSection">
+            <h2 class="demo-title">
+                <i class="fas fa-shield-alt"></i>
+                CaptchaUI 验证码UI组件
+            </h2>
+            <p class="text-muted mb-4">
+                验证码状态展示组件，支持加载、成功、失败三种状态，支持中英文切换。
+            </p>
+
+            <div class="demo-row">
+                <div id="captchaIdle" style="width: 200px;"></div>
+                <div id="captchaLoading" style="width: 200px;"></div>
+                <div id="captchaSuccess" style="width: 200px;"></div>
+                <div id="captchaError" style="width: 200px;"></div>
+            </div>
+
+            <div class="demo-row mt-4">
+                <button class="btn btn-danger" onclick="demoCaptcha.showLoading()">
+                    <i class="fas fa-spinner fa-spin me-2"></i>显示加载
+                </button>
+                <button class="btn btn-success" onclick="demoCaptcha.showSuccess({session_id: 'DEMO123'})">
+                    <i class="fas fa-check me-2"></i>显示成功
+                </button>
+                <button class="btn btn-outline-danger" onclick="demoCaptcha.showError({message: '验证失败，请重试'})">
+                    <i class="fas fa-times me-2"></i>显示错误
+                </button>
+                <button class="btn btn-secondary" onclick="demoCaptcha.reset()">
+                    <i class="fas fa-redo me-2"></i>重置
+                </button>
+            </div>
+
+            <div class="code-block">
+                <code>const captcha = new CaptchaUI('container', {
+    type: 'slider',
+    language: 'zh-CN',
+    onSuccess: (data) => console.log('验证成功', data),
+    onError: (error) => console.log('验证失败', error)
+});</code>
+            </div>
+        </div>
+
+        <div class="demo-section" id="sliderSection">
+            <h2 class="demo-title">
+                <i class="fas fa-arrows-alt-h"></i>
+                SliderCaptcha 滑块验证组件
+            </h2>
+            <p class="text-muted mb-4">
+                完整的滑块验证码交互组件，包含轨迹采集和验证功能。
+            </p>
+
+            <div id="sliderCaptcha" style="max-width: 400px;"></div>
+
+            <div class="demo-row mt-4">
+                <button class="btn btn-primary" onclick="sliderDemo.refresh()">
+                    <i class="fas fa-sync-alt me-2"></i>刷新验证码
+                </button>
+                <span class="text-muted ms-3">
+                    <i class="fas fa-keyboard me-1"></i>
+                    支持键盘操作：← → 调整位置，Enter 提交
+                </span>
+            </div>
+        </div>
+
+        <div class="demo-section" id="buttonSection">
+            <h2 class="demo-title">
+                <i class="fas fa-hand-pointer"></i>
+                Button 按钮组件
+            </h2>
+            <p class="text-muted mb-4">
+                支持多种变体、大小和状态，内置加载状态动画。
+            </p>
+
+            <h5 class="mb-3">按钮变体</h5>
+            <div class="demo-row">
+                <div id="btnPrimary"></div>
+                <div id="btnSecondary"></div>
+                <div id="btnOutline"></div>
+                <div id="btnGhost"></div>
+            </div>
+
+            <h5 class="mb-3 mt-4">按钮大小</h5>
+            <div class="demo-row">
+                <div id="btnSmall"></div>
+                <div id="btnMedium"></div>
+                <div id="btnLarge"></div>
+            </div>
+
+            <h5 class="mb-3 mt-4">按钮状态</h5>
+            <div class="demo-row">
+                <div id="btnLoading"></div>
+                <div id="btnDisabled"></div>
+                <div id="btnWithIcon"></div>
+            </div>
+        </div>
+
+        <div class="demo-section" id="modalSection">
+            <h2 class="demo-title">
+                <i class="fas fa-window-maximize"></i>
+                Modal 模态框组件
+            </h2>
+            <p class="text-muted mb-4">
+                支持多种尺寸、头部/尾部自定义，键盘导航（ESC关闭）和焦点管理。
+            </p>
+
+            <div class="demo-row">
+                <button class="btn btn-primary" onclick="openModal('sm')">
+                    <i class="fas fa-plus me-2"></i>小尺寸
+                </button>
+                <button class="btn btn-primary" onclick="openModal('md')">
+                    <i class="fas fa-plus me-2"></i>中尺寸
+                </button>
+                <button class="btn btn-primary" onclick="openModal('lg')">
+                    <i class="fas fa-plus me-2"></i>大尺寸
+                </button>
+                <button class="btn btn-success" onclick="openConfirm()">
+                    <i class="fas fa-question-circle me-2"></i>确认对话框
+                </button>
+                <button class="btn btn-warning" onclick="openAlert()">
+                    <i class="fas fa-exclamation-triangle me-2"></i>警告提示
+                </button>
+            </div>
+        </div>
+
+        <div class="demo-section" id="toastSection">
+            <h2 class="demo-title">
+                <i class="fas fa-bell"></i>
+                Toast 提示组件
+            </h2>
+            <p class="text-muted mb-4">
+                自动消失的通知提示，支持多种类型和自定义时长。
+            </p>
+
+            <div class="demo-row">
+                <button class="btn btn-success" onclick="toast.success('验证成功！会话ID: DEMO123456')">
+                    <i class="fas fa-check-circle me-2"></i>成功
+                </button>
+                <button class="btn btn-danger" onclick="toast.error('网络连接失败，请检查网络')">
+                    <i class="fas fa-times-circle me-2"></i>错误
+                </button>
+                <button class="btn btn-warning" onclick="toast.warning('验证码即将过期，请尽快完成')">
+                    <i class="fas fa-exclamation-triangle me-2"></i>警告
+                </button>
+                <button class="btn btn-info" onclick="toast.info('新版本已发布，请刷新页面')">
+                    <i class="fas fa-info-circle me-2"></i>信息
+                </button>
+                <button class="btn btn-outline-secondary" onclick="toast.show({type: 'info', message: '自定义Toast，带标题', title: '提示', duration: 5000})">
+                    <i class="fas fa-cog me-2"></i>带标题
+                </button>
+            </div>
+        </div>
+
+        <div class="demo-section" id="accessibilitySection">
+            <h2 class="demo-title">
+                <i class="fas fa-universal-access"></i>
+                无障碍访问支持
+            </h2>
+            <p class="text-muted mb-4">
+                所有组件均支持ARIA属性、键盘导航和屏幕阅读器。
+            </p>
+
+            <ul class="list-group">
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success me-3"></i>
+                    <span>ARIA角色和标签（role, aria-label, aria-describedby）</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success me-3"></i>
+                    <span>键盘导航支持（Tab, Enter, Space, Escape, 方向键）</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success me-3"></i>
+                    <span>焦点管理（焦点陷阱，自动聚焦）</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success me-3"></i>
+                    <span>屏幕阅读器通知（aria-live, aria-busy）</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success me-3"></i>
+                    <span>减少动画偏好支持（prefers-reduced-motion）</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center">
+                    <i class="fas fa-check-circle text-success me-3"></i>
+                    <span>高对比度主题支持</span>
+                </li>
+            </ul>
+        </div>
+
+        <div class="demo-section" id="themeSection">
+            <h2 class="demo-title">
+                <i class="fas fa-palette"></i>
+                主题定制
+            </h2>
+            <p class="text-muted mb-4">
+                通过CSS变量轻松定制主题颜色、字体、间距等。
+            </p>
+
+            <div class="code-block">
+                <code>/* 使用CSS变量自定义主题 */
+:root {
+    --ui-color-primary: #c9a96e;
+    --ui-color-success: #28a745;
+    --ui-border-radius: 0.5rem;
+}
+
+/* 深色主题 */
+[data-ui-theme="dark"] {
+    --ui-bg-primary: #2d2d44;
+    --ui-text-primary: #f8f9fa;
+}</code>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/ui_components.js"></script>
+    <script>
+        (function() {
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = themeToggle.querySelector('i');
+
+            const savedTheme = localStorage.getItem('ui-theme') || 'light';
+            document.documentElement.setAttribute('data-ui-theme', savedTheme);
+            updateIcon(savedTheme);
+
+            themeToggle.addEventListener('click', function() {
+                const currentTheme = document.documentElement.getAttribute('data-ui-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-ui-theme', newTheme);
+                localStorage.setItem('ui-theme', newTheme);
+                updateIcon(newTheme);
+            });
+
+            function updateIcon(theme) {
+                themeIcon.classList.remove('fa-moon', 'fa-sun');
+                themeIcon.classList.add(theme === 'dark' ? 'fa-sun' : 'fa-moon');
+            }
+
+            window.demoCaptcha = new CaptchaUI('captchaIdle', {
+                type: 'slider',
+                language: 'zh-CN',
+                onSuccess: function(data) {
+                    toast.success('验证成功！');
+                },
+                onError: function(error) {
+                    toast.error('验证失败');
+                }
+            });
+
+            window.sliderDemo = new SliderCaptcha('sliderCaptcha', {
+                apiBase: '/api/v1',
+                onSuccess: function(data) {
+                    toast.success('滑块验证成功！');
+                },
+                onError: function(error) {
+                    toast.error('验证失败，请重试');
+                }
+            });
+
+            new Button('btnPrimary', {
+                text: '主要按钮',
+                variant: 'primary',
+                onClick: function() {
+                    toast.info('点击了主要按钮');
+                }
+            });
+
+            new Button('btnSecondary', {
+                text: '次要按钮',
+                variant: 'secondary',
+                onClick: function() {
+                    toast.info('点击了次要按钮');
+                }
+            });
+
+            new Button('btnOutline', {
+                text: '描边按钮',
+                variant: 'outline',
+                onClick: function() {
+                    toast.info('点击了描边按钮');
+                }
+            });
+
+            new Button('btnGhost', {
+                text: '幽灵按钮',
+                variant: 'ghost',
+                onClick: function() {
+                    toast.info('点击了幽灵按钮');
+                }
+            });
+
+            new Button('btnSmall', {
+                text: '小按钮',
+                size: 'sm',
+                onClick: function() {
+                    toast.info('点击了小按钮');
+                }
+            });
+
+            new Button('btnMedium', {
+                text: '中按钮',
+                size: 'md',
+                onClick: function() {
+                    toast.info('点击了中按钮');
+                }
+            });
+
+            new Button('btnLarge', {
+                text: '大按钮',
+                size: 'lg',
+                onClick: function() {
+                    toast.info('点击了大按钮');
+                }
+            });
+
+            window.demoBtnLoading = new Button('btnLoading', {
+                text: '加载状态',
+                loading: false,
+                onClick: function() {
+                    this.setLoading(true);
+                    setTimeout(() => {
+                        this.setLoading(false);
+                    }, 2000);
+                }
+            });
+
+            new Button('btnDisabled', {
+                text: '禁用按钮',
+                disabled: true
+            });
+
+            new Button('btnWithIcon', {
+                text: '带图标',
+                icon: 'fas fa-heart',
+                iconPosition: 'left',
+                onClick: function() {
+                    toast.info('点击了带图标的按钮');
+                }
+            });
+
+            window.currentModal = null;
+
+            window.openModal = function(size) {
+                if (window.currentModal) {
+                    window.currentModal.close();
+                }
+
+                const sizes = {
+                    sm: { title: '小尺寸模态框', content: '<p>这是一个小尺寸的模态框，适用于简单的内容展示。</p><p>内容区域可以包含任何HTML元素。</p>' },
+                    md: { title: '中尺寸模态框', content: '<p>这是一个中尺寸的模态框，适用于一般的对话和操作场景。</p><ul><li>支持自定义内容</li><li>支持头部和尾部自定义</li><li>支持键盘操作</li></ul>' },
+                    lg: { title: '大尺寸模态框', content: '<p>这是一个大尺寸的模态框，适用于需要展示更多内容的场景。</p><p>可以包含表格、表单、列表等复杂元素。</p>' }
+                };
+
+                const config = sizes[size] || sizes.md;
+
+                window.currentModal = new Modal({
+                    title: config.title,
+                    content: config.content,
+                    size: size,
+                    onConfirm: function() {
+                        toast.success('确认操作执行成功');
+                    },
+                    onClose: function() {
+                        console.log('模态框已关闭');
+                    }
+                });
+
+                window.currentModal.open();
+            };
+
+            window.openConfirm = function() {
+                Modal.confirm({
+                    title: '确认删除',
+                    message: '确定要删除此项目吗？此操作无法撤销。',
+                    confirmText: '确认删除',
+                    cancelText: '取消',
+                    onConfirm: function() {
+                        toast.success('项目已删除');
+                    },
+                    onCancel: function() {
+                        toast.info('已取消操作');
+                    }
+                });
+            };
+
+            window.openAlert = function() {
+                Modal.alert({
+                    title: '安全警告',
+                    message: '检测到异常登录行为，建议立即修改密码。',
+                    buttonText: '我知道了',
+                    onClose: function() {
+                        toast.info('已关闭警告');
+                    }
+                });
+            };
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && window.currentModal && window.currentModal.isOpen) {
+                    window.currentModal.close();
+                }
+            });
+
+            console.log('UI组件库演示已加载');
+            console.log('可用组件: CaptchaUI, SliderCaptcha, Button, Modal, Toast');
+        })();
+    </script>
+</body>
+</html>

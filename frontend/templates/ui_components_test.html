@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="墨盾验证 - UI组件测试">
+    <title>UI组件测试 - 墨盾验证</title>
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --ui-color-primary: #c9a96e;
+            --ui-color-success: #28a745;
+            --ui-color-danger: #dc3545;
+            --ui-bg-primary: #ffffff;
+            --ui-bg-secondary: #f8f9fa;
+            --ui-text-primary: #1a1a2e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--ui-bg-secondary);
+            padding: 2rem;
+        }
+
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .test-section {
+            background: var(--ui-bg-primary);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--ui-color-primary);
+            border-bottom: 2px solid var(--ui-color-primary);
+            padding-bottom: 0.5rem;
+        }
+
+        .test-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .test-item:last-child {
+            border-bottom: none;
+        }
+
+        .test-name {
+            font-weight: 500;
+        }
+
+        .test-result {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .test-status {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+        }
+
+        .test-status.pass {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .test-status.fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .test-status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .test-runner {
+            background: #343a40;
+            color: #fff;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .test-runner h2 {
+            margin: 0 0 1rem;
+            font-size: 1.5rem;
+        }
+
+        .test-progress {
+            height: 8px;
+            background: #495057;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .test-progress-bar {
+            height: 100%;
+            background: var(--ui-color-primary);
+            transition: width 0.3s ease;
+            width: 0;
+        }
+
+        .test-summary {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .summary-label {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+
+        .summary-item.pass .summary-value {
+            color: #28a745;
+        }
+
+        .summary-item.fail .summary-value {
+            color: #dc3545;
+        }
+
+        .summary-item.pending .summary-value {
+            color: #ffc107;
+        }
+
+        #captchaTest, #sliderTest, #buttonTest, #modalTest, #toastTest {
+            min-height: 80px;
+        }
+
+        @keyframes toast-slide-in {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-runner">
+            <h2><i class="fas fa-vial me-2"></i>UI组件测试运行器</h2>
+            <div class="test-progress">
+                <div class="test-progress-bar" id="progressBar"></div>
+            </div>
+            <div class="test-summary">
+                <div class="summary-item pass">
+                    <div class="summary-value" id="passCount">0</div>
+                    <div class="summary-label">通过</div>
+                </div>
+                <div class="summary-item fail">
+                    <div class="summary-value" id="failCount">0</div>
+                    <div class="summary-label">失败</div>
+                </div>
+                <div class="summary-item pending">
+                    <div class="summary-value" id="pendingCount">0</div>
+                    <div class="summary-label">待运行</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section" id="captchaSection">
+            <h3 class="test-title"><i class="fas fa-shield-alt me-2"></i>CaptchaUI 组件测试</h3>
+            <div id="captchaTest"></div>
+            <div class="mt-3">
+                <button class="btn btn-success btn-sm me-2" onclick="runCaptchaTests()">
+                    <i class="fas fa-play me-1"></i>运行测试
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="testCaptchaLoading()">
+                    测试加载状态
+                </button>
+                <button class="btn btn-success btn-sm" onclick="testCaptchaSuccess()">
+                    测试成功状态
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="testCaptchaError()">
+                    测试错误状态
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section" id="sliderSection">
+            <h3 class="test-title"><i class="fas fa-arrows-alt-h me-2"></i>SliderCaptcha 组件测试</h3>
+            <div id="sliderTest"></div>
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm" onclick="runSliderTests()">
+                    <i class="fas fa-play me-1"></i>运行测试
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section" id="buttonSection">
+            <h3 class="test-title"><i class="fas fa-hand-pointer me-2"></i>Button 组件测试</h3>
+            <div id="buttonTest"></div>
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm" onclick="runButtonTests()">
+                    <i class="fas fa-play me-1"></i>运行测试
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section" id="modalSection">
+            <h3 class="test-title"><i class="fas fa-window-maximize me-2"></i>Modal 组件测试</h3>
+            <div id="modalTest"></div>
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm" onclick="runModalTests()">
+                    <i class="fas fa-play me-1"></i>运行测试
+                </button>
+                <button class="btn btn-success btn-sm" onclick="testModalOpen()">
+                    测试打开
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="testModalClose()">
+                    测试关闭
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section" id="toastSection">
+            <h3 class="test-title"><i class="fas fa-bell me-2"></i>Toast 组件测试</h3>
+            <div id="toastTest"></div>
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm" onclick="runToastTests()">
+                    <i class="fas fa-play me-1"></i>运行测试
+                </button>
+                <button class="btn btn-success btn-sm" onclick="testToastSuccess()">
+                    测试成功
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="testToastError()">
+                    测试错误
+                </button>
+                <button class="btn btn-warning btn-sm" onclick="testToastWarning()">
+                    测试警告
+                </button>
+                <button class="btn btn-info btn-sm" onclick="testToastInfo()">
+                    测试信息
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section" id="accessibilitySection">
+            <h3 class="test-title"><i class="fas fa-universal-access me-2"></i>无障碍访问测试</h3>
+            <div class="mt-3">
+                <button class="btn btn-primary btn-sm" onclick="runAccessibilityTests()">
+                    <i class="fas fa-play me-1"></i>运行测试
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/ui_components.js"></script>
+    <script>
+        const TestRunner = {
+            results: {
+                passed: 0,
+                failed: 0,
+                pending: 0
+            },
+            tests: [],
+
+            init() {
+                this.updateUI();
+            },
+
+            addTest(name, testFn) {
+                this.tests.push({ name, testFn, status: 'pending' });
+            },
+
+            async runAll() {
+                for (const test of this.tests) {
+                    try {
+                        await test.testFn();
+                        test.status = 'pass';
+                        this.results.passed++;
+                    } catch (error) {
+                        test.status = 'fail';
+                        this.results.failed++;
+                        console.error(`Test failed: ${test.name}`, error);
+                    }
+                    this.updateUI();
+                }
+            },
+
+            updateUI() {
+                document.getElementById('passCount').textContent = this.results.passed;
+                document.getElementById('failCount').textContent = this.results.failed;
+                document.getElementById('pendingCount').textContent = this.tests.filter(t => t.status === 'pending').length;
+
+                const total = this.results.passed + this.results.failed + this.tests.filter(t => t.status === 'pending').length;
+                const progress = total > 0 ? ((this.results.passed + this.results.failed) / total) * 100 : 0;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+            },
+
+            assert(condition, message) {
+                if (!condition) {
+                    throw new Error(message || 'Assertion failed');
+                }
+            }
+        };
+
+        let captchaInstance = null;
+        let sliderInstance = null;
+        let buttonInstance = null;
+        let modalInstance = null;
+        const toastInstance = new Toast();
+
+        function createTestResult(name, status, message) {
+            const container = document.createElement('div');
+            container.className = 'test-item';
+            container.innerHTML = `
+                <span class="test-name">${name}</span>
+                <span class="test-result">
+                    <span class="test-status ${status}">
+                        <i class="fas ${status === 'pass' ? 'fa-check' : status === 'fail' ? 'fa-times' : 'fa-clock'}"></i>
+                    </span>
+                    <span>${message || (status === 'pass' ? '通过' : status === 'fail' ? '失败' : '待运行')}</span>
+                </span>
+            `;
+            return container;
+        }
+
+        async function testCaptchaLoading() {
+            const container = document.getElementById('captchaTest');
+            container.innerHTML = '';
+
+            captchaInstance = new CaptchaUI(container, {
+                type: 'slider',
+                language: 'zh-CN'
+            });
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            TestRunner.assert(container.querySelector('.captcha-ui-wrapper'), 'Captcha wrapper should exist');
+            TestRunner.assert(container.querySelector('.captcha-ui-content'), 'Captcha content should exist');
+
+            captchaInstance.showLoading();
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            TestRunner.assert(
+                container.getAttribute('aria-busy') === 'true',
+                'aria-busy should be true during loading'
+            );
+
+            const spinner = container.querySelector('.captcha-ui-spinner');
+            TestRunner.assert(spinner && spinner.style.display !== 'none', 'Spinner should be visible during loading');
+
+            console.log('Captcha loading test passed');
+        }
+
+        async function testCaptchaSuccess() {
+            const container = document.getElementById('captchaTest');
+            container.innerHTML = '';
+
+            captchaInstance = new CaptchaUI(container, { type: 'slider' });
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            captchaInstance.showSuccess({ session_id: 'TEST123' });
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const icon = container.querySelector('i');
+            TestRunner.assert(icon && icon.classList.contains('fa-check-circle'), 'Success icon should be visible');
+            TestRunner.assert(
+                container.classList.contains('captcha-ui-success'),
+                'Container should have success class'
+            );
+
+            console.log('Captcha success test passed');
+        }
+
+        async function testCaptchaError() {
+            const container = document.getElementById('captchaTest');
+            container.innerHTML = '';
+
+            captchaInstance = new CaptchaUI(container, { type: 'slider' });
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            captchaInstance.showError({ message: 'Test error' });
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            const icon = container.querySelector('i');
+            TestRunner.assert(icon && icon.classList.contains('fa-times-circle'), 'Error icon should be visible');
+
+            console.log('Captcha error test passed');
+        }
+
+        async function runCaptchaTests() {
+            const section = document.getElementById('captchaSection');
+            const testContainer = section.querySelector('.test-item') ? section : createTestResult('Captcha Tests', 'pending');
+
+            try {
+                await testCaptchaLoading();
+                await testCaptchaSuccess();
+                await testCaptchaError();
+                console.log('All CaptchaUI tests passed');
+            } catch (error) {
+                console.error('CaptchaUI tests failed:', error);
+            }
+        }
+
+        async function runSliderTests() {
+            const container = document.getElementById('sliderTest');
+            container.innerHTML = '';
+
+            try {
+                sliderInstance = new SliderCaptcha(container, {
+                    apiBase: '/api/v1'
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                TestRunner.assert(container.querySelector('.slider-captcha-wrapper'), 'Slider wrapper should exist');
+                TestRunner.assert(container.querySelector('.slider-captcha-container'), 'Slider container should exist');
+
+                console.log('SliderCaptcha tests passed');
+            } catch (error) {
+                console.error('SliderCaptcha tests failed:', error);
+            }
+        }
+
+        async function runButtonTests() {
+            const container = document.getElementById('buttonTest');
+            container.innerHTML = '';
+
+            try {
+                buttonInstance = new Button(container, {
+                    text: '测试按钮',
+                    variant: 'primary',
+                    size: 'md'
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                TestRunner.assert(container.querySelector('.btn'), 'Button element should exist');
+                TestRunner.assert(
+                    container.querySelector('.btn-danger'),
+                    'Button should have variant class'
+                );
+
+                buttonInstance.setLoading(true);
+                TestRunner.assert(
+                    container.querySelector('.btn').disabled,
+                    'Button should be disabled when loading'
+                );
+
+                buttonInstance.setLoading(false);
+                buttonInstance.setDisabled(true);
+                TestRunner.assert(
+                    container.querySelector('.btn').disabled,
+                    'Button should be disabled'
+                );
+
+                buttonInstance.setText('新文本');
+                TestRunner.assert(
+                    container.querySelector('.btn').textContent.includes('新文本'),
+                    'Button text should be updated'
+                );
+
+                console.log('Button tests passed');
+            } catch (error) {
+                console.error('Button tests failed:', error);
+            }
+        }
+
+        function testModalOpen() {
+            modalInstance = new Modal({
+                title: '测试模态框',
+                content: '<p>这是一个测试模态框</p>',
+                size: 'md',
+                onConfirm: () => console.log('Confirmed'),
+                onClose: () => console.log('Closed')
+            });
+
+            modalInstance.open();
+
+            TestRunner.assert(
+                modalInstance.isOpen === true,
+                'Modal should be open'
+            );
+
+            TestRunner.assert(
+                document.querySelector('.ui-modal-backdrop'),
+                'Backdrop should exist'
+            );
+
+            TestRunner.assert(
+                document.querySelector('.ui-modal'),
+                'Modal element should exist'
+            );
+
+            console.log('Modal open test passed');
+        }
+
+        function testModalClose() {
+            if (modalInstance) {
+                modalInstance.close();
+
+                setTimeout(() => {
+                    TestRunner.assert(
+                        modalInstance.isOpen === false,
+                        'Modal should be closed'
+                    );
+                    console.log('Modal close test passed');
+                }, 400);
+            }
+        }
+
+        async function runModalTests() {
+            testModalOpen();
+            await new Promise(resolve => setTimeout(resolve, 400));
+            testModalClose();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        function testToastSuccess() {
+            toastInstance.success('测试成功消息');
+
+            const toast = document.querySelector('.ui-toast');
+            TestRunner.assert(toast, 'Toast element should exist');
+            TestRunner.assert(
+                toast.classList.contains('ui-toast-success'),
+                'Toast should have success class'
+            );
+
+            console.log('Toast success test passed');
+        }
+
+        function testToastError() {
+            toastInstance.error('测试错误消息');
+
+            const toast = document.querySelector('.ui-toast');
+            TestRunner.assert(toast, 'Toast element should exist');
+            TestRunner.assert(
+                toast.classList.contains('ui-toast-error'),
+                'Toast should have error class'
+            );
+
+            console.log('Toast error test passed');
+        }
+
+        function testToastWarning() {
+            toastInstance.warning('测试警告消息');
+
+            const toast = document.querySelector('.ui-toast');
+            TestRunner.assert(toast, 'Toast element should exist');
+            TestRunner.assert(
+                toast.classList.contains('ui-toast-warning'),
+                'Toast should have warning class'
+            );
+
+            console.log('Toast warning test passed');
+        }
+
+        function testToastInfo() {
+            toastInstance.info('测试信息消息');
+
+            const toast = document.querySelector('.ui-toast');
+            TestRunner.assert(toast, 'Toast element should exist');
+            TestRunner.assert(
+                toast.classList.contains('ui-toast-info'),
+                'Toast should have info class'
+            );
+
+            console.log('Toast info test passed');
+        }
+
+        async function runToastTests() {
+            testToastSuccess();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            testToastError();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            testToastWarning();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            testToastInfo();
+        }
+
+        async function runAccessibilityTests() {
+            console.log('Running accessibility tests...');
+
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            const captcha = new CaptchaUI(container, { type: 'slider' });
+
+            TestRunner.assert(
+                container.getAttribute('role') === 'application',
+                'Captcha should have role attribute'
+            );
+
+            TestRunner.assert(
+                container.getAttribute('aria-label'),
+                'Captcha should have aria-label'
+            );
+
+            container.remove();
+
+            const modal = new Modal({
+                title: 'Accessibility Test',
+                content: '<button id="testBtn">Test</button>'
+            });
+            modal.open();
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            TestRunner.assert(
+                document.querySelector('.ui-modal').getAttribute('aria-modal') === 'true',
+                'Modal should have aria-modal'
+            );
+
+            modal.close();
+
+            await new Promise(resolve => setTimeout(resolve, 400));
+
+            console.log('Accessibility tests passed');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            TestRunner.init();
+            console.log('UI Component Tests loaded');
+            console.log('Available tests: CaptchaUI, SliderCaptcha, Button, Modal, Toast');
+        });
+    </script>
+</body>
+</html>
