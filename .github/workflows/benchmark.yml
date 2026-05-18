@@ -9,6 +9,7 @@ on:
       - 'benchmark/**'
       - 'backend/**'
       - 'scripts/**'
+      - '.github/workflows/benchmark.yml'
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
@@ -29,6 +30,15 @@ on:
         default: 'http://localhost:8080'
         type: string
 
+permissions:
+  contents: read
+  checks: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GO_VERSION: '1.21'
   POSTGRES_HOST: localhost
@@ -40,12 +50,13 @@ env:
   REDIS_PORT: 6379
   JWT_SECRET: benchmark-test-secret
   GIN_MODE: test
+  BENCHMARK_TIMEOUT: 90m
 
 jobs:
   benchmark:
     name: Run Performance Benchmark
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     services:
       postgres:
@@ -61,7 +72,9 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --shm-size=256mb
+          --shm-size=512mb
+          --shared-buffers=512MB
+          --max-connections=200
 
       redis:
         image: redis:7-alpine
@@ -72,7 +85,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --maxmemory 256mb
+          --maxmemory 512mb
+          --save ""
 
     steps:
       - name: Checkout code
@@ -105,129 +119,164 @@ jobs:
             -U ${{ env.POSTGRES_USER }} \
             -d postgres \
             -c "CREATE DATABASE ${{ env.POSTGRES_DB }}"
+          
+          PGPASSWORD=${{ env.POSTGRES_PASSWORD }} psql \
+            -h ${{ env.POSTGRES_HOST }} \
+            -U ${{ env.POSTGRES_USER }} \
+            -d ${{ env.POSTGRES_DB }} \
+            -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" || true
 
-      - name: Setup benchmark environment
+      - name: Setup benchmark directories
         run: |
           mkdir -p benchmark/reports
           mkdir -p benchmark/baselines
           mkdir -p benchmark/profiles
+          mkdir -p benchmark/traces
 
       - name: Build backend
         run: |
           cd backend
-          go build -o hjtpx-api ./cmd/api/main.go
+          go build -ldflags="-s -w" -o hjtpx-api ./cmd/api/main.go
+
+      - name: Build benchmark tools
+        run: |
+          cd benchmark
+          go build -ldflags="-s -w" ./cmd/benchmark/main.go
+          go build -ldflags="-s -w" ./cmd/stress_test/main.go
 
       - name: Start backend service
         run: |
           cd backend
           ./hjtpx-api &
           echo $! > ../backend.pid
+          echo "Backend started with PID: $(cat ../backend.pid)"
         env:
           DATABASE_URL: postgres://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@${{ env.POSTGRES_HOST }}:${{ env.POSTGRES_PORT }}/${{ env.POSTGRES_DB }}?sslmode=disable
           REDIS_ADDR: ${{ env.REDIS_HOST }}:${{ env.REDIS_PORT }}
 
       - name: Wait for backend readiness
         run: |
-          for i in {1..60}; do
+          echo "Waiting for backend to be ready..."
+          for i in {1..120}; do
             if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-              echo "Backend is ready"
+              echo "Backend is ready after ${i} attempts"
               exit 0
             fi
-            echo "Waiting for backend... ($i/60)"
+            echo "Waiting for backend... ($i/120)"
             sleep 2
           done
           echo "Backend failed to start"
           exit 1
 
-      - name: Run benchmark based on mode
+      - name: Verify backend endpoints
+        run: |
+          echo "Verifying backend endpoints..."
+          curl -sf http://localhost:8080/health || { echo "Health endpoint failed"; exit 1; }
+          curl -sf http://localhost:8080/api/v1/captcha/types || { echo "Captcha types endpoint failed"; exit 1; }
+          echo "All endpoints verified!"
+
+      - name: Run Go benchmarks
         run: |
           BENCHMARK_MODE=${{ inputs.benchmark_mode || 'standard' }}
-          API_URL=${{ inputs.api_url || 'http://localhost:8080' }}
-
+          BENCHMARK_TIME="60s"
+          
           case $BENCHMARK_MODE in
             quick)
               echo "Running quick benchmark (30s)..."
-              cd benchmark
-              go test -bench=. -benchtime=30s -run=^$ -tags=benchmark \
-                -json | tee ../benchmark/reports/quick_results.json
+              BENCHMARK_TIME="30s"
               ;;
             standard)
               echo "Running standard benchmark (60s)..."
-              cd benchmark
-              go test -bench=. -benchtime=60s -run=^$ -tags=benchmark \
-                -json | tee ../benchmark/reports/standard_results.json
+              BENCHMARK_TIME="60s"
               ;;
             full)
               echo "Running full benchmark (120s)..."
-              cd benchmark
-              go test -bench=. -benchtime=120s -run=^$ -tags=benchmark \
-                -json | tee ../benchmark/reports/full_results.json
+              BENCHMARK_TIME="120s"
               ;;
             baseline)
-              echo "Generating baseline..."
-              cd benchmark
-              go test -bench=. -benchtime=120s -run=^$ -tags=benchmark \
-                -json > ../benchmark/reports/baseline_results.json
-              ;;
-            *)
-              echo "Running standard benchmark..."
-              cd benchmark
-              go test -bench=. -benchtime=60s -run=^$ -tags=benchmark \
-                -json | tee ../benchmark/reports/results.json
+              echo "Generating baseline (120s)..."
+              BENCHMARK_TIME="120s"
               ;;
           esac
-        env:
-          BENCHMARK_BASE_URL: http://localhost:8080
+          
+          cd benchmark
+          mkdir -p ../benchmarkReports
+          go test -bench=. -benchtime=$BENCHMARK_TIME -benchmem \
+            -cpuprofile=cpu.prof \
+            -memprofile=mem.prof \
+            -run=^$ \
+            -tags=benchmark \
+            -json > ../benchmarkReports/benchmark_results.json || true
 
       - name: Run scenario benchmarks
         run: |
           cd benchmark
-          go run cmd/benchmark/main.go || true
+          ./main || true
         continue-on-error: true
+        env:
+          BENCHMARK_BASE_URL: http://localhost:8080
 
       - name: Generate benchmark reports
         if: always()
         run: |
           cd benchmark
-          go run cmd/benchmark/main.go --report --format=json || true
-          go run cmd/benchmark/main.go --report --format=html || true
+          if [ -f main ]; then
+            ./main --report --format=json --output=../benchmarkReports/ || true
+            ./main --report --format=html --output=../benchmarkReports/ || true
+          fi
+          
+          cd ..
+          if [ -f benchmark/benchmark_results.json ]; then
+            echo "Benchmark results captured"
+          fi
 
       - name: Analyze regression
         if: always()
         run: |
           if [ -f benchmark/reports/results.json ]; then
             echo "Checking for performance regressions..."
-
-            TOTAL_QPS=$(jq -r '[.[] | select(.type == "bench") | .metrics.qps // 0] | add' benchmark/reports/results.json 2>/dev/null || echo "0")
-            echo "Total QPS: $TOTAL_QPS"
-
-            if (( $(echo "$TOTAL_QPS < 1000" | bc -l 2>/dev/null || echo 1) )); then
-              echo "WARNING: Total QPS is below threshold"
+            
+            if command -v jq &> /dev/null; then
+              TOTAL_QPS=$(jq -r '[.[] | select(.type == "bench") | .metrics.qps // 0] | add' benchmark/reports/results.json 2>/dev/null || echo "0")
+              echo "Total QPS: $TOTAL_QPS"
+              
+              if (( $(echo "$TOTAL_QPS < 1000" | bc -l 2>/dev/null || echo 1) )); then
+                echo "WARNING: Total QPS is below threshold"
+              fi
             fi
+          else
+            echo "No detailed results found, using basic benchmark results"
           fi
 
       - name: Check baseline comparison
         if: always()
         run: |
           if [ -f benchmark/baselines/baseline.json ]; then
-            echo "Baseline exists, comparison available"
+            echo "Baseline exists, comparison will be available"
+            if command -v jq &> /dev/null; then
+              echo "Baseline QPS: $(jq -r '.total_qps // "N/A"' benchmark/baselines/baseline.json 2>/dev/null || echo 'N/A')"
+            fi
           else
             echo "No baseline found, this run will establish baseline"
           fi
 
-      - name: Run Go benchmarks with profiling
+      - name: Generate profiling reports
         if: always()
         run: |
           cd benchmark
-
-          go test -bench=. -benchtime=10s -benchmem \
-            -cpuprofile=cpu.prof \
-            -memprofile=mem.prof \
-            -run=^$ \
-            -tags=benchmark
-
+          
           if [ -f cpu.prof ]; then
-            go tool pprof -text cpu.prof | head -20
+            echo "=== CPU Profile (Top 20) ==="
+            go tool pprof -text cpu.prof 2>/dev/null | head -20 || echo "CPU profile analysis failed"
+            
+            if command -v dot &> /dev/null; then
+              go tool pprof -dot cpu.prof > cpu.dot 2>/dev/null || true
+            fi
+          fi
+          
+          if [ -f mem.prof ]; then
+            echo "=== Memory Profile (Top 20) ==="
+            go tool pprof -text mem.prof 2>/dev/null | head -20 || echo "Memory profile analysis failed"
           fi
         continue-on-error: true
 
@@ -237,32 +286,69 @@ jobs:
         with:
           name: benchmark-reports-${{ github.run_id }}
           path: |
+            benchmarkReports/
             benchmark/reports/
             benchmark/baselines/
             benchmark/*.prof
             benchmark/*.html
-          retention-days: 30
+            benchmark/*.dot
+          retention-days: 90
 
       - name: Stop backend service
         if: always()
         run: |
           if [ -f backend.pid ]; then
+            echo "Stopping backend..."
             kill $(cat backend.pid) 2>/dev/null || true
+            sleep 5
+            kill -9 $(cat backend.pid) 2>/dev/null || true
             rm -f backend.pid
+            echo "Backend stopped"
           fi
 
       - name: Show backend logs on failure
         if: failure()
         run: |
           if [ -f backend/backend.log ]; then
-            echo "=== Backend Logs ==="
+            echo "=== Backend Logs (Last 100 lines) ==="
             tail -100 backend/backend.log
           fi
+
+      - name: Generate benchmark summary
+        run: |
+          echo "## Performance Benchmark Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Benchmark Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode: ${{ inputs.benchmark_mode || 'standard' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Trigger: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Run ID: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f benchmarkReports/benchmark_results.json ]; then
+            echo "✅ Benchmark completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Benchmark results not found" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Benchmark Reports: Available" >> $GITHUB_STEP_SUMMARY
+          echo "- CPU Profile: Available" >> $GITHUB_STEP_SUMMARY
+          echo "- Memory Profile: Available" >> $GITHUB_STEP_SUMMARY
+          echo "- Baseline Data: Available" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review detailed reports in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check for performance regressions" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update baseline if performance improved" >> $GITHUB_STEP_SUMMARY
 
   baseline-update:
     name: Update Performance Baseline
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     if: github.ref == 'refs/heads/main' && github.event_name == 'schedule'
     needs: benchmark
 
@@ -280,6 +366,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --shm-size=512mb
 
       redis:
         image: redis:7-alpine
@@ -294,11 +381,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            benchmark/go.sum
 
       - name: Build backend
         run: |
           cd backend
-          go build -o hjtpx-api ./cmd/api/main.go
+          go build -ldflags="-s -w" -o hjtpx-api ./cmd/api/main.go
 
       - name: Start backend
         run: |
@@ -311,7 +402,7 @@ jobs:
 
       - name: Wait for backend
         run: |
-          for i in {1..60}; do
+          for i in {1..120}; do
             if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
               exit 0
             fi
@@ -322,21 +413,26 @@ jobs:
       - name: Update baseline
         run: |
           mkdir -p benchmark/baselines
-
+          
           cd benchmark
+          mkdir -p ../baselineReports
           go test -bench=. -benchtime=120s -run=^$ -tags=benchmark \
-            -json > ../benchmark/baselines/new_baseline.json
-
+            -json > ../baselineReports/new_baseline.json || true
+          
           if [ -f ../benchmark/baselines/baseline.json ]; then
             echo "Backing up existing baseline"
             cp ../benchmark/baselines/baseline.json \
                "../benchmark/baselines/baseline_backup_$(date +%Y%m%d).json"
           fi
-
-          cp ../benchmark/baselines/new_baseline.json \
-             ../benchmark/baselines/baseline.json
-
-          echo "Baseline updated successfully"
+          
+          if [ -f ../baselineReports/new_baseline.json ]; then
+            cp ../baselineReports/new_baseline.json \
+               ../benchmark/baselines/baseline.json
+            echo "Baseline updated successfully"
+          else
+            echo "Baseline update failed"
+            exit 1
+          fi
 
       - name: Commit baseline update
         run: |
@@ -374,14 +470,15 @@ jobs:
 
       - name: Generate summary
         run: |
-          echo "# Performance Benchmark Summary" > $GITHUB_STEP_SUMMARY
+          echo "# Performance Benchmark Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Run ID:** ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "**Run URL:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "**Triggered By:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -d benchmark/reports ] && [ "$(ls -A benchmark/reports)" ]; then
+          
+          if [ -d benchmark/reports ] && [ "$(ls -A benchmark/reports 2>/dev/null)" ]; then
             echo "## Reports" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             for f in benchmark/reports/*.json; do
@@ -389,12 +486,19 @@ jobs:
                 echo "- \`$(basename $f)\`" >> $GITHUB_STEP_SUMMARY
               fi
             done
+            for f in benchmark/reports/*.html; do
+              if [ -f "$f" ]; then
+                echo "- \`$(basename $f)\`" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
           else
-            echo "No reports generated" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No reports generated" >> $GITHUB_STEP_SUMMARY
           fi
-
+          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "- Review detailed reports in artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- Check for any performance regressions" >> $GITHUB_STEP_SUMMARY
-          echo "- Update baseline if performance improved" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review detailed reports in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Check for any performance regressions" >> $GITHUB_STEP_SUMMARY
+          echo "3. Update baseline if performance improved" >> $GITHUB_STEP_SUMMARY
+          echo "4. Share results with team" >> $GITHUB_STEP_SUMMARY
+

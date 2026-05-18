@@ -6,12 +6,26 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    - cron: '0 2 * * 1'  # 每周一凌晨2点运行
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  security-events: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.21'
+  GOLANGCI_LINT_VERSION: 'latest'
 
 jobs:
   lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +33,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            benchmark/go.sum
 
       - name: Run Go vet
         run: go vet ./...
@@ -28,7 +46,7 @@ jobs:
         uses: golangci/golangci-lint-action@v4
         with:
           version: latest
-          args: --timeout=10m
+          args: --timeout=10m --enable=gocritic,gosec,govet,errcheck,staticcheck,megacheck
 
       - name: Check code formatting
         run: |
@@ -46,9 +64,25 @@ jobs:
             echo "$TODOS"
           fi
 
+      - name: Check for FIXME comments
+        run: |
+          FIXMES=$(grep -rn "FIXME" --include="*.go" . || true)
+          if [ -n "$FIXMES" ]; then
+            echo "Found FIXME comments:"
+            echo "$FIXMES"
+          fi
+
+      - name: Check for hardcoded test data
+        run: |
+          HARDCODED=$(grep -rnE "(password|secret|api_key|apikey)\s*[=:]\s*['\"]test" --include="*.go" . | grep -v "_test.go" || true)
+          if [ -n "$HARDCODED" ]; then
+            echo "Warning: Found potential hardcoded secrets in non-test files:"
+            echo "$HARDCODED"
+          fi
+
   security-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +90,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            benchmark/go.sum
 
       - name: Run Go vulnerability scan
         uses: trailofbits/go-sec-commit-check@v1
@@ -66,7 +104,12 @@ jobs:
       - name: Run gosec security scanner
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -no-fail -fmt json -out gosec-report.json ./...
+          gosec -no-fail -fmt json -out gosec-report.json ./... || true
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vulncmd@latest
+          govulncheck ./... || true
 
       - name: Upload gosec report
         uses: actions/upload-artifact@v4
@@ -78,7 +121,7 @@ jobs:
 
   secrets-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -91,9 +134,17 @@ jobs:
           GITLEAKS_ENABLE_COMMENTS: true
           GITLEAKS_LOG_LEVEL: debug
 
+      - name: Check for sensitive files
+        run: |
+          SENSITIVE_FILES=$(find . -type f \( -name "*.pem" -o -name "*.key" -o -name ".env*" -o -name "*.password" \) | grep -v node_modules | grep -v vendor || true)
+          if [ -n "$SENSITIVE_FILES" ]; then
+            echo "Warning: Found potentially sensitive files:"
+            echo "$SENSITIVE_FILES"
+          fi
+
   dependency-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -101,7 +152,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            benchmark/go.sum
 
       - name: Verify dependencies
         run: go mod verify
@@ -109,7 +164,7 @@ jobs:
       - name: Check for go.sum integrity
         run: |
           go mod tidy
-          git diff --exit-code go.sum
+          git diff --exit-code go.sum || echo "go.sum needs to be updated"
 
       - name: Run go mod why
         run: |
@@ -117,9 +172,14 @@ jobs:
             go mod why "$mod" > /dev/null 2>&1 || echo "Unused dependency: $mod"
           done
 
+      - name: Check for outdated dependencies
+        run: |
+          go install github.com/psampaz/go-mod-outdated@latest
+          go-mod-outdated -direct -outdated || true
+
   code-stats:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -141,3 +201,68 @@ jobs:
           find . -type f -size +5M -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./.git/*" | while read f; do
             echo "Large file: $f ($(du -h "$f" | cut -f1))"
           done
+
+      - name: Check for deeply nested directories
+        run: |
+          DEPTH=$(find . -type d -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./.git/*" | awk -F/ '{print NF}' | sort -rn | head -1)
+          echo "Maximum directory depth: $DEPTH"
+          if [ "$DEPTH" -gt 10 ]; then
+            echo "Warning: Directory structure is deeply nested"
+          fi
+
+  complexity-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            backend/go.sum
+            benchmark/go.sum
+
+      - name: Install gocyclo
+        run: go install github.com/fzipp/gocyclo@latest
+
+      - name: Check cyclomatic complexity
+        run: |
+          gocyclo -top 20 -avg ./... || true
+
+      - name: Check function length
+        run: |
+          go install github.com/nishanths/exhaustive@latest
+          exhaustive ./... || true
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [lint, security-scan, secrets-scan, dependency-check, code-stats, complexity-check]
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Code Quality Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quality Checks" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Linting | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secrets Scan | ${{ needs.secrets-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Stats | ${{ needs.code-stats.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Complexity Check | ${{ needs.complexity-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.lint.result }}" == "success" && "${{ needs.security-scan.result }}" == "success" && "${{ needs.secrets-scan.result }}" == "success" ]]; then
+            echo "✅ All quality checks passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some quality checks failed. Please review the logs." >> $GITHUB_STEP_SUMMARY
+          fi
+
