@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -23,12 +24,40 @@ type FingerprintData struct {
 	Timezone        string    `json:"timezone"`
 	CanvasHash      string    `json:"canvas_hash"`
 	WebGLHash       string    `json:"webgl_hash"`
+	AudioHash       string    `json:"audio_hash"`
+	WebGLParamsHash string    `json:"webgl_params_hash"`
+	FontHash        string    `json:"font_hash"`
+	PluginHash      string    `json:"plugin_hash"`
+	HardwareHash    string    `json:"hardware_hash"`
 	FirstSeen       time.Time `json:"first_seen"`
 	LastSeen        time.Time `json:"last_seen"`
 	RequestCount    int       `json:"request_count"`
 	IsBlacklisted   bool      `json:"is_blacklisted"`
 	BlacklistReason string    `json:"blacklist_reason"`
 	RiskScore       float64   `json:"risk_score"`
+}
+
+type CanvasFingerprint struct {
+	Canvas2DHash    string `json:"canvas_2d_hash"`
+	CanvasWebGLHash string `json:"canvas_webgl_hash"`
+	CanvasBitmapHash string `json:"canvas_bitmap_hash"`
+	RenderingQuality string `json:"rendering_quality"`
+}
+
+type WebGLFingerprint struct {
+	Renderer       string `json:"renderer"`
+	Vendor         string `json:"vendor"`
+	Version        string `json:"version"`
+	ParametersHash string `json:"parameters_hash"`
+	ExtensionsHash  string `json:"extensions_hash"`
+	ShaderPrecision string `json:"shader_precision"`
+}
+
+type AudioFingerprint struct {
+	Hash     string  `json:"hash"`
+	Latency  float64 `json:"latency"`
+	Channels int     `json:"channels"`
+	SampleRate int   `json:"sample_rate"`
 }
 
 type BehaviorPattern struct {
@@ -599,4 +628,327 @@ func (s *FingerprintService) FindSimilarFingerprints(targetFP string, threshold 
 	}
 
 	return result
+}
+
+func (s *FingerprintService) ExtractEnhancedFingerprintData(r *http.Request, additionalData map[string]string) *FingerprintData {
+	fingerprintID := s.GenerateEnhancedFingerprint(r, additionalData)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if fp, exists := s.fingerprints[fingerprintID]; exists {
+		fp.LastSeen = time.Now()
+		fp.RequestCount++
+		return fp
+	}
+
+	fp := &FingerprintData{
+		FingerprintID:   fingerprintID,
+		IP:              s.getRealIP(r),
+		UserAgent:       r.UserAgent(),
+		Accept:          r.Header.Get("Accept"),
+		AcceptLanguage:  r.Header.Get("Accept-Language"),
+		AcceptEncoding:  r.Header.Get("Accept-Encoding"),
+		Connection:      r.Header.Get("Connection"),
+		ScreenInfo:      additionalData["screen_info"],
+		Timezone:        additionalData["timezone"],
+		CanvasHash:      additionalData["canvas_hash"],
+		WebGLHash:       additionalData["webgl_hash"],
+		AudioHash:       additionalData["audio_hash"],
+		WebGLParamsHash: additionalData["webgl_params_hash"],
+		FontHash:        additionalData["font_hash"],
+		PluginHash:      additionalData["plugin_hash"],
+		HardwareHash:    additionalData["hardware_hash"],
+		FirstSeen:       time.Now(),
+		LastSeen:        time.Now(),
+		RequestCount:    1,
+		IsBlacklisted:   false,
+		RiskScore:       0,
+	}
+
+	s.fingerprints[fingerprintID] = fp
+	s.trackBehavior(fingerprintID, r)
+
+	return fp
+}
+
+func (s *FingerprintService) GenerateEnhancedFingerprint(r *http.Request, additionalData map[string]string) string {
+	hasher := sha256.New()
+
+	ip := s.getRealIP(r)
+	hasher.Write([]byte(ip))
+
+	userAgent := r.UserAgent()
+	hasher.Write([]byte(userAgent))
+
+	accept := r.Header.Get("Accept")
+	hasher.Write([]byte(accept))
+
+	acceptLang := r.Header.Get("Accept-Language")
+	hasher.Write([]byte(acceptLang))
+
+	acceptEnc := r.Header.Get("Accept-Encoding")
+	hasher.Write([]byte(acceptEnc))
+
+	connection := r.Header.Get("Connection")
+	hasher.Write([]byte(connection))
+
+	headers := []string{
+		"DNT",
+		"Upgrade-Insecure-Requests",
+		"Sec-Fetch-Dest",
+		"Sec-Fetch-Mode",
+		"Sec-Fetch-Site",
+		"Sec-Fetch-User",
+		"Cache-Control",
+		"Accept-CH",
+		"Sec-CH-UA",
+		"Sec-CH-UA-Mobile",
+		"Sec-CH-UA-Platform",
+	}
+	for _, h := range headers {
+		hasher.Write([]byte(r.Header.Get(h)))
+	}
+
+	for k, v := range additionalData {
+		hasher.Write([]byte(k + ":" + v))
+	}
+
+	if canvasHash := additionalData["canvas_hash"]; canvasHash != "" {
+		hasher.Write([]byte(canvasHash))
+	}
+
+	if webglHash := additionalData["webgl_hash"]; webglHash != "" {
+		hasher.Write([]byte(webglHash))
+	}
+
+	if audioHash := additionalData["audio_hash"]; audioHash != "" {
+		hasher.Write([]byte(audioHash))
+	}
+
+	if webglParamsHash := additionalData["webgl_params_hash"]; webglParamsHash != "" {
+		hasher.Write([]byte(webglParamsHash))
+	}
+
+	if fontHash := additionalData["font_hash"]; fontHash != "" {
+		hasher.Write([]byte(fontHash))
+	}
+
+	if pluginHash := additionalData["plugin_hash"]; pluginHash != "" {
+		hasher.Write([]byte(pluginHash))
+	}
+
+	if hardwareHash := additionalData["hardware_hash"]; hardwareHash != "" {
+		hasher.Write([]byte(hardwareHash))
+	}
+
+	hash := hasher.Sum(nil)
+	return hex.EncodeToString(hash)
+}
+
+func (s *FingerprintService) AnalyzeCanvasFingerprint(canvasData map[string]interface{}) *CanvasFingerprint {
+	result := &CanvasFingerprint{}
+
+	if canvas2D, ok := canvasData["canvas_2d"].(string); ok && canvas2D != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(canvas2D))
+		result.Canvas2DHash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	if canvasWebGL, ok := canvasData["canvas_webgl"].(string); ok && canvasWebGL != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(canvasWebGL))
+		result.CanvasWebGLHash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	if canvasBitmap, ok := canvasData["canvas_bitmap"].(string); ok && canvasBitmap != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(canvasBitmap))
+		result.CanvasBitmapHash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	if quality, ok := canvasData["rendering_quality"].(string); ok {
+		result.RenderingQuality = quality
+	}
+
+	return result
+}
+
+func (s *FingerprintService) AnalyzeWebGLFingerprint(webglData map[string]interface{}) *WebGLFingerprint {
+	result := &WebGLFingerprint{}
+
+	if renderer, ok := webglData["renderer"].(string); ok {
+		result.Renderer = renderer
+	}
+
+	if vendor, ok := webglData["vendor"].(string); ok {
+		result.Vendor = vendor
+	}
+
+	if version, ok := webglData["version"].(string); ok {
+		result.Version = version
+	}
+
+	if params, ok := webglData["parameters"].(string); ok && params != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(params))
+		result.ParametersHash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	if extensions, ok := webglData["extensions"].(string); ok && extensions != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(extensions))
+		result.ExtensionsHash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	if precision, ok := webglData["shader_precision"].(string); ok {
+		result.ShaderPrecision = precision
+	}
+
+	return result
+}
+
+func (s *FingerprintService) AnalyzeAudioFingerprint(audioData map[string]interface{}) *AudioFingerprint {
+	result := &AudioFingerprint{}
+
+	if hash, ok := audioData["audio_hash"].(string); ok && hash != "" {
+		result.Hash = hash
+	}
+
+	if latency, ok := audioData["latency"].(float64); ok {
+		result.Latency = latency
+	}
+
+	if channels, ok := audioData["channels"].(int); ok {
+		result.Channels = channels
+	}
+
+	if sampleRate, ok := audioData["sample_rate"].(int); ok {
+		result.SampleRate = sampleRate
+	}
+
+	return result
+}
+
+func (s *FingerprintService) DetectFingerprintAnomalies(fp *FingerprintData) (bool, []string, float64) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	anomalies := []string{}
+	riskScore := 0.0
+
+	if fp.CanvasHash == "" && fp.WebGLHash == "" {
+		anomalies = append(anomalies, "missing_advanced_fingerprints")
+		riskScore += 15
+	}
+
+	if fp.AudioHash == "" {
+		anomalies = append(anomalies, "missing_audio_fingerprint")
+		riskScore += 10
+	}
+
+	if fp.FontHash == "" {
+		anomalies = append(anomalies, "missing_font_fingerprint")
+		riskScore += 8
+	}
+
+	if fp.HardwareHash == "" {
+		anomalies = append(anomalies, "missing_hardware_fingerprint")
+		riskScore += 5
+	}
+
+	similarFPs := s.findSimilarFingerprintsInternal(fp.FingerprintID)
+	if len(similarFPs) > 3 {
+		anomalies = append(anomalies, "too_many_similar_fingerprints")
+		riskScore += 25
+	}
+
+	return len(anomalies) > 0, anomalies, riskScore
+}
+
+func (s *FingerprintService) findSimilarFingerprintsInternal(targetFP string) []string {
+	result := make([]string, 0)
+
+	target, exists := s.fingerprints[targetFP]
+	if !exists {
+		return result
+	}
+
+	for id, fp := range s.fingerprints {
+		if id == targetFP {
+			continue
+		}
+
+		similarity := 0.0
+		if fp.IP == target.IP {
+			similarity += 0.3
+		}
+		if fp.UserAgent == target.UserAgent {
+			similarity += 0.3
+		}
+		if fp.CanvasHash != "" && fp.CanvasHash == target.CanvasHash {
+			similarity += 0.2
+		}
+		if fp.WebGLHash != "" && fp.WebGLHash == target.WebGLHash {
+			similarity += 0.2
+		}
+
+		if similarity >= 0.6 {
+			result = append(result, id)
+		}
+	}
+
+	return result
+}
+
+type EnhancedFingerprintAnalysis struct {
+	Fingerprint           *FingerprintData
+	CanvasAnalysis       *CanvasFingerprint
+	WebGLAnalysis        *WebGLFingerprint
+	AudioAnalysis        *AudioFingerprint
+	IsAnomaly            bool
+	AnomalyReasons       []string
+	RiskScore            float64
+	PatternAnalysis      map[string]interface{}
+	SimilarFingerprints  []string
+}
+
+func (s *FingerprintService) PerformEnhancedAnalysis(r *http.Request, additionalData map[string]string) *EnhancedFingerprintAnalysis {
+	fp := s.ExtractEnhancedFingerprintData(r, additionalData)
+
+	canvasAnalysis := &CanvasFingerprint{}
+	if canvasData, ok := additionalData["canvas_data"].(map[string]interface{}); ok {
+		canvasAnalysis = s.AnalyzeCanvasFingerprint(canvasData)
+	}
+
+	webglAnalysis := &WebGLFingerprint{}
+	if webglData, ok := additionalData["webgl_data"].(map[string]interface{}); ok {
+		webglAnalysis = s.AnalyzeWebGLFingerprint(webglData)
+	}
+
+	audioAnalysis := &AudioFingerprint{}
+	if audioData, ok := additionalData["audio_data"].(map[string]interface{}); ok {
+		audioAnalysis = s.AnalyzeAudioFingerprint(audioData)
+	}
+
+	isAnomaly, anomalyReasons, anomalyScore := s.DetectFingerprintAnomalies(fp)
+
+	baseRiskScore := s.CalculateRiskScore(fp)
+	totalRiskScore := baseRiskScore + anomalyScore
+
+	patternAnalysis := s.AnalyzeRequestPattern(fp.FingerprintID)
+
+	similarFPs := s.findSimilarFingerprintsInternal(fp.FingerprintID)
+
+	return &EnhancedFingerprintAnalysis{
+		Fingerprint:          fp,
+		CanvasAnalysis:       canvasAnalysis,
+		WebGLAnalysis:        webglAnalysis,
+		AudioAnalysis:        audioAnalysis,
+		IsAnomaly:            isAnomaly,
+		AnomalyReasons:       anomalyReasons,
+		RiskScore:            math.Min(totalRiskScore, 100),
+		PatternAnalysis:      patternAnalysis,
+		SimilarFingerprints: similarFPs,
+	}
 }

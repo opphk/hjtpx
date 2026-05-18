@@ -6,6 +6,9 @@
     'use strict';
 
     var CaptchaEnv = {
+        
+        automationDetected: false,
+        automationTools: [],
         // 检测是否为移动设备
         isMobile: function() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -243,7 +246,11 @@
                 network: this.getNetworkInfo(),
                 features: this.supports,
                 performanceLevel: this.getPerformanceLevel(),
-                recommendedQuality: this.getRecommendedQuality()
+                recommendedQuality: this.getRecommendedQuality(),
+                automation: {
+                    detected: this.automationDetected,
+                    tools: this.automationTools
+                }
             };
         },
 
@@ -433,6 +440,411 @@
         
         // 根据质量推荐应用图片质量
         document.documentElement.setAttribute('data-captcha-quality', report.recommendedQuality);
+    }
+    
+    CaptchaEnv.detectAutomationTools = function() {
+        var detected = [];
+        
+        if (navigator.webdriver) {
+            detected.push('webdriver');
+        }
+        
+        if (window.callPhantom || window._phantom || window.phantom) {
+            detected.push('phantomjs');
+        }
+        
+        if (window.__selenium || window.__webdriver || window.selenium) {
+            detected.push('selenium');
+        }
+        
+        if (window.__puppeteer__ || window.puppeteer) {
+            detected.push('puppeteer');
+        }
+        
+        if (window.__playwright__ || window.playwright) {
+            detected.push('playwright');
+        }
+        
+        var cdcPattern = /cdc_/;
+        var ctwPattern = /ctw_/;
+        Object.keys(window).forEach(function(key) {
+            if (cdcPattern.test(key) || ctwPattern.test(key)) {
+                if (detected.indexOf('cdp_object') === -1) {
+                    detected.push('cdp_object');
+                }
+            }
+        });
+        
+        if (navigator.plugins.length === 0) {
+            detected.push('no_plugins');
+        }
+        
+        if (navigator.mimeTypes && navigator.mimeTypes.length === 0) {
+            detected.push('no_mimetypes');
+        }
+        
+        var screen = window.screen;
+        if (screen && (screen.width === 0 || screen.height === 0 || screen.width === 1 || screen.height === 1)) {
+            detected.push('abnormal_screen_size');
+        }
+        
+        try {
+            var testCanvas = document.createElement('canvas');
+            testCanvas.width = 200;
+            testCanvas.height = 100;
+            var ctx = testCanvas.getContext('2d');
+            ctx.fillText('test', 10, 10);
+            var dataURL = testCanvas.toDataURL();
+            if (dataURL === 'data:,') {
+                detected.push('canvas_blocked');
+            }
+        } catch (e) {
+            detected.push('canvas_error');
+        }
+        
+        try {
+            var testElement = document.createElement('div');
+            testElement.style.transform = 'translate3d(10px, 10px, 10px)';
+            var computedStyle = window.getComputedStyle(testElement);
+            var transformValue = computedStyle.getPropertyValue('transform');
+            if (!transformValue || transformValue === 'none') {
+                detected.push('css_transform_blocked');
+            }
+        } catch (e) {
+            detected.push('css_detection_error');
+        }
+        
+        try {
+            var testEle = document.createElement('div');
+            testEle.style.pointerEvents = 'none';
+            document.body.appendChild(testEle);
+            var rect = testEle.getBoundingClientRect();
+            document.body.removeChild(testEle);
+        } catch (e) {
+            detected.push('bounding_client_rect_error');
+        }
+        
+        try {
+            var audioCtx = window.AudioContext || window.webkitAudioContext;
+            if (audioCtx) {
+                var context = new audioCtx();
+                var oscillator = context.createOscillator();
+                var gainNode = context.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(context.destination);
+                var startTime = Date.now();
+                oscillator.start();
+                var endTime = Date.now();
+                if (endTime - startTime > 100) {
+                    detected.push('audio_context_slow');
+                }
+                oscillator.stop();
+                context.close();
+            }
+        } catch (e) {
+            detected.push('audio_context_error');
+        }
+        
+        try {
+            var canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    var vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                    
+                    var softwareRenderers = ['swiftshader', 'llvmpipe', 'softpipe', 'mesa', 'software'];
+                    softwareRenderers.forEach(function(r) {
+                        if (renderer.toLowerCase().indexOf(r) !== -1) {
+                            detected.push('software_renderer');
+                        }
+                    });
+                    
+                    var headlessRenderers = ['headless', 'null'];
+                    headlessRenderers.forEach(function(r) {
+                        if (renderer.toLowerCase().indexOf(r) !== -1) {
+                            detected.push('headless_renderer');
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            detected.push('webgl_detection_error');
+        }
+        
+        try {
+            var perf = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance;
+            if (perf && perf.timing) {
+                var loadTime = perf.timing.loadEventEnd - perf.timing.navigationStart;
+                if (loadTime < 500 && loadTime > 0) {
+                    detected.push('very_fast_load');
+                }
+            }
+        } catch (e) {
+            detected.push('performance_timing_error');
+        }
+        
+        var languages = navigator.languages || [navigator.language];
+        if (languages.length === 0 || (languages.length === 1 && languages[0] === 'en-US')) {
+            detected.push('suspicious_languages');
+        }
+        
+        try {
+            var testFunc = function() {};
+            var testProxy = new Proxy(testFunc, {});
+            detected.push('proxy_supported');
+        } catch (e) {
+        }
+        
+        try {
+            var testInt8 = new Int8Array(1);
+            if (testInt8.length !== 1) {
+                detected.push('int8array_manipulated');
+            }
+        } catch (e) {
+            detected.push('int8array_error');
+        }
+        
+        try {
+            var elem = document.createElement('canvas');
+            elem.width = 10;
+            elem.height = 10;
+            var ctx2d = elem.getContext('2d');
+            var imageData = ctx2d.createImageData(10, 10);
+            if (imageData.width !== 10 || imageData.height !== 10) {
+                detected.push('imagedata_manipulated');
+            }
+        } catch (e) {
+            detected.push('imagedata_error');
+        }
+        
+        CaptchaEnv.automationDetected = detected.length > 0;
+        CaptchaEnv.automationTools = detected;
+        
+        return detected;
+    };
+    
+    CaptchaEnv.getAutomationRiskScore = function() {
+        var tools = CaptchaEnv.automationTools;
+        var score = 0;
+        
+        var riskLevels = {
+            'webdriver': 40,
+            'selenium': 35,
+            'puppeteer': 30,
+            'playwright': 30,
+            'phantomjs': 35,
+            'cdp_object': 25,
+            'no_plugins': 15,
+            'no_mimetypes': 15,
+            'abnormal_screen_size': 20,
+            'canvas_blocked': 25,
+            'css_transform_blocked': 15,
+            'software_renderer': 30,
+            'headless_renderer': 35,
+            'audio_context_slow': 20,
+            'very_fast_load': 25,
+            'suspicious_languages': 10,
+            'proxy_supported': 15,
+            'int8array_manipulated': 20,
+            'imagedata_manipulated': 20,
+            'canvas_error': 30,
+            'css_detection_error': 20,
+            'bounding_client_rect_error': 20,
+            'audio_context_error': 25,
+            'webgl_detection_error': 20,
+            'performance_timing_error': 15
+        };
+        
+        tools.forEach(function(tool) {
+            score += riskLevels[tool] || 10;
+        });
+        
+        return Math.min(score, 100);
+    };
+    
+    CaptchaEnv.getAutomationReport = function() {
+        var tools = CaptchaEnv.automationTools;
+        return {
+            detected: CaptchaEnv.automationDetected,
+            tools: tools,
+            riskScore: CaptchaEnv.getAutomationRiskScore(),
+            summary: tools.length === 0 ? 'No automation detected' : 'Automation tools detected: ' + tools.join(', '),
+            timestamp: new Date().toISOString()
+        };
+    };
+    
+    CaptchaEnv.detectVM = function() {
+        var indicators = [];
+        
+        var vmStrings = [
+            'virtualbox', 'vbox', 'vmware', 'virtual', 'qemu', 'kvm', 
+            'xen', 'parallels', 'hyper-v', 'bochs', 'docker', 'container'
+        ];
+        
+        var userAgent = navigator.userAgent.toLowerCase();
+        vmStrings.forEach(function(str) {
+            if (userAgent.indexOf(str) !== -1) {
+                indicators.push('useragent_' + str);
+            }
+        });
+        
+        try {
+            var screenInfo = window.screen;
+            if (screenInfo) {
+                if (screenInfo.width === 800 && screenInfo.height === 600) {
+                    indicators.push('vm_resolution_800x600');
+                }
+                if (screenInfo.colorDepth === 0) {
+                    indicators.push('vm_colordepth_0');
+                }
+            }
+        } catch (e) {
+            indicators.push('screen_detection_error');
+        }
+        
+        try {
+            var canvas = document.createElement('canvas');
+            var gl = canvas.getContext('webgl');
+            if (gl) {
+                var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    var vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                    
+                    var vmRenderers = ['vmware', 'virtualbox', 'virtual', 'qemu', 'parallels', 'xen'];
+                    vmRenderers.forEach(function(r) {
+                        if (renderer.toLowerCase().indexOf(r) !== -1) {
+                            indicators.push('webgl_' + r);
+                        }
+                        if (vendor.toLowerCase().indexOf(r) !== -1) {
+                            indicators.push('webgl_vendor_' + r);
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            indicators.push('webgl_vm_detection_error');
+        }
+        
+        try {
+            var platform = navigator.platform;
+            if (platform && platform.toLowerCase().indexOf('virtual') !== -1) {
+                indicators.push('platform_virtual');
+            }
+        } catch (e) {
+            indicators.push('platform_detection_error');
+        }
+        
+        try {
+            var hardwareConcurrency = navigator.hardwareConcurrency;
+            if (hardwareConcurrency && hardwareConcurrency > 16) {
+                indicators.push('suspicious_high_cpu_cores');
+            }
+            if (hardwareConcurrency && hardwareConcurrency < 2) {
+                indicators.push('suspicious_low_cpu_cores');
+            }
+        } catch (e) {
+            indicators.push('hardware_concurrency_error');
+        }
+        
+        return indicators;
+    };
+    
+    CaptchaEnv.detectSandbox = function() {
+        var indicators = [];
+        
+        try {
+            var startTime = performance.now();
+            var endTime = performance.now();
+            var executionTime = endTime - startTime;
+            if (executionTime === 0) {
+                indicators.push('suspicious_zero_timing');
+            }
+        } catch (e) {
+            indicators.push('timing_detection_error');
+        }
+        
+        try {
+            var testArray = new Uint8Array(1);
+            testArray[0] = 1;
+            if (testArray[0] !== 1) {
+                indicators.push('typed_array_manipulated');
+            }
+        } catch (e) {
+            indicators.push('typed_array_error');
+        }
+        
+        try {
+            var testDate = new Date();
+            var year = testDate.getFullYear();
+            if (year < 2000 || year > 2100) {
+                indicators.push('suspicious_year');
+            }
+        } catch (e) {
+            indicators.push('date_detection_error');
+        }
+        
+        try {
+            if (navigator.deviceMemory && navigator.deviceMemory < 1) {
+                indicators.push('very_low_memory');
+            }
+        } catch (e) {
+            indicators.push('memory_detection_error');
+        }
+        
+        return indicators;
+    };
+    
+    CaptchaEnv.getEnvironmentRiskReport = function() {
+        var automationTools = CaptchaEnv.detectAutomationTools();
+        var vmIndicators = CaptchaEnv.detectVM();
+        var sandboxIndicators = CaptchaEnv.detectSandbox();
+        
+        var allIndicators = automationTools.concat(vmIndicators).concat(sandboxIndicators);
+        
+        var riskScore = 0;
+        riskScore += CaptchaEnv.getAutomationRiskScore();
+        riskScore += vmIndicators.length * 15;
+        riskScore += sandboxIndicators.length * 10;
+        
+        return {
+            automation: {
+                detected: CaptchaEnv.automationDetected,
+                tools: automationTools,
+                riskScore: CaptchaEnv.getAutomationRiskScore()
+            },
+            vm: {
+                detected: vmIndicators.length > 0,
+                indicators: vmIndicators,
+                riskScore: vmIndicators.length * 15
+            },
+            sandbox: {
+                detected: sandboxIndicators.length > 0,
+                indicators: sandboxIndicators,
+                riskScore: sandboxIndicators.length * 10
+            },
+            overallRiskScore: Math.min(riskScore, 100),
+            allIndicators: allIndicators,
+            timestamp: new Date().toISOString()
+        };
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            CaptchaEnv.detectAutomationTools();
+            CaptchaEnv.detectVM();
+            CaptchaEnv.detectSandbox();
+            applyOptimizations();
+        });
+    } else {
+        CaptchaEnv.detectAutomationTools();
+        CaptchaEnv.detectVM();
+        CaptchaEnv.detectSandbox();
+        applyOptimizations();
     }
 
 })();

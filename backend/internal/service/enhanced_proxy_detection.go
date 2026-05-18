@@ -851,3 +851,310 @@ type ProxyRiskReport struct {
 func (r *ProxyRiskReport) ToJSON() ([]byte, error) {
 	return json.MarshalIndent(r, "", "  ")
 }
+
+func (d *EnhancedProxyDetection) DetectProxyByPort(proxyPort int) bool {
+	commonProxyPorts := map[int]bool{
+		80:     true,
+		8080:   true,
+		3128:   true,
+		8888:   true,
+		1080:   true,
+		8118:   true,
+		8123:   true,
+		9050:   true,
+		9051:   true,
+		10808:  true,
+		7913:   true,
+		8191:   true,
+		8192:   true,
+		1080:   true,
+		}
+	return commonProxyPorts[proxyPort]
+}
+
+func (d *EnhancedProxyDetection) AnalyzeDNSLeakTest(domain string) (bool, []string) {
+	var leakedDNS []string
+
+	ips, err := net.LookupIP(domain)
+	if err != nil {
+		return false, []string{}
+	}
+
+	for _, ip := range ips {
+		if isPrivateIP(ip.String()) {
+			leakedDNS = append(leakedDNS, ip.String())
+		}
+	}
+
+	if len(leakedDNS) > 0 {
+		return true, leakedDNS
+	}
+
+	return false, []string{}
+}
+
+func (d *EnhancedProxyDetection) CheckVPNProtocols(headers http.Header) (bool, []string) {
+	vpnProtocols := []string{}
+
+	vpnHeaders := map[string]string{
+		"X-VPN-Server":    "VPN Server",
+		"X-VPN-Connection": "VPN Connection",
+		"PPTP-VPN":        "PPTP VPN",
+	}
+
+	for header, protocol := range vpnHeaders {
+		if headers.Get(header) != "" {
+			vpnProtocols = append(vpnProtocols, protocol)
+		}
+	}
+
+	if len(vpnProtocols) > 0 {
+		return true, vpnProtocols
+	}
+
+	return false, []string{}
+}
+
+func (d *EnhancedProxyDetection) AnalyzeTorCircuits(ctx context.Context, ip string) (*TorCircuitAnalysis, error) {
+	analysis := &TorCircuitAnalysis{
+		IP:           ip,
+		IsTorRelay:   false,
+		IsTorBridge:  false,
+		CircuitCount: 0,
+		Flags:        []string{},
+	}
+
+	if d.IsTorExitNode(ip) {
+		analysis.IsTorRelay = true
+		analysis.Flags = append(analysis.Flags, "Exit")
+	}
+
+	analysis.NodesCount = d.estimateTorNodes(ip)
+	analysis.LastUpdated = time.Now()
+
+	return analysis, nil
+}
+
+type TorCircuitAnalysis struct {
+	IP            string    `json:"ip"`
+	IsTorRelay    bool      `json:"is_tor_relay"`
+	IsTorBridge   bool      `json:"is_tor_bridge"`
+	CircuitCount  int       `json:"circuit_count"`
+	NodesCount    int       `json:"nodes_count"`
+	Flags         []string  `json:"flags"`
+	LastUpdated   time.Time `json:"last_updated"`
+}
+
+func (d *EnhancedProxyDetection) estimateTorNodes(ip string) int {
+	baseHash := 0
+	for _, char := range ip {
+		baseHash += int(char)
+	}
+	return baseHash % 100
+}
+
+func (d *EnhancedProxyDetection) DetectTransparentProxy(headers http.Header) (bool, []string) {
+	indicators := []string{}
+
+	if headers.Get("X-Forwarded-For") != "" {
+		indicators = append(indicators, "transparent_proxy_xff")
+	}
+
+	if headers.Get("Proxy-Authorization") != "" {
+		indicators = append(indicators, "proxy_auth_present")
+	}
+
+	if headers.Get("Via") != "" {
+		indicators = append(indicators, "via_header")
+	}
+
+	if headers.Get("X-Proxy-ID") != "" {
+		indicators = append(indicators, "proxy_id")
+	}
+
+	if len(indicators) >= 2 {
+		return true, indicators
+	}
+
+	return false, indicators
+}
+
+func (d *EnhancedProxyDetection) AnalyzeNetworkPatterns(ip string, headers http.Header) *NetworkPatternAnalysis {
+	analysis := &NetworkPatternAnalysis{
+		IP:            ip,
+		Patterns:      []string{},
+		Suspicious:    false,
+		RiskFactors:   []string{},
+	}
+
+	if headers.Get("X-Forwarded-For") != "" {
+		xffIPs := strings.Split(headers.Get("X-Forwarded-For"), ",")
+		if len(xffIPs) > 3 {
+			analysis.Patterns = append(analysis.Patterns, "multi_hop_detected")
+			analysis.Suspicious = true
+			analysis.RiskFactors = append(analysis.RiskFactors, "multiple_proxy_hops")
+		}
+	}
+
+	if strings.Contains(strings.ToLower(headers.Get("User-Agent")), "python") ||
+		strings.Contains(strings.ToLower(headers.Get("User-Agent")), "curl") ||
+		strings.Contains(strings.ToLower(headers.Get("User-Agent")), "wget") {
+		analysis.Patterns = append(analysis.Patterns, "scripted_client")
+		analysis.Suspicious = true
+		analysis.RiskFactors = append(analysis.RiskFactors, "automated_client")
+	}
+
+	if headers.Get("X-Real-IP") != "" {
+		analysis.Patterns = append(analysis.Patterns, "real_ip_exposed")
+	}
+
+	if headers.Get("Forwarded") != "" {
+		analysis.Patterns = append(analysis.Patterns, "forwarded_header")
+	}
+
+	return analysis
+}
+
+type NetworkPatternAnalysis struct {
+	IP          string   `json:"ip"`
+	Patterns    []string `json:"patterns"`
+	Suspicious  bool     `json:"suspicious"`
+	RiskFactors []string `json:"risk_factors"`
+}
+
+func (d *EnhancedProxyDetection) DetectResidentialProxy(ip string, geo *GeoLocation) bool {
+	if geo == nil {
+		return false
+	}
+
+	ispIndicators := []string{
+		"comcast",
+		"at&t",
+		"verizon",
+		"t-mobile",
+		"vodafone",
+		"orange",
+		"bt",
+		"sky",
+	}
+
+	ispLower := strings.ToLower(geo.ISP)
+	for _, indicator := range ispIndicators {
+		if strings.Contains(ispLower, indicator) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (d *EnhancedProxyDetection) AnalyzeIPQuality(ip string) *IPQualityScore {
+	quality := &IPQualityScore{
+		IP:            ip,
+		OverallScore:  100,
+		RiskFactors:   []string{},
+		Recommendations: []string{},
+	}
+
+	quality.OverallScore = d.calculateIPQuality(ip, quality)
+
+	return quality
+}
+
+type IPQualityScore struct {
+	IP               string   `json:"ip"`
+	OverallScore     float64  `json:"overall_score"`
+	RiskFactors      []string `json:"risk_factors"`
+	Recommendations  []string `json:"recommendations"`
+}
+
+func (d *EnhancedProxyDetection) calculateIPQuality(ip string, quality *IPQualityScore) float64 {
+	score := 100.0
+
+	if d.IsTorExitNode(ip) {
+		score -= 50
+		quality.RiskFactors = append(quality.RiskFactors, "tor_exit_node")
+		quality.Recommendations = append(quality.Recommendations, "添加额外的行为验证")
+	}
+
+	for provider := range d.vpnProviders {
+		for _, prefix := range d.vpnProviders[provider].IPRanges {
+			if strings.HasPrefix(ip, prefix) {
+				score -= 40
+				quality.RiskFactors = append(quality.RiskFactors, "vpn_provider:"+provider)
+				quality.Recommendations = append(quality.Recommendations, "要求额外的身份验证")
+				break
+			}
+		}
+	}
+
+	datacenterPrefixes := []string{"3.", "4.", "8.", "13.", "15.", "16."}
+	for _, prefix := range datacenterPrefixes {
+		if strings.HasPrefix(ip, prefix) {
+			score -= 20
+			quality.RiskFactors = append(quality.RiskFactors, "datacenter_ip")
+			break
+		}
+	}
+
+	if isPrivateIP(ip) {
+		score -= 30
+		quality.RiskFactors = append(quality.RiskFactors, "private_ip")
+	}
+
+	return math.Max(0, score)
+}
+
+func isPrivateIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+
+	privateBlocks := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"127.0.0.0/8",
+		"169.254.0.0/16",
+	}
+
+	for _, block := range privateBlocks {
+		_, network, err := net.ParseCIDR(block)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (d *EnhancedProxyDetection) BatchAnalyzeVPNProviders(asns []int) map[int]string {
+	results := make(map[int]string)
+
+	for _, asn := range asns {
+		isVPN, provider := d.DetectVPNByASN(asn)
+		if isVPN {
+			results[asn] = provider
+		}
+	}
+
+	return results
+}
+
+func (d *EnhancedProxyDetection) GetProxyDetectionHistory(ip string) []*ProxyDetectionRecord {
+	return []*ProxyDetectionRecord{}
+}
+
+type ProxyDetectionRecord struct {
+	Timestamp  time.Time
+	IP         string
+	IsProxy    bool
+	IsVPN      bool
+	IsTor      bool
+	Confidence float64
+	Headers    map[string]string
+}

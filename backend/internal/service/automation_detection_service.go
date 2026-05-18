@@ -2,6 +2,7 @@ package service
 
 import (
 	"math"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -17,6 +18,8 @@ type AutomationDetectionService struct {
 	headlessPatterns     []*regexp.Regexp
 	webdriverPatterns    []*regexp.Regexp
 	automationIndicators []*regexp.Regexp
+	vmPatterns           []*regexp.Regexp
+	sandboxPatterns      []*regexp.Regexp
 
 	mu                    sync.RWMutex
 	behaviorPatterns      map[string]*AutomationBehavior
@@ -61,6 +64,24 @@ type AutoDetectionResult struct {
 	AutoBehavioralIndicators *AutoBehavioralIndicators `json:"behavioral_indicators"`
 	DebuggerDetected      bool                `json:"debugger_detected"`
 	HeadlessDetected      bool                `json:"headless_detected"`
+	VMDetected           bool                `json:"vm_detected"`
+	SandboxDetected      bool                `json:"sandbox_detected"`
+	VMType               string              `json:"vm_type"`
+	SandboxType          string              `json:"sandbox_type"`
+}
+
+type VMDetectionResult struct {
+	IsVM        bool     `json:"is_vm"`
+	VMType      string   `json:"vm_type"`
+	Confidence  float64  `json:"confidence"`
+	Indicators  []string `json:"indicators"`
+}
+
+type SandboxDetectionResult struct {
+	IsSandbox  bool     `json:"is_sandbox"`
+	SBXType    string   `json:"sandbox_type"`
+	Confidence float64  `json:"confidence"`
+	Indicators []string `json:"indicators"`
 }
 
 type AutoBehavioralIndicators struct {
@@ -137,6 +158,28 @@ func NewAutomationDetectionService() *AutomationDetectionService {
 			regexp.MustCompile(`(?i)crawler`),
 			regexp.MustCompile(`(?i)scraper`),
 		},
+		vmPatterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)virtualbox`),
+			regexp.MustCompile(`(?i)vmware`),
+			regexp.MustCompile(`(?i)qemu`),
+			regexp.MustCompile(`(?i)kvm`),
+			regexp.MustCompile(`(?i)xen`),
+			regexp.MustCompile(`(?i)parallels`),
+			regexp.MustCompile(`(?i)hyper-v`),
+			regexp.MustCompile(`(?i)vbox`),
+			regexp.MustCompile(`(?i)bochs`),
+			regexp.MustCompile(`(?i)docker`),
+			regexp.MustCompile(`(?i)container`),
+		},
+		sandboxPatterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)sandbox`),
+			regexp.MustCompile(`(?i)cuckoo`),
+			regexp.MustCompile(`(?i)joe.*sandbox`),
+			regexp.MustCompile(`(?i)anubis`),
+			regexp.MustCompile(`(?i)timeout`),
+			regexp.MustCompile(`(?i)sandboxie`),
+			regexp.MustCompile(`(?i)comodo`),
+		},
 		behaviorPatterns:    make(map[string]*AutomationBehavior),
 		debuggerDetection:   make(map[string]*DebuggerDetectionRecord),
 		sessionBehavior:     make(map[string]*SessionBehaviorAnalysis),
@@ -154,6 +197,8 @@ func (s *AutomationDetectionService) DetectAutomationTool(r *http.Request, front
 		AutoBehavioralIndicators: &AutoBehavioralIndicators{IsHumanLike: true},
 		DebuggerDetected:      false,
 		HeadlessDetected:      false,
+		VMDetected:            false,
+		SandboxDetected:       false,
 	}
 
 	userAgent := r.UserAgent()
@@ -197,6 +242,22 @@ func (s *AutomationDetectionService) DetectAutomationTool(r *http.Request, front
 		score += 25
 		confidence += 0.25
 		result.DebuggerDetected = true
+	}
+
+	vmResult := s.detectVM(userAgent, frontendData, result)
+	if vmResult.IsVM {
+		score += vmResult.Confidence * 40
+		confidence += vmResult.Confidence * 0.4
+		result.VMDetected = true
+		result.VMType = vmResult.VMType
+	}
+
+	sandboxResult := s.detectSandbox(frontendData, result)
+	if sandboxResult.IsSandbox {
+		score += sandboxResult.Confidence * 35
+		confidence += sandboxResult.Confidence * 0.35
+		result.SandboxDetected = true
+		result.SandboxType = sandboxResult.SBXType
 	}
 
 	behaviorResult := s.analyzeBehavioralPatterns(ip, r)
@@ -642,4 +703,211 @@ func autoStandardDeviation(values []float64) float64 {
 		sumSquaredDiff += diff * diff
 	}
 	return math.Sqrt(sumSquaredDiff / float64(len(values)))
+}
+
+func (s *AutomationDetectionService) detectVM(userAgent string, data map[string]interface{}, result *AutoDetectionResult) *VMDetectionResult {
+	vmResult := &VMDetectionResult{
+		IsVM:       false,
+		VMType:     "",
+		Confidence: 0.0,
+		Indicators: []string{},
+	}
+
+	confidence := 0.0
+
+	for _, pattern := range s.vmPatterns {
+		if pattern.MatchString(userAgent) {
+			result.Evidence = append(result.Evidence, "VM pattern detected in User-Agent")
+			vmResult.Indicators = append(vmResult.Indicators, pattern.String())
+			confidence += 0.3
+		}
+	}
+
+	if data != nil {
+		if vmType, ok := data["vm_type"].(string); ok && vmType != "" {
+			result.Evidence = append(result.Evidence, "VM type detected: "+vmType)
+			vmResult.VMType = vmType
+			vmResult.Indicators = append(vmResult.Indicators, "vm_type:"+vmType)
+			confidence += 0.4
+		}
+
+		if vmIndicators, ok := data["vm_indicators"].([]interface{}); ok && len(vmIndicators) > 0 {
+			for _, indicator := range vmIndicators {
+				if indStr, ok := indicator.(string); ok {
+					result.Evidence = append(result.Evidence, "VM indicator: "+indStr)
+					vmResult.Indicators = append(vmResult.Indicators, indStr)
+					confidence += 0.1
+				}
+			}
+		}
+
+		if screenInfo, ok := data["screen_info"].(string); ok {
+			if strings.Contains(strings.ToLower(screenInfo), "virtual") ||
+				strings.Contains(strings.ToLower(screenInfo), "vmware") {
+				result.Evidence = append(result.Evidence, "VM detected in screen info")
+				vmResult.Indicators = append(vmResult.Indicators, "screen_info_vm")
+				confidence += 0.2
+			}
+		}
+
+		if gpuInfo, ok := data["gpu_info"].(string); ok {
+			vmGPUPatterns := []string{"vmware", "virtual", "qemu", "parallels", "virtualbox"}
+			for _, pattern := range vmGPUPatterns {
+				if strings.Contains(strings.ToLower(gpuInfo), pattern) {
+					result.Evidence = append(result.Evidence, "VM GPU detected: "+pattern)
+					vmResult.Indicators = append(vmResult.Indicators, "gpu_"+pattern)
+					confidence += 0.25
+					break
+				}
+			}
+		}
+
+		if platform, ok := data["platform"].(string); ok {
+			if strings.Contains(strings.ToLower(platform), "virtual") {
+				result.Evidence = append(result.Evidence, "VM platform detected")
+				vmResult.Indicators = append(vmResult.Indicators, "platform_virtual")
+				confidence += 0.15
+			}
+		}
+	}
+
+	vmResult.Confidence = math.Min(confidence, 1.0)
+	vmResult.IsVM = vmResult.Confidence >= 0.3
+
+	return vmResult
+}
+
+func (s *AutomationDetectionService) detectSandbox(data map[string]interface{}, result *AutoDetectionResult) *SandboxDetectionResult {
+	sbxResult := &SandboxDetectionResult{
+		IsSandbox:  false,
+		SBXType:    "",
+		Confidence: 0.0,
+		Indicators: []string{},
+	}
+
+	confidence := 0.0
+
+	if data != nil {
+		if sandboxDetected, ok := data["sandbox_detected"].(bool); ok && sandboxDetected {
+			result.Evidence = append(result.Evidence, "Sandbox detected by frontend")
+			sbxResult.Indicators = append(sbxResult.Indicators, "frontend_sandbox_detected")
+			confidence += 0.5
+		}
+
+		if sbxType, ok := data["sandbox_type"].(string); ok && sbxType != "" {
+			result.Evidence = append(result.Evidence, "Sandbox type: "+sbxType)
+			sbxResult.SBXType = sbxType
+			sbxResult.Indicators = append(sbxResult.Indicators, "sandbox_type:"+sbxType)
+			confidence += 0.3
+		}
+
+		if sbxIndicators, ok := data["sandbox_indicators"].([]interface{}); ok && len(sbxIndicators) > 0 {
+			for _, indicator := range sbxIndicators {
+				if indStr, ok := indicator.(string); ok {
+					result.Evidence = append(result.Evidence, "Sandbox indicator: "+indStr)
+					sbxResult.Indicators = append(sbxResult.Indicators, indStr)
+					confidence += 0.15
+				}
+			}
+		}
+
+		if timingAnomaly, ok := data["timing_anomaly"].(float64); ok && timingAnomaly > 80 {
+			result.Evidence = append(result.Evidence, "High timing anomaly (possible sandbox)")
+			sbxResult.Indicators = append(sbxResult.Indicators, "high_timing_anomaly")
+			confidence += 0.25
+		}
+
+		if executionTime, ok := data["execution_time"].(float64); ok {
+			if executionTime < 1 {
+				result.Evidence = append(result.Evidence, "Suspiciously fast execution time")
+				sbxResult.Indicators = append(sbxResult.Indicators, "fast_execution")
+				confidence += 0.2
+			}
+		}
+
+		if processInfo, ok := data["process_count"].(int); ok {
+			if processInfo < 50 {
+				result.Evidence = append(result.Evidence, "Low process count (sandbox indicator)")
+				sbxResult.Indicators = append(sbxResult.Indicators, "low_process_count")
+				confidence += 0.15
+			}
+		}
+
+		if memoryInfo, ok := data["memory_available"].(float64); ok {
+			if memoryInfo < 1000 {
+				result.Evidence = append(result.Evidence, "Low available memory (sandbox indicator)")
+				sbxResult.Indicators = append(sbxResult.Indicators, "low_memory")
+				confidence += 0.15
+			}
+		}
+	}
+
+	sbxResult.Confidence = math.Min(confidence, 1.0)
+	sbxResult.IsSandbox = sbxResult.Confidence >= 0.3
+
+	return sbxResult
+}
+
+func (s *AutomationDetectionService) AnalyzeEnvironmentRisk(data map[string]interface{}) (float64, []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	riskScore := 0.0
+	indicators := []string{}
+
+	vmResult := &VMDetectionResult{}
+	vmResult.IsVM = false
+
+	if data != nil {
+		if vmScore, ok := data["vm_risk_score"].(float64); ok {
+			riskScore += vmScore
+			if vmScore > 0.5 {
+				indicators = append(indicators, "high_vm_risk")
+			}
+		}
+
+		if sbxScore, ok := data["sandbox_risk_score"].(float64); ok {
+			riskScore += sbxScore
+			if sbxScore > 0.5 {
+				indicators = append(indicators, "high_sandbox_risk")
+			}
+		}
+
+		if autoScore, ok := data["automation_risk_score"].(float64); ok {
+			riskScore += autoScore
+			if autoScore > 0.6 {
+				indicators = append(indicators, "high_automation_risk")
+			}
+		}
+
+		if fingerprintScore, ok := data["fingerprint_risk_score"].(float64); ok {
+			riskScore += fingerprintScore * 0.5
+			if fingerprintScore > 0.7 {
+				indicators = append(indicators, "suspicious_fingerprint")
+			}
+		}
+	}
+
+	return math.Min(riskScore, 100), indicators
+}
+
+func getClientIP(r *http.Request) string {
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return xri
+	}
+
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
