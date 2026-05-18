@@ -50,11 +50,28 @@ func SetupRouter() *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	r.GET("/", func(c *gin.Context) {
+	// Health Check
+	r.GET("/health", handler.HealthCheck)
+
+	// API文档
+	r.GET("/api", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"code":    0,
 			"message": "Welcome to HJTPX API",
 			"version": "1.0.0",
+		})
+	})
+
+	// 主验证码页面
+	r.GET("/captcha.html", func(c *gin.Context) {
+		c.HTML(200, "captcha.html", gin.H{
+			"title": "验证码",
+		})
+	})
+
+	r.GET("/seamless", func(c *gin.Context) {
+		c.HTML(200, "seamless.html", gin.H{
+			"title": "无缝验证码",
 		})
 	})
 
@@ -154,6 +171,7 @@ func SetupRouter() *gin.Engine {
 		adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
 		adminRouter.GET("/api/system-status", handler.GetSystemStatus)
 		adminRouter.GET("/api/alerts", handler.GetDashboardAlerts)
+		adminRouter.GET("/api/dashboard/extended", handler.GetExtendedDashboardStats)
 		adminRouter.GET("/export", handler.ExportDashboardData)
 
 		adminRouter.GET("/api/logs", handler.GetVerificationLogs)
@@ -321,6 +339,7 @@ func SetupRouter() *gin.Engine {
 		admin.Use(middleware.AuthMiddleware())
 		{
 			admin.GET("/stats", handler.GetStats)
+			admin.GET("/stats/detailed", handler.GetDetailedStats)
 			admin.GET("/users", handler.ListUsers)
 			admin.POST("/users", handler.CreateUser)
 			admin.PUT("/users/:id", handler.UpdateUser)

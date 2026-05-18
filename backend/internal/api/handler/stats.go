@@ -281,3 +281,76 @@ func GenerateReport(c *gin.Context) {
 		"report": report,
 	})
 }
+
+type DetailedStatsRequest struct {
+	StartDate string `form:"start_date"`
+	EndDate   string `form:"end_date"`
+	GroupBy   string `form:"group_by"`
+}
+
+type DetailedStatsResponse struct {
+	TotalVerifications int64              `json:"total_verifications"`
+	SuccessRate       float64             `json:"success_rate"`
+	AvgResponseTime   float64             `json:"avg_response_time"`
+	TopApplications   []ApplicationStats  `json:"top_applications"`
+	TopIPs            []IPStats           `json:"top_ips"`
+	HourlyDistribution []HourlyStats      `json:"hourly_distribution"`
+	DailyTrend        []DailyStats        `json:"daily_trend"`
+}
+
+type ApplicationStats struct {
+	AppID      uint   `json:"app_id"`
+	AppName    string `json:"app_name"`
+	TotalCount int64  `json:"total_count"`
+	SuccessRate float64 `json:"success_rate"`
+}
+
+type IPStats struct {
+	IP        string `json:"ip"`
+	Count     int64  `json:"count"`
+	BlockRate float64 `json:"block_rate"`
+}
+
+type HourlyStats struct {
+	Hour  int   `json:"hour"`
+	Count int64 `json:"count"`
+}
+
+type DailyStats struct {
+	Date        string  `json:"date"`
+	TotalCount  int64   `json:"total_count"`
+	SuccessCount int64  `json:"success_count"`
+	FailCount   int64   `json:"fail_count"`
+	AvgResponseTime float64 `json:"avg_response_time"`
+}
+
+func GetDetailedStats(c *gin.Context) {
+	handler := GetStatsHandler()
+	var req DetailedStatsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.BadRequest(c, "无效的请求参数")
+		return
+	}
+
+	startDate := time.Now().AddDate(0, 0, -7)
+	endDate := time.Now()
+	
+	if req.StartDate != "" {
+		if parsed, err := time.Parse("2006-01-02", req.StartDate); err == nil {
+			startDate = parsed
+		}
+	}
+	if req.EndDate != "" {
+		if parsed, err := time.Parse("2006-01-02", req.EndDate); err == nil {
+			endDate = parsed.Add(24 * time.Hour)
+		}
+	}
+
+	stats, err := handler.statsService.GetDetailedStats(startDate, endDate, req.GroupBy)
+	if err != nil {
+		response.InternalServerError(c, "获取详细统计失败")
+		return
+	}
+
+	response.Success(c, stats)
+}

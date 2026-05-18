@@ -1,25 +1,64 @@
 let blacklistPage = 1;
+let whitelistPage = 1;
 let blacklistPageSize = 10;
+let whitelistPageSize = 10;
 let currentBlacklist = [];
+let currentWhitelist = [];
 let currentView = 'table';
+let selectedBlacklist = new Set();
+let activeTab = 'blacklist';
 
 document.addEventListener('DOMContentLoaded', () => {
+    setupTabs();
     loadBlacklistSummary();
     loadBlacklist();
     setupEventListeners();
 });
 
+function setupTabs() {
+    const tabLinks = document.querySelectorAll('[data-tab]');
+    tabLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            tabLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            activeTab = link.dataset.tab;
+            
+            if (activeTab === 'blacklist') {
+                document.getElementById('blacklistSection').classList.remove('d-none');
+                document.getElementById('whitelistSection').classList.add('d-none');
+                loadBlacklist();
+            } else {
+                document.getElementById('blacklistSection').classList.add('d-none');
+                document.getElementById('whitelistSection').classList.remove('d-none');
+                loadWhitelist();
+            }
+        });
+    });
+}
+
 function setupEventListeners() {
     const addBtn = document.getElementById('addBlacklistBtn');
     if (addBtn) {
-        addBtn.addEventListener('click', () => openBlacklistModal());
+        addBtn.addEventListener('click', () => {
+            if (activeTab === 'blacklist') {
+                openBlacklistModal();
+            } else {
+                openWhitelistModal();
+            }
+        });
     }
 
     const importBtn = document.getElementById('importBlacklistBtn');
     if (importBtn) {
         importBtn.addEventListener('click', () => {
-            const modal = new bootstrap.Modal(document.getElementById('importModal'));
-            modal.show();
+            if (activeTab === 'blacklist') {
+                const modal = new bootstrap.Modal(document.getElementById('importModal'));
+                modal.show();
+            } else {
+                const modal = new bootstrap.Modal(document.getElementById('whitelistImportModal'));
+                modal.show();
+            }
         });
     }
 
@@ -28,11 +67,21 @@ function setupEventListeners() {
         confirmImportBtn.addEventListener('click', handleImport);
     }
 
+    const confirmWhitelistImportBtn = document.getElementById('confirmWhitelistImportBtn');
+    if (confirmWhitelistImportBtn) {
+        confirmWhitelistImportBtn.addEventListener('click', handleWhitelistImport);
+    }
+
     const searchBtn = document.getElementById('searchBlacklistBtn');
     if (searchBtn) {
         searchBtn.addEventListener('click', () => {
             blacklistPage = 1;
-            loadBlacklist();
+            whitelistPage = 1;
+            if (activeTab === 'blacklist') {
+                loadBlacklist();
+            } else {
+                loadWhitelist();
+            }
         });
     }
 
@@ -40,7 +89,15 @@ function setupEventListeners() {
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', (e) => {
             const checkboxes = document.querySelectorAll('.bl-checkbox');
-            checkboxes.forEach(cb => cb.checked = e.target.checked);
+            checkboxes.forEach(cb => {
+                cb.checked = e.target.checked;
+                if (e.target.checked) {
+                    selectedBlacklist.add(parseInt(cb.dataset.id));
+                } else {
+                    selectedBlacklist.delete(parseInt(cb.dataset.id));
+                }
+            });
+            updateSelectedCount();
         });
     }
 
@@ -68,6 +125,136 @@ function setupEventListeners() {
     const form = document.getElementById('blacklistForm');
     if (form) {
         form.addEventListener('submit', handleBlacklistSubmit);
+    }
+
+    const whitelistForm = document.getElementById('whitelistForm');
+    if (whitelistForm) {
+        whitelistForm.addEventListener('submit', handleWhitelistSubmit);
+    }
+
+    setupBatchActions();
+}
+
+function setupBatchActions() {
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', handleBatchDelete);
+    }
+
+    const batchUnblockBtn = document.getElementById('batchUnblockBtn');
+    if (batchUnblockBtn) {
+        batchUnblockBtn.addEventListener('click', handleBatchUnblock);
+    }
+
+    const batchExportBtn = document.getElementById('batchExportBtn');
+    if (batchExportBtn) {
+        batchExportBtn.addEventListener('click', handleBatchExport);
+    }
+
+    const batchWhitelistBtn = document.getElementById('batchWhitelistBtn');
+    if (batchWhitelistBtn) {
+        batchWhitelistBtn.addEventListener('click', handleBatchWhitelist);
+    }
+}
+
+function updateSelectedCount() {
+    const countEl = document.getElementById('selectedCount');
+    if (countEl) {
+        countEl.textContent = selectedBlacklist.size;
+    }
+}
+
+async function handleBatchDelete() {
+    if (selectedBlacklist.size === 0) {
+        showToast('请先选择要删除的记录', 'warning');
+        return;
+    }
+
+    if (!confirm(`确定要删除选中的 ${selectedBlacklist.size} 条记录吗？`)) {
+        return;
+    }
+
+    try {
+        const ids = Array.from(selectedBlacklist);
+        await auth.request('/admin/blacklist/batch-delete', {
+            method: 'POST',
+            body: JSON.stringify({ ids })
+        });
+        showToast(`成功删除 ${ids.length} 条记录`, 'success');
+        selectedBlacklist.clear();
+        loadBlacklist();
+        loadBlacklistSummary();
+    } catch (error) {
+        showToast('批量删除失败', 'danger');
+    }
+}
+
+async function handleBatchUnblock() {
+    if (selectedBlacklist.size === 0) {
+        showToast('请先选择要解封的记录', 'warning');
+        return;
+    }
+
+    if (!confirm(`确定要解封选中的 ${selectedBlacklist.size} 条记录吗？`)) {
+        return;
+    }
+
+    try {
+        const ids = Array.from(selectedBlacklist);
+        await auth.request('/admin/blacklist/batch-unblock', {
+            method: 'POST',
+            body: JSON.stringify({ ids })
+        });
+        showToast(`成功解封 ${ids.length} 条记录`, 'success');
+        selectedBlacklist.clear();
+        loadBlacklist();
+        loadBlacklistSummary();
+    } catch (error) {
+        showToast('批量解封失败', 'danger');
+    }
+}
+
+function handleBatchExport() {
+    if (selectedBlacklist.size === 0) {
+        showToast('请先选择要导出的记录', 'warning');
+        return;
+    }
+
+    const selectedItems = currentBlacklist.filter(item => selectedBlacklist.has(item.id));
+    const dataStr = JSON.stringify(selectedItems, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `blacklist_export_${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(`成功导出 ${selectedItems.length} 条记录`, 'success');
+}
+
+async function handleBatchWhitelist() {
+    if (selectedBlacklist.size === 0) {
+        showToast('请先选择要移入白名单的记录', 'warning');
+        return;
+    }
+
+    if (!confirm(`确定要将选中的 ${selectedBlacklist.size} 条记录移入白名单吗？`)) {
+        return;
+    }
+
+    try {
+        const ids = Array.from(selectedBlacklist);
+        await auth.request('/admin/blacklist/move-to-whitelist', {
+            method: 'POST',
+            body: JSON.stringify({ ids })
+        });
+        showToast(`成功移入白名单 ${ids.length} 条记录`, 'success');
+        selectedBlacklist.clear();
+        loadBlacklist();
+        loadWhitelist();
+        loadBlacklistSummary();
+    } catch (error) {
+        showToast('批量移入白名单失败', 'danger');
     }
 }
 
@@ -590,4 +777,251 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+async function loadWhitelist() {
+    const type = document.getElementById('whitelistType')?.value || '';
+    const keyword = document.getElementById('whitelistKeyword')?.value || '';
+    const mockData = getMockWhitelist();
+
+    try {
+        const params = new URLSearchParams({
+            page: whitelistPage,
+            size: whitelistPageSize,
+            type, keyword
+        });
+
+        const result = await auth.request(`/admin/whitelist?${params.toString()}`);
+        if (result.code === 0) {
+            currentWhitelist = result.data.list || [];
+            renderWhitelistPagination(result.data.total || currentWhitelist.length);
+            renderWhitelistCount(result.data.total || currentWhitelist.length);
+        } else {
+            currentWhitelist = filterWhitelist(mockData, type, keyword);
+            renderWhitelistPagination(currentWhitelist.length);
+            renderWhitelistCount(currentWhitelist.length);
+        }
+    } catch (error) {
+        currentWhitelist = filterWhitelist(mockData, type, keyword);
+        renderWhitelistPagination(currentWhitelist.length);
+        renderWhitelistCount(currentWhitelist.length);
+    }
+
+    renderWhitelist();
+}
+
+function getMockWhitelist() {
+    return [
+        {
+            id: 1, target: '192.168.1.1', type: 'ip', source: 'manual',
+            reason: '内部测试IP', expiration: 'permanent', status: 'active',
+            createdBy: 'admin', createdAt: '2025-01-01 10:00:00'
+        },
+        {
+            id: 2, target: 'trusted_user_001', type: 'user_id', source: 'manual',
+            reason: 'VIP用户', expiration: 'permanent', status: 'active',
+            createdBy: 'admin', createdAt: '2025-01-15 14:30:00'
+        }
+    ];
+}
+
+function filterWhitelist(list, type, keyword) {
+    return list.filter(item => {
+        if (type && item.type !== type) return false;
+        if (keyword && !item.target.toLowerCase().includes(keyword.toLowerCase())) return false;
+        return true;
+    });
+}
+
+function renderWhitelist() {
+    const tbody = document.getElementById('whitelistTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = currentWhitelist.map(item => `
+        <tr>
+            <td><input type="checkbox" class="wl-checkbox" data-id="${item.id}"></td>
+            <td>
+                <strong>${escapeHtml(item.target)}</strong>
+                <br><small class="text-muted">ID: ${item.id}</small>
+            </td>
+            <td><span class="badge ${getTypeBadgeClass(item.type)}">${getTypeText(item.type)}</span></td>
+            <td><small>${escapeHtml(item.reason)}</small></td>
+            <td><small>${item.expiration === 'permanent' ? '永久' : item.expiration}</small></td>
+            <td><span class="badge bg-success">生效中</span></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" onclick="viewWhitelistDetail(${item.id})" title="查看"><i class="fas fa-eye"></i></button>
+                    <button class="btn btn-outline-danger" onclick="deleteWhitelistItem(${item.id})" title="删除"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderWhitelistCount(total) {
+    const countEl = document.getElementById('whitelistCount');
+    if (countEl) countEl.textContent = total;
+}
+
+function renderWhitelistPagination(total) {
+    const pagination = document.getElementById('whitelistPagination');
+    if (!pagination) return;
+
+    const totalPages = Math.ceil(total / whitelistPageSize);
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+
+    let html = '<div class="d-flex justify-content-between align-items-center">';
+    html += `<span class="text-muted">第 ${whitelistPage} / ${totalPages} 页，共 ${total} 条</span>`;
+    html += '<div class="btn-group btn-group-sm">';
+    html += `<button class="btn btn-outline-secondary" onclick="changeWhitelistPage(${whitelistPage - 1})" ${whitelistPage === 1 ? 'disabled' : ''}>上一页</button>`;
+
+    const startPage = Math.max(1, whitelistPage - 2);
+    const endPage = Math.min(totalPages, whitelistPage + 2);
+
+    if (startPage > 1) {
+        html += `<button class="btn btn-outline-secondary" onclick="changeWhitelistPage(1)">1</button>`;
+        if (startPage > 2) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="btn ${i === whitelistPage ? 'btn-primary' : 'btn-outline-secondary'}" onclick="changeWhitelistPage(${i})">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += `<button class="btn btn-outline-secondary" disabled>...</button>`;
+        html += `<button class="btn btn-outline-secondary" onclick="changeWhitelistPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    html += `<button class="btn btn-outline-secondary" onclick="changeWhitelistPage(${whitelistPage + 1})" ${whitelistPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+    html += '</div></div>';
+
+    pagination.innerHTML = html;
+}
+
+function changeWhitelistPage(page) {
+    whitelistPage = page;
+    loadWhitelist();
+}
+
+function openWhitelistModal(item = null) {
+    const modal = document.getElementById('whitelistModal');
+    const title = document.getElementById('whitelistModalTitle');
+    const form = document.getElementById('whitelistForm');
+
+    if (item) {
+        title.textContent = '编辑白名单';
+        document.getElementById('whitelistId').value = item.id;
+        document.getElementById('wlType').value = item.type;
+        document.getElementById('wlValue').value = item.target;
+        document.getElementById('wlReason').value = item.reason;
+    } else {
+        title.textContent = '添加白名单';
+        form.reset();
+        document.getElementById('whitelistId').value = '';
+    }
+
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+async function handleWhitelistSubmit(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('whitelistId').value;
+
+    const data = {
+        type: document.getElementById('wlType').value,
+        target: document.getElementById('wlValue').value,
+        reason: document.getElementById('wlReason').value
+    };
+
+    try {
+        if (id) {
+            await auth.request(`/admin/whitelist/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+            showToast('白名单更新成功', 'success');
+        } else {
+            await auth.request('/admin/whitelist', { method: 'POST', body: JSON.stringify(data) });
+            showToast('白名单添加成功', 'success');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('whitelistModal'))?.hide();
+        loadWhitelist();
+    } catch (error) {
+        showToast('保存失败', 'danger');
+    }
+}
+
+async function handleWhitelistImport() {
+    const fileInput = document.getElementById('whitelistImportFile');
+    const importType = document.getElementById('whitelistImportType').value;
+    const importReason = document.getElementById('whitelistImportReason').value;
+
+    if (!fileInput.files.length) {
+        showToast('请选择要导入的文件', 'warning');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+        const content = e.target.result;
+        const targets = content.split(/\r?\n/).filter(line => line.trim());
+
+        const data = {
+            type: importType,
+            targets: targets,
+            reason: importReason
+        };
+
+        try {
+            await auth.request('/admin/whitelist/import', { method: 'POST', body: JSON.stringify(data) });
+            showToast(`成功导入 ${targets.length} 条记录`, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('whitelistImportModal'))?.hide();
+            loadWhitelist();
+        } catch (error) {
+            showToast('导入失败', 'danger');
+        }
+    };
+
+    reader.readAsText(file);
+}
+
+async function deleteWhitelistItem(id) {
+    if (!confirm('确定要删除这条白名单记录吗？')) return;
+
+    try {
+        await auth.request(`/admin/whitelist/${id}`, { method: 'DELETE' });
+        showToast('删除成功', 'success');
+        loadWhitelist();
+    } catch (error) {
+        showToast('删除失败', 'danger');
+    }
+}
+
+function viewWhitelistDetail(id) {
+    const item = currentWhitelist.find(i => i.id === id);
+    if (!item) return;
+
+    const modal = document.getElementById('whitelistDetailModal');
+    const content = document.getElementById('whitelistDetailContent');
+
+    content.innerHTML = `
+        <table class="table table-borderless">
+            <tr><td class="text-muted" style="width: 100px;">ID</td><td>${item.id}</td></tr>
+            <tr><td class="text-muted">目标</td><td><code>${escapeHtml(item.target)}</code></td></tr>
+            <tr><td class="text-muted">类型</td><td><span class="badge ${getTypeBadgeClass(item.type)}">${getTypeText(item.type)}</span></td></tr>
+            <tr><td class="text-muted">来源</td><td><span class="badge bg-secondary">${getSourceText(item.source)}</span></td></tr>
+            <tr><td class="text-muted">原因</td><td>${escapeHtml(item.reason)}</td></tr>
+            <tr><td class="text-muted">过期时间</td><td>${item.expiration === 'permanent' ? '永久' : item.expiration}</td></tr>
+            <tr><td class="text-muted">添加人</td><td>${item.createdBy}</td></tr>
+            <tr><td class="text-muted">添加时间</td><td>${item.createdAt}</td></tr>
+        </table>
+    `;
+
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
 }

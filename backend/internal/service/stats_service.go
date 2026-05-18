@@ -462,6 +462,78 @@ func (s *StatsService) generateDailyReport(date time.Time) (string, error) {
 	return report, nil
 }
 
+type DetailedStatsResult struct {
+	TotalVerifications int64             `json:"total_verifications"`
+	SuccessRate       float64            `json:"success_rate"`
+	AvgResponseTime   float64            `json:"avg_response_time"`
+	TopApplications   []ApplicationStats `json:"top_applications"`
+	TopIPs           []TopIPs           `json:"top_ips"`
+	HourlyDistribution []HourlyStats    `json:"hourly_distribution"`
+	DailyTrend       []TrendDataPoint   `json:"daily_trend"`
+}
+
+func (s *StatsService) GetDetailedStats(startDate, endDate time.Time, groupBy string) (*DetailedStatsResult, error) {
+	result := &DetailedStatsResult{}
+
+	var totalCount, successCount int64
+	database.DB.Model(&models.Verification{}).
+		Where("created_at >= ? AND created_at < ?", startDate, endDate).
+		Count(&totalCount)
+	database.DB.Model(&models.Verification{}).
+		Where("status = ? AND created_at >= ? AND created_at < ?", "success", startDate, endDate).
+		Count(&successCount)
+
+	result.TotalVerifications = totalCount
+	if totalCount > 0 {
+		result.SuccessRate = float64(successCount) / float64(totalCount) * 100
+	}
+
+	var avgDuration float64
+	rows, _ := database.DB.Model(&models.Verification{}).
+		Select("COALESCE(AVG(duration), 0) as avg_duration").
+		Where("created_at >= ? AND created_at < ?", startDate, endDate).
+		Rows()
+	if rows.Next() {
+		rows.Scan(&avgDuration)
+	}
+	result.AvgResponseTime = avgDuration
+
+	appStats, err := s.GetApplicationStats(10)
+	if err == nil {
+		result.TopApplications = appStats
+	}
+
+	ipStats, err := s.GetTopIPs(10)
+	if err == nil {
+		result.TopIPs = ipStats
+	}
+
+	for hour := 0; hour < 24; hour++ {
+		startHour := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), hour, 0, 0, 0, startDate.Location())
+		endHour := startHour.Add(time.Hour)
+
+		var count int64
+		database.DB.Model(&models.Verification{}).
+			Where("created_at >= ? AND created_at < ?", startHour, endHour).
+			Count(&count)
+
+		result.HourlyDistribution = append(result.HourlyDistribution, HourlyStats{
+			Hour:       hour,
+			TotalCount: count,
+		})
+	}
+
+	days := int(endDate.Sub(startDate).Hours() / 24)
+	if days > 0 {
+		trendData, err := s.GetTrendData(days)
+		if err == nil {
+			result.DailyTrend = trendData
+		}
+	}
+
+	return result, nil
+}
+
 func (s *StatsService) generateWeeklyReport(date time.Time) (string, error) {
 	startOfWeek := date.AddDate(0, 0, -int(date.Weekday()))
 	endOfWeek := startOfWeek.AddDate(0, 0, 7)

@@ -20,6 +20,9 @@
 <button type="button" class="btn btn-default" id="fullscreenBtn" title="全屏">
     <i class="fas fa-expand"></i>
 </button>
+<button type="button" class="btn btn-default" id="autoRefreshBtn" title="自动刷新">
+    <i class="fas fa-clock"></i> <span id="autoRefreshStatus">关闭</span>
+</button>
 {% endblock %}
 
 {% block content %}
@@ -80,6 +83,61 @@
                 <i class="fas fa-clock"></i>
             </div>
             <a href="/admin/monitoring" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-gradient-secondary">
+            <div class="inner">
+                <h3 id="totalUsers">0</h3>
+                <p>总用户数</p>
+                <small class="text-muted" id="userGrowth"></small>
+            </div>
+            <div class="icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <a href="/admin/applications" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-gradient-info">
+            <div class="inner">
+                <h3 id="totalApps">0</h3>
+                <p>应用数量</p>
+                <small class="text-muted" id="appGrowth"></small>
+            </div>
+            <div class="icon">
+                <i class="fas fa-mobile-alt"></i>
+            </div>
+            <a href="/admin/applications" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-gradient-navy">
+            <div class="inner">
+                <h3 id="currentQPSDisplay">0</h3>
+                <p>当前QPS</p>
+                <small class="text-muted">每秒请求数</small>
+            </div>
+            <div class="icon">
+                <i class="fas fa-tachometer-alt"></i>
+            </div>
+            <a href="/admin/monitoring" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-gradient-dark">
+            <div class="inner">
+                <h3 id="errorRate">0%</h3>
+                <p>错误率</p>
+                <small class="text-muted" id="errorTrend"></small>
+            </div>
+            <div class="icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <a href="/admin/logs" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
         </div>
     </div>
 </div>

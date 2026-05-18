@@ -7,6 +7,8 @@ let previousStats = null;
 const REALTIME_UPDATE_INTERVAL = 5000;
 const MAX_REALTIME_POINTS = 60;
 const WS_RECONNECT_DELAY = 3000;
+const AUTO_REFRESH_INTERVAL = 30000;
+let isAutoRefreshEnabled = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     initECharts();
@@ -16,7 +18,104 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSystemStatus();
     loadRecentActivity();
     startAutoRefresh();
+    await loadExtendedStats();
 });
+
+function toggleAutoRefresh() {
+    isAutoRefreshEnabled = !isAutoRefreshEnabled;
+    const statusEl = document.getElementById('autoRefreshStatus');
+    const btnEl = document.getElementById('autoRefreshBtn');
+    
+    if (isAutoRefreshEnabled) {
+        statusEl.textContent = '开启';
+        btnEl.classList.add('btn-success');
+        btnEl.classList.remove('btn-default');
+        autoRefreshInterval = setInterval(() => {
+            loadDashboardStats();
+            loadSystemStatus();
+        }, AUTO_REFRESH_INTERVAL);
+        showToast('自动刷新已开启（每30秒）', 'info');
+    } else {
+        statusEl.textContent = '关闭';
+        btnEl.classList.remove('btn-success');
+        btnEl.classList.add('btn-default');
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        showToast('自动刷新已关闭', 'info');
+    }
+}
+
+async function loadExtendedStats() {
+    try {
+        const response = await fetch('/admin/api/dashboard/extended');
+        if (!response.ok) throw new Error('Network error');
+        
+        const result = await response.json();
+        if (result.code === 0) {
+            updateExtendedStats(result.data);
+        } else {
+            loadMockExtendedStats();
+        }
+    } catch (error) {
+        console.error('Extended stats load failed:', error);
+        loadMockExtendedStats();
+    }
+}
+
+function loadMockExtendedStats() {
+    updateExtendedStats({
+        total_users: Math.floor(Math.random() * 5000) + 8000,
+        total_apps: Math.floor(Math.random() * 50) + 100,
+        current_qps: Math.floor(Math.random() * 50) + 20,
+        error_rate: (Math.random() * 2 + 0.5).toFixed(2),
+        user_growth: (Math.random() * 15 + 5).toFixed(1),
+        app_growth: (Math.random() * 10 + 2).toFixed(1),
+        error_growth: (Math.random() * 5 - 3).toFixed(1)
+    });
+}
+
+function updateExtendedStats(data) {
+    const totalUsersEl = document.getElementById('totalUsers');
+    const totalAppsEl = document.getElementById('totalApps');
+    const currentQPSEl = document.getElementById('currentQPSDisplay');
+    const errorRateEl = document.getElementById('errorRate');
+    const userGrowthEl = document.getElementById('userGrowth');
+    const appGrowthEl = document.getElementById('appGrowth');
+    const errorTrendEl = document.getElementById('errorTrend');
+    
+    if (totalUsersEl) {
+        animateNumber('totalUsers', data.total_users || 0);
+        if (userGrowthEl) {
+            const growth = parseFloat(data.user_growth || 0);
+            userGrowthEl.textContent = growth >= 0 ? `↑ ${growth}%` : `↓ ${Math.abs(growth)}%`;
+            userGrowthEl.className = growth >= 0 ? 'text-success' : 'text-danger';
+        }
+    }
+    
+    if (totalAppsEl) {
+        animateNumber('totalApps', data.total_apps || 0);
+        if (appGrowthEl) {
+            const growth = parseFloat(data.app_growth || 0);
+            appGrowthEl.textContent = growth >= 0 ? `↑ ${growth}%` : `↓ ${Math.abs(growth)}%`;
+            appGrowthEl.className = growth >= 0 ? 'text-success' : 'text-danger';
+        }
+    }
+    
+    if (currentQPSEl) {
+        animateNumber('currentQPSDisplay', data.current_qps || 0);
+    }
+    
+    if (errorRateEl) {
+        errorRateEl.textContent = (data.error_rate || 0) + '%';
+        if (errorTrendEl) {
+            const growth = parseFloat(data.error_growth || 0);
+            errorTrendEl.textContent = growth <= 0 ? `↓ ${Math.abs(growth)}%` : `↑ ${growth}%`;
+            errorTrendEl.className = growth <= 0 ? 'text-success' : 'text-danger';
+        }
+    }
+}
 
 function initECharts() {
     initRequestTrendChart();

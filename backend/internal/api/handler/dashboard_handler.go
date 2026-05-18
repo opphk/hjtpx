@@ -135,3 +135,15 @@ func GetDashboardAlerts(c *gin.Context) {
 		"alerts": alerts,
 	})
 }
+
+func GetExtendedDashboardStats(c *gin.Context) {
+	handler := GetDashboardHandler()
+
+	stats, err := handler.dashboardService.GetExtendedStats()
+	if err != nil {
+		response.InternalServerError(c, "获取扩展统计失败")
+		return
+	}
+
+	response.Success(c, stats)
+}

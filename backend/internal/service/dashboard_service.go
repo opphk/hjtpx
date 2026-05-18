@@ -379,3 +379,66 @@ func (s *DashboardService) CheckAlerts() []DashboardAlert {
 
 	return alerts
 }
+
+type ExtendedStats struct {
+	TotalUsers   int64   `json:"total_users"`
+	TotalApps    int64   `json:"total_apps"`
+	CurrentQPS   float64 `json:"current_qps"`
+	ErrorRate    float64 `json:"error_rate"`
+	UserGrowth   float64 `json:"user_growth"`
+	AppGrowth    float64 `json:"app_growth"`
+	ErrorGrowth  float64 `json:"error_growth"`
+}
+
+func (s *DashboardService) GetExtendedStats() (*ExtendedStats, error) {
+	stats := &ExtendedStats{}
+
+	database.DB.Model(&models.User{}).Count(&stats.TotalUsers)
+
+	database.DB.Model(&models.Application{}).Count(&stats.TotalApps)
+
+	now := time.Now()
+	startOfMinute := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0, 0, now.Location())
+	var countInMinute int64
+	database.DB.Model(&models.Verification{}).
+		Where("created_at >= ?", startOfMinute).
+		Count(&countInMinute)
+	stats.CurrentQPS = float64(countInMinute)
+
+	var totalCount, errorCount int64
+	database.DB.Model(&models.Verification{}).Count(&totalCount)
+	database.DB.Model(&models.Verification{}).
+		Where("status = ?", "failed").
+		Count(&errorCount)
+	if totalCount > 0 {
+		stats.ErrorRate = float64(errorCount) / float64(totalCount) * 100
+	}
+
+	startOfWeek := now.AddDate(0, 0, -7)
+	var weekStartCount, weekEndCount int64
+	database.DB.Model(&models.User{}).
+		Where("created_at >= ?", startOfWeek).
+		Count(&weekStartCount)
+	weekStart := startOfWeek.AddDate(0, 0, -7)
+	database.DB.Model(&models.User{}).
+		Where("created_at >= ? AND created_at < ?", weekStart, startOfWeek).
+		Count(&weekEndCount)
+	if weekEndCount > 0 {
+		stats.UserGrowth = float64(weekStartCount-weekEndCount) / float64(weekEndCount) * 100
+	}
+
+	startOfWeekApps := now.AddDate(0, 0, -7)
+	var weekStartApps, weekEndApps int64
+	database.DB.Model(&models.Application{}).
+		Where("created_at >= ?", startOfWeekApps).
+		Count(&weekStartApps)
+	weekStartAppsTime := startOfWeekApps.AddDate(0, 0, -7)
+	database.DB.Model(&models.Application{}).
+		Where("created_at >= ? AND created_at < ?", weekStartAppsTime, startOfWeekApps).
+		Count(&weekEndApps)
+	if weekEndApps > 0 {
+		stats.AppGrowth = float64(weekStartApps-weekEndApps) / float64(weekEndApps) * 100
+	}
+
+	return stats, nil
+}

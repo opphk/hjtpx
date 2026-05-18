@@ -1,5 +1,8 @@
 let userGrowthChart, requestTrendChart, requestTypeChart, appDistributionChart, errorRateChart, geoDistributionChart;
 let currentChartType = 'line';
+let refreshTimer = null;
+let isAutoRefresh = false;
+const AUTO_REFRESH_INTERVAL = 60000;
 
 document.addEventListener('DOMContentLoaded', () => {
     initAllCharts();
@@ -43,6 +46,38 @@ function setupEventListeners() {
     const exportBtn = document.getElementById('exportStatsBtn');
     if (exportBtn) {
         exportBtn.addEventListener('click', exportStatsReport);
+    }
+
+    setupAutoRefresh();
+}
+
+function setupAutoRefresh() {
+    const autoRefreshBtn = document.createElement('button');
+    autoRefreshBtn.id = 'autoRefreshBtn';
+    autoRefreshBtn.className = 'btn btn-outline-secondary btn-sm ms-2';
+    autoRefreshBtn.innerHTML = '<i class="fas fa-sync me-1"></i>自动刷新';
+    
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn && refreshBtn.parentElement) {
+        refreshBtn.parentElement.appendChild(autoRefreshBtn);
+        
+        autoRefreshBtn.addEventListener('click', () => {
+            isAutoRefresh = !isAutoRefresh;
+            if (isAutoRefresh) {
+                autoRefreshBtn.classList.add('btn-success');
+                autoRefreshBtn.classList.remove('btn-outline-secondary');
+                refreshTimer = setInterval(loadStatsData, AUTO_REFRESH_INTERVAL);
+                showToast('自动刷新已开启（每分钟）', 'info');
+            } else {
+                autoRefreshBtn.classList.remove('btn-success');
+                autoRefreshBtn.classList.add('btn-outline-secondary');
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
+                }
+                showToast('自动刷新已关闭', 'info');
+            }
+        });
     }
 }
 
