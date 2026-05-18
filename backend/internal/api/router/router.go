@@ -144,6 +144,12 @@ func SetupRouter() *gin.Engine {
 			})
 		})
 
+		adminRouter.GET("/rate-limit", func(c *gin.Context) {
+			c.HTML(200, "rate-limit.html", gin.H{
+				"title": "限流配置",
+			})
+		})
+
 		adminRouter.GET("/api/dashboard", handler.GetDashboardData)
 		adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
 		adminRouter.GET("/api/system-status", handler.GetSystemStatus)
@@ -379,6 +385,9 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/backups/:id/verify", backupHandler.VerifyBackup)
 			admin.POST("/backups/cleanup", backupHandler.CleanupOldBackups)
 			admin.GET("/backup-config", backupHandler.GetBackupConfig)
+
+			arHandler := handler.GetAdvancedRateLimitHandler()
+			arHandler.RegisterRoutes(admin)
 		}
 	}
 

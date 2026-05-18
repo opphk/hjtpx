@@ -174,13 +174,53 @@ type TokenBucketConfigRequest struct {
 func (h *AdvancedRateLimitHandler) GetTokenBucketStats(c *gin.Context) {
 	key := c.Query("key")
 	if key == "" {
-		stats := h.tokenBucketService.GetBucketStats("")
-		response.Success(c, gin.H{"stats": stats})
+		stats := h.tokenBucketService.GetGlobalStats()
+		bucketList := h.tokenBucketService.GetBucketList()
+		response.Success(c, gin.H{
+			"global_stats": stats,
+			"buckets":      bucketList,
+		})
 		return
 	}
 
 	stats := h.tokenBucketService.GetBucketStats(key)
 	response.Success(c, gin.H{"key": key, "stats": stats})
+}
+
+type TokenBucketUpdateRequest struct {
+	Key      string  `json:"key" binding:"required"`
+	Rate     float64 `json:"rate"`
+	Capacity float64 `json:"capacity"`
+	BurstSize float64 `json:"burst_size"`
+}
+
+func (h *AdvancedRateLimitHandler) UpdateTokenBucketConfig(c *gin.Context) {
+	var req TokenBucketUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	config := &service.TokenBucketConfig{
+		Rate:     req.Rate,
+		Capacity: req.Capacity,
+		BurstSize: req.BurstSize,
+	}
+
+	if err := h.tokenBucketService.UpdateBucketConfig(req.Key, config); err != nil {
+		response.InternalServerError(c, "Failed to update bucket config: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{"message": "bucket config updated successfully"})
+}
+
+func (h *AdvancedRateLimitHandler) GetTokenBucketList(c *gin.Context) {
+	bucketList := h.tokenBucketService.GetBucketList()
+	response.Success(c, gin.H{
+		"count":   len(bucketList),
+		"buckets": bucketList,
+	})
 }
 
 func (h *AdvancedRateLimitHandler) ResetTokenBucket(c *gin.Context) {
@@ -339,6 +379,8 @@ func (h *AdvancedRateLimitHandler) RegisterRoutes(r *gin.RouterGroup) {
 		rateLimit.POST("/distributed/reset", h.ResetDistributedKey)
 
 		rateLimit.GET("/token-bucket/stats", h.GetTokenBucketStats)
+		rateLimit.GET("/token-bucket/list", h.GetTokenBucketList)
+		rateLimit.POST("/token-bucket/update", h.UpdateTokenBucketConfig)
 		rateLimit.POST("/token-bucket/reset", h.ResetTokenBucket)
 
 		rateLimit.GET("/smart/stats", h.GetSmartRateLimitStats)

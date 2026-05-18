@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/hjtpx/hjtpx/internal/pkg/logger"
 	"github.com/hjtpx/hjtpx/pkg/redis"
 )
 
@@ -27,22 +29,41 @@ type TokenBucketResult struct {
 	IsBurst    bool          // 是否为突发请求
 }
 
+// TokenBucketStats 令牌桶统计信息
+type TokenBucketStats struct {
+	TotalRequests   int64   // 总请求数
+	AllowedRequests int64   // 允许的请求数
+	RejectedRequests int64  // 拒绝的请求数
+	BurstRequests   int64   // 突发请求数
+	TotalTokens     float64 // 当前令牌数
+	Capacity        float64 // 桶容量
+	TokenUsage      float64 // 令牌使用率
+}
+
 // TokenBucket 令牌桶结构
 type TokenBucket struct {
-	mu         sync.Mutex
-	key        string
-	capacity   float64
-	rate       float64
-	tokens     float64
-	lastRefill time.Time
-	burstSize  float64
+	mu               sync.Mutex
+	key              string
+	capacity         float64
+	rate             float64
+	tokens           float64
+	lastRefill       time.Time
+	burstSize        float64
+	totalRequests    int64
+	allowedRequests  int64
+	rejectedRequests int64
+	burstRequests    int64
 }
 
 // TokenBucketRateLimitService 令牌桶限流服务
 type TokenBucketRateLimitService struct {
-	buckets      map[string]*TokenBucket
-	mu           sync.RWMutex
-	redisEnabled bool
+	buckets         map[string]*TokenBucket
+	mu              sync.RWMutex
+	redisEnabled    bool
+	globalStats     atomic.Int64
+	allowedCount    atomic.Int64
+	rejectedCount   atomic.Int64
+	burstCount      atomic.Int64
 }
 
 const (
@@ -108,6 +129,7 @@ func (tb *TokenBucket) tryConsume(tokens float64) *TokenBucketResult {
 	defer tb.mu.Unlock()
 
 	tb.refill()
+	tb.totalRequests++
 
 	result := &TokenBucketResult{
 		Allowed:  false,
@@ -119,6 +141,7 @@ func (tb *TokenBucket) tryConsume(tokens float64) *TokenBucketResult {
 	// 正常令牌消费
 	if tb.tokens >= tokens {
 		tb.tokens -= tokens
+		tb.allowedRequests++
 		result.Allowed = true
 		result.Tokens = tb.tokens
 		return result
@@ -129,6 +152,8 @@ func (tb *TokenBucket) tryConsume(tokens float64) *TokenBucketResult {
 		remaining := tokens - tb.tokens
 		tb.tokens = 0
 		tb.burstSize -= remaining
+		tb.allowedRequests++
+		tb.burstRequests++
 		result.Allowed = true
 		result.IsBurst = true
 		result.Tokens = tb.tokens
@@ -137,6 +162,7 @@ func (tb *TokenBucket) tryConsume(tokens float64) *TokenBucketResult {
 	}
 
 	// 计算需要等待的时间
+	tb.rejectedRequests++
 	needed := tokens - tb.tokens
 	result.WaitTime = time.Duration(needed/tb.rate) * time.Second
 	result.RetryAfter = result.WaitTime
@@ -308,16 +334,116 @@ func (s *TokenBucketRateLimitService) GetBucketStats(key string) map[string]inte
 		bucket.mu.Lock()
 		defer bucket.mu.Unlock()
 		bucket.refill()
+		
+		var tokenUsage float64
+		if bucket.capacity > 0 {
+			tokenUsage = ((bucket.capacity - bucket.tokens) / bucket.capacity) * 100
+		}
+		
 		return map[string]interface{}{
-			"key":         bucket.key,
-			"tokens":      bucket.tokens,
-			"capacity":    bucket.capacity,
-			"rate":        bucket.rate,
-			"burst_size":  bucket.burstSize,
-			"last_refill": bucket.lastRefill,
+			"key":                bucket.key,
+			"tokens":             bucket.tokens,
+			"capacity":           bucket.capacity,
+			"rate":               bucket.rate,
+			"burst_size":         bucket.burstSize,
+			"last_refill":        bucket.lastRefill,
+			"total_requests":     bucket.totalRequests,
+			"allowed_requests":   bucket.allowedRequests,
+			"rejected_requests":  bucket.rejectedRequests,
+			"burst_requests":     bucket.burstRequests,
+			"token_usage":        tokenUsage,
 		}
 	}
 	return nil
+}
+
+// GetGlobalStats 获取全局统计信息
+func (s *TokenBucketRateLimitService) GetGlobalStats() map[string]interface{} {
+	s.mu.RLock()
+	bucketCount := len(s.buckets)
+	s.mu.RUnlock()
+
+	totalTokens := float64(0)
+	for _, bucket := range s.buckets {
+		bucket.mu.Lock()
+		totalTokens += bucket.tokens
+		bucket.mu.Unlock()
+	}
+
+	return map[string]interface{}{
+		"bucket_count":        bucketCount,
+		"total_tokens":        totalTokens,
+		"total_requests":      s.globalStats.Load(),
+		"allowed_requests":    s.allowedCount.Load(),
+		"rejected_requests":  s.rejectedCount.Load(),
+		"burst_requests":      s.burstCount.Load(),
+		"redis_enabled":       s.redisEnabled,
+	}
+}
+
+// UpdateBucketConfig 更新桶配置
+func (s *TokenBucketRateLimitService) UpdateBucketConfig(key string, config *TokenBucketConfig) error {
+	bucketKey := tokenBucketPrefix + key
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if bucket, exists := s.buckets[bucketKey]; exists {
+		bucket.mu.Lock()
+		defer bucket.mu.Unlock()
+		bucket.capacity = config.Capacity
+		bucket.rate = config.Rate
+		bucket.burstSize = config.BurstSize
+		if bucket.tokens > bucket.capacity {
+			bucket.tokens = bucket.capacity
+		}
+		if bucket.burstSize > bucket.capacity {
+			bucket.burstSize = bucket.capacity
+		}
+		logger.Info("TokenBucket: updated bucket config",
+			logger.Fields{"key": key, "capacity": config.Capacity, "rate": config.Rate})
+		return nil
+	}
+	return fmt.Errorf("bucket not found: %s", key)
+}
+
+// GetBucketList 获取所有桶的列表
+func (s *TokenBucketRateLimitService) GetBucketList() []map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]map[string]interface{}, 0, len(s.buckets))
+	now := time.Now()
+
+	for _, bucket := range s.buckets {
+		bucket.mu.Lock()
+		elapsed := now.Sub(bucket.lastRefill).Seconds()
+		tokens := bucket.tokens + elapsed*bucket.rate
+		if tokens > bucket.capacity {
+			tokens = bucket.capacity
+		}
+
+		var tokenUsage float64
+		if bucket.capacity > 0 {
+			tokenUsage = ((bucket.capacity - tokens) / bucket.capacity) * 100
+		}
+
+		result = append(result, map[string]interface{}{
+			"key":               bucket.key,
+			"tokens":            tokens,
+			"capacity":          bucket.capacity,
+			"rate":              bucket.rate,
+			"burst_size":        bucket.burstSize,
+			"token_usage":       tokenUsage,
+			"total_requests":    bucket.totalRequests,
+			"allowed_requests":  bucket.allowedRequests,
+			"rejected_requests": bucket.rejectedRequests,
+			"burst_requests":    bucket.burstRequests,
+		})
+		bucket.mu.Unlock()
+	}
+
+	return result
 }
 
 // cleanupExpiredBuckets 清理过期的桶
