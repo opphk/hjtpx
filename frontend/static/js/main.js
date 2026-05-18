@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initKeyboardNavigation();
     initAccessibilityFeatures();
     injectCaptchaStyles();
+    initTouchGestures();
+    initTouchFeedback();
 });
 
 function initKeyboardNavigation() {
@@ -724,4 +726,202 @@ function injectCaptchaStyles() {
     `;
 
     document.head.appendChild(styleSheet);
+}
+
+function initTouchGestures() {
+    if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) {
+        return;
+    }
+
+    const touchConfig = {
+        swipeThreshold: 50,
+        tapThreshold: 200,
+        longPressDelay: 500,
+        doubleTapDelay: 300,
+        dragThreshold: 10
+    };
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isSwipe = false;
+    let isDragging = false;
+    let longPressTimer = null;
+    let lastTapTime = 0;
+    let lastTapPos = { x: 0, y: 0 };
+
+    const captchaInteractive = document.querySelectorAll('.captcha-interactive, .captcha-slider-button, .captcha-click-marker, .captcha-refresh');
+
+    captchaInteractive.forEach(el => {
+        el.addEventListener('touchstart', function(e) {
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+            isSwipe = true;
+            isDragging = false;
+
+            this.classList.add('touch-active');
+
+            longPressTimer = setTimeout(() => {
+                this.classList.add('long-press-active');
+                triggerHapticFeedback('medium');
+                this.dispatchEvent(new CustomEvent('longpress', { bubbles: true }));
+            }, touchConfig.longPressDelay);
+        }, { passive: true });
+
+        el.addEventListener('touchmove', function(e) {
+            if (longPressTimer) {
+                const touch = e.touches[0];
+                const deltaX = Math.abs(touch.clientX - touchStartX);
+                const deltaY = Math.abs(touch.clientY - touchStartY);
+
+                if (deltaX > touchConfig.dragThreshold || deltaY > touchConfig.dragThreshold) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                    this.classList.remove('long-press-active');
+                    isDragging = true;
+                }
+            }
+
+            if (isDragging) {
+                this.classList.add('dragging');
+            }
+        }, { passive: true });
+
+        el.addEventListener('touchend', function(e) {
+            const touch = e.changedTouches[0];
+            const touchDuration = Date.now() - touchStartTime;
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = touch.clientY - touchStartY;
+
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+
+            this.classList.remove('touch-active', 'long-press-active', 'dragging');
+
+            if (touchDuration < touchConfig.tapThreshold && Math.abs(deltaX) < touchConfig.dragThreshold && Math.abs(deltaY) < touchConfig.dragThreshold) {
+                handleTap(this, touch);
+            }
+
+            if (isSwipe && Math.abs(deltaX) > touchConfig.swipeThreshold) {
+                const direction = deltaX > 0 ? 'right' : 'left';
+                this.dispatchEvent(new CustomEvent('swipe', {
+                    bubbles: true,
+                    detail: { direction: direction, distance: Math.abs(deltaX) }
+                }));
+            }
+
+            if (isSwipe && Math.abs(deltaY) > touchConfig.swipeThreshold && Math.abs(deltaY) > Math.abs(deltaX)) {
+                const direction = deltaY > 0 ? 'down' : 'up';
+                this.dispatchEvent(new CustomEvent('swipe', {
+                    bubbles: true,
+                    detail: { direction: direction, distance: Math.abs(deltaY) }
+                }));
+            }
+
+            isSwipe = false;
+            isDragging = false;
+        }, { passive: true });
+
+        el.addEventListener('touchcancel', function() {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+            this.classList.remove('touch-active', 'long-press-active', 'dragging');
+            isSwipe = false;
+            isDragging = false;
+        });
+    });
+
+    function handleTap(target, touch) {
+        const now = Date.now();
+
+        if (now - lastTapTime < touchConfig.doubleTapDelay) {
+            const deltaX = Math.abs(touch.clientX - lastTapPos.x);
+            const deltaY = Math.abs(touch.clientY - lastTapPos.y);
+
+            if (deltaX < 50 && deltaY < 50) {
+                target.dispatchEvent(new CustomEvent('doubletap', {
+                    bubbles: true,
+                    detail: { x: touch.clientX, y: touch.clientY }
+                }));
+                lastTapTime = 0;
+                triggerHapticFeedback('light');
+                return;
+            }
+        }
+
+        lastTapTime = now;
+        lastTapPos = { x: touch.clientX, y: touch.clientY };
+        triggerHapticFeedback('light');
+
+        target.dispatchEvent(new CustomEvent('tap', {
+            bubbles: true,
+            detail: { x: touch.clientX, y: touch.clientY }
+        }));
+    }
+}
+
+function initTouchFeedback() {
+    if (document.getElementById('touch-feedback-styles')) {
+        return;
+    }
+
+    const style = document.createElement('style');
+    style.id = 'touch-feedback-styles';
+    style.textContent = `
+        .touch-active {
+            transform: scale(0.96);
+            opacity: 0.9;
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
+        }
+
+        .long-press-active {
+            background-color: rgba(102, 126, 234, 0.2) !important;
+            box-shadow: inset 0 0 20px rgba(102, 126, 234, 0.15);
+        }
+
+        .dragging {
+            opacity: 0.85;
+            transform: scale(1.08);
+            cursor: grabbing;
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            .captcha-interactive,
+            .captcha-slider-button,
+            .captcha-click-marker,
+            .captcha-refresh,
+            .btn,
+            .nav-link {
+                -webkit-tap-highlight-color: rgba(102, 126, 234, 0.2);
+                -webkit-touch-callout: none;
+                touch-action: manipulation;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .touch-active,
+            .long-press-active,
+            .dragging {
+                transition: none !important;
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+}
+
+function triggerHapticFeedback(intensity = 'light') {
+    if ('vibrate' in navigator) {
+        const patterns = {
+            light: 10,
+            medium: 25,
+            heavy: 50
+        };
+        navigator.vibrate(patterns[intensity] || patterns.light);
+    }
 }

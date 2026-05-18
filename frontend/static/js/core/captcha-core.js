@@ -86,6 +86,17 @@
             this.refreshButton = this.container.querySelector('.captcha-refresh');
         };
 
+        SliderCaptcha.prototype.triggerHapticFeedback = function(intensity) {
+            if ('vibrate' in navigator) {
+                var patterns = {
+                    light: 10,
+                    medium: 25,
+                    heavy: 50
+                };
+                navigator.vibrate(patterns[intensity] || patterns.light);
+            }
+        };
+
         SliderCaptcha.prototype.getTemplate = function() {
             return '<div class="captcha-slider-container">' +
                 '<div class="captcha-slider-track"></div>' +
@@ -147,7 +158,11 @@
             this.sliderContainer.classList.add('is-dragging');
             this.sliderButton.classList.add('dragging');
 
-            e.preventDefault();
+            if (e.type === 'touchstart') {
+                this.triggerHapticFeedback('light');
+                e.preventDefault();
+                e.stopPropagation();
+            }
         };
 
         SliderCaptcha.prototype.onDrag = function(e) {
@@ -162,6 +177,10 @@
             this.sliderPosition = Math.max(0, Math.min(deltaX, maxX));
 
             this.updateSliderUI();
+
+            if (e.type === 'touchmove') {
+                e.preventDefault();
+            }
         };
 
         SliderCaptcha.prototype.endDrag = function() {
@@ -200,6 +219,7 @@
             this.isVerified = true;
             this.sliderButton.classList.add('success');
             this.sliderButton.innerHTML = '<i class="fas fa-check"></i>';
+            this.triggerHapticFeedback('heavy');
 
             if (this.options.onSuccess) {
                 this.options.onSuccess({
@@ -213,6 +233,7 @@
         SliderCaptcha.prototype.onError = function() {
             this.sliderButton.classList.add('error');
             this.sliderContainer.classList.add('error-flash');
+            this.triggerHapticFeedback('heavy');
 
             setTimeout(function() {
                 this.resetSlider();

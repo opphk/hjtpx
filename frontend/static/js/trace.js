@@ -5,6 +5,8 @@ class TraceCollector {
         this.isCollecting = false;
         this.lastPoint = null;
         this.deviceInfo = this.getDeviceInfo();
+        this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        this.activeTouches = new Map();
     }
 
     getDeviceInfo() {
@@ -13,7 +15,8 @@ class TraceCollector {
             screenWidth: window.screen.width,
             screenHeight: window.screen.height,
             devicePixelRatio: window.devicePixelRatio,
-            touchSupport: 'ontouchstart' in window,
+            touchSupport: this.isTouchDevice,
+            maxTouchPoints: navigator.maxTouchPoints || 0,
             platform: navigator.platform,
             language: navigator.language
         };
@@ -24,9 +27,75 @@ class TraceCollector {
         this.startTime = Date.now();
         this.isCollecting = true;
         this.lastPoint = null;
+        this.activeTouches.clear();
+
+        if (this.isTouchDevice) {
+            this.setupTouchTracking();
+        }
     }
 
-    addPoint(eventType, x, y) {
+    setupTouchTracking() {
+        const trackElement = document.querySelector('.captcha-slider-container, .captcha-interactive, body');
+        if (!trackElement) return;
+
+        trackElement.addEventListener('touchstart', (e) => {
+            if (!this.isCollecting) return;
+
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                this.activeTouches.set(touch.identifier, {
+                    x: touch.clientX,
+                    y: touch.clientY,
+                    time: Date.now()
+                });
+
+                this.addPoint('touchstart', touch.clientX, touch.clientY, touch.identifier);
+            }
+        }, { passive: true });
+
+        trackElement.addEventListener('touchmove', (e) => {
+            if (!this.isCollecting) return;
+
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                const lastTouch = this.activeTouches.get(touch.identifier);
+
+                if (lastTouch) {
+                    const timeDiff = Date.now() - lastTouch.time;
+                    if (timeDiff >= 5) {
+                        this.addMovePoint(touch.clientX, touch.clientY, touch.identifier);
+                        this.activeTouches.set(touch.identifier, {
+                            x: touch.clientX,
+                            y: touch.clientY,
+                            time: Date.now()
+                        });
+                    }
+                }
+            }
+        }, { passive: true });
+
+        trackElement.addEventListener('touchend', (e) => {
+            if (!this.isCollecting) return;
+
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                this.activeTouches.delete(touch.identifier);
+                this.addPoint('touchend', touch.clientX, touch.clientY, touch.identifier);
+            }
+        }, { passive: true });
+
+        trackElement.addEventListener('touchcancel', (e) => {
+            if (!this.isCollecting) return;
+
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                this.activeTouches.delete(touch.identifier);
+                this.addPoint('touchcancel', touch.clientX, touch.clientY, touch.identifier);
+            }
+        }, { passive: true });
+    }
+
+    addPoint(eventType, x, y, touchId = null) {
         if (!this.isCollecting) return;
 
         const point = {
@@ -36,16 +105,20 @@ class TraceCollector {
             e: eventType
         };
 
+        if (touchId !== null) {
+            point.touchId = touchId;
+        }
+
         this.points.push(point);
 
-        if (eventType === 'start') {
+        if (eventType === 'start' || eventType === 'touchstart') {
             this.startTime = Date.now();
         }
 
         this.lastPoint = point;
     }
 
-    addMovePoint(x, y) {
+    addMovePoint(x, y, touchId = null) {
         if (!this.isCollecting) return;
 
         if (this.lastPoint) {
@@ -61,6 +134,10 @@ class TraceCollector {
             y: y,
             e: 'move'
         };
+
+        if (touchId !== null) {
+            point.touchId = touchId;
+        }
 
         this.points.push(point);
         this.lastPoint = point;

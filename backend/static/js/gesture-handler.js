@@ -7,7 +7,10 @@
     rotationSensitivity: 0.1,
     pinchThreshold: 0.02,
     dragThreshold: 5,
-    velocityThreshold: 0.5
+    velocityThreshold: 0.5,
+    touchFeedbackDuration: 120,
+    longPressDelay: 500,
+    doubleTapDelay: 300
   };
 
   class GestureHandler {
@@ -30,7 +33,76 @@
       this.setupPinchZoom();
       this.setupDragAndDrop();
       this.setupDoubleTap();
+      this.setupLongPress();
       this.injectGestureStyles();
+    }
+
+    setupLongPress() {
+      const longPressTargets = document.querySelectorAll('[data-long-press="true"], .captcha-interactive, .captcha-refresh');
+
+      longPressTargets.forEach(el => {
+        let longPressTimer = null;
+        let isMoving = false;
+        let startX = 0;
+        let startY = 0;
+
+        el.addEventListener('touchstart', (e) => {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          isMoving = false;
+
+          longPressTimer = setTimeout(() => {
+            this.triggerHapticFeedback('medium');
+            el.classList.add('long-press-active');
+            this.dispatchGestureEvent('longpress', el, {
+              x: startX,
+              y: startY,
+              duration: GESTURE_CONFIG.longPressDelay
+            });
+          }, GESTURE_CONFIG.longPressDelay);
+        }, { passive: true });
+
+        el.addEventListener('touchmove', (e) => {
+          const deltaX = Math.abs(e.touches[0].clientX - startX);
+          const deltaY = Math.abs(e.touches[0].clientY - startY);
+
+          if (deltaX > 10 || deltaY > 10) {
+            isMoving = true;
+            if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+              el.classList.remove('long-press-active');
+            }
+          }
+        }, { passive: true });
+
+        el.addEventListener('touchend', () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          el.classList.remove('long-press-active');
+        }, { passive: true });
+
+        el.addEventListener('touchcancel', () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          el.classList.remove('long-press-active');
+        });
+      });
+    }
+
+    triggerHapticFeedback(intensity = 'light') {
+      if ('vibrate' in navigator) {
+        const patterns = {
+          light: 10,
+          medium: 25,
+          heavy: 50
+        };
+        navigator.vibrate(patterns[intensity] || patterns.light);
+      }
     }
 
     setupTouchGestures() {
@@ -174,6 +246,7 @@
           if (deltaTime < GESTURE_CONFIG.maxSwipeTime) {
             if (Math.abs(deltaX) > GESTURE_CONFIG.minSwipeDistance) {
               const direction = deltaX > 0 ? 'right' : 'left';
+              this.triggerHapticFeedback('light');
               this.dispatchGestureEvent('swipe', document.body, {
                 direction: direction,
                 distance: Math.abs(deltaX),
@@ -184,6 +257,7 @@
 
             if (Math.abs(deltaY) > GESTURE_CONFIG.minSwipeDistance) {
               const direction = deltaY > 0 ? 'down' : 'up';
+              this.triggerHapticFeedback('light');
               this.dispatchGestureEvent('swipe', document.body, {
                 direction: direction,
                 distance: Math.abs(deltaY),

@@ -40,6 +40,24 @@
       this.setupOrientationHandling();
       this.setupKeyboardAvoidance();
       this.injectMobileStyles();
+      this.setupPerformanceOptimization();
+
+      if (window.ResizeObserver) {
+        this.setupResizeObserver();
+      }
+    }
+
+    setupResizeObserver() {
+      const resizeObserver = new ResizeObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.target.classList.contains('captcha-canvas')) {
+            this.optimizeCanvasRendering();
+          }
+        });
+      });
+
+      const canvases = document.querySelectorAll('.captcha-canvas');
+      canvases.forEach(canvas => resizeObserver.observe(canvas));
     }
 
     setupViewportFix() {
@@ -354,7 +372,7 @@
 
     setupLazyLoading() {
       if ('IntersectionObserver' in window) {
-        const lazyImages = document.querySelectorAll('img[data-src], img.lazy');
+        const lazyImages = document.querySelectorAll('img[data-src], img.lazy, img[data-lazy-src]');
 
         const imageObserver = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
@@ -367,6 +385,7 @@
                 img.removeAttribute('data-src');
                 img.removeAttribute('data-lazy-src');
                 img.classList.add('lazy-loaded');
+                img.classList.remove('lazy');
                 imageObserver.unobserve(img);
               }
             }
@@ -377,7 +396,80 @@
         });
 
         lazyImages.forEach(img => imageObserver.observe(img));
+      } else {
+        const lazyImages = document.querySelectorAll('img[data-src], img.lazy, img[data-lazy-src]');
+        lazyImages.forEach(img => {
+          const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src');
+          if (src) {
+            img.src = src;
+            img.removeAttribute('data-src');
+            img.removeAttribute('data-lazy-src');
+            img.classList.add('lazy-loaded');
+            img.classList.remove('lazy');
+          }
+        });
       }
+    }
+
+    setupPerformanceOptimization() {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          this.preloadCriticalImages();
+          this.optimizeTouchTargets();
+        });
+      } else {
+        setTimeout(() => {
+          this.preloadCriticalImages();
+          this.optimizeTouchTargets();
+        }, 100);
+      }
+    }
+
+    preloadCriticalImages() {
+      const criticalImages = document.querySelectorAll('img[data-preload="true"]');
+      criticalImages.forEach(img => {
+        const src = img.getAttribute('data-preload');
+        if (src && !img.src) {
+          img.src = src;
+          img.removeAttribute('data-preload');
+        }
+      });
+    }
+
+    optimizeTouchTargets() {
+      const interactiveElements = document.querySelectorAll(
+        'button, a, input, select, textarea, [role="button"], [tabindex], .captcha-interactive, .captcha-slider-button, .captcha-click-marker, .captcha-refresh'
+      );
+
+      interactiveElements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const minSize = MOBILE_CONFIG.touchTargetMinSize;
+
+        if (rect.width < minSize || rect.height < minSize) {
+          el.classList.add('touch-target-optimized');
+        }
+      });
+    }
+
+    optimizeCanvasRendering() {
+      const canvases = document.querySelectorAll('canvas');
+      canvases.forEach(canvas => {
+        if (!canvas.classList.contains('captcha-canvas')) return;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const dpr = window.devicePixelRatio || 1;
+          const rect = canvas.getBoundingClientRect();
+
+          if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            ctx.scale(dpr, dpr);
+          }
+        }
+      });
     }
 
     setupOrientationHandling() {
