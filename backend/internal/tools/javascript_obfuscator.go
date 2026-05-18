@@ -25,33 +25,87 @@ import (
 )
 
 type ObfuscatorConfig struct {
-	EnableVariableObfuscation   bool
-	EnableStringEncryption      bool
-	EnableCodeCompression       bool
-	EnableControlFlowFlattening bool
-	EnableDeadCodeInjection     bool
-	EnableFunctionWrapping      bool
-	StringEncryptionKey         []byte
-	CompressWhitespace          bool
-	RemoveComments              bool
-	PreserveConsole             bool
-	EnableAdvancedAntiDebug     bool
-	EnableSelfDestruct          bool
-	EnableMemoryProtection      bool
-	EnableCodeVirtualization    bool
-	StringEncryptionMethod      string
-	EnableNameMangling          bool
-	EnableScopeTracking         bool
-	EnableCodeIntegrity         bool
+	EnableVariableObfuscation    bool
+	EnableStringEncryption       bool
+	EnableCodeCompression        bool
+	EnableControlFlowFlattening  bool
+	EnableDeadCodeInjection      bool
+	EnableFunctionWrapping       bool
+	StringEncryptionKey          []byte
+	CompressWhitespace           bool
+	RemoveComments               bool
+	PreserveConsole              bool
+	EnableAdvancedAntiDebug      bool
+	EnableSelfDestruct           bool
+	EnableMemoryProtection       bool
+	EnableCodeVirtualization     bool
+	StringEncryptionMethod       string
+	EnableNameMangling           bool
+	EnableScopeTracking          bool
+	EnableCodeIntegrity          bool
 	EnableDynamicAnalysis        bool
 	EnableTimingProtection       bool
 	EnableHeapSprayProtection    bool
-	EnablePolymorphicBlocks      bool
+	EnablePolymorphicBlocks     bool
 	EnablePolynomialObfuscation  bool
 	EnableArrayShuffle           bool
 	EnableExceptionHandling      bool
-	EnableDynamicLoading        bool
-	EnableAdvancedIntegrity     bool
+	EnableDynamicLoading         bool
+	EnableAdvancedIntegrity      bool
+	EnableStackTraceObfuscation  bool
+	EnableConstantObfuscation    bool
+	EnableObjectPropertyObfuscation bool
+	EnableRegexObfuscation      bool
+	EnableNumberObfuscation      bool
+	EnableBooleanObfuscation     bool
+	EnableDateObfuscation        bool
+	EnableArrayLiteralObfuscation bool
+	EnableFunctionNameObfuscation bool
+	EnableClassNameObfuscation   bool
+	EnableImportExportObfuscation bool
+	EnableTryCatchObfuscation    bool
+	EnableSwitchCaseObfuscation  bool
+	EnableLoopObfuscation        bool
+	EnableNumericLiteralObfuscation bool
+	EnableStringConcatObfuscation  bool
+	EnablePropertyAccessObfuscation bool
+	EnableEvalObfuscation        bool
+	EnableCallbackObfuscation    bool
+	EnableThisBindingObfuscation  bool
+	EnablePrototypeObfuscation   bool
+	EnableIIFEObfuscation        bool
+	EnableCommaOperatorObfuscation bool
+	EnableTernaryObfuscation     bool
+	EnableBitwiseObfuscation     bool
+	EnableHexadecimalObfuscation bool
+	EnableUnicodeEscapeObfuscation bool
+	EnableDebuggerDetection      bool
+	EnableSourceMapRemoval       bool
+	EnableConsoleOverride        bool
+	EnableErrorTracking          bool
+	EnablePerformanceMonitoring  bool
+	EnableNetworkRequestObfuscation bool
+	EnableStorageObfuscation     bool
+	EnableCookieObfuscation      bool
+	EnableLocalStorageObfuscation bool
+	EnableSessionStorageObfuscation bool
+	EnableIndexObfuscation       bool
+	EnableDeepPropertyObfuscation bool
+	EnableLazyEvaluation         bool
+	EnableMethodChaining          bool
+	EnableImmediateInvoke        bool
+	EnableScopeIsolation         bool
+	EnableContextIsolation        bool
+	EnableStrictModeObfuscation   bool
+	EnableScriptInjectionProtection bool
+	EnableXSSPrevention           bool
+	EnableContentSecurityPolicy   bool
+	EnableFeaturePolicy           bool
+	EnableMixedContentCheck       bool
+	EnhancedEncryptionLevel       int
+	CustomObfuscationPatterns    []string
+	ObfuscationSeed               int64
+	EnableDeterministicOutput     bool
 }
 
 var defaultObfuscatorConfig = ObfuscatorConfig{
@@ -82,6 +136,60 @@ var defaultObfuscatorConfig = ObfuscatorConfig{
 	EnableExceptionHandling:     true,
 	EnableDynamicLoading:       false,
 	EnableAdvancedIntegrity:    false,
+	EnableStackTraceObfuscation: true,
+	EnableConstantObfuscation:   true,
+	EnableObjectPropertyObfuscation: true,
+	EnableRegexObfuscation:     true,
+	EnableNumberObfuscation:    true,
+	EnableBooleanObfuscation:   true,
+	EnableDateObfuscation:      true,
+	EnableArrayLiteralObfuscation: true,
+	EnableFunctionNameObfuscation: true,
+	EnableClassNameObfuscation: true,
+	EnableImportExportObfuscation: false,
+	EnableTryCatchObfuscation:   true,
+	EnableSwitchCaseObfuscation: true,
+	EnableLoopObfuscation:      true,
+	EnableNumericLiteralObfuscation: true,
+	EnableStringConcatObfuscation: true,
+	EnablePropertyAccessObfuscation: true,
+	EnableEvalObfuscation:      true,
+	EnableCallbackObfuscation:   true,
+	EnableThisBindingObfuscation: true,
+	EnablePrototypeObfuscation: true,
+	EnableIIFEObfuscation:      true,
+	EnableCommaOperatorObfuscation: true,
+	EnableTernaryObfuscation:  true,
+	EnableBitwiseObfuscation:   true,
+	EnableHexadecimalObfuscation: true,
+	EnableUnicodeEscapeObfuscation: true,
+	EnableDebuggerDetection:    true,
+	EnableSourceMapRemoval:     true,
+	EnableConsoleOverride:      true,
+	EnableErrorTracking:       true,
+	EnablePerformanceMonitoring: true,
+	EnableNetworkRequestObfuscation: true,
+	EnableStorageObfuscation:  true,
+	EnableCookieObfuscation:   true,
+	EnableLocalStorageObfuscation: true,
+	EnableSessionStorageObfuscation: true,
+	EnableIndexObfuscation:    true,
+	EnableDeepPropertyObfuscation: true,
+	EnableLazyEvaluation:      true,
+	EnableMethodChaining:      true,
+	EnableImmediateInvoke:     true,
+	EnableScopeIsolation:      true,
+	EnableContextIsolation:    true,
+	EnableStrictModeObfuscation: true,
+	EnableScriptInjectionProtection: true,
+	EnableXSSPrevention:      true,
+	EnableContentSecurityPolicy: true,
+	EnableFeaturePolicy:      true,
+	EnableMixedContentCheck:  true,
+	EnhancedEncryptionLevel:  3,
+	CustomObfuscationPatterns: []string{},
+	ObfuscationSeed:          time.Now().UnixNano(),
+	EnableDeterministicOutput: false,
 }
 
 type Obfuscator struct {
@@ -3684,6 +3792,632 @@ func ValidateObfuscatedJS(code string) (bool, []string) {
 	}
 
 	return len(errors) == 0, errors
+}
+
+func (o *Obfuscator) ObfuscateNumbers(code string) string {
+	result := code
+
+	numberPattern := regexp.MustCompile(`\b(\d+)\b`)
+	result = numberPattern.ReplaceAllStringFunc(result, func(match string) string {
+		num, _ := strconv.Atoi(match)
+		if num > 10 && num < 10000 {
+			a := GetRandomInt(1, num-1)
+			b := num - a
+			return fmt.Sprintf("(%d+%d)", a, b)
+		}
+		return match
+	})
+
+	return result
+}
+
+func (o *Obfuscator) ObfuscateBooleans(code string) string {
+	result := code
+
+	result = regexp.MustCompile(`\btrue\b`).ReplaceAllString(result, "(1===1)")
+	result = regexp.MustCompile(`\bfalse\b`).ReplaceAllString(result, "(1===0)")
+
+	return result
+}
+
+func (o *Obfuscator) ObfuscateHexadecimal(code string) string {
+	result := code
+
+	hexPattern := regexp.MustCompile(`0x[0-9A-Fa-f]+`)
+	result = hexPattern.ReplaceAllStringFunc(result, func(match string) string {
+		val, _ := strconv.ParseInt(match, 0, 64)
+		return fmt.Sprintf("%d", val)
+	})
+
+	return result
+}
+
+func (o *Obfuscator) ObfuscateStrings(code string) string {
+	result := code
+
+	stringPattern := regexp.MustCompile(`"([^"]*)"`)
+	result = stringPattern.ReplaceAllStringFunc(result, func(match string) string {
+		parts := stringPattern.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			str := parts[1]
+			if len(str) > 2 {
+				parts_str := []string{}
+				for i := 0; i < len(str); i++ {
+					parts_str = append(parts_str, fmt.Sprintf("String.fromCharCode(%d)", int(str[i])))
+				}
+				return strings.Join(parts_str, "+")
+			}
+		}
+		return match
+	})
+
+	return result
+}
+
+func (o *Obfuscator) ObfuscateArrayLiterals(code string) string {
+	result := code
+
+	arrayPattern := regexp.MustCompile(`\[([^\]]+)\]`)
+	result = arrayPattern.ReplaceAllStringFunc(result, func(match string) string {
+		parts := arrayPattern.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			content := parts[1]
+			if strings.Contains(content, ",") {
+				obfuscatedContent := o.obfuscateArrayElements(content)
+				return fmt.Sprintf("Array(%s)", obfuscatedContent)
+			}
+		}
+		return match
+	})
+
+	return result
+}
+
+func (o *Obfuscator) obfuscateArrayElements(content string) string {
+	elements := strings.Split(content, ",")
+	var result []string
+
+	for _, elem := range elements {
+		elem = strings.TrimSpace(elem)
+		if regexp.MustCompile(`^\d+$`).MatchString(elem) {
+			num, _ := strconv.Atoi(elem)
+			a := GetRandomInt(1, num)
+			b := num - a
+			result = append(result, fmt.Sprintf("%d+%d", a, b))
+		} else {
+			result = append(result, elem)
+		}
+	}
+
+	return strings.Join(result, ",")
+}
+
+func (o *Obfuscator) AddDebugDetection(code string) string {
+	detection := `
+;(function(){
+	var _0xDD={
+		detectors:[
+			function(){
+				var threshold=160;
+				var w=window.outerWidth-window.innerWidth;
+				var h=window.outerHeight-window.innerHeight;
+				if(w>threshold||h>threshold)return true;
+				return false;
+			},
+			function(){
+				var start=Date.now();
+				debugger;
+				var end=Date.now();
+				if(end-start>50)return true;
+				return false;
+			},
+			function(){
+				var f=function(){};
+				f.toString=function(){
+					if(window.devtools&&window.devtools.isOpen)return true;
+					return false;
+				};
+				console.log(f);
+				return false;
+			},
+			function(){
+				if(typeof console._commandLineAPI!=='undefined')return true;
+				if(typeof console.profiles!=='undefined')return true;
+				if(window.firebug)return true;
+				return false;
+			}
+		],
+		check:function(){
+			for(var i=0;i<this.detectors.length;i++){
+				if(this.detectors[i]())return true;
+			}
+			return false;
+		}
+	};
+	if(_0xDD.check()){
+		document.documentElement.style.display='none';
+		document.body.innerHTML='<h1>Debug detected</h1>';
+		throw new Error('Debug detected');
+	}
+	setInterval(function(){
+		if(_0xDD.check()){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<h1>Debug detected</h1>';
+			throw new Error('Debug detected');
+		}
+	},3000);
+})();
+`
+	return detection + code
+}
+
+func (o *Obfuscator) AddEnhancedIntegrityCheck(code string) string {
+	hash := HashCode(code)
+
+	integrityCheck := fmt.Sprintf(`
+;(function(){
+	var _0xEIC={
+		hash:'%s',
+		startTime:Date.now(),
+		checkCount:0,
+		maxChecks:100,
+		timer:null,
+		createMarker:function(){
+			var m=document.createElement('div');
+			m.id='_0xEIC_marker';
+			m.style.display='none';
+			m.setAttribute('data-h',this.hash);
+			document.body.appendChild(m);
+		},
+		verifyMarker:function(){
+			var m=document.getElementById('_0xEIC_marker');
+			if(!m||m.getAttribute('data-h')!==this.hash)return false;
+			return true;
+		},
+		verify:function(){
+			if(this.checkCount>=this.maxChecks){
+				clearInterval(this.timer);
+				return true;
+			}
+			if(!this.verifyMarker()){
+				this.handleFailure();
+				return false;
+			}
+			this.checkCount++;
+			return true;
+		},
+		handleFailure:function(){
+			clearInterval(this.timer);
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<h1>Integrity check failed</h1>';
+			throw new Error('Integrity compromised');
+		},
+		start:function(){
+			this.createMarker();
+			var self=this;
+			this.timer=setInterval(function(){self.verify();},10000);
+		}
+	};
+	_0xEIC.start();
+	window.__EIC=_0xEIC;
+})();
+`, hash)
+
+	return code + integrityCheck
+}
+
+func (o *Obfuscator) AddDynamicLoader(code string) string {
+	loader := `
+;(function(){
+	var _0xDL={
+		modules:{},
+		cache:{},
+		register:function(name,code){
+			this.modules[name]=code;
+		},
+		load:function(name){
+			if(this.cache[name])return this.cache[name];
+			var code=this.modules[name];
+			if(code){
+				this.cache[name]=code;
+				return code;
+			}
+			return null;
+		},
+		evalModule:function(name){
+			var code=this.load(name);
+			if(code){
+				try{return eval(code);}catch(e){}
+			}
+			return null;
+		},
+		clear:function(){
+			this.cache={};
+		}
+	};
+	window.__DL=_0xDL;
+})();
+`
+	return loader + code
+}
+
+func GenerateAdvancedCodeIntegrity(code string, config ObfuscatorConfig) string {
+	hashes, _ := GenerateIntegrityHashes(code)
+
+	integrity := fmt.Sprintf(`
+;(function(){
+	var _0xACI={
+		hashes:{
+			sha256:'%s',
+			sha384:'%s',
+			sha512:'%s',
+			md5:'%s'
+		},
+		timestamp:'%s',
+		checkInterval:%d,
+		maxChecks:%d,
+		checkCount:0,
+		timer:null,
+		createElements:function(){
+			var elements=['_0xACI_e1','_0xACI_e2','_0xACI_e3'];
+			for(var i=0;i<elements.length;i++){
+				var el=document.createElement('div');
+				el.id=elements[i];
+				el.style.display='none';
+				el.setAttribute('data-h',this.hashes.sha256);
+				document.body.appendChild(el);
+			}
+		},
+		verifyElements:function(){
+			var elements=['_0xACI_e1','_0xACI_e2','_0xACI_e3'];
+			for(var i=0;i<elements.length;i++){
+				var el=document.getElementById(elements[i]);
+				if(!el||el.getAttribute('data-h')!==this.hashes.sha256){
+					return false;
+				}
+			}
+			return true;
+		},
+		verifyTiming:function(){
+			var start=performance.now();
+			var sum=0;
+			for(var i=0;i<1000;i++){sum+=Math.random()*i;}
+			var end=performance.now();
+			return end-start<100;
+		},
+		verify:function(){
+			if(this.checkCount>=this.maxChecks){
+				clearInterval(this.timer);
+				return true;
+			}
+			if(!this.verifyElements()||!this.verifyTiming()){
+				this.handleFailure();
+				return false;
+			}
+			this.checkCount++;
+			return true;
+		},
+		handleFailure:function(){
+			clearInterval(this.timer);
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%%;height:100%%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial;"><div><h1>代码完整性校验失败</h1><p>检测到代码已被篡改</p></div></div>';
+			throw new Error('Advanced code integrity check failed');
+		},
+		start:function(){
+			this.createElements();
+			var self=this;
+			this.timer=setInterval(function(){self.verify();},this.checkInterval);
+		}
+	};
+	_0xACI.start();
+	window.__ACI=_0xACI;
+})();
+`, hashes.SHA256, hashes.SHA384, hashes.SHA512, hashes.MD5, hashes.Timestamp.Format(time.RFC3339), 15000, 50)
+
+	return code + integrity
+}
+
+func GenerateEnhancedDynamicLoader(modules map[string]string, config ObfuscatorConfig) string {
+	loader := `
+;(function(){
+	var _0xEDL={
+		modules:{},
+		cache:{},
+		loadOrder:[],
+		maxCache:50,
+		register:function(name,code){
+			this.modules[name]=code;
+		},
+		load:function(name){
+			if(this.cache[name]){
+				return this.cache[name];
+			}
+			var code=this.modules[name];
+			if(!code)return null;
+			this.loadOrder.push(name);
+			if(this.loadOrder.length>this.maxCache){
+				var oldest=this.loadOrder.shift();
+				delete this.cache[oldest];
+			}
+			this.cache[name]=code;
+			return code;
+		},
+		evalModule:function(name){
+			var code=this.load(name);
+			if(code){
+				try{return eval(code);}catch(e){return null;}
+			}
+			return null;
+		},
+		preload:function(names,cb){
+			var loaded=0;
+			var total=names.length;
+			var self=this;
+			names.forEach(function(n){
+				self.load(n);
+				loaded++;
+				if(loaded===total&&cb)cb();
+			});
+		},
+		clear:function(){
+			this.cache={};
+			this.loadOrder=[];
+		},
+		unload:function(name){
+			delete this.cache[name];
+			var idx=this.loadOrder.indexOf(name);
+			if(idx>-1)this.loadOrder.splice(idx,1);
+		}
+	};
+	window.__EDL=_0xEDL;
+`;
+
+	for name, code := range modules {
+		encoded := base64.StdEncoding.EncodeToString([]byte(code))
+		loader += fmt.Sprintf("_0xEDL.register('%s',atob('%s'));\n", name, encoded)
+	}
+
+	loader += `})();`
+	return loader
+}
+
+func GenerateAdvancedAntiDebugEnhanced() string {
+	return `
+;(function(){
+	var _0xAAD={
+		version:'4.0',
+		startTime:Date.now(),
+		detectionCount:0,
+		maxDetections:2,
+		isBlocked:false,
+		detectors:[
+			function(){
+				var t=160;
+				if(window.outerWidth-window.innerWidth>t||window.outerHeight-window.innerHeight>t){
+					return true;
+				}
+				return false;
+			},
+			function(){
+				var s=Date.now();
+				debugger;
+				var e=Date.now();
+				if(e-s>75)return true;
+				return false;
+			},
+			function(){
+				var f=function(){};
+				f.toString=function(){
+					if(window.devtools&&window.devtools.isOpen)return true;
+					return false;
+				};
+				console.log(f);
+				return false;
+			},
+			function(){
+				if(typeof console._commandLineAPI!=='undefined'||
+				   typeof console.exception!=='undefined'||
+				   window.firebug)return true;
+				return false;
+			},
+			function(){
+				if(window.webkitDebuggerAPI)return true;
+				if(window.chrome&&window.chrome.runtime)return true;
+				return false;
+			},
+			function(){
+				var el=document.createElement('div');
+				el.id='_0xAAD_test';
+				el.style.cssText='position:absolute;left:-9999px;top:-9999px;';
+				document.body.appendChild(el);
+				var w=el.offsetWidth;
+				var h=el.offsetHeight;
+				document.body.removeChild(el);
+				if(w>0||h>0)return true;
+				return false;
+			},
+			function(){
+				var s=performance.now();
+				var sum=0;
+				for(var i=0;i<100;i++){sum+=Math.random();}
+				var e=performance.now();
+				if(e-s>50)return true;
+				return false;
+			},
+			function(){
+				try{
+					var a=new AbortController();
+					var f=new FinalizationRegistry(function(){});
+					return false;
+				}catch(e){
+					return true;
+				}
+			}
+		],
+		detect:function(){
+			var detections=[];
+			for(var i=0;i<this.detectors.length;i++){
+				try{
+					if(this.detectors[i]()){
+						detections.push(i);
+					}
+				}catch(e){}
+			}
+			return detections;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.isBlocked)return;
+				var d=self.detect();
+				if(d.length>0){
+					self.detectionCount+=d.length;
+					if(self.detectionCount>=self.maxDetections){
+						self.block();
+					}
+				}
+			},2500);
+			document.addEventListener('keydown',function(e){
+				if(e.key==='F12'||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='I')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='J')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='C')||
+				   (e.ctrlKey&&e.key==='U')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='K')){
+					e.preventDefault();
+					if(!self.isBlocked){
+						self.detectionCount++;
+						if(self.detectionCount>=self.maxDetections){
+							self.block();
+						}
+					}
+				}
+			});
+			document.addEventListener('contextmenu',function(e){
+				if(!self.isBlocked){
+					e.preventDefault();
+				}
+			});
+			Object.defineProperty(document,'hidden',{
+				get:function(){
+					if(!self.isBlocked){
+						self.detectionCount++;
+						if(self.detectionCount>=self.maxDetections){
+							self.block();
+						}
+					}
+					return false;
+				},
+				configurable:false
+			});
+		},
+		block:function(){
+			if(this.isBlocked)return;
+			this.isBlocked=true;
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;z-index:2147483647;"><div style="text-align:center;padding:40px;"><h1 style="margin:0 0 20px 0;font-size:48px;">访问受限</h1><p style="margin:0;font-size:18px;opacity:0.8;">检测到异常行为，页面已停止运行</p></div></div>';
+			throw new Error('Advanced anti-debug protection triggered');
+		},
+		init:function(){
+			this.protect();
+			var d=this.detect();
+			if(d.length>0){
+				this.detectionCount+=d.length;
+				if(this.detectionCount>=this.maxDetections){
+					this.block();
+				}
+			}
+		}
+	};
+	_0xAAD.init();
+	window.__AAD=_0xAAD;
+	if(document.readyState==='loading'){
+		document.addEventListener('DOMContentLoaded',function(){_0xAAD.init();});
+	}
+})();
+`
+}
+
+func GenerateAdvancedControlFlowObfuscation() string {
+	return `
+;(function(){
+	var _0xACF={
+		flatten:function(code){
+			return '(function(){var _0xSF=0,_0xSD={};_0xSD[0]='+code+';return _0xSD[0];})()';
+		},
+		obfuscate:function(fn){
+			var originalCode=fn.toString();
+			return '(function(){'+originalCode+'})';
+		}
+	};
+	window.__ACF=_0xACF;
+})();
+`
+}
+
+func GenerateAdvancedStringEncryption() string {
+	return `
+;(function(){
+	var _0xASE={
+		encrypt:function(s,key){
+			var result='';
+			for(var i=0;i<s.length;i++){
+				result+=String.fromCharCode(s.charCodeAt(i)^key.charCodeAt(i%key.length));
+			}
+			return btoa(result);
+		},
+		decrypt:function(s,key){
+			var result='';
+			var data=atob(s);
+			for(var i=0;i<data.length;i++){
+				result+=String.fromCharCode(data.charCodeAt(i)^key.charCodeAt(i%key.length));
+			}
+			return result;
+		},
+		multiLayerEncrypt:function(s,keys){
+			var result=s;
+			for(var i=0;i<keys.length;i++){
+				result=this.encrypt(result,keys[i]);
+			}
+			return result;
+		},
+		multiLayerDecrypt:function(s,keys){
+			var result=s;
+			for(var i=keys.length-1;i>=0;i--){
+				result=this.decrypt(result,keys[i]);
+			}
+			return result;
+		}
+	};
+	window.__ASE=_0xASE;
+})();
+`
+}
+
+func GenerateAdvancedCodeProtectionFinal(code string, config ObfuscatorConfig) string {
+	var result strings.Builder
+
+	result.WriteString(GenerateAdvancedAntiDebugEnhanced())
+
+	if config.EnableAdvancedIntegrity {
+		result.WriteString(GenerateAdvancedCodeIntegrity(code, config))
+	}
+
+	if config.EnableDynamicLoading {
+		result.WriteString(GenerateEnhancedDynamicLoader(map[string]string{}, config))
+	}
+
+	if config.EnableMemoryProtection {
+		result.WriteString(GenerateMemoryProtection())
+	}
+
+	if config.EnableCodeIntegrity {
+		result.WriteString(CreateSelfCheckingCode(code, config.StringEncryptionKey))
+	}
+
+	result.WriteString(code)
+
+	return result.String()
 }
 
 
