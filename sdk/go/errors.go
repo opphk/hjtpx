@@ -18,6 +18,12 @@ var (
 	ErrRateLimited        = errors.New("rate limited")
 	ErrUnauthorized       = errors.New("unauthorized")
 	ErrInternalError      = errors.New("internal error")
+	ErrCaptchaExpired     = errors.New("captcha expired")
+	ErrInvalidCaptchaType = errors.New("invalid captcha type")
+	ErrEmptyChallengeID   = errors.New("challenge ID is empty")
+	ErrEmptyAnswer        = errors.New("answer is empty")
+	ErrInvalidTrajectory  = errors.New("invalid trajectory data")
+	ErrMaxRetriesExceeded = errors.New("max retries exceeded")
 )
 
 type SDKError struct {
@@ -50,6 +56,14 @@ func GetSDKErrorCode(err error) int {
 	return 0
 }
 
+func GetSDKErrorMessage(err error) string {
+	var sdkErr *SDKError
+	if errors.As(err, &sdkErr) {
+		return sdkErr.Message
+	}
+	return ""
+}
+
 func HandleError(err error) {
 	if err == nil {
 		return
@@ -57,6 +71,7 @@ func HandleError(err error) {
 
 	if IsSDKError(err) {
 		code := GetSDKErrorCode(err)
+		msg := GetSDKErrorMessage(err)
 		switch code {
 		case http.StatusUnauthorized:
 			fmt.Println("Authentication failed - check your credentials")
@@ -66,6 +81,12 @@ func HandleError(err error) {
 			fmt.Println("Server error - please try again later")
 		case http.StatusBadRequest:
 			fmt.Println("Invalid request parameters")
+		case 400:
+			if strings.Contains(strings.ToLower(msg), "required") {
+				fmt.Printf("Missing required field: %s\n", msg)
+			} else {
+				fmt.Printf("Invalid parameter: %s\n", msg)
+			}
 		default:
 			fmt.Printf("API Error (code %d): %v\n", code, err)
 		}
@@ -73,6 +94,10 @@ func HandleError(err error) {
 		fmt.Println("Request timed out - please check your network")
 	} else if errors.Is(err, ErrNetworkError) {
 		fmt.Println("Network error - please check your connection")
+	} else if errors.Is(err, ErrCaptchaExpired) {
+		fmt.Println("Captcha has expired - please request a new one")
+	} else if errors.Is(err, ErrMaxRetriesExceeded) {
+		fmt.Println("Max retries exceeded - please try again later")
 	} else {
 		fmt.Printf("Unexpected error: %v\n", err)
 	}
@@ -154,4 +179,34 @@ func NewSDKErrorWithCause(code int, message string, cause error) error {
 		Message: message,
 		Err:     cause,
 	}
+}
+
+func (e *SDKError) Is(target error) bool {
+	return errors.Is(e.Err, target)
+}
+
+func ValidateChallengeID(challengeID string) error {
+	if challengeID == "" {
+		return NewSDKError(400, "challenge ID is required")
+	}
+	return nil
+}
+
+func ValidateAnswer(answer string) error {
+	if answer == "" {
+		return NewSDKError(400, "answer is required")
+	}
+	return nil
+}
+
+func ValidateTrajectory(trajectory []TrajectoryPoint) error {
+	if len(trajectory) == 0 {
+		return NewSDKError(400, "trajectory must contain at least one point")
+	}
+	for i, point := range trajectory {
+		if point.T < 0 {
+			return fmt.Errorf("invalid timestamp at index %d: %w", i, ErrInvalidTrajectory)
+		}
+	}
+	return nil
 }
