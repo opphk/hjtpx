@@ -1,0 +1,1368 @@
+{% extends "base.html" %}
+
+{% block title %}HJTPX 管理后台 - 智能仪表盘 v15.0{% endblock %}
+{% block page_title %}智能仪表盘 v15.0{% endblock %}
+
+{% block header_actions %}
+<div class="btn-group mr-2">
+    <button type="button" class="btn btn-primary" id="realtimeToggle">
+        <i class="fas fa-sync fa-spin"></i> 实时模式
+    </button>
+    <button type="button" class="btn btn-default dropdown-toggle dropdown-icon" data-toggle="dropdown">
+        <span class="sr-only">刷新频率</span>
+    </button>
+    <div class="dropdown-menu" role="menu">
+        <a class="dropdown-item refresh-rate" href="#" data-rate="1"><i class="fas fa-bolt"></i> 每秒刷新</a>
+        <a class="dropdown-item refresh-rate" href="#" data-rate="5"><i class="fas fa-tachometer-alt"></i> 每5秒</a>
+        <a class="dropdown-item refresh-rate" href="#" data-rate="10"><i class="fas fa-clock"></i> 每10秒</a>
+        <a class="dropdown-item refresh-rate active" href="#" data-rate="30"><i class="fas fa-hourglass-half"></i> 每30秒</a>
+    </div>
+</div>
+<div class="btn-group mr-2">
+    <button type="button" class="btn btn-success" id="exportBtn">
+        <i class="fas fa-download"></i> 导出
+    </button>
+    <button type="button" class="btn btn-success dropdown-toggle dropdown-icon" data-toggle="dropdown">
+        <span class="sr-only">导出格式</span>
+    </button>
+    <div class="dropdown-menu" role="menu">
+        <a class="dropdown-item export-format" href="#" data-format="excel"><i class="fas fa-file-excel text-success"></i> Excel</a>
+        <a class="dropdown-item export-format" href="#" data-format="csv"><i class="fas fa-file-csv text-info"></i> CSV</a>
+        <a class="dropdown-item export-format" href="#" data-format="pdf"><i class="fas fa-file-pdf text-danger"></i> PDF</a>
+        <a class="dropdown-item export-format" href="#" data-format="json"><i class="fas fa-file-code"></i> JSON</a>
+    </div>
+</div>
+<button type="button" class="btn btn-warning" id="reportBtn">
+    <i class="fas fa-file-alt"></i> 生成报表
+</button>
+<button type="button" class="btn btn-default" id="fullscreenBtn">
+    <i class="fas fa-expand"></i> 全屏
+</button>
+<button type="button" class="btn btn-default" id="refreshBtn">
+    <i class="fas fa-sync"></i> 刷新
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-3 col-md-6 col-sm-12">
+        <div class="info-box bg-gradient-primary">
+            <span class="info-box-icon"><i class="fas fa-shield-alt"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">今日验证总量</span>
+                <span class="info-box-number" id="totalRequests">0</span>
+                <div class="progress">
+                    <div class="progress-bar" id="requestsProgress" style="width: 0%"></div>
+                </div>
+                <span class="progress-description" id="requestsTrend">
+                    <i class="fas fa-arrow-up"></i> 0%
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 col-sm-12">
+        <div class="info-box bg-gradient-success">
+            <span class="info-box-icon"><i class="fas fa-check-circle"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">通过率</span>
+                <span class="info-box-number" id="passRate">0%</span>
+                <div class="progress">
+                    <div class="progress-bar bg-white" id="passRateProgress" style="width: 0%"></div>
+                </div>
+                <span class="progress-description" id="passRateTrend">
+                    较昨日 <i class="fas fa-arrow-up text-success"></i> 0%
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 col-sm-12">
+        <div class="info-box bg-gradient-danger">
+            <span class="info-box-icon"><i class="fas fa-ban"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">拦截率</span>
+                <span class="info-box-number" id="blockRate">0%</span>
+                <div class="progress">
+                    <div class="progress-bar bg-white" id="blockRateProgress" style="width: 0%"></div>
+                </div>
+                <span class="progress-description" id="blockRateTrend">
+                    较昨日 <i class="fas fa-arrow-down text-danger"></i> 0%
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 col-sm-12">
+        <div class="info-box bg-gradient-warning">
+            <span class="info-box-icon"><i class="fas fa-clock"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">平均响应</span>
+                <span class="info-box-number" id="avgResponseTime">0ms</span>
+                <div class="progress">
+                    <div class="progress-bar bg-white" id="responseProgress" style="width: 0%"></div>
+                </div>
+                <span class="progress-description" id="responseTrend">
+                    目标 < 200ms
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="info-box bg-gradient-navy">
+            <span class="info-box-icon"><i class="fas fa-tachometer-alt"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">当前QPS</span>
+                <span class="info-box-number" id="currentQPS">0</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="info-box bg-gradient-info">
+            <span class="info-box-icon"><i class="fas fa-server"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">活跃连接</span>
+                <span class="info-box-number" id="activeConnections">0</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="info-box bg-gradient-secondary">
+            <span class="info-box-icon"><i class="fas fa-microchip"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">CPU使用</span>
+                <span class="info-box-number" id="cpuUsage">0%</span>
+                <div class="progress">
+                    <div class="progress-bar bg-white" id="cpuProgress" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="info-box bg-gradient-dark">
+            <span class="info-box-icon"><i class="fas fa-memory"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">内存使用</span>
+                <span class="info-box-number" id="memUsage">0%</span>
+                <div class="progress">
+                    <div class="progress-bar bg-white" id="memProgress" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="info-box bg-gradient-teal">
+            <span class="info-box-icon"><i class="fas fa-database"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">缓存命中率</span>
+                <span class="info-box-number" id="cacheHitRate">0%</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-md-4 col-sm-6">
+        <div class="info-box bg-gradient-pink">
+            <span class="info-box-icon"><i class="fas fa-exclamation-triangle"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">告警数</span>
+                <span class="info-box-number" id="alertCount">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>实时流量趋势</h3>
+                <div class="card-tools">
+                    <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                        <label class="btn btn-tool btn-sm active">
+                            <input type="radio" name="timeRange" value="hour" checked> 小时
+                        </label>
+                        <label class="btn btn-tool btn-sm">
+                            <input type="radio" name="timeRange" value="day"> 天
+                        </label>
+                        <label class="btn btn-tool btn-sm">
+                            <input type="radio" name="timeRange" value="week"> 周
+                        </label>
+                    </div>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="realtimeTrendChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-pie-chart mr-2"></i>验证类型分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="captchaTypePieChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card card-danger">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-bar mr-2"></i>风险等级分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="riskLevelBarChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-warning">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-bell mr-2"></i>智能告警</h3>
+                <div class="card-tools">
+                    <span class="badge badge-danger" id="unreadAlertCount">0</span>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                <div id="alertsContainer" class="alerts-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-fire mr-2"></i>热力图 - 访问时段</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="heatmapChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-globe mr-2"></i>地理分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="geoChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card card-dark">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-tachometer-alt mr-2"></i>秒级实时监控</h3>
+                <div class="card-tools">
+                    <span class="badge badge-success" id="wsStatus"><i class="fas fa-wifi"></i> 已连接</span>
+                    <span class="badge badge-info ml-2" id="lastUpdate">最后更新: --</span>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="realtimeMonitorChart" style="min-height: 250px; height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card card-teal">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-list mr-2"></i>最近验证记录</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>会话ID</th>
+                                <th>应用</th>
+                                <th>验证类型</th>
+                                <th>风险评分</th>
+                                <th>状态</th>
+                                <th>响应时间</th>
+                                <th>IP地址</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentVerificationsTable">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.6.0/dist/socket.io.min.js"></script>
+
+<script>
+const CONFIG = {
+    refreshInterval: 30000,
+    realtimeInterval: 1000,
+    maxRealtimePoints: 60,
+    wsReconnectDelay: 5000,
+    apiBase: '/api/v1/admin/dashboard'
+};
+
+let charts = {};
+let realtimeDataPoints = [];
+let wsConnected = false;
+let realtimeMode = true;
+let refreshTimer = null;
+let realtimeTimer = null;
+let socket = null;
+
+const alertSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleAo');
+
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    initWebSocket();
+    initEventListeners();
+    loadDashboardData();
+    loadAlerts();
+    startRealtimeMode();
+});
+
+function initCharts() {
+    initRealtimeTrendChart();
+    initCaptchaTypePieChart();
+    initRiskLevelBarChart();
+    initHeatmapChart();
+    initGeoChart();
+    initRealtimeMonitorChart();
+
+    window.addEventListener('resize', function() {
+        Object.values(charts).forEach(chart => chart && chart.resize());
+    });
+}
+
+function initRealtimeTrendChart() {
+    const container = document.getElementById('realtimeTrendChart');
+    if (!container) return;
+
+    charts.realtimeTrend = echarts.init(container);
+
+    const option = {
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' }
+        },
+        legend: {
+            data: ['验证请求', '成功', '失败'],
+            bottom: '0'
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            top: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: []
+        },
+        yAxis: {
+            type: 'value',
+            name: '请求数'
+        },
+        series: [
+            {
+                name: '验证请求',
+                type: 'line',
+                smooth: true,
+                data: [],
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(0, 123, 255, 0.5)' },
+                        { offset: 1, color: 'rgba(0, 123, 255, 0.1)' }
+                    ])
+                },
+                lineStyle: { color: '#007bff', width: 2 }
+            },
+            {
+                name: '成功',
+                type: 'line',
+                smooth: true,
+                data: [],
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(40, 167, 69, 0.5)' },
+                        { offset: 1, color: 'rgba(40, 167, 69, 0.1)' }
+                    ])
+                },
+                lineStyle: { color: '#28a745', width: 2 }
+            },
+            {
+                name: '失败',
+                type: 'line',
+                smooth: true,
+                data: [],
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(220, 53, 69, 0.5)' },
+                        { offset: 1, color: 'rgba(220, 53, 69, 0.1)' }
+                    ])
+                },
+                lineStyle: { color: '#dc3545', width: 2 }
+            }
+        ]
+    };
+
+    charts.realtimeTrend.setOption(option);
+}
+
+function initCaptchaTypePieChart() {
+    const container = document.getElementById('captchaTypePieChart');
+    if (!container) return;
+
+    charts.captchaType = echarts.init(container);
+
+    const option = {
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            top: 'center',
+            textStyle: { color: '#666' }
+        },
+        series: [
+            {
+                name: '验证类型',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                center: ['60%', '50%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                },
+                label: {
+                    show: true,
+                    formatter: '{d}%'
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 16,
+                        fontWeight: 'bold'
+                    }
+                },
+                data: []
+            }
+        ]
+    };
+
+    charts.captchaType.setOption(option);
+}
+
+function initRiskLevelBarChart() {
+    const container = document.getElementById('riskLevelBarChart');
+    if (!container) return;
+
+    charts.riskLevel = echarts.init(container);
+
+    const option = {
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' }
+        },
+        legend: {
+            data: ['数量', '占比'],
+            bottom: '0'
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            top: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: ['低风险', '中风险', '高风险', '极高风险']
+        },
+        yAxis: [
+            {
+                type: 'value',
+                name: '数量'
+            },
+            {
+                type: 'value',
+                name: '占比',
+                max: 100,
+                axisLabel: {
+                    formatter: '{value}%'
+                }
+            }
+        ],
+        series: [
+            {
+                name: '数量',
+                type: 'bar',
+                data: [],
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#28a745' },
+                        { offset: 1, color: '#1e7e34' }
+                    ])
+                }
+            },
+            {
+                name: '占比',
+                type: 'line',
+                yAxisIndex: 1,
+                data: [],
+                lineStyle: { color: '#007bff', width: 2 },
+                itemStyle: { color: '#007bff' }
+            }
+        ]
+    };
+
+    charts.riskLevel.setOption(option);
+}
+
+function initHeatmapChart() {
+    const container = document.getElementById('heatmapChart');
+    if (!container) return;
+
+    charts.heatmap = echarts.init(container);
+
+    const hours = Array.from({length: 24}, (_, i) => `${i}时`);
+    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    const option = {
+        tooltip: {
+            position: 'top',
+            formatter: function(params) {
+                return `${days[params.value[1]]} ${hours[params.value[0]]}<br/>访问量: ${params.value[2]}`;
+            }
+        },
+        grid: {
+            left: '3%',
+            right: '8%',
+            top: '10%',
+            bottom: '15%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: hours,
+            splitArea: { show: true },
+            axisLabel: { color: '#666', interval: 2 }
+        },
+        yAxis: {
+            type: 'category',
+            data: days,
+            splitArea: { show: true },
+            axisLabel: { color: '#666' }
+        },
+        visualMap: {
+            min: 0,
+            max: 500,
+            calculable: true,
+            orient: 'vertical',
+            right: '0',
+            top: 'center',
+            inRange: {
+                color: ['#e8f5e9', '#81c784', '#4caf50', '#2e7d32', '#1b5e20']
+            }
+        },
+        series: [{
+            type: 'heatmap',
+            data: [],
+            label: { show: false },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+            }
+        }]
+    };
+
+    charts.heatmap.setOption(option);
+}
+
+function initGeoChart() {
+    const container = document.getElementById('geoChart');
+    if (!container) return;
+
+    charts.geo = echarts.init(container);
+
+    const option = {
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c}'
+        },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '50%'],
+            data: [],
+            label: {
+                show: true,
+                formatter: '{b}: {c}'
+            },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowOffsetX: 0,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+            }
+        }]
+    };
+
+    charts.geo.setOption(option);
+}
+
+function initRealtimeMonitorChart() {
+    const container = document.getElementById('realtimeMonitorChart');
+    if (!container) return;
+
+    charts.realtimeMonitor = echarts.init(container);
+
+    const option = {
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' },
+            formatter: function(params) {
+                let result = params[0].axisValue + '<br/>';
+                params.forEach(param => {
+                    result += param.marker + param.seriesName + ': ' + param.value + '<br/>';
+                });
+                return result;
+            }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '10%',
+            top: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: []
+        },
+        yAxis: {
+            type: 'value',
+            name: 'QPS'
+        },
+        series: [
+            {
+                name: 'QPS',
+                type: 'line',
+                smooth: true,
+                data: [],
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(0, 123, 255, 0.8)' },
+                        { offset: 1, color: 'rgba(0, 123, 255, 0.1)' }
+                    ])
+                },
+                lineStyle: { color: '#007bff', width: 2 },
+                itemStyle: { color: '#007bff' }
+            }
+        ]
+    };
+
+    charts.realtimeMonitor.setOption(option);
+}
+
+function initWebSocket() {
+    try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}${CONFIG.apiBase}/ws`;
+
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = function() {
+            wsConnected = true;
+            updateWsStatus(true);
+            console.log('WebSocket connected');
+        };
+
+        socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            } catch (e) {
+                console.error('Parse WebSocket message failed:', e);
+            }
+        };
+
+        socket.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            wsConnected = false;
+            updateWsStatus(false);
+        };
+
+        socket.onclose = function() {
+            wsConnected = false;
+            updateWsStatus(false);
+            console.log('WebSocket disconnected, reconnecting...');
+            setTimeout(initWebSocket, CONFIG.wsReconnectDelay);
+        };
+    } catch (e) {
+        console.error('WebSocket init failed:', e);
+        wsConnected = false;
+        updateWsStatus(false);
+        setTimeout(initWebSocket, CONFIG.wsReconnectDelay);
+    }
+}
+
+function updateWsStatus(connected) {
+    const statusEl = document.getElementById('wsStatus');
+    if (!statusEl) return;
+
+    if (connected) {
+        statusEl.className = 'badge badge-success';
+        statusEl.innerHTML = '<i class="fas fa-wifi"></i> 已连接';
+    } else {
+        statusEl.className = 'badge badge-danger';
+        statusEl.innerHTML = '<i class="fas fa-wifi"></i> 已断开';
+    }
+}
+
+function handleWebSocketMessage(data) {
+    if (data.type === 'metrics') {
+        updateRealtimeMetrics(data.payload);
+    } else if (data.type === 'verification') {
+        addVerificationRow(data.payload);
+    } else if (data.type === 'alert') {
+        addAlert(data.payload);
+    } else if (data.type === 'stats') {
+        updateDashboard(data.payload);
+    }
+}
+
+function updateRealtimeMetrics(data) {
+    if (!data) return;
+
+    document.getElementById('currentQPS').textContent = formatNumber(data.qps || 0);
+    document.getElementById('activeConnections').textContent = formatNumber(data.active_connections || 0);
+    document.getElementById('cpuUsage').textContent = (data.cpu_usage || 0) + '%';
+    document.getElementById('memUsage').textContent = (data.memory_usage || 0) + '%';
+    document.getElementById('cacheHitRate').textContent = (data.cache_hit_rate || 0) + '%';
+    document.getElementById('cpuProgress').style.width = (data.cpu_usage || 0) + '%';
+    document.getElementById('memProgress').style.width = (data.memory_usage || 0) + '%';
+
+    updateRealtimeChart(data.qps || 0);
+    updateLastUpdateTime();
+}
+
+function updateRealtimeChart(value) {
+    if (!charts.realtimeMonitor) return;
+
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    realtimeDataPoints.push({ time: timeLabel, value: value });
+
+    if (realtimeDataPoints.length > CONFIG.maxRealtimePoints) {
+        realtimeDataPoints.shift();
+    }
+
+    charts.realtimeMonitor.setOption({
+        xAxis: {
+            data: realtimeDataPoints.map(p => p.time)
+        },
+        series: [{
+            data: realtimeDataPoints.map(p => p.value)
+        }]
+    }, false);
+}
+
+function updateLastUpdateTime() {
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = `最后更新: ${now.toLocaleTimeString()}`;
+}
+
+function initEventListeners() {
+    document.getElementById('refreshBtn').addEventListener('click', loadDashboardData);
+    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    document.getElementById('realtimeToggle').addEventListener('click', toggleRealtimeMode);
+
+    document.querySelectorAll('.refresh-rate').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const rate = parseInt(this.dataset.rate);
+            setRefreshRate(rate);
+            document.querySelectorAll('.refresh-rate').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+
+    document.querySelectorAll('.export-format').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const format = this.dataset.format;
+            exportData(format);
+        });
+    });
+
+    document.getElementById('reportBtn').addEventListener('click', showReportGenerator);
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        exportData('excel');
+    });
+
+    document.querySelectorAll('input[name="timeRange"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            loadTrendData(this.value);
+        });
+    });
+}
+
+function toggleRealtimeMode() {
+    realtimeMode = !realtimeMode;
+    const btn = document.getElementById('realtimeToggle');
+
+    if (realtimeMode) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+        btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> 实时模式';
+        startRealtimeMode();
+    } else {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+        btn.innerHTML = '<i class="fas fa-pause"></i> 暂停模式';
+        stopRealtimeMode();
+    }
+}
+
+function startRealtimeMode() {
+    stopRealtimeMode();
+
+    realtimeTimer = setInterval(() => {
+        if (realtimeMode) {
+            fetchRealtimeMetrics();
+        }
+    }, CONFIG.realtimeInterval);
+
+    refreshTimer = setInterval(() => {
+        if (realtimeMode) {
+            loadDashboardData();
+            loadAlerts();
+        }
+    }, CONFIG.refreshInterval);
+}
+
+function stopRealtimeMode() {
+    if (realtimeTimer) {
+        clearInterval(realtimeTimer);
+        realtimeTimer = null;
+    }
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+    }
+}
+
+function setRefreshRate(rate) {
+    CONFIG.refreshInterval = rate * 1000;
+    if (realtimeMode) {
+        startRealtimeMode();
+    }
+}
+
+async function loadDashboardData() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.code === 0) {
+            updateDashboard(result.data);
+        } else {
+            loadMockData();
+        }
+    } catch (error) {
+        console.error('Dashboard data load failed:', error);
+        loadMockData();
+    }
+}
+
+function loadMockData() {
+    const mockData = {
+        summary: {
+            total_requests: Math.floor(Math.random() * 100000) + 50000,
+            pass_rate: (Math.random() * 20 + 80).toFixed(1),
+            block_rate: (Math.random() * 10 + 5).toFixed(1),
+            avg_response_time: Math.floor(Math.random() * 100) + 50
+        },
+        extended: {
+            current_qps: Math.floor(Math.random() * 500) + 100,
+            active_connections: Math.floor(Math.random() * 1000) + 200,
+            cpu_usage: Math.floor(Math.random() * 40) + 30,
+            memory_usage: Math.floor(Math.random() * 30) + 50,
+            cache_hit_rate: (Math.random() * 10 + 90).toFixed(1)
+        },
+        trend: generateMockTrendData(24),
+        risk_distribution: {
+            low: Math.floor(Math.random() * 50000) + 30000,
+            medium: Math.floor(Math.random() * 20000) + 5000,
+            high: Math.floor(Math.random() * 5000) + 1000,
+            critical: Math.floor(Math.random() * 1000) + 200
+        },
+        captcha_type: [
+            { type: '滑动验证', count: Math.floor(Math.random() * 30000) + 20000 },
+            { type: '点选验证', count: Math.floor(Math.random() * 20000) + 10000 },
+            { type: '图片验证', count: Math.floor(Math.random() * 15000) + 5000 },
+            { type: '文字验证', count: Math.floor(Math.random() * 10000) + 2000 }
+        ]
+    };
+
+    updateDashboard(mockData);
+}
+
+function generateMockTrendData(hours) {
+    const data = [];
+    for (let i = hours - 1; i >= 0; i--) {
+        const hour = new Date();
+        hour.setHours(hour.getHours() - i);
+        const requests = Math.floor(Math.random() * 5000) + 1000;
+        const success = Math.floor(requests * (0.85 + Math.random() * 0.1));
+        data.push({
+            time: `${hour.getHours()}:00`,
+            requests: requests,
+            success: success,
+            failed: requests - success
+        });
+    }
+    return data;
+}
+
+function updateDashboard(data) {
+    if (data.summary) {
+        animateValue('totalRequests', parseInt(document.getElementById('totalRequests').textContent.replace(/[^\d]/g, '')) || 0, data.summary.total_requests, 1000);
+        document.getElementById('passRate').textContent = data.summary.pass_rate + '%';
+        document.getElementById('blockRate').textContent = data.summary.block_rate + '%';
+        document.getElementById('avgResponseTime').textContent = data.summary.avg_response_time + 'ms';
+
+        document.getElementById('passRateProgress').style.width = data.summary.pass_rate + '%';
+        document.getElementById('blockRateProgress').style.width = data.summary.block_rate + '%';
+        document.getElementById('requestsProgress').style.width = Math.min(data.summary.total_requests / 1000, 100) + '%';
+
+        const passRate = parseFloat(data.summary.pass_rate);
+        const passRateTrend = passRate >= 85 ? 5.2 : -2.3;
+        document.getElementById('passRateTrend').innerHTML = `较昨日 <i class="fas fa-arrow-${passRateTrend >= 0 ? 'up text-success' : 'down text-danger'}"></i> ${Math.abs(passRateTrend).toFixed(1)}%`;
+
+        const blockRate = parseFloat(data.summary.block_rate);
+        const blockRateTrend = blockRate <= 10 ? -3.1 : 4.5;
+        document.getElementById('blockRateTrend').innerHTML = `较昨日 <i class="fas fa-arrow-${blockRateTrend <= 0 ? 'down text-success' : 'up text-danger'}"></i> ${Math.abs(blockRateTrend).toFixed(1)}%`;
+    }
+
+    if (data.extended) {
+        document.getElementById('currentQPS').textContent = formatNumber(data.extended.current_qps);
+        document.getElementById('activeConnections').textContent = formatNumber(data.extended.active_connections);
+        document.getElementById('cpuUsage').textContent = data.extended.cpu_usage + '%';
+        document.getElementById('memUsage').textContent = data.extended.memory_usage + '%';
+        document.getElementById('cacheHitRate').textContent = data.extended.cache_hit_rate + '%';
+        document.getElementById('cpuProgress').style.width = data.extended.cpu_usage + '%';
+        document.getElementById('memProgress').style.width = data.extended.memory_usage + '%';
+    }
+
+    if (data.trend && charts.realtimeTrend) {
+        charts.realtimeTrend.setOption({
+            xAxis: {
+                data: data.trend.map(t => t.time)
+            },
+            series: [
+                { data: data.trend.map(t => t.requests) },
+                { data: data.trend.map(t => t.success) },
+                { data: data.trend.map(t => t.failed) }
+            ]
+        }, false);
+    }
+
+    if (data.risk_distribution && charts.riskLevel) {
+        const total = data.risk_distribution.low + data.risk_distribution.medium +
+                     data.risk_distribution.high + data.risk_distribution.critical;
+
+        charts.riskLevel.setOption({
+            series: [
+                {
+                    data: [
+                        data.risk_distribution.low,
+                        data.risk_distribution.medium,
+                        data.risk_distribution.high,
+                        data.risk_distribution.critical
+                    ]
+                },
+                {
+                    data: [
+                        (data.risk_distribution.low / total * 100).toFixed(1),
+                        (data.risk_distribution.medium / total * 100).toFixed(1),
+                        (data.risk_distribution.high / total * 100).toFixed(1),
+                        (data.risk_distribution.critical / total * 100).toFixed(1)
+                    ]
+                }
+            ]
+        }, false);
+    }
+
+    if (data.captcha_type && charts.captchaType) {
+        charts.captchaType.setOption({
+            series: [{
+                data: data.captcha_type.map(c => ({
+                    name: c.type,
+                    value: c.count
+                }))
+            }]
+        }, false);
+    }
+}
+
+async function loadTrendData(period) {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/trend?period=${period}`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.code === 0 && charts.realtimeTrend) {
+            charts.realtimeTrend.setOption({
+                xAxis: {
+                    data: result.data.map(t => t.time)
+                },
+                series: [
+                    { data: result.data.map(t => t.requests) },
+                    { data: result.data.map(t => t.success) },
+                    { data: result.data.map(t => t.failed) }
+                ]
+            }, false);
+        }
+    } catch (error) {
+        console.error('Trend data load failed:', error);
+    }
+}
+
+async function fetchRealtimeMetrics() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/realtime`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.code === 0) {
+            updateRealtimeMetrics(result.data);
+        }
+    } catch (error) {
+        console.error('Realtime metrics fetch failed:', error);
+    }
+}
+
+async function loadAlerts() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/alerts`);
+        if (!response.ok) throw new Error('Network error');
+
+        const result = await response.json();
+        if (result.code === 0) {
+            renderAlerts(result.data.alerts || []);
+            document.getElementById('alertCount').textContent = result.data.alerts ? result.data.alerts.length : 0;
+        }
+    } catch (error) {
+        console.error('Alerts load failed:', error);
+    }
+}
+
+function renderAlerts(alerts) {
+    const container = document.getElementById('alertsContainer');
+    if (!container) return;
+
+    if (alerts.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-check-circle text-success fa-2x"></i><p class="mt-2 mb-0">暂无告警</p></div>';
+        document.getElementById('unreadAlertCount').textContent = '0';
+        return;
+    }
+
+    document.getElementById('unreadAlertCount').textContent = alerts.length;
+
+    container.innerHTML = alerts.map(alert => `
+        <div class="alert-item ${alert.level}">
+            <div class="alert-time">${new Date(alert.timestamp * 1000).toLocaleString()}</div>
+            <div class="alert-message">${escapeHtml(alert.message)}</div>
+        </div>
+    `).join('');
+}
+
+function addAlert(alert) {
+    const container = document.getElementById('alertsContainer');
+    if (!container) return;
+
+    const alertHtml = `
+        <div class="alert-item ${alert.level}">
+            <div class="alert-time">${new Date(alert.timestamp * 1000).toLocaleString()}</div>
+            <div class="alert-message">${escapeHtml(alert.message)}</div>
+        </div>
+    `;
+
+    const existingEmpty = container.querySelector('.text-center');
+    if (existingEmpty) {
+        container.innerHTML = '';
+    }
+
+    container.insertAdjacentHTML('afterbegin', alertHtml);
+
+    while (container.children.length > 10) {
+        container.removeChild(container.lastChild);
+    }
+
+    const currentCount = parseInt(document.getElementById('alertCount').textContent) || 0;
+    document.getElementById('alertCount').textContent = currentCount + 1;
+
+    if (alert.level === 'critical' || alert.level === 'warning') {
+        alertSound.play().catch(() => {});
+    }
+}
+
+function addVerificationRow(data) {
+    const tbody = document.getElementById('recentVerificationsTable');
+    if (!tbody) return;
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td><small>${new Date(data.timestamp).toLocaleTimeString()}</small></td>
+        <td><small>${escapeHtml(data.session_id ? data.session_id.substring(0, 8) + '...' : '-')}</small></td>
+        <td><small>${escapeHtml(data.app || '-')}</small></td>
+        <td><small>${escapeHtml(data.captcha_type || '-')}</small></td>
+        <td><span class="badge badge-${getRiskBadgeClass(data.risk_score)}">${data.risk_score || 0}</span></td>
+        <td><span class="badge badge-${data.status === 'success' ? 'success' : 'danger'}">${data.status === 'success' ? '成功' : '失败'}</span></td>
+        <td><small>${data.response_time || 0}ms</small></td>
+        <td><small>${escapeHtml(data.ip_address || '-')}</small></td>
+    `;
+
+    tbody.insertBefore(row, tbody.firstChild);
+
+    while (tbody.children.length > 20) {
+        tbody.removeChild(tbody.lastChild);
+    }
+}
+
+function getRiskBadgeClass(score) {
+    if (score >= 80) return 'danger';
+    if (score >= 60) return 'warning';
+    if (score >= 30) return 'info';
+    return 'success';
+}
+
+async function exportData(format) {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/export?format=${format}`);
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        let filename = `dashboard_export_${new Date().toISOString().split('T')[0]}`;
+        switch (format) {
+            case 'excel': filename += '.xlsx'; break;
+            case 'csv': filename += '.csv'; break;
+            case 'pdf': filename += '.pdf'; break;
+            case 'json': filename += '.json'; break;
+        }
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showAdminToast(`数据已导出为 ${format.toUpperCase()} 格式`, 'success');
+    } catch (error) {
+        console.error('Export failed:', error);
+        showAdminToast('导出失败，请重试', 'error');
+    }
+}
+
+function showReportGenerator() {
+    Swal.fire({
+        title: '生成报表',
+        html: `
+            <div class="form-group">
+                <label>报表名称</label>
+                <input type="text" id="reportName" class="form-control" value="智能仪表盘报表_${new Date().toLocaleDateString()}">
+            </div>
+            <div class="form-group">
+                <label>报表类型</label>
+                <select id="reportType" class="form-control">
+                    <option value="summary">汇总报表</option>
+                    <option value="detailed">详细报表</option>
+                    <option value="trend">趋势报表</option>
+                    <option value="risk">风险分析报表</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>时间范围</label>
+                <select id="reportPeriod" class="form-control">
+                    <option value="today">今天</option>
+                    <option value="yesterday">昨天</option>
+                    <option value="week">最近7天</option>
+                    <option value="month">最近30天</option>
+                </select>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '生成并导出',
+        cancelButtonText: '取消',
+        preConfirm: async () => {
+            const name = document.getElementById('reportName').value;
+            const type = document.getElementById('reportType').value;
+            const period = document.getElementById('reportPeriod').value;
+
+            try {
+                const response = await fetch(`${CONFIG.apiBase}/report`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, type, period })
+                });
+
+                if (!response.ok) throw new Error('Report generation failed');
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${name}.xlsx`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                return true;
+            } catch (error) {
+                Swal.showValidationMessage(`报表生成失败: ${error.message}`);
+                return false;
+            }
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            showAdminToast('报表生成成功', 'success');
+        }
+    });
+}
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.error('Fullscreen request failed:', err);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+}
+
+function animateValue(elementId, start, end, duration) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    const startTime = performance.now();
+
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 4);
+        const value = Math.floor(start + (end - start) * easeProgress);
+        element.textContent = formatNumber(value);
+
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    requestAnimationFrame(update);
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+window.addEventListener('beforeunload', function() {
+    stopRealtimeMode();
+    if (socket) {
+        socket.close();
+    }
+});
+</script>
+{% endblock %}

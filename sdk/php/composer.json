@@ -1,34 +1,65 @@
 {
-  "name": "hjtpx/captcha-sdk",
-  "description": "HJTPX 验证码系统 PHP SDK",
-  "type": "library",
-  "license": "MIT",
-  "authors": [
-    {
-      "name": "HJTPX Team"
-    }
-  ],
-  "require": {
-    "php": ">=7.4",
-    "guzzlehttp/guzzle": "^7.0"
-  },
-  "require-dev": {
-    "phpunit/phpunit": "^9.0",
-    "squizlabs/php_codesniffer": "^3.0"
-  },
-  "autoload": {
-    "psr-4": {
-      "HJTPX\\Captcha\\": "src/"
-    }
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "HJTPX\\Captcha\\Tests\\": "tests/"
-    }
-  },
-  "scripts": {
-    "test": "phpunit",
-    "cs-check": "phpcs",
-    "cs-fix": "phpcbf"
-  }
+    "name": "hjtpx/captcha-laravel",
+    "description": "Hjtpx Captcha SDK for Laravel - 支持滑块、点击、图形等多种验证码类型",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "captcha",
+        "laravel",
+        "slider-captcha",
+        "click-captcha",
+        "image-captcha",
+        "verification",
+        "security"
+    ],
+    "authors": [
+        {
+            "name": "Hjtpx Team",
+            "email": "team@hjtpx.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "laravel/framework": "^10.0|^11.0",
+        "guzzlehttp/guzzle": "^7.8",
+        "symfony/yaml": "^6.0|^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^8.0|^9.0",
+        "phpstan/phpstan": "^1.10"
+    },
+    "autoload": {
+        "psr-4": {
+            "Hjtpx\\Captcha\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Hjtpx\\Captcha\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "phpstan": "vendor/bin/phpstan analyse src --level=6"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Hjtpx\\Captcha\\Providers\\CaptchaServiceProvider"
+            ],
+            "facades": [
+                "Hjtpx\\Captcha\\Facades\\Captcha"
+            ],
+            "aliases": {
+                "Captcha": "Hjtpx\\Captcha\\Facades\\Captcha"
+            }
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

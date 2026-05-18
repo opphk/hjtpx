@@ -2590,3 +2590,849 @@ Authorization: Bearer {your_token_here}
 **认证要求**：需要管理员Token
 
 **请求参数
+---
+
+## AI风控引擎API (v15.0)
+
+### 概述
+
+AI风控引擎API提供了基于深度强化学习的智能风控策略，包括多维度风险画像、实时风险评估、策略热更新和效果监控等功能。
+
+---
+
+### 实时风险评估API
+
+#### 提交风险评估请求
+
+**接口地址**：`POST /api/v1/risk/assess`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "fingerprint": "string",           // 设备指纹 [必需]
+  "ip_address": "string",            // IP地址 [必需]
+  "session_id": "string",            // 会话ID
+  "device_info": {                   // 设备信息
+    "user_agent": "string",
+    "screen_resolution": "string",
+    "timezone": "string",
+    "language": "string",
+    "is_mobile": boolean,
+    "is_bot": boolean,
+    "is_headless": boolean
+  },
+  "behavior_data": {                // 行为数据
+    "score": number,
+    "mouse_speed": number,
+    "click_frequency": number,
+    "path_efficiency": number
+  },
+  "geo_data": {                     // 地理位置数据
+    "current_country": "string",
+    "current_region": "string",
+    "current_city": "string"
+  },
+  "metadata": {}                    // 其他元数据
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "风险评估成功",
+  "data": {
+    "request_id": "risk_1716054400000000000",
+    "risk_score": 75.5,
+    "risk_level": "medium",
+    "action": "captcha",
+    "factors": ["建议进行验证码挑战"],
+    "device_score": 85.0,
+    "ip_score": 78.0,
+    "behavior_score": 72.0,
+    "geo_score": 90.0,
+    "historical_score": 80.0,
+    "time_score": 100.0,
+    "session_score": 88.0,
+    "confidence": 0.95,
+    "processing_time_ms": 8,
+    "recommendations": ["增加设备验证", "监控IP行为"]
+  }
+}
+```
+
+**响应字段说明**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| request_id | string | 请求唯一标识 |
+| risk_score | float | 综合风险评分 (0-100) |
+| risk_level | string | 风险等级: low/medium/high/critical |
+| action | string | 建议动作: allow/captcha/review/block/challenge |
+| factors | array | 触发风险的因素列表 |
+| device_score | float | 设备风险评分 |
+| ip_score | float | IP风险评分 |
+| behavior_score | float | 行为风险评分 |
+| geo_score | float | 地理位置风险评分 |
+| historical_score | float | 历史行为评分 |
+| time_score | float | 时间段风险评分 |
+| session_score | float | 会话风险评分 |
+| confidence | float | 评估置信度 (0-1) |
+| processing_time_ms | int | 处理时间(毫秒) |
+
+---
+
+### 风险画像API
+
+#### 获取风险画像
+
+**接口地址**：`GET /api/v1/risk/profile`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| fingerprint | string | 是 | 设备指纹 |
+| ip_address | string | 是 | IP地址 |
+| type | string | 否 | 画像类型: unified/device/ip/behavior/geo (默认unified) |
+| session_id | string | 否 | 会话ID (查询行为画像时必需) |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "profile": {
+      "id": 1,
+      "fingerprint": "fp_xxx",
+      "overall_risk_score": 78.5,
+      "risk_level": "medium",
+      "trust_level": 75,
+      "request_count": 150,
+      "block_count": 3,
+      "first_seen_at": "2024-01-01T00:00:00Z",
+      "last_seen_at": "2024-05-15T12:00:00Z"
+    },
+    "device_history": [],
+    "ip_history": []
+  }
+}
+```
+
+#### 获取风险画像分析
+
+**接口地址**：`GET /api/v1/risk/profile/analysis`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| fingerprint | string | 是 | 设备指纹 |
+| ip_address | string | 是 | IP地址 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "分析成功",
+  "data": {
+    "device_score": 85.0,
+    "ip_score": 78.0,
+    "device_risk_factors": ["检测到自动化框架特征"],
+    "ip_risk_factors": ["24小时内被拦截2次"],
+    "device_history": [],
+    "ip_history": []
+  }
+}
+```
+
+#### 更新设备画像
+
+**接口地址**：`PUT /api/v1/risk/profile/device`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "fingerprint": "string",
+  "device_info": {
+    "user_agent": "string",
+    "screen_resolution": "string",
+    "touch_points": 0,
+    "has_web_socket": true
+  }
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "设备画像更新成功",
+  "data": {
+    "id": 1,
+    "fingerprint": "fp_xxx",
+    "risk_score": 82.5,
+    "trust_level": 80
+  }
+}
+```
+
+---
+
+### 风控策略管理API
+
+#### 获取当前策略版本
+
+**接口地址**：`GET /api/v1/risk/strategy/version`
+
+**认证要求**：无需认证
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "version": {
+      "id": 1,
+      "version": "v1.0.0",
+      "strategy_type": "default",
+      "is_active": true,
+      "published_at": "2024-01-01T00:00:00Z"
+    },
+    "rules": [
+      {
+        "id": 1,
+        "name": "IP频率限制",
+        "rule_type": "rate_limit",
+        "action": "captcha",
+        "priority": 100,
+        "weight": 0.15,
+        "enabled": true
+      }
+    ]
+  }
+}
+```
+
+#### 获取策略版本历史
+
+**接口地址**：`GET /api/v1/risk/strategy/versions`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| limit | int | 否 | 返回数量限制 (默认20) |
+
+#### 创建新策略版本
+
+**接口地址**：`POST /api/v1/risk/strategy/version`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "base_version": "v1.0.0",
+  "new_version": "v1.1.0",
+  "description": "优化风控规则"
+}
+```
+
+#### 更新策略规则
+
+**接口地址**：`PUT /api/v1/risk/strategy/rule/:id`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "name": "新规则名称",
+  "condition": "ip_request_count > threshold",
+  "action": "block",
+  "parameters": {"threshold": 100},
+  "priority": 90,
+  "weight": 0.2,
+  "enabled": true
+}
+```
+
+#### 发布策略版本
+
+**接口地址**：`POST /api/v1/risk/strategy/version/:id/publish`
+
+**认证要求**：无需认证
+
+#### 回滚策略版本
+
+**接口地址**：`POST /api/v1/risk/strategy/version/:id/rollback`
+
+**认证要求**：无需认证
+
+#### 获取版本更新历史
+
+**接口地址**：`GET /api/v1/risk/strategy/version/:id/updates`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| limit | int | 否 | 返回数量限制 (默认50) |
+
+#### 导出策略版本
+
+**接口地址**：`GET /api/v1/risk/strategy/version/:id/export`
+
+**认证要求**：无需认证
+
+**响应**：JSON格式的策略配置文件
+
+#### 导入策略版本
+
+**接口地址**：`POST /api/v1/risk/strategy/version/import`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "json_data": "{...}"  // 导出的策略JSON
+}
+```
+
+#### 评估风险规则
+
+**接口地址**：`POST /api/v1/risk/strategy/evaluate`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "risk_context": {
+    "ip_request_count": 150,
+    "mouse_speed": 2500,
+    "is_vpn": true
+  }
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "评估成功",
+  "data": {
+    "action": "captcha",
+    "risk_score": 45.5,
+    "triggered_rules": ["IP频率限制", "VPN/代理检测"]
+  }
+}
+```
+
+---
+
+### 风控监控API
+
+#### 获取监控指标
+
+**接口地址**：`GET /api/v1/risk/monitoring/metrics`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| type | string | 否 | 指标类型: risk/performance/block (默认risk) |
+| range | string | 否 | 时间范围: 1h/6h/24h/7d (默认1h) |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "risk_score_avg": 72.5,
+    "risk_score_max": 95.0,
+    "risk_score_min": 30.0
+  }
+}
+```
+
+#### 获取风险指标
+
+**接口地址**：`GET /api/v1/risk/monitoring/risk-metrics`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| start_time | string | 否 | 开始时间 (RFC3339格式) |
+| end_time | string | 否 | 结束时间 (RFC3339格式) |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "metrics": {
+      "avg_risk_score": 68.5,
+      "total_requests": 50000,
+      "blocked_requests": 1500,
+      "block_rate": 0.03,
+      "false_positives": 45,
+      "false_positive_rate": 0.03,
+      "avg_response_time_ms": 8.5
+    },
+    "risk_distribution": {
+      "low": 35000,
+      "medium": 10000,
+      "high": 4000,
+      "critical": 1000
+    },
+    "action_distribution": {
+      "allow": 40000,
+      "captcha": 8000,
+      "review": 1500,
+      "block": 500
+    },
+    "period": {
+      "start": "2024-05-14T00:00:00Z",
+      "end": "2024-05-15T00:00:00Z"
+    }
+  }
+}
+```
+
+#### 获取策略性能
+
+**接口地址**：`GET /api/v1/risk/monitoring/strategy-performance`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| strategy_name | string | 否 | 策略名称 |
+| start_time | string | 否 | 开始时间 |
+| end_time | string | 否 | 结束时间 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "effectiveness": 0.85,
+    "false_positive_rate": 0.02,
+    "total_hits": 1500,
+    "trends": [
+      {
+        "timestamp": "2024-05-15T00:00:00Z",
+        "value": 0.82,
+        "unit": "rate"
+      }
+    ]
+  }
+}
+```
+
+#### 获取模型性能
+
+**接口地址**：`GET /api/v1/risk/monitoring/model-performance`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| model_type | string | 否 | 模型类型 (默认drp) |
+| start_time | string | 否 | 开始时间 |
+| end_time | string | 否 | 结束时间 |
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "accuracy": 0.92,
+    "precision": 0.88,
+    "recall": 0.95,
+    "f1_score": 0.91,
+    "avg_latency_ms": 5.2,
+    "accuracy_trend": []
+  }
+}
+```
+
+#### 获取活跃告警
+
+**接口地址**：`GET /api/v1/risk/monitoring/alerts`
+
+**认证要求**：无需认证
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": [
+    {
+      "id": 1,
+      "alert_type": "threshold",
+      "alert_name": "risk_score告警",
+      "severity": "medium",
+      "message": "risk_score指标低于阈值: 当前值35.0, 阈值40.0",
+      "status": "active",
+      "created_at": "2024-05-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+#### 确认告警
+
+**接口地址**：`POST /api/v1/risk/monitoring/alerts/:id/acknowledge`
+
+**认证要求**：无需认证
+
+#### 解决告警
+
+**接口地址**：`POST /api/v1/risk/monitoring/alerts/:id/resolve`
+
+**认证要求**：无需认证
+
+#### 生成监控报告
+
+**接口地址**：`POST /api/v1/risk/monitoring/reports`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "report_type": "risk",
+  "start_time": "2024-05-01T00:00:00Z",
+  "end_time": "2024-05-15T00:00:00Z"
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "报告生成成功",
+  "data": {
+    "id": 1,
+    "report_type": "risk",
+    "report_name": "risk报告_20240501_20240515",
+    "period_start": "2024-05-01T00:00:00Z",
+    "period_end": "2024-05-15T00:00:00Z",
+    "summary": "平均风险评分: 68.50; 拦截率: 3.00%; 误报率: 3.00%;",
+    "generated_at": "2024-05-15T12:00:00Z"
+  }
+}
+```
+
+#### 获取监控报告列表
+
+**接口地址**：`GET /api/v1/risk/monitoring/reports`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| report_type | string | 否 | 报告类型 |
+| limit | int | 否 | 返回数量限制 (默认10) |
+
+---
+
+### 深度强化学习(DRL) API
+
+#### 获取DRL策略状态
+
+**接口地址**：`GET /api/v1/risk/drl/status`
+
+**认证要求**：无需认证
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "查询成功",
+  "data": {
+    "current_performance": 5.2,
+    "outcomes_summary": {
+      "total_requests": 10000,
+      "successful": 9500,
+      "failed": 500,
+      "accuracy": 0.95,
+      "avg_latency_ms": 8.5,
+      "action_counts": {
+        "allow": 8000,
+        "captcha": 1500,
+        "review": 300,
+        "block": 200
+      },
+      "action_accuracy": {
+        "allow": 0.98,
+        "captcha": 0.92,
+        "review": 0.85,
+        "block": 0.88
+      },
+      "current_exploration": 0.05,
+      "policy_performance": 5.2
+    }
+  }
+}
+```
+
+#### 记录DRL结果
+
+**接口地址**：`POST /api/v1/risk/drl/outcome`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "session_id": "string",
+  "action": "string",    // allow/captcha/review/block/challenge
+  "success": boolean,
+  "latency_ms": 5
+}
+```
+
+#### 训练DRL模型
+
+**接口地址**：`POST /api/v1/risk/drl/train`
+
+**认证要求**：无需认证
+
+**请求参数**：
+
+```json
+{
+  "batch_size": 32
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "code": 0,
+  "message": "模型训练成功"
+}
+```
+
+---
+
+### 错误码
+
+| 错误码 | 说明 |
+|--------|------|
+| 0 | 成功 |
+| 400 | 参数错误 |
+| 404 | 资源不存在 |
+| 500 | 服务器内部错误 |
+
+---
+
+### 性能指标
+
+| 指标 | 目标值 | 说明 |
+|------|--------|------|
+| 响应时间 | < 10ms | 99分位 |
+| 可用性 | 99.9% | 全年可用性 |
+| 并发处理 | 10000 QPS | 每秒请求数 |
+| 准确率 | > 90% | 风险识别准确率 |
+| 误报率 | < 5% | 正常请求被误拦比例 |
+
+---
+
+### 使用示例
+
+#### Go语言示例
+
+```go
+package main
+
+import (
+    "bytes"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+type RiskAssessmentRequest struct {
+    Fingerprint string                 `json:"fingerprint"`
+    IPAddress   string                 `json:"ip_address"`
+    SessionID   string                 `json:"session_id"`
+    DeviceInfo  map[string]interface{} `json:"device_info"`
+    BehaviorData map[string]interface{} `json:"behavior_data"`
+}
+
+type RiskAssessmentResponse struct {
+    RiskScore      float64  `json:"risk_score"`
+    RiskLevel      string   `json:"risk_level"`
+    Action         string   `json:"action"`
+    Factors        []string `json:"factors"`
+    ProcessingTime int64    `json:"processing_time_ms"`
+}
+
+func main() {
+    req := RiskAssessmentRequest{
+        Fingerprint: "test_fingerprint_001",
+        IPAddress:   "192.168.1.100",
+        SessionID:   "session_001",
+        DeviceInfo: map[string]interface{}{
+            "user_agent":    "Mozilla/5.0 Chrome/91.0",
+            "screen_res":    "1920x1080",
+        },
+        BehaviorData: map[string]interface{}{
+            "score": 85.0,
+        },
+    }
+
+    jsonData, _ := json.Marshal(req)
+    resp, err := http.Post(
+        "http://localhost:8080/api/v1/risk/assess",
+        "application/json",
+        bytes.NewBuffer(jsonData),
+    )
+    if err != nil {
+        panic(err)
+    }
+    defer resp.Body.Close()
+
+    var result map[string]interface{}
+    json.NewDecoder(resp.Body).Decode(&result)
+
+    fmt.Printf("Risk Score: %.2f\n", result["data"].(map[string]interface{})["risk_score"])
+}
+```
+
+#### JavaScript示例
+
+```javascript
+async function assessRisk(fingerprint, ipAddress) {
+    const response = await fetch('/api/v1/risk/assess', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            fingerprint,
+            ip_address: ipAddress,
+            session_id: 'session_' + Date.now(),
+            device_info: {
+                user_agent: navigator.userAgent,
+                screen_resolution: `${screen.width}x${screen.height}`,
+            }
+        })
+    });
+
+    const result = await response.json();
+    return result.data;
+}
+
+// 使用示例
+const riskResult = await assessRisk('fp_xxx', '192.168.1.100');
+console.log('Risk Level:', riskResult.risk_level);
+console.log('Action:', riskResult.action);
+```
+
+---
+
+## 附录
+
+### A. 风险等级说明
+
+| 等级 | 评分范围 | 说明 | 建议动作 |
+|------|----------|------|----------|
+| 低 (low) | 80-100 | 风险极低，可信用户 | 直接放行 |
+| 中 (medium) | 60-79 | 风险中等 | 验证码挑战 |
+| 高 (high) | 40-59 | 风险较高 | 人工审核 |
+| 严重 (critical) | 0-39 | 风险极高 | 直接拦截 |
+
+### B. 支持的动作
+
+| 动作 | 说明 |
+|------|------|
+| allow | 允许访问 |
+| captcha | 要求完成验证码 |
+| review | 人工审核 |
+| block | 阻止访问 |
+| challenge | 额外验证挑战 |
+
+### C. 规则类型
+
+| 类型 | 说明 |
+|------|------|
+| rate_limit | 频率限制规则 |
+| behavior | 行为分析规则 |
+| device_fingerprint | 设备指纹规则 |
+| network | 网络特征规则 |
+| geo | 地理位置规则 |
+| blacklist | 黑名单规则 |
+
+### D. 告警级别
+
+| 级别 | 说明 | 处理时效 |
+|------|------|----------|
+| critical | 严重告警 | 即时处理 |
+| high | 高优先级 | 1小时内 |
+| medium | 中优先级 | 4小时内 |
+| low | 低优先级 | 24小时内 |
+
+---
+
+**文档版本**: v15.0
+**最后更新**: 2024-05-18
+**维护团队**: AI风控引擎开发组

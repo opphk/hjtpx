@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="墨盾验证 - 增强型滑块验证码 v15.0">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>增强型滑块验证码 v15.0 - 墨盾验证</title>
+    
+    <link rel="preconnect" href="https://cdn.bootcdn.net">
+    <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --captcha-primary: #c9a96e;
+            --captcha-success: #28a745;
+            --captcha-danger: #dc3545;
+            --captcha-dark: #1a1a2e;
+            --captcha-light: #f8f9fa;
+            --captcha-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .enhanced-captcha-container {
+            max-width: 450px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .captcha-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .captcha-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--captcha-dark);
+            margin-bottom: 0.5rem;
+        }
+        
+        .captcha-subtitle {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        .captcha-image-container {
+            position: relative;
+            width: 100%;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid rgba(201, 169, 110, 0.3);
+        }
+        
+        .captcha-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .slider-track {
+            position: relative;
+            width: 100%;
+            height: 50px;
+            background: var(--captcha-light);
+            border-radius: 25px;
+            margin-top: 1rem;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .slider-track::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 4px;
+            background: rgba(201, 169, 110, 0.3);
+            border-radius: 2px;
+        }
+        
+        .slider-button {
+            position: absolute;
+            left: 4px;
+            top: 4px;
+            width: 42px;
+            height: 42px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            cursor: grab;
+            transition: transform 0.1s ease;
+            z-index: 10;
+        }
+        
+        .slider-button:hover {
+            transform: scale(1.05);
+        }
+        
+        .slider-button:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        
+        .slider-button i {
+            color: var(--captcha-primary);
+            font-size: 1.2rem;
+        }
+        
+        .slider-progress {
+            position: absolute;
+            left: 4px;
+            top: 4px;
+            height: 42px;
+            background: linear-gradient(90deg, var(--captcha-primary), #d4b87a);
+            border-radius: 21px;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+        
+        .slider-hint {
+            text-align: center;
+            margin-top: 0.75rem;
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        
+        .obstacle-info {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.75rem;
+        }
+        
+        .obstacle-badge {
+            padding: 0.25rem 0.5rem;
+            background: rgba(201, 169, 110, 0.1);
+            border: 1px solid rgba(201, 169, 110, 0.3);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--captcha-primary);
+        }
+        
+        .result-display {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+        
+        .result-display.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .result-display.success {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.3);
+            color: var(--captcha-success);
+        }
+        
+        .result-display.error {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: var(--captcha-danger);
+        }
+        
+        .analysis-panel {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--captcha-light);
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .analysis-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .analysis-label {
+            color: #6c757d;
+        }
+        
+        .analysis-value {
+            font-weight: 600;
+            color: var(--captcha-dark);
+        }
+        
+        .analysis-value.good {
+            color: var(--captcha-success);
+        }
+        
+        .analysis-value.warning {
+            color: #ffc107;
+        }
+        
+        .analysis-value.bad {
+            color: var(--captcha-danger);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            z-index: 100;
+        }
+        
+        .loading-overlay.show {
+            display: flex;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(201, 169, 110, 0.2);
+            border-top-color: var(--captcha-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .btn-refresh {
+            margin-top: 1rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--captcha-dark);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+        }
+        
+        .btn-refresh:hover {
+            background: #2d2d44;
+            transform: translateY(-2px);
+        }
+        
+        .feature-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-badge {
+            padding: 0.25rem 0.75rem;
+            background: linear-gradient(135deg, var(--captcha-primary), #d4b87a);
+            color: white;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .difficulty-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            justify-content: center;
+        }
+        
+        .difficulty-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(201, 169, 110, 0.3);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+            font-size: 0.85rem;
+        }
+        
+        .difficulty-btn:hover {
+            border-color: var(--captcha-primary);
+        }
+        
+        .difficulty-btn.active {
+            background: var(--captcha-primary);
+            color: white;
+            border-color: var(--captcha-primary);
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            justify-content: center;
+        }
+        
+        .mode-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid rgba(201, 169, 110, 0.3);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--captcha-transition);
+            font-size: 0.85rem;
+        }
+        
+        .mode-btn:hover {
+            border-color: var(--captcha-primary);
+        }
+        
+        .mode-btn.active {
+            background: var(--captcha-primary);
+            color: white;
+            border-color: var(--captcha-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="enhanced-captcha-container">
+            <div class="captcha-header">
+                <h1 class="captcha-title">增强型滑块验证码</h1>
+                <p class="captcha-subtitle">v15.0 - 多层障碍物 · 智能检测</p>
+            </div>
+            
+            <div class="feature-badges">
+                <span class="feature-badge">双轨滑块</span>
+                <span class="feature-badge">深度学习检测</span>
+                <span class="feature-badge">自适应阻力</span>
+                <span class="feature-badge">轨迹预测</span>
+            </div>
+            
+            <div class="difficulty-selector">
+                <button class="difficulty-btn active" data-difficulty="1">简单</button>
+                <button class="difficulty-btn" data-difficulty="2">中等</button>
+                <button class="difficulty-btn" data-difficulty="3">困难</button>
+                <button class="difficulty-btn" data-difficulty="4">极难</button>
+                <button class="difficulty-btn" data-difficulty="5">地狱</button>
+            </div>
+            
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="standard">标准模式</button>
+                <button class="mode-btn" data-mode="dual_track">双轨模式</button>
+                <button class="mode-btn" data-mode="multi_obstacle">多障碍模式</button>
+                <button class="mode-btn" data-mode="chaos">混沌模式</button>
+            </div>
+            
+            <div class="captcha-image-container" id="captchaContainer">
+                <img class="captcha-image" id="captchaImage" alt="验证码图片">
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            
+            <div class="obstacle-info" id="obstacleInfo" style="display: none;">
+                <span class="obstacle-badge" id="obstacleCount">障碍物: 0</span>
+                <span class="obstacle-badge" id="resistanceLevel">阻力等级: 1</span>
+            </div>
+            
+            <div class="slider-track" id="sliderTrack">
+                <div class="slider-progress" id="sliderProgress"></div>
+                <div class="slider-button" id="sliderButton">
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+            </div>
+            
+            <p class="slider-hint" id="sliderHint">拖动滑块完成验证</p>
+            
+            <div class="result-display" id="resultDisplay">
+                <i class="fas fa-check-circle me-2"></i>
+                <span id="resultText"></span>
+            </div>
+            
+            <div class="analysis-panel" id="analysisPanel" style="display: none;">
+                <h6 class="mb-3"><i class="fas fa-chart-line me-2"></i>轨迹分析报告</h6>
+                <div class="analysis-item">
+                    <span class="analysis-label">是否为人类:</span>
+                    <span class="analysis-value" id="isHuman">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">置信度:</span>
+                    <span class="analysis-value" id="confidence">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">轨迹模式:</span>
+                    <span class="analysis-value" id="trajectoryPattern">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">异常分数:</span>
+                    <span class="analysis-value" id="anomalyScore">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">速度特征:</span>
+                    <span class="analysis-value" id="speedProfile">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">神经网络分数:</span>
+                    <span class="analysis-value" id="neuralScore">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">LSTM 置信度:</span>
+                    <span class="analysis-value" id="lstmConfidence">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">注意力分数:</span>
+                    <span class="analysis-value" id="attentionScore">-</span>
+                </div>
+                <div class="analysis-item">
+                    <span class="analysis-label">风险评估:</span>
+                    <span class="analysis-value" id="riskAssessment">-</span>
+                </div>
+            </div>
+            
+            <button class="btn-refresh" id="refreshBtn">
+                <i class="fas fa-sync-alt me-2"></i>刷新验证码
+            </button>
+        </div>
+    </div>
+    
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function() {
+            'use strict';
+            
+            const state = {
+                sessionId: null,
+                gapX: 0,
+                gapY: 0,
+                isDragging: false,
+                startX: 0,
+                currentX: 0,
+                trajectory: [],
+                startTime: 0,
+                difficulty: 1,
+                mode: 'standard',
+                obstacles: [],
+                resistanceLevel: 1,
+                trackMode: 'standard'
+            };
+            
+            const elements = {
+                captchaImage: document.getElementById('captchaImage'),
+                captchaContainer: document.getElementById('captchaContainer'),
+                loadingOverlay: document.getElementById('loadingOverlay'),
+                sliderTrack: document.getElementById('sliderTrack'),
+                sliderButton: document.getElementById('sliderButton'),
+                sliderProgress: document.getElementById('sliderProgress'),
+                sliderHint: document.getElementById('sliderHint'),
+                resultDisplay: document.getElementById('resultDisplay'),
+                resultText: document.getElementById('resultText'),
+                analysisPanel: document.getElementById('analysisPanel'),
+                obstacleInfo: document.getElementById('obstacleInfo'),
+                obstacleCount: document.getElementById('obstacleCount'),
+                resistanceLevel: document.getElementById('resistanceLevel'),
+                refreshBtn: document.getElementById('refreshBtn')
+            };
+            
+            function initDifficultySelector() {
+                const buttons = document.querySelectorAll('.difficulty-btn');
+                buttons.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        buttons.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        state.difficulty = parseInt(this.dataset.difficulty);
+                        refreshCaptcha();
+                    });
+                });
+            }
+            
+            function initModeSelector() {
+                const buttons = document.querySelectorAll('.mode-btn');
+                buttons.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        buttons.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        state.mode = this.dataset.mode;
+                        refreshCaptcha();
+                    });
+                });
+            }
+            
+            async function refreshCaptcha() {
+                showLoading(true);
+                hideResult();
+                hideAnalysis();
+                
+                try {
+                    const response = await fetch('/api/v1/captcha/slider/enhanced/generate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            difficulty: state.difficulty,
+                            mode: state.mode
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to generate captcha');
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (result.code === 0 && result.data) {
+                        const data = result.data;
+                        state.sessionId = data.session_id;
+                        state.gapX = data.gap_x;
+                        state.gapY = data.gap_y;
+                        state.obstacles = data.obstacles || [];
+                        state.resistanceLevel = data.resistance_level || 1;
+                        state.trackMode = data.track_info ? 'dual_track' : 'standard';
+                        
+                        elements.captchaImage.src = data.background_url;
+                        
+                        updateObstacleInfo();
+                        
+                        resetSlider();
+                    } else {
+                        throw new Error(result.message || 'Failed to generate captcha');
+                    }
+                } catch (error) {
+                    console.error('Error generating captcha:', error);
+                    showError('生成验证码失败，请重试');
+                } finally {
+                    showLoading(false);
+                }
+            }
+            
+            function updateObstacleInfo() {
+                if (state.obstacles && state.obstacles.length > 0) {
+                    elements.obstacleInfo.style.display = 'flex';
+                    elements.obstacleCount.textContent = `障碍物: ${state.obstacles.length}`;
+                    elements.resistanceLevel.textContent = `阻力等级: ${state.resistanceLevel}`;
+                } else {
+                    elements.obstacleInfo.style.display = 'none';
+                }
+            }
+            
+            function initSlider() {
+                const button = elements.sliderButton;
+                const track = elements.sliderTrack;
+                
+                const startDrag = function(e) {
+                    if (state.isDragging) return;
+                    
+                    state.isDragging = true;
+                    state.startX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+                    state.currentX = 0;
+                    state.startTime = Date.now();
+                    state.trajectory = [];
+                    
+                    button.style.cursor = 'grabbing';
+                };
+                
+                const drag = function(e) {
+                    if (!state.isDragging) return;
+                    e.preventDefault();
+                    
+                    const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+                    const deltaX = clientX - state.startX;
+                    
+                    const trackWidth = track.offsetWidth - button.offsetWidth - 8;
+                    const maxX = Math.max(0, Math.min(deltaX, trackWidth));
+                    
+                    const resistanceMultiplier = getResistanceMultiplier(maxX / trackWidth);
+                    const resistedX = maxX * resistanceMultiplier;
+                    
+                    state.currentX = resistedX;
+                    button.style.left = (resistedX + 4) + 'px';
+                    elements.sliderProgress.style.width = (resistedX + 4) + 'px';
+                    
+                    const now = Date.now();
+                    state.trajectory.push({
+                        x: resistedX,
+                        y: 0,
+                        timestamp: now - state.startTime,
+                        pressure: 0.5,
+                        tilt_x: 0,
+                        tilt_y: 0
+                    });
+                    
+                    elements.sliderHint.textContent = `${Math.round((resistedX / trackWidth) * 100)}%`;
+                };
+                
+                const endDrag = function(e) {
+                    if (!state.isDragging) return;
+                    
+                    state.isDragging = false;
+                    button.style.cursor = 'grab';
+                    
+                    const trackWidth = track.offsetWidth - button.offsetWidth - 8;
+                    const progress = state.currentX / trackWidth;
+                    
+                    if (progress > 0.1) {
+                        submitVerification(progress);
+                    } else {
+                        resetSlider();
+                    }
+                };
+                
+                button.addEventListener('mousedown', startDrag);
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', endDrag);
+                
+                button.addEventListener('touchstart', startDrag, { passive: false });
+                document.addEventListener('touchmove', drag, { passive: false });
+                document.addEventListener('touchend', endDrag);
+            }
+            
+            function getResistanceMultiplier(progress) {
+                const resistanceLevel = state.resistanceLevel;
+                
+                let resistance = 0;
+                
+                switch (resistanceLevel) {
+                    case 1:
+                        resistance = progress * 0.1;
+                        break;
+                    case 2:
+                        resistance = progress * 0.15 + Math.sin(progress * Math.PI) * 0.1;
+                        break;
+                    case 3:
+                        resistance = progress * 0.2 + Math.sin(progress * Math.PI) * 0.15;
+                        break;
+                    case 4:
+                        resistance = progress * 0.25 + Math.sin(progress * Math.PI * 1.5) * 0.15;
+                        break;
+                    case 5:
+                        resistance = progress * 0.3 + Math.sin(progress * Math.PI * 2) * 0.2;
+                        break;
+                    default:
+                        resistance = progress * 0.1;
+                }
+                
+                return 1 - resistance * 0.5;
+            }
+            
+            function resetSlider() {
+                elements.sliderButton.style.left = '4px';
+                elements.sliderProgress.style.width = '0px';
+                elements.sliderHint.textContent = '拖动滑块完成验证';
+                state.trajectory = [];
+            }
+            
+            async function submitVerification(progress) {
+                showLoading(true);
+                
+                const trackWidth = elements.sliderTrack.offsetWidth - elements.sliderButton.offsetWidth - 8;
+                const positionX = Math.round((state.gapX / 320) * trackWidth);
+                
+                try {
+                    const response = await fetch('/api/v1/captcha/slider/enhanced/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            session_id: state.sessionId,
+                            position_x: positionX,
+                            position_y: state.gapY,
+                            trajectory: state.trajectory,
+                            drag_duration: Date.now() - state.startTime,
+                            resistance_level: state.resistanceLevel,
+                            difficulty: state.difficulty,
+                            obstacles: state.obstacles,
+                            track_mode: state.trackMode
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to verify captcha');
+                    }
+                    
+                    const result = await response.json();
+                    
+                    if (result.code === 0 && result.data) {
+                        const data = result.data;
+                        
+                        if (data.success) {
+                            showSuccess('验证成功！');
+                        } else {
+                            showError(data.message || '验证失败');
+                        }
+                        
+                        if (data.trajectory_analysis) {
+                            displayAnalysis(data.trajectory_analysis);
+                        }
+                    } else {
+                        throw new Error(result.message || 'Failed to verify captcha');
+                    }
+                } catch (error) {
+                    console.error('Error verifying captcha:', error);
+                    showError('验证失败，请重试');
+                } finally {
+                    showLoading(false);
+                }
+            }
+            
+            function displayAnalysis(analysis) {
+                elements.analysisPanel.style.display = 'block';
+                
+                document.getElementById('isHuman').textContent = analysis.is_human ? '是' : '否';
+                document.getElementById('isHuman').className = 'analysis-value ' + (analysis.is_human ? 'good' : 'bad');
+                
+                document.getElementById('confidence').textContent = (analysis.confidence * 100).toFixed(1) + '%';
+                document.getElementById('confidence').className = 'analysis-value ' + getScoreClass(analysis.confidence);
+                
+                document.getElementById('trajectoryPattern').textContent = analysis.pattern || '-';
+                
+                document.getElementById('anomalyScore').textContent = (analysis.anomaly_score * 100).toFixed(1) + '%';
+                document.getElementById('anomalyScore').className = 'analysis-value ' + getScoreClass(1 - analysis.anomaly_score);
+                
+                if (analysis.speed_profile) {
+                    const sp = analysis.speed_profile;
+                    document.getElementById('speedProfile').textContent = 
+                        `${sp.speed_trend || 'stable'} (avg: ${sp.average_speed?.toFixed(1) || '-'})`;
+                }
+                
+                document.getElementById('neuralScore').textContent = (analysis.neural_score * 100).toFixed(1) + '%';
+                document.getElementById('neuralScore').className = 'analysis-value ' + getScoreClass(analysis.neural_score);
+                
+                document.getElementById('lstmConfidence').textContent = (analysis.lstm_confidence * 100).toFixed(1) + '%';
+                document.getElementById('lstmConfidence').className = 'analysis-value ' + getScoreClass(analysis.lstm_confidence);
+                
+                document.getElementById('attentionScore').textContent = (analysis.attention_score * 100).toFixed(1) + '%';
+                document.getElementById('attentionScore').className = 'analysis-value ' + getScoreClass(analysis.attention_score);
+            }
+            
+            function getScoreClass(score) {
+                if (score >= 0.7) return 'good';
+                if (score >= 0.4) return 'warning';
+                return 'bad';
+            }
+            
+            function hideAnalysis() {
+                elements.analysisPanel.style.display = 'none';
+            }
+            
+            function showSuccess(message) {
+                elements.resultDisplay.className = 'result-display show success';
+                elements.resultDisplay.querySelector('i').className = 'fas fa-check-circle me-2';
+                elements.resultText.textContent = message;
+            }
+            
+            function showError(message) {
+                elements.resultDisplay.className = 'result-display show error';
+                elements.resultDisplay.querySelector('i').className = 'fas fa-times-circle me-2';
+                elements.resultText.textContent = message;
+            }
+            
+            function hideResult() {
+                elements.resultDisplay.className = 'result-display';
+            }
+            
+            function showLoading(show) {
+                if (show) {
+                    elements.loadingOverlay.classList.add('show');
+                } else {
+                    elements.loadingOverlay.classList.remove('show');
+                }
+            }
+            
+            function init() {
+                initDifficultySelector();
+                initModeSelector();
+                initSlider();
+                
+                elements.refreshBtn.addEventListener('click', refreshCaptcha);
+                
+                refreshCaptcha();
+            }
+            
+            document.addEventListener('DOMContentLoaded', init);
+            
+            window.EnhancedSliderCaptcha = {
+                refresh: refreshCaptcha,
+                getState: function() { return state; }
+            };
+        })();
+    </script>
+</body>
+</html>

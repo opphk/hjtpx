@@ -87,7 +87,7 @@ func PublishVerificationEvent(event RealTimeVerificationEvent) {
 	}
 }
 
-func SubscribeToVerificationEvents() <-chan RealTimeVerificationEvent {
+func SubscribeToRealTimeVerificationEvents() <-chan RealTimeVerificationEvent {
 	return realTimeEvents
 }
 
@@ -596,20 +596,20 @@ func (s *DashboardService) exportToExcel(data *DashboardData) ([]byte, error) {
 	return json.Marshal(data)
 }
 
-type DashboardAlert struct {
+type RealTimeDashboardAlert struct {
 	Type      string `json:"type"`
 	Level     string `json:"level"`
 	Message   string `json:"message"`
 	Timestamp int64  `json:"timestamp"`
 }
 
-func (s *DashboardService) CheckAlerts() []DashboardAlert {
-	var alerts []DashboardAlert
+func (s *DashboardService) CheckAlerts() []RealTimeDashboardAlert {
+	var alerts []RealTimeDashboardAlert
 
 	summary, err := s.getSummary()
 	if err == nil && summary != nil {
 		if summary.BlockRate > 20 {
-			alerts = append(alerts, DashboardAlert{
+			alerts = append(alerts, RealTimeDashboardAlert{
 				Type:      "high_block_rate",
 				Level:     "warning",
 				Message:   fmt.Sprintf("拦截率异常: %.2f%%", summary.BlockRate),
@@ -618,7 +618,7 @@ func (s *DashboardService) CheckAlerts() []DashboardAlert {
 		}
 
 		if summary.AvgResponseTime > 500 {
-			alerts = append(alerts, DashboardAlert{
+			alerts = append(alerts, RealTimeDashboardAlert{
 				Type:      "slow_response",
 				Level:     "info",
 				Message:   fmt.Sprintf("响应时间过长: %dms", summary.AvgResponseTime),

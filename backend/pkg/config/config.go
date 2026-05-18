@@ -6,14 +6,15 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Postgres PostgresConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
-	Database DatabaseConfig
-	Alert    AlertConfig
-	I18n     I18nConfig
-	Backup   BackupConfig
+	Server     ServerConfig
+	Postgres   PostgresConfig
+	Redis      RedisConfig
+	JWT        JWTConfig
+	Database   DatabaseConfig
+	Alert      AlertConfig
+	I18n       I18nConfig
+	Backup     BackupConfig
+	Distributed DistributedConfig
 }
 
 type DatabaseConfig struct {
@@ -160,6 +161,83 @@ type RedisConfig struct {
 	MaxRetries int
 }
 
+type DistributedConfig struct {
+	Version         string                   `yaml:"version"`
+	Enabled         bool                     `yaml:"enabled"`
+	Region          string                   `yaml:"region"`
+	Datacenter      string                   `yaml:"datacenter"`
+	RedisCluster    DistributedRedisConfig    `yaml:"redis_cluster"`
+	ServiceDiscovery ServiceDiscoveryConfig   `yaml:"service_discovery"`
+	HealthCheck     HealthCheckConfig        `yaml:"health_check"`
+	Failover        FailoverConfig           `yaml:"failover"`
+}
+
+type DistributedRedisConfig struct {
+	Enabled            bool     `yaml:"enabled"`
+	Mode               int      `yaml:"mode"`
+	ClusterNodes       []string `yaml:"cluster_nodes"`
+	SentinelNodes      []string `yaml:"sentinel_nodes"`
+	StandaloneAddr     string   `yaml:"standalone_addr"`
+	MasterName         string   `yaml:"master_name"`
+	Password           string   `yaml:"password"`
+	DB                 int      `yaml:"db"`
+	PoolSize           int      `yaml:"pool_size"`
+	MinIdleConns       int      `yaml:"min_idle_conns"`
+	MaxIdleConns       int      `yaml:"max_idle_conns"`
+	DialTimeoutSecs    int      `yaml:"dial_timeout_secs"`
+	ReadTimeoutSecs    int      `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs   int      `yaml:"write_timeout_secs"`
+	PoolTimeoutSecs    int      `yaml:"pool_timeout_secs"`
+	MaxRetries        int      `yaml:"max_retries"`
+	FailoverEnabled    bool     `yaml:"failover_enabled"`
+	ReplicaLagLimitSecs int     `yaml:"replica_lag_limit_secs"`
+	HeartbeatIntervalSecs int  `yaml:"heartbeat_interval_secs"`
+	Region             string   `yaml:"region"`
+}
+
+type ServiceDiscoveryConfig struct {
+	Enabled               bool   `yaml:"enabled"`
+	ServiceName           string `yaml:"service_name"`
+	HeartbeatIntervalSecs int    `yaml:"heartbeat_interval_secs"`
+	TTLSecs               int    `yaml:"ttl_secs"`
+	HealthCheckIntervalSecs int  `yaml:"health_check_interval_secs"`
+	MaxHeartbeatMisses    int    `yaml:"max_heartbeat_misses"`
+	UseRedis              bool   `yaml:"use_redis"`
+}
+
+type HealthCheckConfig struct {
+	Enabled            bool     `yaml:"enabled"`
+	IntervalSecs       int      `yaml:"interval_secs"`
+	TimeoutSecs        int      `yaml:"timeout_secs"`
+	MaxFailCount       int      `yaml:"max_fail_count"`
+	FailureThreshold   int      `yaml:"failure_threshold"`
+	RecoveryThreshold  int      `yaml:"recovery_threshold"`
+	EnableAutoFailover bool     `yaml:"enable_auto_failover"`
+	CheckPostgres      bool     `yaml:"check_postgres"`
+	CheckRedis         bool     `yaml:"check_redis"`
+	CheckMemcached     bool     `yaml:"check_memcached"`
+	CheckExternal      bool     `yaml:"check_external"`
+	ExternalEndpoints  []string `yaml:"external_endpoints"`
+}
+
+type FailoverConfig struct {
+	Enabled                 bool             `yaml:"enabled"`
+	AutoDetectEnabled       bool             `yaml:"auto_detect_enabled"`
+	RegionFailover          bool             `yaml:"region_failover"`
+	CrossRegionEnabled      bool             `yaml:"cross_region_enabled"`
+	MaxRetries             int              `yaml:"max_retries"`
+	RetryIntervalSecs       int              `yaml:"retry_interval_secs"`
+	HealthCheckTimeoutSecs  int              `yaml:"health_check_timeout_secs"`
+	FallbackEnabled         bool             `yaml:"fallback_enabled"`
+	Regions                 []RegionConfig   `yaml:"regions"`
+}
+
+type RegionConfig struct {
+	Name             string   `yaml:"name"`
+	PrimaryRegion    string   `yaml:"primary_region"`
+	FallbackRegions  []string `yaml:"fallback_regions"`
+}
+
 func LoadConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -273,6 +351,67 @@ func LoadConfig() *Config {
 			CompressionEnabled:      getEnvAsBool("BACKUP_COMPRESSION_ENABLED", true),
 			EncryptionEnabled:       getEnvAsBool("BACKUP_ENCRYPTION_ENABLED", false),
 			EncryptionKey:           getEnv("BACKUP_ENCRYPTION_KEY", ""),
+		},
+		Distributed: DistributedConfig{
+			Version:    getEnv("DISTRIBUTED_VERSION", "15.0"),
+			Enabled:    getEnvAsBool("DISTRIBUTED_ENABLED", true),
+			Region:     getEnv("DISTRIBUTED_REGION", "default"),
+			Datacenter: getEnv("DISTRIBUTED_DC", "dc1"),
+			RedisCluster: DistributedRedisConfig{
+				Enabled:            getEnvAsBool("REDIS_CLUSTER_ENABLED", false),
+				Mode:               getEnvAsInt("REDIS_CLUSTER_MODE", 2),
+				ClusterNodes:       []string{},
+				SentinelNodes:      []string{},
+				StandaloneAddr:     getEnv("REDIS_STANDALONE_ADDR", "localhost:6379"),
+				MasterName:         getEnv("REDIS_SENTINEL_MASTER", "mymaster"),
+				Password:           getEnv("REDIS_PASSWORD", ""),
+				DB:                 0,
+				PoolSize:           getEnvAsInt("REDIS_POOL_SIZE", 100),
+				MinIdleConns:       getEnvAsInt("REDIS_MIN_IDLE", 10),
+				MaxIdleConns:       getEnvAsInt("REDIS_MAX_IDLE", 50),
+				DialTimeoutSecs:    getEnvAsInt("REDIS_DIAL_TIMEOUT", 5),
+				ReadTimeoutSecs:    getEnvAsInt("REDIS_READ_TIMEOUT", 3),
+				WriteTimeoutSecs:   getEnvAsInt("REDIS_WRITE_TIMEOUT", 3),
+				PoolTimeoutSecs:    getEnvAsInt("REDIS_POOL_TIMEOUT", 4),
+				MaxRetries:        getEnvAsInt("REDIS_MAX_RETRIES", 3),
+				FailoverEnabled:    getEnvAsBool("REDIS_FAILOVER_ENABLED", true),
+				ReplicaLagLimitSecs: getEnvAsInt("REDIS_REPLICA_LAG_LIMIT", 1),
+				HeartbeatIntervalSecs: getEnvAsInt("REDIS_HEARTBEAT_INTERVAL", 30),
+			},
+			ServiceDiscovery: ServiceDiscoveryConfig{
+				Enabled:               getEnvAsBool("SERVICE_DISCOVERY_ENABLED", true),
+				ServiceName:           getEnv("SERVICE_NAME", "captcha-service"),
+				HeartbeatIntervalSecs: getEnvAsInt("SERVICE_HEARTBEAT_INTERVAL", 10),
+				TTLSecs:               getEnvAsInt("SERVICE_TTL", 30),
+				HealthCheckIntervalSecs: getEnvAsInt("SERVICE_HEALTH_CHECK_INTERVAL", 15),
+				MaxHeartbeatMisses:    getEnvAsInt("SERVICE_MAX_HEARTBEAT_MISSES", 3),
+				UseRedis:              getEnvAsBool("SERVICE_USE_REDIS", true),
+			},
+			HealthCheck: HealthCheckConfig{
+				Enabled:            getEnvAsBool("HEALTH_CHECK_ENABLED", true),
+				IntervalSecs:       getEnvAsInt("HEALTH_CHECK_INTERVAL", 10),
+				TimeoutSecs:        getEnvAsInt("HEALTH_CHECK_TIMEOUT", 5),
+				MaxFailCount:       getEnvAsInt("HEALTH_CHECK_MAX_FAIL", 3),
+				FailureThreshold:   getEnvAsInt("HEALTH_CHECK_FAILURE_THRESHOLD", 3),
+				RecoveryThreshold:  getEnvAsInt("HEALTH_CHECK_RECOVERY_THRESHOLD", 2),
+				EnableAutoFailover: getEnvAsBool("HEALTH_CHECK_AUTO_FAILOVER", true),
+				CheckPostgres:      getEnvAsBool("HEALTH_CHECK_POSTGRES", true),
+				CheckRedis:         getEnvAsBool("HEALTH_CHECK_REDIS", true),
+				CheckMemcached:     getEnvAsBool("HEALTH_CHECK_MEMCACHED", false),
+				CheckExternal:      getEnvAsBool("HEALTH_CHECK_EXTERNAL", false),
+				ExternalEndpoints:  []string{},
+			},
+			Failover: FailoverConfig{
+				Enabled:                getEnvAsBool("FAILOVER_ENABLED", true),
+				AutoDetectEnabled:      getEnvAsBool("FAILOVER_AUTO_DETECT", true),
+				RegionFailover:         getEnvAsBool("FAILOVER_REGION_ENABLED", true),
+				CrossRegionEnabled:     getEnvAsBool("FAILOVER_CROSS_REGION", true),
+				MaxRetries:            getEnvAsInt("FAILOVER_MAX_RETRIES", 3),
+				RetryIntervalSecs:      getEnvAsInt("FAILOVER_RETRY_INTERVAL", 5),
+				HealthCheckTimeoutSecs: getEnvAsInt("FAILOVER_HEALTH_CHECK_TIMEOUT", 10),
+				FallbackEnabled:        getEnvAsBool("FAILOVER_FALLBACK_ENABLED", true),
+				Regions:                []RegionConfig{},
+			},
 		},
 	}
 }
