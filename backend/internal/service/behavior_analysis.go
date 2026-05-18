@@ -61,6 +61,10 @@ type ClickPattern struct {
 	IsDoubleClick      bool                `json:"is_double_click"`
 	ClickAreaSize      float64             `json:"click_area_size,omitempty"`
 	PreClickHesitation float64             `json:"pre_click_hesitation,omitempty"`
+	ClickIntervalCV   float64             `json:"click_interval_cv,omitempty"`
+	ClickBurstiness   float64             `json:"click_burstiness,omitempty"`
+	ClickRhythmConsistency float64         `json:"click_rhythm_consistency,omitempty"`
+	ClickTimingPattern string              `json:"click_timing_pattern,omitempty"`
 }
 
 type KeyboardPattern struct {
@@ -96,6 +100,13 @@ type SpeedAnalysis struct {
 	JerkMax             float64   `json:"jerk_max"`
 	IsSpeedConsistent   bool      `json:"is_speed_consistent"`
 	SpeedOutliers       int       `json:"speed_outliers"`
+	SpeedProfiles       []float64 `json:"speed_profiles"`
+	SpeedEntropy        float64   `json:"speed_entropy"`
+	SpeedBurstiness     float64   `json:"speed_burstiness"`
+	AccelerationEntropy float64  `json:"acceleration_entropy"`
+	SpeedRampIndex      float64   `json:"speed_ramp_index"`
+	AccelerationTrend  float64   `json:"acceleration_trend"`
+	NormalizedSpeedVariance float64 `json:"normalized_speed_variance"`
 }
 
 type PathSimilarity struct {
@@ -220,7 +231,127 @@ func (s *BehaviorAnalysisService) smoothTrajectory(points []BehaviorDataPoint, w
 	return smoothed
 }
 
-func (s *BehaviorAnalysisService) savitzkyGolaySmooth(points []BehaviorDataPoint, windowSize int, order int) []BehaviorDataPoint {
+func (s *BehaviorAnalysisService) AdaptiveSmoothTrajectory(points []BehaviorDataPoint) []BehaviorDataPoint {
+	if len(points) < 3 {
+		return points
+	}
+
+	speeds := []float64{}
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt)
+		}
+	}
+
+	if len(speeds) < 2 {
+		return points
+	}
+
+	windowSize := s.DetermineOptimalWindowSize(speeds)
+
+	smoothed := s.SavitzkyGolaySmoothWithAdaptiveParams(points, windowSize)
+
+	return smoothed
+}
+
+func (s *BehaviorAnalysisService) DetermineOptimalWindowSize(speeds []float64) int {
+	if len(speeds) < 5 {
+		return 3
+	}
+
+	variance := s.variance(speeds)
+	mean := s.mean(speeds)
+
+	if mean == 0 {
+		return 3
+	}
+
+	coefficientOfVariation := math.Sqrt(variance) / mean
+
+	var windowSize int
+	if coefficientOfVariation < 0.2 {
+		windowSize = 7
+	} else if coefficientOfVariation < 0.4 {
+		windowSize = 5
+	} else if coefficientOfVariation < 0.6 {
+		windowSize = 5
+	} else {
+		windowSize = 3
+	}
+
+	if windowSize%2 == 0 {
+		windowSize++
+	}
+
+	maxWindow := len(speeds) / 4
+	if maxWindow%2 == 0 {
+		maxWindow++
+	}
+	if windowSize > maxWindow {
+		windowSize = maxWindow
+	}
+	if windowSize < 3 {
+		windowSize = 3
+	}
+
+	return windowSize
+}
+
+func (s *BehaviorAnalysisService) SavitzkyGolaySmoothWithAdaptiveParams(points []BehaviorDataPoint, windowSize int) []BehaviorDataPoint {
+	if len(points) < windowSize || windowSize < 3 {
+		return points
+	}
+
+	order := 2
+	if windowSize < 5 {
+		order = 2
+	} else {
+		order = 3
+	}
+
+	if order >= windowSize {
+		order = windowSize - 1
+	}
+
+	halfWindow := windowSize / 2
+	smoothed := make([]BehaviorDataPoint, len(points))
+
+	coeffs := s.computeSGCoefficients(windowSize, order)
+
+	for i := range points {
+		start := i - halfWindow
+		end := i + halfWindow
+
+		if start < 0 {
+			start = 0
+		}
+		if end >= len(points) {
+			end = len(points) - 1
+		}
+
+		sumX := 0.0
+		sumY := 0.0
+		idx := 0
+
+		for j := start; j <= end; j++ {
+			sumX += float64(points[j].X) * coeffs[idx]
+			sumY += float64(points[j].Y) * coeffs[idx]
+			idx++
+		}
+
+		smoothed[i] = points[i]
+		smoothed[i].X = int(math.Round(sumX))
+		smoothed[i].Y = int(math.Round(sumY))
+	}
+
+	return smoothed
+}
+
+func (s *BehaviorAnalysisService) SavitzkyGolaySmooth(points []BehaviorDataPoint, windowSize int, order int) []BehaviorDataPoint {
 	if len(points) < windowSize || order >= windowSize {
 		return points
 	}
@@ -449,6 +580,248 @@ func (s *BehaviorAnalysisService) analyzeSpeed(points []BehaviorDataPoint) Speed
 	analysis.IsSpeedConsistent = analysis.SpeedStdDev < analysis.AverageSpeed*0.3
 
 	return analysis
+}
+
+func (s *BehaviorAnalysisService) AnalyzeSpeedAdvanced(points []BehaviorDataPoint) SpeedAnalysis {
+	analysis := s.analyzeSpeed(points)
+
+	if len(points) < 3 || len(analysis.Speeds) < 3 {
+		return analysis
+	}
+
+	speedProfiles := s.computeSpeedProfile(analysis.Speeds)
+	analysis.SpeedProfiles = speedProfiles
+
+	analysis.SpeedEntropy = s.CalculateSpeedEntropy(analysis.Speeds)
+
+	analysis.SpeedBurstiness = s.CalculateSpeedBurstiness(analysis.Speeds)
+
+	accelMagnitudes := []float64{}
+	for i := 2; i < len(analysis.Speeds); i++ {
+		dt := float64(points[i].Timestamp - points[i-2].Timestamp)
+		if dt > 0 && i < len(points) {
+			accel := (analysis.Speeds[i] - analysis.Speeds[i-1]) / dt
+			accelMagnitudes = append(accelMagnitudes, math.Abs(accel))
+		}
+	}
+	analysis.AccelerationEntropy = s.CalculateSpeedEntropy(accelMagnitudes)
+
+	analysis.SpeedRampIndex = s.CalculateSpeedRampIndex(points)
+
+	analysis.AccelerationTrend = s.CalculateAccelerationTrend(analysis.Accelerations)
+
+	analysis.NormalizedSpeedVariance = s.CalculateNormalizedSpeedVariance(analysis.Speeds)
+
+	return analysis
+}
+
+func (s *BehaviorAnalysisService) computeSpeedProfile(speeds []float64) []float64 {
+	if len(speeds) < 5 {
+		return speeds
+	}
+
+	windowSize := 5
+	if windowSize%2 == 0 {
+		windowSize++
+	}
+	halfWindow := windowSize / 2
+
+	profile := make([]float64, len(speeds))
+
+	for i := range speeds {
+		start := i - halfWindow
+		end := i + halfWindow
+
+		if start < 0 {
+			start = 0
+		}
+		if end >= len(speeds) {
+			end = len(speeds) - 1
+		}
+
+		sum := 0.0
+		count := 0
+		for j := start; j <= end; j++ {
+			sum += speeds[j]
+			count++
+		}
+		profile[i] = sum / float64(count)
+	}
+
+	return profile
+}
+
+func (s *BehaviorAnalysisService) CalculateSpeedEntropy(speeds []float64) float64 {
+	if len(speeds) < 2 {
+		return 0.0
+	}
+
+	buckets := 10
+	minSpeed := s.min(speeds)
+	maxSpeed := s.max(speeds)
+
+	if maxSpeed-minSpeed < 0.001 {
+		return 0.0
+	}
+
+	bucketSize := (maxSpeed - minSpeed) / float64(buckets)
+	if bucketSize == 0 {
+		return 0.0
+	}
+
+	counts := make([]int, buckets)
+	for _, speed := range speeds {
+		bucket := int((speed - minSpeed) / bucketSize)
+		if bucket >= buckets {
+			bucket = buckets - 1
+		}
+		if bucket < 0 {
+			bucket = 0
+		}
+		counts[bucket]++
+	}
+
+	total := len(speeds)
+	entropy := 0.0
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (s *BehaviorAnalysisService) CalculateSpeedBurstiness(speeds []float64) float64 {
+	if len(speeds) < 3 {
+		return 0.0
+	}
+
+	mean := s.mean(speeds)
+	if mean == 0 {
+		return 0.0
+	}
+
+	squaredDeviations := 0.0
+	for _, speed := range speeds {
+		deviation := (speed - mean) / mean
+		squaredDeviations += deviation * deviation
+	}
+
+	variance := squaredDeviations / float64(len(speeds))
+
+	burstiness := math.Sqrt(variance) / (1 + mean/1000.0)
+
+	return math.Min(burstiness, 10.0)
+}
+
+func (s *BehaviorAnalysisService) CalculateSpeedRampIndex(points []BehaviorDataPoint) float64 {
+	if len(points) < 10 {
+		return 0.0
+	}
+
+	firstQuartile := len(points) / 4
+	thirdQuartile := 3 * len(points) / 4
+
+	speedsFirst := []float64{}
+	speedsThird := []float64{}
+
+	for i := 1; i <= firstQuartile && i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speedsFirst = append(speedsFirst, distance/dt)
+		}
+	}
+
+	for i := thirdQuartile; i < len(points); i++ {
+		if i == 0 {
+			continue
+		}
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speedsThird = append(speedsThird, distance/dt)
+		}
+	}
+
+	if len(speedsFirst) == 0 || len(speedsThird) == 0 {
+		return 0.0
+	}
+
+	avgFirst := s.mean(speedsFirst)
+	avgThird := s.mean(speedsThird)
+
+	if avgFirst == 0 {
+		return 0.0
+	}
+
+	return (avgThird - avgFirst) / avgFirst
+}
+
+func (s *BehaviorAnalysisService) CalculateAccelerationTrend(accelerations []float64) float64 {
+	if len(accelerations) < 3 {
+		return 0.0
+	}
+
+	firstHalf := accelerations[:len(accelerations)/2]
+	secondHalf := accelerations[len(accelerations)/2:]
+
+	avgFirst := s.mean(firstHalf)
+	avgSecond := s.mean(secondHalf)
+
+	if math.Abs(avgFirst) < 0.001 {
+		return 0.0
+	}
+
+	return (avgSecond - avgFirst) / math.Abs(avgFirst)
+}
+
+func (s *BehaviorAnalysisService) CalculateNormalizedSpeedVariance(speeds []float64) float64 {
+	if len(speeds) < 2 {
+		return 0.0
+	}
+
+	mean := s.mean(speeds)
+	if mean == 0 {
+		return 0.0
+	}
+
+	variance := s.variance(speeds)
+
+	normalizedVariance := variance / (mean * mean)
+
+	return math.Min(normalizedVariance, 100.0)
+}
+
+type EnhancedSpeedAnalysis struct {
+	Speeds                   []float64 `json:"speeds"`
+	AverageSpeed             float64   `json:"average_speed"`
+	MedianSpeed              float64   `json:"median_speed"`
+	MaxSpeed                 float64   `json:"max_speed"`
+	MinSpeed                 float64   `json:"min_speed"`
+	SpeedVariance            float64   `json:"speed_variance"`
+	SpeedStdDev              float64   `json:"speed_std_dev"`
+	SpeedSkewness           float64   `json:"speed_skewness"`
+	Accelerations            []float64 `json:"accelerations"`
+	AverageAcceleration      float64   `json:"average_acceleration"`
+	MaxAcceleration          float64   `json:"max_acceleration"`
+	JerkAvg                  float64   `json:"jerk_avg"`
+	JerkMax                  float64   `json:"jerk_max"`
+	IsSpeedConsistent        bool      `json:"is_speed_consistent"`
+	SpeedOutliers            int       `json:"speed_outliers"`
+	SpeedProfiles            []float64 `json:"speed_profiles,omitempty"`
+	SpeedEntropy             float64   `json:"speed_entropy,omitempty"`
+	SpeedBurstiness          float64   `json:"speed_burstiness,omitempty"`
+	AccelerationEntropy      float64   `json:"acceleration_entropy,omitempty"`
+	SpeedRampIndex           float64   `json:"speed_ramp_index,omitempty"`
+	AccelerationTrend        float64   `json:"acceleration_trend,omitempty"`
+	NormalizedSpeedVariance  float64   `json:"normalized_speed_variance,omitempty"`
 }
 
 func (s *BehaviorAnalysisService) checkPathSimilarity(currentPath []BehaviorDataPoint) PathSimilarity {
@@ -826,6 +1199,292 @@ func (s *BehaviorAnalysisService) computeCurvature(p1, p2, p3 BehaviorDataPoint)
 	return angle
 }
 
+func (s *BehaviorAnalysisService) ComputeCurvatureStatistics(points []BehaviorDataPoint) (mean, stdDev, maxCurvature float64) {
+	if len(points) < 3 {
+		return 0, 0, 0
+	}
+
+	curvatures := []float64{}
+	for i := 1; i < len(points)-1; i++ {
+		curv := s.computeCurvature(points[i-1], points[i], points[i+1])
+		curvatures = append(curvatures, math.Abs(curv))
+	}
+
+	if len(curvatures) == 0 {
+		return 0, 0, 0
+	}
+
+	mean = s.mean(curvatures)
+	stdDev = math.Sqrt(s.variance(curvatures))
+	maxCurvature = s.max(curvatures)
+
+	return mean, stdDev, maxCurvature
+}
+
+func (s *BehaviorAnalysisService) ComputeTrajectorySmoothnessMetrics(points []BehaviorDataPoint) map[string]float64 {
+	metrics := make(map[string]float64)
+
+	if len(points) < 3 {
+		return metrics
+	}
+
+	angles := []float64{}
+	for i := 1; i < len(points); i++ {
+		if i == 0 || i == len(points)-1 {
+			continue
+		}
+
+		v1x := float64(points[i].X - points[i-1].X)
+		v1y := float64(points[i].Y - points[i-1].Y)
+		v2x := float64(points[i+1].X - points[i].X)
+		v2y := float64(points[i+1].Y - points[i].Y)
+
+		dot := v1x*v2x + v1y*v2y
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			angles = append(angles, math.Abs(angle))
+		}
+	}
+
+	if len(angles) == 0 {
+		return metrics
+	}
+
+	avgAngle := s.mean(angles)
+	metrics["avg_angle_change"] = avgAngle
+
+	angleVariance := s.variance(angles)
+	metrics["angle_variance"] = angleVariance
+	metrics["angle_std_dev"] = math.Sqrt(angleVariance)
+
+	sharpTurns := 0
+	for _, angle := range angles {
+		if angle > math.Pi/4 {
+			sharpTurns++
+		}
+	}
+	metrics["sharp_turns"] = float64(sharpTurns)
+	metrics["sharp_turn_ratio"] = float64(sharpTurns) / float64(len(angles))
+
+	maxPossibleAngle := math.Pi * 2
+	metrics["smoothness_score"] = math.Max(0, math.Min(1, 1-avgAngle/maxPossibleAngle))
+
+	angleEntropy := s.ComputeEntropyFromFloat(angles)
+	metrics["angle_entropy"] = angleEntropy
+
+	smoothness := 1.0
+	metrics["normalized_smoothness"] = smoothness
+
+	return metrics
+}
+
+func (s *BehaviorAnalysisService) ComputeEntropyFromFloat(values []float64) float64 {
+	if len(values) < 2 {
+		return 0.0
+	}
+
+	buckets := 10
+	minVal := values[0]
+	maxVal := values[0]
+
+	for _, v := range values {
+		if v < minVal {
+			minVal = v
+		}
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+
+	rangeVal := maxVal - minVal
+	if rangeVal < 0.001 {
+		return 0.0
+	}
+
+	bucketSize := rangeVal / float64(buckets)
+	if bucketSize == 0 {
+		return 0.0
+	}
+
+	counts := make([]int, buckets)
+	for _, v := range values {
+		bucket := int((v - minVal) / bucketSize)
+		if bucket >= buckets {
+			bucket = buckets - 1
+		}
+		if bucket < 0 {
+			bucket = 0
+		}
+		counts[bucket]++
+	}
+
+	total := len(values)
+	entropy := 0.0
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (s *BehaviorAnalysisService) DetectAccelerationAnomalies(points []BehaviorDataPoint, accelerations []float64) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	if len(accelerations) < 2 {
+		result["has_anomaly"] = false
+		return result
+	}
+
+	meanAccel := s.mean(accelerations)
+	stdDevAccel := math.Sqrt(s.variance(accelerations))
+
+	result["mean_acceleration"] = meanAccel
+	result["std_dev_acceleration"] = stdDevAccel
+
+	anomalies := []int{}
+	for i, accel := range accelerations {
+		zScore := (accel - meanAccel) / stdDevAccel
+		if math.Abs(zScore) > 3 {
+			anomalies = append(anomalies, i)
+		}
+	}
+	result["anomaly_indices"] = anomalies
+	result["anomaly_count"] = len(anomalies)
+	result["has_anomaly"] = len(anomalies) > 0
+
+	suddenAccels := 0
+	for i := 1; i < len(accelerations); i++ {
+		diff := math.Abs(accelerations[i] - accelerations[i-1])
+		if diff > stdDevAccel*2 {
+			suddenAccels++
+		}
+	}
+	result["sudden_acceleration_changes"] = suddenAccels
+
+	return result
+}
+
+func (s *BehaviorAnalysisService) AnalyzeAccelerationPattern(points []BehaviorDataPoint) map[string]float64 {
+	pattern := make(map[string]float64)
+
+	if len(points) < 3 {
+		return pattern
+	}
+
+	speeds := []float64{}
+	for i := 1; i < len(points); i++ {
+		dx := float64(points[i].X - points[i-1].X)
+		dy := float64(points[i].Y - points[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(points[i].Timestamp - points[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt)
+		}
+	}
+
+	if len(speeds) < 2 {
+		return pattern
+	}
+
+	accelerations := []float64{}
+	for i := 2; i < len(speeds); i++ {
+		dt := float64(points[i].Timestamp - points[i-2].Timestamp)
+		if dt > 0 && i < len(points) {
+			accel := (speeds[i] - speeds[i-1]) / dt
+			accelerations = append(accelerations, accel)
+		}
+	}
+
+	if len(accelerations) == 0 {
+		return pattern
+	}
+
+	pattern["mean_acceleration"] = s.mean(accelerations)
+	pattern["acceleration_variance"] = s.variance(accelerations)
+	pattern["acceleration_std_dev"] = math.Sqrt(s.variance(accelerations))
+	pattern["max_acceleration"] = s.max(accelerations)
+	pattern["min_acceleration"] = s.min(accelerations)
+
+	positiveAccels := 0
+	negativeAccels := 0
+	for _, accel := range accelerations {
+		if accel > 0 {
+			positiveAccels++
+		} else {
+			negativeAccels++
+		}
+	}
+	if len(accelerations) > 0 {
+		pattern["acceleration_positive_ratio"] = float64(positiveAccels) / float64(len(accelerations))
+		pattern["acceleration_negative_ratio"] = float64(negativeAccels) / float64(len(accelerations))
+	}
+
+	pattern["acceleration_oscillation_count"] = float64(s.countOscillations(accelerations))
+
+	pattern["acceleration_jerkiness"] = s.calculateJerkiness(accelerations)
+
+	return pattern
+}
+
+func (s *BehaviorAnalysisService) countOscillations(values []float64) int {
+	if len(values) < 3 {
+		return 0
+	}
+
+	oscillations := 0
+	prevSign := 0
+
+	for i := 1; i < len(values); i++ {
+		currentSign := 0
+		if values[i] > 0.001 {
+			currentSign = 1
+		} else if values[i] < -0.001 {
+			currentSign = -1
+		}
+
+		if currentSign != 0 && currentSign != prevSign {
+			oscillations++
+		}
+
+		if currentSign != 0 {
+			prevSign = currentSign
+		}
+	}
+
+	return oscillations
+}
+
+func (s *BehaviorAnalysisService) calculateJerkiness(accelerations []float64) float64 {
+	if len(accelerations) < 3 {
+		return 0.0
+	}
+
+	jerks := []float64{}
+	for i := 1; i < len(accelerations); i++ {
+		jerk := accelerations[i] - accelerations[i-1]
+		jerks = append(jerks, math.Abs(jerk))
+	}
+
+	if len(jerks) == 0 {
+		return 0.0
+	}
+
+	return s.mean(jerks)
+}
+
 func (s *BehaviorAnalysisService) analyzeClickPatternEnhanced(clicks []BehaviorDataPoint, allPoints []BehaviorDataPoint) ClickPattern {
 	pattern := ClickPattern{
 		Clicks:     clicks,
@@ -913,6 +1572,153 @@ func (s *BehaviorAnalysisService) analyzeClickPatternEnhanced(clicks []BehaviorD
 	}
 
 	return pattern
+}
+
+func (s *BehaviorAnalysisService) AnalyzeClickRhythmAdvanced(clicks []BehaviorDataPoint, allPoints []BehaviorDataPoint) ClickPattern {
+	pattern := s.analyzeClickPatternEnhanced(clicks, allPoints)
+
+	if len(clicks) < 2 {
+		return pattern
+	}
+
+	pattern.ClickIntervalCV = s.calculateClickIntervalCoefficientOfVariation(clicks)
+
+	pattern.ClickBurstiness = s.calculateClickBurstiness(clicks)
+
+	pattern.ClickRhythmConsistency = s.calculateClickRhythmConsistency(clicks)
+
+	pattern.ClickTimingPattern = s.analyzeClickTimingPattern(clicks)
+
+	return pattern
+}
+
+func (s *BehaviorAnalysisService) calculateClickIntervalCoefficientOfVariation(clicks []BehaviorDataPoint) float64 {
+	if len(clicks) < 2 {
+		return 0.0
+	}
+
+	intervals := []float64{}
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			intervals = append(intervals, interval)
+		}
+	}
+
+	if len(intervals) < 2 {
+		return 0.0
+	}
+
+	mean := s.mean(intervals)
+	if mean == 0 {
+		return 0.0
+	}
+
+	stdDev := math.Sqrt(s.variance(intervals))
+
+	return stdDev / mean
+}
+
+func (s *BehaviorAnalysisService) calculateClickBurstiness(clicks []BehaviorDataPoint) float64 {
+	if len(clicks) < 3 {
+		return 0.0
+	}
+
+	intervals := []float64{}
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			intervals = append(intervals, interval)
+		}
+	}
+
+	if len(intervals) < 2 {
+		return 0.0
+	}
+
+	mean := s.mean(intervals)
+	if mean == 0 {
+		return 0.0
+	}
+
+	squaredDeviations := 0.0
+	for _, interval := range intervals {
+		deviation := (interval - mean) / mean
+		squaredDeviations += deviation * deviation
+	}
+
+	variance := squaredDeviations / float64(len(intervals))
+
+	return math.Sqrt(variance)
+}
+
+func (s *BehaviorAnalysisService) calculateClickRhythmConsistency(clicks []BehaviorDataPoint) float64 {
+	if len(clicks) < 3 {
+		return 1.0
+	}
+
+	intervals := []float64{}
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			intervals = append(intervals, interval)
+		}
+	}
+
+	if len(intervals) < 2 {
+		return 1.0
+	}
+
+	mean := s.mean(intervals)
+	if mean == 0 {
+		return 0.0
+	}
+
+	meanAbsDeviation := 0.0
+	for _, interval := range intervals {
+		meanAbsDeviation += math.Abs(interval - mean)
+	}
+	meanAbsDeviation /= float64(len(intervals))
+
+	consistency := 1.0 - (meanAbsDeviation / mean)
+	if consistency < 0 {
+		consistency = 0
+	}
+
+	return consistency
+}
+
+func (s *BehaviorAnalysisService) analyzeClickTimingPattern(clicks []BehaviorDataPoint) string {
+	if len(clicks) < 2 {
+		return "unknown"
+	}
+
+	intervals := []float64{}
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			intervals = append(intervals, interval)
+		}
+	}
+
+	if len(intervals) < 2 {
+		return "unknown"
+	}
+
+	mean := s.mean(intervals)
+	stdDev := math.Sqrt(s.variance(intervals))
+
+	cv := stdDev / mean
+
+	if cv < 0.1 {
+		return "mechanical"
+	} else if cv < 0.3 {
+		return "regular"
+	} else if cv < 0.6 {
+		return "natural"
+	} else {
+		return "erratic"
+	}
 }
 
 func (s *BehaviorAnalysisService) computePreClickHesitation(click BehaviorDataPoint, allPoints []BehaviorDataPoint) float64 {
@@ -1247,6 +2053,556 @@ func (s *BehaviorAnalysisService) calculateRiskScoreEnhanced(result *AnalysisRes
 	result.RiskFactors = factors
 	result.IsBotLikely = riskScore >= 50
 	result.Confidence = math.Min(riskScore/100+0.3, 0.95)
+}
+
+func (s *BehaviorAnalysisService) calculateRiskScoreOptimized(result *AnalysisResult) {
+	score := 0.0
+	indicators := []string{}
+	factors := make(map[string]float64)
+
+	speedScore := s.evaluateSpeedRisk(result)
+	score += speedScore.Score
+	for indicator, weight := range speedScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	trajectoryScore := s.evaluateTrajectoryRisk(result)
+	score += trajectoryScore.Score
+	for indicator, weight := range trajectoryScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	pathScore := s.evaluatePathRisk(result)
+	score += pathScore.Score
+	for indicator, weight := range pathScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	clickScore := s.evaluateClickRisk(result)
+	score += clickScore.Score
+	for indicator, weight := range clickScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	keyboardScore := s.evaluateKeyboardRisk(result)
+	score += keyboardScore.Score
+	for indicator, weight := range keyboardScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	dataQualityScore := s.evaluateDataQualityRisk(result)
+	score += dataQualityScore.Score
+	for indicator, weight := range dataQualityScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	advancedRiskScore := s.evaluateAdvancedRiskIndicators(result)
+	score += advancedRiskScore.Score
+	for indicator, weight := range advancedRiskScore.Indicators {
+		indicators = append(indicators, indicator)
+		factors[indicator] = weight
+	}
+
+	score = s.applyRiskSmoothing(score, factors)
+
+	score = math.Min(score, 100)
+
+	result.RiskScore = score
+	result.RiskIndicators = indicators
+	result.RiskFactors = factors
+	result.IsBotLikely = score >= 50
+	result.Confidence = s.calculateConfidence(score, len(indicators), len(result.Trajectory.Points))
+}
+
+type RiskComponent struct {
+	Score      float64
+	Indicators map[string]float64
+}
+
+func (s *BehaviorAnalysisService) evaluateSpeedRisk(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	if len(result.SpeedAnalysis.Speeds) == 0 {
+		return component
+	}
+
+	speedOutlierRatio := float64(result.SpeedAnalysis.SpeedOutliers) / float64(len(result.SpeedAnalysis.Speeds))
+	if speedOutlierRatio > 0.33 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["速度异常波动大"] = weight
+	} else if speedOutlierRatio > 0.2 {
+		weight := 8.0
+		component.Score += weight
+		component.Indicators["速度波动较大"] = weight
+	}
+
+	if result.SpeedAnalysis.MaxSpeed > 10 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["检测到超高速移动"] = weight
+	}
+
+	if result.SpeedAnalysis.AverageSpeed > 0 && result.SpeedAnalysis.SpeedStdDev > 0 {
+		speedCV := result.SpeedAnalysis.SpeedStdDev / result.SpeedAnalysis.AverageSpeed
+
+		if speedCV < 0.05 && len(result.SpeedAnalysis.Speeds) > 10 {
+			weight := 25.0
+			component.Score += weight
+			component.Indicators["速度过于恒定(疑似机器)"] = weight
+		} else if speedCV < 0.1 && len(result.SpeedAnalysis.Speeds) > 5 {
+			weight := 15.0
+			component.Score += weight
+			component.Indicators["速度恒定"] = weight
+		}
+
+		if speedCV > 2.0 && len(result.SpeedAnalysis.Speeds) > 5 {
+			weight := 10.0
+			component.Score += weight
+			component.Indicators["速度变化异常剧烈"] = weight
+		}
+	}
+
+	if len(result.SpeedAnalysis.Speeds) > 2 {
+		speedEntropy := s.CalculateSpeedEntropy(result.SpeedAnalysis.Speeds)
+		if speedEntropy < 1.0 && len(result.SpeedAnalysis.Speeds) > 5 {
+			weight := 12.0
+			component.Score += weight
+			component.Indicators["速度分布熵过低"] = weight
+		}
+	}
+
+	if len(result.SpeedAnalysis.Accelerations) > 0 {
+		accelVariance := s.variance(result.SpeedAnalysis.Accelerations)
+		if accelVariance < 0.001 {
+			weight := 15.0
+			component.Score += weight
+			component.Indicators["加速度变化异常平稳"] = weight
+		} else if accelVariance < 0.01 {
+			weight := 8.0
+			component.Score += weight
+			component.Indicators["加速度变化较平稳"] = weight
+		}
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) evaluateTrajectoryRisk(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	if len(result.Trajectory.Points) < 2 {
+		return component
+	}
+
+	pathEfficiencyScore := s.evaluatePathEfficiency(result.Trajectory)
+	component.Score += pathEfficiencyScore
+	if pathEfficiencyScore > 20 {
+		component.Indicators["路径过于笔直"] = pathEfficiencyScore
+	}
+
+	if result.Trajectory.JitterScore < 0.02 {
+		weight := 25.0
+		component.Score += weight
+		component.Indicators["轨迹抖动极低(机器特征)"] = weight
+	} else if result.Trajectory.JitterScore < 0.03 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["轨迹抖动低"] = weight
+	}
+
+	if result.Trajectory.CurvatureAvg < 0.03 && len(result.Trajectory.Points) > 20 {
+		weight := 25.0
+		component.Score += weight
+		component.Indicators["曲率极低(机器特征)"] = weight
+	} else if result.Trajectory.CurvatureAvg < 0.05 && len(result.Trajectory.Points) > 20 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["曲率低"] = weight
+	}
+
+	if result.Trajectory.PauseCount == 0 && len(result.Trajectory.Points) >= 20 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["无停顿(机器特征)"] = weight
+	}
+
+	if result.Trajectory.MicroCorrections == 0 && len(result.Trajectory.Points) >= 20 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["无微修正(机器特征)"] = weight
+	}
+
+	if result.Trajectory.AccelerationMagVariance < 0.0001 && len(result.Trajectory.Points) > 10 {
+		weight := 20.0
+		component.Score += weight
+		component.Indicators["加速度幅度方差极小"] = weight
+	} else if result.Trajectory.AccelerationMagVariance < 0.001 && len(result.Trajectory.Points) > 10 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["加速度幅度方差小"] = weight
+	}
+
+	smoothnessMetrics := s.ComputeTrajectorySmoothnessMetrics(result.Trajectory.Points)
+	if len(smoothnessMetrics) > 0 {
+		if smoothnessMetrics["smoothness_score"] > 0.95 {
+			weight := 18.0
+			component.Score += weight
+			component.Indicators["轨迹平滑度极高"] = weight
+		}
+
+		if smoothnessMetrics["sharp_turn_ratio"] < 0.05 {
+			weight := 12.0
+			component.Score += weight
+			component.Indicators["轨迹转折点极少"] = weight
+		}
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) evaluatePathEfficiency(traj MouseTrajectory) float64 {
+	score := 0.0
+
+	if traj.PathEfficiency > 0.95 && traj.TotalDistance > 100 {
+		score = 30.0
+	} else if traj.PathEfficiency > 0.92 && traj.TotalDistance > 100 {
+		score = 25.0
+	} else if traj.PathEfficiency > 0.90 && traj.TotalDistance > 100 {
+		score = 20.0
+	} else if traj.PathEfficiency > 0.85 && traj.TotalDistance > 50 {
+		score = 15.0
+	} else if traj.PathEfficiency > 0.80 && traj.TotalDistance > 50 {
+		score = 10.0
+	}
+
+	return score
+}
+
+func (s *BehaviorAnalysisService) evaluatePathRisk(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	if result.PathSimilarity.ComparedPathLength < 5 {
+		return component
+	}
+
+	if result.PathSimilarity.IsPathRepeated {
+		weight := 30.0
+		component.Score += weight
+		component.Indicators["路径重复检测"] = weight
+	}
+
+	if result.PathSimilarity.PathHashMatch {
+		weight := 25.0
+		component.Score += weight
+		component.Indicators["路径哈希匹配"] = weight
+	}
+
+	if result.PathSimilarity.DTWDistance < 30 && result.PathSimilarity.ComparedPathLength > 10 {
+		weight := 25.0
+		component.Score += weight
+		component.Indicators["DTW距离极小"] = weight
+	} else if result.PathSimilarity.DTWDistance < 50 && result.PathSimilarity.ComparedPathLength > 10 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["DTW距离小"] = weight
+	}
+
+	if result.PathSimilarity.SimilarityScore > 0.9 {
+		weight := 20.0
+		component.Score += weight
+		component.Indicators["路径相似度极高"] = weight
+	} else if result.PathSimilarity.SimilarityScore > 0.85 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["路径相似度高"] = weight
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) evaluateClickRisk(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	if result.ClickPattern.ClickCount == 0 {
+		return component
+	}
+
+	if result.ClickPattern.Regularity > 0.95 && result.ClickPattern.ClickCount > 2 {
+		weight := 20.0
+		component.Score += weight
+		component.Indicators["点击间隔极其规律"] = weight
+	} else if result.ClickPattern.Regularity > 0.9 && result.ClickPattern.ClickCount > 2 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["点击间隔过于规律"] = weight
+	} else if result.ClickPattern.Regularity > 0.85 && result.ClickPattern.ClickCount > 3 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["点击间隔规律"] = weight
+	}
+
+	if result.ClickPattern.PositionEntropy < 1.5 && result.ClickPattern.ClickCount > 3 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["点击位置熵极低"] = weight
+	} else if result.ClickPattern.PositionEntropy < 2.0 && result.ClickPattern.ClickCount > 3 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["点击位置集中"] = weight
+	}
+
+	if result.ClickPattern.ClickAreaSize < 2.0 && result.ClickPattern.ClickCount > 3 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["点击区域极小"] = weight
+	} else if result.ClickPattern.ClickAreaSize < 5.0 && result.ClickPattern.ClickCount > 3 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["点击区域小"] = weight
+	}
+
+	if result.ClickPattern.IsDoubleClick {
+		weight := 5.0
+		component.Score += weight
+		component.Indicators["快速双击"] = weight
+	}
+
+	if result.ClickPattern.ClickCount > 1 && result.ClickPattern.PreClickHesitation > 0 {
+		if result.ClickPattern.PreClickHesitation < 30 {
+			weight := 20.0
+			component.Score += weight
+			component.Indicators["点击前犹豫极短(机器特征)"] = weight
+		} else if result.ClickPattern.PreClickHesitation < 50 {
+			weight := 15.0
+			component.Score += weight
+			component.Indicators["点击前犹豫短"] = weight
+		}
+	}
+
+	if result.ClickPattern.ClickCount > 1 {
+		clickIntervalCV := s.calculateClickIntervalCoefficientOfVariation(result.ClickPattern.Clicks)
+		if clickIntervalCV < 0.05 {
+			weight := 15.0
+			component.Score += weight
+			component.Indicators["点击间隔变异系数极小"] = weight
+		}
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) evaluateKeyboardRisk(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	if len(result.KeyboardPattern.KeyStrokes) == 0 {
+		return component
+	}
+
+	if result.KeyboardPattern.TypingSpeed > 20 {
+		weight := 20.0
+		component.Score += weight
+		component.Indicators["打字速度异常快"] = weight
+	} else if result.KeyboardPattern.TypingSpeed > 15 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["打字速度快"] = weight
+	}
+
+	if result.KeyboardPattern.AverageHoldTime < 30 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["按键保持时间极短"] = weight
+	} else if result.KeyboardPattern.AverageHoldTime < 50 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["按键保持时间短"] = weight
+	}
+
+	if result.KeyboardPattern.Regularity > 0.98 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["按键间隔极其规律"] = weight
+	} else if result.KeyboardPattern.Regularity > 0.95 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["按键间隔过于规律"] = weight
+	}
+
+	if result.KeyboardPattern.ErrorRate > 0.1 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["按键错误率高"] = weight
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) evaluateDataQualityRisk(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	pointCount := len(result.Trajectory.Points)
+
+	if pointCount < 5 {
+		weight := 20.0
+		component.Score += weight
+		component.Indicators["行为数据点极少"] = weight
+	} else if pointCount < 10 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["行为数据点较少"] = weight
+	} else if pointCount < 20 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["行为数据点偏少"] = weight
+	}
+
+	if pointCount > 1000 {
+		weight := 10.0
+		component.Score += weight
+		component.Indicators["数据点异常多"] = weight
+	} else if pointCount > 500 {
+		weight := 5.0
+		component.Score += weight
+		component.Indicators["数据点偏多"] = weight
+	}
+
+	totalTime := float64(0)
+	if len(result.Trajectory.Points) > 1 {
+		totalTime = float64(result.Trajectory.Points[len(result.Trajectory.Points)-1].Timestamp -
+			result.Trajectory.Points[0].Timestamp)
+	}
+
+	if totalTime > 0 && totalTime < 100 {
+		weight := 15.0
+		component.Score += weight
+		component.Indicators["行为时长极短"] = weight
+	} else if totalTime > 60000 {
+		weight := 5.0
+		component.Score += weight
+		component.Indicators["行为时长偏长"] = weight
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) evaluateAdvancedRiskIndicators(result *AnalysisResult) RiskComponent {
+	component := RiskComponent{
+		Score:      0.0,
+		Indicators: make(map[string]float64),
+	}
+
+	accelPattern := s.AnalyzeAccelerationPattern(result.Trajectory.Points)
+	if len(accelPattern) > 0 {
+		if accelPattern["acceleration_positive_ratio"] > 0.95 {
+			weight := 12.0
+			component.Score += weight
+			component.Indicators["加速度模式异常(仅加速)"] = weight
+		} else if accelPattern["acceleration_positive_ratio"] < 0.05 {
+			weight := 12.0
+			component.Score += weight
+			component.Indicators["加速度模式异常(仅减速)"] = weight
+		}
+
+		if accelPattern["acceleration_oscillation_count"] < 2 && len(result.Trajectory.Points) > 20 {
+			weight := 10.0
+			component.Score += weight
+			component.Indicators["加速度振荡次数少"] = weight
+		}
+	}
+
+	if len(result.SpeedAnalysis.Speeds) > 5 {
+		normalizedVar := s.CalculateNormalizedSpeedVariance(result.SpeedAnalysis.Speeds)
+		if normalizedVar < 0.01 {
+			weight := 15.0
+			component.Score += weight
+			component.Indicators["归一化速度方差极小"] = weight
+		} else if normalizedVar < 0.05 {
+			weight := 8.0
+			component.Score += weight
+			component.Indicators["归一化速度方差小"] = weight
+		}
+	}
+
+	return component
+}
+
+func (s *BehaviorAnalysisService) applyRiskSmoothing(baseScore float64, factors map[string]float64) float64 {
+	if len(factors) == 0 {
+		return baseScore
+	}
+
+	extremeFactorCount := 0
+	for _, weight := range factors {
+		if weight >= 20 {
+			extremeFactorCount++
+		}
+	}
+
+	if extremeFactorCount >= 3 {
+		baseScore *= 1.1
+	}
+
+	scoreVariance := 0.0
+	if len(factors) > 0 {
+		mean := baseScore / float64(len(factors))
+		for _, weight := range factors {
+			scoreVariance += math.Pow(weight-mean, 2)
+		}
+		scoreVariance /= float64(len(factors))
+	}
+
+	if scoreVariance > 100 {
+		baseScore *= 0.95
+	}
+
+	return baseScore
+}
+
+func (s *BehaviorAnalysisService) calculateConfidence(score float64, indicatorCount int, pointCount int) float64 {
+	baseConfidence := 0.5
+
+	dataConfidence := math.Min(float64(pointCount)/100.0, 0.3)
+
+	indicatorConfidence := math.Min(float64(indicatorCount)/10.0, 0.2)
+
+	if score > 80 {
+		baseConfidence = 0.9
+	} else if score > 60 {
+		baseConfidence = 0.8
+	} else if score > 40 {
+		baseConfidence = 0.7
+	} else if score > 20 {
+		baseConfidence = 0.6
+	}
+
+	confidence := baseConfidence + dataConfidence + indicatorConfidence
+
+	return math.Min(math.Max(confidence, 0.3), 0.95)
 }
 
 func (s *BehaviorAnalysisService) CalculateRiskScore(verification *models.Verification, behaviorData []models.BehaviorData) float64 {

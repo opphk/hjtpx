@@ -3010,7 +3010,346 @@ func (sa *SliderAnalyzer) CalculateAdvancedBotScore(trajectory []SliderPoint, ta
 	botScore += patternScore * 0.3
 	indicators = append(indicators, patternIndicators...)
 
+	advancedBotScore, advancedIndicators := sa.performAdvancedBotDetection(trajectory, targetPosition)
+	botScore += advancedBotScore * 0.4
+	indicators = append(indicators, advancedIndicators...)
+
 	return math.Min(botScore, 1.0), indicators
+}
+
+func (sa *SliderAnalyzer) performAdvancedBotDetection(trajectory []SliderPoint, targetPosition int) (float64, []string) {
+	score := 0.0
+	indicators := make([]string, 0)
+
+	temporalAnalysis := sa.analyzeTemporalPattern(trajectory)
+	if temporalAnalysis["is_mechanical"] == true {
+		score += 0.2
+		indicators = append(indicators, "时序模式异常机械")
+	}
+
+	spatialAnalysis := sa.analyzeSpatialPattern(trajectory)
+	if spatialAnalysis["is_too_perfect"] == true {
+		score += 0.15
+		indicators = append(indicators, "空间模式过于完美")
+	}
+
+	velocityProfile := sa.analyzeVelocityProfile(trajectory)
+	if velocityProfile["is_suspicious"] == true {
+		score += 0.15
+		indicators = append(indicators, "速度曲线可疑")
+	}
+
+	interruptionPattern := sa.analyzeInterruptionPattern(trajectory)
+	if interruptionPattern["is_bot_like"] == true {
+		score += 0.1
+		indicators = append(indicators, "中断模式异常")
+	}
+
+	return score, indicators
+}
+
+func (sa *SliderAnalyzer) analyzeTemporalPattern(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	if len(trajectory) < 3 {
+		result["is_mechanical"] = false
+		return result
+	}
+
+	intervals := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			intervals = append(intervals, dt)
+		}
+	}
+
+	if len(intervals) < 3 {
+		result["is_mechanical"] = false
+		return result
+	}
+
+	mean := 0.0
+	for _, interval := range intervals {
+		mean += interval
+	}
+	mean /= float64(len(intervals))
+
+	variance := 0.0
+	for _, interval := range intervals {
+		variance += (interval - mean) * (interval - mean)
+	}
+	variance /= float64(len(intervals))
+
+	coefficientOfVariation := 0.0
+	if mean > 0 {
+		coefficientOfVariation = math.Sqrt(variance) / mean
+	}
+
+	result["coefficient_of_variation"] = coefficientOfVariation
+	result["is_mechanical"] = coefficientOfVariation < 0.02
+
+	intervalRatios := make([]float64, 0)
+	for i := 1; i < len(intervals); i++ {
+		ratio := intervals[i] / intervals[i-1]
+		if ratio > 0 {
+			intervalRatios = append(intervalRatios, ratio)
+		}
+	}
+
+	if len(intervalRatios) > 0 {
+		ratioVariance := 0.0
+		ratioMean := 0.0
+		for _, ratio := range intervalRatios {
+			ratioMean += ratio
+		}
+		ratioMean /= float64(len(intervalRatios))
+
+		for _, ratio := range intervalRatios {
+			ratioVariance += (ratio - ratioMean) * (ratio - ratioMean)
+		}
+		ratioVariance /= float64(len(intervalRatios))
+
+		result["interval_ratio_variance"] = ratioVariance
+		if ratioVariance < 0.001 {
+			result["is_mechanical"] = true
+		}
+	}
+
+	return result
+}
+
+func (sa *SliderAnalyzer) analyzeSpatialPattern(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	if len(trajectory) < 3 {
+		result["is_too_perfect"] = false
+		return result
+	}
+
+	startX := float64(trajectory[0].X)
+	startY := float64(trajectory[0].Y)
+	endX := float64(trajectory[len(trajectory)-1].X)
+	endY := float64(trajectory[len(trajectory)-1].Y)
+
+	directDistance := math.Sqrt((endX-startX)*(endX-startX) + (endY-startY)*(endY-startY))
+
+	totalDistance := 0.0
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		totalDistance += math.Sqrt(dx*dx + dy*dy)
+	}
+
+	if totalDistance == 0 {
+		result["is_too_perfect"] = true
+		return result
+	}
+
+	pathEfficiency := directDistance / totalDistance
+	result["path_efficiency"] = pathEfficiency
+
+	if pathEfficiency > 0.999 {
+		result["is_too_perfect"] = true
+	}
+
+	varianceX := 0.0
+	varianceY := 0.0
+	meanX := 0.0
+	meanY := 0.0
+	for _, p := range trajectory {
+		meanX += float64(p.X)
+		meanY += float64(p.Y)
+	}
+	meanX /= float64(len(trajectory))
+	meanY /= float64(len(trajectory))
+
+	for _, p := range trajectory {
+		varianceX += (float64(p.X) - meanX) * (float64(p.X) - meanX)
+		varianceY += (float64(p.Y) - meanY) * (float64(p.Y) - meanY)
+	}
+	varianceX /= float64(len(trajectory))
+	varianceY /= float64(len(trajectory))
+
+	totalVariance := varianceX + varianceY
+	result["total_variance"] = totalVariance
+
+	expectedVariance := 50.0
+	if totalVariance < expectedVariance*0.5 && pathEfficiency > 0.95 {
+		result["is_too_perfect"] = true
+	}
+
+	return result
+}
+
+func (sa *SliderAnalyzer) analyzeVelocityProfile(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	if len(trajectory) < 3 {
+		result["is_suspicious"] = false
+		return result
+	}
+
+	speeds := sa.extractSpeeds(trajectory)
+	if len(speeds) < 3 {
+		result["is_suspicious"] = false
+		return result
+	}
+
+	mean := 0.0
+	for _, speed := range speeds {
+		mean += speed
+	}
+	mean /= float64(len(speeds))
+
+	variance := 0.0
+	for _, speed := range speeds {
+		variance += (speed - mean) * (speed - mean)
+	}
+	variance /= float64(len(speeds))
+
+	normalizedVariance := 0.0
+	if mean > 0 {
+		normalizedVariance = variance / (mean * mean)
+	}
+
+	result["normalized_variance"] = normalizedVariance
+
+	if normalizedVariance < 0.0001 && mean > 100 {
+		result["is_suspicious"] = true
+	}
+
+	acceleration := make([]float64, 0)
+	for i := 2; i < len(speeds); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-2].Timestamp)
+		if dt > 0 {
+			accel := (speeds[i] - speeds[i-2]) / dt * 1000
+			acceleration = append(acceleration, accel)
+		}
+	}
+
+	if len(acceleration) > 0 {
+		accelVariance := 0.0
+		accelMean := 0.0
+		for _, acc := range acceleration {
+			accelMean += acc
+		}
+		accelMean /= float64(len(acceleration))
+
+		for _, acc := range acceleration {
+			accelVariance += (acc - accelMean) * (acc - accelMean)
+		}
+		accelVariance /= float64(len(acceleration))
+
+		result["acceleration_variance"] = accelVariance
+
+		if accelVariance < 0.01 && math.Abs(accelMean) < 0.1 {
+			result["is_suspicious"] = true
+		}
+	}
+
+	return result
+}
+
+func (sa *SliderAnalyzer) analyzeInterruptionPattern(trajectory []SliderPoint) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	if len(trajectory) < 3 {
+		result["is_bot_like"] = false
+		return result
+	}
+
+	pauses := 0
+	totalPauseDuration := 0.0
+
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+
+		if distance < 3 && dt > 100 {
+			pauses++
+			totalPauseDuration += dt
+		}
+	}
+
+	result["pause_count"] = pauses
+	result["total_pause_duration"] = totalPauseDuration
+
+	totalDuration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	pauseRatio := 0.0
+	if totalDuration > 0 {
+		pauseRatio = totalPauseDuration / totalDuration
+	}
+	result["pause_ratio"] = pauseRatio
+
+	if pauses == 0 && totalDuration > 1000 {
+		result["is_bot_like"] = true
+	}
+
+	hoverCount := 0
+	hoverDuration := 0.0
+	hoverStart := -1
+
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+
+		if distance < 5 && dt > 50 {
+			if hoverStart == -1 {
+				hoverStart = i - 1
+			}
+		} else {
+			if hoverStart != -1 {
+				hoverCount++
+				hoverDuration += float64(trajectory[i-1].Timestamp - trajectory[hoverStart].Timestamp)
+				hoverStart = -1
+			}
+		}
+	}
+
+	if hoverStart != -1 {
+		hoverCount++
+		hoverDuration += float64(trajectory[len(trajectory)-1].Timestamp - trajectory[hoverStart].Timestamp)
+	}
+
+	result["hover_count"] = hoverCount
+	result["hover_duration"] = hoverDuration
+
+	if hoverCount < 2 && totalDuration > 2000 {
+		result["is_bot_like"] = true
+	}
+
+	return result
+}
+
+func (sa *SliderAnalyzer) calculateAdaptiveRiskScore(result *SliderAnalysisResult, trajectory []SliderPoint) float64 {
+	baseScore := sa.calculateOverallRiskScore(result)
+
+	temporalAnalysis := sa.analyzeTemporalPattern(trajectory)
+	if temporalAnalysis["is_mechanical"].(bool) {
+		baseScore += 0.15
+	}
+
+	spatialAnalysis := sa.analyzeSpatialPattern(trajectory)
+	if spatialAnalysis["is_too_perfect"].(bool) {
+		baseScore += 0.1
+	}
+
+	velocityProfile := sa.analyzeVelocityProfile(trajectory)
+	if velocityProfile["is_suspicious"].(bool) {
+		baseScore += 0.1
+	}
+
+	interruptionPattern := sa.analyzeInterruptionPattern(trajectory)
+	if interruptionPattern["is_bot_like"].(bool) {
+		baseScore += 0.05
+	}
+
+	return math.Min(baseScore, 1.0)
 }
 
 type HighSamplingRateAnalyzer struct {

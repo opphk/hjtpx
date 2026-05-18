@@ -105,7 +105,7 @@ func (g *ImageGenerator) generateBackground() *image.RGBA {
 		}
 	}
 
-	bgType := rand.Intn(8)
+	bgType := rand.Intn(12)
 	switch bgType {
 	case 0:
 		g.drawGradientBackground(img)
@@ -123,6 +123,14 @@ func (g *ImageGenerator) generateBackground() *image.RGBA {
 		g.drawPerlinLikeNoise(img, uint8(80+rand.Intn(60)), uint8(100+rand.Intn(50)), uint8(120+rand.Intn(40)))
 	case 7:
 		g.drawMarbleTexture(img, uint8(70+rand.Intn(70)), uint8(90+rand.Intn(50)), uint8(110+rand.Intn(50)))
+	case 8:
+		g.drawBrickTexture(img)
+	case 9:
+		g.drawWoodTexture(img)
+	case 10:
+		g.drawMetalTexture(img)
+	case 11:
+		g.drawGrassTexture(img)
 	default:
 		g.drawGradientBackground(img)
 	}
@@ -747,7 +755,251 @@ func (g *ImageGenerator) extractSlider(background *image.RGBA, gap image.Rectang
 
 	g.addSliderBorder(sliderImg)
 
+	sliderImg = g.applyAdvancedSliderProcessing(sliderImg, background, gap)
+
 	return sliderImg
+}
+
+func (g *ImageGenerator) applyAdvancedSliderProcessing(slider *image.RGBA, background *image.RGBA, gap image.Rectangle) *image.RGBA {
+	result := image.NewRGBA(slider.Bounds())
+	draw.Draw(result, result.Bounds(), slider, slider.Bounds().Min, draw.Src)
+
+	result = g.applyAdaptiveEdgeEnhancement(result)
+
+	result = g.applyIntelligentShadowRecovery(result, background, gap)
+
+	result = g.applyHighQualityAntiAliasing(result)
+
+	result = g.applyColorCorrection(result)
+
+	return result
+}
+
+func (g *ImageGenerator) applyAdaptiveEdgeEnhancement(img *image.RGBA) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	edgeStrength := g.calculateEdgeStrength(img)
+
+	enhancementFactor := 1.0
+	if edgeStrength < 15 {
+		enhancementFactor = 1.3
+	} else if edgeStrength > 40 {
+		enhancementFactor = 0.8
+	}
+
+	bounds := img.Bounds()
+	for y := bounds.Min.Y + 1; y < bounds.Max.Y-1; y++ {
+		for x := bounds.Min.X + 1; x < bounds.Max.X-1; x++ {
+			edgePixel := g.isEdgePixel(img, x, y)
+			if edgePixel {
+				p := img.RGBAAt(x, y)
+
+				contrast := 1.0 + (enhancementFactor-1.0)*0.5
+				r := g.clampUint8(int(float64(int(p.R)-128)*contrast) + 128)
+				gc := g.clampUint8(int(float64(int(p.G)-128)*contrast) + 128)
+				b := g.clampUint8(int(float64(int(p.B)-128)*contrast) + 128)
+
+				result.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) calculateEdgeStrength(img *image.RGBA) float64 {
+	bounds := img.Bounds()
+	totalStrength := 0.0
+	count := 0
+
+	for y := bounds.Min.Y + 1; y < bounds.Max.Y-1; y++ {
+		for x := bounds.Min.X + 1; x < bounds.Max.X-1; x++ {
+			if g.isEdgePixel(img, x, y) {
+				totalStrength += 1.0
+			}
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return (totalStrength / float64(count)) * 100
+}
+
+func (g *ImageGenerator) isEdgePixel(img *image.RGBA, x, y int) bool {
+	if x < 1 || x >= img.Bounds().Dx()-1 || y < 1 || y >= img.Bounds().Dy()-1 {
+		return false
+	}
+
+	center := img.RGBAAt(x, y)
+	
+	neighbors := [4]struct{ dx, dy int }{
+		{-1, 0}, {1, 0}, {0, -1}, {0, 1},
+	}
+
+	for _, n := range neighbors {
+		nx, ny := x+n.dx, y+n.dy
+		neighbor := img.RGBAAt(nx, ny)
+
+		diff := float64(abs(int(center.R)-int(neighbor.R))) +
+				float64(abs(int(center.G)-int(neighbor.G))) +
+				float64(abs(int(center.B)-int(neighbor.B)))
+
+		if diff > 20 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (g *ImageGenerator) applyIntelligentShadowRecovery(slider *image.RGBA, background *image.RGBA, gap image.Rectangle) *image.RGBA {
+	result := image.NewRGBA(slider.Bounds())
+	draw.Draw(result, result.Bounds(), slider, slider.Bounds().Min, draw.Src)
+
+	bounds := slider.Bounds()
+	sliderMargin := 4
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			isNearEdge := x < sliderMargin || x >= bounds.Dx()-sliderMargin ||
+				y < sliderMargin || y >= bounds.Dy()-sliderMargin
+
+			if isNearEdge {
+				p := slider.RGBAAt(x, y)
+				brightness := float64(p.R)*0.299 + float64(p.G)*0.587 + float64(p.B)*0.114
+
+				if brightness < 80 {
+					bgX := gap.Min.X + x - sliderMargin
+					bgY := gap.Min.Y + y - sliderMargin
+
+					if bgX >= 0 && bgX < background.Bounds().Dx() &&
+						bgY >= 0 && bgY < background.Bounds().Dy() {
+						bgPixel := background.RGBAAt(bgX, bgY)
+						bgBrightness := float64(bgPixel.R)*0.299 + float64(bgPixel.G)*0.587 + float64(bgPixel.B)*0.114
+
+						if bgBrightness > brightness+20 {
+							blendFactor := 0.3
+							r := g.clampUint8(int(float64(p.R)*(1-blendFactor) + float64(bgPixel.R)*blendFactor))
+							gc := g.clampUint8(int(float64(p.G)*(1-blendFactor) + float64(bgPixel.G)*blendFactor))
+							b := g.clampUint8(int(float64(p.B)*(1-blendFactor) + float64(bgPixel.B)*blendFactor))
+
+							result.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) applyHighQualityAntiAliasing(img *image.RGBA) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	bounds := img.Bounds()
+	for y := bounds.Min.Y + 1; y < bounds.Max.Y-1; y++ {
+		for x := bounds.Min.X + 1; x < bounds.Max.X-1; x++ {
+			edgeCount := 0
+			neighbors := [8]struct{ dx, dy int }{
+				{-1, -1}, {0, -1}, {1, -1},
+				{-1, 0}, {1, 0},
+				{-1, 1}, {0, 1}, {1, 1},
+			}
+
+			for _, n := range neighbors {
+				if g.isEdgePixel(img, x+n.dx, y+n.dy) {
+					edgeCount++
+				}
+			}
+
+			if edgeCount >= 3 && edgeCount <= 5 {
+				p := img.RGBAAt(x, y)
+
+				avgR, avgG, avgB := 0, 0, 0
+				validNeighbors := 0
+
+				for _, n := range neighbors {
+					nx, ny := x+n.dx, y+n.dy
+					if nx >= 0 && nx < bounds.Dx() && ny >= 0 && ny < bounds.Dy() {
+						np := img.RGBAAt(nx, ny)
+						avgR += int(np.R)
+						avgG += int(np.G)
+						avgB += int(np.B)
+						validNeighbors++
+					}
+				}
+
+				if validNeighbors > 0 {
+					blendFactor := 0.3
+					r := g.clampUint8(int(float64(p.R)*(1-blendFactor) + float64(avgR/validNeighbors)*blendFactor))
+					gc := g.clampUint8(int(float64(p.G)*(1-blendFactor) + float64(avgG/validNeighbors)*blendFactor))
+					b := g.clampUint8(int(float64(p.B)*(1-blendFactor) + float64(avgB/validNeighbors)*blendFactor))
+
+					result.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) applyColorCorrection(img *image.RGBA) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	bounds := img.Bounds()
+	
+	var totalR, totalG, totalB float64
+	count := 0
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			p := img.RGBAAt(x, y)
+			totalR += float64(p.R)
+			totalG += float64(p.G)
+			totalB += float64(p.B)
+			count++
+		}
+	}
+
+	if count == 0 {
+		return result
+	}
+
+	avgR := totalR / float64(count)
+	avgG := totalG / float64(count)
+	avgB := totalB / float64(count)
+
+	avgBrightness := (avgR + avgG + avgB) / 3.0
+	targetBrightness := 140.0
+
+	brightnessRatio := targetBrightness / avgBrightness
+	if brightnessRatio > 1.3 {
+		brightnessRatio = 1.3
+	}
+	if brightnessRatio < 0.7 {
+		brightnessRatio = 0.7
+	}
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			p := img.RGBAAt(x, y)
+
+			r := g.clampUint8(int(float64(p.R) * brightnessRatio))
+			gc := g.clampUint8(int(float64(p.G) * brightnessRatio))
+			b := g.clampUint8(int(float64(p.B) * brightnessRatio))
+
+			result.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+
+	return result
 }
 
 func (g *ImageGenerator) addSliderBorder(slider *image.RGBA) {
@@ -1066,6 +1318,342 @@ func (g *ImageGenerator) encodePNG(img *image.RGBA) []byte {
 func (g *ImageGenerator) EncodeToBase64(img *image.RGBA) string {
 	data := g.encodePNG(img)
 	return base64.StdEncoding.EncodeToString(data)
+}
+
+func (g *ImageGenerator) drawBrickTexture(img *image.RGBA) {
+	brickWidth := 40
+	brickHeight := 20
+	mortarWidth := 3
+
+	baseR := uint8(120 + rand.Intn(40))
+	baseG := uint8(80 + rand.Intn(40))
+	baseB := uint8(60 + rand.Intn(30))
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			row := y / brickHeight
+			offset := 0
+			if row%2 == 1 {
+				offset = brickWidth / 2
+			}
+
+			brickX := (x + offset) % brickWidth
+			brickY := y % brickHeight
+
+			isMortar := brickX < mortarWidth || brickY < mortarWidth
+
+			var r, gc, b uint8
+			if isMortar {
+				mortarVariation := int16(rand.Intn(20) - 10)
+				r = g.clampUint8(int(baseR) - 60 + int(mortarVariation))
+				gc = g.clampUint8(int(baseG) - 60 + int(mortarVariation))
+				b = g.clampUint8(int(baseB) - 40 + int(mortarVariation))
+			} else {
+				brickVariation := int16(rand.Intn(30) - 15)
+				r = g.clampUint8(int(baseR) + int(brickVariation))
+				gc = g.clampUint8(int(baseG) + int(brickVariation))
+				b = g.clampUint8(int(baseB) + int(brickVariation))
+
+				noise := int16(rand.Intn(10) - 5)
+				r = g.clampUint8(int(r) + int(noise))
+				gc = g.clampUint8(int(gc) + int(noise))
+				b = g.clampUint8(int(b) + int(noise))
+			}
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+
+	g.applySubtleVignette(img)
+}
+
+func (g *ImageGenerator) drawWoodTexture(img *image.RGBA) {
+	baseR := uint8(120 + rand.Intn(60))
+	baseG := uint8(80 + rand.Intn(40))
+	baseB := uint8(50 + rand.Intn(30))
+
+	ringFrequency := 0.05 + rand.Float64()*0.03
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			noise := g.simplexNoise2D(float64(x)*0.1, float64(y)*0.1) * 20
+
+			woodPattern := math.Sin(float64(y)*ringFrequency+noise) * 15
+
+			grain := g.simplexNoise2D(float64(x)*0.3, float64(y)*0.3) * 10
+
+			r := g.clampUint8(int(baseR) + int(woodPattern) + int(grain))
+			gc := g.clampUint8(int(baseG) + int(float64(woodPattern)*0.8) + int(float64(grain)*0.7))
+			b := g.clampUint8(int(baseB) + int(float64(woodPattern)*0.5) + int(float64(grain)*0.5))
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+
+	g.applySubtleVignette(img)
+}
+
+func (g *ImageGenerator) drawMetalTexture(img *image.RGBA) {
+	baseR := uint8(100 + rand.Intn(60))
+	baseG := uint8(100 + rand.Intn(60))
+	baseB := uint8(120 + rand.Intn(60))
+
+	isBrushed := rand.Float64() > 0.5
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			noise := g.simplexNoise2D(float64(x)*0.15, float64(y)*0.15) * 30
+
+			var r, gc, b uint8
+
+			if isBrushed {
+				brushedLines := math.Sin(float64(y)*0.8) * 10
+				r = g.clampUint8(int(baseR) + int(brushedLines) + int(noise))
+				gc = g.clampUint8(int(baseG) + int(brushedLines) + int(noise))
+				b = g.clampUint8(int(baseB) + int(brushedLines) + int(noise))
+			} else {
+				brushedLines := math.Sin(float64(x)*0.8) * 10
+				r = g.clampUint8(int(baseR) + int(brushedLines) + int(noise))
+				gc = g.clampUint8(int(baseG) + int(brushedLines) + int(noise))
+				b = g.clampUint8(int(baseB) + int(brushedLines) + int(noise))
+			}
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+
+	g.applySubtleVignette(img)
+}
+
+func (g *ImageGenerator) drawGrassTexture(img *image.RGBA) {
+	baseR := uint8(40 + rand.Intn(30))
+	baseG := uint8(80 + rand.Intn(50))
+	baseB := uint8(30 + rand.Intn(30))
+
+	for y := 0; y < g.height; y++ {
+		for x := 0; x < g.width; x++ {
+			noise1 := g.simplexNoise2D(float64(x)*0.2, float64(y)*0.2) * 25
+			noise2 := g.simplexNoise2D(float64(x)*0.5, float64(y)*0.5) * 10
+
+			grassVariation := math.Sin(float64(x)*0.3+float64(y)*0.2) * 8
+
+			r := g.clampUint8(int(baseR) + int(noise1) + int(grassVariation))
+			gc := g.clampUint8(int(baseG) + int(noise1) + int(noise2) + int(grassVariation))
+			b := g.clampUint8(int(baseB) + int(noise2) + int(grassVariation))
+
+			img.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+		}
+	}
+
+	bladeCount := 50 + rand.Intn(50)
+	for i := 0; i < bladeCount; i++ {
+		x := rand.Intn(g.width)
+		startY := rand.Intn(g.height)
+		length := 5 + rand.Intn(15)
+		angle := -0.3 + rand.Float64()*0.6
+
+		for j := 0; j < length; j++ {
+			bladeX := x + int(float64(j)*angle)
+			bladeY := startY - j
+
+			if bladeX >= 0 && bladeX < g.width && bladeY >= 0 && bladeY < g.height {
+				p := img.RGBAAt(bladeX, bladeY)
+				darkness := 0.7 + rand.Float64()*0.3
+				r := g.clampUint8(int(float64(p.R) * darkness * 0.8))
+				gc := g.clampUint8(int(float64(p.G) * darkness))
+				b := g.clampUint8(int(float64(p.B) * darkness * 0.8))
+				img.Set(bladeX, bladeY, color.RGBA{R: r, G: gc, B: b, A: 255})
+			}
+		}
+	}
+
+	g.applySubtleVignette(img)
+}
+
+func (g *ImageGenerator) applyMultiLayerShadowDetection(img *image.RGBA, gap image.Rectangle) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	result = g.applySoftShadow(result, gap, 8, 0.3)
+
+	result = g.applyMediumShadow(result, gap, 4, 0.5)
+
+	result = g.applyHardShadow(result, gap, 2, 0.7)
+
+	result = g.applyAmbientOcclusion(result, gap)
+
+	return result
+}
+
+func (g *ImageGenerator) applySoftShadow(img *image.RGBA, gap image.Rectangle, blur int, intensity float64) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	for y := gap.Min.Y - blur*2; y <= gap.Max.Y+blur*2; y++ {
+		for x := gap.Min.X - blur*2; x <= gap.Max.X+blur*2; x++ {
+			if x < 0 || x >= g.width || y < 0 || y >= g.height {
+				continue
+			}
+
+			isInsideGap := x >= gap.Min.X && x < gap.Max.X && y >= gap.Min.Y && y < gap.Max.Y
+			if isInsideGap {
+				continue
+			}
+
+			distToGap := g.getMinDistanceToRect(x, y, gap)
+			if distToGap <= float64(blur*2) {
+				blurFactor := 1.0 - distToGap/float64(blur*2)
+
+				offsetX := 2
+				offsetY := 2
+				shadowX := x + offsetX
+				shadowY := y + offsetY
+
+				if shadowX >= gap.Min.X && shadowX < gap.Max.X &&
+					shadowY >= gap.Min.Y && shadowY < gap.Max.Y {
+					p := result.RGBAAt(x, y)
+
+					shadowColor := g.calculateShadowColorFromRGBA(p.R, p.G, p.B, intensity*blurFactor)
+
+					result.Set(x, y, shadowColor)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) applyMediumShadow(img *image.RGBA, gap image.Rectangle, blur int, intensity float64) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	for y := gap.Min.Y - blur; y <= gap.Max.Y+blur; y++ {
+		for x := gap.Min.X - blur; x <= gap.Max.X+blur; x++ {
+			if x < 0 || x >= g.width || y < 0 || y >= g.height {
+				continue
+			}
+
+			isInsideGap := x >= gap.Min.X && x < gap.Max.X && y >= gap.Min.Y && y < gap.Max.Y
+			if isInsideGap {
+				continue
+			}
+
+			distToGap := g.getMinDistanceToRect(x, y, gap)
+			if distToGap <= float64(blur) {
+				blurFactor := 1.0 - distToGap/float64(blur)
+				effectiveIntensity := blurFactor * intensity
+
+				offsetX := 1
+				offsetY := 1
+				shadowX := x + offsetX
+				shadowY := y + offsetY
+
+				if shadowX >= gap.Min.X && shadowX < gap.Max.X &&
+					shadowY >= gap.Min.Y && shadowY < gap.Max.Y {
+					p := result.RGBAAt(x, y)
+
+					shadowColor := g.calculateShadowColorFromRGBA(p.R, p.G, p.B, effectiveIntensity)
+
+					result.Set(x, y, shadowColor)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) applyHardShadow(img *image.RGBA, gap image.Rectangle, offset int, intensity float64) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	for y := gap.Min.Y; y < gap.Max.Y; y++ {
+		for x := gap.Min.X; x < gap.Max.X; x++ {
+			shadowX := x + offset
+			shadowY := y + offset
+
+			if shadowX >= 0 && shadowX < g.width && shadowY >= 0 && shadowY < g.height {
+				p := result.RGBAAt(shadowX, shadowY)
+				shadowColor := g.calculateShadowColorFromRGBA(p.R, p.G, p.B, intensity)
+				result.Set(shadowX, shadowY, shadowColor)
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) applyAmbientOcclusion(img *image.RGBA, gap image.Rectangle) *image.RGBA {
+	result := image.NewRGBA(img.Bounds())
+	draw.Draw(result, result.Bounds(), img, img.Bounds().Min, draw.Src)
+
+	radius := 3
+
+	for y := gap.Min.Y - radius; y <= gap.Max.Y+radius; y++ {
+		for x := gap.Min.X - radius; x <= gap.Max.X+radius; x++ {
+			if x < 0 || x >= g.width || y < 0 || y >= g.height {
+				continue
+			}
+
+			isInsideGap := x >= gap.Min.X && x < gap.Max.X && y >= gap.Min.Y && y < gap.Max.Y
+			if isInsideGap {
+				continue
+			}
+
+			distToGap := g.getMinDistanceToRect(x, y, gap)
+			if distToGap <= float64(radius) {
+				aoFactor := 1.0 - (distToGap / float64(radius)) * 0.3
+
+				p := result.RGBAAt(x, y)
+				r := g.clampUint8(int(float64(p.R) * aoFactor))
+				gc := g.clampUint8(int(float64(p.G) * aoFactor))
+				b := g.clampUint8(int(float64(p.B) * aoFactor))
+
+				result.Set(x, y, color.RGBA{R: r, G: gc, B: b, A: 255})
+			}
+		}
+	}
+
+	return result
+}
+
+func (g *ImageGenerator) calculateShadowColor(p color.RGBA, intensity float64) color.RGBA {
+	shadowFactor := 1.0 - intensity
+
+	brightness := float64(p.R)*0.299 + float64(p.G)*0.587 + float64(p.B)*0.114
+
+	var shadowR, shadowG, shadowB uint8
+	if brightness > 128 {
+		shadowR = g.clampUint8(int(float64(p.R) * shadowFactor))
+		shadowG = g.clampUint8(int(float64(p.G) * shadowFactor))
+		shadowB = g.clampUint8(int(float64(p.B) * shadowFactor))
+	} else {
+		shadowR = g.clampUint8(int(float64(p.R) * (1.0 + intensity * 0.2)))
+		shadowG = g.clampUint8(int(float64(p.G) * (1.0 + intensity * 0.2)))
+		shadowB = g.clampUint8(int(float64(p.B) * (1.0 + intensity * 0.2)))
+	}
+
+	return color.RGBA{R: shadowR, G: shadowG, B: shadowB, A: 255}
+}
+
+func (g *ImageGenerator) calculateShadowColorFromRGBA(r, gv, b uint8, intensity float64) color.RGBA {
+	shadowFactor := 1.0 - intensity
+
+	brightness := float64(r)*0.299 + float64(gv)*0.587 + float64(b)*0.114
+
+	var shadowR, shadowGv, shadowB uint8
+	if brightness > 128 {
+		shadowR = g.clampUint8(int(float64(r) * shadowFactor))
+		shadowGv = g.clampUint8(int(float64(gv) * shadowFactor))
+		shadowB = g.clampUint8(int(float64(b) * shadowFactor))
+	} else {
+		shadowR = g.clampUint8(int(float64(r) * (1.0 + intensity * 0.2)))
+		shadowGv = g.clampUint8(int(float64(gv) * (1.0 + intensity * 0.2)))
+		shadowB = g.clampUint8(int(float64(b) * (1.0 + intensity * 0.2)))
+	}
+
+	return color.RGBA{R: shadowR, G: shadowGv, B: shadowB, A: 255}
 }
 
 func init() {

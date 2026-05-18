@@ -1,139 +1,100 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"math/rand"
-	"time"
 
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/models"
+	"time"
 )
 
 func main() {
-	fmt.Println("=== 行为分析系统测试 ===")
-	fmt.Println()
+	fmt.Println("测试优化后的行为分析引擎...")
 
-	// 1. 创建增强行为分析服务
-	fmt.Println("1. 初始化增强行为分析服务...")
-	ebas := service.NewEnhancedBehaviorAnalysisService()
-	fmt.Println("   ✓ 服务初始化成功")
-	fmt.Println()
+	svc := service.NewBehaviorAnalysisService()
 
-	// 2. 生成测试数据
-	fmt.Println("2. 生成测试行为数据...")
-	humanData := generateHumanBehaviorData()
-	robotData := generateRoboticBehaviorData()
-	fmt.Printf("   ✓ 人类行为数据: %d 条\n", len(humanData))
-	fmt.Printf("   ✓ 机器行为数据: %d 条\n", len(robotData))
-	fmt.Println()
+	testPoints := []service.BehaviorDataPoint{
+		{X: 100, Y: 100, Timestamp: 1000, Event: "mousemove"},
+		{X: 110, Y: 110, Timestamp: 1100, Event: "mousemove"},
+		{X: 120, Y: 120, Timestamp: 1200, Event: "mousemove"},
+		{X: 130, Y: 130, Timestamp: 1300, Event: "mousemove"},
+		{X: 140, Y: 140, Timestamp: 1400, Event: "mousemove"},
+		{X: 150, Y: 150, Timestamp: 1500, Event: "mousemove"},
+		{X: 160, Y: 160, Timestamp: 1600, Event: "mousemove"},
+	}
 
-	// 3. 测试人类行为分析
-	fmt.Println("3. 分析人类行为...")
-	ebas.AnalyzeBehavior(humanData)
-	fmt.Println("   ✓ 人类行为分析完成")
-	fmt.Println()
+	fmt.Println("\n1. 测试自适应平滑轨迹算法...")
+	adaptiveSmoothed := svc.AdaptiveSmoothTrajectory(testPoints)
+	fmt.Printf("自适应平滑后点数: %d (原始: %d)\n", len(adaptiveSmoothed), len(testPoints))
 
-	// 4. 测试机器行为分析
-	fmt.Println("4. 分析机器行为...")
-	ebas.AnalyzeBehavior(robotData)
-	fmt.Println("   ✓ 机器行为分析完成")
-	fmt.Println()
+	fmt.Println("\n2. 测试Savitzky-Golay平滑算法...")
+	sgSmoothed := svc.SavitzkyGolaySmooth(testPoints, 3, 2)
+	fmt.Printf("SG平滑后点数: %d\n", len(sgSmoothed))
 
-	// 5. 功能总结
-	fmt.Println("=== 功能实现总结 ===")
-	fmt.Println("✓ 增强行为分析服务")
-	fmt.Println("✓ 行为特征提取")
-	fmt.Println("✓ 风险评分计算")
-	fmt.Println()
-	fmt.Println("目标指标:")
-	fmt.Println("- 机器人识别准确率: 99%+")
-	fmt.Println("- 正常用户误伤率: <0.5%")
-	fmt.Println()
-	fmt.Println("测试完成!")
+	fmt.Println("\n3. 测试速度分析...")
+	speedAnalysis, _ := svc.AnalyzeSpeed(createTestBehaviorDataArray(testPoints))
+	fmt.Printf("平均速度: %.4f\n", speedAnalysis.AverageSpeed)
+	fmt.Printf("最大速度: %.4f\n", speedAnalysis.MaxSpeed)
+	fmt.Printf("速度方差: %.4f\n", speedAnalysis.SpeedVariance)
+	fmt.Printf("速度标准差: %.4f\n", speedAnalysis.SpeedStdDev)
+
+	fmt.Println("\n4. 测试曲率统计...")
+	curvMean, curvStdDev, curvMax := svc.ComputeCurvatureStatistics(testPoints)
+	fmt.Printf("平均曲率: %.6f\n", curvMean)
+	fmt.Printf("曲率标准差: %.6f\n", curvStdDev)
+	fmt.Printf("最大曲率: %.6f\n", curvMax)
+
+	fmt.Println("\n5. 测试轨迹平滑度指标...")
+	smoothnessMetrics := svc.ComputeTrajectorySmoothnessMetrics(testPoints)
+	fmt.Printf("平均角度变化: %.6f\n", smoothnessMetrics["avg_angle_change"])
+	fmt.Printf("平滑度分数: %.6f\n", smoothnessMetrics["smoothness_score"])
+	fmt.Printf("锐利转折比例: %.6f\n", smoothnessMetrics["sharp_turn_ratio"])
+
+	fmt.Println("\n6. 测试加速度异常检测...")
+	accelerations := []float64{0.1, 0.2, 0.15, 0.25, 0.2, 0.18, 0.22}
+	accelAnomalies := svc.DetectAccelerationAnomalies(testPoints, accelerations)
+	fmt.Printf("异常数量: %d\n", accelAnomalies["anomaly_count"])
+	fmt.Printf("是否有异常: %v\n", accelAnomalies["has_anomaly"])
+
+	fmt.Println("\n7. 测试加速度模式分析...")
+	accelPattern := svc.AnalyzeAccelerationPattern(testPoints)
+	fmt.Printf("平均加速度: %.6f\n", accelPattern["mean_acceleration"])
+	fmt.Printf("加速度方差: %.6f\n", accelPattern["acceleration_variance"])
+	fmt.Printf("振荡次数: %.0f\n", accelPattern["acceleration_oscillation_count"])
+
+	fmt.Println("\n8. 测试速度熵...")
+	speeds := []float64{0.5, 0.6, 0.55, 0.65, 0.58, 0.62, 0.59}
+	speedEntropy := svc.CalculateSpeedEntropy(speeds)
+	fmt.Printf("速度熵: %.6f\n", speedEntropy)
+
+	fmt.Println("\n9. 测试速度突发性...")
+	speedBurstiness := svc.CalculateSpeedBurstiness(speeds)
+	fmt.Printf("速度突发性: %.6f\n", speedBurstiness)
+
+	fmt.Println("\n10. 测试点击节奏分析...")
+	clicks := []service.BehaviorDataPoint{
+		{X: 100, Y: 100, Timestamp: 1000, Event: "click"},
+		{X: 150, Y: 150, Timestamp: 1200, Event: "click"},
+		{X: 200, Y: 200, Timestamp: 1400, Event: "click"},
+		{X: 250, Y: 250, Timestamp: 1600, Event: "click"},
+	}
+	clickRhythm := svc.AnalyzeClickRhythmAdvanced(clicks, testPoints)
+	fmt.Printf("点击间隔变异系数: %.6f\n", clickRhythm.ClickIntervalCV)
+	fmt.Printf("点击突发性: %.6f\n", clickRhythm.ClickBurstiness)
+	fmt.Printf("点击节奏一致性: %.6f\n", clickRhythm.ClickRhythmConsistency)
+	fmt.Printf("点击时间模式: %s\n", clickRhythm.ClickTimingPattern)
+
+	fmt.Println("\n所有测试完成!")
 }
 
-func generateHumanBehaviorData() []models.BehaviorData {
-	data := make([]models.BehaviorData, 0)
-	baseTime := time.Now()
-
-	for i := 0; i < 30; i++ {
-		point := service.BehaviorDataPoint{
-			X:         100 + i*10 + rand.Intn(10) - 5,
-			Y:         100 + i*5 + rand.Intn(10) - 5,
-			Timestamp: baseTime.Add(time.Duration(i*50+rand.Intn(20)) * time.Millisecond).UnixMilli(),
-			Event:     "move",
+func createTestBehaviorDataArray(points []service.BehaviorDataPoint) []models.BehaviorData {
+	result := make([]models.BehaviorData, len(points))
+	for i, p := range points {
+		result[i] = models.BehaviorData{
+			Data:      fmt.Sprintf(`{"x":%d,"y":%d,"timestamp":%d,"event":"%s"}`, p.X, p.Y, p.Timestamp, p.Event),
+			DataType:  p.Event,
+			Timestamp: time.Now(),
 		}
-		pointJSON, _ := json.Marshal(point)
-		data = append(data, models.BehaviorData{
-			DataType: "mouse",
-			Data:     string(pointJSON),
-		})
 	}
-
-	keys := []string{"h", "e", "l", "l", "o", "w", "o", "r", "l", "d"}
-	keyBaseTime := time.Now().Add(time.Second)
-	for i := 0; i < 10; i++ {
-		interval := 80 + rand.Int63n(80)
-		keyBaseTime = keyBaseTime.Add(time.Duration(interval) * time.Millisecond)
-
-		ks := struct {
-			Key          string `json:"key"`
-			Timestamp    int64  `json:"timestamp"`
-			HoldDuration int64  `json:"hold_duration,omitempty"`
-		}{
-			Key:          keys[i%len(keys)],
-			Timestamp:    keyBaseTime.UnixMilli(),
-			HoldDuration: 50 + rand.Int63n(50),
-		}
-		ksJSON, _ := json.Marshal(ks)
-		data = append(data, models.BehaviorData{
-			DataType: "keyboard",
-			Data:     string(ksJSON),
-		})
-	}
-
-	return data
-}
-
-func generateRoboticBehaviorData() []models.BehaviorData {
-	data := make([]models.BehaviorData, 0)
-	baseTime := time.Now()
-
-	for i := 0; i < 30; i++ {
-		point := service.BehaviorDataPoint{
-			X:         100 + i*10,
-			Y:         100 + i*5,
-			Timestamp: baseTime.Add(time.Duration(i*50) * time.Millisecond).UnixMilli(),
-			Event:     "move",
-		}
-		pointJSON, _ := json.Marshal(point)
-		data = append(data, models.BehaviorData{
-			DataType: "mouse",
-			Data:     string(pointJSON),
-		})
-	}
-
-	keys := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	keyBaseTime := time.Now().Add(time.Second)
-	for i := 0; i < 10; i++ {
-		keyBaseTime = keyBaseTime.Add(100 * time.Millisecond)
-
-		ks := struct {
-			Key          string `json:"key"`
-			Timestamp    int64  `json:"timestamp"`
-			HoldDuration int64  `json:"hold_duration,omitempty"`
-		}{
-			Key:          keys[i%len(keys)],
-			Timestamp:    keyBaseTime.UnixMilli(),
-			HoldDuration: 50,
-		}
-		ksJSON, _ := json.Marshal(ks)
-		data = append(data, models.BehaviorData{
-			DataType: "keyboard",
-			Data:     string(ksJSON),
-		})
-	}
-
-	return data
+	return result
 }
