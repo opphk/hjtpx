@@ -5,6 +5,20 @@
 
 set -e
 
+LOG_FILE="/var/log/hjtpx/docker-entrypoint.log"
+
+log_message() {
+    echo "[$(date -u +'%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date -u +'%Y-%m-%d %H:%M:%S')] $1"
+}
+
+log_error() {
+    echo "[$(date -u +'%Y-%m-%d %H:%M:%S')] ERROR: $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date -u +'%Y-%m-%d %H:%M:%S')] ERROR: $1"
+}
+
+log_warning() {
+    echo "[$(date -u +'%Y-%m-%d %H:%M:%S')] WARNING: $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$(date -u +'%Y-%m-%d %H:%M:%S')] WARNING: $1"
+}
+
 echo "Starting hjtpx application..."
 
 # =============================================================================
@@ -12,7 +26,7 @@ echo "Starting hjtpx application..."
 # =============================================================================
 
 validate_env() {
-    echo "Validating environment variables..."
+    log_message "Validating environment variables..."
 
     # 必需的环境变量
     REQUIRED_VARS="
@@ -30,22 +44,22 @@ validate_env() {
     for var in $REQUIRED_VARS; do
         value=$(eval echo \$$var)
         if [ -z "$value" ]; then
-            echo "Error: $var is not set"
+            log_error "$var is not set"
             missing_vars="$missing_vars $var"
         fi
     done
 
     if [ -n "$missing_vars" ]; then
-        echo "Error: Missing required environment variables:$missing_vars"
+        log_error "Missing required environment variables:$missing_vars"
         exit 1
     fi
 
     # JWT密钥长度检查
     if [ ${#JWT_SECRET} -lt 32 ]; then
-        echo "Warning: JWT_SECRET should be at least 32 characters long for security"
+        log_warning "JWT_SECRET should be at least 32 characters long for security"
     fi
 
-    echo "Environment variables validated successfully"
+    log_message "Environment variables validated successfully"
 }
 
 # =============================================================================
@@ -53,26 +67,27 @@ validate_env() {
 # =============================================================================
 
 wait_for_postgres() {
-    echo "Waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
+    log_message "Waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
     max_attempts=30
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
         if pg_isready -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" > /dev/null 2>&1; then
-            echo "PostgreSQL is ready!"
+            log_message "PostgreSQL is ready!"
             return 0
         fi
-        echo "PostgreSQL is unavailable (attempt $attempt/$max_attempts) - sleeping"
+        log_message "PostgreSQL is unavailable (attempt $attempt/$max_attempts) - sleeping"
         sleep 2
         attempt=$((attempt + 1))
     done
 
-    echo "Error: PostgreSQL failed to start after $max_attempts attempts"
+    log_error "PostgreSQL failed to start after $max_attempts attempts"
+    log_error "PostgreSQL connection details: host=${POSTGRES_HOST}, port=${POSTGRES_PORT}, user=${POSTGRES_USER}"
     return 1
 }
 
 wait_for_redis() {
-    echo "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
+    log_message "Waiting for Redis at ${REDIS_HOST}:${REDIS_PORT}..."
 
     redis_password="${REDIS_PASSWORD:-}"
     max_attempts=30
@@ -81,21 +96,22 @@ wait_for_redis() {
     while [ $attempt -le $max_attempts ]; do
         if [ -n "$redis_password" ]; then
             if redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" -a "$redis_password" ping > /dev/null 2>&1; then
-                echo "Redis is ready!"
+                log_message "Redis is ready!"
                 return 0
             fi
         else
             if redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" ping > /dev/null 2>&1; then
-                echo "Redis is ready!"
+                log_message "Redis is ready!"
                 return 0
             fi
         fi
-        echo "Redis is unavailable (attempt $attempt/$max_attempts) - sleeping"
+        log_message "Redis is unavailable (attempt $attempt/$max_attempts) - sleeping"
         sleep 2
         attempt=$((attempt + 1))
     done
 
-    echo "Error: Redis failed to start after $max_attempts attempts"
+    log_error "Redis failed to start after $max_attempts attempts"
+    log_error "Redis connection details: host=${REDIS_HOST}, port=${REDIS_PORT}"
     return 1
 }
 
@@ -104,7 +120,7 @@ wait_for_redis() {
 # =============================================================================
 
 setup_system() {
-    echo "Setting up system environment..."
+    log_message "Setting up system environment..."
 
     # 创建必要的目录
     mkdir -p /var/log/hjtpx
@@ -114,7 +130,7 @@ setup_system() {
     chmod 755 /var/log/hjtpx
     chmod 1777 /tmp/hjtpx
 
-    echo "System environment setup completed"
+    log_message "System environment setup completed"
 }
 
 # =============================================================================
@@ -122,9 +138,9 @@ setup_system() {
 # =============================================================================
 
 start_application() {
-    echo "Starting application..."
-    echo "Server will listen on port ${SERVER_PORT:-8080}"
-    echo "Gin mode: ${GIN_MODE:-release}"
+    log_message "Starting application..."
+    log_message "Server will listen on port ${SERVER_PORT:-8080}"
+    log_message "Gin mode: ${GIN_MODE:-release}"
 
     # 执行应用程序
     exec /server

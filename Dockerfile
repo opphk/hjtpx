@@ -7,7 +7,7 @@ FROM golang:1.21-alpine AS builder
 
 # 设置构建参数
 ARG BUILD_VERSION=dev
-ARG BUILD_TIME
+ARG BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata musl-legacy
@@ -27,13 +27,14 @@ ENV CGO_ENABLED=0 \
     GOARCH=amd64 \
     GO111MODULE=on
 
-# 构建二进制文件
+# 构建二进制文件并进行strip
 RUN go build \
     -ldflags="-s -w -X main.Version=${BUILD_VERSION} -X main.BuildTime=${BUILD_TIME}" \
-    -o server ./cmd/server
+    -o server ./cmd/server && \
+    strip -s server
 
-# 阶段2: 运行阶段 - 使用busybox作为基础镜像
-FROM busybox:musl
+# 阶段2: 运行阶段 - 使用distroless作为基础镜像
+FROM gcr.io/distroless/static:nonroot
 
 # 设置时区和CA证书
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
@@ -46,8 +47,10 @@ COPY --from=builder /app/server /server
 COPY docker/health-check.sh /usr/local/bin/health-check
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# 创建必要的目录
+# 创建必要的目录并设置权限
 RUN mkdir -p /var/log/hjtpx /tmp/hjtpx && \
+    chmod 755 /var/log/hjtpx && \
+    chmod 1777 /tmp/hjtpx && \
     chmod +x /usr/local/bin/health-check /usr/local/bin/docker-entrypoint.sh
 
 WORKDIR /app
@@ -55,9 +58,9 @@ WORKDIR /app
 # 暴露端口
 EXPOSE 8080
 
-# 健康检查
+# 健康检查 - 使用wget直接检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /usr/local/bin/health-check --quick || exit 1
+    CMD ["/usr/local/bin/health-check", "--quick"] || exit 1
 
 # 入口脚本
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -1,0 +1,33 @@
+{
+  "log": {
+    "level": "info",
+    "format": "json",
+    "output": "/var/log/hjtpx/app.log",
+    "max_size": "10m",
+    "max_backups": 5,
+    "max_age": 30,
+    "compress": true,
+    "buffer_size": 8192
+  },
+  "docker": {
+    "driver": "json-file",
+    "max_size": "10m",
+    "max_file": "3",
+    "compress": true,
+    "labels": ["app", "service", "hjtpx"]
+  },
+  "logrotate": {
+    "enabled": true,
+    "schedule": "daily",
+    "max_size": "10m",
+    "max_age": 7,
+    "compress": true,
+    "copy_truncate": true
+  },
+  "monitoring": {
+    "enabled": true,
+    "check_interval": "1h",
+    "alert_on_size_threshold": "100m",
+    "alert_on_error_threshold": 1000
+  }
+}

@@ -31,15 +31,18 @@ services:
       - REDIS_DB=${REDIS_DB:-0}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
+      - HEALTH_CHECK_RETRIES=3
+      - HEALTH_CHECK_INTERVAL=5
     volumes:
       - ./logs:/var/log/hjtpx
       - ./config.yaml:/app/config.yaml:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "/usr/local/bin/health-check", "--quick"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+      exit_code: 0
     restart: unless-stopped
     deploy:
       resources:
@@ -49,6 +52,7 @@ services:
         reservations:
           cpus: '0.25'
           memory: 128M
+    stop_grace_period: 30s
     networks:
       - hjtpx_network
     logging:
@@ -57,9 +61,12 @@ services:
         max-size: "10m"
         max-file: "3"
         compress: "true"
+        labels: "app,service,hjtpx"
     labels:
       - "hjtpx.service=app"
       - "hjtpx.version=${BUILD_VERSION:-dev}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   postgres:
     image: postgres:14-alpine
@@ -76,11 +83,12 @@ services:
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost -p 5432"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+      exit_code: 0
     restart: unless-stopped
     deploy:
       resources:
@@ -90,6 +98,7 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
+    stop_grace_period: 30s
     networks:
       - hjtpx_network
     logging:
@@ -98,8 +107,11 @@ services:
         max-size: "50m"
         max-file: "5"
         compress: "true"
+        labels: "app,service,database"
     labels:
       - "hjtpx.service=postgres"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   redis:
     image: redis:7-alpine
@@ -111,11 +123,12 @@ services:
     ports:
       - "${REDIS_EXTERNAL_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
+      exit_code: 0
     restart: unless-stopped
     deploy:
       resources:
@@ -125,6 +138,7 @@ services:
         reservations:
           cpus: '0.1'
           memory: 64M
+    stop_grace_period: 30s
     networks:
       - hjtpx_network
     logging:
@@ -133,8 +147,11 @@ services:
         max-size: "50m"
         max-file: "5"
         compress: "true"
+        labels: "app,service,cache"
     labels:
       - "hjtpx.service=redis"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 networks:
   hjtpx_network:
