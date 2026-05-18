@@ -1,6 +1,6 @@
 # HJTPX Captcha C# SDK
 
-HJTPX 验证码系统的 C# 软件开发工具包。
+HJTPX 验证码系统的 C# 软件开发工具包，支持所有主流验证码类型。
 
 ## 功能特性
 
@@ -18,6 +18,7 @@ HJTPX 验证码系统的 C# 软件开发工具包。
 - 自动重试机制
 - 完整的异步 API
 - 支持 .NET 配置系统
+- 完善的错误处理
 
 ## 安装
 
@@ -94,35 +95,192 @@ config.RetryConfig.InitialDelayMs = 200;
 var client = new CaptchaClient(config);
 ```
 
-## API 文档
+## 验证码类型
 
-### 验证码类型
-
-所有验证码类型都有对应的获取和验证方法：
-
-| 验证码类型 | 获取方法 | 验证方法 |
-|-----------|---------|---------|
-| 滑块 | `GetSliderCaptchaAsync` | `VerifySliderCaptchaAsync` |
-| 点击 | `GetClickCaptchaAsync` | `VerifyClickCaptchaAsync` |
-| 旋转 | `GetRotationCaptchaAsync` | `VerifyRotationCaptchaAsync` |
-| 手势 | `GetGestureCaptchaAsync` | `VerifyGestureCaptchaAsync` |
-| 拼图 | `GetJigsawCaptchaAsync` | `VerifyJigsawCaptchaAsync` |
-| 语音 | `GetVoiceCaptchaAsync` | `VerifyVoiceCaptchaAsync` |
-| 连连看 | `GetConnectCaptchaAsync` | `VerifyConnectCaptchaAsync` |
-| 3D | `GetThreeDCaptchaAsync` | `VerifyThreeDCaptchaAsync` |
-
-### 通用验证
-
-如果需要更灵活的验证方式，可以使用通用验证方法：
+### 滑块验证码
 
 ```csharp
-var request = new VerifyCaptchaRequest
+// 获取滑块验证码
+var slider = await client.GetSliderCaptchaAsync(320, 160, 8);
+
+// 生成轨迹
+var trajectory = new List<TrajectoryPoint>
 {
-    SessionId = "session-id",
-    Type = "slider",
-    X = 185
+    new TrajectoryPoint(0, slider.SecretY, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 1000),
+    new TrajectoryPoint(50, slider.SecretY + 2, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 800),
+    new TrajectoryPoint(100, slider.SecretY - 1, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - 600),
+    new TrajectoryPoint(150, slider.SecretY, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
 };
-var result = await client.VerifyCaptchaAsync(request);
+
+// 验证
+var result = await client.VerifySliderCaptchaAsync(
+    slider.SessionId,
+    150,
+    slider.SecretY,
+    trajectory
+);
+```
+
+### 点选验证码
+
+```csharp
+// 获取点选验证码
+var click = await client.GetClickCaptchaAsync("number", true, 3);
+Console.WriteLine($"提示: {click.Hint}");
+
+// 用户点击
+var clicks = new List<ClickData>
+{
+    new ClickData { X = 100, Y = 100, Duration = 500 },
+    new ClickData { X = 200, Y = 150, Duration = 300 },
+    new ClickData { X = 300, Y = 200, Duration = 400 }
+};
+
+// 验证
+var result = await client.VerifyClickCaptchaAsync(
+    click.SessionId,
+    clicks,
+    new List<int> { 0, 1, 2 }
+);
+```
+
+### 手势验证码
+
+```csharp
+// 获取手势验证码
+var gesture = await client.GetGestureCaptchaAsync();
+
+// 用户绘制的手势
+var pattern = new List<int> { 0, 1, 2, 4, 8 };
+
+// 验证
+var result = await client.VerifyGestureCaptchaAsync(gesture.SessionId, pattern);
+```
+
+### 旋转验证码
+
+```csharp
+// 获取旋转验证码
+var rotation = await client.GetRotationCaptchaAsync();
+
+// 用户旋转角度
+var result = await client.VerifyRotationCaptchaAsync(rotation.ChallengeId, 87);
+```
+
+### 拼图验证码
+
+```csharp
+// 获取拼图验证码
+var jigsaw = await client.GetJigsawCaptchaAsync(300, 300, 3);
+
+// 用户调整的碎片
+var pieces = jigsaw.Pieces.Select(p => new JigsawPiece
+{
+    Index = p.Index,
+    OriginalX = p.OriginalX,
+    OriginalY = p.OriginalY,
+    CurrentX = p.OriginalX + 5,
+    CurrentY = p.OriginalY + 5,
+    Width = p.Width,
+    Height = p.Height,
+    Rotation = 0
+}).ToList();
+
+// 验证
+var result = await client.VerifyJigsawCaptchaAsync(jigsaw.SessionId, pieces);
+```
+
+### 语音验证码
+
+```csharp
+// 获取语音验证码
+var voice = await client.GetVoiceCaptchaAsync("zh-CN");
+
+// 用户听到的答案
+var result = await client.VerifyVoiceCaptchaAsync(voice.SessionId, voice.Text ?? "123456");
+```
+
+## 用户认证
+
+### 登录
+
+```csharp
+var login = await client.LoginAsync("username", "password");
+Console.WriteLine($"Token: {login.AccessToken}");
+Console.WriteLine($"User: {login.User.Username}");
+```
+
+### 注册
+
+```csharp
+var register = await client.RegisterAsync("newuser", "new@example.com", "password");
+Console.WriteLine($"User ID: {register.UserId}");
+```
+
+### 登出
+
+```csharp
+await client.LogoutAsync();
+```
+
+## 环境检测
+
+### 获取检测脚本
+
+```csharp
+var script = await client.GetDetectionScriptAsync();
+```
+
+### 提交检测数据
+
+```csharp
+var detectionData = new Dictionary<string, object>
+{
+    ["fingerprint"] = "browser-fingerprint",
+    ["canvas_hash"] = "canvas-fingerprint",
+    ["webgl_vendor"] = "WebGL Vendor",
+    ["timezone"] = "Asia/Shanghai",
+    ["language"] = "zh-CN"
+};
+
+var result = await client.SubmitDetectionAsync(detectionData);
+Console.WriteLine($"Risk Level: {result["risk_level"]}");
+```
+
+## 错误处理
+
+SDK 提供以下异常类型：
+
+```csharp
+try
+{
+    var captcha = await client.GetSliderCaptchaAsync();
+}
+catch (ApiException ex)
+{
+    // API 返回错误
+    Console.WriteLine($"API 错误: {ex.Code} - {ex.Message}");
+}
+catch (NetworkException ex)
+{
+    // 网络错误
+    Console.WriteLine($"网络错误: {ex.Message}");
+}
+catch (CaptchaException ex)
+{
+    // 通用验证码错误
+    Console.WriteLine($"验证码错误: {ex.Message}");
+}
+catch (ValidationException ex)
+{
+    // 参数验证错误
+    Console.WriteLine($"验证错误: {ex.Message}");
+}
+catch (AuthenticationException ex)
+{
+    // 认证错误
+    Console.WriteLine($"认证错误: {ex.Message}");
+}
 ```
 
 ## 配置选项
@@ -156,32 +314,6 @@ var result = await client.VerifyCaptchaAsync(request);
 | MaxDelayMs | long | 最大延迟（毫秒） | 10000 |
 | BackoffMultiplier | double | 退避乘数 | 2.0 |
 | RetryableStatusCodes | List<int> | 可重试的状态码 | 429,500,502,503,504 |
-
-## 错误处理
-
-SDK 提供以下异常类型：
-
-```csharp
-try
-{
-    var captcha = await client.GetSliderCaptchaAsync();
-}
-catch (ApiException ex)
-{
-    // API 返回错误
-    Console.WriteLine($"API 错误: {ex.Code} - {ex.Message}");
-}
-catch (NetworkException ex)
-{
-    // 网络错误
-    Console.WriteLine($"网络错误: {ex.Message}");
-}
-catch (CaptchaException ex)
-{
-    // 通用验证码错误
-    Console.WriteLine($"验证码错误: {ex.Message}");
-}
-```
 
 ## 运行测试
 
