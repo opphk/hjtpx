@@ -266,10 +266,11 @@
     color: #adb5bd;
 }
 
-/* ==================== 成功/错误动画 ==================== */
-.captcha-success-animation {
-    animation: captcha-success-bounce 0.6s ease-out;
-    will-change: transform;
+/* ==================== 增强动画效果 ==================== */
+@keyframes captcha-error-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
 }
 
 @keyframes captcha-success-bounce {
@@ -277,15 +278,59 @@
     50% { transform: scale(1.1); }
 }
 
-.captcha-error-animation {
-    animation: captcha-error-shake 0.5s ease-in-out;
+@keyframes captcha-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes captcha-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes captcha-scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.captcha-animate-fade-in {
+    animation: captcha-fade-in 0.3s ease-out;
+}
+
+.captcha-animate-slide-up {
+    animation: captcha-slide-up 0.4s ease-out;
+}
+
+.captcha-animate-scale-in {
+    animation: captcha-scale-in 0.3s ease-out;
+}
+
+.captcha-success-animation {
+    animation: captcha-success-bounce 0.6s ease-out;
     will-change: transform;
 }
 
-@keyframes captcha-error-shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-8px); }
-    75% { transform: translateX(8px); }
+.captcha-error-animation {
+    animation: captcha-error-shake 0.5s ease-in-out;
+    will-change: transform;
 }
 
 /* 彩带庆祝动画 */
@@ -520,61 +565,159 @@
     100% { transform: translateY(0); opacity: 1; }
 }
 
-/* ==================== 提示消息 ==================== */
-.captcha-hint {
-    padding: 0.75rem 1rem;
+/* ==================== 增强错误提示样式 ==================== */
+.captcha-error-toast {
+    background: rgba(220, 53, 69, 0.95) !important;
+    color: white !important;
+    border-left: 4px solid #ff6b6b !important;
+}
+
+.captcha-error-toast .captcha-toast-icon {
+    color: white !important;
+}
+
+.captcha-error-toast .captcha-toast-title {
+    color: white !important;
+}
+
+.captcha-error-toast .captcha-toast-message {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.captcha-error-toast .captcha-toast-close {
+    color: white !important;
+}
+
+.captcha-error-hint {
+    background: rgba(220, 53, 69, 0.08);
+    border: 1px solid rgba(220, 53, 69, 0.2);
     border-radius: var(--captcha-radius-sm);
+    padding: 0.875rem 1rem;
     margin-top: 0.75rem;
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
-    animation: captcha-hint-fadeIn 0.3s ease;
+    animation: captcha-fade-in 0.3s ease;
 }
 
-@keyframes captcha-hint-fadeIn {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.captcha-hint-icon {
+.captcha-error-hint-icon {
     flex-shrink: 0;
-    font-size: 1.1rem;
+    font-size: 1.25rem;
+    color: var(--captcha-danger);
     margin-top: 0.125rem;
 }
 
-.captcha-hint-text {
+.captcha-error-hint-text {
     flex: 1;
 }
 
-.captcha-hint-title {
+.captcha-error-hint-title {
     font-weight: 600;
+    color: var(--captcha-danger);
     margin-bottom: 0.25rem;
 }
 
-.captcha-hint-desc {
+.captcha-error-hint-desc {
     font-size: 0.875rem;
+    color: #6c757d;
     line-height: 1.5;
 }
 
-.captcha-hint.error {
-    background: rgba(220, 53, 69, 0.1);
-    border: 1px solid rgba(220, 53, 69, 0.3);
+[data-bs-theme="dark"] .captcha-error-hint {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.3);
 }
 
-.captcha-hint.error .captcha-hint-icon { color: var(--captcha-danger); }
-.captcha-hint.error .captcha-hint-title { color: var(--captcha-danger); }
-.captcha-hint.error .captcha-hint-desc { color: #6c757d; }
-
-.captcha-hint.success {
-    background: rgba(40, 167, 69, 0.1);
-    border: 1px solid rgba(40, 167, 69, 0.3);
+[data-bs-theme="dark"] .captcha-error-hint-desc {
+    color: #adb5bd;
 }
 
-.captcha-hint.success .captcha-hint-icon { color: var(--captcha-success); }
-.captcha-hint.success .captcha-hint-title { color: var(--captcha-success); }
-.captcha-hint.success .captcha-hint-desc { color: #6c757d; }
+.captcha-success-hint {
+    background: rgba(40, 167, 69, 0.08);
+    border: 1px solid rgba(40, 167, 69, 0.2);
+    border-radius: var(--captcha-radius-sm);
+    padding: 0.875rem 1rem;
+    margin-top: 0.75rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    animation: captcha-fade-in 0.3s ease;
+}
 
-[data-bs-theme="dark"] .captcha-hint-desc {
+.captcha-success-hint-icon {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+    color: var(--captcha-success);
+    margin-top: 0.125rem;
+}
+
+.captcha-success-hint-text {
+    flex: 1;
+}
+
+.captcha-success-hint-title {
+    font-weight: 600;
+    color: var(--captcha-success);
+    margin-bottom: 0.25rem;
+}
+
+.captcha-success-hint-desc {
+    font-size: 0.875rem;
+    color: #6c757d;
+    line-height: 1.5;
+}
+
+[data-bs-theme="dark"] .captcha-success-hint {
+    background: rgba(40, 167, 69, 0.15);
+    border-color: rgba(40, 167, 69, 0.3);
+}
+
+[data-bs-theme="dark"] .captcha-success-hint-desc {
+    color: #adb5bd;
+}
+
+/* ==================== 友好提示样式 ==================== */
+.captcha-friendly-tip {
+    background: rgba(13, 202, 240, 0.08);
+    border: 1px solid rgba(13, 202, 240, 0.2);
+    border-radius: var(--captcha-radius-sm);
+    padding: 0.875rem 1rem;
+    margin-top: 0.75rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    animation: captcha-fade-in 0.3s ease;
+}
+
+.captcha-friendly-tip-icon {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+    color: var(--captcha-info);
+    margin-top: 0.125rem;
+}
+
+.captcha-friendly-tip-text {
+    flex: 1;
+}
+
+.captcha-friendly-tip-title {
+    font-weight: 600;
+    color: var(--captcha-info);
+    margin-bottom: 0.25rem;
+}
+
+.captcha-friendly-tip-desc {
+    font-size: 0.875rem;
+    color: #6c757d;
+    line-height: 1.5;
+}
+
+[data-bs-theme="dark"] .captcha-friendly-tip {
+    background: rgba(13, 202, 240, 0.15);
+    border-color: rgba(13, 202, 240, 0.3);
+}
+
+[data-bs-theme="dark"] .captcha-friendly-tip-desc {
     color: #adb5bd;
 }
 
@@ -734,6 +877,33 @@
     }
 }
 
+@media (max-width: 768px) {
+    .captcha-card {
+        margin-bottom: 1rem;
+    }
+    
+    .captcha-demo-area {
+        min-height: 140px;
+    }
+    
+    .captcha-btn {
+        padding: 0.625rem 1.125rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .captcha-container {
+        padding: 0.75rem;
+    }
+}
+
+@media (min-width: 1400px) {
+    .captcha-card {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+}
+
 /* 触摸设备优化 */
 @media (hover: none) and (pointer: coarse) {
     .captcha-btn:hover {
@@ -783,11 +953,79 @@
     }
 }
 
-/* GPU加速提示 - 用于复杂动画元素 */
-.gpu-accelerated {
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    perspective: 1000px;
+/* ==================== 无障碍支持增强 ==================== */
+.captcha-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.captcha-sr-only-focusable:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+}
+
+.captcha-interactive {
+    cursor: pointer;
+    transition: var(--captcha-transition);
+}
+
+.captcha-interactive:focus {
+    outline: 2px solid var(--captcha-primary);
+    outline-offset: 2px;
+}
+
+.captcha-interactive:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.captcha-interactive:focus-visible {
+    outline: 2px solid var(--captcha-primary);
+    outline-offset: 2px;
+}
+
+.captcha-keyboard-focus {
+    outline: 2px solid var(--captcha-primary);
+    outline-offset: 2px;
+}
+
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--captcha-primary);
+    color: white;
+    padding: 8px 16px;
+    z-index: 10000;
+    transition: top 0.3s ease;
+    text-decoration: none;
+    border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+    top: 0;
+    outline: 2px solid white;
+    outline-offset: -2px;
+}
+
+[aria-live="polite"]:empty:before {
+    content: ' ';
+}
+
+[role="alert"] {
+    animation: captcha-fade-in 0.3s ease;
 }
 
 /* 图片懒加载占位符样式 */

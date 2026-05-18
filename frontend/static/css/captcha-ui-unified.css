@@ -720,6 +720,25 @@
     }
 }
 
+@media (max-width: 768px) {
+    .captcha-card {
+        margin-bottom: 1rem;
+    }
+}
+
+@media (max-width: 992px) {
+    .captcha-container {
+        padding: 0.75rem;
+    }
+}
+
+@media (min-width: 1400px) {
+    .captcha-card {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+}
+
 /* Touch Device Optimization */
 @media (hover: none) and (pointer: coarse) {
     .captcha-btn:hover {

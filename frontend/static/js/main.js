@@ -19,8 +19,58 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    initKeyboardNavigation();
+    initAccessibilityFeatures();
     injectCaptchaStyles();
 });
+
+function initKeyboardNavigation() {
+    const focusableElements = document.querySelectorAll(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    
+    focusableElements.forEach(el => {
+        el.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    });
+
+    const captchaInteractive = document.querySelectorAll('.captcha-interactive');
+    captchaInteractive.forEach(el => {
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+    });
+}
+
+function initAccessibilityFeatures() {
+    const announcer = document.createElement('div');
+    announcer.setAttribute('aria-live', 'polite');
+    announcer.setAttribute('aria-atomic', 'true');
+    announcer.className = 'captcha-sr-only';
+    announcer.id = 'captcha-announcer';
+    document.body.appendChild(announcer);
+
+    window.captchaAnnounce = function(message) {
+        const announcer = document.getElementById('captcha-announcer');
+        if (announcer) {
+            announcer.textContent = message;
+            setTimeout(() => {
+                announcer.textContent = '';
+            }, 1000);
+        }
+    };
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.body.classList.add('reduce-motion');
+    }
+
+    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => {
+        document.body.classList.toggle('reduce-motion', e.matches);
+    });
+}
 
 function injectCaptchaStyles() {
     if (document.getElementById('captcha-dynamic-styles')) {

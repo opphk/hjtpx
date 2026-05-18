@@ -1167,9 +1167,9 @@
                 </div>
 
                 <!-- 验证码卡片网格 -->
-                <div class="row g-4">
+                <div class="row g-4" role="list" aria-label="验证码类型列表">
                     <!-- 滑块验证卡片 -->
-                    <div class="col-lg-4">
+                    <div class="col-lg-4" role="listitem">
                         <div class="demo-card h-100 shadow-sm fade-in" id="demoSlider" role="region" aria-labelledby="slider-title">
                             <div class="demo-card-header">
                                 <div class="icon-wrap" aria-hidden="true">
@@ -1187,22 +1187,22 @@
                                 <div class="captcha-demo-area" id="sliderDemoArea" role="application" aria-label="滑块验证区域" aria-live="polite">
                                     <div id="captcha-container"></div>
                                 </div>
-                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap" role="group" aria-label="操作按钮">
                                     <button class="btn btn-danger btn-sm captcha-interactive" onclick="switchCaptchaType('slider')" aria-label="开始体验滑块验证" type="button">
                                         <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
                                     </button>
                                     <button class="btn btn-dark btn-sm captcha-interactive" onclick="refreshCaptcha()" aria-label="刷新验证码" type="button">
                                         <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
                                     </button>
-                                    <div class="result-banner" id="sliderResult" role="status" aria-live="polite">
+                                    <div class="result-banner" id="sliderResult" role="status" aria-live="polite" aria-atomic="true">
                                         <i class="fas fa-check-circle" aria-hidden="true"></i>
                                         <span id="sliderResultText"></span>
                                     </div>
                                 </div>
                                 
                                 <!-- 进度指示器 -->
-                                <div class="captcha-progress-container" id="sliderProgressContainer" style="display: none;">
-                                    <div class="captcha-progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <div class="captcha-progress-container" id="sliderProgressContainer" style="display: none;" role="progressbar" aria-label="验证进度" aria-hidden="true">
+                                    <div class="captcha-progress-bar">
                                         <div class="captcha-progress-fill" id="sliderProgressFill" style="width: 0%"></div>
                                     </div>
                                     <div class="captcha-progress-text" id="sliderProgressText">准备中...</div>
@@ -1210,8 +1210,8 @@
                                 
                                 <!-- 难度指示器 -->
                                 <div class="difficulty-indicator mt-2" id="sliderDifficultyIndicator" aria-label="难度等级">
-                                    <span>难度:</span>
-                                    <div class="difficulty-dots" role="img" aria-label="当前难度1级，共3级">
+                                    <span id="sliderDifficultyLabel">难度:</span>
+                                    <div class="difficulty-dots" role="img" aria-label="当前难度1级，共3级" aria-describedby="sliderDifficultyLabel">
                                         <div class="difficulty-dot active" data-level="1" aria-hidden="true"></div>
                                         <div class="difficulty-dot" data-level="2" aria-hidden="true"></div>
                                         <div class="difficulty-dot" data-level="3" aria-hidden="true"></div>
