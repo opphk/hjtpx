@@ -1,14 +1,15 @@
 /**
  * Captcha Environment Detector
  * 环境检测脚本 - 用于性能优化
+ * 增强版：包含自动化工具检测、浏览器指纹分析、网络环境检测
  */
 (function() {
     'use strict';
 
     var CaptchaEnv = {
         
-        automationDetected: false,
-        automationTools: [],
+        // ==================== 基础环境检测 ====================
+        
         // 检测是否为移动设备
         isMobile: function() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -19,6 +20,469 @@
             return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
         },
 
+        // ==================== 自动化工具检测 ====================
+        
+        // 自动化工具检测结果缓存
+        _automationCache: null,
+        
+        // 检测自动化工具
+        detectAutomation: function() {
+            if (this._automationCache) {
+                return this._automationCache;
+            }
+            
+            var results = {
+                isHeadless: false,
+                isPuppeteer: false,
+                isPlaywright: false,
+                isSelenium: false,
+                isCypress: false,
+                isNightmare: false,
+                isTestCafe: false,
+                isWebDriverIO: false,
+                isPhantomJS: false,
+                automationScore: 0,
+                detections: []
+            };
+            
+            var ua = navigator.userAgent.toLowerCase();
+            
+            // Headless Chrome 检测
+            if (ua.indexOf('headless') > -1 || ua.indexOf('phantom') > -1) {
+                results.isHeadless = true;
+                results.automationScore += 30;
+                results.detections.push('headless_chrome_ua');
+            }
+            
+            // Puppeteer 检测
+            if (ua.indexOf('puppeteer') > -1 || document.$cdc_asdjflasutopfhvcZLmcfl_) {
+                results.isPuppeteer = true;
+                results.automationScore += 40;
+                results.detections.push('puppeteer_detected');
+            }
+            
+            // Playwright 检测
+            if (window.__playwright__ || window.__pw_tags || window.__pw_resume__) {
+                results.isPlaywright = true;
+                results.automationScore += 45;
+                results.detections.push('playwright_detected');
+            }
+            
+            // Selenium 检测
+            if (ua.indexOf('selenium') > -1 || ua.indexOf('webdriver') > -1) {
+                results.isSelenium = true;
+                results.automationScore += 35;
+                results.detections.push('selenium_webdriver_ua');
+            }
+            
+            // Cypress 检测
+            if (window.__cypress__ || ua.indexOf('cypress') > -1) {
+                results.isCypress = true;
+                results.automationScore += 40;
+                results.detections.push('cypress_detected');
+            }
+            
+            // Nightmare/Electron 检测
+            if (window.Nightmare || ua.indexOf('nightmare') > -1 || ua.indexOf('electron') > -1) {
+                results.isNightmare = true;
+                results.automationScore += 30;
+                results.detections.push('nightmare_electron_detected');
+            }
+            
+            // TestCafe 检测
+            if (window.__TESTCAFE || ua.indexOf('testcafe') > -1) {
+                results.isTestCafe = true;
+                results.automationScore += 35;
+                results.detections.push('testcafe_detected');
+            }
+            
+            // WebDriverIO 检测
+            if (window.WebDriver || ua.indexOf('webdriverio') > -1 || ua.indexOf('wdio') > -1) {
+                results.isWebDriverIO = true;
+                results.automationScore += 35;
+                results.detections.push('webdriverio_detected');
+            }
+            
+            // PhantomJS 检测
+            if (ua.indexOf('phantomjs') > -1) {
+                results.isPhantomJS = true;
+                results.automationScore += 40;
+                results.detections.push('phantomjs_detected');
+            }
+            
+            // navigator.webdriver 检测
+            if (navigator.webdriver === true) {
+                results.automationScore += 35;
+                results.detections.push('navigator_webdriver_true');
+            }
+            
+            // 无插件检测
+            if (navigator.plugins && navigator.plugins.length === 0) {
+                results.automationScore += 15;
+                results.detections.push('no_plugins');
+            }
+            
+            // 无语言设置检测
+            if (navigator.languages && navigator.languages.length === 0) {
+                results.automationScore += 15;
+                results.detections.push('no_languages');
+            }
+            
+            // WebGL 软件渲染器检测
+            try {
+                var canvas = document.createElement('canvas');
+                var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        if (renderer && (renderer.indexOf('SwiftShader') > -1 || 
+                            renderer.indexOf('llvmpipe') > -1 || 
+                            renderer.indexOf('Software') > -1)) {
+                            results.automationScore += 25;
+                            results.detections.push('software_rendering_detected');
+                        }
+                    }
+                }
+            } catch (e) {}
+            
+            // 限制分数在0-100之间
+            results.automationScore = Math.min(100, Math.max(0, results.automationScore));
+            
+            this._automationCache = results;
+            return results;
+        },
+        
+        // ==================== 浏览器指纹分析 ====================
+        
+        // 生成浏览器指纹
+        generateFingerprint: function() {
+            var components = [];
+            
+            // User Agent
+            components.push('ua:' + (navigator.userAgent || ''));
+            
+            // 语言
+            components.push('lang:' + (navigator.language || ''));
+            components.push('langs:' + ((navigator.languages || []).join(',')));
+            
+            // 屏幕信息
+            components.push('screen:' + (screen.width || 0) + 'x' + (screen.height || 0) + 'x' + (screen.colorDepth || 0));
+            
+            // 时区
+            components.push('tz:' + (new Date().getTimezoneOffset() || 0));
+            
+            // 平台
+            components.push('plat:' + (navigator.platform || ''));
+            
+            // 硬件信息
+            components.push('cpu:' + (navigator.hardwareConcurrency || 0));
+            components.push('mem:' + (navigator.deviceMemory || 0));
+            components.push('touch:' + (navigator.maxTouchPoints || 0));
+            
+            // Canvas 指纹
+            try {
+                var canvas = document.createElement('canvas');
+                canvas.width = 200;
+                canvas.height = 50;
+                var ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.textBaseline = 'top';
+                    ctx.font = '14px Arial';
+                    ctx.fillStyle = '#f60';
+                    ctx.fillRect(0, 0, 50, 50);
+                    ctx.fillStyle = '#069';
+                    ctx.fillText('fingerprint', 10, 20);
+                    var dataUrl = canvas.toDataURL();
+                    components.push('canvas:' + dataUrl.substring(0, 100));
+                }
+            } catch (e) {
+                components.push('canvas:error');
+            }
+            
+            // WebGL 信息
+            try {
+                var canvas = document.createElement('canvas');
+                var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        var vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                        var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        components.push('webgl_vendor:' + (vendor || ''));
+                        components.push('webgl_renderer:' + (renderer || ''));
+                    }
+                }
+            } catch (e) {
+                components.push('webgl:error');
+            }
+            
+            // 插件
+            var plugins = [];
+            if (navigator.plugins) {
+                for (var i = 0; i < navigator.plugins.length; i++) {
+                    plugins.push(navigator.plugins[i].name);
+                }
+            }
+            components.push('plugins:' + plugins.join(','));
+            
+            return this._hashString(components.join('|'));
+        },
+        
+        // 计算字符串哈希
+        _hashString: function(str) {
+            var hash = 0;
+            for (var i = 0; i < str.length; i++) {
+                var char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return Math.abs(hash).toString(16);
+        },
+        
+        // 分析指纹异常
+        analyzeFingerprintAnomalies: function() {
+            var anomalies = [];
+            
+            // Canvas 指纹异常
+            try {
+                var canvas = document.createElement('canvas');
+                var ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.textBaseline = 'top';
+                    ctx.font = '14px Arial';
+                    ctx.fillText('test', 2, 2);
+                    var dataURL = canvas.toDataURL();
+                    if (dataURL.indexOf('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==') === 0) {
+                        anomalies.push('canvas_fingerprint_missing');
+                    }
+                }
+            } catch (e) {
+                anomalies.push('canvas_access_blocked');
+            }
+            
+            // WebGL 异常
+            try {
+                var canvas = document.createElement('canvas');
+                var gl = canvas.getContext('webgl');
+                if (!gl) {
+                    anomalies.push('webgl_not_supported');
+                } else {
+                    var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (!debugInfo) {
+                        anomalies.push('webgl_debug_blocked');
+                    }
+                }
+            } catch (e) {
+                anomalies.push('webgl_access_error');
+            }
+            
+            // 语言异常
+            if (!navigator.languages || navigator.languages.length === 0) {
+                anomalies.push('no_languages');
+            } else if (navigator.languages.length === 1 && navigator.languages[0] === 'en-US') {
+                anomalies.push('default_language_only');
+            }
+            
+            // 插件异常
+            if (!navigator.plugins || navigator.plugins.length === 0) {
+                anomalies.push('no_plugins');
+            }
+            
+            return anomalies;
+        },
+        
+        // ==================== 网络环境检测 ====================
+        
+        // 检测VPN
+        detectVPN: function() {
+            var results = {
+                isVPN: false,
+                confidence: 0,
+                evidence: []
+            };
+            
+            // WebRTC 检测
+            try {
+                var RTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+                if (RTCPeerConnection) {
+                    var pc = new RTCPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+                    pc.createDataChannel('');
+                    pc.onicecandidate = function(evt) {
+                        if (evt.candidate) {
+                            var candidate = evt.candidate.candidate;
+                            if (candidate.indexOf('srflx') > -1 || candidate.indexOf('relay') > -1) {
+                                results.isVPN = true;
+                                results.confidence += 30;
+                                results.evidence.push('webrtc_candidate_type');
+                            }
+                        }
+                    };
+                    pc.createOffer().then(function(offer) {
+                        pc.setLocalDescription(offer);
+                    }).catch(function() {});
+                    setTimeout(function() { pc.close(); }, 1000);
+                }
+            } catch (e) {}
+            
+            // 连接类型检测
+            if (navigator.connection) {
+                var conn = navigator.connection;
+                if (conn.type === 'vpn' || conn.type === 'pptp' || conn.type === 'tunnel') {
+                    results.isVPN = true;
+                    results.confidence += 50;
+                    results.evidence.push('connection_type_vpn');
+                }
+            }
+            
+            return results;
+        },
+        
+        // 检测代理
+        detectProxy: function() {
+            var results = {
+                isProxy: false,
+                confidence: 0,
+                evidence: []
+            };
+            
+            // WebRTC 本地IP泄露
+            try {
+                var RTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+                if (RTCPeerConnection) {
+                    var pc = new RTCPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+                    pc.createDataChannel('');
+                    pc.onicecandidate = function(evt) {
+                        if (evt.candidate) {
+                            var candidate = evt.candidate.candidate;
+                            if (candidate.indexOf('srflx') > -1 || candidate.indexOf('prflx') > -1) {
+                                results.isProxy = true;
+                                results.confidence += 25;
+                                results.evidence.push('webrtc_srflx_candidate');
+                            }
+                        }
+                    };
+                    pc.createOffer().then(function(offer) {
+                        pc.setLocalDescription(offer);
+                    }).catch(function() {});
+                    setTimeout(function() { pc.close(); }, 1000);
+                }
+            } catch (e) {}
+            
+            // 连接类型
+            if (navigator.connection) {
+                var conn = navigator.connection;
+                if (conn.type === 'proxy' || conn.type === 'socks') {
+                    results.isProxy = true;
+                    results.confidence += 60;
+                    results.evidence.push('connection_type_proxy');
+                }
+            }
+            
+            return results;
+        },
+        
+        // 检测 Tor
+        detectTor: function() {
+            var results = {
+                isTor: false,
+                confidence: 0,
+                evidence: []
+            };
+            
+            // Tor 检测模式
+            var ua = navigator.userAgent.toLowerCase();
+            if (ua.indexOf('tor') > -1 || ua.indexOf('onion') > -1) {
+                results.isTor = true;
+                results.confidence += 70;
+                results.evidence.push('tor_ua_signature');
+            }
+            
+            // WebRTC Tor检测
+            try {
+                var RTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+                if (RTCPeerConnection) {
+                    var pc = new RTCPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+                    pc.createDataChannel('');
+                    pc.onicecandidate = function(evt) {
+                        if (evt.candidate) {
+                            var candidate = evt.candidate.candidate;
+                            if (candidate.indexOf('tcp') > -1 && candidate.indexOf('typel') > -1) {
+                                results.isTor = true;
+                                results.confidence += 50;
+                                results.evidence.push('tor_tcp_candidate');
+                            }
+                        }
+                    };
+                    pc.createOffer().then(function(offer) {
+                        pc.setLocalDescription(offer);
+                    }).catch(function() {});
+                    setTimeout(function() { pc.close(); }, 1000);
+                }
+            } catch (e) {}
+            
+            return results;
+        },
+        
+        // 网络延迟分析
+        analyzeNetworkLatency: function() {
+            var results = {
+                avgLatency: 0,
+                variance: 0,
+                anomalies: []
+            };
+            
+            // 测量延迟
+            var latencies = [];
+            var startTime = performance.now();
+            
+            // 简单的延迟测量（使用本地资源）
+            try {
+                var testStart = Date.now();
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', window.location.pathname + '?t=' + testStart, false);
+                xhr.send();
+                var latency = Date.now() - testStart;
+                latencies.push(latency);
+            } catch (e) {
+                latencies.push(0);
+            }
+            
+            // 计算平均延迟
+            if (latencies.length > 0) {
+                var sum = 0;
+                for (var i = 0; i < latencies.length; i++) {
+                    sum += latencies[i];
+                }
+                results.avgLatency = sum / latencies.length;
+                
+                // 计算方差
+                var sqSum = 0;
+                for (var i = 0; i < latencies.length; i++) {
+                    sqSum += Math.pow(latencies[i] - results.avgLatency, 2);
+                }
+                results.variance = sqSum / latencies.length;
+                
+                // 检测异常
+                if (results.avgLatency > 1000) {
+                    results.anomalies.push('very_high_latency');
+                }
+                if (results.variance > 100) {
+                    results.anomalies.push('high_variance');
+                }
+            }
+            
+            return results;
+        },
+        
+        // ==================== 设备性能检测 ====================
+        
         // 检测是否为低性能设备
         isLowPerformance: function() {
             return new Promise(function(resolve) {
@@ -246,12 +710,150 @@
                 network: this.getNetworkInfo(),
                 features: this.supports,
                 performanceLevel: this.getPerformanceLevel(),
-                recommendedQuality: this.getRecommendedQuality(),
-                automation: {
-                    detected: this.automationDetected,
-                    tools: this.automationTools
-                }
+                recommendedQuality: this.getRecommendedQuality()
             };
+        },
+        
+        // ==================== 综合安全检测报告 ====================
+        
+        // 获取完整的环境安全报告
+        getSecurityReport: function() {
+            var automation = this.detectAutomation();
+            var fingerprint = this.generateFingerprint();
+            var fingerprintAnomalies = this.analyzeFingerprintAnomalies();
+            var vpn = this.detectVPN();
+            var proxy = this.detectProxy();
+            var tor = this.detectTor();
+            var networkLatency = this.analyzeNetworkLatency();
+            
+            var riskScore = 0;
+            var riskFactors = [];
+            
+            // 自动化工具风险
+            if (automation.automationScore > 0) {
+                riskScore += automation.automationScore;
+                riskFactors.push({
+                    type: 'automation',
+                    score: automation.automationScore,
+                    details: automation.detections
+                });
+            }
+            
+            // 指纹异常风险
+            if (fingerprintAnomalies.length > 0) {
+                riskScore += fingerprintAnomalies.length * 10;
+                riskFactors.push({
+                    type: 'fingerprint_anomaly',
+                    score: fingerprintAnomalies.length * 10,
+                    details: fingerprintAnomalies
+                });
+            }
+            
+            // VPN 风险
+            if (vpn.isVPN) {
+                riskScore += vpn.confidence * 0.5;
+                riskFactors.push({
+                    type: 'vpn',
+                    score: vpn.confidence * 0.5,
+                    details: vpn.evidence
+                });
+            }
+            
+            // 代理风险
+            if (proxy.isProxy) {
+                riskScore += proxy.confidence * 0.4;
+                riskFactors.push({
+                    type: 'proxy',
+                    score: proxy.confidence * 0.4,
+                    details: proxy.evidence
+                });
+            }
+            
+            // Tor 风险
+            if (tor.isTor) {
+                riskScore += tor.confidence * 0.6;
+                riskFactors.push({
+                    type: 'tor',
+                    score: tor.confidence * 0.6,
+                    details: tor.evidence
+                });
+            }
+            
+            // 网络延迟异常风险
+            if (networkLatency.anomalies.length > 0) {
+                riskScore += networkLatency.anomalies.length * 5;
+                riskFactors.push({
+                    type: 'network_latency',
+                    score: networkLatency.anomalies.length * 5,
+                    details: networkLatency.anomalies
+                });
+            }
+            
+            // 限制风险分数在0-100之间
+            riskScore = Math.min(100, Math.max(0, riskScore));
+            
+            var riskLevel = 'low';
+            if (riskScore >= 70) {
+                riskLevel = 'critical';
+            } else if (riskScore >= 50) {
+                riskLevel = 'high';
+            } else if (riskScore >= 30) {
+                riskLevel = 'medium';
+            }
+            
+            return {
+                timestamp: Date.now(),
+                fingerprint: fingerprint,
+                riskScore: riskScore,
+                riskLevel: riskLevel,
+                riskFactors: riskFactors,
+                automation: automation,
+                network: {
+                    vpn: vpn,
+                    proxy: proxy,
+                    tor: tor,
+                    latency: networkLatency
+                },
+                anomalies: fingerprintAnomalies,
+                recommendations: this._generateRecommendations(riskLevel, riskFactors)
+            };
+        },
+        
+        // 生成安全建议
+        _generateRecommendations: function(riskLevel, riskFactors) {
+            var recommendations = [];
+            
+            if (riskLevel === 'critical' || riskLevel === 'high') {
+                recommendations.push('检测到高风险自动化工具活动，建议启用额外验证');
+            }
+            
+            for (var i = 0; i < riskFactors.length; i++) {
+                var factor = riskFactors[i];
+                
+                switch (factor.type) {
+                    case 'automation':
+                        recommendations.push('检测到自动化框架使用，建议进行行为分析');
+                        break;
+                    case 'fingerprint_anomaly':
+                        recommendations.push('检测到指纹异常，可能存在隐私保护或自动化工具');
+                        break;
+                    case 'vpn':
+                        recommendations.push('检测到VPN连接');
+                        break;
+                    case 'proxy':
+                        recommendations.push('检测到代理服务器');
+                        break;
+                    case 'tor':
+                        recommendations.push('检测到Tor网络');
+                        break;
+                }
+            }
+            
+            if (recommendations.length === 0) {
+                recommendations.push('环境检测正常');
+            }
+            
+            return recommendations;
         },
 
         // 检测首屏渲染完成时间
@@ -440,411 +1042,6 @@
         
         // 根据质量推荐应用图片质量
         document.documentElement.setAttribute('data-captcha-quality', report.recommendedQuality);
-    }
-    
-    CaptchaEnv.detectAutomationTools = function() {
-        var detected = [];
-        
-        if (navigator.webdriver) {
-            detected.push('webdriver');
-        }
-        
-        if (window.callPhantom || window._phantom || window.phantom) {
-            detected.push('phantomjs');
-        }
-        
-        if (window.__selenium || window.__webdriver || window.selenium) {
-            detected.push('selenium');
-        }
-        
-        if (window.__puppeteer__ || window.puppeteer) {
-            detected.push('puppeteer');
-        }
-        
-        if (window.__playwright__ || window.playwright) {
-            detected.push('playwright');
-        }
-        
-        var cdcPattern = /cdc_/;
-        var ctwPattern = /ctw_/;
-        Object.keys(window).forEach(function(key) {
-            if (cdcPattern.test(key) || ctwPattern.test(key)) {
-                if (detected.indexOf('cdp_object') === -1) {
-                    detected.push('cdp_object');
-                }
-            }
-        });
-        
-        if (navigator.plugins.length === 0) {
-            detected.push('no_plugins');
-        }
-        
-        if (navigator.mimeTypes && navigator.mimeTypes.length === 0) {
-            detected.push('no_mimetypes');
-        }
-        
-        var screen = window.screen;
-        if (screen && (screen.width === 0 || screen.height === 0 || screen.width === 1 || screen.height === 1)) {
-            detected.push('abnormal_screen_size');
-        }
-        
-        try {
-            var testCanvas = document.createElement('canvas');
-            testCanvas.width = 200;
-            testCanvas.height = 100;
-            var ctx = testCanvas.getContext('2d');
-            ctx.fillText('test', 10, 10);
-            var dataURL = testCanvas.toDataURL();
-            if (dataURL === 'data:,') {
-                detected.push('canvas_blocked');
-            }
-        } catch (e) {
-            detected.push('canvas_error');
-        }
-        
-        try {
-            var testElement = document.createElement('div');
-            testElement.style.transform = 'translate3d(10px, 10px, 10px)';
-            var computedStyle = window.getComputedStyle(testElement);
-            var transformValue = computedStyle.getPropertyValue('transform');
-            if (!transformValue || transformValue === 'none') {
-                detected.push('css_transform_blocked');
-            }
-        } catch (e) {
-            detected.push('css_detection_error');
-        }
-        
-        try {
-            var testEle = document.createElement('div');
-            testEle.style.pointerEvents = 'none';
-            document.body.appendChild(testEle);
-            var rect = testEle.getBoundingClientRect();
-            document.body.removeChild(testEle);
-        } catch (e) {
-            detected.push('bounding_client_rect_error');
-        }
-        
-        try {
-            var audioCtx = window.AudioContext || window.webkitAudioContext;
-            if (audioCtx) {
-                var context = new audioCtx();
-                var oscillator = context.createOscillator();
-                var gainNode = context.createGain();
-                oscillator.connect(gainNode);
-                gainNode.connect(context.destination);
-                var startTime = Date.now();
-                oscillator.start();
-                var endTime = Date.now();
-                if (endTime - startTime > 100) {
-                    detected.push('audio_context_slow');
-                }
-                oscillator.stop();
-                context.close();
-            }
-        } catch (e) {
-            detected.push('audio_context_error');
-        }
-        
-        try {
-            var canvas = document.createElement('canvas');
-            canvas.width = 100;
-            canvas.height = 100;
-            var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            if (gl) {
-                var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                if (debugInfo) {
-                    var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                    var vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-                    
-                    var softwareRenderers = ['swiftshader', 'llvmpipe', 'softpipe', 'mesa', 'software'];
-                    softwareRenderers.forEach(function(r) {
-                        if (renderer.toLowerCase().indexOf(r) !== -1) {
-                            detected.push('software_renderer');
-                        }
-                    });
-                    
-                    var headlessRenderers = ['headless', 'null'];
-                    headlessRenderers.forEach(function(r) {
-                        if (renderer.toLowerCase().indexOf(r) !== -1) {
-                            detected.push('headless_renderer');
-                        }
-                    });
-                }
-            }
-        } catch (e) {
-            detected.push('webgl_detection_error');
-        }
-        
-        try {
-            var perf = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance;
-            if (perf && perf.timing) {
-                var loadTime = perf.timing.loadEventEnd - perf.timing.navigationStart;
-                if (loadTime < 500 && loadTime > 0) {
-                    detected.push('very_fast_load');
-                }
-            }
-        } catch (e) {
-            detected.push('performance_timing_error');
-        }
-        
-        var languages = navigator.languages || [navigator.language];
-        if (languages.length === 0 || (languages.length === 1 && languages[0] === 'en-US')) {
-            detected.push('suspicious_languages');
-        }
-        
-        try {
-            var testFunc = function() {};
-            var testProxy = new Proxy(testFunc, {});
-            detected.push('proxy_supported');
-        } catch (e) {
-        }
-        
-        try {
-            var testInt8 = new Int8Array(1);
-            if (testInt8.length !== 1) {
-                detected.push('int8array_manipulated');
-            }
-        } catch (e) {
-            detected.push('int8array_error');
-        }
-        
-        try {
-            var elem = document.createElement('canvas');
-            elem.width = 10;
-            elem.height = 10;
-            var ctx2d = elem.getContext('2d');
-            var imageData = ctx2d.createImageData(10, 10);
-            if (imageData.width !== 10 || imageData.height !== 10) {
-                detected.push('imagedata_manipulated');
-            }
-        } catch (e) {
-            detected.push('imagedata_error');
-        }
-        
-        CaptchaEnv.automationDetected = detected.length > 0;
-        CaptchaEnv.automationTools = detected;
-        
-        return detected;
-    };
-    
-    CaptchaEnv.getAutomationRiskScore = function() {
-        var tools = CaptchaEnv.automationTools;
-        var score = 0;
-        
-        var riskLevels = {
-            'webdriver': 40,
-            'selenium': 35,
-            'puppeteer': 30,
-            'playwright': 30,
-            'phantomjs': 35,
-            'cdp_object': 25,
-            'no_plugins': 15,
-            'no_mimetypes': 15,
-            'abnormal_screen_size': 20,
-            'canvas_blocked': 25,
-            'css_transform_blocked': 15,
-            'software_renderer': 30,
-            'headless_renderer': 35,
-            'audio_context_slow': 20,
-            'very_fast_load': 25,
-            'suspicious_languages': 10,
-            'proxy_supported': 15,
-            'int8array_manipulated': 20,
-            'imagedata_manipulated': 20,
-            'canvas_error': 30,
-            'css_detection_error': 20,
-            'bounding_client_rect_error': 20,
-            'audio_context_error': 25,
-            'webgl_detection_error': 20,
-            'performance_timing_error': 15
-        };
-        
-        tools.forEach(function(tool) {
-            score += riskLevels[tool] || 10;
-        });
-        
-        return Math.min(score, 100);
-    };
-    
-    CaptchaEnv.getAutomationReport = function() {
-        var tools = CaptchaEnv.automationTools;
-        return {
-            detected: CaptchaEnv.automationDetected,
-            tools: tools,
-            riskScore: CaptchaEnv.getAutomationRiskScore(),
-            summary: tools.length === 0 ? 'No automation detected' : 'Automation tools detected: ' + tools.join(', '),
-            timestamp: new Date().toISOString()
-        };
-    };
-    
-    CaptchaEnv.detectVM = function() {
-        var indicators = [];
-        
-        var vmStrings = [
-            'virtualbox', 'vbox', 'vmware', 'virtual', 'qemu', 'kvm', 
-            'xen', 'parallels', 'hyper-v', 'bochs', 'docker', 'container'
-        ];
-        
-        var userAgent = navigator.userAgent.toLowerCase();
-        vmStrings.forEach(function(str) {
-            if (userAgent.indexOf(str) !== -1) {
-                indicators.push('useragent_' + str);
-            }
-        });
-        
-        try {
-            var screenInfo = window.screen;
-            if (screenInfo) {
-                if (screenInfo.width === 800 && screenInfo.height === 600) {
-                    indicators.push('vm_resolution_800x600');
-                }
-                if (screenInfo.colorDepth === 0) {
-                    indicators.push('vm_colordepth_0');
-                }
-            }
-        } catch (e) {
-            indicators.push('screen_detection_error');
-        }
-        
-        try {
-            var canvas = document.createElement('canvas');
-            var gl = canvas.getContext('webgl');
-            if (gl) {
-                var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                if (debugInfo) {
-                    var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                    var vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-                    
-                    var vmRenderers = ['vmware', 'virtualbox', 'virtual', 'qemu', 'parallels', 'xen'];
-                    vmRenderers.forEach(function(r) {
-                        if (renderer.toLowerCase().indexOf(r) !== -1) {
-                            indicators.push('webgl_' + r);
-                        }
-                        if (vendor.toLowerCase().indexOf(r) !== -1) {
-                            indicators.push('webgl_vendor_' + r);
-                        }
-                    });
-                }
-            }
-        } catch (e) {
-            indicators.push('webgl_vm_detection_error');
-        }
-        
-        try {
-            var platform = navigator.platform;
-            if (platform && platform.toLowerCase().indexOf('virtual') !== -1) {
-                indicators.push('platform_virtual');
-            }
-        } catch (e) {
-            indicators.push('platform_detection_error');
-        }
-        
-        try {
-            var hardwareConcurrency = navigator.hardwareConcurrency;
-            if (hardwareConcurrency && hardwareConcurrency > 16) {
-                indicators.push('suspicious_high_cpu_cores');
-            }
-            if (hardwareConcurrency && hardwareConcurrency < 2) {
-                indicators.push('suspicious_low_cpu_cores');
-            }
-        } catch (e) {
-            indicators.push('hardware_concurrency_error');
-        }
-        
-        return indicators;
-    };
-    
-    CaptchaEnv.detectSandbox = function() {
-        var indicators = [];
-        
-        try {
-            var startTime = performance.now();
-            var endTime = performance.now();
-            var executionTime = endTime - startTime;
-            if (executionTime === 0) {
-                indicators.push('suspicious_zero_timing');
-            }
-        } catch (e) {
-            indicators.push('timing_detection_error');
-        }
-        
-        try {
-            var testArray = new Uint8Array(1);
-            testArray[0] = 1;
-            if (testArray[0] !== 1) {
-                indicators.push('typed_array_manipulated');
-            }
-        } catch (e) {
-            indicators.push('typed_array_error');
-        }
-        
-        try {
-            var testDate = new Date();
-            var year = testDate.getFullYear();
-            if (year < 2000 || year > 2100) {
-                indicators.push('suspicious_year');
-            }
-        } catch (e) {
-            indicators.push('date_detection_error');
-        }
-        
-        try {
-            if (navigator.deviceMemory && navigator.deviceMemory < 1) {
-                indicators.push('very_low_memory');
-            }
-        } catch (e) {
-            indicators.push('memory_detection_error');
-        }
-        
-        return indicators;
-    };
-    
-    CaptchaEnv.getEnvironmentRiskReport = function() {
-        var automationTools = CaptchaEnv.detectAutomationTools();
-        var vmIndicators = CaptchaEnv.detectVM();
-        var sandboxIndicators = CaptchaEnv.detectSandbox();
-        
-        var allIndicators = automationTools.concat(vmIndicators).concat(sandboxIndicators);
-        
-        var riskScore = 0;
-        riskScore += CaptchaEnv.getAutomationRiskScore();
-        riskScore += vmIndicators.length * 15;
-        riskScore += sandboxIndicators.length * 10;
-        
-        return {
-            automation: {
-                detected: CaptchaEnv.automationDetected,
-                tools: automationTools,
-                riskScore: CaptchaEnv.getAutomationRiskScore()
-            },
-            vm: {
-                detected: vmIndicators.length > 0,
-                indicators: vmIndicators,
-                riskScore: vmIndicators.length * 15
-            },
-            sandbox: {
-                detected: sandboxIndicators.length > 0,
-                indicators: sandboxIndicators,
-                riskScore: sandboxIndicators.length * 10
-            },
-            overallRiskScore: Math.min(riskScore, 100),
-            allIndicators: allIndicators,
-            timestamp: new Date().toISOString()
-        };
-    };
-    
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() {
-            CaptchaEnv.detectAutomationTools();
-            CaptchaEnv.detectVM();
-            CaptchaEnv.detectSandbox();
-            applyOptimizations();
-        });
-    } else {
-        CaptchaEnv.detectAutomationTools();
-        CaptchaEnv.detectVM();
-        CaptchaEnv.detectSandbox();
-        applyOptimizations();
     }
 
 })();

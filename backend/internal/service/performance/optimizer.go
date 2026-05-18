@@ -204,7 +204,7 @@ func (do *DatabaseOptimizer) Optimize() *DatabaseOptimizationResult {
 
 	if do.poolOptimizer != nil {
 		if metrics.WaitCount > int64(do.aggressionLevel*20) {
-			do.poolOptimizer.Optimize()
+			do.poolOptimizer.CheckAndOptimize()
 			result.PoolResized = true
 		}
 	}

@@ -354,7 +354,7 @@ func TestFingerprintStabilityValidation(t *testing.T) {
 		svc.UpdateFingerprintStabilityForTest(stableFingerprint, fmt.Sprintf("user_%d", i))
 	}
 
-	isStable, score := svc.ValidateFingerprint(stableFingerprint, 3, 30*24*time.Hour)
+	isStable, score := svc.ValidateFingerprintStability(stableFingerprint, 3, 30*24*time.Hour)
 
 	t.Logf("稳定性验证结果: %v (分数: %.2f)", isStable, score)
 

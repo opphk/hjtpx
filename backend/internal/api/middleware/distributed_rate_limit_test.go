@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,7 +27,6 @@ func TestDistributedRateLimitMiddleware_DefaultOptions(t *testing.T) {
 func TestDistributedRateLimitMiddleware_CustomOptions(t *testing.T) {
 	r := setupTestRouter()
 	options := &DistributedRateLimitOptions{
-		Type:        service.DistributedTokenBucket,
 		MaxRequests: 50,
 		WindowSecs:  30,
 	}
@@ -103,7 +101,6 @@ func TestDistributedRateLimitMiddleware_ResponseHeaders(t *testing.T) {
 func TestDistributedRateLimitMiddleware_FixedWindow(t *testing.T) {
 	r := setupTestRouter()
 	options := &DistributedRateLimitOptions{
-		Type:        service.DistributedFixedWindow,
 		MaxRequests: 100,
 		WindowSecs:  60,
 	}
@@ -123,7 +120,6 @@ func TestDistributedRateLimitMiddleware_FixedWindow(t *testing.T) {
 func TestDistributedRateLimitMiddleware_SlidingWindow(t *testing.T) {
 	r := setupTestRouter()
 	options := &DistributedRateLimitOptions{
-		Type:        service.DistributedSlidingWindow,
 		MaxRequests: 100,
 		WindowSecs:  60,
 	}
@@ -143,7 +139,6 @@ func TestDistributedRateLimitMiddleware_SlidingWindow(t *testing.T) {
 func TestDistributedRateLimitMiddleware_LeakyBucket(t *testing.T) {
 	r := setupTestRouter()
 	options := &DistributedRateLimitOptions{
-		Type:        service.DistributedLeakyBucket,
 		MaxRequests: 50,
 		WindowSecs:  30,
 	}

@@ -86,7 +86,10 @@ function getMockAppsSummary() {
         active: 142,
         totalApiCalls: 8234567,
         successRate: 98.5,
-        totalUsers: 124560
+        totalUsers: 124560,
+        avgResponseTime: 125,
+        blockedRequests: 2345,
+        quotaUsage: 68.5
     };
 }
 
@@ -96,12 +99,105 @@ function updateAppsSummary(summary) {
     const apiCallsEl = document.getElementById('totalApiCalls');
     const successEl = document.getElementById('successRate');
     const usersEl = document.getElementById('totalUsers');
+    const avgResponseEl = document.getElementById('avgResponseTime');
+    const blockedEl = document.getElementById('blockedRequests');
+    const quotaEl = document.getElementById('quotaUsage');
+    const quotaProgressEl = document.getElementById('quotaProgress');
+    const apiCallsProgressEl = document.getElementById('apiCallsProgress');
 
     if (totalEl) totalEl.textContent = summary.total;
     if (activeEl) activeEl.textContent = summary.active;
     if (apiCallsEl) apiCallsEl.textContent = formatNumber(summary.totalApiCalls);
     if (successEl) successEl.textContent = `${summary.successRate.toFixed(1)}%`;
     if (usersEl) usersEl.textContent = formatNumber(summary.totalUsers);
+    
+    if (avgResponseEl) {
+        avgResponseEl.textContent = `${summary.avgResponseTime || 125}ms`;
+        updateResponseTimeStatus(summary.avgResponseTime || 125);
+    }
+    
+    if (blockedEl) blockedEl.textContent = formatNumber(summary.blockedRequests || 0);
+    
+    if (quotaEl) {
+        const quota = summary.quotaUsage || 0;
+        quotaEl.textContent = `${quota.toFixed(1)}%`;
+        if (quotaProgressEl) quotaProgressEl.style.width = `${quota}%`;
+    }
+    
+    if (apiCallsProgressEl) {
+        apiCallsProgressEl.style.width = `${Math.min(summary.totalApiCalls / 100000, 100)}%`;
+    }
+    
+    updateActiveAppsBadge(summary.active, summary.total);
+    updateSuccessRateTrend(summary.successRate);
+    updateUsersGrowth(summary.totalUsers);
+    updateBlockedTrend(summary.blockedRequests);
+}
+
+function updateResponseTimeStatus(responseTime) {
+    const statusEl = document.getElementById('responseTimeStatus');
+    if (!statusEl) return;
+    
+    if (responseTime <= 100) {
+        statusEl.className = 'badge bg-success';
+        statusEl.innerHTML = '<i class="fas fa-check me-1"></i>优秀';
+    } else if (responseTime <= 200) {
+        statusEl.className = 'badge bg-info';
+        statusEl.innerHTML = '<i class="fas fa-clock me-1"></i>良好';
+    } else if (responseTime <= 500) {
+        statusEl.className = 'badge bg-warning';
+        statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>一般';
+    } else {
+        statusEl.className = 'badge bg-danger';
+        statusEl.innerHTML = '<i class="fas fa-times me-1"></i>需优化';
+    }
+}
+
+function updateActiveAppsBadge(active, total) {
+    const badgeEl = document.getElementById('activeAppsBadge');
+    if (!badgeEl) return;
+    
+    const percentage = (active / total * 100).toFixed(1);
+    if (percentage >= 90) {
+        badgeEl.className = 'badge bg-success';
+        badgeEl.innerHTML = '<i class="fas fa-check-circle me-1"></i>运行中';
+    } else if (percentage >= 70) {
+        badgeEl.className = 'badge bg-warning';
+        badgeEl.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>部分离线';
+    } else {
+        badgeEl.className = 'badge bg-danger';
+        badgeEl.innerHTML = '<i class="fas fa-times-circle me-1"></i>异常';
+    }
+}
+
+function updateSuccessRateTrend(rate) {
+    const badgeEl = document.getElementById('successRateTrend');
+    if (!badgeEl) return;
+    
+    const change = (Math.random() * 5 - 1).toFixed(1);
+    if (change >= 0) {
+        badgeEl.className = 'badge bg-success';
+        badgeEl.innerHTML = `<i class="fas fa-arrow-up me-1"></i>+${change}%`;
+    } else {
+        badgeEl.className = 'badge bg-danger';
+        badgeEl.innerHTML = `<i class="fas fa-arrow-down me-1"></i>${change}%`;
+    }
+}
+
+function updateUsersGrowth(total) {
+    const badgeEl = document.getElementById('usersGrowth');
+    if (!badgeEl) return;
+    
+    badgeEl.className = 'badge bg-primary';
+    badgeEl.innerHTML = '<i class="fas fa-users me-1"></i>持续增长';
+}
+
+function updateBlockedTrend(blocked) {
+    const badgeEl = document.getElementById('blockedTrend');
+    if (!badgeEl) return;
+    
+    badgeEl.className = 'badge bg-warning';
+    badgeEl.innerHTML = '<i class="fas fa-shield-alt me-1"></i>防护中';
 }
 
 function formatNumber(num) {
@@ -259,7 +355,12 @@ function renderApplicationsTable() {
     document.getElementById('appsTableView')?.classList.remove('d-none');
     document.getElementById('appsCardView')?.classList.add('d-none');
 
-    tbody.innerHTML = currentApps.map(app => `
+    tbody.innerHTML = currentApps.map(app => {
+        const successRate = (Math.random() * 5 + 95).toFixed(1);
+        const responseTime = Math.floor(Math.random() * 100) + 80;
+        const quotaUsage = Math.floor(Math.random() * 30) + 50;
+        
+        return `
         <tr class="${selectedApps.has(app.id) ? 'table-primary' : ''}">
             <td>
                 <input type="checkbox" class="form-check-input app-checkbox" 
@@ -278,7 +379,31 @@ function renderApplicationsTable() {
                 </button>
             </td>
             <td><span class="badge ${getStatusBadgeClass(app.status)}">${getStatusText(app.status)}</span></td>
-            <td>${formatNumber(app.requestsPerDay)}</td>
+            <td>
+                ${formatNumber(app.requestsPerDay)}
+                <div class="progress mt-1" style="height: 3px; width: 60px;">
+                    <div class="progress-bar bg-info" style="width: ${Math.min(app.requestsPerDay / 200, 100)}%"></div>
+                </div>
+            </td>
+            <td>
+                <span class="badge ${successRate >= 98 ? 'bg-success' : successRate >= 95 ? 'bg-warning' : 'bg-danger'}">
+                    ${successRate}%
+                </span>
+            </td>
+            <td>
+                <span class="badge ${responseTime <= 150 ? 'bg-success' : responseTime <= 300 ? 'bg-warning' : 'bg-danger'}">
+                    ${responseTime}ms
+                </span>
+            </td>
+            <td>
+                <div class="d-flex align-items-center">
+                    <span class="mr-2">${quotaUsage}%</span>
+                    <div class="progress flex-grow-1" style="height: 4px; width: 60px;">
+                        <div class="progress-bar ${quotaUsage >= 90 ? 'bg-danger' : quotaUsage >= 70 ? 'bg-warning' : 'bg-success'}" 
+                             style="width: ${quotaUsage}%"></div>
+                    </div>
+                </div>
+            </td>
             <td><small class="text-muted">${app.keyStatus || '有效'}</small></td>
             <td><small class="text-muted">${app.createdAt}</small></td>
             <td>
@@ -290,7 +415,7 @@ function renderApplicationsTable() {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 
     updateBatchToolbar();
 }

@@ -652,6 +652,7 @@ type AdvancedFeatures struct {
 	CurvatureMedian         float64
 	CurvatureVariance       float64
 	CurvatureMax            float64
+	CurvatureEntropy        float64
 	DirectionChangeRate     float64
 	DirectionEntropy        float64
 	Sinuosity               float64
@@ -696,6 +697,7 @@ func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*A
 		features.CurvatureMedian = e.medianFloat(curvatures)
 		features.CurvatureVariance = e.varianceFloat(curvatures)
 		features.CurvatureMax = e.maxAbsFloat(curvatures)
+		features.CurvatureEntropy = e.calculateEntropy(curvatures, 5)
 	}
 
 	directions := e.computeDirections(traceData)
@@ -1097,4 +1099,400 @@ func (e *TraceExtractor) calculateKurtosis(values []float64) float64 {
 	}
 	n := float64(len(values))
 	return (sum / n) - 3.0
+}
+
+func (e *TraceExtractor) ExtractEnhancedFeatures(traceData *model.TraceData) (*EnhancedFeatures, error) {
+	if traceData == nil || len(traceData.Points) < 2 {
+		return nil, errors.New("轨迹数据点不足")
+	}
+
+	features := &EnhancedFeatures{}
+
+	_, err := e.ExtractFeatures(traceData)
+	if err != nil {
+		return nil, err
+	}
+
+	advanced, err := e.ExtractAdvancedFeatures(traceData)
+	if err == nil && advanced != nil {
+		features.CurvatureVariance = advanced.CurvatureVariance
+		features.CurvatureEntropy = advanced.CurvatureEntropy
+	}
+
+	pressures := e.extractPressureSequence(traceData)
+	if len(pressures) > 0 {
+		features.AvgPressure = e.meanFloat(pressures)
+		features.PressureVariance = e.varianceFloat(pressures)
+		features.MaxPressure = e.maxFloat(pressures)
+		features.MinPressure = e.minFloat(pressures)
+		features.PressureSkewness = e.calculateSkewness(pressures)
+		features.PressureKurtosis = e.calculateKurtosis(pressures)
+	}
+
+	if len(traceData.ClickData) > 0 {
+		features.ClickCount = len(traceData.ClickData)
+		features.AvgClickInterval = e.calculateClickIntervalFromClickData(traceData.ClickData)
+		features.ClickRegularity = e.calculateClickRegularity(traceData.ClickData)
+		features.ClickAreaSize = e.calculateClickAreaSize(traceData.ClickData)
+		features.TargetedClickRate = e.calculateTargetedClickRate(traceData.ClickData)
+		features.AvgClickPressure = e.calculateAvgClickPressure(traceData.ClickData)
+		features.ClickPressureVariance = e.calculateClickPressureVariance(traceData.ClickData)
+	}
+
+	if len(traceData.ScrollData) > 0 {
+		features.ScrollCount = len(traceData.ScrollData)
+		features.AvgScrollVelocity = e.calculateAvgScrollVelocity(traceData.ScrollData)
+		features.ScrollRegularity = e.calculateScrollRegularity(traceData.ScrollData)
+		features.ScrollDirectionEntropy = e.calculateScrollDirectionEntropy(traceData.ScrollData)
+		features.ScrollVelocityVariance = e.calculateScrollVelocityVariance(traceData.ScrollData)
+	}
+
+	features.MovementFluidity = e.calculateMovementFluidity(traceData)
+
+	features.CurvatureSkewness = e.calculateCurvatureSkewness(traceData)
+
+	return features, nil
+}
+
+type EnhancedFeatures struct {
+	CurvatureVariance      float64
+	CurvatureSkewness      float64
+	CurvatureEntropy       float64
+	AvgPressure            float64
+	PressureVariance       float64
+	MaxPressure            float64
+	MinPressure            float64
+	PressureSkewness       float64
+	PressureKurtosis       float64
+	PressureConsistency    float64
+	ClickCount             int
+	AvgClickInterval       float64
+	ClickRegularity        float64
+	ClickAreaSize          float64
+	TargetedClickRate      float64
+	AvgClickPressure      float64
+	ClickPressureVariance float64
+	ScrollCount            int
+	AvgScrollVelocity      float64
+	ScrollRegularity       float64
+	ScrollDirectionEntropy float64
+	ScrollVelocityVariance float64
+	MovementFluidity       float64
+	SpatialSpreadX         float64
+	SpatialSpreadY         float64
+	TemporalIntervalStdDev float64
+	PauseRatio             float64
+}
+
+func (e *TraceExtractor) extractPressureSequence(traceData *model.TraceData) []float64 {
+	pressures := make([]float64, 0, len(traceData.Points))
+	for _, p := range traceData.Points {
+		if p.Pressure > 0 {
+			pressures = append(pressures, p.Pressure)
+		} else if p.Event == "click" || p.Event == "touchstart" {
+			pressures = append(pressures, 0.5)
+		} else {
+			pressures = append(pressures, 0.1)
+		}
+	}
+	return pressures
+}
+
+func (e *TraceExtractor) calculateClickIntervalFromClickData(clicks []model.ClickInfo) float64 {
+	if len(clicks) < 2 {
+		return 0
+	}
+
+	var totalInterval float64
+	count := 0
+
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			totalInterval += interval
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalInterval / float64(count)
+}
+
+func (e *TraceExtractor) calculateClickRegularity(clicks []model.ClickInfo) float64 {
+	if len(clicks) < 3 {
+		return 1.0
+	}
+
+	intervals := make([]float64, 0)
+	for i := 1; i < len(clicks); i++ {
+		interval := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if interval > 0 {
+			intervals = append(intervals, interval)
+		}
+	}
+
+	if len(intervals) < 2 {
+		return 1.0
+	}
+
+	mean := e.meanFloat(intervals)
+	if mean == 0 {
+		return 0
+	}
+
+	var variance float64
+	for _, interval := range intervals {
+		diff := interval - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(intervals))
+
+	stdDev := math.Sqrt(variance)
+
+	regularity := 1.0 - math.Min(stdDev/mean, 1.0)
+
+	return regularity
+}
+
+func (e *TraceExtractor) calculateClickAreaSize(clicks []model.ClickInfo) float64 {
+	if len(clicks) < 2 {
+		return 0
+	}
+
+	minX, maxX := clicks[0].X, clicks[0].X
+	minY, maxY := clicks[0].Y, clicks[0].Y
+
+	for _, c := range clicks {
+		if c.X < minX {
+			minX = c.X
+		}
+		if c.X > maxX {
+			maxX = c.X
+		}
+		if c.Y < minY {
+			minY = c.Y
+		}
+		if c.Y > maxY {
+			maxY = c.Y
+		}
+	}
+
+	return (maxX - minX) * (maxY - minY) / 10000.0
+}
+
+func (e *TraceExtractor) calculateTargetedClickRate(clicks []model.ClickInfo) float64 {
+	if len(clicks) == 0 {
+		return 0
+	}
+
+	targetedCount := 0
+	for _, c := range clicks {
+		if c.IsTargeted {
+			targetedCount++
+		}
+	}
+
+	return float64(targetedCount) / float64(len(clicks))
+}
+
+func (e *TraceExtractor) calculateAvgClickPressure(clicks []model.ClickInfo) float64 {
+	if len(clicks) == 0 {
+		return 0
+	}
+
+	var totalPressure float64
+	for _, c := range clicks {
+		if c.Pressure > 0 {
+			totalPressure += c.Pressure
+		} else {
+			totalPressure += 0.5
+		}
+	}
+
+	return totalPressure / float64(len(clicks))
+}
+
+func (e *TraceExtractor) calculateClickPressureVariance(clicks []model.ClickInfo) float64 {
+	if len(clicks) < 2 {
+		return 0
+	}
+
+	pressures := make([]float64, len(clicks))
+	for i, c := range clicks {
+		if c.Pressure > 0 {
+			pressures[i] = c.Pressure
+		} else {
+			pressures[i] = 0.5
+		}
+	}
+
+	return e.varianceFloat(pressures)
+}
+
+func (e *TraceExtractor) calculateAvgScrollVelocity(scrolls []model.ScrollInfo) float64 {
+	if len(scrolls) == 0 {
+		return 0
+	}
+
+	var totalVelocity float64
+	for _, s := range scrolls {
+		if s.Velocity > 0 {
+			totalVelocity += s.Velocity
+		} else {
+			dx := math.Abs(s.DeltaX)
+			dy := math.Abs(s.DeltaY)
+			totalVelocity += math.Sqrt(dx*dx + dy*dy)
+		}
+	}
+
+	return totalVelocity / float64(len(scrolls))
+}
+
+func (e *TraceExtractor) calculateScrollRegularity(scrolls []model.ScrollInfo) float64 {
+	if len(scrolls) < 3 {
+		return 1.0
+	}
+
+	velocities := make([]float64, len(scrolls))
+	for i, s := range scrolls {
+		if s.Velocity > 0 {
+			velocities[i] = s.Velocity
+		} else {
+			dx := math.Abs(s.DeltaX)
+			dy := math.Abs(s.DeltaY)
+			velocities[i] = math.Sqrt(dx*dx + dy*dy)
+		}
+	}
+
+	mean := e.meanFloat(velocities)
+	if mean == 0 {
+		return 0
+	}
+
+	var variance float64
+	for _, v := range velocities {
+		diff := v - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(velocities))
+
+	stdDev := math.Sqrt(variance)
+
+	return 1.0 - math.Min(stdDev/mean, 1.0)
+}
+
+func (e *TraceExtractor) calculateScrollDirectionEntropy(scrolls []model.ScrollInfo) float64 {
+	if len(scrolls) == 0 {
+		return 0
+	}
+
+	directions := make([]string, 0)
+	for _, s := range scrolls {
+		directions = append(directions, s.Direction)
+	}
+
+	directionCounts := make(map[string]int)
+	for _, d := range directions {
+		directionCounts[d]++
+	}
+
+	total := len(directions)
+	entropy := 0.0
+
+	for _, count := range directionCounts {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *TraceExtractor) calculateScrollVelocityVariance(scrolls []model.ScrollInfo) float64 {
+	if len(scrolls) < 2 {
+		return 0
+	}
+
+	velocities := make([]float64, len(scrolls))
+	for i, s := range scrolls {
+		if s.Velocity > 0 {
+			velocities[i] = s.Velocity
+		} else {
+			dx := math.Abs(s.DeltaX)
+			dy := math.Abs(s.DeltaY)
+			velocities[i] = math.Sqrt(dx*dx + dy*dy)
+		}
+	}
+
+	return e.varianceFloat(velocities)
+}
+
+func (e *TraceExtractor) calculateMovementFluidity(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 1.0
+	}
+
+	smoothness := e.calculateSmoothness(traceData)
+
+	pauseRatio := 0.0
+	if traceData.TotalTime > 0 {
+		pauseCount := e.calculatePauseCount(traceData)
+		pauseRatio = float64(pauseCount) / float64(len(traceData.Points))
+	}
+
+	speedVariance := e.calculateSpeedVariance(traceData)
+	avgSpeed := e.calculateAvgSpeed(traceData)
+	normalizedVariance := 0.0
+	if avgSpeed > 0 {
+		normalizedVariance = speedVariance / (avgSpeed * avgSpeed)
+	}
+
+	smoothnessScore := math.Max(0, 1.0-smoothness/0.3)
+
+	fluidity := smoothnessScore * (1.0 - pauseRatio) * (1.0 - math.Min(normalizedVariance, 1.0))
+
+	return math.Max(0, math.Min(1, fluidity))
+}
+
+func (e *TraceExtractor) calculateCurvatureSkewness(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 0
+	}
+
+	curvatures := e.computeCurvatures(traceData)
+	if len(curvatures) < 2 {
+		return 0
+	}
+
+	return e.calculateSkewness(curvatures)
+}
+
+func (e *TraceExtractor) maxFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (e *TraceExtractor) minFloat(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values {
+		if v < min {
+			min = v
+		}
+	}
+	return min
 }

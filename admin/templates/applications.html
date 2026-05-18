@@ -57,6 +57,9 @@
                             <div class="stat-label mb-1">应用总数</div>
                             <div class="stat-value" id="totalApps">0</div>
                             <small class="text-muted" style="font-size:12px;">活跃 <span id="activeApps">0</span></small>
+                            <div class="mt-2">
+                                <span class="badge bg-success" id="activeAppsBadge"><i class="fas fa-check-circle me-1"></i>运行中</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -66,6 +69,9 @@
                             <div class="stat-label mb-1">API调用总量</div>
                             <div class="stat-value" id="totalApiCalls">0</div>
                             <small class="text-muted" style="font-size:12px;">本月</small>
+                            <div class="progress mt-2" style="height: 4px;">
+                                <div class="progress-bar bg-info" id="apiCallsProgress" style="width: 0%"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -75,6 +81,9 @@
                             <div class="stat-label mb-1">成功调用率</div>
                             <div class="stat-value text-success" id="successRate">0%</div>
                             <small class="text-muted" style="font-size:12px;">平均</small>
+                            <div class="mt-2">
+                                <span class="badge bg-success" id="successRateTrend"><i class="fas fa-arrow-up me-1"></i>+2.3%</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -84,6 +93,48 @@
                             <div class="stat-label mb-1">总用户数</div>
                             <div class="stat-value" id="totalUsers">0</div>
                             <small class="text-muted" style="font-size:12px;">所有应用</small>
+                            <div class="mt-2">
+                                <span class="badge bg-primary" id="usersGrowth"><i class="fas fa-users me-1"></i>持续增长</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <div class="col-md-4">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">平均响应时间</div>
+                            <div class="stat-value text-primary" id="avgResponseTime">0ms</div>
+                            <small class="text-muted" style="font-size:12px;">今日</small>
+                            <div class="mt-2">
+                                <span class="badge bg-success" id="responseTimeStatus"><i class="fas fa-check me-1"></i>优秀</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">被拦截请求</div>
+                            <div class="stat-value text-danger" id="blockedRequests">0</div>
+                            <small class="text-muted" style="font-size:12px;">风险拦截</small>
+                            <div class="mt-2">
+                                <span class="badge bg-warning" id="blockedTrend"><i class="fas fa-shield-alt me-1"></i>防护中</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm border text-center">
+                        <div class="card-body">
+                            <div class="stat-label mb-1">API配额使用</div>
+                            <div class="stat-value text-info" id="quotaUsage">0%</div>
+                            <small class="text-muted" style="font-size:12px;">日配额</small>
+                            <div class="progress mt-2" style="height: 4px;">
+                                <div class="progress-bar bg-info" id="quotaProgress" style="width: 0%"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -306,6 +357,9 @@
                                     <th>应用密钥</th>
                                     <th>状态</th>
                                     <th>请求量/日</th>
+                                    <th>成功率</th>
+                                    <th>响应时间</th>
+                                    <th>配额使用</th>
                                     <th>密钥状态</th>
                                     <th>创建时间</th>
                                     <th>操作</th>

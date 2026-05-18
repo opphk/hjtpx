@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -36,10 +35,10 @@ func TestRegisterBiometricProfile_Success(t *testing.T) {
 
 	keyboardSample := &service.KeyboardSample{
 		KeyEvents: []service.KeyEvent{
-			{Key: "a", Type: "keydown", Timestamp: time.Now().UnixMilli(), KeyCode: 65},
-			{Key: "b", Type: "keyup", Timestamp: time.Now().UnixMilli(), KeyCode: 66},
+			{Key: "a", Type: "keydown", Timestamp: 1000, KeyCode: 65},
+			{Key: "a", Type: "keyup", Timestamp: 1100, KeyCode: 65},
 		},
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: 1000,
 	}
 
 	reqBody := RegisterBiometricProfileRequest{
@@ -109,10 +108,10 @@ func TestVerifyBiometrics_Success(t *testing.T) {
 
 	keyboardSample := &service.KeyboardSample{
 		KeyEvents: []service.KeyEvent{
-			{Key: "a", Type: "keydown", Timestamp: time.Now().UnixMilli(), KeyCode: 65},
-			{Key: "b", Type: "keyup", Timestamp: time.Now().UnixMilli(), KeyCode: 66},
+			{Key: "a", Type: "keydown", Timestamp: 1000, KeyCode: 65},
+			{Key: "a", Type: "keyup", Timestamp: 1100, KeyCode: 65},
 		},
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: 1000,
 	}
 
 	reqBody := VerifyBiometricsRequest{

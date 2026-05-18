@@ -4599,8 +4599,7 @@ func (o *Obfuscator) ApplyMaximumProtection(code string) (string, error) {
 
 	if o.config.EnableControlFlowFlattening {
 		result = o.flattenControlFlowAdvanced(result)
-		result = o.addStateMachineFlattening(result)
-		result = o.addOpaquePredicate(result)
+		result = o.addOpaquePredicates(result)
 		result = o.addLoopUnswitching(result)
 	}
 

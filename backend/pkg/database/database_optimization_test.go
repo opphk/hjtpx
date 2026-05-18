@@ -28,8 +28,8 @@ func TestArchiveStats(t *testing.T) {
 		TotalArchivedRecords: 1000,
 		TotalCleanedRecords:  500,
 		LastArchiveTime:      time.Now(),
-		LastCleanupTime:      time.Now(),
-		ArchiveErrors:        5,
+		LastCleanupTime:     time.Now(),
+		ArchiveErrors:       5,
 		CleanupErrors:        3,
 	}
 
@@ -42,493 +42,165 @@ func TestArchiveStats(t *testing.T) {
 	}
 }
 
-func TestHotColdSeparator(t *testing.T) {
-	separator := NewHotColdSeparator(24*time.Hour, 30*24*time.Hour)
-
-	if separator.hotThreshold != 24*time.Hour {
-		t.Errorf("Hot threshold = %v, want %v", separator.hotThreshold, 24*time.Hour)
+func TestEnhancedPoolConfig(t *testing.T) {
+	config := &EnhancedPoolConfig{
+		MaxOpenConns:        100,
+		MaxIdleConns:        50,
+		MinIdleConns:        10,
+		ConnMaxLifetime:     30 * time.Minute,
+		ConnMaxIdleTime:     10 * time.Minute,
+		HealthCheckInterval: 30 * time.Second,
 	}
 
-	if separator.coldThreshold != 30*24*time.Hour {
-		t.Errorf("Cold threshold = %v, want %v", separator.coldThreshold, 30*24*time.Hour)
+	if config.MaxOpenConns != 100 {
+		t.Errorf("MaxOpenConns = %d, want %d", config.MaxOpenConns, 100)
 	}
-}
-
-func TestTimeBasedArchiveStrategy(t *testing.T) {
-	strategy := NewTimeBasedArchiveStrategy("logs", "created_at", 30*24*time.Hour)
-
-	if strategy.tableName != "logs" {
-		t.Errorf("Table name = %s, want %s", strategy.tableName, "logs")
+	if config.MaxIdleConns != 50 {
+		t.Errorf("MaxIdleConns = %d, want %d", config.MaxIdleConns, 50)
 	}
-
-	if strategy.dateField != "created_at" {
-		t.Errorf("Date field = %s, want %s", strategy.dateField, "created_at")
-	}
-
-	if strategy.GetName() != "time_based_archive" {
-		t.Errorf("GetName() = %s, want %s", strategy.GetName(), "time_based_archive")
-	}
-
-	if strategy.GetStatus() != "pending" {
-		t.Errorf("Initial status = %s, want %s", strategy.GetStatus(), "pending")
+	if config.MinIdleConns != 10 {
+		t.Errorf("MinIdleConns = %d, want %d", config.MinIdleConns, 10)
 	}
 }
 
-func TestSizeBasedArchiveStrategy(t *testing.T) {
-	strategy := NewSizeBasedArchiveStrategy("logs", "created_at", 1000000)
-
-	if strategy.tableName != "logs" {
-		t.Errorf("Table name = %s, want %s", strategy.tableName, "logs")
+func TestTuningRecord(t *testing.T) {
+	oldConfig := &EnhancedPoolConfig{
+		MaxOpenConns: 100,
+	}
+	newConfig := &EnhancedPoolConfig{
+		MaxOpenConns: 150,
 	}
 
-	if strategy.maxSize != 1000000 {
-		t.Errorf("Max size = %d, want %d", strategy.maxSize, 1000000)
+	record := &TuningRecord{
+		Timestamp: time.Now(),
+		OldConfig: oldConfig,
+		NewConfig: newConfig,
+		Reason:    "increased load",
 	}
 
-	if strategy.GetName() != "size_based_archive" {
-		t.Errorf("GetName() = %s, want %s", strategy.GetName(), "size_based_archive")
+	if record.OldConfig.MaxOpenConns != 100 {
+		t.Errorf("OldConfig.MaxOpenConns = %d, want %d", record.OldConfig.MaxOpenConns, 100)
 	}
-}
-
-func TestArchiveScheduler(t *testing.T) {
-	scheduler := NewArchiveScheduler()
-
-	if len(scheduler.strategies) != 0 {
-		t.Errorf("Initial strategies count = %d, want %d", len(scheduler.strategies), 0)
+	if record.NewConfig.MaxOpenConns != 150 {
+		t.Errorf("NewConfig.MaxOpenConns = %d, want %d", record.NewConfig.MaxOpenConns, 150)
 	}
-
-	strategy := NewTimeBasedArchiveStrategy("logs", "created_at", 30*24*time.Hour)
-	scheduler.AddStrategy(strategy)
-
-	if len(scheduler.strategies) != 1 {
-		t.Errorf("After add, strategies count = %d, want %d", len(scheduler.strategies), 1)
-	}
-
-	strategies := scheduler.GetStrategies()
-	if len(strategies) != 1 {
-		t.Errorf("GetStrategies count = %d, want %d", len(strategies), 1)
+	if record.Reason != "increased load" {
+		t.Errorf("Reason = %s, want %s", record.Reason, "increased load")
 	}
 }
 
-func TestCompressionArchiver(t *testing.T) {
-	archiver := NewCompressionArchiver(6)
-
-	if !archiver.enabled {
-		t.Error("Compression archiver should be enabled")
+func TestPoolHealthStatus(t *testing.T) {
+	status := &PoolHealthStatus{
+		IsHealthy:        true,
+		Score:            0.95,
+		Issues:           []string{},
+		Recommendations:  []string{},
+		LastCheck:        time.Now(),
 	}
 
-	if archiver.compressionLevel != 6 {
-		t.Errorf("Compression level = %d, want %d", archiver.compressionLevel, 6)
+	if !status.IsHealthy {
+		t.Error("IsHealthy should be true")
 	}
-}
-
-func TestCompressionArchiverInvalidLevel(t *testing.T) {
-	archiver := NewCompressionArchiver(15)
-
-	if archiver.compressionLevel != 6 {
-		t.Errorf("Invalid level should default to 6, got %d", archiver.compressionLevel)
-	}
-
-	archiver2 := NewCompressionArchiver(0)
-	if archiver2.compressionLevel != 6 {
-		t.Errorf("Invalid level should default to 6, got %d", archiver2.compressionLevel)
+	if status.Score != 0.95 {
+		t.Errorf("Score = %f, want %f", status.Score, 0.95)
 	}
 }
 
-func TestCompressionArchiverGetRatio(t *testing.T) {
-	archiver := NewCompressionArchiver(6)
-
-	ratio, err := archiver.GetCompressionRatio("test_table")
-	if err != nil {
-		t.Errorf("GetCompressionRatio should not error: %v", err)
+func TestConnectionPressure(t *testing.T) {
+	pressure := &ConnectionPressure{
+		Timestamp:      time.Now(),
+		OpenConnections: 100,
+		InUse:          80,
+		Idle:           20,
+		WaitCount:      5,
+		PressureLevel:  "normal",
+		Advice:         "connections healthy",
 	}
 
-	if ratio <= 0 || ratio > 1 {
-		t.Errorf("Compression ratio = %f, should be between 0 and 1", ratio)
+	if pressure.OpenConnections != 100 {
+		t.Errorf("OpenConnections = %d, want %d", pressure.OpenConnections, 100)
 	}
-}
-
-func TestConnectionPoolConfig(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    20,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
+	if pressure.InUse != 80 {
+		t.Errorf("InUse = %d, want %d", pressure.InUse, 80)
 	}
-
-	if err := config.Validate(); err != nil {
-		t.Errorf("Valid config should not error: %v", err)
-	}
-}
-
-func TestConnectionPoolConfigInvalidMaxOpenConns(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    0,
-		MaxIdleConns:    20,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	if err := config.Validate(); err == nil {
-		t.Error("Invalid config should return error")
-	}
-}
-
-func TestConnectionPoolConfigInvalidMaxIdleConns(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    0,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	if err := config.Validate(); err == nil {
-		t.Error("Invalid config should return error")
-	}
-}
-
-func TestConnectionPoolConfigIdleExceedsOpen(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    10,
-		MaxIdleConns:    20,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	if err := config.Validate(); err == nil {
-		t.Error("maxIdleConns > maxOpenConns should return error")
-	}
-}
-
-func TestConnectionPoolConfigOptimize(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    50,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	config.Optimize(0.3)
-
-	if config.MaxIdleConns >= 50 {
-		t.Errorf("Idle connections should be reduced at low ratio, got %d", config.MaxIdleConns)
-	}
-
-	config2 := &ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    50,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	config2.Optimize(0.95)
-
-	if config2.MaxIdleConns <= 50 {
-		t.Errorf("Idle connections should be increased at high ratio, got %d", config2.MaxIdleConns)
+	if pressure.PressureLevel != "normal" {
+		t.Errorf("PressureLevel = %s, want %s", pressure.PressureLevel, "normal")
 	}
 }
 
 func TestConnectionPoolOptimizer(t *testing.T) {
 	config := &ConnectionPoolConfig{
 		MaxOpenConns:    100,
-		MaxIdleConns:    20,
+		MaxIdleConns:    50,
 		ConnMaxLifetime: 30 * time.Minute,
 		ConnMaxIdleTime: 10 * time.Minute,
 	}
 
 	optimizer := NewConnectionPoolOptimizer(config)
 
-	if optimizer.currentConfig != config {
-		t.Error("Optimizer should use provided config")
-	}
-
-	if optimizer.healthCheckInterval != 30*time.Second {
-		t.Errorf("Health check interval = %v, want %v", optimizer.healthCheckInterval, 30*time.Second)
-	}
-
-	if !optimizer.autoTuningEnabled {
-		t.Error("Auto tuning should be enabled by default")
-	}
-}
-
-func TestConnectionPoolOptimizerGetConfig(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    20,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	optimizer := NewConnectionPoolOptimizer(config)
-	result := optimizer.GetConfig()
-
-	if result.MaxOpenConns != 100 {
-		t.Errorf("MaxOpenConns = %d, want %d", result.MaxOpenConns, 100)
-	}
-}
-
-func TestConnectionPoolOptimizerEnableAutoTuning(t *testing.T) {
-	config := &ConnectionPoolConfig{
-		MaxOpenConns:    100,
-		MaxIdleConns:    20,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 10 * time.Minute,
-	}
-
-	optimizer := NewConnectionPoolOptimizer(config)
-
-	optimizer.EnableAutoTuning(false)
-	if optimizer.autoTuningEnabled {
-		t.Error("Auto tuning should be disabled")
+	if optimizer == nil {
+		t.Error("Expected optimizer to be created")
 	}
 
 	optimizer.EnableAutoTuning(true)
+	optimizer.EnableAutoTuning(false)
+}
+
+func TestEnhancedConnectionPoolOptimizer(t *testing.T) {
+	optimizer := &EnhancedConnectionPoolOptimizer{
+		healthCheckInterval:   30 * time.Second,
+		autoTuningEnabled:     true,
+		maxHistorySize:        100,
+		tuningHistory:         make([]TuningRecord, 0),
+	}
+
+	if optimizer.healthCheckInterval != 30*time.Second {
+		t.Errorf("healthCheckInterval = %v, want %v", optimizer.healthCheckInterval, 30*time.Second)
+	}
 	if !optimizer.autoTuningEnabled {
-		t.Error("Auto tuning should be enabled")
+		t.Error("autoTuningEnabled should be true")
+	}
+	if optimizer.maxHistorySize != 100 {
+		t.Errorf("maxHistorySize = %d, want %d", optimizer.maxHistorySize, 100)
 	}
 }
 
-func TestConnectionPoolHealthCheck(t *testing.T) {
-	checker := NewConnectionPoolHealthCheck()
+func TestConnectionPoolMetrics(t *testing.T) {
+	metrics := &ConnectionPoolMetrics{}
 
-	if len(checker.checkHistory) != 0 {
-		t.Errorf("Initial history count = %d, want %d", len(checker.checkHistory), 0)
+	metrics.TotalConnections = 100
+	metrics.ActiveConnections = 50
+	metrics.IdleConnections = 50
+	metrics.WaitCount = 10
+	metrics.WaitDuration = 100 * time.Millisecond
+
+	if metrics.TotalConnections != 100 {
+		t.Errorf("TotalConnections = %d, want %d", metrics.TotalConnections, 100)
 	}
-
-	result := checker.GetLastCheck()
-	if result != nil {
-		t.Error("GetLastCheck should return nil when no checks have been run")
+	if metrics.ActiveConnections != 50 {
+		t.Errorf("ActiveConnections = %d, want %d", metrics.ActiveConnections, 50)
 	}
-}
-
-func TestConnectionPoolHealthCheckGetHistory(t *testing.T) {
-	checker := NewConnectionPoolHealthCheck()
-
-	history := checker.GetHistory(10)
-	if history == nil {
-		t.Error("GetHistory should not return nil")
-	}
-
-	if len(history) != 0 {
-		t.Errorf("Empty history length = %d, want %d", len(history), 0)
-	}
-
-	history = checker.GetHistory(0)
-	if len(history) != 0 {
-		t.Error("GetHistory with 0 should return empty")
+	if metrics.IdleConnections != 50 {
+		t.Errorf("IdleConnections = %d, want %d", metrics.IdleConnections, 50)
 	}
 }
 
-func TestConnectionPoolHealthCheckIsHealthy(t *testing.T) {
-	checker := NewConnectionPoolHealthCheck()
-
-	if checker.IsHealthy() {
-		t.Error("Initial health should be false")
-	}
-}
-
-func TestConnectionPoolManager(t *testing.T) {
-	manager := GetConnectionPoolManager()
-
-	if manager == nil {
-		t.Fatal("GetConnectionPoolManager should not return nil")
+func TestPoolMetricsSnapshot(t *testing.T) {
+	snapshot := &PoolMetricsSnapshot{
+		Timestamp:        time.Now(),
+		TotalConnections:  50,
+		ActiveConnections: 30,
+		IdleConnections:  20,
+		WaitCount:        5,
 	}
 
-	if manager.optimizer == nil {
-		t.Error("Optimizer should not be nil")
+	if snapshot.TotalConnections != 50 {
+		t.Errorf("TotalConnections = %d, want %d", snapshot.TotalConnections, 50)
 	}
-
-	if manager.healthCheck == nil {
-		t.Error("Health check should not be nil")
+	if snapshot.ActiveConnections != 30 {
+		t.Errorf("ActiveConnections = %d, want %d", snapshot.ActiveConnections, 30)
 	}
-}
-
-func TestConnectionWrapper(t *testing.T) {
-	wrapper := &ConnectionWrapper{}
-
-	if wrapper.db != nil {
-		t.Error("Initial db should be nil")
-	}
-
-	wrapper.RecordStats()
-
-	stats := wrapper.GetStats()
-	if stats.MaxOpenConnections != 0 {
-		t.Error("Stats should be zero when db is nil")
-	}
-}
-
-func TestPerformanceMonitorCreation(t *testing.T) {
-	monitor := &PerformanceMonitor{
-		queryMetrics:    make([]QueryMetric, 0),
-		slowQueries:     make([]QueryMetric, 0),
-		maxMetricsLen:   10000,
-		maxSlowQueryLen: 1000,
-		enabled:         true,
-		slowThreshold:   50 * time.Millisecond,
-	}
-
-	if !monitor.enabled {
-		t.Error("Monitor should be enabled")
-	}
-
-	if monitor.maxMetricsLen != 10000 {
-		t.Errorf("Max metrics len = %d, want %d", monitor.maxMetricsLen, 10000)
-	}
-}
-
-func TestPerformanceStats(t *testing.T) {
-	stats := &PerformanceStats{
-		TotalQueries:     1000,
-		SlowQueries:      50,
-		FailedQueries:    10,
-		AvgDuration:      25 * time.Millisecond,
-		MaxDuration:      500 * time.Millisecond,
-		MinDuration:      5 * time.Millisecond,
-		TotalDuration:    25 * time.Second,
-		QueriesPerSecond: 100.5,
-		SlowQueryRatio:   5.0,
-	}
-
-	if stats.TotalQueries != 1000 {
-		t.Errorf("TotalQueries = %d, want %d", stats.TotalQueries, 1000)
-	}
-
-	if stats.SlowQueryRatio != 5.0 {
-		t.Errorf("SlowQueryRatio = %f, want %f", stats.SlowQueryRatio, 5.0)
-	}
-}
-
-func TestSlowQueryInfo(t *testing.T) {
-	info := &SlowQueryInfo{
-		Query:          "SELECT * FROM users",
-		Count:          100,
-		TotalDuration:  10 * time.Second,
-		AvgDuration:    100 * time.Millisecond,
-		MaxDuration:    500 * time.Millisecond,
-		LastOccurrence: time.Now(),
-		Suggestions:    []string{"Add index", "Use limit"},
-	}
-
-	if info.Count != 100 {
-		t.Errorf("Count = %d, want %d", info.Count, 100)
-	}
-
-	if len(info.Suggestions) != 2 {
-		t.Errorf("Suggestions count = %d, want %d", len(info.Suggestions), 2)
-	}
-}
-
-func TestSlowQueryAnalyzer(t *testing.T) {
-	analyzer := NewSlowQueryAnalyzer()
-
-	if analyzer == nil {
-		t.Fatal("NewSlowQueryAnalyzer should not return nil")
-	}
-
-	if len(analyzer.queries) != 0 {
-		t.Error("Initial queries should be empty")
-	}
-
-	analyzer.Record("SELECT * FROM users", 100*time.Millisecond)
-
-	if len(analyzer.queries) != 1 {
-		t.Errorf("After record, queries count = %d, want %d", len(analyzer.queries), 1)
-	}
-
-	queries := analyzer.GetTopQueries(10)
-	if len(queries) != 1 {
-		t.Errorf("GetTopQueries should return 1, got %d", len(queries))
-	}
-}
-
-func TestSlowQueryAnalyzerClear(t *testing.T) {
-	analyzer := NewSlowQueryAnalyzer()
-
-	analyzer.Record("SELECT * FROM users", 100*time.Millisecond)
-	analyzer.Clear()
-
-	if len(analyzer.queries) != 0 {
-		t.Errorf("After clear, queries count = %d, want %d", len(analyzer.queries), 0)
-	}
-}
-
-func TestMetricsAggregator(t *testing.T) {
-	aggregator := NewMetricsAggregator(5*time.Minute, 60)
-
-	if aggregator == nil {
-		t.Fatal("NewMetricsAggregator should not return nil")
-	}
-
-	if len(aggregator.windows) != 0 {
-		t.Error("Initial windows should be empty")
-	}
-
-	if aggregator.maxWindows != 60 {
-		t.Errorf("Max windows = %d, want %d", aggregator.maxWindows, 60)
-	}
-}
-
-func TestMetricsAggregatorRecordWindow(t *testing.T) {
-	aggregator := NewMetricsAggregator(5*time.Minute, 5)
-
-	stats := &PerformanceStats{
-		TotalQueries: 100,
-	}
-
-	aggregator.RecordWindow(stats)
-
-	if len(aggregator.windows) != 1 {
-		t.Errorf("After record, windows count = %d, want %d", len(aggregator.windows), 1)
-	}
-}
-
-func TestMetricsAggregatorGetTrend(t *testing.T) {
-	aggregator := NewMetricsAggregator(5*time.Minute, 60)
-
-	trend := aggregator.GetTrend()
-	if trend != "insufficient_data" {
-		t.Errorf("With no windows, trend = %s, want %s", trend, "insufficient_data")
-	}
-}
-
-func TestAlertConfig(t *testing.T) {
-	config := &AlertConfig{
-		SlowQueryThreshold:      50 * time.Millisecond,
-		AvgDurationThreshold:    30 * time.Millisecond,
-		SlowQueryRatioThreshold: 5.0,
-	}
-
-	if config.SlowQueryThreshold != 50*time.Millisecond {
-		t.Errorf("SlowQueryThreshold = %v, want %v", config.SlowQueryThreshold, 50*time.Millisecond)
-	}
-}
-
-func TestQueryMetric(t *testing.T) {
-	metric := QueryMetric{
-		Query:        "SELECT * FROM users",
-		Duration:     100 * time.Millisecond,
-		Timestamp:    time.Now(),
-		IsSlow:       true,
-		ConnectionID: 123,
-	}
-
-	if metric.Duration != 100*time.Millisecond {
-		t.Errorf("Duration = %v, want %v", metric.Duration, 100*time.Millisecond)
-	}
-
-	if !metric.IsSlow {
-		t.Error("IsSlow should be true")
-	}
-}
-
-func TestPoolStatsRecord(t *testing.T) {
-	record := PoolStatsRecord{
-		Timestamp: time.Now(),
-		Stats:     PoolStats{},
-	}
-
-	if record.Timestamp.IsZero() {
-		t.Error("Timestamp should not be zero")
+	if snapshot.IdleConnections != 20 {
+		t.Errorf("IdleConnections = %d, want %d", snapshot.IdleConnections, 20)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -89,7 +90,7 @@ var defaultEnhancedCSPConfig = EnhancedCSPConfig{
 	Enabled:    true,
 	DefaultSrc: []string{"'self'"},
 	ScriptSrc:  []string{"'self'"},
-	StyleSrc:   []string{"'self'"},
+	StyleSrc:   []string{"'self'", "'unsafe-inline'"},
 	ImgSrc:     []string{"'self'", "data:", "https:"},
 	FontSrc:    []string{"'self'"},
 	ConnectSrc: []string{"'self'"},
@@ -97,7 +98,6 @@ var defaultEnhancedCSPConfig = EnhancedCSPConfig{
 	ObjectSrc:  []string{"'none'"},
 	EnableNonce: true,
 	ExcludePaths: []string{"/health", "/metrics", "/api/health"},
-	ReportURI:  "/csp-report",
 }
 
 var (
@@ -138,10 +138,6 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 		cfg = configs[0]
 	}
 
-	if cfg.TokenLength < 32 {
-		cfg.TokenLength = 32
-	}
-
 	return func(c *gin.Context) {
 		if !cfg.Enabled {
 			c.Next()
@@ -169,7 +165,7 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 			if method == "GET" || method == "HEAD" {
 				sessionID := enhancedGenerateCSRFCSID(c)
 
-				token, err := csrfSecurity.GenerateTokenWithEntropy(cfg.TokenLength)
+				token, err := csrfSecurity.GenerateToken()
 				if err == nil {
 					enhancedCSRFStoreMu.Lock()
 					enhancedCSRFTokenStore[sessionID] = &sessionCSRFData{
@@ -219,15 +215,6 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 				"error":   "csrf_token_missing",
 				"code":    "CSRF_TOKEN_MISSING",
 				"message": "CSRF token is required for this request",
-			})
-			return
-		}
-
-		if len(token) < 32 {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error":   "csrf_token_invalid",
-				"code":    "CSRF_TOKEN_TOO_SHORT",
-				"message": "Invalid CSRF token length",
 			})
 			return
 		}
@@ -329,17 +316,6 @@ func EnhancedXSSProtectionMiddleware(configs ...EnhancedXSSConfig) gin.HandlerFu
 		}
 
 		c.Request.Header.Set("X-XSS-Protection", "1; mode=block")
-		c.Request.Header.Set("X-Content-Type-Options", "nosniff")
-
-		if cfg.LogViolations {
-			userAgent := c.GetHeader("User-Agent")
-			if userAgent != "" {
-				isXSS, pattern := DetectXSS(userAgent)
-				if isXSS {
-					fmt.Printf("[XSS_DETECTED] User-Agent contains XSS pattern: %s, IP: %s\n", pattern, c.ClientIP())
-				}
-			}
-		}
 
 		c.Next()
 	}
@@ -379,18 +355,10 @@ func buildCSPPolicy(cfg EnhancedCSPConfig) string {
 	directives := []string{"default-src 'self'"}
 
 	if len(cfg.ScriptSrc) > 0 {
-		scriptSrc := "script-src " + strings.Join(cfg.ScriptSrc, " ")
-		if cfg.EnableNonce {
-			scriptSrc += " 'nonce'"
-		}
-		directives = append(directives, scriptSrc)
+		directives = append(directives, "script-src "+strings.Join(cfg.ScriptSrc, " "))
 	}
 	if len(cfg.StyleSrc) > 0 {
-		styleSrc := "style-src " + strings.Join(cfg.StyleSrc, " ")
-		if cfg.EnableNonce {
-			styleSrc += " 'nonce'"
-		}
-		directives = append(directives, styleSrc)
+		directives = append(directives, "style-src "+strings.Join(cfg.StyleSrc, " "))
 	}
 	if len(cfg.ImgSrc) > 0 {
 		directives = append(directives, "img-src "+strings.Join(cfg.ImgSrc, " "))
@@ -407,11 +375,6 @@ func buildCSPPolicy(cfg EnhancedCSPConfig) string {
 	if len(cfg.ObjectSrc) > 0 {
 		directives = append(directives, "object-src "+strings.Join(cfg.ObjectSrc, " "))
 	}
-
-	directives = append(directives, "base-uri 'self'")
-	directives = append(directives, "form-action 'self'")
-	directives = append(directives, "frame-ancestors 'none'")
-	directives = append(directives, "upgrade-insecure-requests")
 
 	if cfg.ReportURI != "" {
 		directives = append(directives, "report-uri "+cfg.ReportURI)
@@ -541,17 +504,6 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 			return
 		}
 
-		if c.Request.ContentLength == 0 && (c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH") {
-			contentType := c.GetHeader("Content-Type")
-			if strings.Contains(contentType, "application/json") {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-					"error":   "empty_body",
-					"message": "Request body cannot be empty for JSON content type",
-				})
-				return
-			}
-		}
-
 		if cfg.ValidateQuery {
 			query := c.Request.URL.Query()
 			if len(query) > cfg.MaxQueryParams {
@@ -563,14 +515,6 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 			}
 
 			for key, values := range query {
-				if len(key) > 256 {
-					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-						"error":   "query_param_too_long",
-						"message": fmt.Sprintf("Query parameter key too long: %s", key[:50]),
-					})
-					return
-				}
-
 				sanitizedKey := SanitizeInput(key)
 				if sanitizedKey != key {
 					delete(query, key)
@@ -578,14 +522,6 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 				}
 
 				for i, value := range values {
-					if len(value) > 10000 {
-						c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-							"error":   "query_value_too_long",
-							"message": "Query parameter value too long",
-						})
-						return
-					}
-
 					sanitized := SanitizeInput(value)
 					if sanitized != value {
 						isXSS, pattern := DetectXSS(value)
@@ -603,14 +539,6 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 		if cfg.ValidateForm && (c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH") {
 			if err := c.Request.ParseForm(); err == nil {
 				for key, values := range c.Request.PostForm {
-					if len(key) > 256 {
-						c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-							"error":   "form_field_too_long",
-							"message": fmt.Sprintf("Form field key too long: %s", key[:50]),
-						})
-						return
-					}
-
 					sanitizedKey := SanitizeInput(key)
 					if sanitizedKey != key {
 						delete(c.Request.PostForm, key)
@@ -619,14 +547,6 @@ func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlew
 					}
 
 					for i, value := range values {
-						if len(value) > 10000 {
-							c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-								"error":   "form_value_too_long",
-								"message": "Form field value too long",
-							})
-							return
-						}
-
 						sanitized := SanitizeHTML(value)
 						if sanitized != value {
 							isXSS, pattern := DetectXSS(value)
@@ -695,49 +615,131 @@ func SSRFProtectionMiddleware(configs ...SSRFProtectionConfig) gin.HandlerFunc {
 }
 
 func isSSRFAttack(urlStr string, cfg SSRFProtectionConfig) bool {
-	parsedURL, err := url.Parse(urlStr)
-	if err != nil {
-		return true
+	// 检查URL是否为空
+	if urlStr == "" {
+		return false
 	}
-
-	if parsedURL.Host == "" {
-		return true
+	
+	// 检查是否包含协议
+	urlLower := strings.ToLower(urlStr)
+	
+	// 阻止危险协议
+	dangerousProtocols := []string{
+		"dict://",
+		"ldap://",
+		"sftp://",
+		"imap://",
+		"pop3://",
+		"telnet://",
+		"tftp://",
+		"gopher://",
+		"file://",
 	}
-
-	host := parsedURL.Hostname()
-
-	if cfg.CheckLoopback {
-		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+	
+	for _, proto := range dangerousProtocols {
+		if strings.Contains(urlLower, proto) {
 			return true
 		}
 	}
-
-	if cfg.CheckPrivate {
-		privateRanges := []string{
-			"10.", "172.16.", "172.17.", "172.18.", "172.19.",
-			"172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
-			"172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
-			"172.30.", "172.31.", "192.168.",
-		}
-		for _, prefix := range privateRanges {
-			if strings.HasPrefix(host, prefix) {
-				return true
-			}
+	
+	// 检查内网IP和主机名
+	privatePatterns := []string{
+		"127.0.0.1",
+		"localhost",
+		"0.0.0.0",
+		"::1",
+		"[::1]",
+		"[::ffff:",
+		"169.254.169.254",
+		"metadata.google.internal",
+		"metadata.azure.com",
+		"metadata.openstack.org",
+	}
+	
+	for _, pattern := range privatePatterns {
+		if strings.Contains(urlLower, pattern) {
+			return true
 		}
 	}
-
+	
+	// 检查私有IP范围
+	ipPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.)`),
+		regexp.MustCompile(`(?i)(127\.|0\.0\.0\.0)`),
+	}
+	
+	for _, pattern := range ipPatterns {
+		if pattern.MatchString(urlStr) {
+			return true
+		}
+	}
+	
+	// 检查十六进制编码的IP
+	hexIPPattern := regexp.MustCompile(`(?i)(0x[a-f0-9]{8})`)
+	if hexIPPattern.MatchString(urlStr) {
+		return true
+	}
+	
+	// 检查点分十进制IP
+	ipPattern := regexp.MustCompile(`(?i)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`)
+	matches := ipPattern.FindAllString(urlStr, -1)
+	for _, ip := range matches {
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+	
+	// 检查允许的域名列表
 	if len(cfg.AllowedDomains) > 0 {
+		parsedURL, err := url.Parse(urlStr)
+		if err != nil {
+			return true
+		}
+		
+		host := parsedURL.Hostname()
 		allowed := false
 		for _, domain := range cfg.AllowedDomains {
-			if strings.HasSuffix(host, domain) || host == domain {
+			if host == domain || strings.HasSuffix(host, "."+domain) {
 				allowed = true
 				break
 			}
 		}
+		
 		if !allowed {
 			return true
 		}
 	}
+	
+	// 检查阻止的IP范围
+	if len(cfg.BlockedIPRanges) > 0 {
+		for _, blockedRange := range cfg.BlockedIPRanges {
+			if strings.Contains(urlStr, blockedRange) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
 
+func isPrivateIP(ip string) bool {
+	privateRanges := []string{
+		"10.",
+		"172.16.", "172.17.", "172.18.", "172.19.",
+		"172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+		"172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+		"172.30.", "172.31.",
+		"192.168.",
+		"127.",
+		"0.",
+		"169.254.",
+	}
+	
+	for _, range_ := range privateRanges {
+		if strings.Contains(ip, range_) {
+			return true
+		}
+	}
+	
 	return false
 }

@@ -4140,3 +4140,315 @@ func ExtractMicroMovementsStatic(trajectory []SliderPoint) []SliderPoint {
 	
 	return microMovements
 }
+
+func (sa *SliderAnalyzer) AnalyzeTrajectoryQuality(trajectory []SliderPoint) map[string]interface{} {
+	quality := make(map[string]interface{})
+
+	if len(trajectory) < 3 {
+		quality["is_valid"] = false
+		quality["reason"] = "insufficient_points"
+		return quality
+	}
+
+	quality["is_valid"] = true
+	quality["point_count"] = len(trajectory)
+
+	totalDuration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	quality["duration_ms"] = totalDuration
+
+	if totalDuration < 100 {
+		quality["is_valid"] = false
+		quality["reason"] = "too_fast"
+		return quality
+	}
+
+	if totalDuration > 30000 {
+		quality["is_valid"] = false
+		quality["reason"] = "too_slow"
+		return quality
+	}
+
+	totalDistance := 0.0
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		totalDistance += math.Sqrt(dx*dx + dy*dy)
+	}
+	quality["total_distance"] = totalDistance
+
+	if totalDistance < 50 {
+		quality["is_valid"] = false
+		quality["reason"] = "insufficient_distance"
+		return quality
+	}
+
+	speeds := sa.extractSpeeds(trajectory)
+	if len(speeds) > 0 {
+		maxSpeed := 0.0
+		for _, speed := range speeds {
+			if speed > maxSpeed {
+				maxSpeed = speed
+			}
+		}
+		quality["max_speed"] = maxSpeed
+
+		if maxSpeed > 5000 {
+			quality["is_valid"] = false
+			quality["reason"] = "unrealistic_speed"
+			return quality
+		}
+	}
+
+	samplingRate := float64(len(trajectory)) / totalDuration * 1000
+	quality["sampling_rate_hz"] = samplingRate
+
+	if samplingRate < 10 {
+		quality["is_valid"] = false
+		quality["reason"] = "low_sampling_rate"
+		return quality
+	}
+
+	return quality
+}
+
+func (sa *SliderAnalyzer) DetectAdvancedBotPatterns(trajectory []SliderPoint) (float64, []string) {
+	if len(trajectory) < 5 {
+		return 0.0, []string{}
+	}
+
+	botScore := 0.0
+	patterns := make([]string, 0)
+
+	pattern1 := sa.detectUniformMotionPattern(trajectory)
+	if pattern1.detected {
+		botScore += pattern1.weight
+		patterns = append(patterns, pattern1.name+": "+pattern1.description)
+	}
+
+	pattern2 := sa.detectGeometricPrecision(trajectory)
+	if pattern2.detected {
+		botScore += pattern2.weight
+		patterns = append(patterns, pattern2.name+": "+pattern2.description)
+	}
+
+	pattern3 := sa.detectTemporalRegularity(trajectory)
+	if pattern3.detected {
+		botScore += pattern3.weight
+		patterns = append(patterns, pattern3.name+": "+pattern3.description)
+	}
+
+	pattern4 := sa.detectVelocityAnomaly(trajectory)
+	if pattern4.detected {
+		botScore += pattern4.weight
+		patterns = append(patterns, pattern4.name+": "+pattern4.description)
+	}
+
+	pattern5 := sa.detectDirectionAnomaly(trajectory)
+	if pattern5.detected {
+		botScore += pattern5.weight
+		patterns = append(patterns, pattern5.name+": "+pattern5.description)
+	}
+
+	return math.Min(botScore, 1.0), patterns
+}
+
+type botPattern struct {
+	name        string
+	description string
+	detected    bool
+	weight      float64
+}
+
+func (sa *SliderAnalyzer) detectUniformMotionPattern(trajectory []SliderPoint) botPattern {
+	speeds := sa.extractSpeeds(trajectory)
+	if len(speeds) < 3 {
+		return botPattern{name: "uniform_motion", detected: false, weight: 0}
+	}
+
+	mean := 0.0
+	for _, s := range speeds {
+		mean += s
+	}
+	mean /= float64(len(speeds))
+
+	variance := 0.0
+	for _, s := range speeds {
+		diff := s - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(speeds))
+
+	coefficientOfVariation := 0.0
+	if mean > 0 {
+		coefficientOfVariation = math.Sqrt(variance) / mean
+	}
+
+	detected := coefficientOfVariation < 0.03 && mean > 100
+
+	return botPattern{
+		name:        "uniform_motion",
+		description: fmt.Sprintf("均匀移动，速度变异系数: %.4f", coefficientOfVariation),
+		detected:    detected,
+		weight:      0.25,
+	}
+}
+
+func (sa *SliderAnalyzer) detectGeometricPrecision(trajectory []SliderPoint) botPattern {
+	if len(trajectory) < 3 {
+		return botPattern{name: "geometric_precision", detected: false, weight: 0}
+	}
+
+	startX := float64(trajectory[0].X)
+	endX := float64(trajectory[len(trajectory)-1].X)
+	totalDist := 0.0
+
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		totalDist += math.Sqrt(dx*dx + dy*dy)
+	}
+
+	directDist := math.Abs(endX - startX)
+	efficiency := 0.0
+	if totalDist > 0 {
+		efficiency = directDist / totalDist
+	}
+
+	detected := efficiency > 0.999
+
+	return botPattern{
+		name:        "geometric_precision",
+		description: fmt.Sprintf("几何精度过高，路径效率: %.4f", efficiency),
+		detected:    detected,
+		weight:      0.3,
+	}
+}
+
+func (sa *SliderAnalyzer) detectTemporalRegularity(trajectory []SliderPoint) botPattern {
+	if len(trajectory) < 3 {
+		return botPattern{name: "temporal_regularity", detected: false, weight: 0}
+	}
+
+	intervals := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			intervals = append(intervals, dt)
+		}
+	}
+
+	if len(intervals) < 3 {
+		return botPattern{name: "temporal_regularity", detected: false, weight: 0}
+	}
+
+	mean := 0.0
+	for _, interval := range intervals {
+		mean += interval
+	}
+	mean /= float64(len(intervals))
+
+	variance := 0.0
+	for _, interval := range intervals {
+		diff := interval - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(intervals))
+
+	coefficientOfVariation := 0.0
+	if mean > 0 {
+		coefficientOfVariation = math.Sqrt(variance) / mean
+	}
+
+	detected := coefficientOfVariation < 0.02
+
+	return botPattern{
+		name:        "temporal_regularity",
+		description: fmt.Sprintf("时序过于规律，时间间隔变异系数: %.4f", coefficientOfVariation),
+		detected:    detected,
+		weight:      0.2,
+	}
+}
+
+func (sa *SliderAnalyzer) detectVelocityAnomaly(trajectory []SliderPoint) botPattern {
+	speeds := sa.extractSpeeds(trajectory)
+	if len(speeds) < 3 {
+		return botPattern{name: "velocity_anomaly", detected: false, weight: 0}
+	}
+
+	mean := 0.0
+	for _, s := range speeds {
+		mean += s
+	}
+	mean /= float64(len(speeds))
+
+	maxSpeed := 0.0
+	for _, s := range speeds {
+		if s > maxSpeed {
+			maxSpeed = s
+		}
+	}
+
+	anomalyScore := 0.0
+	if maxSpeed > mean*5 {
+		anomalyScore = 0.3
+	}
+
+	variance := 0.0
+	for _, s := range speeds {
+		diff := s - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(speeds))
+
+	if variance < 1.0 && mean > 100 {
+		anomalyScore += 0.2
+	}
+
+	detected := anomalyScore > 0.3
+
+	return botPattern{
+		name:        "velocity_anomaly",
+		description: fmt.Sprintf("速度异常，平均速度: %.2f，最大速度: %.2f", mean, maxSpeed),
+		detected:    detected,
+		weight:      anomalyScore,
+	}
+}
+
+func (sa *SliderAnalyzer) detectDirectionAnomaly(trajectory []SliderPoint) botPattern {
+	if len(trajectory) < 3 {
+		return botPattern{name: "direction_anomaly", detected: false, weight: 0}
+	}
+
+	angleChanges := 0.0
+	var prevAngle float64
+
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		angle := math.Atan2(dy, dx)
+
+		if i > 1 {
+			angleDiff := math.Abs(angle - prevAngle)
+			if angleDiff > math.Pi {
+				angleDiff = 2*math.Pi - angleDiff
+			}
+			angleChanges += angleDiff
+		}
+		prevAngle = angle
+	}
+
+	avgAngleChange := angleChanges / float64(len(trajectory)-1)
+
+	startY := float64(trajectory[0].Y)
+	endY := float64(trajectory[len(trajectory)-1].Y)
+	yVariance := math.Abs(endY - startY)
+
+	detected := avgAngleChange < 0.05 && yVariance < 5
+
+	return botPattern{
+		name:        "direction_anomaly",
+		description: fmt.Sprintf("方向异常，平均角度变化: %.4f，Y轴偏移: %.2f", avgAngleChange, yVariance),
+		detected:    detected,
+		weight:      0.25,
+	}
+}

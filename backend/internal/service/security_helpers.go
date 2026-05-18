@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"html"
 	"regexp"
 	"strings"
 	"sync"
@@ -279,40 +280,232 @@ func (s *XSSSecurity) SanitizeInput(input string) string {
 
 // SanitizeHTML HTML转义和清理
 func SanitizeHTML(input string) string {
-	// 移除script标签
+	// 移除script标签（包括编码的）
 	input = regexp.MustCompile(`(?i)<script[^>]*>.*?</script>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<script[^>]*>`).ReplaceAllString(input, "")
 	input = regexp.MustCompile(`(?i)</script>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<\/?script`).ReplaceAllString(input, "")
 	
 	// 移除iframe
 	input = regexp.MustCompile(`(?i)<iframe[^>]*>.*?</iframe>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<iframe[^>]*>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)</iframe>`).ReplaceAllString(input, "")
 	
 	// 移除img标签（可能有onerror）
 	input = regexp.MustCompile(`(?i)<img[^>]*>`).ReplaceAllString(input, "")
 	
 	// 移除svg标签
 	input = regexp.MustCompile(`(?i)<svg[^>]*>.*?</svg>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<svg[^>]*>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)</svg>`).ReplaceAllString(input, "")
+	
+	// 移除embed标签
+	input = regexp.MustCompile(`(?i)<embed[^>]*>`).ReplaceAllString(input, "")
+	
+	// 移除object标签
+	input = regexp.MustCompile(`(?i)<object[^>]*>.*?</object>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<object[^>]*>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)</object>`).ReplaceAllString(input, "")
+	
+	// 移除applet标签
+	input = regexp.MustCompile(`(?i)<applet[^>]*>.*?</applet>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<applet[^>]*>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)</applet>`).ReplaceAllString(input, "")
+	
+	// 移除form标签
+	input = regexp.MustCompile(`(?i)<form[^>]*>.*?</form>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<form[^>]*>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)</form>`).ReplaceAllString(input, "")
+	
+	// 移除link标签
+	input = regexp.MustCompile(`(?i)<link[^>]*>`).ReplaceAllString(input, "")
+	
+	// 移除meta标签
+	input = regexp.MustCompile(`(?i)<meta[^>]*>`).ReplaceAllString(input, "")
+	
+	// 移除base标签
+	input = regexp.MustCompile(`(?i)<base[^>]*>`).ReplaceAllString(input, "")
+	
+	// 移除style标签
+	input = regexp.MustCompile(`(?i)<style[^>]*>.*?</style>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<style[^>]*>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)</style>`).ReplaceAllString(input, "")
+	
+	// 移除xml标签
+	input = regexp.MustCompile(`(?i)<xml[^>]*>.*?</xml>`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)<xml[^>]*>`).ReplaceAllString(input, "")
+	
+	// 移除xss标签
+	input = regexp.MustCompile(`(?i)<xss[^>]*>.*?</xss>`).ReplaceAllString(input, "")
 	
 	// 移除事件处理器
 	input = regexp.MustCompile(`(?i)\s+on\w+\s*=\s*(["'][^"']*["']|[^\s>]*)`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonload\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonclick\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonerror\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonmouseover\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonfocus\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonblur\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonchange\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonsubmit\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonkeydown\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonkeyup\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonkeypress\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonmouseout\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonmousedown\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonmouseup\b`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)\bonmouseover\b`).ReplaceAllString(input, "")
+	
+	// 移除javascript:协议
+	input = regexp.MustCompile(`(?i)javascript\s*:`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)vbscript\s*:`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)data\s*:`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`(?i)blob\s*:`).ReplaceAllString(input, "")
+	
+	// 移除HTML注释（可能被用于绕过）
+	input = regexp.MustCompile(`<!--.*?-->`).ReplaceAllString(input, "")
+	input = regexp.MustCompile(`<!--.*`).ReplaceAllString(input, "")
+	
+	// 移除CDATA节
+	input = regexp.MustCompile(`(?i)<!\[CDATA\[.*?\]\]>`).ReplaceAllString(input, "")
+	
+	// 移除HTML实体编码
+	input = regexp.MustCompile(`&#(\d+);`).ReplaceAllStringFunc(input, func(match string) string {
+		return ""
+	})
+	input = regexp.MustCompile(`&#x([0-9a-f]+);`).ReplaceAllStringFunc(input, func(match string) string {
+		return ""
+	})
 	
 	// HTML转义
-	return input
+	return html.EscapeString(input)
 }
 
 // DetectXSS 检测XSS攻击
 func (s *XSSSecurity) DetectXSS(input string) (bool, string) {
-	xssPatterns := []string{
-		`<script`,
-		`javascript:`,
-		`onerror`,
-		`onload`,
-		`onclick`,
+	xssPatterns := []struct {
+		pattern string
+		name    string
+	}{
+		{`<script`, "script_tag"},
+		{`javascript:`, "javascript_protocol"},
+		{`vbscript:`, "vbscript_protocol"},
+		{`data:`, "data_protocol"},
+		{`onerror`, "onerror_event"},
+		{`onload`, "onload_event"},
+		{`onclick`, "onclick_event"},
+		{`onmouseover`, "onmouseover_event"},
+		{`onfocus`, "onfocus_event"},
+		{`onblur`, "onblur_event"},
+		{`onchange`, "onchange_event"},
+		{`onsubmit`, "onsubmit_event"},
+		{`onkeydown`, "onkeydown_event"},
+		{`onkeyup`, "onkeyup_event"},
+		{`onkeypress`, "onkeypress_event"},
+		{`<iframe`, "iframe_tag"},
+		{`<img`, "img_tag"},
+		{`<svg`, "svg_tag"},
+		{`<embed`, "embed_tag"},
+		{`<object`, "object_tag"},
+		{`<applet`, "applet_tag"},
+		{`<form`, "form_tag"},
+		{`<link`, "link_tag"},
+		{`<meta`, "meta_tag"},
+		{`<base`, "base_tag"},
+		{`<style`, "style_tag"},
+		{`<xml`, "xml_tag"},
+		{`expression(`, "css_expression"},
+		{`behavior:`, "css_behavior"},
+		{`alert(`, "alert_function"},
+		{`prompt(`, "prompt_function"},
+		{`confirm(`, "confirm_function"},
+		{`document.`, "document_object"},
+		{`window.`, "window_object"},
+		{`parent.`, "parent_object"},
+		{`top.`, "top_object"},
+		{`&#`, "html_entity"},
+		{`\\x`, "hex_escape"},
+		{`\\u`, "unicode_escape"},
 	}
 	
 	lowerInput := strings.ToLower(input)
-	for _, pattern := range xssPatterns {
-		if strings.Contains(lowerInput, pattern) {
-			return true, pattern
+	for _, p := range xssPatterns {
+		if strings.Contains(lowerInput, p.pattern) {
+			return true, p.name
+		}
+	}
+	
+	return false, ""
+}
+
+// DetectSQLInjection 检测SQL注入攻击
+func (s *XSSSecurity) DetectSQLInjection(input string) (bool, string) {
+	sqlPatterns := []struct {
+		pattern string
+		name    string
+	}{
+		{`union select`, "union_select"},
+		{`union all select`, "union_all_select"},
+		{`select * from`, "select_all"},
+		{`insert into`, "insert_statement"},
+		{`update set`, "update_statement"},
+		{`delete from`, "delete_statement"},
+		{`drop table`, "drop_table"},
+		{`alter table`, "alter_table"},
+		{`exec(`, "exec_statement"},
+		{`execute(`, "execute_statement"},
+		{`';--`, "sql_comment"},
+		{`' or '1'='1`, "or_always_true"},
+		{`' or 1=1`, "or_numeric_true"},
+		{`1=1--`, "numeric_true_comment"},
+		{`information_schema`, "information_schema"},
+		{`sys.tables`, "system_tables"},
+		{`pg_catalog`, "postgres_catalog"},
+		{`sleep(`, "time_based"},
+		{`benchmark(`, "benchmark_function"},
+		{`waitfor delay`, "mssql_delay"},
+		{`load_file(`, "file_read"},
+		{`into outfile`, "file_write"},
+		{`0x`, "hex_literal"},
+		{`char(`, "char_function"},
+		{`concat(`, "concat_function"},
+	}
+	
+	lowerInput := strings.ToLower(input)
+	for _, p := range sqlPatterns {
+		if strings.Contains(lowerInput, p.pattern) {
+			return true, p.name
+		}
+	}
+	
+	return false, ""
+}
+
+// DetectCommandInjection 检测命令注入攻击
+func (s *XSSSecurity) DetectCommandInjection(input string) (bool, string) {
+	cmdPatterns := []struct {
+		pattern string
+		name    string
+	}{
+		{`&&`, "and_operator"},
+		{`||`, "or_operator"},
+		{";", "semicolon"},
+		{"|", "pipe"},
+		{"`", "backtick"},
+		{"$(", "subshell"},
+		{"${", "variable_expansion"},
+		{"eval(", "eval_function"},
+		{"system(", "system_function"},
+		{"exec(", "exec_function"},
+		{"passthru(", "passthru_function"},
+		{"shell_exec(", "shell_exec_function"},
+		{"popen(", "popen_function"},
+	}
+	
+	lowerInput := strings.ToLower(input)
+	for _, p := range cmdPatterns {
+		if strings.Contains(lowerInput, p.pattern) {
+			return true, p.name
 		}
 	}
 	

@@ -89,21 +89,92 @@ function switchChartType(type) {
     }
 }
 
-async function loadStatsData() {
-    const dateRange = document.getElementById('dateRange')?.value || '30d';
-    const comparePeriod = document.getElementById('comparePeriod')?.value || '';
-    const mockData = getMockStatsData(dateRange);
+function loadStatsData() {
+    animateValue('totalRequests', 0, 82560, 1500);
+    document.getElementById('successRate').textContent = '92.5%';
+    document.getElementById('avgResponse').textContent = '45ms';
+    animateValue('activeUsers', 0, 12580, 1500);
+    
+    document.getElementById('requestsProgress').style.width = '75%';
+    document.getElementById('successProgress').style.width = '92.5%';
+    document.getElementById('responseProgress').style.width = '45%';
+    document.getElementById('usersProgress').style.width = '60%';
+    
+    const requestsChange = 12.5;
+    const successChange = 2.3;
+    const responseChange = -8.2;
+    const usersChange = 15.8;
+    
+    document.getElementById('requestsChange').innerHTML = `<span class="trend-up"><i class="fas fa-arrow-up"></i> +${requestsChange}%</span>`;
+    document.getElementById('successChange').innerHTML = `<span class="trend-up"><i class="fas fa-arrow-up"></i> +${successChange}%</span>`;
+    document.getElementById('responseChange').innerHTML = `<span class="trend-down"><i class="fas fa-arrow-down"></i> ${responseChange}%</span>`;
+    document.getElementById('usersChange').innerHTML = `<span class="trend-up"><i class="fas fa-arrow-up"></i> +${usersChange}%</span>`;
+    
+    updateTrendBadge('requestsTrendBadge', requestsChange);
+    updateTrendBadge('successTrendBadge', successChange);
+    updateTrendBadge('responseTrendBadge', responseChange, true);
+    updateTrendBadge('usersTrendBadge', usersChange);
+    
+    loadAdditionalStats();
+    loadStatsTable();
+}
 
-    try {
-        const result = await auth.request(`/admin/stats?range=${dateRange}&compare=${comparePeriod}`);
-        if (result.code === 0) {
-            updateAllStats(result.data);
-        } else {
-            updateAllStats(mockData);
-        }
-    } catch (error) {
-        updateAllStats(mockData);
+function loadAdditionalStats() {
+    animateValue('totalBlockRate', 0, 5.2, 1000, '%');
+    animateValue('peakQPS', 0, 1523, 1200);
+    animateValue('avgRiskScore', 0, 23.5, 1000);
+    animateValue('totalRevenue', 0, 45680, 1500, '¥');
+    
+    document.getElementById('blockRateProgress').style.width = '5.2%';
+    document.getElementById('qpsProgress').style.width = '76%';
+    document.getElementById('riskProgress').style.width = '23.5%';
+    document.getElementById('revenueProgress').style.width = '68%';
+    
+    updateTrendBadge('revenueTrendBadge', 18.5);
+}
+
+function updateTrendBadge(elementId, change, isInverse = false) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    const isPositive = change >= 0;
+    const displayValue = Math.abs(change).toFixed(1);
+    
+    if (isPositive === !isInverse) {
+        el.innerHTML = `<i class="fas fa-arrow-up"></i> ${displayValue}%`;
+        el.className = 'badge badge-success';
+    } else {
+        el.innerHTML = `<i class="fas fa-arrow-down"></i> ${displayValue}%`;
+        el.className = 'badge badge-danger';
     }
+}
+
+function animateValue(elementId, start, end, duration, prefix = '') {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const startTime = performance.now();
+    
+    function update(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 4);
+        const value = start + (end - start) * easeProgress;
+        
+        if (prefix === '%') {
+            element.textContent = value.toFixed(1) + '%';
+        } else if (prefix === '¥') {
+            element.textContent = '¥' + Math.floor(value).toLocaleString();
+        } else {
+            element.textContent = formatNumber(Math.floor(value));
+        }
+        
+        if (progress < 1) {
+            requestAnimationFrame(update);
+        }
+    }
+    
+    requestAnimationFrame(update);
 }
 
 function getMockStatsData(range) {

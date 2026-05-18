@@ -170,7 +170,10 @@
                                     <div class="progress mt-2">
                                         <div class="progress-bar" id="requestsProgress" style="width: 0%"></div>
                                     </div>
-                                    <small class="text-muted" id="requestsChange"></small>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted" id="requestsChange"></small>
+                                        <span class="badge badge-light" id="requestsTrendBadge">-</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -184,7 +187,10 @@
                                     <div class="progress mt-2">
                                         <div class="progress-bar" id="successProgress" style="width: 0%"></div>
                                     </div>
-                                    <small class="text-muted" id="successChange"></small>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted" id="successChange"></small>
+                                        <span class="badge badge-light" id="successTrendBadge">-</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -198,7 +204,10 @@
                                     <div class="progress mt-2">
                                         <div class="progress-bar" id="responseProgress" style="width: 0%"></div>
                                     </div>
-                                    <small class="text-muted" id="responseChange"></small>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted" id="responseChange"></small>
+                                        <span class="badge badge-light" id="responseTrendBadge">-</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -212,7 +221,81 @@
                                     <div class="progress mt-2">
                                         <div class="progress-bar" id="usersProgress" style="width: 0%"></div>
                                     </div>
-                                    <small class="text-muted" id="usersChange"></small>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted" id="usersChange"></small>
+                                        <span class="badge badge-light" id="usersTrendBadge">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-info">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="totalBlockRate">0%</h3>
+                                        <small>拦截率</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar bg-white" id="blockRateProgress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted">恶意请求</small>
+                                        <span class="badge badge-light"><i class="fas fa-shield-alt"></i></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-secondary">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="peakQPS">0</h3>
+                                        <small>峰值QPS</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar bg-white" id="qpsProgress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted">最高并发</small>
+                                        <span class="badge badge-light"><i class="fas fa-bolt"></i></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-dark">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="avgRiskScore">0.0</h3>
+                                        <small>平均风险评分</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar bg-white" id="riskProgress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted">安全指标</small>
+                                        <span class="badge badge-light"><i class="fas fa-chart-line"></i></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-navy">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="totalRevenue">¥0</h3>
+                                        <small>收益金额</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar bg-white" id="revenueProgress" style="width: 0%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <small class="text-muted" id="revenueChange"></small>
+                                        <span class="badge badge-light" id="revenueTrendBadge">-</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

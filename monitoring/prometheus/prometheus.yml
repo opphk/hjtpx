@@ -9,7 +9,7 @@ global:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: []
+        - targets: ['alertmanager:9093']
       timeout: 10s
       api_version: v2
 
@@ -44,7 +44,7 @@ scrape_configs:
         target_label: metrics_path
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: '(go_|http_|process_|app_|captcha_|auth_|security_|cache_|db_|redis_|middleware_).*'
+        regex: '(go_|http_|process_|app_|captcha_|auth_|security_|cache_|db_|redis_|middleware_|websocket_|mfa_|bot_|trace_|fingerprint_|proxy_|environment_).*'
         action: keep
       - source_labels: [__name__]
         regex: '.*_internal.*'
@@ -148,6 +148,19 @@ scrape_configs:
         regex: 'node_.*'
         action: keep
 
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'alertmanager'
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'alertmanager_.*'
+        action: keep
+
   - job_name: 'loki'
     static_configs:
       - targets: ['loki:3100']
@@ -162,15 +175,3 @@ scrape_configs:
       - source_labels: [__name__]
         regex: 'loki_.*'
         action: keep
-
-alerting:
-  alertmanagers:
-    - kubernetes_sd_configs:
-        - role: pod
-      relabel_configs:
-        - source_labels: [__meta_kubernetes_pod_name]
-          regex: prometheus
-          action: keep
-        - source_labels: [__meta_kubernetes_pod_container_port_number]
-          regex: "9093"
-          action: keep

@@ -12,40 +12,68 @@ import (
 type SecurityEventType string
 
 const (
-	EventLoginAttempt           SecurityEventType = "login_attempt"
-	EventLoginSuccess           SecurityEventType = "login_success"
-	EventLoginFailure           SecurityEventType = "login_failure"
-	EventAccessDenied           SecurityEventType = "access_denied"
-	EventCSRFDetected           SecurityEventType = "csrf_detected"
-	EventSQLInjection           SecurityEventType = "sql_injection"
-	EventXSSAttempt             SecurityEventType = "xss_attempt"
-	EventRateLimitHit           SecurityEventType = "rate_limit_hit"
-	EventBotDetected            SecurityEventType = "bot_detected"
-	EventDDoSAttempt            SecurityEventType = "ddos_attempt"
-	EventSuspiciousActivity     SecurityEventType = "suspicious_activity"
-	EventPrivilegeEscalation    SecurityEventType = "privilege_escalation"
-	EventDataAccess             SecurityEventType = "data_access"
-	EventConfigChange           SecurityEventType = "config_change"
-	EventAccountCreated         SecurityEventType = "account_created"
-	EventAccountDeleted         SecurityEventType = "account_deleted"
-	EventPasswordChange         SecurityEventType = "password_change"
-	EventPasswordReset          SecurityEventType = "password_reset"
-	EventAPIKeyGenerated        SecurityEventType = "api_key_generated"
-	EventSessionCreated         SecurityEventType = "session_created"
-	EventSessionExpired         SecurityEventType = "session_expired"
-	EventSessionInvalidated     SecurityEventType = "session_invalidated"
-	EventDataExport             SecurityEventType = "data_export"
-	EventDataImport             SecurityEventType = "data_import"
-	EventBackupCreated          SecurityEventType = "backup_created"
-	EventBackupRestored         SecurityEventType = "backup_restored"
-	EventFirewallBlock          SecurityEventType = "firewall_block"
-	EventIPReputationWarning    SecurityEventType = "ip_reputation_warning"
-	EventAnomalyDetected        SecurityEventType = "anomaly_detected"
-	EventViolationDetected      SecurityEventType = "violation_detected"
-	EventMFAEnabled             SecurityEventType = "mfa_enabled"
-	EventMFAFailed              SecurityEventType = "mfa_failed"
+	EventLoginAttempt            SecurityEventType = "login_attempt"
+	EventLoginSuccess            SecurityEventType = "login_success"
+	EventLoginFailure            SecurityEventType = "login_failure"
+	EventLogout                  SecurityEventType = "logout"
+	EventAccessDenied            SecurityEventType = "access_denied"
+	EventCSRFDetected            SecurityEventType = "csrf_detected"
+	EventSQLInjection            SecurityEventType = "sql_injection"
+	EventXSSAttempt              SecurityEventType = "xss_attempt"
+	EventCommandInjection        SecurityEventType = "command_injection"
+	EventPathTraversal           SecurityEventType = "path_traversal"
+	EventSSRFAttempt             SecurityEventType = "ssrf_attempt"
+	EventRateLimitHit            SecurityEventType = "rate_limit_hit"
+	EventBotDetected             SecurityEventType = "bot_detected"
+	EventDDoSAttempt             SecurityEventType = "ddos_attempt"
+	EventSuspiciousActivity      SecurityEventType = "suspicious_activity"
+	EventPrivilegeEscalation     SecurityEventType = "privilege_escalation"
+	EventDataAccess              SecurityEventType = "data_access"
+	EventConfigChange            SecurityEventType = "config_change"
+	EventAccountCreated          SecurityEventType = "account_created"
+	EventAccountDeleted          SecurityEventType = "account_deleted"
+	EventAccountLocked           SecurityEventType = "account_locked"
+	EventAccountUnlocked         SecurityEventType = "account_unlocked"
+	EventPasswordChange          SecurityEventType = "password_change"
+	EventPasswordReset           SecurityEventType = "password_reset"
+	EventPasswordResetRequest    SecurityEventType = "password_reset_request"
+	EventAPIKeyGenerated         SecurityEventType = "api_key_generated"
+	EventAPIKeyRevoked           SecurityEventType = "api_key_revoked"
+	EventSessionCreated          SecurityEventType = "session_created"
+	EventSessionExpired          SecurityEventType = "session_expired"
+	EventSessionInvalidated      SecurityEventType = "session_invalidated"
+	EventSessionHijackAttempt    SecurityEventType = "session_hijack_attempt"
+	EventDataExport              SecurityEventType = "data_export"
+	EventDataImport              SecurityEventType = "data_import"
+	EventBackupCreated           SecurityEventType = "backup_created"
+	EventBackupRestored          SecurityEventType = "backup_restored"
+	EventBackupDeleted           SecurityEventType = "backup_deleted"
+	EventFirewallBlock           SecurityEventType = "firewall_block"
+	EventIPReputationWarning     SecurityEventType = "ip_reputation_warning"
+	EventIPBlacklisted           SecurityEventType = "ip_blacklisted"
+	EventIPWhitelisted           SecurityEventType = "ip_whitelisted"
+	EventAnomalyDetected         SecurityEventType = "anomaly_detected"
+	EventViolationDetected       SecurityEventType = "violation_detected"
+	EventMFAEnabled              SecurityEventType = "mfa_enabled"
+	EventMFADisabled             SecurityEventType = "mfa_disabled"
+	EventMFAFailed               SecurityEventType = "mfa_failed"
+	EventMFASuccess              SecurityEventType = "mfa_success"
 	EventCertificateExpiry      SecurityEventType = "certificate_expiry"
 	EventDependencyVulnerability SecurityEventType = "dependency_vulnerability"
+	EventSecurityScan            SecurityEventType = "security_scan"
+	EventPenetrationTest         SecurityEventType = "penetration_test"
+	EventInputValidationFailed   SecurityEventType = "input_validation_failed"
+	EventInvalidRequest          SecurityEventType = "invalid_request"
+	EventPayloadTooLarge         SecurityEventType = "payload_too_large"
+	EventUploadBlocked           SecurityEventType = "upload_blocked"
+	EventFileInclusion           SecurityEventType = "file_inclusion"
+	EventLDAPInjection           SecurityEventType = "ldap_injection"
+	EventXMLInjection            SecurityEventType = "xml_injection"
+	EventJSONInjection           SecurityEventType = "json_injection"
+	EventXXEAttack               SecurityEventType = "xxe_attack"
+	EventHTTPParameterPollution  SecurityEventType = "http_parameter_pollution"
+	EventOpenRedirect            SecurityEventType = "open_redirect"
+	EventClickjackingAttempt     SecurityEventType = "clickjacking_attempt"
 )
 
 type SecurityEvent struct {
@@ -114,13 +142,17 @@ func NewSecurityAuditService() *SecurityAuditService {
 			regexp.MustCompile(`(?i)(private[_-]key|ssh[_-]key|certificate)`),
 		},
 		severityLevels: map[SecurityEventType]string{
-			EventLoginAttempt:           "info",
-			EventLoginSuccess:           "info",
-			EventLoginFailure:           "warning",
-			EventAccessDenied:           "warning",
+			EventLoginAttempt:            "info",
+			EventLoginSuccess:            "info",
+			EventLoginFailure:            "warning",
+			EventLogout:                  "info",
+			EventAccessDenied:            "warning",
 			EventCSRFDetected:           "high",
 			EventSQLInjection:           "critical",
 			EventXSSAttempt:             "high",
+			EventCommandInjection:        "critical",
+			EventPathTraversal:           "high",
+			EventSSRFAttempt:            "high",
 			EventRateLimitHit:           "warning",
 			EventBotDetected:            "medium",
 			EventDDoSAttempt:            "critical",
@@ -130,24 +162,48 @@ func NewSecurityAuditService() *SecurityAuditService {
 			EventConfigChange:           "high",
 			EventAccountCreated:         "info",
 			EventAccountDeleted:         "warning",
+			EventAccountLocked:          "high",
+			EventAccountUnlocked:        "warning",
 			EventPasswordChange:         "info",
 			EventPasswordReset:          "warning",
+			EventPasswordResetRequest:   "warning",
 			EventAPIKeyGenerated:        "high",
+			EventAPIKeyRevoked:          "warning",
 			EventSessionCreated:         "info",
 			EventSessionExpired:         "info",
 			EventSessionInvalidated:     "warning",
+			EventSessionHijackAttempt:   "critical",
 			EventDataExport:             "high",
 			EventDataImport:             "high",
 			EventBackupCreated:          "info",
 			EventBackupRestored:         "warning",
-			EventFirewallBlock:          "medium",
-			EventIPReputationWarning:    "warning",
-			EventAnomalyDetected:        "high",
-			EventViolationDetected:      "high",
-			EventMFAEnabled:             "info",
-			EventMFAFailed:              "warning",
-			EventCertificateExpiry:      "high",
+			EventBackupDeleted:         "warning",
+			EventFirewallBlock:         "medium",
+			EventIPReputationWarning:   "warning",
+			EventIPBlacklisted:         "high",
+			EventIPWhitelisted:         "info",
+			EventAnomalyDetected:       "high",
+			EventViolationDetected:     "high",
+			EventMFAEnabled:            "info",
+			EventMFADisabled:           "warning",
+			EventMFAFailed:             "warning",
+			EventMFASuccess:            "info",
+			EventCertificateExpiry:     "high",
 			EventDependencyVulnerability: "high",
+			EventSecurityScan:          "info",
+			EventPenetrationTest:       "warning",
+			EventInputValidationFailed: "warning",
+			EventInvalidRequest:        "warning",
+			EventPayloadTooLarge:       "warning",
+			EventUploadBlocked:         "high",
+			EventFileInclusion:         "critical",
+			EventLDAPInjection:         "critical",
+			EventXMLInjection:          "critical",
+			EventJSONInjection:         "critical",
+			EventXXEAttack:             "critical",
+			EventHTTPParameterPollution: "medium",
+			EventOpenRedirect:          "high",
+			EventClickjackingAttempt:   "medium",
 		},
 	}
 	go service.processEvents()

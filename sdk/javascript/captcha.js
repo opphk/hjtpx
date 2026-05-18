@@ -2,7 +2,64 @@
  * 行为验证系统 JavaScript SDK - 浏览器端完整版
  *
  * 提供浏览器环境下完整的验证码功能，支持多种集成模式
+ * @version 2.0.0
  */
+
+'use strict';
+
+/**
+ * 错误类定义
+ */
+class CaptchaSDKError extends Error {
+  constructor(message, status, code) {
+    super(message);
+    this.name = 'CaptchaSDKError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+class CaptchaAPIError extends CaptchaSDKError {
+  constructor(message, code, data) {
+    super(message, 200, code);
+    this.name = 'CaptchaAPIError';
+    this.data = data;
+  }
+}
+
+class CaptchaNetworkError extends CaptchaSDKError {
+  constructor(message) {
+    super(message, 0, 0);
+    this.name = 'CaptchaNetworkError';
+  }
+}
+
+class CaptchaTimeoutError extends CaptchaSDKError {
+  constructor(message) {
+    super(message, 408, 0);
+    this.name = 'CaptchaTimeoutError';
+  }
+}
+
+class CaptchaValidationError extends CaptchaSDKError {
+  constructor(message) {
+    super(message, 400, 0);
+    this.name = 'CaptchaValidationError';
+  }
+}
+
+/**
+ * 验证错误是否可重试
+ * @param {Error} error - 错误对象
+ * @returns {boolean} 是否可重试
+ */
+function isRetryableError(error) {
+  if (error instanceof CaptchaSDKError) {
+    const retryableStatuses = [408, 429, 500, 502, 503, 504];
+    return retryableStatuses.includes(error.status);
+  }
+  return false;
+}
 
 class CaptchaClient {
   /**
@@ -864,19 +921,243 @@ class ClickCaptchaWidget {
   }
 }
 
+/**
+ * 批量请求管理器
+ */
+class BatchRequestManager {
+  /**
+   * 创建批量请求管理器
+   * @param {CaptchaClient} client - 验证码客户端
+   * @param {Object} options - 配置选项
+   */
+  constructor(client, options = {}) {
+    this.client = client;
+    this.concurrency = options.concurrency || 5;
+    this.maxRetries = options.maxRetries || 3;
+    this.retryDelay = options.retryDelay || 1000;
+  }
+
+  /**
+   * 延迟指定毫秒
+   * @param {number} ms - 延迟时间
+   * @returns {Promise<void>}
+   */
+  _delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 指数退避延迟
+   * @param {number} attempt - 当前重试次数
+   * @returns {number} 延迟时间
+   */
+  _getBackoffDelay(attempt) {
+    return Math.min(this.retryDelay * Math.pow(2, attempt - 1), 30000);
+  }
+
+  /**
+   * 带重试的请求
+   * @param {Function} requestFn - 请求函数
+   * @returns {Promise<any>} 请求结果
+   */
+  async _requestWithRetry(requestFn) {
+    let lastError;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await requestFn();
+      } catch (error) {
+        lastError = error;
+
+        if (!isRetryableError(error) || attempt === this.maxRetries) {
+          throw error;
+        }
+
+        const delay = this._getBackoffDelay(attempt + 1);
+        console.warn(`请求失败，${delay}ms后重试 (${attempt + 1}/${this.maxRetries})`);
+        await this._delay(delay);
+      }
+    }
+
+    throw lastError;
+  }
+
+  /**
+   * 批量验证
+   * @param {Array<Object>} requests - 验证请求数组
+   * @returns {Promise<Object>} 批量结果
+   */
+  async batchVerify(requests) {
+    const results = {
+      successful: [],
+      failed: [],
+      total: requests.length,
+      successRate: 0,
+    };
+
+    const semaphore = {
+      count: 0,
+      queue: [],
+    };
+
+    const execute = async (index, requestFn) => {
+      semaphore.count++;
+
+      try {
+        const data = await this._requestWithRetry(requestFn);
+        results.successful.push({ index, data });
+      } catch (error) {
+        results.failed.push({ index, error });
+      }
+
+      semaphore.count--;
+
+      if (semaphore.queue.length > 0) {
+        const next = semaphore.queue.shift();
+        execute(next.index, next.fn);
+      }
+    };
+
+    const tasks = requests.map((request, index) => {
+      return new Promise((resolve) => {
+        const task = () => {
+          const requestFn = async () => {
+            return await this.client.verifyCaptcha(request);
+          };
+          execute(index, requestFn).then(resolve);
+        };
+
+        if (semaphore.count < this.concurrency) {
+          task();
+        } else {
+          semaphore.queue.push({ index, fn: task });
+        }
+      });
+    });
+
+    await Promise.all(tasks);
+
+    results.successRate = results.successful.length / results.total;
+    return results;
+  }
+
+  /**
+   * 批量获取验证码
+   * @param {Array<Object>} requests - 获取请求数组
+   * @returns {Promise<Object>} 批量结果
+   */
+  async batchGetCaptcha(requests) {
+    const results = {
+      successful: [],
+      failed: [],
+      total: requests.length,
+      successRate: 0,
+    };
+
+    const semaphore = {
+      count: 0,
+      queue: [],
+    };
+
+    const execute = async (index, captchaType, options) => {
+      semaphore.count++;
+
+      try {
+        let data;
+        switch (captchaType) {
+          case 'slider':
+            data = await this.client.getSliderCaptcha(options);
+            break;
+          case 'click':
+            data = await this.client.getClickCaptcha(options);
+            break;
+          case 'image':
+            data = await this.client.getImageCaptcha(options);
+            break;
+          default:
+            throw new Error(`Unsupported captcha type: ${captchaType}`);
+        }
+        results.successful.push({ index, data });
+      } catch (error) {
+        results.failed.push({ index, error });
+      }
+
+      semaphore.count--;
+
+      if (semaphore.queue.length > 0) {
+        const next = semaphore.queue.shift();
+        execute(next.index, next.type, next.options);
+      }
+    };
+
+    const tasks = requests.map((request, index) => {
+      return new Promise((resolve) => {
+        const task = () => {
+          execute(index, request.type, request.options);
+        };
+
+        if (semaphore.count < this.concurrency) {
+          task();
+        } else {
+          semaphore.queue.push({ index, type: request.type, options: request.options });
+        }
+      });
+    });
+
+    await Promise.all(tasks);
+
+    results.successRate = results.successful.length / results.total;
+    return results;
+  }
+}
+
+/**
+ * 创建带批处理的验证码客户端
+ * @param {string} baseURL - API基础URL
+ * @param {Object} options - 配置选项
+ * @returns {Object} 客户端和批处理管理器
+ */
+function createBatchClient(baseURL, options = {}) {
+  const client = new CaptchaClient(baseURL, options);
+  const batchManager = new BatchRequestManager(client, options);
+
+  return {
+    client,
+    batchManager,
+    batchVerify: (requests) => batchManager.batchVerify(requests),
+    batchGetCaptcha: (requests) => batchManager.batchGetCaptcha(requests),
+  };
+}
+
 // 导出
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     CaptchaClient,
+    CaptchaSDKError,
+    CaptchaAPIError,
+    CaptchaNetworkError,
+    CaptchaTimeoutError,
+    CaptchaValidationError,
+    isRetryableError,
     UserAuth,
     Environment,
     SliderCaptchaWidget,
     ClickCaptchaWidget,
+    BatchRequestManager,
+    createBatchClient,
   };
 } else if (typeof window !== 'undefined') {
   window.CaptchaClient = CaptchaClient;
+  window.CaptchaSDKError = CaptchaSDKError;
+  window.CaptchaAPIError = CaptchaAPIError;
+  window.CaptchaNetworkError = CaptchaNetworkError;
+  window.CaptchaTimeoutError = CaptchaTimeoutError;
+  window.CaptchaValidationError = CaptchaValidationError;
+  window.isRetryableError = isRetryableError;
   window.UserAuth = UserAuth;
   window.Environment = Environment;
   window.SliderCaptchaWidget = SliderCaptchaWidget;
   window.ClickCaptchaWidget = ClickCaptchaWidget;
+  window.BatchRequestManager = BatchRequestManager;
+  window.createBatchClient = createBatchClient;
 }

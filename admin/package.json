@@ -1,0 +1,40 @@
+{
+  "name": "admin-frontend-tests",
+  "version": "1.0.0",
+  "description": "HJTPX Admin Frontend Tests",
+  "main": "tests/admin-frontend.test.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --maxWorkers=2"
+  },
+  "keywords": [
+    "admin",
+    "frontend",
+    "tests",
+    "hjtpx"
+  ],
+  "author": "HJTPX Team",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "admin/static/js/**/*.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "verbose": true,
+    "testTimeout": 10000
+  }
+}

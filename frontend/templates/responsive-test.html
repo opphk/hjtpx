@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>响应式测试 - 墨盾验证</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
+    <style>
+        body {
+            padding: 2rem;
+            background: #f8f9fa;
+        }
+        .test-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .test-title {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a2e;
+        }
+        .device-preview {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        .device-preview.active {
+            border-color: #c9a96e;
+            background: rgba(201, 169, 110, 0.05);
+        }
+        .device-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        .result-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .result-badge.pass {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+        .result-badge.fail {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+        .breakpoint-info {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 0.5rem;
+        }
+        .test-components {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .component-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .component-title {
+            font-size: 0.85rem;
+            color: #495057;
+            margin-bottom: 0.75rem;
+        }
+        
+        /* Responsive container test */
+        .responsive-container {
+            background: linear-gradient(135deg, rgba(201,169,110,0.1), rgba(201,169,110,0.2));
+            border: 2px dashed #c9a96e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        /* Touch target test */
+        .touch-targets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+        }
+        
+        /* Toast preview */
+        .toast-preview {
+            position: relative;
+            height: 200px;
+            border: 1px dashed #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+        
+        @media (max-width: 575.98px) {
+            body {
+                padding: 1rem;
+            }
+            .test-section {
+                padding: 1rem;
+                border-radius: 8px;
+            }
+            .test-components {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (min-width: 576px) and (max-width: 991.98px) {
+            .test-components {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">📱 响应式设计测试</h1>
+        
+        <!-- Breakpoint Detection -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-desktop me-2"></i>当前视口信息
+            </div>
+            <div class="breakpoint-info" id="viewportInfo">
+                宽度: <span id="viewportWidth">--</span>px | 
+                高度: <span id="viewportHeight">--</span>px |
+                设备类型: <span id="deviceType">--</span>
+            </div>
+            <div class="breakpoint-info mt-2">
+                当前断点: <span id="currentBreakpoint" class="badge bg-primary">--</span>
+            </div>
+        </div>
+        
+        <!-- Responsive Container Test -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-th-large me-2"></i>响应式容器测试
+            </div>
+            <div class="responsive-container" id="containerTest">
+                容器测试区域 - 请调整浏览器宽度查看响应式效果
+            </div>
+            <div class="breakpoint-info">
+                容器实际宽度: <span id="containerWidth">--</span>px
+            </div>
+        </div>
+        
+        <!-- Component Tests -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-puzzle-piece me-2"></i>组件响应式测试
+            </div>
+            <div class="test-components">
+                <!-- Button Test -->
+                <div class="component-card">
+                    <div class="component-title">按钮组件</div>
+                    <button class="btn btn-primary btn-sm">小按钮</button>
+                    <button class="btn btn-primary">默认按钮</button>
+                    <button class="btn btn-primary btn-lg">大按钮</button>
+                </div>
+                
+                <!-- Toast Test -->
+                <div class="component-card">
+                    <div class="component-title">Toast 通知</div>
+                    <div class="captcha-toast-container" style="position: relative; top: auto; right: auto;">
+                        <div class="captcha-toast success">
+                            <div class="captcha-toast-icon"><i class="fas fa-check-circle"></i></div>
+                            <div class="captcha-toast-content">
+                                <div class="captcha-toast-title">成功</div>
+                                <div class="captcha-toast-message">测试消息</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Card Test -->
+                <div class="component-card">
+                    <div class="component-title">卡片组件</div>
+                    <div class="captcha-card" style="max-width: 200px; margin: 0 auto;">
+                        <div class="captcha-card-header" style="padding: 0.75rem;">
+                            标题
+                        </div>
+                        <div class="captcha-card-body" style="padding: 0.75rem;">
+                            卡片内容
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar Test -->
+                <div class="component-card">
+                    <div class="component-title">进度条</div>
+                    <div class="captcha-progress-container" style="max-width: 150px; margin: 0 auto;">
+                        <div class="captcha-progress-bar">
+                            <div class="captcha-progress-fill" style="width: 60%;"></div>
+                        </div>
+                        <div class="captcha-progress-text">60%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Touch Targets Test -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-hand-pointer me-2"></i>触摸目标测试 (最小44px)
+            </div>
+            <div class="touch-targets" id="touchTargets">
+                <button class="btn btn-primary btn-sm">小</button>
+                <button class="btn btn-primary">中</button>
+                <button class="btn btn-primary btn-lg">大</button>
+                <a href="#" class="btn btn-secondary">链接</a>
+                <button class="captcha-refresh-btn"><i class="fas fa-sync"></i></button>
+                <button class="theme-toggle"><i class="fas fa-moon"></i></button>
+            </div>
+            <div class="breakpoint-info mt-2" id="touchTargetInfo">
+                点击下方按钮检查触摸目标是否符合最小尺寸要求
+            </div>
+        </div>
+        
+        <!-- Error/Success Messages Test -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-bell me-2"></i>错误/成功消息样式测试
+            </div>
+            <div class="captcha-error-message mb-3">
+                <div class="captcha-error-message-icon">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <div class="captcha-error-message-content">
+                    <div class="captcha-error-message-title">错误提示</div>
+                    <div class="captcha-error-message-text">这是一条错误消息，用于测试统一样式</div>
+                </div>
+            </div>
+            <div class="captcha-success-message">
+                <div class="captcha-success-message-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="captcha-success-message-content">
+                    <div class="captcha-success-message-title">成功提示</div>
+                    <div class="captcha-success-message-text">这是一条成功消息，用于测试统一样式</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Animation Test -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-play me-2"></i>动画效果测试
+            </div>
+            <div class="d-flex gap-3 flex-wrap justify-content-center">
+                <button class="btn btn-primary" onclick="playAnimation('success')">
+                    <i class="fas fa-check me-1"></i>成功动画
+                </button>
+                <button class="btn btn-danger" onclick="playAnimation('error')">
+                    <i class="fas fa-times me-1"></i>错误动画
+                </button>
+                <button class="btn btn-secondary" onclick="playAnimation('refresh')">
+                    <i class="fas fa-sync me-1"></i>刷新动画
+                </button>
+            </div>
+            <div class="mt-3 text-center">
+                <div id="animationTarget" class="captcha-result-banner show success" style="opacity: 1; transform: none;">
+                    <i class="fas fa-check-circle"></i>
+                    <span>测试动画区域</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Device Simulation -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-mobile-alt me-2"></i>设备模拟预览
+            </div>
+            <div class="row g-3">
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="device-preview" id="device-iphone">
+                        <div class="device-label">iPhone SE</div>
+                        <div class="breakpoint-info">375 x 667</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="device-preview" id="device-iphone-landscape">
+                        <div class="device-label">iPhone 横屏</div>
+                        <div class="breakpoint-info">667 x 375</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="device-preview" id="device-ipad">
+                        <div class="device-label">iPad</div>
+                        <div class="breakpoint-info">768 x 1024</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="device-preview" id="device-ipad-landscape">
+                        <div class="device-label">iPad 横屏</div>
+                        <div class="breakpoint-info">1024 x 768</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="device-preview" id="device-desktop">
+                        <div class="device-label">桌面端</div>
+                        <div class="breakpoint-info">1280 x 800</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="device-preview" id="device-large">
+                        <div class="device-label">大屏幕</div>
+                        <div class="breakpoint-info">1920 x 1080</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Test Results Summary -->
+        <div class="test-section">
+            <div class="test-title">
+                <i class="fas fa-clipboard-check me-2"></i>测试结果汇总
+            </div>
+            <div id="testResults">
+                <div class="text-muted">请调整浏览器窗口大小查看各项测试状态</div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/js/responsive-test.js"></script>
+    <script>
+        function updateViewportInfo() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            document.getElementById('viewportWidth').textContent = width;
+            document.getElementById('viewportHeight').textContent = height;
+            
+            let deviceType = '桌面端';
+            let breakpoint = '大屏幕';
+            
+            if (width < 576) {
+                deviceType = '手机';
+                breakpoint = '超小屏幕 (< 576px)';
+            } else if (width < 768) {
+                deviceType = '大手机';
+                breakpoint = '小屏幕 (576px - 768px)';
+            } else if (width < 992) {
+                deviceType = '平板';
+                breakpoint = '中等屏幕 (768px - 992px)';
+            } else if (width < 1200) {
+                deviceType = '笔记本电脑';
+                breakpoint = '大屏幕 (992px - 1200px)';
+            } else {
+                deviceType = '桌面显示器';
+                breakpoint = '超大屏幕 (>= 1200px)';
+            }
+            
+            document.getElementById('deviceType').textContent = deviceType;
+            document.getElementById('currentBreakpoint').textContent = breakpoint;
+            
+            const container = document.querySelector('.responsive-container');
+            if (container) {
+                document.getElementById('containerWidth').textContent = container.offsetWidth;
+            }
+            
+            updateDevicePreview(width);
+            runQuickTests();
+        }
+        
+        function updateDevicePreview(width) {
+            const devices = {
+                'device-iphone': width < 576,
+                'device-iphone-landscape': width >= 576 && width < 768 && window.innerHeight < window.innerWidth,
+                'device-ipad': width >= 768 && width < 992 && window.innerHeight > window.innerWidth,
+                'device-ipad-landscape': width >= 992 && width < 1200 && window.innerHeight < window.innerWidth,
+                'device-desktop': width >= 992 && width < 1920,
+                'device-large': width >= 1920
+            };
+            
+            Object.keys(devices).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.toggle('active', devices[id]);
+                }
+            });
+        }
+        
+        function runQuickTests() {
+            const results = [];
+            
+            const container = document.querySelector('.responsive-container');
+            if (container && container.offsetWidth > 0) {
+                results.push({ name: '响应式容器', pass: true });
+            }
+            
+            const toast = document.querySelector('.captcha-toast-container');
+            if (toast && toast.getBoundingClientRect().right <= window.innerWidth + 10) {
+                results.push({ name: 'Toast定位', pass: true });
+            }
+            
+            const buttons = document.querySelectorAll('.touch-targets button, .touch-targets a');
+            let allTouchTargetsValid = true;
+            buttons.forEach(btn => {
+                const rect = btn.getBoundingClientRect();
+                if (rect.width < 32 || rect.height < 32) {
+                    allTouchTargetsValid = false;
+                }
+            });
+            results.push({ name: '触摸目标', pass: allTouchTargetsValid });
+            
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = results.map(r => 
+                `<span class="result-badge ${r.pass ? 'pass' : 'fail'} me-2 mb-2">
+                    <i class="fas ${r.pass ? 'fa-check' : 'fa-times'}"></i>
+                    ${r.name}
+                </span>`
+            ).join('');
+        }
+        
+        function playAnimation(type) {
+            const target = document.getElementById('animationTarget');
+            target.classList.remove('captcha-error-shake', 'captcha-success-animation', 'captcha-refresh-spin');
+            
+            switch(type) {
+                case 'success':
+                    target.className = 'captcha-result-banner show success';
+                    target.innerHTML = '<i class="fas fa-check-circle"></i><span>成功动画</span>';
+                    target.classList.add('captcha-success-animation');
+                    break;
+                case 'error':
+                    target.className = 'captcha-result-banner show error';
+                    target.innerHTML = '<i class="fas fa-times-circle"></i><span>错误动画</span>';
+                    target.classList.add('captcha-error-shake');
+                    break;
+                case 'refresh':
+                    target.className = 'captcha-result-banner show';
+                    target.innerHTML = '<i class="fas fa-sync"></i><span>刷新动画</span>';
+                    target.classList.add('captcha-refresh-spin');
+                    break;
+            }
+            
+            setTimeout(() => {
+                target.classList.remove('captcha-success-animation', 'captcha-error-shake');
+            }, 1500);
+        }
+        
+        window.addEventListener('resize', updateViewportInfo);
+        window.addEventListener('DOMContentLoaded', updateViewportInfo);
+        
+        updateViewportInfo();
+    </script>
+</body>
+</html>

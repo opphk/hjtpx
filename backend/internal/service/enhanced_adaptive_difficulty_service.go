@@ -1296,7 +1296,7 @@ func (pr *PatternRecognizer) recognizePattern(userID string, difficulty Difficul
 	pr.mu.Lock()
 	defer pr.mu.Unlock()
 	
-	patternKey := fmt.Sprintf("%s_%s_%s", userID, difficulty, success)
+	patternKey := fmt.Sprintf("%s_%s_%v", userID, difficulty, success)
 	
 	if pattern, exists := pr.patterns[patternKey]; exists {
 		pattern.Frequency++

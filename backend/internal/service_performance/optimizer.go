@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 	"runtime/pprof"
 	"sync"
@@ -157,7 +158,7 @@ func (po *PerformanceOptimizer) SetOptimizationLevel(level int) {
 
 type DatabaseOptimizer struct {
 	mu                sync.RWMutex
-	poolOptimizer    *database.ConnectionPoolOptimizer
+	poolOptimizer    *database.EnhancedConnectionPoolOptimizer
 	queryCache       *QueryCacheOptimizer
 	indexOptimizer   *IndexOptimizer
 	connectionMonitor *ConnectionMonitor
@@ -198,12 +199,12 @@ func (do *DatabaseOptimizer) Optimize() *DatabaseOptimizationResult {
 		result.ActiveConnections = metrics.ActiveConnections
 		result.IdleConnections = metrics.IdleConnections
 		result.MaxConnections = metrics.TotalConnections
-		result.WaitCount = metrics.WaitCount
+		result.WaitCount = uint64(metrics.WaitCount)
 	}
 
 	if do.poolOptimizer != nil {
-		if metrics.WaitCount > uint64(do.aggressionLevel*20) {
-			do.poolOptimizer.OptimizePoolSize()
+		if metrics.WaitCount > int64(do.aggressionLevel*20) {
+			do.poolOptimizer.CheckAndOptimize()
 			result.PoolResized = true
 		}
 	}
@@ -725,19 +726,37 @@ func (mp *MemoryProfiler) GetStats() map[string]interface{} {
 }
 
 func (mp *MemoryProfiler) DumpProfile(filename string) error {
-	file, err := pprof.Lookup("heap").WriteTo(&lazyFile{filename: filename}, 0)
+	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	return file.Close()
+	defer f.Close()
+	
+	err = pprof.Lookup("heap").WriteTo(f, 0)
+	return err
 }
 
 type lazyFile struct {
 	filename string
+	f        *os.File
 }
 
 func (lf *lazyFile) Close() error {
+	if lf.f != nil {
+		return lf.f.Close()
+	}
 	return nil
+}
+
+func (lf *lazyFile) Write(p []byte) (n int, err error) {
+	if lf.f == nil {
+		var err error
+		lf.f, err = os.Create(lf.filename)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return lf.f.Write(p)
 }
 
 type GoroutineManager struct {
@@ -1170,8 +1189,8 @@ func OptimizeRedisConnectionPool(maxConns, minIdleConns int) error {
 	}
 
 	optimizer := redis.NewPoolConfigOptimizer(client)
-	optimizer.MaxOpenConns = maxConns
-	optimizer.MinIdleConns = minIdleConns
+	optimizer.MaxOpenConns(maxConns)
+	optimizer.MinIdleConns(minIdleConns)
 
 	return optimizer.Optimize()
 }

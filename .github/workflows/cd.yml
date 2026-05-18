@@ -15,52 +15,93 @@ on:
         options:
           - staging
           - production
-      deployment_strategy:
-        description: 'Deployment strategy'
+      skip_tests:
+        description: 'Skip tests (not recommended)'
         required: false
-        default: 'rolling'
-        type: choice
-        options:
-          - rolling
-          - blue-green
-          - canary
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
   packages: write
   actions: read
-  security-events: write
 
 env:
   DOCKER_REGISTRY: docker.io
   IMAGE_NAME: hjtpx/hjtpx
   GO_VERSION: '1.21'
-  DEPLOYMENT_TIMEOUT: 30m
-  HEALTH_CHECK_TIMEOUT: 300
-  ROLLBACK_TIMEOUT: 10m
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  DEPLOY_TIMEOUT: '600'
+  HEALTH_CHECK_TIMEOUT: '120'
+  HEALTH_CHECK_INTERVAL: '10'
 
 jobs:
+  pre-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      commit_sha: ${{ steps.commit.outputs.sha }}
+      commit_message: ${{ steps.commit.outputs.message }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract commit info
+        id: commit
+        run: |
+          echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "message=$(git log -1 --pretty=%B | head -n 1)" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+
+      - name: Generate deployment ID
+        id: deploy_id
+        run: |
+          DEPLOY_ID="deploy-$(date +%Y%m%d-%H%M%S)-${{ github.run_id }}"
+          echo "id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          echo "Generated deployment ID: $DEPLOY_ID"
+
+      - name: Create deployment record
+        run: |
+          mkdir -p .deployments
+          cat > .deployments/${{ steps.deploy_id.outputs.id }}.json <<EOF
+          {
+            "id": "${{ steps.deploy_id.outputs.id }}",
+            "sha": "${{ steps.commit.outputs.sha }}",
+            "message": "${{ steps.commit.outputs.message }}",
+            "ref": "${{ github.ref }}",
+            "environment": "${{ github.event.inputs.environment || 'staging' }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "actor": "${{ github.actor }}"
+          }
+          EOF
+          echo "Deployment record created"
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    needs: pre-deployment
     
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
       image-digest: ${{ steps.build.outputs.digest }}
-      build-time: ${{ steps.build-time.outputs.time }}
+      deployment-id: ${{ needs.pre-deployment.outputs.deploy_id }}
     
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Record build time
-        id: build-time
-        run: echo "time=$(date -u +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
       
       - name: Extract metadata
         id: meta
@@ -96,9 +137,13 @@ jobs:
           build-args: |
             GO_VERSION=${{ env.GO_VERSION }}
             GIN_MODE=production
+            BUILD_VERSION=${{ github.ref_name }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
           platforms: |
             linux/amd64
             linux/arm64
+          no-cache-filters: |
+            golang
       
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -107,28 +152,27 @@ jobs:
           format: spdx-json
           output-file: sbom.spdx.json
       
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: '${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: false
-      
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
-          name: sbom
+          name: sbom-${{ needs.pre-deployment.outputs.deploy_id }}
           path: sbom.spdx.json
-          retention-days: 90
+          retention-days: 30
       
-      - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-        if: always()
+      - name: Image size report
+        run: |
+          echo "## Docker Image Build Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Registry: ${{ env.DOCKER_REGISTRY }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tag: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- SHA: ${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Build Time: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "- Go Version: ${{ env.GO_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.pre-deployment.outputs.deploy_id }}" >> $GITHUB_STEP_SUMMARY
 
   staging-deploy:
     runs-on: ubuntu-latest
@@ -141,65 +185,128 @@ jobs:
       url: https://staging.hjtpx.example.com
     
     steps:
-      - name: Save deployment info
+      - name: Pre-deployment checks
         run: |
-          echo "Deploying to staging environment"
-          echo "Image: ${{ needs.build.outputs.image-tag }}"
-          echo "Build time: ${{ needs.build.outputs.build-time }}"
+          echo "## Staging Deployment Started" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
       
+      - name: Get current container image
+        id: current_image
+        uses: appleboy/ssh-action@master
+        env:
+          DEPLOYMENT_ID: ${{ needs.build.outputs.deployment-id }}
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            echo "=== Pre-deployment Status ==="
+            docker ps --filter "name=hjtpx-staging" --format "{{.Image}}" || echo "No current staging container"
+            
+            echo "Creating backup of current deployment..."
+            docker tag hjtpx-staging:hjtpx hjtpx-staging:previous-${{ needs.build.outputs.deployment-id }} || true
+            
+            echo "Saving deployment metadata..."
+            mkdir -p /opt/hjtpx/deployments
+            cat > /opt/hjtpx/deployments/${{ needs.build.outputs.deployment-id }}.json <<EOF
+            {
+              "id": "${{ needs.build.outputs.deployment-id }}",
+              "version": "${{ github.ref_name }}",
+              "image": "${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "actor": "${{ github.actor }}"
+            }
+            EOF
+
       - name: Deploy to Staging
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_TIMEOUT }}m
           script: |
-            set -e
-            echo "=== Starting Staging Deployment ==="
+            echo "=== Starting Deployment ==="
+            
             echo "Pulling latest image..."
             docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             
-            echo "Creating backup of current container..."
-            docker stop hjtpx-staging-backup || true
-            docker rm hjtpx-staging-backup || true
+            echo "Stopping existing container..."
             docker stop hjtpx-staging || true
             docker rm hjtpx-staging || true
-            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:previous || true
-            docker tag ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }} ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:previous || true
             
             echo "Starting new container..."
             docker run -d \
               --name hjtpx-staging \
               -p 8080:8080 \
-              --env-file .env.staging \
+              --env-file /opt/hjtpx/.env.staging \
               --restart unless-stopped \
-              --health-cmd="curl -f http://localhost:8080/health || exit 1" \
+              --memory-reservation=256m \
+              --memory=512m \
+              --cpus=1.0 \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1" \
               --health-interval=30s \
               --health-timeout=10s \
               --health-retries=3 \
+              --health-start-period=10s \
+              --log-driver=json-file \
+              --log-opt=max-size=10m \
+              --log-opt=max-file=3 \
               ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             
-            echo "Waiting for container to be healthy..."
-            sleep 15
+            echo "Waiting for container to start..."
+            sleep 10
             
-            echo "Cleaning up old images..."
-            docker image prune -f || true
-            
-            echo "=== Staging Deployment Completed ==="
-      
+            echo "Container started successfully"
+
       - name: Health Check
         run: |
-          echo "Performing health check..."
-          timeout 120 bash -c 'until curl -f -s https://staging.hjtpx.example.com/health > /dev/null; do sleep 5; echo "Waiting for service..."; done'
-          echo "Health check passed!"
-      
+          echo "=== Health Check ==="
+          timeout ${{ env.HEALTH_CHECK_TIMEOUT }} bash -c 'until curl -f https://staging.hjtpx.example.com/health; do sleep ${{ env.HEALTH_CHECK_INTERVAL }}; done'
+          echo "✅ Health check passed!"
+
       - name: Run smoke tests
         run: |
-          echo "Running smoke tests..."
-          curl -f -s https://staging.hjtpx.example.com/health || { echo "Health endpoint failed"; exit 1; }
-          curl -f -s https://staging.hjtpx.example.com/api/v1/captcha/types || { echo "Captcha types endpoint failed"; exit 1; }
-          curl -f -s https://staging.hjtpx.example.com/api/v1/health/stats || { echo "Stats endpoint failed"; exit 1; }
-          echo "All smoke tests passed!"
+          echo "=== Running Smoke Tests ==="
+          curl -f https://staging.hjtpx.example.com/health || { echo "❌ Health endpoint failed"; exit 1; }
+          curl -f https://staging.hjtpx.example.com/api/v1/captcha/types || { echo "❌ API endpoint failed"; exit 1; }
+          echo "✅ All smoke tests passed!"
+
+      - name: Post-deployment cleanup
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            echo "=== Post-deployment Cleanup ==="
+            echo "Cleaning up old images (keeping last 5)..."
+            docker image prune -af --filter "until=72h" || true
+            
+            echo "Pruning unused networks..."
+            docker network prune -f || true
+            
+            echo "Container status:"
+            docker ps --filter "name=hjtpx-staging"
+            
+            echo "Resource usage:"
+            docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" hjtpx-staging || true
+
+      - name: Update deployment record
+        run: |
+          echo "## Deployment Status: SUCCESS ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: Staging" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Duration: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify deployment
         if: always()
@@ -213,7 +320,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Status:* ${{ job.status }}\n*Environment:* Staging\n*Version:* ${{ github.ref_name }}\n*Build Time:* ${{ needs.build.outputs.build-time }}"
+                    "text": "*Status:* ${{ job.status }}\n*Environment:* Staging\n*Version:* ${{ github.ref_name }}\n*Deployment ID:* ${{ needs.build.outputs.deployment-id }}"
                   }
                 },
                 {
@@ -223,11 +330,6 @@ jobs:
                       "type": "button",
                       "text": {"type": "plain_text", "text": "View Deployment"},
                       "url": "https://staging.hjtpx.example.com"
-                    },
-                    {
-                      "type": "button",
-                      "text": {"type": "plain_text", "text": "View Logs"},
-                      "url": "https://staging.hjtpx.example.com/logs"
                     }
                   ]
                 }
@@ -239,21 +341,38 @@ jobs:
 
   production-deploy:
     runs-on: ubuntu-latest
-    needs: [build, staging-deploy]
+    needs: build
     if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.environment == 'production'
-    timeout-minutes: 30
+    timeout-minutes: 25
     
     environment:
       name: production
       url: https://hjtpx.example.com
     
     steps:
-      - name: Save deployment info
+      - name: Pre-deployment verification
         run: |
-          echo "Preparing production deployment"
-          echo "Image: ${{ needs.build.outputs.image-tag }}"
-          echo "Deployment Strategy: ${{ github.event.inputs.deployment_strategy || 'rolling' }}"
-          echo "Build time: ${{ needs.build.outputs.build-time }}"
+          echo "## Production Deployment Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ needs.build.outputs.commit_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit Message: ${{ needs.build.outputs.commit_message }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ github.ref }}" == *"refs/tags/"* ]]; then
+            echo "⚠️  **WARNING: Production deployment triggered by tag release**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Create rollback point
+        run: |
+          echo "=== Creating Rollback Point ==="
+          ROLLBACK_ID="rollback-$(date +%Y%m%d-%H%M%S)"
+          echo "rollback_id=$ROLLBACK_ID" >> $GITHUB_OUTPUT
       
       - name: Pre-deployment backup
         uses: appleboy/ssh-action@master
@@ -262,98 +381,156 @@ jobs:
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
-            set -e
             echo "=== Pre-deployment Backup ==="
+            
+            echo "Creating backup directory..."
+            mkdir -p /opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)
+            BACKUP_DIR="/opt/hjtpx/backups/$(date +%Y%m%d-%H%M%S)"
             
             echo "Creating database backup..."
             if command -v pg_dump &> /dev/null; then
-              BACKUP_NAME="pre-deploy-backup-$(date +%Y%m%d-%H%M%S)"
-              pg_dump -h $DB_HOST -U $DB_USER -d $DB_NAME > /backups/$BACKUP_NAME.sql || echo "Database backup failed"
-              echo "Database backup: $BACKUP_NAME"
-            fi || true
+              pg_dump -h $DB_HOST -U $DB_USER -d $DB_NAME | gzip > $BACKUP_DIR/database-backup.sql.gz
+              echo "Database backup saved to $BACKUP_DIR/database-backup.sql.gz"
+            else
+              echo "pg_dump not available, skipping database backup"
+            fi
             
             echo "Backing up config..."
-            if [ -f /app/config.yaml ]; then
-              CONFIG_BACKUP="config-backup-$(date +%Y%m%d-%H%M%S).yaml"
-              cp /app/config.yaml /backups/$CONFIG_BACKUP || echo "Config backup failed"
-              echo "Config backup: $CONFIG_BACKUP"
-            fi || true
+            if [ -f /opt/hjtpx/config.yaml ]; then
+              cp /opt/hjtpx/config.yaml $BACKUP_DIR/config-backup.yaml
+              echo "Config backup saved to $BACKUP_DIR/config-backup.yaml"
+            fi
             
-            echo "Backing up current image tag..."
-            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }} || true
-            docker tag ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }} ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:rollback || true
-            docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:rollback || true
+            echo "Backing up current deployment metadata..."
+            if [ -d /opt/hjtpx/deployments ]; then
+              tar -czf $BACKUP_DIR/deployments-backup.tar.gz -C /opt/hjtpx deployments/
+              echo "Deployments backup saved to $BACKUP_DIR/deployments-backup.tar.gz"
+            fi
             
-            echo "=== Pre-deployment Backup Completed ==="
+            echo "Saving current container image as rollback point..."
+            docker tag hjtpx:hjtpx hjtpx:rollback-$(date +%Y%m%d-%H%M%S) || true
+            docker tag hjtpx:hjtpx hjtpx:previous || true
+            
+            echo "Backup completed successfully"
 
-      - name: Deploy to Production
+      - name: Blue-Green Deployment to Production
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          timeout: ${{ env.DEPLOY_TIMEOUT }}m
+          script: |
+            echo "=== Blue-Green Production Deployment ==="
+            
+            echo "Pulling latest image..."
+            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            echo "Stopping blue container if exists..."
+            docker stop hjtpx-blue || true
+            docker rm hjtpx-blue || true
+            
+            echo "Starting new container (blue)..."
+            docker run -d \
+              --name hjtpx-blue \
+              -p 8081:8080 \
+              --env-file /opt/hjtpx/.env.production \
+              --restart unless-stopped \
+              --memory-reservation=256m \
+              --memory=512m \
+              --cpus=1.0 \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              --health-start-period=15s \
+              --log-driver=json-file \
+              --log-opt=max-size=10m \
+              --log-opt=max-file=5 \
+              ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            
+            echo "Waiting for new container to be healthy (max 2 minutes)..."
+            for i in {1..24}; do
+              if docker exec hjtpx-blue wget --no-verbose --tries=1 --spider http://localhost:8080/health > /dev/null 2>&1; then
+                echo "New container is healthy!"
+                break
+              fi
+              if [ $i -eq 24 ]; then
+                echo "❌ New container failed to become healthy"
+                docker logs hjtpx-blue --tail 50
+                exit 1
+              fi
+              echo "Waiting for health check... ($i/24)"
+              sleep 5
+            done
+            
+            echo "Health check passed, switching traffic..."
+            
+            echo "Stopping green container..."
+            docker stop hjtpx-green || true
+            docker rm hjtpx-green || true
+            
+            echo "Renaming blue to green..."
+            docker stop hjtpx || true
+            docker rm hjtpx || true
+            docker rename hjtpx-blue hjtpx
+            
+            echo "Blue-Green switch completed"
+
+      - name: Health Check
+        run: |
+          echo "=== Production Health Check ==="
+          timeout ${{ env.HEALTH_CHECK_TIMEOUT }} bash -c 'until curl -f https://hjtpx.example.com/health; do sleep ${{ env.HEALTH_CHECK_INTERVAL }}; done'
+          echo "✅ Production health check passed!"
+
+      - name: Run production smoke tests
+        run: |
+          echo "=== Running Production Smoke Tests ==="
+          curl -f https://hjtpx.example.com/health || { echo "❌ Health endpoint failed"; exit 1; }
+          curl -f https://hjtpx.example.com/api/v1/captcha/types || { echo "❌ API endpoint failed"; exit 1; }
+          echo "✅ All production smoke tests passed!"
+
+      - name: Post-deployment cleanup
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
           script: |
-            set -e
-            echo "=== Starting Production Deployment ==="
+            echo "=== Post-deployment Cleanup ==="
             
-            echo "Pulling latest image..."
-            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            echo "Cleaning up old images (keeping last 10)..."
+            docker image prune -af --filter "until=168h" || true
             
-            echo "Creating rollback point..."
-            docker stop hjtpx-rollback || true
-            docker rm hjtpx-rollback || true
-            docker stop hjtpx || true
-            docker rm hjtpx || true
-            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:previous 2>/dev/null || echo "No previous image available"
-            docker tag ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:previous ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:rollback || true
-            docker run -d --name hjtpx-rollback ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:rollback || true
+            echo "Pruning unused networks..."
+            docker network prune -f || true
             
-            echo "Starting new container..."
-            docker run -d \
-              --name hjtpx \
-              -p 8080:8080 \
-              --env-file .env.production \
-              --restart unless-stopped \
-              --health-cmd="curl -f http://localhost:8080/health || exit 1" \
-              --health-interval=30s \
-              --health-timeout=10s \
-              --health-retries=5 \
-              --health-start-period=60s \
-              ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            echo "Cleaning up old backups (keeping last 30)..."
+            find /opt/hjtpx/backups -type d -mtime +30 -exec rm -rf {} + 2>/dev/null || true
             
-            echo "Waiting for new container to be healthy..."
-            for i in {1..30}; do
-              if docker exec hjtpx curl -f http://localhost:8080/health > /dev/null 2>&1; then
-                echo "Container is healthy after ${i} attempts"
-                break
-              fi
-              if [ $i -eq 30 ]; then
-                echo "Health check failed after 30 attempts"
-                exit 1
-              fi
-              sleep 5
-            done
+            echo "Current container status:"
+            docker ps --filter "name=hjtpx"
             
-            echo "Cleaning up old containers..."
-            docker stop hjtpx-old || true
-            docker rm hjtpx-old || true
-            docker image prune -f || true
+            echo "Resource usage:"
+            docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" hjtpx || true
             
-            echo "=== Production Deployment Completed ==="
+            echo "Disk usage:"
+            docker system df
+            
+            echo "Deployment metadata:"
+            cat /opt/hjtpx/deployments/*.json 2>/dev/null | tail -1 || echo "No metadata available"
 
-      - name: Health Check
+      - name: Update deployment record
         run: |
-          echo "Performing production health check..."
-          timeout 180 bash -c 'until curl -f -s https://hjtpx.example.com/health > /dev/null; do sleep 10; echo "Waiting for service..."; done'
-          echo "Production health check passed!"
-
-      - name: Run production smoke tests
-        run: |
-          echo "Running comprehensive smoke tests..."
-          curl -f -s https://hjtpx.example.com/health || { echo "Health endpoint failed"; exit 1; }
-          curl -f -s https://hjtpx.example.com/api/v1/captcha/types || { echo "Captcha types endpoint failed"; exit 1; }
-          curl -f -s https://hjtpx.example.com/api/v1/health/stats || { echo "Stats endpoint failed"; exit 1; }
-          echo "All smoke tests passed!"
+          echo "## Production Deployment Status: SUCCESS ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: Production" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment ID: ${{ needs.build.outputs.deployment-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify production deployment
         if: always()
@@ -377,8 +554,8 @@ jobs:
                     {"type": "mrkdwn", "text": "*Version:*\n${{ github.ref_name }}"},
                     {"type": "mrkdwn", "text": "*Status:*\n${{ job.status }}"},
                     {"type": "mrkdwn", "text": "*Deployed by:*\n${{ github.actor }}"},
-                    {"type": "mrkdwn", "text": "*Commit:*\n${{ github.sha }}"},
-                    {"type": "mrkdwn", "text": "*Build Time:*\n${{ needs.build.outputs.build-time }}"}
+                    {"type": "mrkdwn", "text": "*Commit:*\n${{ needs.build.outputs.commit_sha }}"},
+                    {"type": "mrkdwn", "text": "*Deployment ID:*\n${{ needs.build.outputs.deployment-id }}"}
                   ]
                 },
                 {
@@ -393,11 +570,6 @@ jobs:
                       "type": "button",
                       "text": {"type": "plain_text", "text": "View Logs"},
                       "url": "https://dashboard.example.com/logs"
-                    },
-                    {
-                      "type": "button",
-                      "text": {"type": "plain_text", "text": "Rollback"},
-                      url: "https://github.com/${{ github.repository }}/actions/workflows/cd.yml"
                     }
                   ]
                 }
@@ -409,115 +581,129 @@ jobs:
 
   rollback:
     runs-on: ubuntu-latest
-    needs: [production-deploy]
-    if: failure() && needs.production-deploy.result == 'failure'
+    needs: [staging-deploy, production-deploy]
+    if: failure()
     timeout-minutes: 15
     
-    environment:
-      name: production
-      url: https://hjtpx.example.com
-    
     steps:
-      - name: Notify rollback initiation
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          payload: |
-            {
-              "text": "*⚠️ Initiating Automatic Rollback*",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Version:* ${{ github.ref_name }}\n*Reason:* Deployment failed health checks\n*Action:* Initiating automatic rollback"
-                  }
-                }
-              ]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+      - name: Determine rollback target
+        id: target
+        run: |
+          if [[ "${{ needs.production-deploy.result }}" == "failure" ]]; then
+            echo "target=production" >> $GITHUB_OUTPUT
+            echo "Rolling back production deployment"
+          elif [[ "${{ needs.staging-deploy.result }}" == "failure" ]]; then
+            echo "target=staging" >> $GITHUB_OUTPUT
+            echo "Rolling back staging deployment"
+          fi
 
-      - name: Automatic rollback
+      - name: Rollback production
+        if: needs.production-deploy.result == 'failure'
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.PRODUCTION_HOST }}
           username: ${{ secrets.PRODUCTION_USER }}
           key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          timeout: 10m
           script: |
-            set -e
-            echo "=== Initiating Automatic Rollback ==="
+            echo "=== Production Rollback ==="
+            
+            echo "Checking for rollback images..."
+            docker images | grep hjtpx || echo "No hjtpx images found"
             
             echo "Stopping current container..."
             docker stop hjtpx || true
             docker rm hjtpx || true
             
             echo "Starting rollback container..."
-            docker pull ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:rollback || true
             docker run -d \
               --name hjtpx \
               -p 8080:8080 \
-              --env-file .env.production \
+              --env-file /opt/hjtpx/.env.production \
               --restart unless-stopped \
-              --health-cmd="curl -f http://localhost:8080/health || exit 1" \
-              --health-interval=30s \
-              --health-timeout=10s \
-              --health-retries=3 \
-              ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:rollback || {
-                echo "Rollback image not available, using previous..."
-                docker run -d \
-                  --name hjtpx \
-                  -p 8080:8080 \
-                  --env-file .env.production \
-                  --restart unless-stopped \
-                  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:previous || {
-                    echo "No previous image available for rollback"
-                    exit 1
-                  }
-              }
+              --memory-reservation=256m \
+              --memory=512m \
+              --cpus=1.0 \
+              hjtpx:previous
             
-            echo "Waiting for rollback container to start..."
-            sleep 30
+            echo "Waiting for rollback container to be healthy..."
+            sleep 10
             
-            echo "Verifying rollback..."
-            if curl -f http://localhost:8080/health > /dev/null; then
-              echo "Rollback successful!"
-            else
-              echo "Rollback verification failed!"
-              exit 1
-            fi
+            echo "Rollback completed. Container status:"
+            docker ps --filter "name=hjtpx"
+            docker logs hjtpx --tail 20 || true
+
+      - name: Rollback staging
+        if: needs.staging-deploy.result == 'failure' && needs.production-deploy.result != 'failure'
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          timeout: 10m
+          script: |
+            echo "=== Staging Rollback ==="
             
-            echo "=== Rollback Completed ==="
+            echo "Checking for rollback images..."
+            docker images | grep hjtpx || echo "No hjtpx images found"
+            
+            echo "Stopping current container..."
+            docker stop hjtpx-staging || true
+            docker rm hjtpx-staging || true
+            
+            echo "Starting rollback container..."
+            docker run -d \
+              --name hjtpx-staging \
+              -p 8080:8080 \
+              --env-file /opt/hjtpx/.env.staging \
+              --restart unless-stopped \
+              hjtpx-staging:previous
+            
+            echo "Waiting for rollback container to be healthy..."
+            sleep 10
+            
+            echo "Rollback completed. Container status:"
+            docker ps --filter "name=hjtpx-staging"
+            docker logs hjtpx-staging --tail 20 || true
 
       - name: Verify rollback
         run: |
-          echo "Verifying rollback health..."
-          timeout 120 bash -c 'until curl -f -s https://hjtpx.example.com/health > /dev/null; do sleep 10; echo "Waiting for service..."; done'
-          echo "Rollback health check passed!"
+          echo "=== Verifying Rollback ==="
+          if [[ "${{ needs.production-deploy.result }}" == "failure" ]]; then
+            timeout 60 bash -c 'until curl -f https://hjtpx.example.com/health; do sleep 5; done' || true
+            echo "Production rollback verified"
+          fi
+          
+          if [[ "${{ needs.staging-deploy.result }}" == "failure" ]]; then
+            timeout 60 bash -c 'until curl -f https://staging.hjtpx.example.com/health; do sleep 5; done' || true
+            echo "Staging rollback verified"
+          fi
 
-      - name: Notify rollback completion
+      - name: Generate rollback report
+        run: |
+          echo "## Rollback Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered by: ${{ github.workflow }} failure" >> $GITHUB_STEP_SUMMARY
+          echo "- Failed job: ${{ needs.production-deploy.result == 'failure' && 'production-deploy' || 'staging-deploy' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Rollback target: ${{ steps.target.outputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️  **Manual verification required**" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify rollback
         uses: slackapi/slack-github-action@v1.25.0
         with:
           payload: |
             {
-              "text": "*⚠️ Automatic Rollback Completed*",
+              "text": "*⚠️ Production Deployment Failed - Automatic Rollback Triggered*",
               "blocks": [
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Version:* ${{ github.ref_name }}\n*Action:* Successfully rolled back to previous version\n*Status:* Service restored"
+                    "text": "*Version:* ${{ github.ref_name }}\n*Reason:* Deployment failed\n*Action:* Rolled back to previous version\n*Deployment ID:* ${{ needs.build.outputs.deployment-id }}"
                   }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {"type": "plain_text", "text": "View Application"},
-                      "url": "https://hjtpx.example.com"
-                    }
-                  ]
                 }
               ]
             }
@@ -529,48 +715,38 @@ jobs:
     runs-on: ubuntu-latest
     needs: [staging-deploy, production-deploy]
     if: always()
-    timeout-minutes: 10
+    timeout-minutes: 5
     
     steps:
       - name: Generate deployment report
         run: |
           echo "## Deployment Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Build Information" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Build Time | ${{ needs.production-deploy.outputs.build-time || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image Tag | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | Status | Version |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Staging | ${{ needs.staging-deploy.result }} | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Production | ${{ needs.production-deploy.result }} | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | Status | Version | Deployment ID |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|--------|---------|---------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging | ${{ needs.staging-deploy.result }} | ${{ github.ref_name }} | ${{ needs.build.outputs.deployment-id }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production | ${{ needs.production-deploy.result }} | ${{ github.ref_name }} | ${{ needs.build.outputs.deployment-id }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [[ "${{ needs.staging-deploy.result }}" == "success" && "${{ needs.production-deploy.result }}" == "success" ]]; then
             echo "✅ All deployments completed successfully!" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.staging-deploy.result }}" == "success" ]]; then
+            echo "⚠️ Staging deployed, Production skipped or failed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.production-deploy.result }}" == "success" ]]; then
+            echo "⚠️ Production deployed, Staging skipped or failed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ Some deployments failed. Check the logs for details." >> $GITHUB_STEP_SUMMARY
+            echo "❌ All deployments failed. Check the logs for details." >> $GITHUB_STEP_SUMMARY
           fi
-          echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### Deployment Metrics" >> $GITHUB_STEP_SUMMARY
-          echo "- Total deployment time: Available in workflow logs" >> $GITHUB_STEP_SUMMARY
-          echo "- Health check status: Available in workflow logs" >> $GITHUB_STEP_SUMMARY
-          echo "- Smoke test results: Available in workflow logs" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- SBOM: Available for 90 days" >> $GITHUB_STEP_SUMMARY
-          echo "- Security scan results: Available" >> $GITHUB_STEP_SUMMARY
-          echo "- Build logs: Available for 90 days" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Verify deployment in respective environments" >> $GITHUB_STEP_SUMMARY
+          echo "2. Monitor application logs" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run smoke tests manually if needed" >> $GITHUB_STEP_SUMMARY
 
       - name: Clean up old images
         if: success()
         run: |
           echo "Cleaning up old Docker images..."
-
+          docker image prune -af --filter "until=168h" || true

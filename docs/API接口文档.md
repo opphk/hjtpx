@@ -1,4 +1,4 @@
-# API 接口文档 v11.0
+# API 接口文档 v14.0
 
 ## 目录
 
@@ -11,22 +11,14 @@
    - [手势验证码](#手势验证码)
    - [拼图验证码](#拼图验证码)
    - [图形验证码](#图形验证码)
-   - [语音验证码](#语音验证码)
    - [连连看验证码](#连连看验证码)
    - [3D验证码](#3d验证码)
+   - [语音验证码](#语音验证码)
    - [无感验证](#无感验证)
    - [环境检测](#环境检测)
 4. [管理端 API](#管理端-api)
 5. [错误码](#错误码)
-6. [速率限制](#速率限制)
-7. [示例](#示例)
-
-## 更新日志
-
-- **v11.0** (2026-05-18): 新增连连看验证码、3D验证码、语音验证码接口，完善错误码文档
-- **v10.0** (2026-05-18): 新增OpenAPI/Swagger文档支持
-- **v9.0** (2026-05-17): 新增无感验证、环境检测增强接口
-- **v6.0** (2026-05-17): 初始版本
+6. [示例](#示例)
 
 ## 概述
 
@@ -537,76 +529,20 @@ Content-Type: application/json
 
 ---
 
-### 语音验证码
-
-#### 生成语音验证码
-
-```
-POST /captcha/voice/generate
-```
-
-**请求参数：**
-
-| 参数名 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| length | int | 否 | 验证码长度（4-6），默认4 |
-| lang | string | 否 | 语言：zh-CN, en-US, ja-JP等 |
-
-**响应示例：**
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "session_id": "sess_voice_xxx",
-    "audio_url": "data:audio/wav;base64,...",
-    "duration": 5
-  }
-}
-```
-
-#### 验证语音验证码
-
-```
-POST /captcha/voice/verify
-Content-Type: application/json
-
-{
-  "session_id": "sess_voice_xxx",
-  "answer": "9527"
-}
-```
-
-**响应示例：**
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "success": true,
-    "risk_score": 8.5
-  }
-}
-```
-
----
-
 ### 连连看验证码
 
 #### 生成连连看验证码
 
 ```
-POST /captcha/connect/generate
+POST /captcha/lianliankan/create
 ```
 
 **请求参数：**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| difficulty | string | 否 | 难度：easy, medium, hard |
-| pairs | int | 否 | 配对数量（3-6），默认4 |
+| difficulty | string | 否 | 难度级别：easy, medium, hard, expert |
+| pairs | int | 否 | 配对数量（4-12），默认6 |
 
 **响应示例：**
 
@@ -615,10 +551,16 @@ POST /captcha/connect/generate
   "code": 0,
   "message": "success",
   "data": {
-    "session_id": "sess_connect_xxx",
-    "image": "data:image/png;base64,...",
-    "pairs": 4,
-    "hint": ["🍎→🍎", "🚗→🚗", "🏠→🏠", "⭐→⭐"]
+    "session_id": "sess_lianliankan_xxx",
+    "background_image": "data:image/png;base64...",
+    "icons": [
+      {"id": 1, "icon": "🍎", "pairs": [0, 5]},
+      {"id": 2, "icon": "🍊", "pairs": [1, 6]},
+      {"id": 3, "icon": "🍋", "pairs": [2, 7]}
+    ],
+    "grid_size": {"rows": 4, "cols": 6},
+    "difficulty": "medium",
+    "pairs": 6
   }
 }
 ```
@@ -626,19 +568,7 @@ POST /captcha/connect/generate
 #### 验证连连看
 
 ```
-POST /captcha/connect/verify
-Content-Type: application/json
-
-{
-  "session_id": "sess_connect_xxx",
-  "connections": [
-    {"from": [0, 0], "to": [2, 2]},
-    {"from": [1, 0], "to": [3, 2]},
-    {"from": [0, 2], "to": [2, 0]},
-    {"from": [1, 2], "to": [3, 0]}
-  ],
-  "behavior_data": [...]
-}
+POST /captcha/lianliankan/verify
 ```
 
 **响应示例：**
@@ -649,9 +579,9 @@ Content-Type: application/json
   "message": "success",
   "data": {
     "success": true,
-    "correct_pairs": 4,
-    "total_pairs": 4,
-    "risk_score": 12.3
+    "accuracy": 1.0,
+    "risk_score": 8.5,
+    "captcha_pass": true
   }
 }
 ```
@@ -663,15 +593,15 @@ Content-Type: application/json
 #### 生成3D验证码
 
 ```
-POST /captcha/3d/generate
+POST /captcha/3d/create
 ```
 
 **请求参数：**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| difficulty | string | 否 | 难度：easy, medium, hard, expert |
-| angle | int | 否 | 目标角度（0-360），默认随机 |
+| difficulty | string | 否 | 难度级别：easy, medium, hard, expert |
+| model_type | string | 否 | 模型类型：cube, sphere, cylinder, cone |
 
 **响应示例：**
 
@@ -681,10 +611,15 @@ POST /captcha/3d/generate
   "message": "success",
   "data": {
     "session_id": "sess_3d_xxx",
-    "model_url": "data:model/gltf-binary;base64,...",
-    "target_angle": 127,
-    "hint_image": "data:image/png;base64,...",
-    "difficulty": "medium"
+    "model_data": {
+      "type": "cube",
+      "vertices": [...],
+      "faces": [...]
+    },
+    "target_rotation": {"x": 45, "y": 90, "z": 0},
+    "background_image": "data:image/png;base64...",
+    "difficulty": "medium",
+    "model_type": "cube"
   }
 }
 ```
@@ -693,13 +628,6 @@ POST /captcha/3d/generate
 
 ```
 POST /captcha/3d/verify
-Content-Type: application/json
-
-{
-  "session_id": "sess_3d_xxx",
-  "angle": 125,
-  "behavior_data": [...]
-}
 ```
 
 **响应示例：**
@@ -710,8 +638,62 @@ Content-Type: application/json
   "message": "success",
   "data": {
     "success": true,
-    "angle_diff": 2,
-    "risk_score": 9.8,
+    "rotation_diff": 3.5,
+    "risk_score": 7.2,
+    "captcha_pass": true
+  }
+}
+```
+
+---
+
+### 语音验证码
+
+#### 生成语音验证码
+
+```
+POST /captcha/voice/create
+```
+
+**请求参数：**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| mode | string | 否 | 语音模式：number, letter, mixed |
+| count | int | 否 | 字符数量（4-8），默认4 |
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "session_id": "sess_voice_xxx",
+    "audio_url": "data:audio/mp3;base64,...",
+    "text": "A3B7",
+    "duration": 3,
+    "mode": "mixed",
+    "count": 4
+  }
+}
+```
+
+#### 验证语音验证码
+
+```
+POST /captcha/voice/verify
+```
+
+**响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true,
+    "risk_score": 5.8,
     "captcha_pass": true
   }
 }
@@ -1410,59 +1392,6 @@ if (error.code === 40001) {
 }
 ```
 
----
-
-## 速率限制
-
-系统对 API 接口实施了速率限制以确保服务质量：
-
-### 接口限流规则
-
-| 接口类型 | 限制 | 窗口 | 说明 |
-|----------|------|------|------|
-| 验证码生成 | 100次/分钟 | 滑动窗口 | 每分钟最多生成100次验证码 |
-| 验证码验证 | 200次/分钟 | 滑动窗口 | 每分钟最多验证200次 |
-| 用户认证 | 10次/分钟 | 固定窗口 | 登录、注册等认证接口 |
-| 管理接口 | 60次/分钟 | 滑动窗口 | 后台管理操作 |
-| 统计查询 | 30次/分钟 | 滑动窗口 | 数据查询接口 |
-
-### 限流响应
-
-超出限制将返回 `429 Too Many Requests` 错误：
-
-```json
-{
-  "code": 40001,
-  "message": "请求过于频繁",
-  "data": {
-    "retry_after": 60,
-    "limit": 100,
-    "window": "1 minute",
-    "remaining": 0
-  }
-}
-```
-
-### 响应头
-
-限流相关的响应头：
-
-| 响应头 | 说明 |
-|--------|------|
-| X-RateLimit-Limit | 限制次数 |
-| X-RateLimit-Remaining | 剩余次数 |
-| X-RateLimit-Reset | 重置时间戳 |
-| Retry-After | 距离重试的秒数 |
-
-### 建议
-
-1. **实施客户端限流**：在客户端实施本地限流，避免触发服务端限制
-2. **指数退避重试**：遇到限流时使用指数退避策略
-3. **请求合并**：批量操作时合并请求，减少API调用次数
-4. **缓存策略**：对不频繁变化的数据实施缓存
-
----
-
 ### 错误响应格式
 
 #### 标准错误响应
@@ -1524,6 +1453,11 @@ if (error.code === 40001) {
 | 30xxx | INFO | 资源相关错误 |
 | 40xxx | WARN | 限流触发，正常的流量控制 |
 | 50xxx | ERROR | 服务器错误，需要立即处理 |
+
+---
+
+**最后更新**: 2026-05-18
+**当前版本**: v14.0
 
 ---
 

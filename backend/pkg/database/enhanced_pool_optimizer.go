@@ -150,6 +150,10 @@ func (o *EnhancedConnectionPoolOptimizer) checkAndOptimize() {
 	}
 }
 
+func (o *EnhancedConnectionPoolOptimizer) CheckAndOptimize() {
+	o.checkAndOptimize()
+}
+
 func (o *EnhancedConnectionPoolOptimizer) evaluateHealth(metrics *ConnectionPoolMetrics) *PoolHealthStatus {
 	status := &PoolHealthStatus{
 		IsHealthy:      true,

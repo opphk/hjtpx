@@ -10,16 +10,22 @@ import (
 type AnomalyPatternType string
 
 const (
-	PatternPerfectLine      AnomalyPatternType = "perfect_line"
-	PatternConstantSpeed    AnomalyPatternType = "constant_speed"
-	PatternZeroVariance     AnomalyPatternType = "zero_variance"
-	PatternNoPauses         AnomalyPatternType = "no_pauses"
-	PatternInstantJump      AnomalyPatternType = "instant_jump"
-	PatternSquareWave       AnomalyPatternType = "square_wave"
-	PatternReversedMovement AnomalyPatternType = "reversed_movement"
-	PatternBotPattern       AnomalyPatternType = "bot_pattern"
-	PatternHighFrequency    AnomalyPatternType = "high_frequency"
-	PatternLowResolution    AnomalyPatternType = "low_resolution"
+	PatternPerfectLine          AnomalyPatternType = "perfect_line"
+	PatternConstantSpeed        AnomalyPatternType = "constant_speed"
+	PatternZeroVariance         AnomalyPatternType = "zero_variance"
+	PatternNoPauses             AnomalyPatternType = "no_pauses"
+	PatternInstantJump          AnomalyPatternType = "instant_jump"
+	PatternSquareWave           AnomalyPatternType = "square_wave"
+	PatternReversedMovement     AnomalyPatternType = "reversed_movement"
+	PatternBotPattern           AnomalyPatternType = "bot_pattern"
+	PatternHighFrequency       AnomalyPatternType = "high_frequency"
+	PatternLowResolution        AnomalyPatternType = "low_resolution"
+	PatternAbnormalPressure     AnomalyPatternType = "abnormal_pressure"
+	PatternMechanicalClicking   AnomalyPatternType = "mechanical_clicking"
+	PatternRoboticScrolling     AnomalyPatternType = "robotic_scrolling"
+	PatternUniformCurvature     AnomalyPatternType = "uniform_curvature"
+	PatternExcessiveFluidity   AnomalyPatternType = "excessive_fluidity"
+	PatternStereotypedMovement  AnomalyPatternType = "stereotyped_movement"
 )
 
 type AnomalyPattern struct {
@@ -174,6 +180,82 @@ func (a *AnomalyDetector) DetectAnomalies(traceData *model.TraceData) ([]Anomaly
 				"point_count": float64(len(traceData.Points)),
 			},
 		})
+	}
+
+	enhancedFeatures, err := a.extractor.ExtractEnhancedFeatures(traceData)
+	if err == nil && enhancedFeatures != nil {
+		if a.isAbnormalPressure(enhancedFeatures) {
+			anomalies = append(anomalies, AnomalyPattern{
+				Type:        PatternAbnormalPressure,
+				Description: "点击压力异常,疑似自动化工具",
+				Confidence:  a.calculateAbnormalPressureConfidence(enhancedFeatures),
+				Severity:    "medium",
+				FeatureValues: map[string]float64{
+					"pressure_variance": enhancedFeatures.PressureVariance,
+					"pressure_consistency": enhancedFeatures.PressureConsistency,
+				},
+			})
+		}
+
+		if a.isMechanicalClicking(enhancedFeatures) {
+			anomalies = append(anomalies, AnomalyPattern{
+				Type:        PatternMechanicalClicking,
+				Description: "点击模式过于机械,缺乏人类自然变化",
+				Confidence:  a.calculateMechanicalClickingConfidence(enhancedFeatures),
+				Severity:    "high",
+				FeatureValues: map[string]float64{
+					"click_regularity": enhancedFeatures.ClickRegularity,
+				},
+			})
+		}
+
+		if a.isRoboticScrolling(enhancedFeatures) {
+			anomalies = append(anomalies, AnomalyPattern{
+				Type:        PatternRoboticScrolling,
+				Description: "滚动行为过于规律,疑似自动化脚本",
+				Confidence:  a.calculateRoboticScrollingConfidence(enhancedFeatures),
+				Severity:    "high",
+				FeatureValues: map[string]float64{
+					"scroll_regularity": enhancedFeatures.ScrollRegularity,
+				},
+			})
+		}
+
+		if a.isUniformCurvature(enhancedFeatures) {
+			anomalies = append(anomalies, AnomalyPattern{
+				Type:        PatternUniformCurvature,
+				Description: "轨迹曲率过于均匀,缺乏自然波动",
+				Confidence:  a.calculateUniformCurvatureConfidence(enhancedFeatures),
+				Severity:    "high",
+				FeatureValues: map[string]float64{
+					"curvature_variance": enhancedFeatures.CurvatureVariance,
+				},
+			})
+		}
+
+		if a.isExcessiveFluidity(enhancedFeatures) {
+			anomalies = append(anomalies, AnomalyPattern{
+				Type:        PatternExcessiveFluidity,
+				Description: "移动过于流畅,不符合人类操作特征",
+				Confidence:  a.calculateExcessiveFluidityConfidence(enhancedFeatures),
+				Severity:    "medium",
+				FeatureValues: map[string]float64{
+					"movement_fluidity": enhancedFeatures.MovementFluidity,
+				},
+			})
+		}
+
+		if a.isStereotypedMovement(enhancedFeatures) {
+			anomalies = append(anomalies, AnomalyPattern{
+				Type:        PatternStereotypedMovement,
+				Description: "行为模式单一重复,疑似自动化执行",
+				Confidence:  a.calculateStereotypedMovementConfidence(enhancedFeatures),
+				Severity:    "critical",
+				FeatureValues: map[string]float64{
+					"spatial_entropy": enhancedFeatures.SpatialSpreadX,
+				},
+			})
+		}
 	}
 
 	return anomalies, nil
@@ -422,4 +504,158 @@ func (a *AnomalyDetector) GetAnomalySummary(anomalies []AnomalyPattern) map[stri
 	summary["is_suspicious"] = len(anomalies) > 0 && maxConfidence > 0.7
 
 	return summary
+}
+
+func (a *AnomalyDetector) isAbnormalPressure(enhanced *EnhancedFeatures) bool {
+	if enhanced.PressureVariance < 0.01 && enhanced.PressureConsistency > 0.95 {
+		return true
+	}
+	if enhanced.PressureVariance > 0.5 {
+		return true
+	}
+	return false
+}
+
+func (a *AnomalyDetector) calculateAbnormalPressureConfidence(enhanced *EnhancedFeatures) float64 {
+	if enhanced.PressureVariance < 0.01 && enhanced.PressureConsistency > 0.95 {
+		return math.Min(1.0, (enhanced.PressureConsistency-0.95)*20+0.5)
+	}
+	if enhanced.PressureVariance > 0.5 {
+		return math.Min(1.0, enhanced.PressureVariance)
+	}
+	return 0.0
+}
+
+func (a *AnomalyDetector) isMechanicalClicking(enhanced *EnhancedFeatures) bool {
+	if enhanced.ClickCount == 0 {
+		return false
+	}
+	if enhanced.ClickRegularity > 0.95 && enhanced.ClickCount >= 3 {
+		return true
+	}
+	if enhanced.ClickRegularity > 0.90 && enhanced.ClickAreaSize < 1.0 {
+		return true
+	}
+	return false
+}
+
+func (a *AnomalyDetector) calculateMechanicalClickingConfidence(enhanced *EnhancedFeatures) float64 {
+	if enhanced.ClickCount == 0 {
+		return 0.0
+	}
+
+	baseScore := 0.0
+	if enhanced.ClickRegularity > 0.95 {
+		baseScore += 0.6
+	} else if enhanced.ClickRegularity > 0.90 {
+		baseScore += 0.3
+	}
+
+	if enhanced.ClickAreaSize < 1.0 && enhanced.ClickCount >= 3 {
+		baseScore += 0.2
+	}
+
+	if enhanced.ClickRegularity > 0.98 {
+		baseScore += 0.2
+	}
+
+	return math.Min(1.0, baseScore)
+}
+
+func (a *AnomalyDetector) isRoboticScrolling(enhanced *EnhancedFeatures) bool {
+	if enhanced.ScrollCount == 0 {
+		return false
+	}
+	if enhanced.ScrollRegularity > 0.95 && enhanced.ScrollCount >= 3 {
+		return true
+	}
+	if enhanced.ScrollVelocityVariance < 0.1 {
+		return true
+	}
+	return false
+}
+
+func (a *AnomalyDetector) calculateRoboticScrollingConfidence(enhanced *EnhancedFeatures) float64 {
+	if enhanced.ScrollCount == 0 {
+		return 0.0
+	}
+
+	baseScore := 0.0
+	if enhanced.ScrollRegularity > 0.95 {
+		baseScore += 0.6
+	} else if enhanced.ScrollRegularity > 0.90 {
+		baseScore += 0.3
+	}
+
+	if enhanced.ScrollVelocityVariance < 0.1 {
+		baseScore += 0.3
+	}
+
+	return math.Min(1.0, baseScore)
+}
+
+func (a *AnomalyDetector) isUniformCurvature(enhanced *EnhancedFeatures) bool {
+	if enhanced.CurvatureVariance < 0.001 && enhanced.CurvatureSkewness < 0.1 {
+		return true
+	}
+	return false
+}
+
+func (a *AnomalyDetector) calculateUniformCurvatureConfidence(enhanced *EnhancedFeatures) float64 {
+	if enhanced.CurvatureVariance >= 0.001 {
+		return 0.0
+	}
+
+	confidence := 0.5
+	if enhanced.CurvatureSkewness < 0.05 {
+		confidence += 0.3
+	}
+	if enhanced.CurvatureSkewness < 0.01 {
+		confidence += 0.2
+	}
+
+	return math.Min(1.0, confidence)
+}
+
+func (a *AnomalyDetector) isExcessiveFluidity(enhanced *EnhancedFeatures) bool {
+	if enhanced.MovementFluidity > 0.95 {
+		return true
+	}
+	return false
+}
+
+func (a *AnomalyDetector) calculateExcessiveFluidityConfidence(enhanced *EnhancedFeatures) float64 {
+	if enhanced.MovementFluidity <= 0.95 {
+		return 0.0
+	}
+
+	return math.Min(1.0, (enhanced.MovementFluidity-0.95)*20)
+}
+
+func (a *AnomalyDetector) isStereotypedMovement(enhanced *EnhancedFeatures) bool {
+	if enhanced.SpatialSpreadX < 0.05 && enhanced.SpatialSpreadY < 0.05 {
+		return true
+	}
+	if enhanced.TemporalIntervalStdDev < 0.1 && enhanced.PauseRatio < 0.05 {
+		return true
+	}
+	return false
+}
+
+func (a *AnomalyDetector) calculateStereotypedMovementConfidence(enhanced *EnhancedFeatures) float64 {
+	baseScore := 0.0
+
+	if enhanced.SpatialSpreadX < 0.05 && enhanced.SpatialSpreadY < 0.05 {
+		baseScore += 0.4
+	}
+
+	if enhanced.TemporalIntervalStdDev < 0.1 && enhanced.PauseRatio < 0.05 {
+		baseScore += 0.4
+	}
+
+	if enhanced.MovementFluidity > 0.9 {
+		baseScore += 0.2
+	}
+
+	return math.Min(1.0, baseScore)
 }

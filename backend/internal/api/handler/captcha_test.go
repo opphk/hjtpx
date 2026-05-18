@@ -443,13 +443,14 @@ func TestClickPoint_Structure(t *testing.T) {
 
 func TestVerifyRequest_Structure(t *testing.T) {
 	req := VerifyRequest{
-		SessionID:     "test-session",
-		Type:          "click",
-		X:             100,
-		Y:             50,
-		Points:        [][2]int{{100, 100}},
-		ClickSequence: []int{0},
-		ApplicationID: 1,
+		SessionID:       "test-session",
+		Type:            "click",
+		X:               100,
+		Y:               50,
+		Points:          [][2]int{{100, 100}},
+		ClickSequence:   []int{0},
+		ClickTimestamps: []int64{1000, 1500, 2000},
+		ApplicationID:   1,
 	}
 
 	assert.Equal(t, "test-session", req.SessionID)
@@ -458,5 +459,273 @@ func TestVerifyRequest_Structure(t *testing.T) {
 	assert.Equal(t, 50, req.Y)
 	assert.Len(t, req.Points, 1)
 	assert.Len(t, req.ClickSequence, 1)
+	assert.Len(t, req.ClickTimestamps, 3)
 	assert.Equal(t, uint(1), req.ApplicationID)
+}
+
+func TestContainsString(t *testing.T) {
+	slice := []string{"apple", "banana", "cherry"}
+
+	assert.True(t, containsString(slice, "apple"))
+	assert.True(t, containsString(slice, "banana"))
+	assert.False(t, containsString(slice, "orange"))
+	assert.False(t, containsString([]string{}, "test"))
+}
+
+func TestGetColorAtIndex(t *testing.T) {
+	for i := 0; i < 15; i++ {
+		colorType := getColorAtIndex(i)
+		assert.NotEmpty(t, string(colorType))
+	}
+}
+
+func TestParseColorHex(t *testing.T) {
+	rgba := parseColorHex("#FF5733")
+	assert.Equal(t, uint8(255), rgba.R)
+	assert.Equal(t, uint8(87), rgba.G)
+	assert.Equal(t, uint8(51), rgba.B)
+	assert.Equal(t, uint8(255), rgba.A)
+
+	rgba = parseColorHex("invalid")
+	assert.Equal(t, uint8(128), rgba.R)
+}
+
+func TestGetColorNameLocalized(t *testing.T) {
+	tests := []struct {
+		colorType ColorType
+		language  string
+		expected  string
+	}{
+		{ColorRed, "zh", "红色"},
+		{ColorBlue, "zh", "蓝色"},
+		{ColorGreen, "en-US", "Green"},
+		{ColorRed, "en-US", "Red"},
+	}
+
+	for _, tt := range tests {
+		result := getColorNameLocalized(tt.colorType, tt.language)
+		assert.Equal(t, tt.expected, result)
+	}
+}
+
+func TestGenerateMathProblem(t *testing.T) {
+	problem := generateMathProblem()
+
+	assert.NotEmpty(t, problem.Expression)
+	assert.Len(t, problem.Operands, 2)
+	assert.NotEmpty(t, problem.Result)
+	assert.GreaterOrEqual(t, problem.TargetIndex, 0)
+	assert.Less(t, problem.TargetIndex, 2)
+}
+
+func TestAnalyzeClickTiming_Normal(t *testing.T) {
+	timestamps := []int64{1000, 1200, 1500, 2000}
+	points := [][2]int{{100, 100}, {150, 150}, {200, 200}, {250, 250}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.Equal(t, int64(1000), analysis.TotalDuration)
+	assert.False(t, analysis.IsSuspicious)
+}
+
+func TestAnalyzeClickTiming_TooFast(t *testing.T) {
+	timestamps := []int64{1000, 1010, 1020, 1030}
+	points := [][2]int{{100, 100}, {150, 150}, {200, 200}, {250, 250}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.True(t, analysis.IsSuspicious)
+	assert.Contains(t, analysis.SuspiciousReason, "点击过快")
+}
+
+func TestAnalyzeClickTiming_TotalTooFast(t *testing.T) {
+	timestamps := []int64{1000, 1100, 1200, 1300}
+	points := [][2]int{{100, 100}, {150, 150}, {200, 200}, {250, 250}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.True(t, analysis.IsSuspicious)
+	assert.Contains(t, analysis.SuspiciousReason, "总点击时间过短")
+}
+
+func TestAnalyzeClickTiming_TooSlow(t *testing.T) {
+	timestamps := []int64{1000, 5000, 40000, 50000}
+	points := [][2]int{{100, 100}, {150, 150}, {200, 200}, {250, 250}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.True(t, analysis.IsSuspicious)
+	assert.Contains(t, analysis.SuspiciousReason, "点击间隔过长")
+}
+
+func TestAnalyzeClickTiming_TooRegular(t *testing.T) {
+	timestamps := []int64{1000, 1100, 1200, 1300, 1400, 1500}
+	points := [][2]int{{100, 100}, {110, 110}, {120, 120}, {130, 130}, {140, 140}, {150, 150}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.True(t, analysis.IsSuspicious)
+	assert.Contains(t, analysis.SuspiciousReason, "过于规律")
+}
+
+func TestAnalyzeClickTiming_EmptyTimestamps(t *testing.T) {
+	analysis := analyzeClickTiming([]int64{}, [][2]int{{100, 100}})
+
+	assert.False(t, analysis.IsSuspicious)
+	assert.Equal(t, int64(0), analysis.TotalDuration)
+}
+
+func TestAnalyzeClickTiming_SingleTimestamp(t *testing.T) {
+	timestamps := []int64{1000}
+	points := [][2]int{{100, 100}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.False(t, analysis.IsSuspicious)
+}
+
+func TestAnalyzeClickTiming_HighSpeed(t *testing.T) {
+	timestamps := []int64{1000, 1500, 2000, 2500}
+	points := [][2]int{{100, 100}, {800, 800}, {1500, 1500}, {2200, 2200}}
+
+	analysis := analyzeClickTiming(timestamps, points)
+
+	assert.True(t, analysis.IsSuspicious)
+	assert.Contains(t, analysis.SuspiciousReason, "移动速度异常")
+}
+
+func TestTimingAnalysis_Structure(t *testing.T) {
+	analysis := TimingAnalysis{
+		TotalDuration:    1000,
+		AvgInterval:      333.33,
+		MinInterval:      100,
+		MaxInterval:      500,
+		AvgSpeed:         100.5,
+		StdDeviation:     50.0,
+		IsSuspicious:     false,
+		SuspiciousReason: "",
+	}
+
+	assert.Equal(t, int64(1000), analysis.TotalDuration)
+	assert.Equal(t, 333.33, analysis.AvgInterval)
+	assert.Equal(t, int64(100), analysis.MinInterval)
+	assert.Equal(t, int64(500), analysis.MaxInterval)
+	assert.Equal(t, 100.5, analysis.AvgSpeed)
+	assert.Equal(t, 50.0, analysis.StdDeviation)
+	assert.False(t, analysis.IsSuspicious)
+}
+
+func TestMathProblem_Structure(t *testing.T) {
+	problem := MathProblem{
+		Expression:  "5 + 3",
+		Operands:    []string{"5", "3"},
+		Result:      "8",
+		TargetIndex: 0,
+	}
+
+	assert.Equal(t, "5 + 3", problem.Expression)
+	assert.Len(t, problem.Operands, 2)
+	assert.Equal(t, "8", problem.Result)
+	assert.Equal(t, 0, problem.TargetIndex)
+}
+
+func TestColorTarget_Structure(t *testing.T) {
+	target := ColorTarget{
+		Color:    ColorRed,
+		ColorHex: "#E74C3C",
+		X:        100,
+		Y:        150,
+		Index:    0,
+		Shape:    1,
+	}
+
+	assert.Equal(t, ColorRed, target.Color)
+	assert.Equal(t, "#E74C3C", target.ColorHex)
+	assert.Equal(t, 100, target.X)
+	assert.Equal(t, 150, target.Y)
+	assert.Equal(t, 0, target.Index)
+	assert.Equal(t, 1, target.Shape)
+}
+
+func TestCaptchaSession_ExtendedFields(t *testing.T) {
+	session := &CaptchaSession{
+		ID:            "test-session",
+		Type:          "click",
+		Mode:          ModeMath,
+		MaxPoints:     2,
+		Language:      "zh-CN",
+		MathProblems: []MathProblem{
+			{Expression: "3 + 4", Operands: []string{"3", "4"}, Result: "7", TargetIndex: 0},
+		},
+		ColorTargets: []ColorTarget{
+			{Color: ColorBlue, ColorHex: "#3498DB", X: 100, Y: 100, Index: 0, Shape: 0},
+		},
+		PhraseTarget: "中国",
+	}
+
+	assert.Equal(t, ModeMath, session.Mode)
+	assert.Len(t, session.MathProblems, 1)
+	assert.Len(t, session.ColorTargets, 1)
+	assert.Equal(t, "中国", session.PhraseTarget)
+}
+
+func TestGetClickCaptcha_MathMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/api/v1/captcha/click", GetClickCaptcha)
+
+	req, _ := http.NewRequest("GET", "/api/v1/captcha/click?mode=math", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "session_id")
+	assert.Contains(t, resp, "image_url")
+	assert.Contains(t, resp, "hint")
+	assert.Equal(t, "math", resp["mode"])
+}
+
+func TestGetClickCaptcha_ColorMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/api/v1/captcha/click", GetClickCaptcha)
+
+	req, _ := http.NewRequest("GET", "/api/v1/captcha/click?mode=color", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "session_id")
+	assert.Contains(t, resp, "image_url")
+	assert.Contains(t, resp, "hint")
+	assert.Equal(t, "color", resp["mode"])
+}
+
+func TestGetClickCaptcha_PhraseMode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/api/v1/captcha/click", GetClickCaptcha)
+
+	req, _ := http.NewRequest("GET", "/api/v1/captcha/click?mode=phrase", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	assert.Contains(t, resp, "session_id")
+	assert.Contains(t, resp, "image_url")
+	assert.Contains(t, resp, "hint")
+	assert.Contains(t, resp["hint"], "【")
+	assert.Equal(t, "phrase", resp["mode"])
 }

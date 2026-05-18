@@ -431,6 +431,45 @@ func (s *CSRFSecurity) ValidateToken(token string) bool {
 	return true
 }
 
+func (s *CSRFSecurity) StoreToken(sessionID, token string) error {
+	if token == "" || sessionID == "" {
+		return fmt.Errorf("token and sessionID are required")
+	}
+
+	if s.redis == nil {
+		return nil
+	}
+
+	hashedToken := crypto.HashSHA256([]byte(token))
+	key := fmt.Sprintf("csrf:session:%s:token:%s", sessionID, hashedToken)
+	return s.redis.Set(s.ctx, key, "1", s.expiration).Err()
+}
+
+func (s *CSRFSecurity) VerifyToken(sessionID, token string) (bool, error) {
+	if token == "" || sessionID == "" {
+		return false, fmt.Errorf("token and sessionID are required")
+	}
+
+	if s.redis == nil {
+		return false, nil
+	}
+
+	hashedToken := crypto.HashSHA256([]byte(token))
+	key := fmt.Sprintf("csrf:session:%s:token:%s", sessionID, hashedToken)
+
+	exists, err := s.redis.Exists(s.ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+
+	if exists == 0 {
+		return false, nil
+	}
+
+	s.redis.Del(s.ctx, key)
+	return true, nil
+}
+
 type RequestValidator struct {
 	validators map[string]*regexp.Regexp
 }

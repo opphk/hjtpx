@@ -8,6 +8,7 @@ services:
       args:
         - BUILD_VERSION=${BUILD_VERSION:-dev}
         - BUILD_TIME=${BUILD_TIME:-}
+        - BUILD_FLAGS=${BUILD_FLAGS:--s -w}
     container_name: hjtpx_app
     ports:
       - "${APP_PORT:-8080}:8080"
@@ -31,18 +32,17 @@ services:
       - REDIS_DB=${REDIS_DB:-0}
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
-      - HEALTH_CHECK_RETRIES=3
-      - HEALTH_CHECK_INTERVAL=5
+      - GOMAXPROCS=${GOMAXPROCS:-2}
+      - GOGC=${GOGC:-100}
     volumes:
       - ./logs:/var/log/hjtpx
       - ./config.yaml:/app/config.yaml:ro
     healthcheck:
-      test: ["CMD", "/usr/local/bin/health-check", "--quick"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-      exit_code: 0
     restart: unless-stopped
     deploy:
       resources:
@@ -52,7 +52,6 @@ services:
         reservations:
           cpus: '0.25'
           memory: 128M
-    stop_grace_period: 30s
     networks:
       - hjtpx_network
     logging:
@@ -61,12 +60,17 @@ services:
         max-size: "10m"
         max-file: "3"
         compress: "true"
-        labels: "app,service,hjtpx"
     labels:
       - "hjtpx.service=app"
       - "hjtpx.version=${BUILD_VERSION:-dev}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    shm_size: '64mb'
+    ulimits:
+      nproc: 4096
+      nofile:
+        soft: 65535
+        hard: 65535
 
   postgres:
     image: postgres:14-alpine
@@ -77,18 +81,28 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_INITDB_ARGS=--encoding=UTF8
       - POSTGRES_HOST_AUTH_METHOD=md5
+      - POSTGRES_MAX_CONNECTIONS=100
+      - POSTGRES_SHARED_BUFFERS=256MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=512MB
+      - POSTGRES_MAINTENANCE_WORK_MEM=64MB
+      - POSTGRES_WAL_BUFFERS=4MB
+      - POSTGRES_DEFAULT_STATISTICS_TARGET=100
+      - POSTGRES_RANDOM_PAGE_COST=1.1
+      - POSTGRES_EFFECTIVE_IO_CONCURRENCY=200
+      - POSTGRES_WORK_MEM=4MB
+      - POSTGRES_MIN_WAL_SIZE=1GB
+      - POSTGRES_MAX_WAL_SIZE=4GB
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/docker/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost -p 5432"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-      exit_code: 0
     restart: unless-stopped
     deploy:
       resources:
@@ -98,7 +112,6 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    stop_grace_period: 30s
     networks:
       - hjtpx_network
     logging:
@@ -107,28 +120,39 @@ services:
         max-size: "50m"
         max-file: "5"
         compress: "true"
-        labels: "app,service,database"
     labels:
       - "hjtpx.service=postgres"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    shm_size: '128mb'
 
   redis:
     image: redis:7-alpine
     container_name: hjtpx_redis
-    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy allkeys-lru
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
+      --maxmemory-samples 5
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+      --lazyfree-lazy-server-del yes
+      --replica-lazy-flush yes
+      --activerehashing yes
+      --hz 10
+      --dynamic-hz yes
     volumes:
       - redis_data:/data
       - ./scripts/docker/redis.conf:/usr/local/etc/redis/redis.conf:ro
     ports:
       - "${REDIS_EXTERNAL_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
-      exit_code: 0
     restart: unless-stopped
     deploy:
       resources:
@@ -138,7 +162,6 @@ services:
         reservations:
           cpus: '0.1'
           memory: 64M
-    stop_grace_period: 30s
     networks:
       - hjtpx_network
     logging:
@@ -147,11 +170,14 @@ services:
         max-size: "50m"
         max-file: "5"
         compress: "true"
-        labels: "app,service,cache"
     labels:
       - "hjtpx.service=redis"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
 
 networks:
   hjtpx_network:
@@ -160,6 +186,10 @@ networks:
       driver: default
       config:
         - subnet: 172.28.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: hjtpx-bridge
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
 
 volumes:
   postgres_data:

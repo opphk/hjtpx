@@ -94,10 +94,35 @@ function updateLogStatistics(stats) {
     const alertEl = document.getElementById('logStatsAlert');
     const infoEl = document.getElementById('logStatsInfo');
     
-    if (alertEl && infoEl && stats) {
-        alertEl.style.display = 'block';
-        infoEl.innerHTML = `总记录: ${stats.total_count || 0} | 成功: ${stats.success_count || 0} | 失败: ${stats.failed_count || 0} | 平均风险评分: ${(stats.avg_risk_score || 0).toFixed(2)}`;
+    const successCountEl = document.getElementById('successCount');
+    const failedCountEl = document.getElementById('failedCount');
+    const blockedCountEl = document.getElementById('blockedCount');
+    const avgDurationEl = document.getElementById('avgDuration');
+    const avgRiskScoreEl = document.getElementById('avgRiskScore');
+    const lastUpdateEl = document.getElementById('lastUpdate');
+    
+    if (stats) {
+        if (successCountEl) successCountEl.textContent = formatNumber(stats.success_count || 0);
+        if (failedCountEl) failedCountEl.textContent = formatNumber(stats.failed_count || 0);
+        if (blockedCountEl) blockedCountEl.textContent = formatNumber(stats.blocked_count || 0);
+        if (avgDurationEl) avgDurationEl.textContent = `${(stats.avg_duration || 0).toFixed(0)}ms`;
+        if (avgRiskScoreEl) avgRiskScoreEl.textContent = (stats.avg_risk_score || 0).toFixed(1);
+        if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleTimeString('zh-CN');
+        
+        if (alertEl && infoEl) {
+            alertEl.style.display = 'block';
+            infoEl.innerHTML = `总记录: ${formatNumber(stats.total_count || 0)} | 成功: ${formatNumber(stats.success_count || 0)} | 失败: ${formatNumber(stats.failed_count || 0)} | 平均风险评分: ${(stats.avg_risk_score || 0).toFixed(2)}`;
+        }
     }
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
 }
 
 function updateSelectedCount() {
@@ -192,18 +217,36 @@ function renderTable(logs) {
         const displaySessionId = sessionId.length > 16 ? sessionId.substring(0, 16) + '...' : sessionId;
         
         const captchaTypeText = getCaptchaTypeText(log.captcha_type);
+        
+        const duration = log.duration || 0;
+        const durationClass = duration < 100 ? 'text-success' : duration < 500 ? 'text-warning' : 'text-danger';
+        
+        const riskScore = log.risk_score || 0;
+        const riskScoreClass = riskScore < 30 ? 'bg-success' : riskScore < 60 ? 'bg-warning' : riskScore < 80 ? 'bg-danger' : 'bg-dark';
 
         const row = `
             <tr>
                 <td><input type="checkbox" class="log-checkbox" data-id="${log.id}" onchange="toggleLogSelection(${log.id})"></td>
                 <td>${log.id}</td>
-                <td title="${sessionId}">${displaySessionId}</td>
+                <td title="${sessionId}">
+                    <code>${displaySessionId}</code>
+                    <button class="btn btn-sm btn-link p-0 ml-1" onclick="copyLogSession('${sessionId}')" title="复制会话ID">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </td>
                 <td><span class="badge badge-info">${captchaTypeText}</span></td>
                 <td><span class="badge badge-${statusClass}">${statusText}</span></td>
-                <td><span class="badge badge-${riskClass}">${riskText}</span></td>
-                <td>${(log.risk_score || 0).toFixed(1)}</td>
-                <td>${log.ip_address || '-'}</td>
-                <td>${log.duration || 0}ms</td>
+                <td>
+                    <span class="badge ${riskScoreClass}">${riskText}</span>
+                    <span class="ml-1 text-muted" style="font-size: 0.85em;">(${riskScore.toFixed(1)})</span>
+                </td>
+                <td>
+                    <span class="${durationClass}" style="font-weight: 500;">${duration}ms</span>
+                </td>
+                <td>
+                    <code>${log.ip_address || '-'}</code>
+                    ${log.country ? `<br><small class="text-muted">${log.country} - ${log.city || ''}</small>` : ''}
+                </td>
                 <td>${formatDate(log.created_at)}</td>
                 <td>
                     <div class="btn-group btn-group-sm">
@@ -213,12 +256,50 @@ function renderTable(logs) {
                         <button class="btn btn-secondary" onclick="copyLogSession('${sessionId}')" title="复制会话ID">
                             <i class="fas fa-copy"></i>
                         </button>
+                        ${riskScore >= 80 ? '<button class="btn btn-danger" onclick="addToBlacklist(\'' + log.ip_address + '\')" title="加入黑名单"><i class="fas fa-ban"></i></button>' : ''}
                     </div>
                 </td>
             </tr>
         `;
         tbody.innerHTML += row;
     });
+    
+    updateRealtimeStats(logs);
+}
+
+function updateRealtimeStats(logs) {
+    const stats = {
+        success_count: 0,
+        failed_count: 0,
+        blocked_count: 0,
+        avg_duration: 0,
+        avg_risk_score: 0,
+        total_count: logs.length
+    };
+    
+    let totalDuration = 0;
+    let totalRiskScore = 0;
+    
+    logs.forEach(log => {
+        const status = log.status || log.result;
+        if (status === 'success' || status === 'passed') {
+            stats.success_count++;
+        } else if (status === 'failed' || status === 'failure') {
+            stats.failed_count++;
+        } else if (status === 'blocked' || status === 'block') {
+            stats.blocked_count++;
+        }
+        
+        totalDuration += (log.duration || 0);
+        totalRiskScore += (log.risk_score || 0);
+    });
+    
+    if (logs.length > 0) {
+        stats.avg_duration = totalDuration / logs.length;
+        stats.avg_risk_score = totalRiskScore / logs.length;
+    }
+    
+    updateLogStatistics(stats);
 }
 
 function toggleLogSelection(id) {

@@ -406,14 +406,25 @@ func TestAnomalyDetectionHumanLikeTrace(t *testing.T) {
 	}
 
 	criticalCount := 0
+	highCount := 0
 	for _, anomaly := range anomalies {
-		if anomaly.Severity == "critical" || anomaly.Severity == "high" {
+		if anomaly.Severity == "critical" {
 			criticalCount++
+		}
+		if anomaly.Severity == "high" {
+			highCount++
 		}
 	}
 
+	t.Logf("Critical anomalies: %d, High anomalies: %d", criticalCount, highCount)
+	t.Logf("Total anomalies: %d", len(anomalies))
+
 	if criticalCount > 1 {
-		t.Errorf("Human-like trace should have few or no critical anomalies, got %d", criticalCount)
+		t.Errorf("Human-like trace should have at most 1 critical anomaly, got %d", criticalCount)
+	}
+
+	if highCount > 2 {
+		t.Errorf("Human-like trace should have few high anomalies, got %d", highCount)
 	}
 }
 

@@ -846,7 +846,9 @@
 }
 
 /* ==================== 响应式设计 ==================== */
-@media (max-width: 576px) {
+
+/* 超小屏幕设备 (< 576px) */
+@media (max-width: 575.98px) {
     .captcha-toast-container {
         top: 10px;
         right: 10px;
@@ -855,11 +857,12 @@
     }
 
     .captcha-card-header {
-        padding: 1.25rem;
+        padding: 1rem;
+        font-size: 0.9rem;
     }
 
     .captcha-card-body {
-        padding: 1.25rem;
+        padding: 1rem;
     }
 
     .captcha-btn {
@@ -874,6 +877,55 @@
 
     .captcha-progress-bar {
         height: 8px;
+    }
+
+    .captcha-loading-spinner {
+        width: 36px;
+        height: 36px;
+    }
+
+    .captcha-loading-pulse {
+        width: 48px;
+        height: 48px;
+    }
+
+    .captcha-confetti-piece {
+        width: 8px;
+        height: 8px;
+    }
+}
+
+/* 小屏幕设备 (576px - 768px) */
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .captcha-card-header {
+        padding: 1.25rem;
+    }
+
+    .captcha-card-body {
+        padding: 1.25rem;
+    }
+}
+
+/* 平板设备 (768px - 992px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .captcha-card {
+        margin-bottom: 0;
+    }
+}
+
+/* 大屏幕设备 (>= 1200px) */
+@media (min-width: 1200px) {
+    .captcha-card-header {
+        padding: 1.75rem;
+    }
+
+    .captcha-card-body {
+        padding: 1.75rem;
+    }
+
+    .captcha-btn {
+        padding: 0.625rem 1.5rem;
+        font-size: 1rem;
     }
 }
 

@@ -35,12 +35,36 @@ const (
 	ModeChinese CaptchaMode = "chinese"
 	ModeMixed   CaptchaMode = "mixed"
 	ModeIcon    CaptchaMode = "icon"
+	ModeMath    CaptchaMode = "math"
+	ModeColor   CaptchaMode = "color"
+	ModePhrase  CaptchaMode = "phrase"
 )
 
 type ClickPoint struct {
 	X     int `json:"x"`
 	Y     int `json:"y"`
 	Index int `json:"index"`
+}
+
+type ClickTiming struct {
+	ClickIndex    int
+	Timestamp     int64
+	Interval      int64
+	X             int
+	Y             int
+	DistanceFromPrev float64
+	Speed              float64
+}
+
+type TimingAnalysis struct {
+	TotalDuration    int64
+	AvgInterval      float64
+	MinInterval      int64
+	MaxInterval      int64
+	AvgSpeed         float64
+	StdDeviation     float64
+	IsSuspicious     bool
+	SuspiciousReason string
 }
 
 type CaptchaSession struct {
@@ -62,6 +86,40 @@ type CaptchaSession struct {
 	TargetY      int
 	Language     string
 	SmartTarget  bool
+	MathProblems []MathProblem
+	ColorTargets []ColorTarget
+	PhraseTarget string
+}
+
+type MathProblem struct {
+	Expression  string
+	Operands    []string
+	Result      string
+	TargetIndex int
+}
+
+type ColorType string
+
+const (
+	ColorRed    ColorType = "red"
+	ColorBlue   ColorType = "blue"
+	ColorGreen  ColorType = "green"
+	ColorYellow ColorType = "yellow"
+	ColorPurple ColorType = "purple"
+	ColorOrange ColorType = "orange"
+	ColorPink   ColorType = "pink"
+	ColorCyan   ColorType = "cyan"
+	ColorBrown  ColorType = "brown"
+	ColorGray   ColorType = "gray"
+)
+
+type ColorTarget struct {
+	Color     ColorType
+	ColorHex  string
+	X         int
+	Y         int
+	Index     int
+	Shape     int
 }
 
 var (
@@ -101,6 +159,66 @@ var clickLetterChars = []string{
 
 var clickNumberChars = []string{
 	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+}
+
+var mathOperators = []string{
+	"+", "-", "×", "÷", "=", "?",
+}
+
+var mathPhrases = []string{
+	"计算", "运算", "结果", "等于", "相加", "相减",
+}
+
+var colorHexMap = map[ColorType]string{
+	ColorRed:    "#E74C3C",
+	ColorBlue:   "#3498DB",
+	ColorGreen:  "#2ECC71",
+	ColorYellow: "#F1C40F",
+	ColorPurple: "#9B59B6",
+	ColorOrange: "#E67E22",
+	ColorPink:   "#E91E63",
+	ColorCyan:   "#00BCD4",
+	ColorBrown:  "#795548",
+	ColorGray:   "#95A5A6",
+}
+
+var colorNames = map[ColorType]string{
+	ColorRed:    "红色",
+	ColorBlue:   "蓝色",
+	ColorGreen:  "绿色",
+	ColorYellow: "黄色",
+	ColorPurple: "紫色",
+	ColorOrange: "橙色",
+	ColorPink:   "粉色",
+	ColorCyan:   "青色",
+	ColorBrown:  "棕色",
+	ColorGray:   "灰色",
+}
+
+var colorNamesEN = map[ColorType]string{
+	ColorRed:    "Red",
+	ColorBlue:   "Blue",
+	ColorGreen:  "Green",
+	ColorYellow: "Yellow",
+	ColorPurple: "Purple",
+	ColorOrange: "Orange",
+	ColorPink:   "Pink",
+	ColorCyan:   "Cyan",
+	ColorBrown:  "Brown",
+	ColorGray:   "Gray",
+}
+
+var chinesePhrases = []string{
+	"中国", "北京", "上海", "广州", "深圳", "杭州",
+	"太阳", "月亮", "星星", "天空", "大地", "海洋",
+	"山川", "河流", "森林", "草原", "沙漠", "岛屿",
+	"春天", "夏天", "秋天", "冬天", "季节", "天气",
+	"电脑", "手机", "网络", "程序", "代码", "开发",
+	"学习", "工作", "生活", "家庭", "朋友", "同学",
+	"老师", "学生", "学校", "教室", "书本", "考试",
+	"吃饭", "睡觉", "运动", "旅游", "购物", "娱乐",
+	"音乐", "电影", "电视", "游戏", "运动", "健康",
+	"安全", "密码", "登录", "注册", "验证", "认证",
 }
 
 type IconType string
@@ -163,6 +281,12 @@ func getHintPrefix(mode CaptchaMode, language string) string {
 			return "依次点击图标: "
 		case ModeMixed:
 			return "依次点击: "
+		case ModeMath:
+			return "依次点击运算数: "
+		case ModeColor:
+			return "依次点击颜色: "
+		case ModePhrase:
+			return "依次点击词组中的字: "
 		default:
 			return "依次点击: "
 		}
@@ -178,6 +302,12 @@ func getHintPrefix(mode CaptchaMode, language string) string {
 		return "Click icons: "
 	case ModeMixed:
 		return "Click in order: "
+	case ModeMath:
+		return "Click operands: "
+	case ModeColor:
+		return "Click colors: "
+	case ModePhrase:
+		return "Click phrase characters: "
 	default:
 		return "Click in order: "
 	}
@@ -759,6 +889,503 @@ func generateClickImageWithBackground(session *CaptchaSession) (string, []ClickP
 	return "data:image/png;base64," + base64Data, targetPoints, hintOrder, session.Hint
 }
 
+func generateMathClickImage(session *CaptchaSession) (string, []ClickPoint, []int, string) {
+	session.ImageWidth = 320
+	session.ImageHeight = 280
+	session.Tolerance = 30
+
+	img := image.NewRGBA(image.Rect(0, 0, session.ImageWidth, session.ImageHeight))
+
+	drawGradientBackground(img)
+	addNoiseDots(img, 150)
+	addInterferenceLines(img, 3)
+
+	problem := generateMathProblem()
+	session.MathProblems = []MathProblem{problem}
+
+	targetChars := problem.Operands
+	problemResult := problem.Result
+	maxPoints := len(targetChars)
+
+	decoyNumbers := make([]string, 0)
+	for i := 0; i < 6; i++ {
+		num := rand.Intn(20)
+		numStr := fmt.Sprintf("%d", num)
+		if numStr != problemResult && !containsString(targetChars, numStr) {
+			decoyNumbers = append(decoyNumbers, numStr)
+		}
+		if len(decoyNumbers) >= 4 {
+			break
+		}
+	}
+
+	totalChars := maxPoints + len(decoyNumbers)
+	allChars := make([]string, totalChars)
+	for i := 0; i < maxPoints; i++ {
+		allChars[i] = targetChars[i]
+	}
+	for i := 0; i < len(decoyNumbers); i++ {
+		allChars[maxPoints+i] = decoyNumbers[i]
+	}
+
+	perm := rand.Perm(totalChars)
+	shuffledChars := make([]string, totalChars)
+	charPositions := make([]int, totalChars)
+	for i, p := range perm {
+		shuffledChars[i] = allChars[p]
+		charPositions[i] = p
+	}
+
+	placedRects := make([]image.Rectangle, 0, totalChars)
+	charCenters := make([]struct{ X, Y int }, totalChars)
+	charSizes := make([]int, totalChars)
+
+	for i := 0; i < totalChars; i++ {
+		charSize := 35 + rand.Intn(15)
+		charSizes[i] = charSize
+		halfSize := charSize
+		maxAttempts := 30
+		var cx, cy int
+		placed := false
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			margin := halfSize/2 + 10
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+			if !isOverlapping(cx, cy, halfSize, placedRects) {
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			margin := halfSize/2 + 10
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+		}
+		charCenters[i] = struct{ X, Y int }{cx, cy}
+		placedRects = append(placedRects, image.Rect(cx-halfSize/2, cy-halfSize/2, cx+halfSize/2, cy+halfSize/2))
+	}
+
+	for i := 0; i < totalChars; i++ {
+		char := []rune(shuffledChars[i])[0]
+		charSize := charSizes[i]
+		rotation := float64(rand.Intn(20) - 10)
+		textColor := randomVibrantColor()
+
+		rendered := renderCharToRGBA(char, charSize, textColor)
+		if rendered == nil {
+			rendered = image.NewRGBA(image.Rect(0, 0, 10, 10))
+			draw.Draw(rendered, rendered.Bounds(), &image.Uniform{textColor}, image.Point{}, draw.Src)
+		}
+		rotated := rotateImageRGBA(rendered, rotation)
+		draw.Draw(img, image.Rect(
+			charCenters[i].X-rotated.Bounds().Dx()/2,
+			charCenters[i].Y-rotated.Bounds().Dy()/2,
+			charCenters[i].X-rotated.Bounds().Dx()/2+rotated.Bounds().Dx(),
+			charCenters[i].Y-rotated.Bounds().Dy()/2+rotated.Bounds().Dy(),
+		), rotated, image.Point{}, draw.Over)
+	}
+
+	targetPoints := make([]ClickPoint, maxPoints)
+	usedTargets := make([]bool, maxPoints)
+	displayChars := make([]string, maxPoints)
+
+	for _, origIdx := range perm[:maxPoints] {
+		for j := 0; j < maxPoints; j++ {
+			if usedTargets[j] {
+				continue
+			}
+			ci := -1
+			for k := 0; k < totalChars; k++ {
+				if charPositions[k] == j && k == origIdx {
+					ci = k
+					break
+				}
+			}
+			if ci >= 0 {
+				targetPoints[j].Index = j
+				targetPoints[j].X = charCenters[ci].X
+				targetPoints[j].Y = charCenters[ci].Y
+				displayChars[j] = targetChars[j]
+				usedTargets[j] = true
+				break
+			}
+		}
+	}
+
+	fallbackIdx := 0
+	for j := 0; j < maxPoints; j++ {
+		if !usedTargets[j] {
+			for fallbackIdx < totalChars {
+				ci := -1
+				for k := 0; k < totalChars; k++ {
+					if charPositions[k] == j && k < totalChars {
+						ci = k
+						break
+					}
+				}
+				if ci >= 0 {
+					targetPoints[j].Index = j
+					targetPoints[j].X = charCenters[ci].X
+					targetPoints[j].Y = charCenters[ci].Y
+					displayChars[j] = targetChars[j]
+					usedTargets[j] = true
+					fallbackIdx++
+					break
+				}
+				fallbackIdx++
+			}
+		}
+	}
+
+	session.TargetPoints = targetPoints
+
+	hintOrder := make([]int, maxPoints)
+	for i := 0; i < maxPoints; i++ {
+		hintOrder[i] = i
+	}
+
+	if session.AllowShuffle && rand.Float32() > 0.5 {
+		hintOrder = shuffleInts(hintOrder)
+	}
+
+	session.HintOrder = hintOrder
+
+	session.Hint = problem.Expression + " " + getHintPrefix(session.Mode, session.Language)
+	parts := make([]string, len(hintOrder))
+	for i, idx := range hintOrder {
+		parts[i] = displayChars[idx]
+	}
+	session.Hint += strings.Join(parts, " → ")
+
+	session.Points = make([][2]int, maxPoints)
+	for i, pt := range targetPoints {
+		session.Points[i] = [2]int{pt.X, pt.Y}
+	}
+
+	base64Data := imageToBase64(img)
+	return "data:image/png;base64," + base64Data, targetPoints, hintOrder, session.Hint
+}
+
+func generateColorClickImage(session *CaptchaSession) (string, []ClickPoint, []int, string) {
+	session.ImageWidth = 320
+	session.ImageHeight = 320
+	session.Tolerance = 35
+
+	img := image.NewRGBA(image.Rect(0, 0, session.ImageWidth, session.ImageHeight))
+
+	drawGradientBackground(img)
+	addNoiseDots(img, 120)
+	addInterferenceLines(img, 3)
+
+	maxPoints := session.MaxPoints
+	if maxPoints > 5 {
+		maxPoints = 5
+	}
+
+	totalColors := maxPoints + 3
+	if totalColors > 8 {
+		totalColors = 8
+	}
+
+	allColorTypes := make([]ColorType, 0, 10)
+	for i := 0; i < 10; i++ {
+		allColorTypes = append(allColorTypes, getColorAtIndex(i))
+	}
+	shuffledColors := make([]ColorType, len(allColorTypes))
+	perm := rand.Perm(len(allColorTypes))
+	for i, p := range perm {
+		shuffledColors[i] = allColorTypes[p]
+	}
+
+	placedRects := make([]image.Rectangle, 0, totalColors)
+	colorCenters := make([]struct{ X, Y int }, totalColors)
+	blockSize := 50
+
+	for i := 0; i < totalColors; i++ {
+		maxAttempts := 30
+		var cx, cy int
+		placed := false
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			margin := blockSize/2 + 15
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+			if !isOverlapping(cx, cy, blockSize, placedRects) {
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			margin := blockSize/2 + 15
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+		}
+		colorCenters[i] = struct{ X, Y int }{cx, cy}
+		placedRects = append(placedRects, image.Rect(cx-blockSize/2, cy-blockSize/2, cx+blockSize/2, cy+blockSize/2))
+	}
+
+	for i := 0; i < totalColors; i++ {
+		colorType := shuffledColors[i]
+		rendered := generateColorBlock(blockSize, colorType)
+		draw.Draw(img, image.Rect(
+			colorCenters[i].X-blockSize/2,
+			colorCenters[i].Y-blockSize/2,
+			colorCenters[i].X-blockSize/2+blockSize,
+			colorCenters[i].Y-blockSize/2+blockSize,
+		), rendered, image.Point{}, draw.Over)
+	}
+
+	targetPoints := make([]ClickPoint, maxPoints)
+	usedTargets := make([]bool, maxPoints)
+	displayColors := make([]string, maxPoints)
+
+	for j := 0; j < maxPoints; j++ {
+		targetPoints[j].Index = j
+		targetPoints[j].X = colorCenters[j].X
+		targetPoints[j].Y = colorCenters[j].Y
+		displayColors[j] = getColorNameLocalized(shuffledColors[j], session.Language)
+		usedTargets[j] = true
+		session.ColorTargets = append(session.ColorTargets, ColorTarget{
+			Color:    shuffledColors[j],
+			ColorHex: colorHexMap[shuffledColors[j]],
+			X:        colorCenters[j].X,
+			Y:        colorCenters[j].Y,
+			Index:    j,
+			Shape:    rand.Intn(3),
+		})
+	}
+
+	session.TargetPoints = targetPoints
+
+	hintOrder := make([]int, maxPoints)
+	for i := 0; i < maxPoints; i++ {
+		hintOrder[i] = i
+	}
+
+	if session.AllowShuffle && rand.Float32() > 0.5 {
+		hintOrder = shuffleInts(hintOrder)
+	}
+
+	session.HintOrder = hintOrder
+
+	parts := make([]string, len(hintOrder))
+	for i, idx := range hintOrder {
+		parts[i] = displayColors[idx]
+	}
+	prefix := getHintPrefix(session.Mode, session.Language)
+	session.Hint = prefix + strings.Join(parts, getArrowSeparator(session.Language))
+
+	session.Points = make([][2]int, maxPoints)
+	for i, pt := range targetPoints {
+		session.Points[i] = [2]int{pt.X, pt.Y}
+	}
+
+	base64Data := imageToBase64(img)
+	return "data:image/png;base64," + base64Data, targetPoints, hintOrder, session.Hint
+}
+
+func generatePhraseClickImage(session *CaptchaSession) (string, []ClickPoint, []int, string) {
+	session.ImageWidth = 340
+	session.ImageHeight = 300
+	session.Tolerance = 30
+
+	img := image.NewRGBA(image.Rect(0, 0, session.ImageWidth, session.ImageHeight))
+
+	drawGradientBackground(img)
+	addNoiseDots(img, 180)
+	addInterferenceLines(img, 4)
+	addGridLines(img)
+
+	phrase := chinesePhrases[rand.Intn(len(chinesePhrases))]
+	session.PhraseTarget = phrase
+
+	maxPoints := len(phrase)
+	if maxPoints > session.MaxPoints {
+		maxPoints = session.MaxPoints
+	}
+	if maxPoints < 2 {
+		maxPoints = 2
+	}
+	if maxPoints > len(phrase) {
+		maxPoints = len(phrase)
+	}
+
+	charRunes := []rune(phrase)
+	if len(charRunes) < maxPoints {
+		maxPoints = len(charRunes)
+	}
+	targetChars := make([]string, maxPoints)
+	for i := 0; i < maxPoints; i++ {
+		targetChars[i] = string(charRunes[i])
+	}
+
+	decoyChars := make([]string, 0)
+	for i := 0; i < 8; i++ {
+		decoy := clickChineseChars[rand.Intn(len(clickChineseChars))]
+		if !containsString(targetChars, decoy) {
+			decoyChars = append(decoyChars, decoy)
+		}
+		if len(decoyChars) >= 5 {
+			break
+		}
+	}
+
+	totalChars := maxPoints + len(decoyChars)
+	allChars := make([]string, totalChars)
+	for i := 0; i < maxPoints; i++ {
+		allChars[i] = targetChars[i]
+	}
+	for i := 0; i < len(decoyChars); i++ {
+		allChars[maxPoints+i] = decoyChars[i]
+	}
+
+	perm := rand.Perm(totalChars)
+	shuffledChars := make([]string, totalChars)
+	charPositions := make([]int, totalChars)
+	for i, p := range perm {
+		shuffledChars[i] = allChars[p]
+		charPositions[i] = p
+	}
+
+	placedRects := make([]image.Rectangle, 0, totalChars)
+	charCenters := make([]struct{ X, Y int }, totalChars)
+	charSizes := make([]int, totalChars)
+
+	for i := 0; i < totalChars; i++ {
+		charSize := 35 + rand.Intn(20)
+		charSizes[i] = charSize
+		halfSize := charSize
+		maxAttempts := 30
+		var cx, cy int
+		placed := false
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			margin := halfSize/2 + 12
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+			if !isOverlapping(cx, cy, halfSize, placedRects) {
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			margin := halfSize/2 + 12
+			cx = margin + rand.Intn(session.ImageWidth-2*margin)
+			cy = margin + rand.Intn(session.ImageHeight-2*margin)
+		}
+		charCenters[i] = struct{ X, Y int }{cx, cy}
+		placedRects = append(placedRects, image.Rect(cx-halfSize/2, cy-halfSize/2, cx+halfSize/2, cy+halfSize/2))
+	}
+
+	for i := 0; i < totalChars; i++ {
+		char := []rune(shuffledChars[i])[0]
+		charSize := charSizes[i]
+		rotation := float64(rand.Intn(30) - 15)
+		textColor := randomVibrantColor()
+
+		rendered := renderCharToRGBA(char, charSize, textColor)
+		if rendered == nil {
+			rendered = image.NewRGBA(image.Rect(0, 0, 10, 10))
+			draw.Draw(rendered, rendered.Bounds(), &image.Uniform{textColor}, image.Point{}, draw.Src)
+		}
+		rotated := rotateImageRGBA(rendered, rotation)
+		draw.Draw(img, image.Rect(
+			charCenters[i].X-rotated.Bounds().Dx()/2,
+			charCenters[i].Y-rotated.Bounds().Dy()/2,
+			charCenters[i].X-rotated.Bounds().Dx()/2+rotated.Bounds().Dx(),
+			charCenters[i].Y-rotated.Bounds().Dy()/2+rotated.Bounds().Dy(),
+		), rotated, image.Point{}, draw.Over)
+	}
+
+	targetPoints := make([]ClickPoint, maxPoints)
+	usedTargets := make([]bool, maxPoints)
+	displayChars := make([]string, maxPoints)
+
+	for _, origIdx := range perm[:maxPoints] {
+		for j := 0; j < maxPoints; j++ {
+			if usedTargets[j] {
+				continue
+			}
+			ci := -1
+			for k := 0; k < totalChars; k++ {
+				if charPositions[k] == j && k == origIdx {
+					ci = k
+					break
+				}
+			}
+			if ci >= 0 {
+				targetPoints[j].Index = j
+				targetPoints[j].X = charCenters[ci].X
+				targetPoints[j].Y = charCenters[ci].Y
+				displayChars[j] = targetChars[j]
+				usedTargets[j] = true
+				break
+			}
+		}
+	}
+
+	fallbackIdx := 0
+	for j := 0; j < maxPoints; j++ {
+		if !usedTargets[j] {
+			for fallbackIdx < totalChars {
+				ci := -1
+				for k := 0; k < totalChars; k++ {
+					if charPositions[k] == j && k < totalChars {
+						ci = k
+						break
+					}
+				}
+				if ci >= 0 {
+					targetPoints[j].Index = j
+					targetPoints[j].X = charCenters[ci].X
+					targetPoints[j].Y = charCenters[ci].Y
+					displayChars[j] = targetChars[j]
+					usedTargets[j] = true
+					fallbackIdx++
+					break
+				}
+				fallbackIdx++
+			}
+		}
+	}
+
+	session.TargetPoints = targetPoints
+
+	hintOrder := make([]int, maxPoints)
+	for i := 0; i < maxPoints; i++ {
+		hintOrder[i] = i
+	}
+
+	if session.AllowShuffle && rand.Float32() > 0.5 {
+		hintOrder = shuffleInts(hintOrder)
+	}
+
+	session.HintOrder = hintOrder
+
+	parts := make([]string, len(hintOrder))
+	for i, idx := range hintOrder {
+		parts[i] = displayChars[idx]
+	}
+	prefix := getHintPrefix(session.Mode, session.Language)
+	arrow := getArrowSeparator(session.Language)
+	session.Hint = prefix + "【" + phrase + "】" + arrow + strings.Join(parts, arrow)
+
+	session.Points = make([][2]int, maxPoints)
+	for i, pt := range targetPoints {
+		session.Points[i] = [2]int{pt.X, pt.Y}
+	}
+
+	base64Data := imageToBase64(img)
+	return "data:image/png;base64," + base64Data, targetPoints, hintOrder, session.Hint
+}
+
+func containsString(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
+}
+
 func getCharForIndex(index int, mode CaptchaMode) string {
 	switch mode {
 	case ModeNumber:
@@ -778,8 +1405,124 @@ func getCharForIndex(index int, mode CaptchaMode) string {
 		default:
 			return clickChineseChars[rand.Intn(len(clickChineseChars))]
 		}
+	case ModeMath:
+		switch rand.Intn(3) {
+		case 0:
+			return clickNumberChars[rand.Intn(len(clickNumberChars))]
+		case 1:
+			return mathOperators[rand.Intn(len(mathOperators))]
+		default:
+			return clickNumberChars[rand.Intn(len(clickNumberChars))]
+		}
+	case ModePhrase:
+		return clickChineseChars[rand.Intn(len(clickChineseChars))]
 	default:
 		return clickNumberChars[rand.Intn(len(clickNumberChars))]
+	}
+}
+
+func generateMathProblem() MathProblem {
+	operand1 := rand.Intn(9) + 1
+	operand2 := rand.Intn(9) + 1
+	opIndex := rand.Intn(2)
+	var expression string
+	var result int
+
+	switch opIndex {
+	case 0:
+		expression = fmt.Sprintf("%d + %d", operand1, operand2)
+		result = operand1 + operand2
+	case 1:
+		if operand1 < operand2 {
+			operand1, operand2 = operand2, operand1
+		}
+		expression = fmt.Sprintf("%d - %d", operand1, operand2)
+		result = operand1 - operand2
+	default:
+		expression = fmt.Sprintf("%d × %d", operand1, operand2)
+		result = operand1 * operand2
+	}
+
+	operands := []string{fmt.Sprintf("%d", operand1), fmt.Sprintf("%d", operand2)}
+	targetIndex := rand.Intn(2)
+
+	return MathProblem{
+		Expression:  expression,
+		Operands:    operands,
+		Result:      fmt.Sprintf("%d", result),
+		TargetIndex: targetIndex,
+	}
+}
+
+func getColorNameLocalized(colorType ColorType, language string) string {
+	if language == "zh" || language == "zh-CN" {
+		if name, ok := colorNames[colorType]; ok {
+			return name
+		}
+	}
+	if name, ok := colorNamesEN[colorType]; ok {
+		return name
+	}
+	return string(colorType)
+}
+
+func getColorAtIndex(index int) ColorType {
+	colors := []ColorType{
+		ColorRed, ColorBlue, ColorGreen, ColorYellow,
+		ColorPurple, ColorOrange, ColorPink, ColorCyan,
+		ColorBrown, ColorGray,
+	}
+	return colors[index%len(colors)]
+}
+
+func parseColorHex(hex string) color.RGBA {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return color.RGBA{R: 128, G: 128, B: 128, A: 255}
+	}
+	r := uint8(0)
+	g := uint8(0)
+	b := uint8(0)
+	fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
+	return color.RGBA{R: r, G: g, B: b, A: 255}
+}
+
+func generateColorBlock(size int, colorType ColorType) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	fillColor := parseColorHex(colorHexMap[colorType])
+	drawFilledRect(img, 0, 0, size, size, fillColor)
+	borderColor := color.RGBA{
+		R: uint8(clampU8(int(fillColor.R) - 40)),
+		G: uint8(clampU8(int(fillColor.G) - 40)),
+		B: uint8(clampU8(int(fillColor.B) - 40)),
+		A: 255,
+	}
+	for i := 0; i < 3; i++ {
+		drawRectOutline(img, i, i, size-i*2, size-i*2, borderColor)
+	}
+	return img
+}
+
+func drawRectOutline(img *image.RGBA, x, y, w, h int, c color.Color) {
+	for dx := 0; dx < w; dx++ {
+		px, py := x+dx, y
+		if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+			img.Set(px, py, c)
+		}
+		py = y + h - 1
+		if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+			img.Set(px, py, c)
+		}
+	}
+	for dy := 0; dy < h; dy++ {
+		px, py := x, y+dy
+		if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+			img.Set(px, py, c)
+		}
+		px = x + w - 1
+		if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+			img.Set(px, py, c)
+		}
 	}
 }
 
@@ -1341,6 +2084,12 @@ func GetClickCaptcha(c *gin.Context) {
 		mode = ModeMixed
 	case "icon":
 		mode = ModeIcon
+	case "math":
+		mode = ModeMath
+	case "color":
+		mode = ModeColor
+	case "phrase":
+		mode = ModePhrase
 	default:
 		mode = ModeNumber
 	}
@@ -1368,7 +2117,20 @@ func GetClickCaptcha(c *gin.Context) {
 		SmartTarget:  true,
 	}
 
-	imageURL, _, hintOrder, hint := generateClickImageWithBackground(session)
+	var imageURL string
+	var hintOrder []int
+	var hint string
+
+	switch mode {
+	case ModeMath:
+		imageURL, _, hintOrder, hint = generateMathClickImage(session)
+	case ModeColor:
+		imageURL, _, hintOrder, hint = generateColorClickImage(session)
+	case ModePhrase:
+		imageURL, _, hintOrder, hint = generatePhraseClickImage(session)
+	default:
+		imageURL, _, hintOrder, hint = generateClickImageWithBackground(session)
+	}
 
 	sessionMutex.Lock()
 	captchaSessions[sessionID] = session
@@ -1396,9 +2158,10 @@ type VerifyRequest struct {
 	Y               int                 `json:"y"`                                               // 滑动验证码 Y 坐标
 	Points          [][2]int            `json:"points"`                                          // 点击验证码坐标数组
 	ClickSequence   []int               `json:"click_sequence"`                                  // 点击顺序
+	ClickTimestamps []int64             `json:"click_timestamps"`                               // 点击时间戳（毫秒）
 	BehaviorData    []BehaviorDataPoint `json:"behavior_data"`                                   // 行为分析数据
 	SpeedData       json.RawMessage     `json:"speed_data,omitempty" swaggerignore:"true"`       // 速度数据 (内部使用)
-	ApplicationID   uint                `json:"application_id"`                                  // 应用 ID
+	ApplicationID   uint                `json:"application_id"`                                 // 应用 ID
 	EnvironmentData json.RawMessage     `json:"environment_data,omitempty" swaggerignore:"true"` // 环境检测数据 (内部使用)
 }
 
@@ -1593,6 +2356,11 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 		return false, "点击时序长度不匹配"
 	}
 
+	timingAnalysis := analyzeClickTiming(req.ClickTimestamps, req.Points)
+	if timingAnalysis.IsSuspicious {
+		return false, timingAnalysis.SuspiciousReason
+	}
+
 	tolerance := session.Tolerance
 	if tolerance <= 0 {
 		tolerance = 35
@@ -1704,6 +2472,105 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 	}
 
 	return true, ""
+}
+
+func analyzeClickTiming(timestamps []int64, points [][2]int) TimingAnalysis {
+	analysis := TimingAnalysis{}
+
+	if len(timestamps) < 2 {
+		analysis.TotalDuration = 0
+		analysis.AvgInterval = 0
+		analysis.MinInterval = 0
+		analysis.MaxInterval = 0
+		analysis.AvgSpeed = 0
+		analysis.StdDeviation = 0
+		analysis.IsSuspicious = false
+		return analysis
+	}
+
+	analysis.TotalDuration = timestamps[len(timestamps)-1] - timestamps[0]
+
+	intervals := make([]int64, len(timestamps)-1)
+	for i := 1; i < len(timestamps); i++ {
+		intervals[i-1] = timestamps[i] - timestamps[i-1]
+	}
+
+	if len(intervals) > 0 {
+		totalInterval := int64(0)
+		analysis.MinInterval = intervals[0]
+		analysis.MaxInterval = intervals[0]
+
+		for _, interval := range intervals {
+			totalInterval += interval
+			if interval < analysis.MinInterval {
+				analysis.MinInterval = interval
+			}
+			if interval > analysis.MaxInterval {
+				analysis.MaxInterval = interval
+			}
+		}
+
+		analysis.AvgInterval = float64(totalInterval) / float64(len(intervals))
+
+		if analysis.MinInterval < 50 {
+			analysis.IsSuspicious = true
+			analysis.SuspiciousReason = fmt.Sprintf("点击过快: 检测到最短间隔%d毫秒，可能是机器自动点击", analysis.MinInterval)
+			return analysis
+		}
+
+		if analysis.MaxInterval > 30000 && len(intervals) > 1 {
+			analysis.IsSuspicious = true
+			analysis.SuspiciousReason = fmt.Sprintf("点击间隔过长: 检测到最大间隔%d毫秒，可能在等待外部答案", analysis.MaxInterval)
+			return analysis
+		}
+
+		if analysis.TotalDuration < 500 && len(timestamps) >= 2 {
+			analysis.IsSuspicious = true
+			analysis.SuspiciousReason = fmt.Sprintf("总点击时间过短: %d毫秒内完成%d次点击，可能是机器操作",
+				analysis.TotalDuration, len(timestamps))
+			return analysis
+		}
+
+		var variance float64
+		for _, interval := range intervals {
+			diff := float64(interval) - analysis.AvgInterval
+			variance += diff * diff
+		}
+		analysis.StdDeviation = math.Sqrt(variance / float64(len(intervals)))
+
+		if analysis.StdDeviation < 20 && analysis.AvgInterval < 200 && len(intervals) >= 2 {
+			analysis.IsSuspicious = true
+			analysis.SuspiciousReason = "点击间隔过于规律，可能是脚本或机器人自动点击"
+			return analysis
+		}
+	}
+
+	if len(points) >= 2 {
+		distances := make([]float64, len(points)-1)
+		for i := 1; i < len(points); i++ {
+			dx := float64(points[i][0] - points[i-1][0])
+			dy := float64(points[i][1] - points[i-1][1])
+			distances[i-1] = math.Sqrt(dx*dx + dy*dy)
+		}
+
+		totalDistance := 0.0
+		for _, d := range distances {
+			totalDistance += d
+		}
+
+		if len(distances) > 0 {
+			analysis.AvgSpeed = totalDistance / float64(len(distances))
+
+			if analysis.AvgSpeed > 500 {
+				analysis.IsSuspicious = true
+				analysis.SuspiciousReason = "鼠标移动速度异常：平均速度过高，可能是机器操作"
+				return analysis
+			}
+		}
+	}
+
+	analysis.IsSuspicious = false
+	return analysis
 }
 
 func formatHintOrder(order []int) string {

@@ -625,19 +625,62 @@
             75% { transform: translateX(5px); }
         }
 
-        @media (max-width: 991.98px) {
-            .nav-pills {
-                flex-wrap: wrap;
+        @media (max-width: 575.98px) {
+            .page-hero {
+                padding: 5rem 0 2.5rem;
+            }
+
+            .display-4 {
+                font-size: 1.75rem !important;
             }
 
             .nav-link {
-                flex: 1 1 45%;
-                min-width: 120px;
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+
+            .seamless-lang-switch {
+                font-size: 0.7rem;
+            }
+
+            .seamless-lang-btn {
+                padding: 0.2rem 0.5rem;
+            }
+
+            .icon-wrap {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+
+            .feature-icon-wrap {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+
+            .tech-badge {
+                padding: 0.3rem 0.6rem;
+                font-size: 0.75rem;
+            }
+
+            .seamless-demo-area {
+                min-height: 200px;
+                padding: 1rem;
+            }
+
+            .seamless-fingerprint-display {
+                grid-template-columns: 1fr;
             }
 
             .demo-card-header {
                 flex-direction: column;
                 text-align: center;
+                padding: 1rem;
+            }
+
+            .demo-card-body {
+                padding: 1rem;
             }
 
             .icon-wrap {
@@ -645,30 +688,17 @@
             }
         }
 
-        @media (max-width: 767.98px) {
-            .page-hero {
-                padding: 6rem 0 3rem;
+        @media (min-width: 576px) and (max-width: 991.98px) {
+            .seamless-demo-area {
+                min-height: 240px;
             }
 
-            .display-4 {
-                font-size: 2rem;
-            }
-
-            .nav-link {
-                flex: 1 1 100%;
-                margin-bottom: 0.5rem;
+            .demo-card-header {
+                padding: 1.25rem;
             }
 
             .demo-card-body {
-                padding: 1rem;
-            }
-
-            .seamless-demo-area {
-                min-height: 250px;
-            }
-
-            .seamless-fingerprint-display {
-                grid-template-columns: 1fr;
+                padding: 1.25rem;
             }
         }
 

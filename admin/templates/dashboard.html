@@ -46,61 +46,91 @@
 {% block content %}
 <div class="row">
     <div class="col-lg-3 col-6">
-        <div class="small-box bg-info">
+        <div class="small-box bg-info" data-counter="totalRequests" data-target="0">
             <div class="inner">
-                <h3 id="totalRequests">0</h3>
+                <h3 class="counter-value" id="totalRequests">0</h3>
                 <p>今日验证</p>
-                <div class="small-chart-container">
-                    <div id="requestsMiniChart" style="height: 40px;"></div>
+                <div class="progress mt-2">
+                    <div class="progress-bar bg-white" id="passRateProgress" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="requestsTrend"></small>
+                    <span class="badge badge-light" id="requestsChange"><i class="fas fa-arrow-up"></i></span>
                 </div>
             </div>
             <div class="icon">
                 <i class="fas fa-shield-alt"></i>
             </div>
             <a href="/admin/logs" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <div class="overlay">
+                <i class="fas fa-sync fa-spin"></i>
+            </div>
         </div>
     </div>
     <div class="col-lg-3 col-6">
-        <div class="small-box bg-success">
+        <div class="small-box bg-success" data-counter="passRate" data-target="0">
             <div class="inner">
-                <h3 id="passRate">0%</h3>
+                <h3 class="counter-value" id="passRate">0%</h3>
                 <p>通过率</p>
                 <div class="progress mt-2">
-                    <div class="progress-bar bg-white" id="passRateProgress" style="width: 0%"></div>
+                    <div class="progress-bar bg-white" id="passRateProgressBar" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 d-flex justify-content-between align-items-center">
+                    <small class="text-muted">目标: 95%</small>
+                    <span class="badge badge-light" id="passRateStatus"><i class="fas fa-check"></i></span>
                 </div>
             </div>
             <div class="icon">
                 <i class="fas fa-check-circle"></i>
             </div>
             <a href="/admin/stats" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <div class="overlay">
+                <i class="fas fa-sync fa-spin"></i>
+            </div>
         </div>
     </div>
     <div class="col-lg-3 col-6">
-        <div class="small-box bg-danger">
+        <div class="small-box bg-danger" data-counter="blockRate" data-target="0">
             <div class="inner">
-                <h3 id="blockRate">0%</h3>
+                <h3 class="counter-value" id="blockRate">0%</h3>
                 <p>拦截率</p>
                 <div class="progress mt-2">
-                    <div class="progress-bar bg-white" id="blockRateProgress" style="width: 0%"></div>
+                    <div class="progress-bar bg-white" id="blockRateProgressBar" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 d-flex justify-content-between align-items-center">
+                    <small class="text-muted">恶意请求</small>
+                    <span class="badge badge-light" id="blockRateChange"><i class="fas fa-ban"></i></span>
                 </div>
             </div>
             <div class="icon">
                 <i class="fas fa-ban"></i>
             </div>
             <a href="/admin/risk-rules" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <div class="overlay">
+                <i class="fas fa-sync fa-spin"></i>
+            </div>
         </div>
     </div>
     <div class="col-lg-3 col-6">
-        <div class="small-box bg-warning">
+        <div class="small-box bg-warning" data-counter="avgResponseTime" data-target="0">
             <div class="inner">
-                <h3 id="avgResponseTime">0ms</h3>
+                <h3 class="counter-value" id="avgResponseTime">0ms</h3>
                 <p>平均响应</p>
-                <small class="text-muted" id="responseTrend"></small>
+                <div class="progress mt-2">
+                    <div class="progress-bar bg-white" id="responseTimeProgress" style="width: 0%"></div>
+                </div>
+                <div class="mt-2 d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="responseTrend"></small>
+                    <span class="badge badge-light" id="responseTimeStatus"><i class="fas fa-clock"></i></span>
+                </div>
             </div>
             <div class="icon">
                 <i class="fas fa-clock"></i>
             </div>
             <a href="/admin/monitoring" class="small-box-footer">更多详情 <i class="fas fa-arrow-circle-right"></i></a>
+            <div class="overlay">
+                <i class="fas fa-sync fa-spin"></i>
+            </div>
         </div>
     </div>
 </div>
@@ -162,22 +192,27 @@
 
 <div class="row">
     <div class="col-lg-2 col-6">
-        <div class="info-box bg-gradient-primary">
+        <div class="info-box bg-gradient-primary" data-info-box="apiCalls">
+            <span class="info-box-icon"><i class="fas fa-key"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">API调用</span>
-                <span class="info-box-number" id="apiCalls">0</span>
+                <span class="info-box-number counter-value" id="apiCalls">0</span>
                 <div class="progress">
                     <div class="progress-bar" id="apiCallsProgress" style="width: 0%"></div>
                 </div>
-                <small class="text-muted" id="apiCallsTrend"></small>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted" id="apiCallsTrend">-</small>
+                    <span class="badge badge-light" id="apiCallsBadge">-</span>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-lg-2 col-6">
-        <div class="info-box bg-gradient-success">
+        <div class="info-box bg-gradient-success" data-info-box="cacheHit">
+            <span class="info-box-icon"><i class="fas fa-database"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">缓存命中</span>
-                <span class="info-box-number" id="cacheHitRate">0%</span>
+                <span class="info-box-number counter-value" id="cacheHitRate">0%</span>
                 <div class="progress">
                     <div class="progress-bar" id="cacheHitProgress" style="width: 0%"></div>
                 </div>
@@ -186,46 +221,59 @@
         </div>
     </div>
     <div class="col-lg-2 col-6">
-        <div class="info-box bg-gradient-warning">
+        <div class="info-box bg-gradient-warning" data-info-box="activeDevices">
+            <span class="info-box-icon"><i class="fas fa-mobile-alt"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">活跃设备</span>
-                <span class="info-box-number" id="activeDevices">0</span>
+                <span class="info-box-number counter-value" id="activeDevices">0</span>
                 <div class="progress">
                     <div class="progress-bar" id="activeDevicesProgress" style="width: 0%"></div>
                 </div>
-                <small class="text-muted" id="activeDevicesTrend"></small>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted" id="activeDevicesTrend">-</small>
+                    <span class="badge badge-light" id="activeDevicesBadge">-</span>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-lg-2 col-6">
-        <div class="info-box bg-gradient-danger">
+        <div class="info-box bg-gradient-danger" data-info-box="riskBlocked">
+            <span class="info-box-icon"><i class="fas fa-shield-alt"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">风险拦截</span>
-                <span class="info-box-number" id="riskBlocked">0</span>
+                <span class="info-box-number counter-value" id="riskBlocked">0</span>
                 <div class="progress">
                     <div class="progress-bar" id="riskBlockedProgress" style="width: 0%"></div>
                 </div>
-                <small class="text-muted" id="riskBlockedTrend"></small>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted" id="riskBlockedTrend">-</small>
+                    <span class="badge badge-light" id="riskBlockedBadge">-</span>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-lg-2 col-6">
-        <div class="info-box bg-gradient-info">
+        <div class="info-box bg-gradient-info" data-info-box="avgLatency">
+            <span class="info-box-icon"><i class="fas fa-tachometer-alt"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">平均延迟</span>
-                <span class="info-box-number" id="avgLatency">0ms</span>
+                <span class="info-box-number counter-value" id="avgLatency">0ms</span>
                 <div class="progress">
                     <div class="progress-bar" id="avgLatencyProgress" style="width: 0%"></div>
                 </div>
-                <small class="text-muted" id="avgLatencyTrend"></small>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted" id="avgLatencyTrend">-</small>
+                    <span class="badge badge-light" id="avgLatencyBadge">-</span>
+                </div>
             </div>
         </div>
     </div>
     <div class="col-lg-2 col-6">
-        <div class="info-box bg-gradient-secondary">
+        <div class="info-box bg-gradient-secondary" data-info-box="concurrent">
+            <span class="info-box-icon"><i class="fas fa-network-wired"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">并发连接</span>
-                <span class="info-box-number" id="concurrentConnections">0</span>
+                <span class="info-box-number counter-value" id="concurrentConnections">0</span>
                 <div class="progress">
                     <div class="progress-bar" id="concurrentProgress" style="width: 0%"></div>
                 </div>
@@ -1321,13 +1369,29 @@ function generateMockTrendData() {
 
 function updateDashboard(data) {
     if (data.summary) {
-        animateValue('totalRequests', 0, data.summary.total_requests, 1000);
-        document.getElementById('passRate').textContent = data.summary.pass_rate + '%';
-        document.getElementById('blockRate').textContent = data.summary.block_rate + '%';
-        document.getElementById('avgResponseTime').textContent = data.summary.avg_response_time + 'ms';
+        animateValue('totalRequests', 0, data.summary.total_requests, 1500);
+        animateValue('passRate', 0, parseFloat(data.summary.pass_rate), 1000, '%');
+        animateValue('blockRate', 0, parseFloat(data.summary.block_rate), 1000, '%');
+        animateValue('avgResponseTime', 0, data.summary.avg_response_time, 1000, 'ms');
         
-        document.getElementById('passRateProgress').style.width = data.summary.pass_rate + '%';
-        document.getElementById('blockRateProgress').style.width = data.summary.block_rate + '%';
+        const passRate = parseFloat(data.summary.pass_rate);
+        const blockRate = parseFloat(data.summary.block_rate);
+        
+        document.getElementById('passRateProgressBar').style.width = passRate + '%';
+        document.getElementById('blockRateProgressBar').style.width = blockRate + '%';
+        document.getElementById('responseTimeProgress').style.width = Math.min(data.summary.avg_response_time / 2, 100) + '%';
+        
+        updateKPIBadge('passRateStatus', passRate >= 95, '目标达成', '未达标');
+        updateKPIBadge('blockRateChange', blockRate <= 5, '正常', '偏高');
+        updateKPIBadge('responseTimeStatus', data.summary.avg_response_time <= 100, '优秀', data.summary.avg_response_time <= 200 ? '良好' : '需优化');
+        
+        if (data.summary.requests_change !== undefined) {
+            updateTrendBadge('requestsChange', data.summary.requests_change);
+        }
+        
+        if (data.summary.pass_rate_change !== undefined) {
+            updateTrendBadge('passRateChange', data.summary.pass_rate_change);
+        }
     }
     
     if (data.extended) {
@@ -1690,7 +1754,26 @@ function renderRecentVerifications(data) {
     `).join('');
 }
 
-function animateValue(elementId, start, end, duration) {
+function updateKPIBadge(elementId, condition, successText, failText) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    el.textContent = condition ? successText : failText;
+    el.className = condition ? 'badge badge-success' : 'badge badge-warning';
+}
+
+function updateTrendBadge(elementId, change) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    
+    const isPositive = change >= 0;
+    el.innerHTML = isPositive ? 
+        `<i class="fas fa-arrow-up"></i> ${Math.abs(change).toFixed(1)}%` : 
+        `<i class="fas fa-arrow-down"></i> ${Math.abs(change).toFixed(1)}%`;
+    el.className = isPositive ? 'badge badge-success' : 'badge badge-danger';
+}
+
+function animateValue(elementId, start, end, duration, suffix = '') {
     const element = document.getElementById(elementId);
     if (!element) return;
     
@@ -1700,8 +1783,15 @@ function animateValue(elementId, start, end, duration) {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const easeProgress = 1 - Math.pow(1 - progress, 4);
-        const value = Math.floor(start + (end - start) * easeProgress);
-        element.textContent = formatNumber(value);
+        const value = start + (end - start) * easeProgress;
+        
+        if (suffix === '%') {
+            element.textContent = value.toFixed(1) + '%';
+        } else if (suffix === 'ms') {
+            element.textContent = Math.floor(value) + 'ms';
+        } else {
+            element.textContent = formatNumber(Math.floor(value));
+        }
         
         if (progress < 1) {
             requestAnimationFrame(update);

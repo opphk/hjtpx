@@ -113,21 +113,95 @@ func NewEnvDetectorBackend() *EnvDetector {
 	return &EnvDetector{}
 }
 
+type AutomationIndicators struct {
+	Name          string
+	Confidence    float64
+	DetectionType string
+	Evidence      []string
+}
+
+var automationSignatures = map[string][]string{
+	"puppeteer": {
+		"$cdc_asdjflasutopfhvcZLmcfl_",
+		"$chrome_asyncScriptInfo",
+		"__webdriver_evaluate",
+		"__puppeteer_evaluation_script",
+		"Puppeteer",
+		"HeadlessChrome",
+	},
+	"playwright": {
+		"__playwright__",
+		"__pw_tags",
+		"__pw_resume__",
+		"__pw_connect__",
+		"__playwright_unstripped__",
+		"playwright",
+	},
+	"selenium": {
+		"__selenium_evaluate",
+		"__webdriver_script_fn",
+		"__driver_evaluate",
+		"__fxdriver_evaluate",
+		"__webdriver_unwrapped",
+		"__lastWatirAlert",
+		"__$webdriverAsyncExecutor",
+		"callSelenium",
+		"Selenium",
+		"selenium",
+		"webdriver",
+	},
+	"cypress": {
+		"__cypress_",
+		"Cypress",
+		"cypress",
+	},
+	"nightmare": {
+		"Nightmare",
+		"nightmare",
+	},
+	"testcafe": {
+		"__TESTCAFE",
+		"testcafe",
+	},
+	"webdriverio": {
+		"WebDriver",
+		"webdriverio",
+		"wdio",
+	},
+}
+
+var automationHeaders = map[string]string{
+	"X-WD-Agent":      "webdriver",
+	"X-SELENIUM":      "selenium",
+	"X-PUPPETEER":     "puppeteer",
+	"X-PLAYWRIGHT":    "playwright",
+	"X-AUTOMATION":    "automation",
+	"X-BOT":           "bot",
+	"X-CRAWLER":       "crawler",
+}
+
 func (d *EnvDetector) DetectAutomation(info *EnvInfo) *AutomationResult {
 	result := &AutomationResult{
 		Detected: false,
 		Risks:    []string{},
 	}
 
-	uaLower := strings.ToLower(info.UserAgent)
+	indicators := d.detectAutomationIndicators(info)
+	
+	for _, indicator := range indicators {
+		if indicator.Confidence > 0.5 {
+			result.Risks = append(result.Risks, fmt.Sprintf("%s detected (confidence: %.0f%%)", indicator.Name, indicator.Confidence*100))
+			result.Detected = true
+		}
+	}
 
-	if strings.Contains(uaLower, "webdriver") {
-		result.Risks = append(result.Risks, "Selenium WebDriver detected")
+	if strings.Contains(strings.ToLower(info.UserAgent), "webdriver") {
+		result.Risks = append(result.Risks, "Selenium WebDriver detected in UserAgent")
 		result.Detected = true
 	}
 
-	if strings.Contains(uaLower, "headless") {
-		result.Risks = append(result.Risks, "Headless Chrome detected")
+	if strings.Contains(strings.ToLower(info.UserAgent), "headless") {
+		result.Risks = append(result.Risks, "Headless Chrome detected in UserAgent")
 		result.Detected = true
 	}
 
@@ -150,31 +224,183 @@ func (d *EnvDetector) DetectAutomation(info *EnvInfo) *AutomationResult {
 		result.Risks = append(result.Risks, "WebGL information missing")
 	}
 
-	if strings.Contains(uaLower, "phantom") {
+	if strings.Contains(strings.ToLower(info.UserAgent), "phantom") {
 		result.Risks = append(result.Risks, "PhantomJS detected")
 		result.Detected = true
 	}
 
-	if strings.Contains(uaLower, "puppeteer") {
-		result.Risks = append(result.Risks, "Puppeteer detected")
-		result.Detected = true
-	}
-
-	if strings.Contains(uaLower, "playwright") {
-		result.Risks = append(result.Risks, "Playwright detected")
-		result.Detected = true
-	}
-
-	if strings.Contains(uaLower, "selenium") {
-		result.Risks = append(result.Risks, "Selenium detected")
-		result.Detected = true
-	}
-
-	if info.Platform == "" {
-		result.Risks = append(result.Risks, "Platform information missing")
-	}
-
 	return result
+}
+
+func (d *EnvDetector) detectAutomationIndicators(info *EnvInfo) []AutomationIndicators {
+	indicators := []AutomationIndicators{}
+	uaLower := strings.ToLower(info.UserAgent)
+
+	for automationType, signatures := range automationSignatures {
+		confidence := 0.0
+		evidence := []string{}
+
+		for _, sig := range signatures {
+			if strings.Contains(uaLower, strings.ToLower(sig)) {
+				confidence += 0.3
+				evidence = append(evidence, fmt.Sprintf("UA match: %s", sig))
+			}
+		}
+
+		if strings.Contains(info.WebGLRenderer, "SwiftShader") || 
+		   strings.Contains(info.WebGLRenderer, "llvmpipe") ||
+		   strings.Contains(strings.ToLower(info.WebGLRenderer), "software") {
+			confidence += 0.25
+			evidence = append(evidence, "Software WebGL renderer detected")
+		}
+
+		if info.HardwareConcurrency > 0 && info.HardwareConcurrency <= 2 {
+			confidence += 0.15
+			evidence = append(evidence, fmt.Sprintf("Low CPU cores: %d", info.HardwareConcurrency))
+		}
+
+		if len(info.Plugins) == 0 {
+			confidence += 0.15
+			evidence = append(evidence, "No plugins detected")
+		}
+
+		if len(info.Fonts) < 3 {
+			confidence += 0.1
+			evidence = append(evidence, "Limited fonts detected")
+		}
+
+		if info.TouchSupport && info.MaxTouchPoints == 0 {
+			confidence += 0.1
+			evidence = append(evidence, "Touch support inconsistency")
+		}
+
+		if confidence > 0 {
+			indicators = append(indicators, AutomationIndicators{
+				Name:          automationType,
+				Confidence:    math.Min(confidence, 1.0),
+				DetectionType: "signature_match",
+				Evidence:      evidence,
+			})
+		}
+	}
+
+	nightmarePatterns := []string{"nightmare", "electron", "nw.js"}
+	for _, pattern := range nightmarePatterns {
+		if strings.Contains(uaLower, pattern) {
+			confidence := 0.4
+			if strings.Contains(uaLower, "node") || strings.Contains(info.Platform, "node") {
+				confidence += 0.2
+			}
+			indicators = append(indicators, AutomationIndicators{
+				Name:          "nightmare_electron",
+				Confidence:    confidence,
+				DetectionType: "framework_pattern",
+				Evidence:      []string{fmt.Sprintf("UA contains: %s", pattern)},
+			})
+		}
+	}
+
+	cypressPatterns := []string{"cypress", "cypress_runner"}
+	for _, pattern := range cypressPatterns {
+		if strings.Contains(uaLower, pattern) {
+			indicators = append(indicators, AutomationIndicators{
+				Name:          "cypress",
+				Confidence:    0.75,
+				DetectionType: "framework_pattern",
+				Evidence:      []string{fmt.Sprintf("UA contains: %s", pattern)},
+			})
+		}
+	}
+
+	return indicators
+}
+
+func (d *EnvDetector) DetectAutomationFromHeaders(headers map[string]string) []AutomationIndicators {
+	indicators := []AutomationIndicators{}
+
+	for headerName, automationType := range automationHeaders {
+		if value, exists := headers[headerName]; exists && value != "" {
+			indicators = append(indicators, AutomationIndicators{
+				Name:          automationType,
+				Confidence:    0.9,
+				DetectionType: "header",
+				Evidence:      []string{fmt.Sprintf("Header %s: %s", headerName, value)},
+			})
+		}
+	}
+
+	for headerName, value := range headers {
+		headerLower := strings.ToLower(headerName)
+		valueLower := strings.ToLower(value)
+		
+		if strings.Contains(headerLower, "automation") || strings.Contains(valueLower, "automation") {
+			indicators = append(indicators, AutomationIndicators{
+				Name:          "generic_automation",
+				Confidence:    0.7,
+				DetectionType: "header_content",
+				Evidence:      []string{fmt.Sprintf("Automation indicator in header: %s", headerName)},
+			})
+		}
+
+		if strings.Contains(headerLower, "bot") || strings.Contains(valueLower, "bot") {
+			indicators = append(indicators, AutomationIndicators{
+				Name:          "bot",
+				Confidence:    0.75,
+				DetectionType: "header_content",
+				Evidence:      []string{fmt.Sprintf("Bot indicator in header: %s", headerName)},
+			})
+		}
+	}
+
+	return indicators
+}
+
+func (d *EnvDetector) EnhancedAutomationDetection(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	totalConfidence := 0.0
+	allEvidence := []string{}
+
+	indicators := d.detectAutomationIndicators(info)
+	for _, indicator := range indicators {
+		if indicator.Confidence > 0.4 {
+			detected = true
+			totalConfidence += indicator.Confidence
+			allEvidence = append(allEvidence, fmt.Sprintf("%s: %.0f%%", indicator.Name, indicator.Confidence*100))
+			allEvidence = append(allEvidence, indicator.Evidence...)
+		}
+	}
+
+	behaviorPatterns := []string{
+		"timing_uniform", "click_pattern_robotic", "mouse_movement_linear",
+		"keystroke_regular", "no_human_delay", "suspicious_session",
+	}
+	for _, pattern := range behaviorPatterns {
+		for _, detection := range frontendDetections {
+			if strings.Contains(strings.ToLower(detection), pattern) {
+				detected = true
+				totalConfidence += 0.3
+				allEvidence = append(allEvidence, fmt.Sprintf("Behavior: %s", pattern))
+				break
+			}
+		}
+	}
+
+	resourcePatterns := []string{
+		"no_images", "blocking_scripts", "no_css", "minimal_requests",
+		"rapid_fire", "concurrent_sessions",
+	}
+	for _, pattern := range resourcePatterns {
+		for _, detection := range frontendDetections {
+			if strings.Contains(strings.ToLower(detection), pattern) {
+				detected = true
+				totalConfidence += 0.2
+				allEvidence = append(allEvidence, fmt.Sprintf("Resource: %s", pattern))
+				break
+			}
+		}
+	}
+
+	return detected, math.Min(totalConfidence, 100.0), allEvidence
 }
 
 func (d *EnvDetector) CalculateEnvScore(info *EnvInfo) float64 {
@@ -1230,4 +1456,407 @@ func (d *EnvDetector) EnhancedVMCheck(info *EnvInfo, frontendDetections []string
 	}
 
 	return report
+}
+
+type BrowserFingerprint struct {
+	Hash           string
+	Components     map[string]string
+	AnomalyScore   float64
+	FingerprintID  string
+}
+
+type EnvFingerprintAnalysis struct {
+	Browser       string
+	Version       string
+	OS            string
+	IsSuspicious  bool
+	SuspiciousFeatures []string
+}
+
+func (d *EnvDetector) AnalyzeBrowserFingerprint(info *EnvInfo) *EnvFingerprintAnalysis {
+	analysis := &EnvFingerprintAnalysis{
+		IsSuspicious:      false,
+		SuspiciousFeatures: []string{},
+	}
+
+	browser, version := d.parseUserAgent(info.UserAgent)
+	analysis.Browser = browser
+	analysis.Version = version
+	analysis.OS = d.detectOS(info.UserAgent, info.Platform)
+
+	if info.CanvasFingerprint == "" {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "missing_canvas")
+	}
+
+	if len(info.CanvasFingerprint) < 32 {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "short_canvas_fingerprint")
+	}
+
+	webglRisk := d.AnalyzeWebGLDetails(info)
+	if risk, ok := webglRisk["risk"].(string); ok && risk == "high" {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "suspicious_webgl")
+	}
+
+	if info.WebGLRenderer == "" || info.WebGLVendor == "" {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "missing_webgl_info")
+	}
+
+	uaLower := strings.ToLower(info.UserAgent)
+	if strings.Contains(uaLower, "headless") ||
+	   strings.Contains(uaLower, "phantom") ||
+	   strings.Contains(uaLower, "puppeteer") ||
+	   strings.Contains(uaLower, "playwright") ||
+	   strings.Contains(uaLower, "selenium") {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "automation_framework_ua")
+	}
+
+	if len(info.Fonts) < 3 {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "limited_fonts")
+	}
+
+	if len(info.Plugins) == 0 {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "no_plugins")
+	}
+
+	if len(info.Languages) == 0 || (len(info.Languages) == 1 && info.Language == "") {
+		analysis.IsSuspicious = true
+		analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "abnormal_languages")
+	}
+
+	anomalies := d.DetectCanvasAnomalies(info)
+	if len(anomalies) > 0 {
+		analysis.IsSuspicious = true
+		for _, anomaly := range anomalies {
+			analysis.SuspiciousFeatures = append(analysis.SuspiciousFeatures, "canvas_"+anomaly)
+		}
+	}
+
+	return analysis
+}
+
+func (d *EnvDetector) parseUserAgent(ua string) (browser string, version string) {
+	uaLower := strings.ToLower(ua)
+
+	if strings.Contains(uaLower, "edg/") {
+		browser = "Edge"
+		if idx := strings.Index(uaLower, "edg/"); idx != -1 {
+			version = d.extractVersion(ua[idx+4:])
+		}
+		return
+	}
+
+	browserPatterns := []struct {
+		Name    string
+		Pattern string
+	}{
+		{"Chrome", "chrome/"},
+		{"Firefox", "firefox/"},
+		{"Safari", "safari/"},
+		{"Opera", "opera/"},
+		{"IE", "msie "},
+		{"IE", "trident/"},
+	}
+
+	for _, bp := range browserPatterns {
+		if strings.Contains(uaLower, bp.Pattern) {
+			browser = bp.Name
+			if idx := strings.Index(uaLower, bp.Pattern); idx != -1 {
+				version = d.extractVersion(ua[idx+len(bp.Pattern):])
+			}
+			return
+		}
+	}
+
+	return "Unknown", "0.0"
+}
+
+func (d *EnvDetector) extractVersion(versionStr string) string {
+	parts := strings.Split(versionStr, ".")
+	if len(parts) == 0 {
+		return "0.0"
+	}
+	
+	end := 0
+	for i, c := range versionStr {
+		if c == ' ' || c == ')' || c == '/' || c == ';' {
+			end = i
+			break
+		}
+		end = i + 1
+	}
+	
+	return strings.TrimSpace(versionStr[:end])
+}
+
+func (d *EnvDetector) detectOS(ua string, platform string) string {
+	uaLower := strings.ToLower(ua)
+	platformLower := strings.ToLower(platform)
+
+	if strings.Contains(uaLower, "windows") || strings.Contains(platformLower, "win") {
+		return "Windows"
+	}
+	if strings.Contains(uaLower, "mac os") || strings.Contains(uaLower, "macos") || strings.Contains(platformLower, "mac") {
+		return "macOS"
+	}
+	if strings.Contains(uaLower, "linux") && !strings.Contains(uaLower, "android") {
+		return "Linux"
+	}
+	if strings.Contains(uaLower, "android") {
+		return "Android"
+	}
+	if strings.Contains(uaLower, "iphone") || strings.Contains(uaLower, "ipad") || strings.Contains(uaLower, "ios") {
+		return "iOS"
+	}
+
+	return "Unknown"
+}
+
+func (d *EnvDetector) CalculateFingerprintEntropy(info *EnvInfo) float64 {
+	entropy := 0.0
+
+	if info.CanvasFingerprint != "" {
+		entropy += float64(len(info.CanvasFingerprint)) * 0.5
+	}
+
+	if info.WebGLRenderer != "" {
+		entropy += float64(len(info.WebGLRenderer)) * 0.3
+	}
+
+	if len(info.Fonts) > 0 {
+		entropy += float64(len(info.Fonts)) * 1.5
+	}
+
+	if len(info.Languages) > 0 {
+		entropy += float64(len(info.Languages)) * 2.0
+	}
+
+	if info.ScreenWidth > 0 && info.ScreenHeight > 0 {
+		entropy += 4.0
+	}
+
+	if info.Timezone != "" {
+		entropy += 3.0
+	}
+
+	return math.Min(entropy, 100.0)
+}
+
+type NetworkEnvironmentAnalysis struct {
+	IsVPN        bool
+	IsTor        bool
+	IsProxy      bool
+	IsDatacenter bool
+	ASN          int
+	Country      string
+	RiskScore    float64
+	Evidence     []string
+}
+
+func (d *EnvDetector) AnalyzeNetworkEnvironment(ip string, headers map[string]string, info *EnvInfo) *NetworkEnvironmentAnalysis {
+	analysis := &NetworkEnvironmentAnalysis{
+		RiskScore: 0,
+		Evidence:  []string{},
+	}
+
+	proxyRisk := d.CalculateProxyRiskScore(ip, headers)
+	analysis.RiskScore += proxyRisk * 0.3
+
+	if proxyRisk > 30 {
+		analysis.IsProxy = true
+		analysis.Evidence = append(analysis.Evidence, fmt.Sprintf("Proxy risk score: %.2f", proxyRisk))
+	}
+
+	isVPN, vpnConfidence, vpnEvidence := d.DetectVPNPatterns(info, headers)
+	if isVPN {
+		analysis.IsVPN = true
+		analysis.RiskScore += vpnConfidence * 30
+		analysis.Evidence = append(analysis.Evidence, vpnEvidence...)
+	}
+
+	xff := headers["X-Forwarded-For"]
+	xri := headers["X-Real-IP"]
+	via := headers["Via"]
+
+	if xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 2 {
+			analysis.IsProxy = true
+			analysis.RiskScore += 15
+			analysis.Evidence = append(analysis.Evidence, "Multiple proxy hops detected via X-Forwarded-For")
+		}
+	}
+
+	if xri != "" && xri != ip {
+		analysis.IsProxy = true
+		analysis.RiskScore += 10
+		analysis.Evidence = append(analysis.Evidence, "X-Real-IP differs from connecting IP")
+	}
+
+	if via != "" {
+		viaLower := strings.ToLower(via)
+		if strings.Contains(viaLower, "proxy") || strings.Contains(viaLower, "squid") {
+			analysis.IsProxy = true
+			analysis.RiskScore += 15
+			analysis.Evidence = append(analysis.Evidence, "Proxy detected via Via header")
+		}
+	}
+
+	datacenterRanges := []string{
+		"52.94.", "54.240.", "35.180.", "18.228.",
+		"45.33.", "104.238.", "107.170.", "159.89.",
+		"128.31.", "199.87.", "199.58.", "171.25.",
+	}
+
+	for _, range_ := range datacenterRanges {
+		if strings.HasPrefix(ip, range_) {
+			analysis.IsDatacenter = true
+			analysis.RiskScore += 20
+			analysis.Evidence = append(analysis.Evidence, fmt.Sprintf("IP in datacenter range: %s", range_))
+			break
+		}
+	}
+
+	torExitNodes := []string{
+		"128.31.0.", "199.87.154.", "199.58.186.",
+		"171.25.193.", "162.247.72.", "45.33.32.",
+		"104.244.76.", "77.247.181.", "93.95.227.",
+	}
+
+	for _, torIP := range torExitNodes {
+		if strings.HasPrefix(ip, torIP) {
+			analysis.IsTor = true
+			analysis.RiskScore += 50
+			analysis.Evidence = append(analysis.Evidence, "Known Tor exit node IP range")
+			break
+		}
+	}
+
+	if analysis.RiskScore > 70 {
+		analysis.RiskScore = 70
+	}
+
+	return analysis
+}
+
+func (d *EnvDetector) DetectProxyViaHeaders(headers map[string]string) (bool, float64, []string) {
+	detected := false
+	confidence := 0.0
+	evidence := []string{}
+
+	proxyHeaders := map[string]string{
+		"X-Forwarded-For":   "X-Forwarded-For header present",
+		"X-Real-IP":        "X-Real-IP header present",
+		"Via":              "Via header present",
+		"X-Proxy-ID":       "Proxy ID header present",
+		"X-ProxyChain":     "Proxy chain header present",
+		"Forwarded":        "Forwarded header present",
+		"X-CLIENT-IP":      "Client IP header present",
+		"True-Client-IP":    "True Client IP header present",
+		"CF-Connecting-IP": "Cloudflare IP header present",
+		"X-Sucuri-ID":      "Sucuri proxy header present",
+		"X-CD-Real-IP":     "CDN real IP header present",
+	}
+
+	for header, desc := range proxyHeaders {
+		if value, exists := headers[header]; exists && value != "" {
+			detected = true
+			confidence += 0.2
+			evidence = append(evidence, fmt.Sprintf("%s: %s", desc, value))
+		}
+	}
+
+	for header, value := range headers {
+		headerLower := strings.ToLower(header)
+		valueLower := strings.ToLower(value)
+		
+		if strings.Contains(headerLower, "forwarded") ||
+		   strings.Contains(headerLower, "via") ||
+		   strings.Contains(headerLower, "proxy") {
+			detected = true
+			confidence += 0.3
+			evidence = append(evidence, fmt.Sprintf("Proxy indicator in header %s", header))
+		}
+
+		if strings.Contains(valueLower, "tor") || strings.Contains(valueLower, "onion") {
+			detected = true
+			confidence += 0.5
+			evidence = append(evidence, "Tor-related header value detected")
+		}
+
+		if strings.Contains(valueLower, "vpn") || strings.Contains(valueLower, "virtual private") {
+			detected = true
+			confidence += 0.4
+			evidence = append(evidence, "VPN-related header value detected")
+		}
+	}
+
+	return detected, math.Min(confidence, 1.0), evidence
+}
+
+func (d *EnvDetector) DetectVPNViaASN(asn int) (bool, string) {
+	vpnASN := map[int]string{
+		201229: "Private Internet Access",
+		212502: "CyberGhost",
+		202132: "NordVPN",
+		203378: "ExpressVPN",
+		19679:  "Hide My Ass",
+		49028:  "HotSpot Shield",
+		393552: "Surfshark",
+		206728: "IPVanish",
+		35488:  "Astrill",
+		9009:   "Mullvad",
+		397185: "ProtonVPN",
+		43260:  "TunnelBear",
+	}
+
+	if provider, exists := vpnASN[asn]; exists {
+		return true, provider
+	}
+
+	asnRanges := []struct {
+		Start  int
+		End    int
+		Provider string
+	}{
+		{201229, 209710, "NordVPN Group"},
+		{203378, 203386, "ExpressVPN"},
+		{202132, 202141, "NordVPN"},
+	}
+
+	for _, asnRange := range asnRanges {
+		if asn >= asnRange.Start && asn <= asnRange.End {
+			return true, asnRange.Provider
+		}
+	}
+
+	return false, ""
+}
+
+func (d *EnvDetector) DetectTorExitNode(ip string) bool {
+	torExitNodes := []string{
+		"128.31.0.34", "128.31.0.39", "128.31.0.42",
+		"199.87.154.10", "199.87.154.11", "199.87.154.22",
+		"199.58.186.10", "199.58.186.11", "199.58.186.12",
+		"171.25.193.9", "171.25.193.10", "171.25.193.11",
+		"162.247.72.27", "162.247.72.28", "162.247.72.29",
+		"45.33.32.156", "45.33.32.157", "45.33.32.158",
+		"104.244.76.13", "104.244.76.14", "104.244.76.15",
+		"77.247.181.218", "77.247.181.219", "77.247.181.220",
+		"93.95.227.22", "93.95.227.23", "93.95.227.24",
+	}
+
+	for _, torIP := range torExitNodes {
+		if ip == torIP || strings.HasPrefix(ip, torIP[:strings.LastIndex(torIP, ".")]) {
+			return true
+		}
+	}
+
+	return false
 }
