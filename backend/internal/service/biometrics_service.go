@@ -71,8 +71,8 @@ type MouseEvent struct {
 	Button    int    `json:"button,omitempty"`
 }
 
-// VerificationResult 生物识别验证结果
-type VerificationResult struct {
+// BiometricVerificationResult 生物识别验证结果
+type BiometricVerificationResult struct {
 	IsVerified    bool    `json:"is_verified"`
 	Confidence    float64 `json:"confidence"`
 	KeyboardScore float64 `json:"keyboard_score"`
@@ -130,10 +130,10 @@ func (s *BiometricsService) RegisterProfile(userID string, keyboardSample *Keybo
 }
 
 // Verify 生物特征验证
-func (s *BiometricsService) Verify(userID string, keyboardSample *KeyboardSample, mouseSample *MouseSample) (*VerificationResult, error) {
+func (s *BiometricsService) Verify(userID string, keyboardSample *KeyboardSample, mouseSample *MouseSample) (*BiometricVerificationResult, error) {
 	profile, exists := s.profiles[userID]
 	if !exists {
-		return &VerificationResult{
+		return &BiometricVerificationResult{
 			IsVerified: false,
 			Confidence: 0,
 			Details:    "No profile found for user",
@@ -156,7 +156,7 @@ func (s *BiometricsService) Verify(userID string, keyboardSample *KeyboardSample
 	overallConfidence := (keyboardScore*0.6 + mouseScore*0.4)
 	isVerified := overallConfidence >= 0.95
 
-	result := &VerificationResult{
+	result := &BiometricVerificationResult{
 		IsVerified:    isVerified,
 		Confidence:    overallConfidence,
 		KeyboardScore: keyboardScore,

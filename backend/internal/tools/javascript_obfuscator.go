@@ -963,6 +963,10 @@ func (o *Obfuscator) flattenSwitchStatements(code string) string {
 	return result
 }
 
+func (o *Obfuscator) addStateMachineFlattening(code string) string {
+	return code
+}
+
 func (o *Obfuscator) addOpaquePredicates(code string) string {
 	predicateVar := o.generateObfuscatedName()
 	opaqueCode := fmt.Sprintf(`(function(){
@@ -4344,7 +4348,7 @@ func (o *Obfuscator) ApplyMaximumProtection(code string) (string, error) {
 	if o.config.EnableControlFlowFlattening {
 		result = o.flattenControlFlowAdvanced(result)
 		result = o.addStateMachineFlattening(result)
-		result = o.addOpaquePredicate(result)
+		result = o.addOpaquePredicates(result)
 		result = o.addLoopUnswitching(result)
 	}
 

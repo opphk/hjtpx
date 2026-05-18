@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 	"runtime/pprof"
 	"sync"
@@ -156,12 +157,12 @@ func (po *PerformanceOptimizer) SetOptimizationLevel(level int) {
 }
 
 type DatabaseOptimizer struct {
-	mu                sync.RWMutex
-	poolOptimizer    *database.ConnectionPoolOptimizer
-	queryCache       *QueryCacheOptimizer
-	indexOptimizer   *IndexOptimizer
-	connectionMonitor *ConnectionMonitor
-	aggressionLevel  int
+	mu                 sync.RWMutex
+	poolOptimizer      *database.EnhancedConnectionPoolOptimizer
+	queryCache         *QueryCacheOptimizer
+	indexOptimizer     *IndexOptimizer
+	connectionMonitor  *ConnectionMonitor
+	aggressionLevel    int
 }
 
 func NewDatabaseOptimizer() *DatabaseOptimizer {
@@ -198,12 +199,12 @@ func (do *DatabaseOptimizer) Optimize() *DatabaseOptimizationResult {
 		result.ActiveConnections = metrics.ActiveConnections
 		result.IdleConnections = metrics.IdleConnections
 		result.MaxConnections = metrics.TotalConnections
-		result.WaitCount = metrics.WaitCount
+		result.WaitCount = uint64(metrics.WaitCount)
 	}
 
 	if do.poolOptimizer != nil {
-		if metrics.WaitCount > uint64(do.aggressionLevel*20) {
-			do.poolOptimizer.OptimizePoolSize()
+		if metrics.WaitCount > int64(do.aggressionLevel*20) {
+			do.poolOptimizer.EmergencyExpand()
 			result.PoolResized = true
 		}
 	}
@@ -725,11 +726,14 @@ func (mp *MemoryProfiler) GetStats() map[string]interface{} {
 }
 
 func (mp *MemoryProfiler) DumpProfile(filename string) error {
-	file, err := pprof.Lookup("heap").WriteTo(&lazyFile{filename: filename}, 0)
+	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	return file.Close()
+	defer file.Close()
+	
+	err = pprof.WriteHeapProfile(file)
+	return err
 }
 
 type lazyFile struct {
@@ -738,6 +742,10 @@ type lazyFile struct {
 
 func (lf *lazyFile) Close() error {
 	return nil
+}
+
+func (lf *lazyFile) Write(p []byte) (int, error) {
+	return len(p), nil
 }
 
 type GoroutineManager struct {
@@ -1170,8 +1178,8 @@ func OptimizeRedisConnectionPool(maxConns, minIdleConns int) error {
 	}
 
 	optimizer := redis.NewPoolConfigOptimizer(client)
-	optimizer.MaxOpenConns = maxConns
-	optimizer.MinIdleConns = minIdleConns
+	optimizer.MaxOpenConns(maxConns)
+	optimizer.MinIdleConns(minIdleConns)
 
 	return optimizer.Optimize()
 }

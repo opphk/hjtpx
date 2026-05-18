@@ -123,10 +123,46 @@ func main() {
 	handler.InitLianLianKanCaptchaHandler(lianLianKanGeneratorService, lianLianKanVerifierService)
 	log.Println("LianLianKan captcha service initialized successfully")
 
+	// 增强滑块验证码服务 (v15.0)
+	enhancedSliderGenerator := captcha.NewEnhancedSliderGenerator(sessionCache, captchaRepo)
+	enhancedSliderVerifier := captcha.NewEnhancedSliderVerifier(sessionCache, captchaRepo)
+	handler.InitEnhancedSliderCaptchaHandler(enhancedSliderGenerator, enhancedSliderVerifier)
+	log.Println("Enhanced slider captcha service initialized successfully (v15.0)")
+
 	voiceGeneratorService := captcha.NewVoiceGeneratorService(sessionCache, captchaRepo)
 	voiceVerifierService := captcha.NewVoiceVerifierService(sessionCache, captchaRepo)
 	handler.InitVoiceCaptchaHandler(voiceGeneratorService, voiceVerifierService)
 	log.Println("Voice captcha service initialized successfully")
+
+	// 混合验证服务 (v15.0)
+	hybridGenerator := captcha.NewHybridGeneratorService(sessionCache, captchaRepo)
+	hybridVerifier := captcha.NewHybridVerifierService(sessionCache, captchaRepo)
+	handler.InitHybridCaptchaHandler(hybridGenerator, hybridVerifier)
+	log.Println("Hybrid captcha service initialized successfully (v15.0)")
+
+	// 九宫格验证码服务 (v15.0)
+	gridGenerator := captcha.NewGridGeneratorService(sessionCache, captchaRepo)
+	gridVerifier := captcha.NewGridVerifierService(sessionCache, captchaRepo)
+	handler.InitGridCaptchaHandler(gridGenerator, gridVerifier)
+	log.Println("Grid captcha service initialized successfully (v15.0)")
+
+	// AR虚拟验证码服务 (v15.0)
+	arGenerator := captcha.NewARGeneratorService(sessionCache, captchaRepo)
+	arVerifier := captcha.NewARVerifierService(sessionCache, captchaRepo)
+	handler.InitARCaptchaHandler(arGenerator, arVerifier)
+	log.Println("AR captcha service initialized successfully (v15.0)")
+
+	// 语义理解验证码服务 (v15.0)
+	semanticGenerator := captcha.NewSemanticGeneratorService(sessionCache, captchaRepo)
+	semanticVerifier := captcha.NewSemanticVerifierService(sessionCache, captchaRepo)
+	handler.InitSemanticCaptchaHandler(semanticGenerator, semanticVerifier)
+	log.Println("Semantic captcha service initialized successfully (v15.0)")
+
+	// 社交行为验证码服务 (v15.0)
+	socialGenerator := captcha.NewSocialGeneratorService(sessionCache, captchaRepo)
+	socialVerifier := captcha.NewSocialVerifierService(sessionCache, captchaRepo)
+	handler.InitSocialCaptchaHandler(socialGenerator, socialVerifier)
+	log.Println("Social captcha service initialized successfully (v15.0)")
 
 	if database.DB != nil {
 		configRepo := repository.NewConfigRepo(database.DB)

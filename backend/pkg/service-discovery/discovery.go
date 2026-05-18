@@ -14,6 +14,14 @@ type ServiceInstance struct {
 	Healthy       bool              `json:"healthy"`
 	LastHeartbeat time.Time         `json:"last_heartbeat"`
 	Metadata      map[string]string `json:"metadata"`
+	RegisteredAt  time.Time         `json:"registered_at"`
+	Weight        int               `json:"weight"`
+	Region        string            `json:"region"`
+	DC            string            `json:"dc"`
+	Version       string            `json:"version"`
+	Priority      int               `json:"priority"`
+	Capacity      int               `json:"capacity"`
+	CurrentLoad   int64             `json:"current_load"`
 }
 
 // Registry 服务注册器

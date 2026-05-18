@@ -56,8 +56,8 @@ database:
     query_cache_ttl_secs: 300
     max_query_cache_size: 10000
   read_write_separation:
-    enabled: false
-    load_balance_strategy: round_robin
+    enabled: true
+    load_balance_strategy: least_latency
     auto_failover: true
     master:
       host: localhost
@@ -67,13 +67,35 @@ database:
       db_name: verification
       sslmode: disable
       weight: 100
-    slaves: []
+    slaves:
+      - host: localhost
+        port: 5433
+        user: postgres
+        password: postgres123
+        db_name: verification
+        sslmode: disable
+        weight: 80
+      - host: localhost
+        port: 5434
+        user: postgres
+        password: postgres123
+        db_name: verification
+        sslmode: disable
+        weight: 60
   connection_pool:
-    max_open_conns: 100
-    max_idle_conns: 20
+    max_open_conns: 150
+    max_idle_conns: 50
     conn_max_lifetime_secs: 1800
     conn_max_idle_time_secs: 600
     health_check_interval_secs: 30
+    min_idle_conns: 10
+    wait_timeout_secs: 30
+    max_wait_count: 500
+    enable_warmup: true
+    warmup_conns: 10
+    enable_auto_tuning: true
+    high_load_threshold: 80
+    low_load_threshold: 20
   data_archiving:
     enabled: true
     archive_threshold_days: 30
@@ -87,3 +109,80 @@ database:
     enable_query_metrics: true
     enable_connection_metrics: true
     metrics_interval_secs: 60
+
+distributed:
+  version: "15.0"
+  enabled: true
+  region: default
+  datacenter: dc1
+  redis_cluster:
+    enabled: true
+    mode: cluster
+    cluster_nodes:
+      - localhost:7000
+      - localhost:7001
+      - localhost:7002
+      - localhost:7003
+      - localhost:7004
+      - localhost:7005
+    sentinel_nodes:
+      - localhost:26379
+    standalone_addr: localhost:6379
+    master_name: mymaster
+    password: ""
+    db: 0
+    pool_size: 100
+    min_idle_conns: 10
+    max_idle_conns: 50
+    dial_timeout_secs: 5
+    read_timeout_secs: 3
+    write_timeout_secs: 3
+    pool_timeout_secs: 4
+    max_retries: 3
+    failover_enabled: true
+    replica_lag_limit_secs: 1
+    heartbeat_interval_secs: 30
+  service_discovery:
+    enabled: true
+    service_name: captcha-service
+    heartbeat_interval_secs: 10
+    ttl_secs: 30
+    health_check_interval_secs: 15
+    max_heartbeat_misses: 3
+    use_redis: true
+  health_check:
+    enabled: true
+    interval_secs: 10
+    timeout_secs: 5
+    max_fail_count: 3
+    failure_threshold: 3
+    recovery_threshold: 2
+    enable_auto_failover: true
+    check_postgres: true
+    check_redis: true
+    check_memcached: false
+    check_external: false
+    external_endpoints: []
+  failover:
+    enabled: true
+    auto_detect_enabled: true
+    region_failover: true
+    cross_region_enabled: true
+    max_retries: 3
+    retry_interval_secs: 5
+    health_check_timeout_secs: 10
+    fallback_enabled: true
+    regions:
+      - name: us-east
+        primary_region: us-east-1
+        fallback_regions:
+          - us-west-2
+          - eu-west-1
+      - name: eu-west
+        primary_region: eu-west-1
+        fallback_regions:
+          - us-east-1
+      - name: ap-east
+        primary_region: ap-east-1
+        fallback_regions:
+          - ap-southeast-1

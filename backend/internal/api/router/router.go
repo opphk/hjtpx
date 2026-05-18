@@ -162,6 +162,9 @@ func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, 
 	adminRouter.GET("/dashboard", func(c *gin.Context) {
 		c.HTML(200, "dashboard.html", gin.H{"title": "仪表盘"})
 	})
+	adminRouter.GET("/admin-dashboard", func(c *gin.Context) {
+		c.HTML(200, "admin-dashboard.html", gin.H{"title": "智能仪表盘 v15.0"})
+	})
 	adminRouter.GET("/stats", func(c *gin.Context) {
 		c.HTML(200, "stats.html", gin.H{"title": "统计分析"})
 	})
@@ -185,6 +188,15 @@ func setupAdminRoutes(r *gin.Engine, cacheHandler *handler.CacheMetricsHandler, 
 	})
 
 	adminRouter.GET("/api/dashboard", handler.GetDashboardData)
+	adminRouter.GET("/api/dashboard/admin", handler.GetAdminDashboardMetrics)
+	adminRouter.GET("/api/dashboard/admin/realtime", handler.GetAdminDashboardRealtime)
+	adminRouter.GET("/api/dashboard/admin/trend", handler.GetAdminDashboardTrend)
+	adminRouter.GET("/api/dashboard/admin/alerts", handler.GetAdminDashboardAlerts)
+	adminRouter.GET("/api/dashboard/admin/export", handler.ExportAdminDashboardData)
+	adminRouter.POST("/api/dashboard/admin/report", handler.GenerateAdminDashboardReport)
+	adminRouter.GET("/api/dashboard/admin/ws", handler.AdminDashboardWebSocketHandler)
+	adminRouter.GET("/api/dashboard/admin/alerts-list", handler.GetDashboardAlertsList)
+	adminRouter.POST("/api/dashboard/admin/test-event", handler.PublishTestVerificationEvent)
 	adminRouter.GET("/api/recent-verifications", handler.GetRecentVerifications)
 	adminRouter.GET("/api/system-status", handler.GetSystemStatus)
 	adminRouter.GET("/api/alerts", handler.GetDashboardAlerts)
@@ -264,7 +276,10 @@ func setupAPIRoutes(r *gin.Engine, backupHandler *handler.BackupHandler) {
 	setupVerifyRoutes(api)
 	setupMFARoutes(api)
 	setupGDPRRoutes(api)
+	setupSeamlessV15Routes(api)
 	setupAPIV1AdminRoutes(api, backupHandler)
+	setupEnvironmentRoutes(api)
+	setupRiskEngineRoutes(api)
 }
 
 func setupCaptchaRoutes(api *gin.RouterGroup) {
@@ -294,8 +309,47 @@ func setupCaptchaRoutes(api *gin.RouterGroup) {
 	captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
 	captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
 
+	// 增强滑块验证 (v15.0)
+	captcha.POST("/slider/enhanced/generate", handler.CreateEnhancedSliderCaptcha)
+	captcha.POST("/slider/enhanced/verify", handler.VerifyEnhancedSliderCaptcha)
+	captcha.GET("/slider/enhanced/status/:session_id", handler.GetEnhancedSliderCaptchaStatus)
+	captcha.GET("/slider/enhanced/check/:session_id", handler.CheckEnhancedSliderCaptchaValid)
+	captcha.GET("/slider/enhanced/difficulty", handler.GetEnhancedSliderDifficulty)
+
 	// 多因素滑块验证
 	captcha.POST("/verify-multi-factor", handler.VerifySliderWithMultiFactor)
+
+	// 滑块+点选混合验证 (v15.0)
+	captcha.POST("/hybrid/generate", handler.CreateHybridCaptcha)
+	captcha.POST("/hybrid/slider/verify", handler.VerifyHybridSliderCaptcha)
+	captcha.POST("/hybrid/click/verify", handler.VerifyHybridClickCaptcha)
+	captcha.GET("/hybrid/status/:session_id", handler.GetHybridCaptchaStatus)
+	captcha.GET("/hybrid/check/:session_id", handler.CheckHybridCaptchaValid)
+	captcha.GET("/hybrid/data/:session_id", handler.GetHybridCaptchaData)
+
+	// 九宫格验证码 (v15.0)
+	captcha.POST("/grid/generate", handler.CreateGridCaptcha)
+	captcha.POST("/grid/verify", handler.VerifyGridCaptcha)
+	captcha.GET("/grid/status/:session_id", handler.GetGridCaptchaStatus)
+	captcha.GET("/grid/check/:session_id", handler.CheckGridCaptchaValid)
+
+	// AR虚拟验证码 (v15.0)
+	captcha.POST("/ar/generate", handler.CreateARCaptcha)
+	captcha.POST("/ar/verify", handler.VerifyARCaptcha)
+	captcha.GET("/ar/status/:session_id", handler.GetARCaptchaStatus)
+	captcha.GET("/ar/check/:session_id", handler.CheckARCaptchaValid)
+
+	// 语义理解验证码 (v15.0)
+	captcha.POST("/semantic/generate", handler.CreateSemanticCaptcha)
+	captcha.POST("/semantic/verify", handler.VerifySemanticCaptcha)
+	captcha.GET("/semantic/status/:session_id", handler.GetSemanticCaptchaStatus)
+	captcha.GET("/semantic/check/:session_id", handler.CheckSemanticCaptchaValid)
+
+	// 社交行为验证码 (v15.0)
+	captcha.POST("/social/generate", handler.CreateSocialCaptcha)
+	captcha.POST("/social/verify", handler.VerifySocialCaptcha)
+	captcha.GET("/social/status/:session_id", handler.GetSocialCaptchaStatus)
+	captcha.GET("/social/check/:session_id", handler.CheckSocialCaptchaValid)
 }
 
 func setupWebSocketRoutes(api *gin.RouterGroup) {
@@ -321,6 +375,23 @@ func setupBiometricsRoutes(api *gin.RouterGroup) {
 	biometrics.POST("/register", handler.RegisterBiometricProfile)
 	biometrics.POST("/verify", handler.VerifyBiometrics)
 	biometrics.GET("/profile", handler.GetBiometricProfile)
+
+	setupBiometricsV15Routes(biometrics)
+}
+
+func setupBiometricsV15Routes(biometrics *gin.RouterGroup) {
+	v15 := biometrics.Group("/v15")
+	v15.POST("/register", handler.RegisterMultimodalBiometricProfile)
+	v15.POST("/verify", handler.VerifyMultimodalBiometrics)
+	v15.POST("/register/mouse", handler.RegisterMousePressureProfile)
+	v15.POST("/register/touch", handler.RegisterTouchForceProfile)
+	v15.POST("/register/eye", handler.RegisterEyeTrackingProfile)
+	v15.POST("/fusion/verify", handler.FusionVerifyBiometrics)
+	v15.GET("/profile", handler.GetMultimodalProfile)
+	v15.DELETE("/profile", handler.DeleteMultimodalProfile)
+	v15.GET("/capabilities", handler.GetBiometricsCapabilities)
+	v15.POST("/analyze", handler.AnalyzeBiometricData)
+	v15.POST("/compare", handler.CompareBiometricProfiles)
 }
 
 func setupAdaptiveRoutes(api *gin.RouterGroup) {
@@ -376,6 +447,28 @@ func setupGDPRRoutes(api *gin.RouterGroup) {
 	gdpr.GET("/data-export/:id/download", handler.GetGDPRHandler().DownloadExport)
 	gdpr.POST("/data-deletion", handler.GetGDPRHandler().RequestDataDeletion)
 	gdpr.GET("/data-deletion/:id", handler.GetGDPRHandler().GetDeletionStatus)
+}
+
+func setupSeamlessV15Routes(api *gin.RouterGroup) {
+	seamless := api.Group("/seamless")
+
+	seamless.POST("/update", handler.SeamlessV15Update)
+	seamless.POST("/verify", handler.SeamlessV15Verify)
+	seamless.GET("/trust-score", handler.SeamlessV15TrustScore)
+	seamless.GET("/report", handler.SeamlessV15Report)
+	seamless.GET("/stats", handler.SeamlessV15Stats)
+	seamless.GET("/health", handler.SeamlessV15HealthCheck)
+	seamless.GET("/config", handler.SeamlessV15Config)
+	seamless.GET("/analytics", handler.GetSeamlessAnalytics)
+	seamless.GET("/learning-status", handler.SeamlessV15LearningStatus)
+
+	seamless.POST("/decision", handler.SeamlessV15Decision)
+	seamless.GET("/metrics", handler.CalculateSeamlessMetrics)
+	seamless.GET("/export", handler.ExportSeamlessData)
+
+	seamless.GET("/export-model", handler.SeamlessV15Export)
+	seamless.POST("/import-model", handler.SeamlessV15Import)
+	seamless.POST("/cleanup", handler.SeamlessV15Cleanup)
 }
 
 func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHandler) {
@@ -462,4 +555,42 @@ func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHa
 
 	arHandler := handler.GetAdvancedRateLimitHandler()
 	arHandler.RegisterRoutes(admin)
+}
+
+func setupEnvironmentRoutes(api *gin.RouterGroup) {
+	advEnvHandler := handler.NewAdvancedEnvironmentHandler()
+	advEnvHandler.RegisterRoutes(api)
+}
+
+func setupRiskEngineRoutes(api *gin.RouterGroup) {
+	risk := api.Group("/risk")
+	risk.POST("/assess", handler.RealTimeRiskAssessment)
+	risk.GET("/profile", handler.GetRiskProfile)
+	risk.GET("/profile/analysis", handler.GetRiskProfileAnalysis)
+	risk.PUT("/profile/device", handler.UpdateDeviceProfile)
+
+	risk.GET("/strategy/version", handler.GetStrategyVersion)
+	risk.GET("/strategy/versions", handler.GetStrategyVersions)
+	risk.POST("/strategy/version", handler.CreateStrategyVersion)
+	risk.PUT("/strategy/rule/:id", handler.UpdateStrategyRule)
+	risk.POST("/strategy/version/:id/publish", handler.PublishStrategyVersion)
+	risk.POST("/strategy/version/:id/rollback", handler.RollbackStrategyVersion)
+	risk.GET("/strategy/version/:id/updates", handler.GetStrategyUpdates)
+	risk.GET("/strategy/version/:id/export", handler.ExportStrategyVersion)
+	risk.POST("/strategy/version/import", handler.ImportStrategyVersion)
+	risk.POST("/strategy/evaluate", handler.EvaluateRiskRules)
+
+	risk.GET("/monitoring/metrics", handler.GetMonitoringMetrics)
+	risk.GET("/monitoring/risk-metrics", handler.GetRiskMetrics)
+	risk.GET("/monitoring/strategy-performance", handler.GetStrategyPerformance)
+	risk.GET("/monitoring/model-performance", handler.GetModelPerformance)
+	risk.GET("/monitoring/alerts", handler.GetActiveAlerts)
+	risk.POST("/monitoring/alerts/:id/acknowledge", handler.AcknowledgeAlert)
+	risk.POST("/monitoring/alerts/:id/resolve", handler.ResolveAlert)
+	risk.POST("/monitoring/reports", handler.GenerateMonitoringReport)
+	risk.GET("/monitoring/reports", handler.GetMonitoringReports)
+
+	risk.GET("/drl/status", handler.GetDRLPolicyStatus)
+	risk.POST("/drl/outcome", handler.RecordDRLOutcome)
+	risk.POST("/drl/train", handler.TrainDRLModel)
 }

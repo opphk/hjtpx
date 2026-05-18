@@ -256,15 +256,6 @@ func GetAlerts(c *gin.Context) {
 	})
 }
 
-// AcknowledgeAlert 确认告警
-func AcknowledgeAlert(c *gin.Context) {
-	alertID := c.Param("id")
-	response.Success(c, gin.H{
-		"message": "Alert acknowledged",
-		"id":      alertID,
-	})
-}
-
 // GetSystemMetrics 获取系统指标
 func GetSystemMetrics(c *gin.Context) {
 	response.Success(c, gin.H{

@@ -487,6 +487,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a href="/admin/admin-dashboard" class="nav-link {% if request.path == '/admin/admin-dashboard' %}active{% endif %}" aria-current="{% if request.path == '/admin/admin-dashboard' %}page{% endif %}">
+                                <i class="nav-icon fas fa-brain" aria-hidden="true"></i>
+                                <p>智能仪表盘 v15.0</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a href="/admin/notifications" class="nav-link {% if request.path == '/admin/notifications' %}active{% endif %}" aria-current="{% if request.path == '/admin/notifications' %}page{% endif %}">
                                 <i class="nav-icon fas fa-bell" aria-hidden="true"></i>
                                 <p>告警通知</p>
