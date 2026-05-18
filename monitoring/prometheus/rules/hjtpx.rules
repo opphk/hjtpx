@@ -403,3 +403,138 @@ groups:
         annotations:
           summary: "Loki high ingester errors"
           description: "Loki ingester is experiencing high reconnection errors"
+
+  - name: captcha
+    interval: 30s
+    rules:
+      - alert: HJTXPHighCaptchaBlockRate
+        expr: rate(hjtpx_captcha_blocked_total[5m]) / rate(hjtpx_captcha_total[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high captcha block rate"
+          description: "Captcha block rate is above 20% for more than 5 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPTooHighCaptchaBlockRate
+        expr: rate(hjtpx_captcha_blocked_total[5m]) / rate(hjtpx_captcha_total[5m]) > 0.5
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical captcha block rate"
+          description: "Captcha block rate is above 50% for more than 3 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+      - alert: HJTXPHighCaptchaVerifyLatency
+        expr: histogram_quantile(0.95, rate(hjtpx_captcha_verify_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high captcha verify latency"
+          description: "Captcha verify P95 latency is above 1 second for more than 5 minutes. Current P95: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: HJTXPTooHighCaptchaVerifyLatency
+        expr: histogram_quantile(0.95, rate(hjtpx_captcha_verify_duration_seconds_bucket[5m])) > 3
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical captcha verify latency"
+          description: "Captcha verify P95 latency is above 3 seconds for more than 3 minutes. Current P95: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: HJTXPHighCaptchaErrorRate
+        expr: rate(hjtpx_captcha_total{status="error"}[5m]) / rate(hjtpx_captcha_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high captcha error rate"
+          description: "Captcha error rate is above 10% for more than 5 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
+
+  - name: websocket
+    interval: 30s
+    rules:
+      - alert: HJTXPHighWebSocketConnections
+        expr: hjtpx_websocket_connections_active > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "HJTPX high WebSocket connections"
+          description: "WebSocket active connections are above 1000 for more than 5 minutes"
+
+      - alert: HJTXPTooManyWebSocketConnections
+        expr: hjtpx_websocket_connections_active > 5000
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX too many WebSocket connections"
+          description: "WebSocket active connections are above 5000 for more than 3 minutes"
+
+      - alert: HJTXPWebSocketConnectionDrop
+        expr: rate(hjtpx_websocket_messages_total{direction="disconnect"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high WebSocket connection drop rate"
+          description: "WebSocket connection drop rate is above 100/s for more than 5 minutes"
+
+      - alert: HJTXPHighWebSocketMessageLatency
+        expr: histogram_quantile(0.95, rate(hjtpx_websocket_message_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high WebSocket message latency"
+          description: "WebSocket message P95 latency is above 500ms for more than 5 minutes. Current P95: {{ $value | printf \"%.2f\" }}s"
+
+  - name: security
+    interval: 30s
+    rules:
+      - alert: HJTXPHighSecurityEvents
+        expr: rate(hjtpx_security_events_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high security events rate"
+          description: "Security events rate is above 50/s for more than 5 minutes"
+
+      - alert: HJTXPTooManySecurityEvents
+        expr: rate(hjtpx_security_events_total[5m]) > 200
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical security events rate"
+          description: "Security events rate is above 200/s for more than 3 minutes"
+
+      - alert: HJTXPHighBotDetectionRate
+        expr: rate(hjtpx_bot_detection_total{action="block"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high bot detection rate"
+          description: "Bot detection block rate is above 10/s for more than 5 minutes"
+
+      - alert: HJTXPTooManyBotDetections
+        expr: rate(hjtpx_bot_detection_total{action="block"}[5m]) > 50
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical bot detection rate"
+          description: "Bot detection block rate is above 50/s for more than 3 minutes"
+
+      - alert: HJTXPHighRateLimitHits
+        expr: rate(hjtpx_rate_limit_hits_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high rate limit hits"
+          description: "Rate limit hits are above 100/s for more than 5 minutes"
