@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"fmt"
-	"log"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +9,7 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
-var blacklistService = service.NewRateLimitService()
+var blacklistService = service.NewBlacklistService()
 
 type BlacklistOptions struct {
 	BanDuration time.Duration
@@ -38,7 +36,7 @@ func IPBlacklistMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		isBlacklisted, err := blacklistService.IsBlacklisted(c.Request.Context(), ip, BlacklistTypeIP)
+		isBlacklisted, err := blacklistService.CheckBlacklist(ip, BlacklistTypeIP)
 		if err != nil {
 			c.Next()
 			return
@@ -46,19 +44,6 @@ func IPBlacklistMiddleware() gin.HandlerFunc {
 
 		if isBlacklisted {
 			response.Forbidden(c)
-			c.Abort()
-			return
-		}
-
-		isBanned, remaining, err := blacklistService.IsBanned(c.Request.Context(), ip, BlacklistTypeIP)
-		if err == nil && isBanned {
-			c.Header("Retry-After", remaining.String())
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":        403,
-				"message":     "IP已被临时封禁",
-				"error":       "ip_banned",
-				"retry_after": remaining.String(),
-			})
 			c.Abort()
 			return
 		}
@@ -75,8 +60,8 @@ func UserBlacklistMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		userIDStr := formatUserID(userID)
-		isBlacklisted, err := blacklistService.IsBlacklisted(c.Request.Context(), userIDStr, BlacklistTypeUser)
+		userIDStr := fmt.Sprintf("%d", userID)
+		isBlacklisted, err := blacklistService.CheckBlacklist(userIDStr, BlacklistTypeUser)
 		if err != nil {
 			c.Next()
 			return
@@ -84,19 +69,6 @@ func UserBlacklistMiddleware() gin.HandlerFunc {
 
 		if isBlacklisted {
 			response.Forbidden(c)
-			c.Abort()
-			return
-		}
-
-		isBanned, remaining, err := blacklistService.IsBanned(c.Request.Context(), userIDStr, BlacklistTypeUser)
-		if err == nil && isBanned {
-			c.Header("Retry-After", remaining.String())
-			c.JSON(http.StatusForbidden, gin.H{
-				"code":        403,
-				"message":     "用户已被临时封禁",
-				"error":       "user_banned",
-				"retry_after": remaining.String(),
-			})
 			c.Abort()
 			return
 		}
@@ -116,22 +88,9 @@ func CombinedBlacklistMiddleware() gin.HandlerFunc {
 		}
 
 		if ip != "" {
-			isBlacklisted, _ := blacklistService.IsBlacklisted(c.Request.Context(), ip, BlacklistTypeIP)
+			isBlacklisted, _ := blacklistService.CheckBlacklist(ip, BlacklistTypeIP)
 			if isBlacklisted {
 				response.Forbidden(c)
-				c.Abort()
-				return
-			}
-
-			isBanned, remaining, _ := blacklistService.IsBanned(c.Request.Context(), ip, BlacklistTypeIP)
-			if isBanned {
-				c.Header("Retry-After", remaining.String())
-				c.JSON(http.StatusForbidden, gin.H{
-					"code":        403,
-					"message":     "IP已被临时封禁",
-					"error":       "ip_banned",
-					"retry_after": remaining.String(),
-				})
 				c.Abort()
 				return
 			}
@@ -139,112 +98,20 @@ func CombinedBlacklistMiddleware() gin.HandlerFunc {
 
 		userID := GetUserID(c)
 		if userID > 0 {
-			userIDStr := formatUserID(userID)
-			isBlacklisted, _ := blacklistService.IsBlacklisted(c.Request.Context(), userIDStr, BlacklistTypeUser)
+			userIDStr := fmt.Sprintf("%d", userID)
+			isBlacklisted, _ := blacklistService.CheckBlacklist(userIDStr, BlacklistTypeUser)
 			if isBlacklisted {
 				response.Forbidden(c)
 				c.Abort()
 				return
 			}
-
-			isBanned, remaining, _ := blacklistService.IsBanned(c.Request.Context(), userIDStr, BlacklistTypeUser)
-			if isBanned {
-				c.Header("Retry-After", remaining.String())
-				c.JSON(http.StatusForbidden, gin.H{
-					"code":        403,
-					"message":     "用户已被临时封禁",
-					"error":       "user_banned",
-					"retry_after": remaining.String(),
-				})
-				c.Abort()
-				return
-			}
 		}
 
 		c.Next()
 	}
 }
 
-func AutoBanMiddleware(violationThreshold int, banType string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		identifier := c.ClientIP()
-		if identifier == "" {
-			identifier = c.GetHeader("X-Forwarded-For")
-			if identifier == "" {
-				identifier = c.GetHeader("X-Real-IP")
-			}
-		}
 
-		if identifier == "" {
-			c.Next()
-			return
-		}
-
-		shouldBan, err := blacklistService.ShouldAutoBan(c.Request.Context(), identifier, banType, violationThreshold)
-		if err != nil {
-			c.Next()
-			return
-		}
-
-		if shouldBan {
-			err := blacklistService.AutoBan(c.Request.Context(), identifier, banType)
-			if err == nil {
-				response.Forbidden(c)
-				c.Abort()
-				return
-			}
-		}
-
-		c.Next()
-	}
-}
-
-func RecordViolationAndAutoBanMiddleware(violationType string, threshold int, banType string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		identifier := c.ClientIP()
-		if identifier == "" {
-			identifier = c.GetHeader("X-Forwarded-For")
-			if identifier == "" {
-				identifier = c.GetHeader("X-Real-IP")
-			}
-		}
-
-		if identifier == "" {
-			c.Next()
-			return
-		}
-
-		_, _ = blacklistService.RecordViolation(c.Request.Context(), identifier, violationType)
-
-		shouldBan, _ := blacklistService.ShouldAutoBan(c.Request.Context(), identifier, banType, threshold)
-		if shouldBan {
-			if err := blacklistService.AutoBan(c.Request.Context(), identifier, banType); err != nil {
-				log.Printf("自动封禁失败: %v", err)
-			}
-			response.Forbidden(c)
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func AddToBlacklist(c *gin.Context, identifier string, blacklistType string, duration time.Duration) error {
-	return blacklistService.AddToBlacklist(c.Request.Context(), identifier, blacklistType, duration)
-}
-
-func RemoveFromBlacklist(c *gin.Context, identifier string, blacklistType string) error {
-	return blacklistService.RemoveFromBlacklist(c.Request.Context(), identifier, blacklistType)
-}
-
-func AddBan(c *gin.Context, identifier string, banType string, duration time.Duration) error {
-	return blacklistService.BanIdentifier(c.Request.Context(), identifier, banType, duration)
-}
-
-func RemoveBan(c *gin.Context, identifier string, banType string) error {
-	return blacklistService.UnbanIdentifier(c.Request.Context(), identifier, banType)
-}
 
 func formatUserID(userID uint) string {
 	return fmt.Sprintf("%d", userID)

@@ -92,7 +92,7 @@ func TestEnhancedCSRFProtection(t *testing.T) {
 	fmt.Println("\n=== Testing Enhanced CSRF Protection ===")
 
 	t.Run("TokenGeneration", func(t *testing.T) {
-		csrf := service.NewCSRFSecurity(nil)
+		csrf := service.NewBasicCSRFSecurity(nil)
 
 		token1, err := csrf.GenerateToken()
 		if err != nil {
@@ -112,7 +112,7 @@ func TestEnhancedCSRFProtection(t *testing.T) {
 	})
 
 	t.Run("TokenStorageAndVerification", func(t *testing.T) {
-		csrf := service.NewCSRFSecurity(nil)
+		csrf := service.NewBasicCSRFSecurity(nil)
 
 		sessionID := "test-session-123"
 		token, _ := csrf.GenerateToken()

@@ -190,8 +190,7 @@ func (h *AdvancedRateLimitHandler) GetTokenBucketStats(c *gin.Context) {
 type TokenBucketUpdateRequest struct {
 	Key      string  `json:"key" binding:"required"`
 	Rate     float64 `json:"rate"`
-	Capacity float64 `json:"capacity"`
-	BurstSize float64 `json:"burst_size"`
+	Capacity int64   `json:"capacity"`
 }
 
 func (h *AdvancedRateLimitHandler) UpdateTokenBucketConfig(c *gin.Context) {
@@ -202,9 +201,9 @@ func (h *AdvancedRateLimitHandler) UpdateTokenBucketConfig(c *gin.Context) {
 	}
 
 	config := &service.TokenBucketConfig{
-		Rate:     req.Rate,
-		Capacity: req.Capacity,
-		BurstSize: req.BurstSize,
+		Capacity:   req.Capacity,
+		RefillRate: req.Rate,
+		RefillPerSec: req.Rate,
 	}
 
 	if err := h.tokenBucketService.UpdateBucketConfig(req.Key, config); err != nil {
@@ -324,13 +323,18 @@ func (h *AdvancedRateLimitHandler) CheckRateLimit(c *gin.Context) {
 			}
 		}
 	case "token_bucket":
-		var tbResult *service.TokenBucketResult
-		tbResult, err = h.tokenBucketService.CheckTokenBucketRateLimit(ctx, req.Key, &service.TokenBucketConfig{
-			Rate:     10,
-			Capacity: 100,
+		var tbResult *service.RateLimitResult
+		tbResult, err = h.tokenBucketService.CheckIPTokenBucketLimit(ctx, req.Key, &service.TokenBucketConfig{
+			Capacity:   100,
+			RefillRate: 10,
 		})
 		if tbResult != nil {
-			result = tbResult
+			result = map[string]interface{}{
+				"allowed":      tbResult.Allowed,
+				"remaining":   tbResult.Remaining,
+				"reset_at":    tbResult.ResetAt,
+				"retry_after": tbResult.RetryAfter,
+			}
 		}
 	default:
 		response.BadRequest(c, "invalid type, must be: adaptive, distributed, or token_bucket")

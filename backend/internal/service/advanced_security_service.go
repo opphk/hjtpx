@@ -368,7 +368,7 @@ type CSRFSecurity struct {
 	expiration time.Duration
 }
 
-func NewCSRFSecurity(redisClient *redis.Client) *CSRFSecurity {
+func NewBasicCSRFSecurity(redisClient *redis.Client) *CSRFSecurity {
 	return &CSRFSecurity{
 		redis:      redisClient,
 		ctx:        context.Background(),

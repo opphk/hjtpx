@@ -19,12 +19,6 @@ type RateLimitConfig struct {
 	WindowSecs  int
 }
 
-type RateLimitResult struct {
-	Allowed   bool
-	Remaining int
-	ResetAt   time.Time
-}
-
 const (
 	PrefixIPRateLimit    = "ratelimit:ip:"
 	PrefixUserRateLimit  = "ratelimit:user:"
@@ -48,6 +42,63 @@ func (s *RateLimitService) CheckIPRateLimit(ctx context.Context, ip string, conf
 	return s.checkRateLimit(ctx, key, config)
 }
 
+func (s *RateLimitService) RecordViolation(ctx context.Context, identifier string, violationType string) error {
+	if redis.Client == nil {
+		return nil
+	}
+	key := PrefixViolation + identifier
+	return redis.Client.Set(ctx, key, violationType, 24*time.Hour).Err()
+}
+
+func (s *RateLimitService) RecordFailedAttempt(ctx context.Context, identifier string) (int64, error) {
+	if redis.Client == nil {
+		return 0, nil
+	}
+	key := PrefixFailedAttempts + identifier
+	count, err := redis.Client.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	redis.Client.Expire(ctx, key, 1*time.Hour)
+	return count, nil
+}
+
+func (s *RateLimitService) ClearFailedAttempts(ctx context.Context, identifier string) error {
+	if redis.Client == nil {
+		return nil
+	}
+	key := PrefixFailedAttempts + identifier
+	return redis.Client.Del(ctx, key).Err()
+}
+
+func (s *RateLimitService) IsWhitelisted(ctx context.Context, identifier string, whitelistType string) (bool, error) {
+	if redis.Client == nil {
+		return false, nil
+	}
+	key := PrefixWhitelist + whitelistType + ":" + identifier
+	exists, err := redis.Client.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+
+func (s *RateLimitService) AddToWhitelist(ctx context.Context, identifier string, whitelistType string, ttl time.Duration) error {
+	if redis.Client == nil {
+		return nil
+	}
+	key := PrefixWhitelist + whitelistType + ":" + identifier
+	return redis.Client.Set(ctx, key, "1", ttl).Err()
+}
+
+func (s *RateLimitService) RemoveFromWhitelist(ctx context.Context, identifier string, whitelistType string) error {
+	if redis.Client == nil {
+		return nil
+	}
+	key := PrefixWhitelist + whitelistType + ":" + identifier
+	return redis.Client.Del(ctx, key).Err()
+}
+
 func (s *RateLimitService) CheckUserRateLimit(ctx context.Context, userID uint, config *RateLimitConfig) (*RateLimitResult, error) {
 	if config == nil {
 		config = &DefaultUserConfig
@@ -67,7 +118,7 @@ func (s *RateLimitService) CheckAppRateLimit(ctx context.Context, appID uint, co
 func (s *RateLimitService) checkRateLimit(ctx context.Context, key string, config *RateLimitConfig) (*RateLimitResult, error) {
 	result := &RateLimitResult{
 		Allowed:   true,
-		Remaining: config.MaxRequests - 1,
+		Remaining: float64(config.MaxRequests - 1),
 		ResetAt:   time.Now().Add(time.Duration(config.WindowSecs) * time.Second),
 	}
 
@@ -100,198 +151,6 @@ func (s *RateLimitService) checkRateLimit(ctx context.Context, key string, confi
 		return result, nil
 	}
 
-	result.Remaining = config.MaxRequests - int(count)
+	result.Remaining = float64(config.MaxRequests - int(count))
 	return result, nil
-}
-
-func (s *RateLimitService) AddToBlacklist(ctx context.Context, identifier string, blacklistType string, duration time.Duration) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixBlacklist, blacklistType, identifier)
-	if duration > 0 {
-		return redis.Client.Set(ctx, key, "1", duration).Err()
-	}
-	return redis.Client.Set(ctx, key, "1", 0).Err()
-}
-
-func (s *RateLimitService) RemoveFromBlacklist(ctx context.Context, identifier string, blacklistType string) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixBlacklist, blacklistType, identifier)
-	return redis.Client.Del(ctx, key).Err()
-}
-
-func (s *RateLimitService) IsBlacklisted(ctx context.Context, identifier string, blacklistType string) (bool, error) {
-	if redis.Client == nil {
-		return false, nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixBlacklist, blacklistType, identifier)
-	result, err := redis.Client.Exists(ctx, key).Result()
-	if err != nil {
-		return false, err
-	}
-	return result > 0, nil
-}
-
-func (s *RateLimitService) AddToWhitelist(ctx context.Context, identifier string, whitelistType string, duration time.Duration) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixWhitelist, whitelistType, identifier)
-	if duration > 0 {
-		return redis.Client.Set(ctx, key, "1", duration).Err()
-	}
-	return redis.Client.Set(ctx, key, "1", 0).Err()
-}
-
-func (s *RateLimitService) RemoveFromWhitelist(ctx context.Context, identifier string, whitelistType string) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixWhitelist, whitelistType, identifier)
-	return redis.Client.Del(ctx, key).Err()
-}
-
-func (s *RateLimitService) IsWhitelisted(ctx context.Context, identifier string, whitelistType string) (bool, error) {
-	if redis.Client == nil {
-		return false, nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixWhitelist, whitelistType, identifier)
-	result, err := redis.Client.Exists(ctx, key).Result()
-	if err != nil {
-		return false, err
-	}
-	return result > 0, nil
-}
-
-func (s *RateLimitService) RecordViolation(ctx context.Context, identifier string, violationType string) (int, error) {
-	if redis.Client == nil {
-		return 0, nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixViolation, violationType, identifier)
-	count, err := redis.Client.Incr(ctx, key).Result()
-	if err != nil {
-		return 0, err
-	}
-	if count == 1 {
-		redis.Client.Expire(ctx, key, 10*time.Minute)
-	}
-	return int(count), nil
-}
-
-func (s *RateLimitService) GetViolationCount(ctx context.Context, identifier string, violationType string) (int, error) {
-	if redis.Client == nil {
-		return 0, nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixViolation, violationType, identifier)
-	result, err := redis.Client.Get(ctx, key).Int()
-	if err != nil {
-		return 0, nil
-	}
-	return result, nil
-}
-
-func (s *RateLimitService) ClearViolations(ctx context.Context, identifier string, violationType string) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixViolation, violationType, identifier)
-	return redis.Client.Del(ctx, key).Err()
-}
-
-func (s *RateLimitService) BanIdentifier(ctx context.Context, identifier string, banType string, duration time.Duration) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixBan, banType, identifier)
-	return redis.Client.Set(ctx, key, "1", duration).Err()
-}
-
-func (s *RateLimitService) UnbanIdentifier(ctx context.Context, identifier string, banType string) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixBan, banType, identifier)
-	return redis.Client.Del(ctx, key).Err()
-}
-
-func (s *RateLimitService) IsBanned(ctx context.Context, identifier string, banType string) (bool, time.Duration, error) {
-	if redis.Client == nil {
-		return false, 0, nil
-	}
-	key := fmt.Sprintf("%s%s:%s", PrefixBan, banType, identifier)
-	ttl, err := redis.Client.TTL(ctx, key).Result()
-	if err != nil {
-		return false, 0, err
-	}
-	return ttl > 0, ttl, nil
-}
-
-func (s *RateLimitService) RecordFailedAttempt(ctx context.Context, identifier string) (int, error) {
-	if redis.Client == nil {
-		return 0, nil
-	}
-	key := fmt.Sprintf("%s%s", PrefixFailedAttempts, identifier)
-	count, err := redis.Client.Incr(ctx, key).Result()
-	if err != nil {
-		return 0, err
-	}
-	if count == 1 {
-		redis.Client.Expire(ctx, key, 15*time.Minute)
-	}
-	return int(count), nil
-}
-
-func (s *RateLimitService) GetFailedAttempts(ctx context.Context, identifier string) (int, error) {
-	if redis.Client == nil {
-		return 0, nil
-	}
-	key := fmt.Sprintf("%s%s", PrefixFailedAttempts, identifier)
-	result, err := redis.Client.Get(ctx, key).Int()
-	if err != nil {
-		return 0, nil
-	}
-	return result, nil
-}
-
-func (s *RateLimitService) ClearFailedAttempts(ctx context.Context, identifier string) error {
-	if redis.Client == nil {
-		return nil
-	}
-	key := fmt.Sprintf("%s%s", PrefixFailedAttempts, identifier)
-	return redis.Client.Del(ctx, key).Err()
-}
-
-func (s *RateLimitService) ShouldAutoBan(ctx context.Context, identifier string, violationType string, threshold int) (bool, error) {
-	count, err := s.GetViolationCount(ctx, identifier, violationType)
-	if err != nil {
-		return false, err
-	}
-	return count >= threshold, nil
-}
-
-func (s *RateLimitService) AutoBan(ctx context.Context, identifier string, banType string) error {
-	violationCount, _ := s.GetViolationCount(ctx, identifier, banType)
-	duration := s.CalculateBanDuration(violationCount)
-	return s.BanIdentifier(ctx, identifier, banType, duration)
-}
-
-func (s *RateLimitService) CalculateBanDuration(violationCount int) time.Duration {
-	baseDuration := 5 * time.Minute
-	switch {
-	case violationCount >= 10:
-		return 24 * time.Hour
-	case violationCount >= 7:
-		return 12 * time.Hour
-	case violationCount >= 5:
-		return 6 * time.Hour
-	case violationCount >= 3:
-		return 2 * time.Hour
-	case violationCount >= 2:
-		return 30 * time.Minute
-	default:
-		return baseDuration
-	}
 }

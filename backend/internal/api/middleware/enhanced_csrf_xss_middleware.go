@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -125,8 +124,8 @@ type sessionCSRFData struct {
 }
 
 var (
-	csrfTokenStore = make(map[string]*sessionCSRFData)
-	csrfStoreMu    sync.RWMutex
+	csrfTokenStoreXSS = make(map[string]*sessionCSRFData)
+	csrfStoreMuXSS    sync.RWMutex
 )
 
 func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
@@ -162,17 +161,17 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 
 		if isSafeMethod {
 			if method == "GET" || method == "HEAD" {
-				sessionID := generateCSRFCSID(c)
+				sessionID := generateCSRFCSIDXSS(c)
 
 				token, err := csrfSecurity.GenerateToken()
 				if err == nil {
-					csrfStoreMu.Lock()
-					csrfTokenStore[sessionID] = &sessionCSRFData{
+					csrfStoreMuXSS.Lock()
+					csrfTokenStoreXSS[sessionID] = &sessionCSRFData{
 						Token:     token,
 						ExpiresAt: time.Now().Add(cfg.TokenExpiration),
 						Used:      false,
 					}
-					csrfStoreMu.Unlock()
+					csrfStoreMuXSS.Unlock()
 
 					c.Set("csrf_token", token)
 					c.Set("csrf_session_id", sessionID)
@@ -193,7 +192,7 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 			return
 		}
 
-		sessionID := generateCSRFCSID(c)
+		sessionID := generateCSRFCSIDXSS(c)
 
 		var token string
 		token = c.GetHeader(cfg.HeaderName)
@@ -218,9 +217,9 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 			return
 		}
 
-		csrfStoreMu.RLock()
-		sessionData, exists := csrfTokenStore[sessionID]
-		csrfStoreMu.RUnlock()
+		csrfStoreMuXSS.RLock()
+		sessionData, exists := csrfTokenStoreXSS[sessionID]
+		csrfStoreMuXSS.RUnlock()
 
 		if !exists || sessionData == nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
@@ -232,9 +231,9 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 		}
 
 		if time.Now().After(sessionData.ExpiresAt) {
-			csrfStoreMu.Lock()
+			csrfStoreMuXSS.Lock()
 			delete(csrfTokenStore, sessionID)
-			csrfStoreMu.Unlock()
+			csrfStoreMuXSS.Unlock()
 
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "csrf_token_expired",
@@ -267,9 +266,9 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 		}
 
 		if cfg.RotateOnVerification {
-			csrfStoreMu.Lock()
+			csrfStoreMuXSS.Lock()
 			delete(csrfTokenStore, sessionID)
-			csrfStoreMu.Unlock()
+			csrfStoreMuXSS.Unlock()
 		}
 
 		c.Set("csrf_verified", true)
@@ -279,7 +278,7 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 	}
 }
 
-func generateCSRFCSID(c *gin.Context) string {
+func generateCSRFCSIDXSS(c *gin.Context) string {
 	if sessionID := c.GetHeader("X-Session-ID"); sessionID != "" {
 		return sessionID
 	}
@@ -310,7 +309,8 @@ func EnhancedXSSProtectionMiddleware(configs ...EnhancedXSSConfig) gin.HandlerFu
 		MaxInputLength:           cfg.MaxInputLength,
 	}
 
-	security := service.NewXSSSecurity(xssConfig)
+	xssSecurity := service.NewXSSSecurity(xssConfig)
+	_ = xssSecurity // Mark as intentionally unused
 
 	return func(c *gin.Context) {
 		if !cfg.Enabled {
@@ -404,13 +404,13 @@ func EnhancedSecurityHeadersMiddleware() gin.HandlerFunc {
 
 		c.Header("X-Permitted-Cross-Domain-Policies", "none")
 		c.Header("X-Download-Options", "noopen")
-		c.Header("X-Request-ID", generateRequestID())
+		c.Header("X-Request-ID", generateRequestIDXSS())
 
 		c.Next()
 	}
 }
 
-func generateRequestID() string {
+func generateRequestIDXSS() string {
 	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	return fmt.Sprintf("%x", bytes)
@@ -454,23 +454,19 @@ func SanitizeHTML(input string) string {
 	return xssSecurity.SanitizeHTML(input)
 }
 
-func DetectXSS(input string) (bool, string) {
-	initXSSSecurity()
-	return xssSecurity.DetectXSS(input)
-}
-
-type InputValidationMiddlewareConfig struct {
-	Enabled        bool
-	ValidateQuery  bool
-	ValidateForm   bool
-	ValidateJSON   bool
+type EnhancedInputValidationConfig struct {
+	Enabled         bool
+	ValidateQuery   bool
+	ValidateForm    bool
+	ValidateJSON    bool
 	ValidateHeaders bool
-	MaxQueryParams int
-	MaxBodySize    int64
-	ExcludePaths   []string
+	MaxQueryParams  int
+	MaxBodySize     int64
+	ExcludePaths    []string
+	LogViolations   bool
 }
 
-var defaultInputValidationConfig = InputValidationMiddlewareConfig{
+var defaultEnhancedInputValidationConfig = EnhancedInputValidationConfig{
 	Enabled:         true,
 	ValidateQuery:   true,
 	ValidateForm:    true,
@@ -479,10 +475,16 @@ var defaultInputValidationConfig = InputValidationMiddlewareConfig{
 	MaxQueryParams:  50,
 	MaxBodySize:     1024 * 1024 * 10,
 	ExcludePaths:    []string{"/health", "/metrics"},
+	LogViolations:   true,
 }
 
-func InputValidationMiddleware(configs ...InputValidationMiddlewareConfig) gin.HandlerFunc {
-	cfg := defaultInputValidationConfig
+func DetectXSS(input string) (bool, string) {
+	initXSSSecurity()
+	return xssSecurity.DetectXSS(input)
+}
+
+func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationConfig) gin.HandlerFunc {
+	cfg := defaultEnhancedInputValidationConfig
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}

@@ -34,7 +34,7 @@ type EnhancedCSRFSecurityConfig struct {
 
 type EnhancedCSRFSecurity struct {
 	config     EnhancedCSRFSecurityConfig
-	tokenStore *CSRFTokenStore
+	tokenStore CSRFTokenStore
 	secretKey  []byte
 }
 
@@ -289,8 +289,6 @@ func (s *EnhancedCSRFSecurity) GenerateToken() (string, error) {
 	}
 
 	token := base64.URLEncoding.EncodeToString(bytes)
-	hashedToken := hashCSRFToken(token)
-
 	return token, nil
 }
 
@@ -616,7 +614,9 @@ func (x *XSSSecurity) sanitizeAttributeValue(value string) string {
 
 	value = eventHandlerPattern.ReplaceAllString(value, "")
 
-	value = template.HTMLEscape(value)
+	var buf strings.Builder
+	template.HTMLEscape(&buf, []byte(value))
+	value = buf.String()
 
 	return value
 }

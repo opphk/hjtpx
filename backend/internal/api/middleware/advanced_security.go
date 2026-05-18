@@ -369,7 +369,7 @@ func CSRFTokenMiddleware(config ...CSRFTokenMiddlewareConfig) gin.HandlerFunc {
 		cfg = config[0]
 	}
 
-	csrfSecurity := service.NewCSRFSecurity(nil)
+	csrfSecurity := service.NewBasicCSRFSecurity(nil)
 
 	return func(c *gin.Context) {
 		if !cfg.Enabled {

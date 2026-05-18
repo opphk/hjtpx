@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"math/big"
 	"net/url"
 	"sort"
 	"strconv"
@@ -354,11 +353,11 @@ func (v *SignatureValidator) validateTimestamp(timestamp int64) bool {
 		diff = -diff
 	}
 
-	if diff > v.config.TimestampTolerance.Seconds() {
+	if float64(diff) > v.config.TimestampTolerance.Seconds() {
 		return false
 	}
 
-	if diff > v.config.MaxClockSkew.Seconds() {
+	if float64(diff) > v.config.MaxClockSkew.Seconds() {
 		return false
 	}
 
@@ -570,20 +569,24 @@ func (v *RSASignatureValidator) Sign(message []byte) (string, error) {
 		return "", errors.New("private key not available")
 	}
 
-	var hash hash.Hash
+	var hashed []byte
+	var cryptoHash crypto.Hash
 	switch v.config.Algorithm {
 	case "SHA256":
-		hash = sha256.New()
+		h := sha256.Sum256(message)
+		hashed = h[:]
+		cryptoHash = crypto.SHA256
 	case "SHA512":
-		hash = sha512.New()
+		h := sha512.Sum512(message)
+		hashed = h[:]
+		cryptoHash = crypto.SHA512
 	default:
-		hash = sha256.New()
+		h := sha256.Sum256(message)
+		hashed = h[:]
+		cryptoHash = crypto.SHA256
 	}
 
-	hash.Write(message)
-	hashed := hash.Sum(nil)
-
-	signature, err := rsa.SignPKCS1v15(rand.Reader, v.privateKey, crypto.Hash(hash), hashed)
+	signature, err := rsa.SignPKCS1v15(rand.Reader, v.privateKey, cryptoHash, hashed)
 	if err != nil {
 		return "", err
 	}
@@ -601,20 +604,24 @@ func (v *RSASignatureValidator) Verify(message, signatureBase64 string) error {
 		return err
 	}
 
-	var hash hash.Hash
+	var hashed []byte
+	var cryptoHash crypto.Hash
 	switch v.config.Algorithm {
 	case "SHA256":
-		hash = sha256.New()
+		h := sha256.Sum256([]byte(message))
+		hashed = h[:]
+		cryptoHash = crypto.SHA256
 	case "SHA512":
-		hash = sha512.New()
+		h := sha512.Sum512([]byte(message))
+		hashed = h[:]
+		cryptoHash = crypto.SHA512
 	default:
-		hash = sha256.New()
+		h := sha256.Sum256([]byte(message))
+		hashed = h[:]
+		cryptoHash = crypto.SHA256
 	}
 
-	hash.Write(message)
-	hashed := hash.Sum(nil)
-
-	return rsa.VerifyPKCS1v15(v.publicKey, crypto.Hash(hash), hashed, signature)
+	return rsa.VerifyPKCS1v15(v.publicKey, cryptoHash, hashed, signature)
 }
 
 func (v *RSASignatureValidator) ValidateNonce(nonce string) bool {
@@ -678,7 +685,7 @@ func (v *DoubleSignatureValidator) ValidateRequest(method, path, query string, h
 }
 
 func (v *DoubleSignatureValidator) GenerateDualSignature(method, path, query string, body []byte) (string, string, int64, error) {
-	sig1, timestamp, nonce1, err := v.primaryValidator.GenerateSignature(method, path, query, body)
+	sig1, timestamp, _, err := v.primaryValidator.GenerateSignature(method, path, query, body)
 	if err != nil {
 		return "", "", 0, err
 	}

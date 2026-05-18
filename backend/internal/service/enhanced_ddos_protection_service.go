@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +64,9 @@ type EnhancedIPStatistics struct {
 	ErrorRate           float64
 	TotalErrors         int
 	TotalRequests       int64
+	ErrorCounts         map[int]int
+	UniqueUserAgents    map[string]int
+	UniquePathsSet      map[string]bool
 }
 
 type EnhancedDDoSTrafficData struct {
@@ -691,7 +693,6 @@ func (s *EnhancedDDoSProtectionService) analyzeBehaviorLocked(ip string, now tim
 
 func (s *EnhancedDDoSProtectionService) checkAttackPatterns(r *http.Request, stats *EnhancedIPStatistics) {
 	url := r.URL.String()
-	headers := fmt.Sprintf("%s %s %s", r.Method, url, r.Header.Get("User-Agent"))
 
 	matched, pattern := s.patternMatcher.Match(url)
 	if matched {
@@ -762,7 +763,6 @@ func (s *EnhancedDDoSProtectionService) statsUpdateRoutine() {
 
 	for range ticker.C {
 		s.mu.Lock()
-		now := time.Now()
 
 		for ip, stats := range s.ipStats {
 			s.anomalyDetector.UpdateBaseline(ip, stats.AvgRequestInterval, stats.RequestRate)

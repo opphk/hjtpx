@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/hjtpx/hjtpx/pkg/redis"
 )
 
 type TokenBucketConfig struct {
@@ -21,12 +19,31 @@ type TokenBucketRateLimitService struct {
 	mu      sync.RWMutex
 }
 
+type RateLimitResult struct {
+	Allowed    bool
+	Remaining  float64
+	ResetAt    time.Time
+	RetryAfter float64
+}
+
+func NewTokenBucketRateLimitService() *TokenBucketRateLimitService {
+	return &TokenBucketRateLimitService{
+		config: TokenBucketConfig{
+			Capacity:     100,
+			RefillRate:   10,
+			RefillPerSec: 10,
+		},
+		buckets: make(map[string]*TokenBucket),
+	}
+}
+
 type TokenBucket struct {
-	tokens        float64
-	lastRefill    time.Time
-	capacity      int64
-	refillRate    float64
-	maxTokens     float64
+	mu         sync.Mutex
+	tokens     float64
+	lastRefill time.Time
+	capacity   int64
+	refillRate float64
+	maxTokens  float64
 }
 
 type SlidingWindowConfig struct {
@@ -47,56 +64,7 @@ type SlidingWindow struct {
 	mu         sync.Mutex
 }
 
-type RateLimitConfig struct {
-	MaxRequests int
-	WindowSecs  int
-}
 
-type RateLimitResult struct {
-	Allowed   bool
-	Remaining int
-	ResetAt   time.Time
-	RetryAfter int
-}
-
-type DistributedRateLimitConfig struct {
-	RedisEnabled    bool
-	ConsistencyLevel string
-	Nodes           []string
-	SyncInterval    time.Duration
-}
-
-type DistributedRateLimitService struct {
-	localService *SlidingWindowRateLimitService
-	redisEnabled bool
-	config       DistributedRateLimitConfig
-	nodeID       string
-}
-
-func NewTokenBucketRateLimitService() *TokenBucketRateLimitService {
-	return &TokenBucketRateLimitService{
-		config: TokenBucketConfig{
-			Capacity:     100,
-			RefillRate:   10,
-			RefillPerSec: 10,
-		},
-		buckets: make(map[string]*TokenBucket),
-	}
-}
-
-func NewTokenBucketRateLimitServiceWithConfig(config TokenBucketConfig) *TokenBucketRateLimitService {
-	if config.RefillRate == 0 {
-		config.RefillRate = 10
-	}
-	if config.RefillPerSec == 0 {
-		config.RefillPerSec = 10
-	}
-
-	return &TokenBucketRateLimitService{
-		config:  config,
-		buckets: make(map[string]*TokenBucket),
-	}
-}
 
 func (s *TokenBucketRateLimitService) Allow(key string) bool {
 	s.mu.Lock()
@@ -132,9 +100,6 @@ func (s *TokenBucketRateLimitService) Check(key string) (bool, float64) {
 	if !exists {
 		return true, float64(s.config.Capacity)
 	}
-
-	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
 
 	elapsed := time.Since(bucket.lastRefill).Seconds()
 	bucket.tokens += elapsed * bucket.refillRate
@@ -212,9 +177,6 @@ func (s *TokenBucketRateLimitService) CheckIPTokenBucketLimit(ctx context.Contex
 	}
 	s.mu.Unlock()
 
-	bucket.mu.Lock()
-	defer bucket.mu.Unlock()
-
 	now := time.Now()
 	elapsed := now.Sub(bucket.lastRefill).Seconds()
 	bucket.tokens += elapsed * bucket.refillRate
@@ -243,9 +205,9 @@ func (s *TokenBucketRateLimitService) CheckIPTokenBucketLimit(ctx context.Contex
 
 	return &RateLimitResult{
 		Allowed:    allowed,
-		Remaining:  remaining,
+		Remaining:  float64(remaining),
 		ResetAt:    now.Add(time.Duration(float64(config.Capacity)/config.RefillRate) * time.Second),
-		RetryAfter: retryAfter,
+		RetryAfter: float64(retryAfter),
 	}, nil
 }
 
@@ -259,6 +221,91 @@ func (s *TokenBucketRateLimitService) UpdateConfig(config TokenBucketConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.config = config
+}
+
+func (s *TokenBucketRateLimitService) GetGlobalStats() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	totalTokens := float64(0)
+	for _, bucket := range s.buckets {
+		totalTokens += bucket.tokens
+	}
+
+	return map[string]interface{}{
+		"total_buckets":    len(s.buckets),
+		"total_tokens":     totalTokens,
+		"config":           s.config,
+	}
+}
+
+func (s *TokenBucketRateLimitService) GetBucketList() []map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	bucketList := make([]map[string]interface{}, 0, len(s.buckets))
+	for key, bucket := range s.buckets {
+		bucketList = append(bucketList, map[string]interface{}{
+			"key":          key,
+			"tokens":       bucket.tokens,
+			"capacity":     bucket.capacity,
+			"refill_rate":  bucket.refillRate,
+			"last_refill":  bucket.lastRefill,
+		})
+	}
+
+	return bucketList
+}
+
+func (s *TokenBucketRateLimitService) GetBucketStats(key string) map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	bucket, exists := s.buckets[key]
+	if !exists {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"key":          key,
+		"tokens":       bucket.tokens,
+		"capacity":     bucket.capacity,
+		"refill_rate":  bucket.refillRate,
+		"max_tokens":   bucket.maxTokens,
+		"last_refill":  bucket.lastRefill,
+	}
+}
+
+func (s *TokenBucketRateLimitService) UpdateBucketConfig(key string, config *TokenBucketConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	bucket, exists := s.buckets[key]
+	if !exists {
+		return fmt.Errorf("bucket not found: %s", key)
+	}
+
+	if config.Capacity > 0 {
+		bucket.capacity = config.Capacity
+		bucket.maxTokens = float64(config.Capacity)
+	}
+	if config.RefillRate > 0 {
+		bucket.refillRate = config.RefillRate
+	}
+
+	return nil
+}
+
+func (s *TokenBucketRateLimitService) ResetBucket(ctx context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if bucket, exists := s.buckets[key]; exists {
+		bucket.tokens = float64(bucket.capacity)
+		bucket.lastRefill = time.Now()
+	}
+
+	return nil
 }
 
 func (s *TokenBucketRateLimitService) GetStats() map[string]interface{} {
@@ -443,9 +490,9 @@ func (s *SlidingWindowRateLimitService) CheckSlidingWindow(ctx context.Context, 
 
 	return &RateLimitResult{
 		Allowed:    allowed,
-		Remaining:  int(remaining),
+		Remaining:  float64(remaining),
 		ResetAt:    resetAt,
-		RetryAfter: retryAfter,
+		RetryAfter: float64(retryAfter),
 	}, nil
 }
 
@@ -487,179 +534,6 @@ func (s *SlidingWindowRateLimitService) GetStats() map[string]interface{} {
 		"total_windows": len(s.windows),
 		"windows":        stats,
 		"config":         s.config,
-	}
-}
-
-func NewDistributedRateLimitService(configs ...DistributedRateLimitConfig) *DistributedRateLimitService {
-	cfg := DistributedRateLimitConfig{
-		RedisEnabled:    redis.Client != nil,
-		ConsistencyLevel: "eventual",
-		SyncInterval:    100 * time.Millisecond,
-	}
-
-	if len(configs) > 0 {
-		cfg = configs[0]
-	}
-
-	service := &DistributedRateLimitService{
-		localService: NewSlidingWindowRateLimitService(),
-		redisEnabled: cfg.RedisEnabled && redis.Client != nil,
-		config:       cfg,
-		nodeID:       fmt.Sprintf("node-%d", time.Now().UnixNano()),
-	}
-
-	if service.redisEnabled {
-		go service.syncRoutine()
-	}
-
-	return service
-}
-
-func (s *DistributedRateLimitService) Allow(ctx context.Context, key string, maxRequests int64) (bool, error) {
-	if !s.redisEnabled {
-		result, err := s.localService.CheckSlidingWindow(ctx, key, maxRequests)
-		if err != nil {
-			return false, err
-		}
-		return result.Allowed, nil
-	}
-
-	redisKey := fmt.Sprintf("ratelimit:distributed:%s", key)
-
-	allowed, err := s.redisAllow(ctx, redisKey, maxRequests)
-	if err != nil {
-		result, err := s.localService.CheckSlidingWindow(ctx, key, maxRequests)
-		if err != nil {
-			return false, err
-		}
-		return result.Allowed, nil
-	}
-
-	return allowed, nil
-}
-
-func (s *DistributedRateLimitService) redisAllow(ctx context.Context, key string, maxRequests int64) (bool, error) {
-	if redis.Client == nil {
-		return false, fmt.Errorf("redis not available")
-	}
-
-	now := time.Now()
-	windowStart := now.Truncate(time.Minute)
-	windowKey := fmt.Sprintf("%s:%d", key, windowStart.Unix())
-
-	count, err := redis.Client.Incr(ctx, windowKey).Result()
-	if err != nil {
-		return false, err
-	}
-
-	if count == 1 {
-		redis.Client.Expire(ctx, windowKey, 2*time.Minute)
-	}
-
-	return count <= maxRequests, nil
-}
-
-func (s *DistributedRateLimitService) Check(ctx context.Context, key string, maxRequests int64) (*RateLimitResult, error) {
-	if !s.redisEnabled {
-		return s.localService.CheckSlidingWindow(ctx, key, maxRequests)
-	}
-
-	redisKey := fmt.Sprintf("ratelimit:distributed:%s", key)
-	windowKey := fmt.Sprintf("%s:%d", redisKey, time.Now().Truncate(time.Minute).Unix())
-
-	count, err := redis.Client.Get(ctx, windowKey).Int64()
-	if err != nil && err.Error() != "redis: nil" {
-		return s.localService.CheckSlidingWindow(ctx, key, maxRequests)
-	}
-
-	remaining := maxRequests - count
-	if remaining < 0 {
-		remaining = 0
-	}
-
-	ttl, _ := redis.Client.TTL(ctx, windowKey).Result()
-	resetAt := time.Now().Add(ttl)
-
-	retryAfter := 0
-	if remaining == 0 {
-		retryAfter = int(ttl.Seconds())
-		if retryAfter < 1 {
-			retryAfter = 1
-		}
-	}
-
-	return &RateLimitResult{
-		Allowed:    count < maxRequests,
-		Remaining:  int(remaining),
-		ResetAt:    resetAt,
-		RetryAfter: retryAfter,
-	}, nil
-}
-
-func (s *DistributedRateLimitService) Reset(ctx context.Context, key string) error {
-	if !s.redisEnabled {
-		s.localService.Reset(key)
-		return nil
-	}
-
-	redisKey := fmt.Sprintf("ratelimit:distributed:%s", key)
-
-	pattern := redisKey + ":*"
-	keys, err := redis.Client.Keys(ctx, pattern).Result()
-	if err != nil {
-		return err
-	}
-
-	if len(keys) > 0 {
-		return redis.Client.Del(ctx, keys...).Err()
-	}
-
-	return nil
-}
-
-func (s *DistributedRateLimitService) syncRoutine() {
-	if !s.redisEnabled || redis.Client == nil {
-		return
-	}
-
-	ticker := time.NewTicker(s.config.SyncInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		s.syncLocalToRedis()
-	}
-}
-
-func (s *DistributedRateLimitService) syncLocalToRedis() {
-	if redis.Client == nil {
-		return
-	}
-
-	ctx := context.Background()
-	stats := s.localService.GetStats()
-	windows, ok := stats["windows"].(map[string]interface{})
-	if !ok {
-		return
-	}
-
-	for key := range windows {
-		result, _ := s.localService.CheckSlidingWindow(ctx, key, 0)
-		if result != nil {
-			_ = result
-		}
-	}
-}
-
-func (s *DistributedRateLimitService) GetNodeID() string {
-	return s.nodeID
-}
-
-func (s *DistributedRateLimitService) GetStats() map[string]interface{} {
-	return map[string]interface{}{
-		"redis_enabled":     s.redisEnabled,
-		"node_id":           s.nodeID,
-		"consistency_level": s.config.ConsistencyLevel,
-		"local_stats":       s.localService.GetStats(),
 	}
 }
 
@@ -741,83 +615,11 @@ func (s *LeakyBucketRateLimitService) Reset(key string) {
 	delete(s.buckets, key)
 }
 
-type AdaptiveRateLimitService struct {
-	tokenBucket *TokenBucketRateLimitService
-	slidingWindow *SlidingWindowRateLimitService
-	distributed *DistributedRateLimitService
-	config      AdaptiveRateLimitConfig
-	mu          sync.RWMutex
-}
-
-type AdaptiveRateLimitConfig struct {
-	BaseLimit      int64
-	PeakLimit      int64
-	OffPeakLimit   int64
-	OffPeakStart   int
-	OffPeakEnd     int
-	EnableDynamic  bool
-	CooldownPeriod time.Duration
-}
-
-func NewAdaptiveRateLimitService() *AdaptiveRateLimitService {
-	return &AdaptiveRateLimitService{
-		tokenBucket:   NewTokenBucketRateLimitService(),
-		slidingWindow: NewSlidingWindowRateLimitService(),
-		distributed:   NewDistributedRateLimitService(),
-		config: AdaptiveRateLimitConfig{
-			BaseLimit:      100,
-			PeakLimit:      200,
-			OffPeakLimit:   500,
-			OffPeakStart:   0,
-			OffPeakEnd:     6,
-			EnableDynamic:  true,
-			CooldownPeriod: 1 * time.Minute,
-		},
-	}
-}
-
-func (s *AdaptiveRateLimitService) Allow(ctx context.Context, key string) (bool, error) {
-	s.mu.RLock()
-	limit := s.calculateDynamicLimit()
-	s.mu.RUnlock()
-
-	return s.distributed.Allow(ctx, key, limit)
-}
-
-func (s *AdaptiveRateLimitService) calculateDynamicLimit() int64 {
+func (s *LeakyBucketRateLimitService) GetConfig() LeakyBucketConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	hour := time.Now().Hour()
-
-	if s.config.EnableDynamic {
-		if hour >= s.config.OffPeakStart && hour < s.config.OffPeakEnd {
-			return s.config.OffPeakLimit
-		}
-	}
-
-	if isPeakHour(hour) {
-		return s.config.PeakLimit
-	}
-
-	return s.config.BaseLimit
+	return s.config
 }
 
-func isPeakHour(hour int) bool {
-	return (hour >= 9 && hour <= 11) || (hour >= 14 && hour <= 17)
-}
 
-func (s *AdaptiveRateLimitService) UpdateConfig(config AdaptiveRateLimitConfig) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.config = config
-}
 
-func (s *AdaptiveRateLimitService) GetStats() map[string]interface{} {
-	return map[string]interface{}{
-		"token_bucket": s.tokenBucket.GetStats(),
-		"sliding_window": s.slidingWindow.GetStats(),
-		"distributed":  s.distributed.GetStats(),
-		"config":       s.config,
-	}
-}

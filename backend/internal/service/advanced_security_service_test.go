@@ -231,7 +231,7 @@ func TestJWTSecurity(t *testing.T) {
 
 func TestCSRFSecurity(t *testing.T) {
 	t.Run("GenerateToken", func(t *testing.T) {
-		security := NewCSRFSecurity(nil)
+		security := NewBasicCSRFSecurity(nil)
 
 		token, err := security.GenerateToken()
 		assert.NoError(t, err)
@@ -240,7 +240,7 @@ func TestCSRFSecurity(t *testing.T) {
 	})
 
 	t.Run("Generate unique tokens", func(t *testing.T) {
-		security := NewCSRFSecurity(nil)
+		security := NewBasicCSRFSecurity(nil)
 
 		token1, _ := security.GenerateToken()
 		token2, _ := security.GenerateToken()

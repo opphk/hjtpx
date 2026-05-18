@@ -57,7 +57,7 @@ func IPRateLimitMiddleware(options *RateLimitOptions) gin.HandlerFunc {
 		}
 
 		c.Header("X-RateLimit-Limit", strconv.Itoa(options.MaxRequests))
-		c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
+		c.Header("X-RateLimit-Remaining", strconv.Itoa(int(result.Remaining)))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
 
 		if !result.Allowed {
@@ -98,7 +98,7 @@ func UserRateLimitMiddleware(options *RateLimitOptions) gin.HandlerFunc {
 		}
 
 		c.Header("X-RateLimit-Limit", strconv.Itoa(options.MaxRequests))
-		c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
+		c.Header("X-RateLimit-Remaining", strconv.Itoa(int(result.Remaining)))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
 
 		if !result.Allowed {
@@ -145,7 +145,7 @@ func AppRateLimitMiddleware(options *RateLimitOptions) gin.HandlerFunc {
 		}
 
 		c.Header("X-RateLimit-Limit", strconv.Itoa(options.MaxRequests))
-		c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
+		c.Header("X-RateLimit-Remaining", strconv.Itoa(int(result.Remaining)))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
 
 		if !result.Allowed {
@@ -246,7 +246,7 @@ func RecordFailedAttemptMiddleware() gin.HandlerFunc {
 
 		failedCount, _ := rateLimitService.RecordFailedAttempt(c.Request.Context(), identifier)
 		if failedCount >= 5 {
-			_, _ = rateLimitService.RecordViolation(c.Request.Context(), identifier, "failed_attempts")
+			_ = rateLimitService.RecordViolation(c.Request.Context(), identifier, "failed_attempts")
 		}
 
 		c.Next()
@@ -275,8 +275,8 @@ func GetRateLimitService() *service.RateLimitService {
 // TokenBucketOptions 令牌桶配置
 type TokenBucketOptions struct {
 	Rate          float64
-	Capacity      float64
-	BurstSize     float64
+	Capacity      int64
+	RefillRate    float64
 	InitialTokens float64
 }
 
@@ -289,7 +289,7 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 			options = &TokenBucketOptions{
 				Rate:          10,
 				Capacity:      100,
-				BurstSize:     50,
+				RefillRate:    10,
 				InitialTokens: 100,
 			}
 		}
@@ -303,10 +303,9 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 		}
 
 		config := &service.TokenBucketConfig{
-			Rate:          options.Rate,
-			Capacity:      options.Capacity,
-			BurstSize:     options.BurstSize,
-			InitialTokens: options.InitialTokens,
+			Capacity:     options.Capacity,
+			RefillRate:   options.Rate,
+			RefillPerSec: options.RefillRate,
 		}
 
 		result, err := tokenBucketRateLimitService.CheckIPTokenBucketLimit(c.Request.Context(), ip, config)
@@ -315,15 +314,15 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 			return
 		}
 
-		c.Header("X-TokenBucket-Limit", strconv.FormatFloat(config.Capacity, 'f', 2, 64))
-		c.Header("X-TokenBucket-Remaining", strconv.FormatFloat(result.Tokens, 'f', 2, 64))
+		c.Header("X-TokenBucket-Limit", strconv.FormatInt(options.Capacity, 10))
+		c.Header("X-TokenBucket-Remaining", strconv.FormatFloat(result.Remaining, 'f', 2, 64))
 		if result.RetryAfter > 0 {
-			c.Header("X-TokenBucket-RetryAfter", strconv.FormatFloat(result.RetryAfter.Seconds(), 'f', 2, 64))
+			c.Header("X-TokenBucket-RetryAfter", strconv.FormatFloat(result.RetryAfter, 'f', 2, 64))
 		}
 
 		if !result.Allowed {
 			if result.RetryAfter > 0 {
-				c.Header("Retry-After", strconv.FormatInt(int64(result.RetryAfter.Seconds()), 10))
+				c.Header("Retry-After", strconv.FormatFloat(result.RetryAfter, 'f', 2, 64))
 			}
 			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()

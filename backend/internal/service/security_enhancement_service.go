@@ -309,7 +309,7 @@ func (v *InputValidator) SanitizeInput(input string) string {
 	return sanitized
 }
 
-type SecurityHeadersConfig struct {
+type BasicSecurityHeadersConfig struct {
 	CSP                 string
 	HSTS                string
 	XFrameOptions       string
@@ -318,7 +318,7 @@ type SecurityHeadersConfig struct {
 	ReferrerPolicy      string
 }
 
-var DefaultSecurityHeaders = SecurityHeadersConfig{
+var DefaultBasicSecurityHeaders = BasicSecurityHeadersConfig{
 	CSP:                 "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
 	HSTS:                "max-age=31536000; includeSubDomains; preload",
 	XFrameOptions:       "DENY",
