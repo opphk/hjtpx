@@ -433,8 +433,8 @@ func (s *FingerprintService) AnalyzeRequestPattern(fingerprintID string) map[str
 			intervals = append(intervals, behavior.RequestTimes[i].Sub(behavior.RequestTimes[i-1]).Seconds())
 		}
 		result["avg_interval"] = avg(intervals)
-		result["min_interval"] = min(intervals)
-		result["max_interval"] = max(intervals)
+		result["min_interval"] = fingerprintMin(intervals)
+		result["max_interval"] = fingerprintMax(intervals)
 	}
 
 	pathCounts := make(map[string]int)
@@ -466,7 +466,7 @@ func avg(values []float64) float64 {
 	return sum / float64(len(values))
 }
 
-func min(values []float64) float64 {
+func fingerprintMin(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
@@ -479,7 +479,7 @@ func min(values []float64) float64 {
 	return m
 }
 
-func max(values []float64) float64 {
+func fingerprintMax(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}

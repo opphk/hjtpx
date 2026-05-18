@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,14 +15,14 @@ type SeamlessVerifyRequest struct {
 	DeviceFingerprint string                 `json:"device_fingerprint" binding:"required"`
 	ApplicationID     uint                   `json:"application_id"`
 	UserID            *uint                  `json:"user_id,omitempty"`
-	BehaviorData      []BehaviorDataPoint    `json:"behavior_data,omitempty"`
+	BehaviorData      []SeamlessBehaviorDataPoint    `json:"behavior_data,omitempty"`
 	EnvironmentData   map[string]interface{} `json:"environment_data,omitempty"`
 	FingerprintHash   string                 `json:"fingerprint_hash,omitempty"`
 	FeatureCount      int                    `json:"feature_count,omitempty"`
 	RiskScore         *RiskScoreData         `json:"risk_score,omitempty"`
 }
 
-type BehaviorDataPoint struct {
+type SeamlessBehaviorDataPoint struct {
 	Event      string                 `json:"event"`
 	Timestamp  int64                  `json:"timestamp"`
 	Data       map[string]interface{} `json:"data,omitempty"`
@@ -75,16 +74,16 @@ type SeamlessConfigResponse struct {
 }
 
 var (
-	behaviorService interface{}
-	deviceService    interface{}
+	seamlessBehaviorService interface{}
+	seamlessDeviceService   interface{}
 )
 
 func SetBehaviorService(service interface{}) {
-	behaviorService = service
+	seamlessBehaviorService = service
 }
 
 func SetDeviceDetectionService(service interface{}) {
-	deviceService = service
+	seamlessDeviceService = service
 }
 
 func SeamlessVerify(c *gin.Context) {
@@ -136,7 +135,7 @@ func SeamlessVerify(c *gin.Context) {
 		}
 	}
 
-	riskScore := calculateRiskScore(req, appConfig)
+	riskScore := seamlessCalculateRiskScore(req, appConfig)
 
 	decision := determineDecision(riskScore, trustStatus, appConfig)
 	reason := getDecisionReason(decision, riskScore, trustStatus)
@@ -229,7 +228,7 @@ type DeviceTrustStatus struct {
 	TrustLevel float64
 }
 
-func calculateRiskScore(req SeamlessVerifyRequest, config models.SeamlessConfig) float64 {
+func seamlessCalculateRiskScore(req SeamlessVerifyRequest, config models.SeamlessConfig) float64 {
 	riskScore := 0.0
 
 	if req.RiskScore != nil {
@@ -250,7 +249,7 @@ func calculateRiskScore(req SeamlessVerifyRequest, config models.SeamlessConfig)
 	return riskScore
 }
 
-func analyzeBehaviorRisk(behaviorData []BehaviorDataPoint) float64 {
+func analyzeBehaviorRisk(behaviorData []SeamlessBehaviorDataPoint) float64 {
 	if len(behaviorData) == 0 {
 		return 50.0
 	}
@@ -285,7 +284,7 @@ func analyzeBehaviorRisk(behaviorData []BehaviorDataPoint) float64 {
 		risk += 30
 	}
 
-	if anomalyCount > len(behaviorData)*0.3 {
+	if anomalyCount > int(float64(len(behaviorData))*0.3) {
 		risk += 40
 	}
 

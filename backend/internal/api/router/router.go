@@ -425,7 +425,6 @@ func SetupRouter() *gin.Engine {
 			admin.GET("/backup-config", backupHandler.GetBackupConfig)
 
 			// 批量操作
-			batchHandler := handler.NewBatchOperationHandler()
 			admin.GET("/batch-operations", handler.ListBatchOperations)
 			admin.GET("/batch-operations/:id", handler.GetBatchOperation)
 			admin.GET("/batch-operations/:id/progress", handler.GetBatchOperationProgress)

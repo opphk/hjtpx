@@ -15,11 +15,18 @@
     "report": "playwright show-report",
     "install:browsers": "playwright install --with-deps"
   },
-  "keywords": ["e2e", "playwright", "testing"],
+  "keywords": [
+    "e2e",
+    "playwright",
+    "testing"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.8.0"
+  },
+  "dependencies": {
+    "playwright": "^1.60.0"
   }
 }

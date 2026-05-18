@@ -352,14 +352,20 @@ type TrustedDevice struct {
 // SeamlessConfig 无感验证配置
 type SeamlessConfig struct {
 	gorm.Model
-	ApplicationID      uint        `gorm:"not null;uniqueIndex:idx_seamless_config_app" json:"application_id"`
-	Enabled            bool        `gorm:"default:true" json:"enabled"`
-	AutoTrustAfter     int         `gorm:"default:3" json:"auto_trust_after"`     // 连续验证成功次数后自动信任
-	TrustDurationDays  int         `gorm:"default:30" json:"trust_duration_days"` // 信任设备有效期(天)
-	ChallengeThreshold float64     `gorm:"default:30" json:"challenge_threshold"` // 风险分高于此值需要挑战
-	BlockThreshold     float64     `gorm:"default:70" json:"block_threshold"`     // 风险分高于此值直接阻止
-	WhitelistEnabled   bool        `gorm:"default:false" json:"whitelist_enabled"`
-	Application        Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
+	ApplicationID              uint        `gorm:"not null;uniqueIndex:idx_seamless_config_app" json:"application_id"`
+	Enabled                    bool        `gorm:"default:true" json:"enabled"`
+	AutoTrustAfter             int         `gorm:"default:3" json:"auto_trust_after"`     // 连续验证成功次数后自动信任
+	TrustDurationDays          int         `gorm:"default:30" json:"trust_duration_days"` // 信任设备有效期(天)
+	TrustExpiryDays            int         `gorm:"default:30" json:"trust_expiry_days"`  // 兼容旧字段
+	ChallengeThreshold         float64     `gorm:"default:30" json:"challenge_threshold"` // 风险分高于此值需要挑战
+	BlockThreshold             float64     `gorm:"default:70" json:"block_threshold"`     // 风险分高于此值直接阻止
+	WhitelistEnabled           bool        `gorm:"default:false" json:"whitelist_enabled"`
+	RequireBehaviorAnalysis    bool        `gorm:"default:true" json:"require_behavior_analysis"`
+	ForceVerificationThreshold float64     `gorm:"default:50" json:"force_verification_threshold"`
+	EnableAutoTrust            bool        `gorm:"default:true" json:"enable_auto_trust"`
+	MinTrustLevel              float64     `gorm:"default:70" json:"min_trust_level"`
+	MaxDevicePerUser           int         `gorm:"default:5" json:"max_device_per_user"`
+	Application                Application `gorm:"foreignKey:ApplicationID" json:"application,omitempty"`
 }
 
 type TraceRecord struct {

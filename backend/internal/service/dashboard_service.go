@@ -424,6 +424,8 @@ func (s *DashboardService) GetHeatmapData(startDate, endDate string) (*HeatmapDa
 		end = now.Add(24 * time.Hour)
 	}
 
+	_ = end // end used for readability
+
 	for d := 0; d < 7; d++ {
 		data.Values[d] = make([]int64, 24)
 		for h := 0; h < 24; h++ {
@@ -447,19 +449,19 @@ func (s *DashboardService) GetHeatmapData(startDate, endDate string) (*HeatmapDa
 	return data, nil
 }
 
-type RadarData struct {
-	Indicators []RadarIndicator `json:"indicators"`
-	Values     []float64        `json:"values"`
+type DashboardRadarData struct {
+	Indicators []DashboardRadarIndicator `json:"indicators"`
+	Values     []float64                `json:"values"`
 }
 
-type RadarIndicator struct {
-	Name  string  `json:"name"`
-	Max   float64 `json:"max"`
+type DashboardRadarIndicator struct {
+	Name string  `json:"name"`
+	Max  float64 `json:"max"`
 }
 
-func (s *DashboardService) GetRadarData() (*RadarData, error) {
-	data := &RadarData{
-		Indicators: []RadarIndicator{
+func (s *DashboardService) GetRadarData() (*DashboardRadarData, error) {
+	data := &DashboardRadarData{
+		Indicators: []DashboardRadarIndicator{
 			{Name: "安全性", Max: 100},
 			{Name: "响应速度", Max: 100},
 			{Name: "用户体验", Max: 100},
@@ -507,32 +509,32 @@ func (s *DashboardService) GetRadarData() (*RadarData, error) {
 		Count(&recentCount)
 
 	data.Values[0] = 100 - avgRiskScore
-	data.Values[1] = max(0, min(100, 100-float64(avgDuration)/5))
-	data.Values[2] = min(100, float64(successCount)*100/max(1, float64(totalCount)))
-	data.Values[3] = min(100, float64(successCount)*100/max(1, float64(totalCount)))
-	data.Values[4] = min(100, float64(recentCount)*100/max(1, 10000))
+	data.Values[1] = dashboardMin(100, 100-float64(avgDuration)/5)
+	data.Values[2] = dashboardMin(100, float64(successCount)*100/dashboardMax(1, float64(totalCount)))
+	data.Values[3] = dashboardMin(100, float64(successCount)*100/dashboardMax(1, float64(totalCount)))
+	data.Values[4] = dashboardMin(100, float64(recentCount)*100/dashboardMax(1, 10000))
 
 	return data, nil
 }
 
-type SankeyNode struct {
+type DashboardSankeyNode struct {
 	Name string `json:"name"`
 }
 
-type SankeyLink struct {
+type DashboardSankeyLink struct {
 	Source int `json:"source"`
 	Target int `json:"target"`
 	Value  int `json:"value"`
 }
 
-type SankeyData struct {
-	Nodes []SankeyNode `json:"nodes"`
-	Links []SankeyLink `json:"links"`
+type DashboardSankeyData struct {
+	Nodes []DashboardSankeyNode  `json:"nodes"`
+	Links []DashboardSankeyLink `json:"links"`
 }
 
-func (s *DashboardService) GetSankeyData() (*SankeyData, error) {
-	data := &SankeyData{
-		Nodes: []SankeyNode{
+func (s *DashboardService) GetSankeyData() (*DashboardSankeyData, error) {
+	data := &DashboardSankeyData{
+		Nodes: []DashboardSankeyNode{
 			{Name: "总请求"},
 			{Name: "滑动验证"},
 			{Name: "点选验证"},
@@ -542,7 +544,7 @@ func (s *DashboardService) GetSankeyData() (*SankeyData, error) {
 			{Name: "失败"},
 			{Name: "拦截"},
 		},
-		Links: make([]SankeyLink, 0),
+		Links: make([]DashboardSankeyLink, 0),
 	}
 
 	var captchaTypeCounts = make(map[string]int64)
@@ -573,10 +575,11 @@ func (s *DashboardService) GetSankeyData() (*SankeyData, error) {
 		"failed":  6,
 		"blocked": 7,
 	}
+	_ = statusIndex
 
 	for captchaType, count := range captchaTypeCounts {
 		if idx, ok := typeIndex[captchaType]; ok {
-			data.Links = append(data.Links, SankeyLink{
+			data.Links = append(data.Links, DashboardSankeyLink{
 				Source: 0,
 				Target: idx,
 				Value:  int(count),
@@ -584,7 +587,7 @@ func (s *DashboardService) GetSankeyData() (*SankeyData, error) {
 		}
 	}
 
-	for captchaType, typeCount := range captchaTypeCounts {
+	for captchaType := range captchaTypeCounts {
 		if typeIdx, ok := typeIndex[captchaType]; ok {
 			var successCount, failedCount, blockedCount int64
 
@@ -599,21 +602,21 @@ func (s *DashboardService) GetSankeyData() (*SankeyData, error) {
 				Count(&blockedCount)
 
 			if successCount > 0 {
-				data.Links = append(data.Links, SankeyLink{
+				data.Links = append(data.Links, DashboardSankeyLink{
 					Source: typeIdx,
 					Target: 5,
 					Value:  int(successCount),
 				})
 			}
 			if failedCount > 0 {
-				data.Links = append(data.Links, SankeyLink{
+				data.Links = append(data.Links, DashboardSankeyLink{
 					Source: typeIdx,
 					Target: 6,
 					Value:  int(failedCount),
 				})
 			}
 			if blockedCount > 0 {
-				data.Links = append(data.Links, SankeyLink{
+				data.Links = append(data.Links, DashboardSankeyLink{
 					Source: typeIdx,
 					Target: 7,
 					Value:  int(blockedCount),
@@ -623,7 +626,7 @@ func (s *DashboardService) GetSankeyData() (*SankeyData, error) {
 	}
 
 	if len(data.Links) == 0 {
-		data.Links = []SankeyLink{
+		data.Links = []DashboardSankeyLink{
 			{Source: 0, Target: 1, Value: 1000},
 			{Source: 0, Target: 2, Value: 500},
 			{Source: 0, Target: 3, Value: 300},
@@ -727,6 +730,7 @@ func (s *DashboardService) GetAdvancedAnalytics(period string) (*AdvancedAnalyti
 	case "week":
 		weekDays := []time.Weekday{time.Sunday, time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday, time.Saturday}
 		dayNames := []string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}
+		_ = dayNames // used for future localization
 
 		for i, weekday := range weekDays {
 			daysFromSunday := int(weekday)
@@ -783,6 +787,34 @@ func (s *DashboardService) GetAdvancedAnalytics(period string) (*AdvancedAnalyti
 	}
 
 	return analytics, nil
+}
+
+func dashboardMin(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func dashboardMax(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func dashboardIntMax(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func dashboardIntMin(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 type CustomRangeData struct {
@@ -881,18 +913,4 @@ func (s *DashboardService) GetCustomRangeData(startDate, endDate string) (*Custo
 	}
 
 	return data, nil
-}
-
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
 }

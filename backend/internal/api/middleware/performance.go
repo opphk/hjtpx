@@ -27,7 +27,7 @@ func (w *responseWriter) WriteString(s string) (int, error) {
 	return w.ResponseWriter.WriteString(s)
 }
 
-type PerformanceStats struct {
+type MiddlewarePerformanceStats struct {
 	TotalRequests int64
 	TotalDuration int64
 	SlowRequests  int64
@@ -35,7 +35,7 @@ type PerformanceStats struct {
 	mu            sync.RWMutex
 }
 
-var stats = &PerformanceStats{
+var stats = &MiddlewarePerformanceStats{
 	RequestCount: make(map[string]int64),
 }
 
@@ -53,7 +53,7 @@ func PerformanceMonitoring() gin.HandlerFunc {
 	}
 }
 
-func (ps *PerformanceStats) recordRequest(path string, duration time.Duration) {
+func (ps *MiddlewarePerformanceStats) recordRequest(path string, duration time.Duration) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -66,7 +66,7 @@ func (ps *PerformanceStats) recordRequest(path string, duration time.Duration) {
 	}
 }
 
-func GetPerformanceStats() map[string]interface{} {
+func GetMiddlewarePerformanceStats() map[string]interface{} {
 	stats.mu.RLock()
 	defer stats.mu.RUnlock()
 
