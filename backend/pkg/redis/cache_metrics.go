@@ -565,7 +565,7 @@ func (me *MetricsExporter) ExportToJSON() (string, error) {
 
 func (me *MetricsExporter) GetAlertSummary() map[string]interface{} {
 	metrics := me.collector.GetDetailedMetrics()
-	alerts := GetGlobalAlertManager().GetAlerts()
+	alerts := GetCacheMonitoringCollector().GetAlerts()
 
 	summary := make(map[string]interface{})
 	summary["total_alerts"] = len(alerts)
@@ -603,7 +603,7 @@ func (cmc *CacheMetricsCollector) TakeSnapshot() *CacheMetricsSnapshot {
 	return &CacheMetricsSnapshot{
 		Timestamp: time.Now(),
 		Metrics:   cmc.GetDetailedMetrics(),
-		Alerts:   GetGlobalAlertManager().GetAlerts(),
+		Alerts:   GetCacheMonitoringCollector().GetAlerts(),
 	}
 }
 
@@ -663,86 +663,9 @@ func (ma *MetricsAggregator) GetAverageLatency() time.Duration {
 	return time.Duration(sum / int64(len(ma.snapshots)))
 }
 
-type CacheAlert struct {
-	Type      string
-	Message   string
-	Timestamp time.Time
-	Severity  string
-}
-
-type AlertManager struct {
-	alerts    []CacheAlert
-	mu        sync.RWMutex
-	maxAlerts int
-}
-
-func NewAlertManager(maxAlerts int) *AlertManager {
-	if maxAlerts <= 0 {
-		maxAlerts = 100
-	}
-	return &AlertManager{
-		maxAlerts: maxAlerts,
-	}
-}
-
-func (am *AlertManager) AddAlert(alertType, message, severity string) {
-	am.mu.Lock()
-	defer am.mu.Unlock()
-
-	alert := CacheAlert{
-		Type:      alertType,
-		Message:   message,
-		Timestamp: time.Now(),
-		Severity:  severity,
-	}
-
-	am.alerts = append(am.alerts, alert)
-
-	if len(am.alerts) > am.maxAlerts {
-		am.alerts = am.alerts[len(am.alerts)-am.maxAlerts:]
-	}
-}
-
-func (am *AlertManager) GetAlerts() []CacheAlert {
-	am.mu.RLock()
-	defer am.mu.RUnlock()
-
-	alerts := make([]CacheAlert, len(am.alerts))
-	copy(alerts, am.alerts)
-	return alerts
-}
-
-func (am *AlertManager) CheckHitRate(metrics *DetailedMetrics, threshold float64) {
-	if metrics.HitRate < threshold {
-		am.AddAlert(
-			"low_hit_rate",
-			"Cache hit rate is below threshold",
-			"warning",
-		)
-	}
-}
-
-func (am *AlertManager) CheckErrorRate(metrics *DetailedMetrics, threshold float64) {
-	total := metrics.TotalRequests
-	if total == 0 {
-		return
-	}
-
-	errorRate := float64(metrics.Errors) / float64(total) * 100
-	if errorRate > threshold {
-		am.AddAlert(
-			"high_error_rate",
-			"Cache error rate is above threshold",
-			"error",
-		)
-	}
-}
-
 var (
 	globalMetricsCollector     *CacheMetricsCollector
 	globalMetricsCollectorOnce sync.Once
-	globalAlertManager         *AlertManager
-	globalAlertManagerOnce     sync.Once
 )
 
 func GetGlobalMetricsCollector() *CacheMetricsCollector {
@@ -750,11 +673,4 @@ func GetGlobalMetricsCollector() *CacheMetricsCollector {
 		globalMetricsCollector = NewCacheMetricsCollector()
 	})
 	return globalMetricsCollector
-}
-
-func GetGlobalAlertManager() *AlertManager {
-	globalAlertManagerOnce.Do(func() {
-		globalAlertManager = NewAlertManager(100)
-	})
-	return globalAlertManager
 }

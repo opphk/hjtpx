@@ -46,6 +46,8 @@ func SetupRouter() *gin.Engine {
 
 	cfg := config.GetConfig()
 	backupHandler := handler.GetBackupHandler(cfg)
+	cacheHandler := handler.NewCacheMetricsHandler()
+	dbHandler := handler.NewDatabaseMetricsHandler()
 
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -187,12 +189,49 @@ func SetupRouter() *gin.Engine {
 
 		// 白标主题 API
 		adminRouter.GET("/api/whitelabel", handler.GetWhitelabelConfig)
-		adminRouter.PUT("/api/whitelabel", handler.UpdateWhitelabelConfig)
-		adminRouter.GET("/api/whitelabel/css", handler.GetWhitelabelCSS)
-		adminRouter.POST("/api/whitelabel/logo/:type", handler.UploadLogo)
-		adminRouter.DELETE("/api/whitelabel/logo/:type", handler.DeleteLogo)
-		adminRouter.POST("/api/whitelabel/reset", handler.ResetWhitelabelConfig)
-	}
+	adminRouter.PUT("/api/whitelabel", handler.UpdateWhitelabelConfig)
+	adminRouter.GET("/api/whitelabel/css", handler.GetWhitelabelCSS)
+	adminRouter.POST("/api/whitelabel/logo/:type", handler.UploadLogo)
+	adminRouter.DELETE("/api/whitelabel/logo/:type", handler.DeleteLogo)
+	adminRouter.POST("/api/whitelabel/reset", handler.ResetWhitelabelConfig)
+	
+	// 仪表盘扩展功能
+	adminRouter.GET("/api/dashboard/config", handler.GetDashboardConfig)
+	adminRouter.PUT("/api/dashboard/config", handler.SaveDashboardConfig)
+	adminRouter.PUT("/api/dashboard/theme", handler.UpdateDashboardTheme)
+	adminRouter.GET("/api/dashboard/widgets", handler.GetDashboardWidgets)
+	adminRouter.PUT("/api/dashboard/widgets", handler.SaveDashboardWidgets)
+	
+	// 通知功能
+	adminRouter.GET("/api/notifications", handler.GetNotifications)
+	adminRouter.PUT("/api/notifications/:id/read", handler.MarkNotificationRead)
+	adminRouter.PUT("/api/notifications/read-all", handler.MarkAllNotificationsRead)
+	adminRouter.DELETE("/api/notifications/:id", handler.DeleteNotification)
+	adminRouter.GET("/api/notifications/unread-count", handler.GetUnreadNotificationCount)
+	adminRouter.POST("/api/notifications/broadcast", handler.BroadcastNotification)
+	
+	// 风控规则引擎 - 暂时注释
+	// adminRouter.POST("/api/risk-templates/init", handler.InitializeTemplates)
+	// adminRouter.GET("/api/risk-templates", handler.GetRuleTemplates)
+	// adminRouter.GET("/api/risk-templates/:id", handler.GetRuleTemplate)
+	// adminRouter.POST("/api/risk-templates", handler.CreateRuleTemplate)
+	// adminRouter.PUT("/api/risk-templates/:id", handler.UpdateRuleTemplate)
+	// adminRouter.DELETE("/api/risk-templates/:id", handler.DeleteRuleTemplate)
+	// adminRouter.POST("/api/risk-templates/apply", handler.ApplyTemplate)
+	
+	// adminRouter.GET("/api/risk-rules", handler.GetRiskRules)
+	// adminRouter.GET("/api/risk-rules/:id", handler.GetRiskRule)
+	// adminRouter.POST("/api/risk-rules", handler.CreateRiskRule)
+	// adminRouter.PUT("/api/risk-rules/:id", handler.UpdateRiskRule)
+	// adminRouter.DELETE("/api/risk-rules/:id", handler.DeleteRiskRule)
+	// adminRouter.PUT("/api/risk-rules/:id/toggle", handler.ToggleRiskRule)
+	// adminRouter.POST("/api/risk-rules/:id/evaluate", handler.EvaluateRule)
+	
+	// adminRouter.GET("/api/risk-rules/:id/trigger-history", handler.GetRuleTriggerHistories)
+	// adminRouter.GET("/api/risk-rules/:id/performance", handler.GetRulePerformance)
+	// adminRouter.GET("/api/risk-rules/performance-overview", handler.GetAllRulesPerformance)
+	// adminRouter.GET("/api/risk-rules/audit-logs", handler.GetRuleAuditLogs)
+}
 
 	api := r.Group("/api/v1")
 	{
@@ -222,6 +261,9 @@ func SetupRouter() *gin.Engine {
 			captcha.POST("/3d/verify", handler.VerifyThreeDCaptcha)
 			captcha.GET("/3d/status/:sessionID", handler.GetThreeDCaptchaStatus)
 			captcha.GET("/3d/check/:sessionID", handler.CheckThreeDCaptchaValid)
+			
+			// 多因素滑块验证
+			captcha.POST("/verify-multi-factor", handler.VerifySliderWithMultiFactor)
 		}
 
 		// 高级限流 API
@@ -395,6 +437,17 @@ func SetupRouter() *gin.Engine {
 			// 行为分析
 			admin.GET("/behavior-analytics", handler.GetBehaviorAnalytics)
 
+			// 深度学习轨迹分析模块
+			admin.GET("/model-performance", handler.GetModelPerformanceReport)
+			admin.POST("/model-update/queue", handler.QueueModelUpdate)
+			admin.POST("/model-update/:action", handler.ToggleOnlineUpdate)
+			admin.POST("/trajectory-visualization", handler.GetTrajectoryVisualization)
+			admin.GET("/slider-difficulty", handler.GetCurrentDifficulty)
+			admin.POST("/slider-difficulty/adjust", handler.AdjustDifficulty)
+			admin.GET("/security-assessment", handler.GetSecurityReport)
+			admin.POST("/security-assessment", handler.PerformSecurityAssessment)
+			admin.POST("/record-prediction", handler.RecordModelPrediction)
+
 			// 备份管理
 			admin.GET("/backups", backupHandler.ListBackups)
 			admin.POST("/backups", backupHandler.CreateBackup)
@@ -404,6 +457,29 @@ func SetupRouter() *gin.Engine {
 			admin.POST("/backups/:id/verify", backupHandler.VerifyBackup)
 			admin.POST("/backups/cleanup", backupHandler.CleanupOldBackups)
 			admin.GET("/backup-config", backupHandler.GetBackupConfig)
+
+			// 缓存性能监控与优化
+			admin.GET("/cache/health", cacheHandler.GetCacheHealth)
+			admin.GET("/cache/metrics", cacheHandler.GetCacheDetailedMetrics)
+			admin.GET("/cache/hot-keys", cacheHandler.GetCacheHotKeys)
+			admin.GET("/cache/latency", cacheHandler.GetCacheLatencyDistribution)
+			admin.GET("/cache/memory-trend", cacheHandler.GetCacheMemoryTrend)
+			admin.GET("/cache/alerts", cacheHandler.GetCacheAlerts)
+			admin.POST("/cache/alerts/acknowledge", cacheHandler.AcknowledgeCacheAlert)
+			admin.POST("/cache/alerts/clear", cacheHandler.ClearCacheAlerts)
+			admin.POST("/cache/metrics/reset", cacheHandler.ResetCacheMetrics)
+			admin.POST("/cache/warmup", cacheHandler.TriggerCacheWarmup)
+			admin.GET("/cache/warmup-status", cacheHandler.GetCacheWarmupStatus)
+			admin.GET("/cache/consistency-status", cacheHandler.GetCacheConsistencyStatus)
+
+			// 数据库性能监控与优化
+			admin.GET("/database/health", dbHandler.GetDatabaseHealth)
+			admin.GET("/database/slow-queries", dbHandler.GetSlowQueries)
+			admin.GET("/database/top-queries", dbHandler.GetTopQueries)
+			admin.GET("/database/query-distribution", dbHandler.GetQueryDistribution)
+			admin.GET("/database/performance-report", dbHandler.GeneratePerformanceReport)
+			admin.GET("/database/optimization-suggestions", dbHandler.GetOptimizationSuggestions)
+			admin.POST("/database/clear-metrics", dbHandler.ClearPerformanceMetrics)
 
 			arHandler := handler.GetAdvancedRateLimitHandler()
 			arHandler.RegisterRoutes(admin)

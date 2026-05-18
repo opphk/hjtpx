@@ -547,3 +547,155 @@ type UserDataSnapshot struct {
 func (UserDataSnapshot) TableName() string {
 	return "user_data_snapshots"
 }
+
+// DashboardConfig 仪表盘配置
+type DashboardConfig struct {
+	gorm.Model
+	AdminID      uint   `gorm:"not null;index:idx_dashboard_admin" json:"admin_id"`
+	LayoutConfig string `gorm:"type:text" json:"layout_config"` // JSON格式的布局配置
+	Theme        string `gorm:"size:50;default:default" json:"theme"`
+	IsActive     bool   `gorm:"default:true" json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (DashboardConfig) TableName() string {
+	return "dashboard_configs"
+}
+
+// DashboardWidget 仪表盘组件配置
+type DashboardWidget struct {
+	gorm.Model
+	DashboardConfigID uint   `gorm:"not null;index:idx_widget_dashboard" json:"dashboard_config_id"`
+	WidgetType        string `gorm:"size:50;not null" json:"widget_type"` // chart, stat, list, etc.
+	Title             string `gorm:"size:255" json:"title"`
+	PositionX         int    `gorm:"default:0" json:"position_x"`
+	PositionY         int    `gorm:"default:0" json:"position_y"`
+	Width             int    `gorm:"default:4" json:"width"`
+	Height            int    `gorm:"default:2" json:"height"`
+	Config            string `gorm:"type:text" json:"config"` // JSON格式的组件配置
+	IsVisible         bool   `gorm:"default:true" json:"is_visible"`
+	DashboardConfig   *DashboardConfig `gorm:"foreignKey:DashboardConfigID" json:"dashboard_config,omitempty"`
+}
+
+func (DashboardWidget) TableName() string {
+	return "dashboard_widgets"
+}
+
+// Notification 通知记录
+type Notification struct {
+	gorm.Model
+	AdminID    uint   `gorm:"index:idx_notification_admin" json:"admin_id"`
+	Title      string `gorm:"size:255;not null" json:"title"`
+	Content    string `gorm:"type:text" json:"content"`
+	Type       string `gorm:"size:50;default:info" json:"type"` // info, warning, error, success
+	IsRead     bool   `gorm:"default:false;index:idx_notification_read" json:"is_read"`
+	ReadAt     *time.Time `json:"read_at,omitempty"`
+	Link       string `gorm:"size:500" json:"link,omitempty"`
+	Meta       string `gorm:"type:text" json:"meta,omitempty"` // 附加信息JSON
+}
+
+func (Notification) TableName() string {
+	return "notifications"
+}
+
+// RiskRuleTemplate 风控规则模板
+type RiskRuleTemplate struct {
+	gorm.Model
+	Name          string `gorm:"size:255;not null;index:idx_template_name" json:"name"`
+	Description   string `gorm:"type:text" json:"description"`
+	Category      string `gorm:"size:100;index:idx_template_category" json:"category"` // rate_limit, behavior, device, etc.
+	RuleType      string `gorm:"size:50;not null" json:"rule_type"`
+	Condition     string `gorm:"type:text;not null" json:"condition"`
+	Action        string `gorm:"size:50;not null" json:"action"`
+	Params        string `gorm:"type:text" json:"params,omitempty"` // 默认参数JSON
+	Severity      string `gorm:"size:20;default:medium" json:"severity"`
+	IsActive      bool   `gorm:"default:true" json:"is_active"`
+	IsSystem      bool   `gorm:"default:false" json:"is_system"` // 是否为系统模板
+	CreatedBy     uint   `json:"created_by"`
+}
+
+func (RiskRuleTemplate) TableName() string {
+	return "risk_rule_templates"
+}
+
+// RiskRule 风控规则（增强版）
+type RiskRule struct {
+	gorm.Model
+	Name          string `gorm:"size:255;not null;index:idx_risk_rule_name" json:"name"`
+	Description   string `gorm:"type:text" json:"description"`
+	TemplateID    *uint  `gorm:"index:idx_risk_rule_template" json:"template_id,omitempty"`
+	RuleType      string `gorm:"size:50;not null;index:idx_risk_rule_type" json:"rule_type"`
+	Condition     string `gorm:"type:text;not null" json:"condition"`
+	Action        string `gorm:"size:50;not null" json:"action"`
+	Params        string `gorm:"type:text" json:"params,omitempty"` // 规则参数JSON
+	Severity      string `gorm:"size:20;default:medium;index:idx_risk_rule_severity" json:"severity"`
+	Priority      int    `gorm:"default:100;index:idx_risk_rule_priority" json:"priority"`
+	IsEnabled     bool   `gorm:"default:true;index:idx_risk_rule_enabled" json:"is_enabled"`
+	ApplicationIDs string `gorm:"type:text" json:"application_ids,omitempty"` // 适用应用ID列表
+	CreatedBy     uint   `json:"created_by"`
+	Template      *RiskRuleTemplate `gorm:"foreignKey:TemplateID" json:"template,omitempty"`
+}
+
+func (RiskRule) TableName() string {
+	return "risk_rules"
+}
+
+// RiskRuleTriggerHistory 规则触发历史
+type RiskRuleTriggerHistory struct {
+	gorm.Model
+	RuleID        uint      `gorm:"not null;index:idx_rule_trigger_rule;index:idx_rule_trigger_rule_time" json:"rule_id"`
+	RuleName      string    `gorm:"size:255" json:"rule_name"`
+	SessionID     string    `gorm:"size:100;index:idx_rule_trigger_session" json:"session_id"`
+	ApplicationID *uint     `gorm:"index:idx_rule_trigger_app" json:"application_id,omitempty"`
+	UserID        *uint     `gorm:"index:idx_rule_trigger_user" json:"user_id,omitempty"`
+	IPAddress     string    `gorm:"size:50" json:"ip_address"`
+	InputData     string    `gorm:"type:text" json:"input_data,omitempty"` // 触发时的输入数据JSON
+	TriggerResult bool      `gorm:"default:false" json:"trigger_result"` // 是否命中
+	ActionTaken   string    `gorm:"size:50" json:"action_taken"` // 实际执行的动作
+	ExecutionTime int64     `gorm:"comment:'执行耗时(毫秒)'" json:"execution_time"`
+	CreatedAt     time.Time `gorm:"index:idx_rule_trigger_time" json:"created_at"`
+	Rule          *RiskRule `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+}
+
+func (RiskRuleTriggerHistory) TableName() string {
+	return "risk_rule_trigger_histories"
+}
+
+// RiskRulePerformance 规则性能分析记录
+type RiskRulePerformance struct {
+	gorm.Model
+	RuleID            uint      `gorm:"not null;uniqueIndex:idx_rule_perf_rule_date" json:"rule_id"`
+	Date              string    `gorm:"size:10;uniqueIndex:idx_rule_perf_rule_date" json:"date"` // YYYY-MM-DD
+	TriggerCount      int       `gorm:"default:0" json:"trigger_count"`       // 触发次数
+	HitCount          int       `gorm:"default:0" json:"hit_count"`           // 命中次数
+	AvgExecutionTime  float64   `gorm:"default:0" json:"avg_execution_time"`  // 平均执行时间
+	MaxExecutionTime  float64   `gorm:"default:0" json:"max_execution_time"`  // 最大执行时间
+	MinExecutionTime  float64   `gorm:"default:0" json:"min_execution_time"`  // 最小执行时间
+	ErrorCount        int       `gorm:"default:0" json:"error_count"`         // 错误次数
+	FalsePositiveRate float64   `gorm:"default:0" json:"false_positive_rate"` // 误报率（需要人工标注）
+	UpdatedAt         time.Time `json:"updated_at"`
+	Rule              *RiskRule `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+}
+
+func (RiskRulePerformance) TableName() string {
+	return "risk_rule_performances"
+}
+
+// RiskRuleAuditLog 规则审计日志
+type RiskRuleAuditLog struct {
+	gorm.Model
+	RuleID        uint      `gorm:"not null;index:idx_rule_audit_rule" json:"rule_id"`
+	RuleName      string    `gorm:"size:255" json:"rule_name"`
+	Action        string    `gorm:"size:50;not null;index:idx_rule_audit_action" json:"action"` // create, update, delete, enable, disable
+	OldValue      string    `gorm:"type:text" json:"old_value,omitempty"`
+	NewValue      string    `gorm:"type:text" json:"new_value,omitempty"`
+	ChangeSummary string    `gorm:"type:text" json:"change_summary"`
+	AdminID       uint      `gorm:"not null;index:idx_rule_audit_admin" json:"admin_id"`
+	CreatedAt     time.Time `gorm:"index:idx_rule_audit_time" json:"created_at"`
+	Rule          *RiskRule `gorm:"foreignKey:RuleID" json:"rule,omitempty"`
+}
+
+func (RiskRuleAuditLog) TableName() string {
+	return "risk_rule_audit_logs"
+}

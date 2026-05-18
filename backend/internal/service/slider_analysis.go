@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"sync"
+	"time"
 )
 
 type SliderTrajectory struct {
@@ -2168,6 +2170,359 @@ func ParseSliderTrajectory(data []byte) ([]SliderPoint, error) {
 		return nil, err
 	}
 	return points, nil
+}
+
+// VerificationFactor - 验证因素接口
+type VerificationFactor interface {
+	Name() string
+	Weight() float64
+	Evaluate(trajectory []SliderPoint, features *SliderFeatures, result *SliderAnalysisResult) (float64, error)
+}
+
+// TimingFactor - 时间因素验证
+type TimingFactor struct{}
+
+func (f *TimingFactor) Name() string { return "timing" }
+func (f *TimingFactor) Weight() float64 { return 0.25 }
+func (f *TimingFactor) Evaluate(trajectory []SliderPoint, features *SliderFeatures, result *SliderAnalysisResult) (float64, error) {
+	if features == nil {
+		return 0.5, nil
+	}
+	totalDuration := float64(features.TotalDuration)
+	if totalDuration < 200 {
+		return 0.1, nil
+	} else if totalDuration < 500 {
+		return 0.4, nil
+	} else if totalDuration > 5000 {
+		return 0.3, nil
+	}
+	return 0.8, nil
+}
+
+// PathSmoothnessFactor - 路径平滑度因素
+type PathSmoothnessFactor struct{}
+
+func (f *PathSmoothnessFactor) Name() string { return "path_smoothness" }
+func (f *PathSmoothnessFactor) Weight() float64 { return 0.2 }
+func (f *PathSmoothnessFactor) Evaluate(trajectory []SliderPoint, features *SliderFeatures, result *SliderAnalysisResult) (float64, error) {
+	if features == nil {
+		return 0.5, nil
+	}
+	efficiency := features.PathEfficiency
+	if efficiency > 0.98 {
+		return 0.2, nil
+	} else if efficiency > 0.9 {
+		return 0.5, nil
+	} else if efficiency > 0.7 {
+		return 0.8, nil
+	}
+	return 0.6, nil
+}
+
+// VelocityFactor - 速度因素
+type VelocityFactor struct{}
+
+func (f *VelocityFactor) Name() string { return "velocity" }
+func (f *VelocityFactor) Weight() float64 { return 0.2 }
+func (f *VelocityFactor) Evaluate(trajectory []SliderPoint, features *SliderFeatures, result *SliderAnalysisResult) (float64, error) {
+	if features == nil {
+		return 0.5, nil
+	}
+	avgVelocity := features.AverageSpeed
+	if avgVelocity > 100 {
+		return 0.1, nil
+	} else if avgVelocity > 50 {
+		return 0.4, nil
+	} else if avgVelocity > 5 {
+		return 0.8, nil
+	}
+	return 0.5, nil
+}
+
+// AccuracyFactor - 准确性因素
+type AccuracyFactor struct{}
+
+func (f *AccuracyFactor) Name() string { return "accuracy" }
+func (f *AccuracyFactor) Weight() float64 { return 0.2 }
+func (f *AccuracyFactor) Evaluate(trajectory []SliderPoint, features *SliderFeatures, result *SliderAnalysisResult) (float64, error) {
+	return 0.7, nil // 模拟准确率得分
+}
+
+// HesitationFactor - 犹豫因素
+type HesitationFactor struct{}
+
+func (f *HesitationFactor) Name() string { return "hesitation" }
+func (f *HesitationFactor) Weight() float64 { return 0.15 }
+func (f *HesitationFactor) Evaluate(trajectory []SliderPoint, features *SliderFeatures, result *SliderAnalysisResult) (float64, error) {
+	if features == nil {
+		return 0.5, nil
+	}
+	if features.PauseCount > 5 {
+		return 0.3, nil
+	} else if features.PauseCount > 2 {
+		return 0.5, nil
+	} else if features.PauseCount > 0 {
+		return 0.7, nil
+	}
+	return 0.8, nil
+}
+
+// MultiFactorVerifier - 多因素验证器
+type MultiFactorVerifier struct {
+	factors []VerificationFactor
+}
+
+func NewMultiFactorVerifier() *MultiFactorVerifier {
+	return &MultiFactorVerifier{
+		factors: []VerificationFactor{
+			&TimingFactor{},
+			&PathSmoothnessFactor{},
+			&VelocityFactor{},
+			&AccuracyFactor{},
+			&HesitationFactor{},
+		},
+	}
+}
+
+func (m *MultiFactorVerifier) VerifyMultiFactor(
+	trajectory []SliderPoint,
+	features *SliderFeatures,
+	result *SliderAnalysisResult,
+) (float64, map[string]float64, error) {
+	scores := make(map[string]float64)
+	totalWeight := 0.0
+	weightedScore := 0.0
+
+	for _, factor := range m.factors {
+		score, err := factor.Evaluate(trajectory, features, result)
+		if err != nil {
+			continue
+		}
+		scores[factor.Name()] = score
+		weightedScore += score * factor.Weight()
+		totalWeight += factor.Weight()
+	}
+
+	if totalWeight > 0 {
+		weightedScore /= totalWeight
+	}
+
+	return weightedScore, scores, nil
+}
+
+// DifficultyEntry - 难度历史记录
+type DifficultyEntry struct {
+	Timestamp   int64
+	Difficulty  int
+	Success     bool
+	TimeSpentMs int64
+}
+
+// SlidingDifficultyAdjuster - 滑动难度调节器
+type SlidingDifficultyAdjuster struct {
+	currentDifficulty int
+	minDifficulty     int
+	maxDifficulty     int
+	history           []DifficultyEntry
+	mu                sync.RWMutex
+}
+
+func NewSlidingDifficultyAdjuster() *SlidingDifficultyAdjuster {
+	return &SlidingDifficultyAdjuster{
+		currentDifficulty: 3,
+		minDifficulty:     1,
+		maxDifficulty:     5,
+		history:           make([]DifficultyEntry, 0, 20),
+	}
+}
+
+func (s *SlidingDifficultyAdjuster) AdjustDifficulty(success bool, timeSpentMs int64) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.history = append(s.history, DifficultyEntry{
+		Timestamp:   time.Now().Unix(),
+		Difficulty:  s.currentDifficulty,
+		Success:     success,
+		TimeSpentMs: timeSpentMs,
+	})
+
+	if len(s.history) > 20 {
+		s.history = s.history[len(s.history)-20:]
+	}
+
+	recentSuccessRate := s.calculateRecentSuccessRate()
+
+	if recentSuccessRate > 0.8 {
+		if s.currentDifficulty < s.maxDifficulty {
+			s.currentDifficulty++
+		}
+	} else if recentSuccessRate < 0.3 {
+		if s.currentDifficulty > s.minDifficulty {
+			s.currentDifficulty--
+		}
+	}
+
+	return s.currentDifficulty
+}
+
+func (s *SlidingDifficultyAdjuster) calculateRecentSuccessRate() float64 {
+	if len(s.history) == 0 {
+		return 0.5
+	}
+	successCount := 0
+	for _, h := range s.history {
+		if h.Success {
+			successCount++
+		}
+	}
+	return float64(successCount) / float64(len(s.history))
+}
+
+func (s *SlidingDifficultyAdjuster) GetDifficultyConfig() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return map[string]interface{}{
+		"current_difficulty": s.currentDifficulty,
+		"min_difficulty":     s.minDifficulty,
+		"max_difficulty":     s.maxDifficulty,
+		"history_count":      len(s.history),
+		"success_rate":       s.calculateRecentSuccessRate(),
+	}
+}
+
+// SecurityAssessment - 安全评估结果
+type SecurityAssessment struct {
+	Timestamp           int64
+	OverallSecurityScore float64
+	ThreatIndicators     []string
+	Recommendations      []string
+	FactorScores         map[string]float64
+}
+
+// SliderSecurityAssessor - 滑块安全性评估器
+type SliderSecurityAssessor struct {
+	assessmentHistory []SecurityAssessment
+	mu                sync.RWMutex
+}
+
+func NewSliderSecurityAssessor() *SliderSecurityAssessor {
+	return &SliderSecurityAssessor{
+		assessmentHistory: make([]SecurityAssessment, 0),
+	}
+}
+
+func (s *SliderSecurityAssessor) AssessSecurity(analysisResult *SliderAnalysisResult, verificationStats map[string]interface{}) (*SecurityAssessment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	assessment := &SecurityAssessment{
+		Timestamp:           time.Now().Unix(),
+		ThreatIndicators:     make([]string, 0),
+		Recommendations:      make([]string, 0),
+		FactorScores:         make(map[string]float64),
+	}
+
+	scoreFactors := map[string]float64{
+		"trajectory_anomaly": 0.0,
+		"bot_detection":     0.0,
+		"risk_score":        0.0,
+		"pattern_quality":   0.0,
+	}
+
+	if analysisResult != nil {
+		scoreFactors["trajectory_anomaly"] = 1.0 - analysisResult.AnomalyScore
+
+		if analysisResult.IsBot {
+			scoreFactors["bot_detection"] = 0.2
+			assessment.ThreatIndicators = append(assessment.ThreatIndicators, "检测到机器人行为")
+		} else {
+			scoreFactors["bot_detection"] = 0.9
+		}
+
+		scoreFactors["risk_score"] = 1.0 - analysisResult.OverallRiskScore
+
+		if analysisResult.TrajectoryPattern == "normal" || analysisResult.TrajectoryPattern == "curved" {
+			scoreFactors["pattern_quality"] = 0.8
+		} else if analysisResult.TrajectoryPattern == "near_straight" {
+			scoreFactors["pattern_quality"] = 0.5
+		} else {
+			scoreFactors["pattern_quality"] = 0.3
+			assessment.ThreatIndicators = append(assessment.ThreatIndicators, "轨迹模式异常")
+		}
+	}
+
+	assessment.FactorScores = scoreFactors
+
+	totalScore := 0.0
+	for _, score := range scoreFactors {
+		totalScore += score
+	}
+	assessment.OverallSecurityScore = totalScore / float64(len(scoreFactors))
+
+	if assessment.OverallSecurityScore < 0.4 {
+		assessment.Recommendations = append(assessment.Recommendations, "建议启用额外验证因素")
+		assessment.Recommendations = append(assessment.Recommendations, "考虑增加验证码难度")
+		assessment.Recommendations = append(assessment.Recommendations, "建议人工审核可疑请求")
+	} else if assessment.OverallSecurityScore < 0.7 {
+		assessment.Recommendations = append(assessment.Recommendations, "持续监控验证情况")
+		assessment.Recommendations = append(assessment.Recommendations, "定期更新验证算法")
+	} else {
+		assessment.Recommendations = append(assessment.Recommendations, "当前安全状况良好")
+		assessment.Recommendations = append(assessment.Recommendations, "保持现有验证策略")
+	}
+
+	s.assessmentHistory = append(s.assessmentHistory, *assessment)
+
+	if len(s.assessmentHistory) > 100 {
+		s.assessmentHistory = s.assessmentHistory[len(s.assessmentHistory)-100:]
+	}
+
+	return assessment, nil
+}
+
+func (s *SliderSecurityAssessor) GetSecurityReport() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.assessmentHistory) == 0 {
+		return map[string]interface{}{
+			"message": "暂无评估数据",
+		}
+	}
+
+	totalAssessments := len(s.assessmentHistory)
+	avgScore := 0.0
+	minScore := 1.0
+	maxScore := 0.0
+	threatCount := 0
+
+	for _, assessment := range s.assessmentHistory {
+		avgScore += assessment.OverallSecurityScore
+		if assessment.OverallSecurityScore < minScore {
+			minScore = assessment.OverallSecurityScore
+		}
+		if assessment.OverallSecurityScore > maxScore {
+			maxScore = assessment.OverallSecurityScore
+		}
+		if len(assessment.ThreatIndicators) > 0 {
+			threatCount++
+		}
+	}
+	avgScore /= float64(totalAssessments)
+
+	latestAssessment := s.assessmentHistory[len(s.assessmentHistory)-1]
+
+	return map[string]interface{}{
+		"total_assessments":     totalAssessments,
+		"average_security_score": avgScore,
+		"min_security_score":     minScore,
+		"max_security_score":     maxScore,
+		"threat_detection_rate":  float64(threatCount) / float64(totalAssessments),
+		"latest_assessment":      latestAssessment,
+		"assessment_history":     s.assessmentHistory,
+	}
 }
 
 func GenerateHumanLikeSliderTrajectory(startX, startY, endX, endY int, duration int64) []SliderPoint {

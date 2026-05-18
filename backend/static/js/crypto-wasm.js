@@ -2,12 +2,14 @@
     'use strict';
 
     const CryptoWasm = (function() {
-        const VERSION = '1.0.0';
+        const VERSION = '2.0.0';
         const MODULE_NAME = 'CryptoWasm';
         const DEFAULT_ITERATIONS = 100000;
         const AES_KEY_LENGTH = 256;
         const IV_LENGTH = 12;
         const SALT_LENGTH = 16;
+        const KEY_ROTATION_INTERVAL = 30 * 60 * 1000; // 30 minutes
+        const PRELOAD_PRIORITY = ['high', 'medium', 'low'];
 
         let wasmModule = null;
         let wasmExports = null;
@@ -15,6 +17,21 @@
         let isWasmSupported = false;
         let useWasm = false;
         let initializationPromise = null;
+        let preloadPromise = null;
+        
+        // Key rotation management
+        let currentKey = null;
+        let previousKey = null;
+        let keyRotationTimer = null;
+        let keyCreationTime = null;
+        
+        // Performance benchmarking
+        let performanceStats = {
+            encrypt: { count: 0, totalTime: 0, minTime: Infinity, maxTime: 0 },
+            decrypt: { count: 0, totalTime: 0, minTime: Infinity, maxTime: 0 },
+            hash: { count: 0, totalTime: 0, minTime: Infinity, maxTime: 0 },
+            pbkdf2: { count: 0, totalTime: 0, minTime: Infinity, maxTime: 0 }
+        };
 
         function isBrowser() {
             return typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -466,7 +483,250 @@
             return arrayBufferToBase64(signature);
         }
 
-        async function initialize(wasmUrl) {
+        // WASM预加载优化
+        function preloadWasm(wasmUrl, priority = 'medium') {
+            if (preloadPromise) {
+                return preloadPromise;
+            }
+
+            if (!checkWasmSupport()) {
+                console.warn(`${MODULE_NAME}: WebAssembly not supported, skipping preload`);
+                return Promise.resolve(false);
+            }
+
+            console.log(`${MODULE_NAME}: Preloading WASM module with ${priority} priority`);
+            
+            preloadPromise = (async () => {
+                try {
+                    const start = performance.now();
+                    let response;
+                    
+                    if (priority === 'high' && 'createObjectURL' in URL) {
+                        // High priority: use fetch with stream
+                        response = await fetch(wasmUrl, { 
+                            priority: 'high',
+                            mode: 'cors',
+                            credentials: 'same-origin'
+                        });
+                    } else {
+                        response = await fetch(wasmUrl);
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch WASM module: ${response.status}`);
+                    }
+
+                    const wasmBuffer = await response.arrayBuffer();
+                    const loadTime = performance.now() - start;
+                    console.log(`${MODULE_NAME}: WASM buffer preloaded in ${loadTime.toFixed(2)}ms`);
+
+                    // Initialize with preloaded buffer
+                    return await initializeWithBuffer(wasmBuffer);
+                } catch (error) {
+                    console.warn(`${MODULE_NAME}: Preload failed:`, error);
+                    preloadPromise = null;
+                    return false;
+                }
+            })();
+
+            return preloadPromise;
+        }
+
+        async function initializeWithBuffer(wasmBuffer) {
+            if (!checkWasmSupport()) {
+                return false;
+            }
+
+            try {
+                const importObject = {
+                    env: {
+                        memory: new WebAssembly.Memory({ initial: 256, maximum: 512 }),
+                        seed: () => Date.now() ^ (Math.random() * 0xFFFFFFFF),
+                        log: (ptr, len) => {
+                            const memory = wasmExports.memory;
+                            const bytes = new Uint8Array(memory.buffer, ptr, len);
+                            console.log('WASM:', String.fromCharCode.apply(null, bytes));
+                        },
+                        abort: (ptr, line, col) => {
+                            console.error(`WASM abort at ${line}:${col}`);
+                            throw new Error('WASM execution aborted');
+                        }
+                    },
+                    wasi_snapshot_preview1: {
+                        fd_write: () => 0,
+                        fd_read: () => 0,
+                        fd_seek: () => 0,
+                        proc_exit: (code) => {
+                            console.log(`WASM proc_exit with code ${code}`);
+                        }
+                    }
+                };
+
+                const result = await WebAssembly.instantiate(wasmBuffer, importObject);
+                
+                if (result.instance && result.instance.exports) {
+                    wasmModule = result.instance;
+                    wasmExports = result.instance.exports;
+                    isWasmLoaded = true;
+                    useWasm = true;
+                    console.log(`${MODULE_NAME}: WASM module initialized from preloaded buffer`);
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.warn(`${MODULE_NAME}: Failed to initialize from buffer:`, error);
+                return false;
+            }
+        }
+
+        // 密钥轮换机制
+        async function generateNewKey() {
+            const key = generateRandomBytes(32);
+            keyCreationTime = Date.now();
+            return key;
+        }
+
+        async function initializeKey(keyMaterial) {
+            previousKey = currentKey;
+            if (keyMaterial) {
+                if (typeof keyMaterial === 'string') {
+                    const salt = generateRandomBytes(SALT_LENGTH);
+                    currentKey = await pbkdf2DeriveKey(keyMaterial, salt, DEFAULT_ITERATIONS, AES_KEY_LENGTH / 8);
+                } else {
+                    currentKey = keyMaterial;
+                }
+            } else {
+                currentKey = await generateNewKey();
+            }
+            keyCreationTime = Date.now();
+            return currentKey;
+        }
+
+        function startKeyRotation(interval = KEY_ROTATION_INTERVAL) {
+            if (keyRotationTimer) {
+                clearInterval(keyRotationTimer);
+            }
+            
+            keyRotationTimer = setInterval(async () => {
+                try {
+                    console.log(`${MODULE_NAME}: Rotating encryption key`);
+                    previousKey = currentKey;
+                    currentKey = await generateNewKey();
+                    keyCreationTime = Date.now();
+                } catch (error) {
+                    console.error(`${MODULE_NAME}: Key rotation failed:`, error);
+                }
+            }, interval);
+            
+            console.log(`${MODULE_NAME}: Key rotation scheduled every ${interval}ms`);
+        }
+
+        function stopKeyRotation() {
+            if (keyRotationTimer) {
+                clearInterval(keyRotationTimer);
+                keyRotationTimer = null;
+            }
+        }
+
+        function getKeyInfo() {
+            return {
+                hasCurrentKey: currentKey !== null,
+                hasPreviousKey: previousKey !== null,
+                keyAge: keyCreationTime ? Date.now() - keyCreationTime : null,
+                isRotationActive: keyRotationTimer !== null
+            };
+        }
+
+        // 性能基准测试
+        function recordPerformance(operation, time) {
+            const stats = performanceStats[operation];
+            if (stats) {
+                stats.count++;
+                stats.totalTime += time;
+                stats.minTime = Math.min(stats.minTime, time);
+                stats.maxTime = Math.max(stats.maxTime, time);
+            }
+        }
+
+        function getPerformanceStats() {
+            const result = {};
+            for (const [op, stats] of Object.entries(performanceStats)) {
+                result[op] = {
+                    count: stats.count,
+                    avgTime: stats.count > 0 ? stats.totalTime / stats.count : 0,
+                    minTime: stats.minTime === Infinity ? 0 : stats.minTime,
+                    maxTime: stats.maxTime,
+                    totalTime: stats.totalTime
+                };
+            }
+            return result;
+        }
+
+        function resetPerformanceStats() {
+            for (const op of Object.keys(performanceStats)) {
+                performanceStats[op] = { count: 0, totalTime: 0, minTime: Infinity, maxTime: 0 };
+            }
+        }
+
+        async function runBenchmark(iterations = 100) {
+            const results = {};
+            const testData = 'Hello, World! This is a test message for benchmarking. '.repeat(10);
+            const testPassword = 'test-password-123';
+            const testSalt = generateRandomBytes(SALT_LENGTH);
+
+            console.log(`${MODULE_NAME}: Running benchmark with ${iterations} iterations...`);
+
+            // PBKDF2 benchmark
+            let start = performance.now();
+            for (let i = 0; i < iterations; i++) {
+                await pbkdf2DeriveKey(testPassword, testSalt, 1000, 32);
+            }
+            results.pbkdf2 = {
+                totalTime: performance.now() - start,
+                avgTime: (performance.now() - start) / iterations,
+                iterations
+            };
+
+            // Encryption benchmark
+            const key = await generateNewKey();
+            start = performance.now();
+            for (let i = 0; i < iterations; i++) {
+                await aes256GcmEncrypt(testData, key);
+            }
+            results.encrypt = {
+                totalTime: performance.now() - start,
+                avgTime: (performance.now() - start) / iterations,
+                iterations
+            };
+
+            // Decryption benchmark
+            const encrypted = await aes256GcmEncrypt(testData, key);
+            start = performance.now();
+            for (let i = 0; i < iterations; i++) {
+                await aes256GcmDecrypt(encrypted, key);
+            }
+            results.decrypt = {
+                totalTime: performance.now() - start,
+                avgTime: (performance.now() - start) / iterations,
+                iterations
+            };
+
+            // Hash benchmark
+            start = performance.now();
+            for (let i = 0; i < iterations; i++) {
+                await hashSHA256(testData);
+            }
+            results.hash = {
+                totalTime: performance.now() - start,
+                avgTime: (performance.now() - start) / iterations,
+                iterations
+            };
+
+            console.log(`${MODULE_NAME}: Benchmark complete`, results);
+            return results;
+        }
+
+        function initialize(wasmUrl) {
             if (initializationPromise) {
                 return initializationPromise;
             }
@@ -524,6 +784,16 @@
             generateKeyPair: generateKeyPair,
             encryptWithPublicKey: encryptWithPublicKey,
             decryptWithPrivateKey: decryptWithPrivateKey,
+            // 新功能导出
+            preloadWasm: preloadWasm,
+            initializeWithBuffer: initializeWithBuffer,
+            initializeKey: initializeKey,
+            startKeyRotation: startKeyRotation,
+            stopKeyRotation: stopKeyRotation,
+            getKeyInfo: getKeyInfo,
+            getPerformanceStats: getPerformanceStats,
+            resetPerformanceStats: resetPerformanceStats,
+            runBenchmark: runBenchmark,
             utils: {
                 arrayBufferToBase64: arrayBufferToBase64,
                 base64ToArrayBuffer: base64ToArrayBuffer

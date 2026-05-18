@@ -16,6 +16,10 @@ type CacheMonitoringConfig struct {
 	MonitoringInterval    time.Duration
 	HotKeyThreshold      int64
 	LatencyBuckets       []time.Duration
+	HitRateWarningThreshold float64
+	HitRateCriticalThreshold float64
+	ErrorRateWarningThreshold float64
+	ErrorRateCriticalThreshold float64
 }
 
 var DefaultMonitoringConfig = &CacheMonitoringConfig{
@@ -25,6 +29,10 @@ var DefaultMonitoringConfig = &CacheMonitoringConfig{
 	EnableMemoryTracking: true,
 	MonitoringInterval:    10 * time.Second,
 	HotKeyThreshold:      100,
+	HitRateWarningThreshold: 70.0,
+	HitRateCriticalThreshold: 50.0,
+	ErrorRateWarningThreshold: 5.0,
+	ErrorRateCriticalThreshold: 10.0,
 	LatencyBuckets: []time.Duration{
 		100 * time.Microsecond,
 		500 * time.Microsecond,
@@ -63,6 +71,9 @@ type CacheMonitoringCollector struct {
 	latencyDistribution map[string]*atomic.Int64
 	keyAccessHistory    map[string]*AccessRecord
 	memorySnapshots     []MemorySnapshot
+	
+	alerts              []CacheAlert
+	maxAlerts           int
 	
 	lastHitCount        int64
 	lastMissCount       int64
@@ -116,6 +127,8 @@ func NewCacheMonitoringCollector(config *CacheMonitoringConfig) *CacheMonitoring
 		latencyDistribution: make(map[string]*atomic.Int64),
 		keyAccessHistory:    make(map[string]*AccessRecord),
 		memorySnapshots:     make([]MemorySnapshot, 0, 100),
+		alerts:              make([]CacheAlert, 0, 50),
+		maxAlerts:           100,
 	}
 
 	for _, bucket := range config.LatencyBuckets {
@@ -302,6 +315,8 @@ func (cmc *CacheMonitoringCollector) updateHealthMetrics() {
 
 	cmc.lastHitCount = hits
 	cmc.lastMissCount = misses
+	
+	cmc.checkAndTriggerAlerts()
 }
 
 func (cmc *CacheMonitoringCollector) snapshotMemory() {
@@ -640,4 +655,110 @@ func RecordCacheLatency(duration time.Duration) {
 
 func RecordCacheKeyAccess(key string) {
 	GetCacheMonitoringCollector().RecordKeyAccess(key)
+}
+
+type CacheAlert struct {
+	ID        int       `json:"id"`
+	Type      string    `json:"type"`
+	Message   string    `json:"message"`
+	Severity  string    `json:"severity"`
+	Timestamp time.Time `json:"timestamp"`
+	Active    bool      `json:"active"`
+}
+
+var alertIDCounter int64
+
+func (cmc *CacheMonitoringCollector) checkAndTriggerAlerts() {
+	cmc.mu.Lock()
+	defer cmc.mu.Unlock()
+
+	hits := cmc.hitCounter.Load()
+	misses := cmc.missCounter.Load()
+	total := hits + misses
+	errors := cmc.errorCounter.Load()
+
+	var currentHitRate float64
+	var currentErrorRate float64
+
+	if total > 0 {
+		currentHitRate = float64(hits) / float64(total) * 100
+		currentErrorRate = float64(errors) / float64(total) * 100
+	}
+
+	if total > 100 {
+		if currentHitRate < cmc.config.HitRateCriticalThreshold {
+			cmc.addAlert("low_hit_rate_critical", 
+				"Cache hit rate is critically low", 
+				"critical")
+		} else if currentHitRate < cmc.config.HitRateWarningThreshold {
+			cmc.addAlert("low_hit_rate_warning", 
+				"Cache hit rate is below warning threshold", 
+				"warning")
+		}
+	}
+
+	if total > 100 {
+		if currentErrorRate > cmc.config.ErrorRateCriticalThreshold {
+			cmc.addAlert("high_error_rate_critical", 
+				"Cache error rate is critically high", 
+				"critical")
+		} else if currentErrorRate > cmc.config.ErrorRateWarningThreshold {
+			cmc.addAlert("high_error_rate_warning", 
+				"Cache error rate is above warning threshold", 
+				"warning")
+		}
+	}
+}
+
+func (cmc *CacheMonitoringCollector) addAlert(alertType, message, severity string) {
+	alert := CacheAlert{
+		ID:        int(atomic.AddInt64(&alertIDCounter, 1)),
+		Type:      alertType,
+		Message:   message,
+		Severity:  severity,
+		Timestamp: time.Now(),
+		Active:    true,
+	}
+
+	for _, existingAlert := range cmc.alerts {
+		if existingAlert.Type == alertType && existingAlert.Active && 
+			time.Since(existingAlert.Timestamp) < 5*time.Minute {
+			return
+		}
+	}
+
+	cmc.alerts = append(cmc.alerts, alert)
+	if len(cmc.alerts) > cmc.maxAlerts {
+		cmc.alerts = cmc.alerts[len(cmc.alerts)-cmc.maxAlerts:]
+	}
+}
+
+func (cmc *CacheMonitoringCollector) GetAlerts() []CacheAlert {
+	cmc.mu.RLock()
+	defer cmc.mu.RUnlock()
+
+	alerts := make([]CacheAlert, 0, len(cmc.alerts))
+	for _, alert := range cmc.alerts {
+		if alert.Active {
+			alerts = append(alerts, alert)
+		}
+	}
+	return alerts
+}
+
+func (cmc *CacheMonitoringCollector) AcknowledgeAlert(alertID int) {
+	cmc.mu.Lock()
+	defer cmc.mu.Unlock()
+
+	for i, alert := range cmc.alerts {
+		if alert.ID == alertID {
+			cmc.alerts[i].Active = false
+		}
+	}
+}
+
+func (cmc *CacheMonitoringCollector) ClearAlerts() {
+	cmc.mu.Lock()
+	defer cmc.mu.Unlock()
+	cmc.alerts = make([]CacheAlert, 0, cmc.maxAlerts)
 }

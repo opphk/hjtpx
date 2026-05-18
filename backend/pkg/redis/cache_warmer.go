@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,6 +24,16 @@ type CacheWarmer struct {
 	wg      sync.WaitGroup
 	cache   *EnhancedCache
 	running bool
+	status  WarmerStatus
+}
+
+type WarmerStatus struct {
+	Running          bool          `json:"running"`
+	TaskCount        int           `json:"task_count"`
+	LastWarmupTime   time.Time     `json:"last_warmup_time"`
+	TotalWarmups     int64         `json:"total_warmups"`
+	FailedWarmups    int64         `json:"failed_warmups"`
+	CurrentWarmups   int32         `json:"current_warmups"`
 }
 
 func NewCacheWarmer(cache *EnhancedCache) *CacheWarmer {
@@ -37,6 +48,10 @@ func NewCacheWarmer(cache *EnhancedCache) *CacheWarmer {
 		ctx:    ctx,
 		cancel: cancel,
 		cache:  cache,
+		status: WarmerStatus{
+			Running: false,
+			TaskCount: 0,
+		},
 	}
 }
 
@@ -173,15 +188,42 @@ func (cw *CacheWarmer) executeTask(task *WarmupTask) error {
 	ctx, cancel := context.WithTimeout(cw.ctx, 30*time.Second)
 	defer cancel()
 
+	atomic.AddInt32(&cw.status.CurrentWarmups, 1)
+	defer atomic.AddInt32(&cw.status.CurrentWarmups, -1)
+
 	data, err := task.Loader(ctx)
 	if err != nil {
+		cw.mu.Lock()
+		cw.status.FailedWarmups++
+		cw.mu.Unlock()
 		return err
 	}
 
-	return cw.cache.Set(ctx, task.Key, data, &SetOptions{
+	err = cw.cache.Set(ctx, task.Key, data, &SetOptions{
 		TTL:   task.TTL,
 		Level: CacheLevelBoth,
 	})
+
+	cw.mu.Lock()
+	cw.status.TotalWarmups++
+	cw.status.LastWarmupTime = time.Now()
+	cw.mu.Unlock()
+
+	return err
+}
+
+func (cw *CacheWarmer) GetStatus() WarmerStatus {
+	cw.mu.RLock()
+	defer cw.mu.RUnlock()
+	
+	status := cw.status
+	status.TaskCount = len(cw.tasks)
+	status.Running = cw.running
+	return status
+}
+
+func (cw *CacheWarmer) Warmup() error {
+	return cw.WarmupAll()
 }
 
 func (cw *CacheWarmer) GetTasks() []*WarmupTask {
@@ -482,4 +524,8 @@ func StopCacheWarmer() {
 
 func AddWarmupTask(task *WarmupTask) {
 	GetGlobalWarmer().AddTask(task)
+}
+
+func GetCacheWarmer() *CacheWarmer {
+	return GetGlobalWarmer()
 }
