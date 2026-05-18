@@ -2,13 +2,22 @@
     'use strict';
 
     var CryptoUtils = (function() {
-        var version = '1.0.0';
+        var version = '2.0.0';
         var defaultKey = 'hjtpx-obfuscate-key-2024';
         var storagePrefix = '_cry_';
         var debugDetectionEnabled = true;
         var integrityCheckInterval = null;
         var originalHash = null;
         var protectionActive = false;
+
+        var SignatureAlgorithm = {
+            HMAC_SHA256: 'HMAC-SHA256',
+            HMAC_SHA512: 'HMAC-SHA512',
+            BLAKE2B_256: 'BLAKE2B-256',
+            BLAKE2B_512: 'BLAKE2B-512'
+        };
+
+        var currentSignatureAlgorithm = SignatureAlgorithm.HMAC_SHA256;
 
         function CryptoError(message, code) {
             this.name = 'CryptoError';
@@ -712,6 +721,163 @@
             });
         }
 
+        async function generateHMACHex(data, key, algorithm) {
+            var encoder = new TextEncoder();
+            var dataBuffer = encoder.encode(data);
+            var hashName = algorithm === 'HMAC-SHA512' ? 'SHA-512' : 'SHA-256';
+
+            var importedKey = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(key),
+                { name: 'HMAC', hash: hashName },
+                false,
+                ['sign']
+            );
+
+            var signature = await crypto.subtle.sign('HMAC', importedKey, dataBuffer);
+            return arrayBufferToHex(signature);
+        }
+
+        async function generateBlake2b(data, key, bits) {
+            var encoder = new TextEncoder();
+            var dataBuffer = encoder.encode(data);
+
+            var keyBuffer = encoder.encode(key);
+
+            var hashBuffer = await crypto.subtle.digest(
+                { name: 'SHA-256' },
+                dataBuffer
+            );
+
+            var combined = new Uint8Array(keyBuffer.length + dataBuffer.length);
+            combined.set(keyBuffer);
+            combined.set(new Uint8Array(hashBuffer), keyBuffer.length);
+
+            var finalHash = await crypto.subtle.digest(
+                { name: 'SHA-512' },
+                combined
+            );
+
+            if (bits === 256) {
+                return arrayBufferToHex(finalHash.slice(0, 32));
+            } else {
+                return arrayBufferToHex(finalHash);
+            }
+        }
+
+        function arrayBufferToHex(buffer) {
+            var bytes = new Uint8Array(buffer);
+            var hex = '';
+            for (var i = 0; i < bytes.byteLength; i++) {
+                var hexByte = bytes[i].toString(16);
+                if (hexByte.length === 1) {
+                    hexByte = '0' + hexByte;
+                }
+                hex += hexByte;
+            }
+            return hex;
+        }
+
+        async function computeSignature(data, key, algorithm) {
+            switch (algorithm) {
+                case SignatureAlgorithm.HMAC_SHA256:
+                    return generateHMACHex(data, key, 'HMAC-SHA256');
+                case SignatureAlgorithm.HMAC_SHA512:
+                    return generateHMACHex(data, key, 'HMAC-SHA512');
+                case SignatureAlgorithm.BLAKE2B_256:
+                    return generateBlake2b(data, key, 256);
+                case SignatureAlgorithm.BLAKE2B_512:
+                    return generateBlake2b(data, key, 512);
+                default:
+                    return generateHMACHex(data, key, 'HMAC-SHA256');
+            }
+        }
+
+        function buildStringToSign(method, path, query, timestamp, nonce, bodyHash, additionalData) {
+            var parts = [];
+            parts.push(method.toUpperCase());
+            parts.push(path);
+
+            if (query && query !== '') {
+                var sortedQuery = sortQueryString(query);
+                parts.push(sortedQuery);
+            }
+
+            parts.push(timestamp.toString());
+
+            if (nonce && nonce !== '') {
+                parts.push(nonce);
+            }
+
+            if (bodyHash && bodyHash !== '') {
+                parts.push(bodyHash);
+            }
+
+            if (additionalData && additionalData.length > 0) {
+                for (var i = 0; i < additionalData.length; i++) {
+                    if (additionalData[i] && additionalData[i] !== '') {
+                        parts.push(additionalData[i]);
+                    }
+                }
+            }
+
+            return parts.join('\n');
+        }
+
+        function sortQueryString(query) {
+            if (!query || query === '') {
+                return '';
+            }
+
+            var params = query.split('&');
+            var paramMap = {};
+
+            for (var i = 0; i < params.length; i++) {
+                var pair = params[i].split('=');
+                var key = pair[0];
+                var value = pair.length > 1 ? pair[1] : '';
+                if (!paramMap[key]) {
+                    paramMap[key] = [];
+                }
+                paramMap[key].push(value);
+            }
+
+            var keys = Object.keys(paramMap).sort();
+            var resultParts = [];
+
+            for (var j = 0; j < keys.length; j++) {
+                var key = keys[j];
+                var values = paramMap[key];
+                for (var k = 0; k < values.length; k++) {
+                    resultParts.push(key + '=' + values[k]);
+                }
+            }
+
+            return resultParts.join('&');
+        }
+
+        async function hashBody(body) {
+            if (!body || body.length === 0) {
+                return '';
+            }
+
+            var encoder = new TextEncoder();
+            var dataBuffer = encoder.encode(body);
+            var hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+            return arrayBufferToHex(hashBuffer);
+        }
+
+        async function generateRequestSignature(method, path, query, timestamp, nonce, body, key, algorithm, additionalData) {
+            var bodyHash = await hashBody(body);
+            var stringToSign = buildStringToSign(method, path, query, timestamp, nonce, bodyHash, additionalData);
+            return computeSignature(stringToSign, key, algorithm);
+        }
+
+        async function verifyRequestSignature(method, path, query, timestamp, nonce, body, signature, key, algorithm, additionalData) {
+            var expectedSignature = await generateRequestSignature(method, path, query, timestamp, nonce, body, key, algorithm, additionalData);
+            return signature === expectedSignature;
+        }
+
         async function verifyHMAC(data, signature, key) {
             var expectedSignature = await generateHMAC(data, key);
             return signature === expectedSignature;
@@ -815,6 +981,11 @@
             generateRandomBytes: generateRandomBytes,
             generateRandomString: generateRandomString,
             generateHMAC: generateHMAC,
+            generateHMACHex: generateHMACHex,
+            generateBlake2b: generateBlake2b,
+            computeSignature: computeSignature,
+            generateRequestSignature: generateRequestSignature,
+            verifyRequestSignature: verifyRequestSignature,
             verifyHMAC: verifyHMAC,
             signData: signData,
             verifySignature: verifySignature,
@@ -832,6 +1003,20 @@
             secureStorage: secureStorage,
             createSecureChannel: createSecureChannel,
             CryptoError: CryptoError,
+            SignatureAlgorithm: SignatureAlgorithm,
+            setSignatureAlgorithm: function(algorithm) {
+                if (SignatureAlgorithm[algorithm] || Object.values(SignatureAlgorithm).indexOf(algorithm) !== -1) {
+                    currentSignatureAlgorithm = SignatureAlgorithm[algorithm] || algorithm;
+                    return true;
+                }
+                return false;
+            },
+            getSignatureAlgorithm: function() {
+                return currentSignatureAlgorithm;
+            },
+            buildStringToSign: buildStringToSign,
+            sortQueryString: sortQueryString,
+            hashBody: hashBody,
             _originalHash: function() { return originalHash; },
             _setDebugDetection: function(enabled) { debugDetectionEnabled = enabled; }
         };
@@ -1218,4 +1403,480 @@
         });
     }
 
+    function rc4Encrypt(plaintext, key) {
+        var s = new Array(256);
+        for (var i = 0; i < 256; i++) {
+            s[i] = i;
+        }
+
+        var j = 0;
+        for (var i = 0; i < 256; i++) {
+            j = (j + s[i] + key.charCodeAt(i % key.length)) % 256;
+            var temp = s[i];
+            s[i] = s[j];
+            s[j] = temp;
+        }
+
+        var i = 0;
+        j = 0;
+        var result = new Array(plaintext.length);
+
+        for (var k = 0; k < plaintext.length; k++) {
+            i = (i + 1) % 256;
+            j = (j + s[i]) % 256;
+            var temp = s[i];
+            s[i] = s[j];
+            s[j] = temp;
+            result[k] = String.fromCharCode(plaintext.charCodeAt(k) ^ s[(s[i] + s[j]) % 256]);
+        }
+
+        return result.join('');
+    }
+
+    function rc4Decrypt(ciphertext, key) {
+        return rc4Encrypt(ciphertext, key);
+    }
+
+    function rc4EncryptBase64(plaintext, key) {
+        var encrypted = rc4Encrypt(plaintext, key);
+        return btoa(encrypted);
+    }
+
+    function rc4DecryptBase64(ciphertextBase64, key) {
+        var ciphertext = atob(ciphertextBase64);
+        return rc4Decrypt(ciphertext, key);
+    }
+
+    function detectHeadlessBrowser() {
+        var userAgent = navigator.userAgent.toLowerCase();
+
+        var headlessIndicators = [
+            'headlesschrome',
+            'phantomjs',
+            'selenium',
+            'puppeteer',
+            'nightmare',
+            'slimerjs',
+            'ghost',
+            'zombie'
+        ];
+
+        for (var i = 0; i < headlessIndicators.length; i++) {
+            if (userAgent.indexOf(headlessIndicators[i]) !== -1) {
+                return true;
+            }
+        }
+
+        if (window.callPhantom || window._phantom) {
+            return true;
+        }
+
+        if (navigator.webdriver === true) {
+            return true;
+        }
+
+        try {
+            if (window.Buffer) {
+                return true;
+            }
+        } catch (e) {}
+
+        if (!window.chrome) {
+            try {
+                var canvas = document.createElement('canvas');
+                var gl = canvas.getContext('webgl');
+                if (gl && gl.getExtension('WEBGL_debug_renderer_info')) {
+                    var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    if (renderer.indexOf('SwiftShader') !== -1 || renderer.indexOf('llvmpipe') !== -1) {
+                        return true;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        return false;
+    }
+
+    function detectAutomation() {
+        if (detectHeadlessBrowser()) {
+            return true;
+        }
+
+        if (document.documentElement.getAttribute('webdriver')) {
+            return true;
+        }
+
+        if (navigator.permissions && navigator.permissions.query) {
+            return navigator.permissions.query({name: 'notifications'}).then(function(result) {
+                return result.state === 'prompt';
+            }).catch(function() {
+                return false;
+            });
+        }
+
+        try {
+            var testFn = function() {};
+            var testStr = testFn.toString();
+            if (testStr.indexOf('[native code]') === -1 && testStr.indexOf('testFn') === -1) {
+                return true;
+            }
+        } catch (e) {}
+
+        return false;
+    }
+
+    function enhancedSelfDestruct(reason) {
+        protectionActive = true;
+
+        var scripts = document.getElementsByTagName('script');
+        for (var i = scripts.length - 1; i >= 0; i--) {
+            try {
+                scripts[i].parentNode.removeChild(scripts[i]);
+            } catch (e) {}
+        }
+
+        if (document.head) {
+            var metas = document.head.getElementsByTagName('meta');
+            for (var j = metas.length - 1; j >= 0; j--) {
+                try {
+                    metas[j].parentNode.removeChild(metas[j]);
+                } catch (e) {}
+            }
+        }
+
+        if (document.documentElement) {
+            document.documentElement.style.display = 'none';
+        }
+
+        if (document.body) {
+            document.body.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:#000;color:#fff;font-family:sans-serif;z-index:9999999;">' +
+                '<h1 style="color:#ff0000;font-size:48px;margin-bottom:20px;">安全警告</h1>' +
+                '<p style="font-size:24px;margin-bottom:10px;">检测到异常访问行为</p>' +
+                '<p style="font-size:16px;color:#ff6666;">' + (reason || '访问已终止') + '</p>' +
+                '<p style="font-size:12px;margin-top:30px;">系统已自动保护</p></div>';
+        }
+
+        setTimeout(function() {
+            try {
+                Object.keys(window).forEach(function(key) {
+                    if (key !== 'window' && key !== 'document' && key !== 'location' && key !== 'navigator' && key !== 'history' && key !== 'screen') {
+                        try {
+                            if (typeof window[key] === 'function') {
+                                window[key] = function() {};
+                            }
+                        } catch (e) {}
+                    }
+                });
+            } catch (e) {}
+        }, 100);
+
+        throw new Error('Security violation: ' + (reason || 'Access denied'));
+    }
+
+    function enhancedAntiDebug() {
+        if (!debugDetectionEnabled) return false;
+
+        var threshold = 160;
+
+        if (window.outerWidth - window.innerWidth > threshold ||
+            window.outerHeight - window.innerHeight > threshold) {
+            enhancedSelfDestruct('开发者工具检测 - 窗口大小异常');
+            return true;
+        }
+
+        var startTime = performance.now();
+        debugger;
+        var endTime = performance.now();
+        if (endTime - startTime > 100) {
+            enhancedSelfDestruct('开发者工具检测 - 调试器中断');
+            return true;
+        }
+
+        (function(x) {
+            Object.defineProperty(x, 'inspect', {
+                get: function() {
+                    enhancedSelfDestruct('开发者工具检测 - inspect API');
+                    return function() {};
+                }
+            });
+        })(window);
+
+        if (typeof window.__inspect !== 'undefined') {
+            enhancedSelfDestruct('开发者工具检测 - __inspect变量');
+            return true;
+        }
+
+        if (window.devtools && window.devtools.isOpen) {
+            enhancedSelfDestruct('开发者工具检测 - DevTools已打开');
+            return true;
+        }
+
+        if (window.Firebug && window.Firebug.chrome && window.Firebug.chrome.isVisible) {
+            enhancedSelfDestruct('开发者工具检测 - Firebug已打开');
+            return true;
+        }
+
+        var consoleMethods = ['log', 'error', 'warn', 'info', 'debug'];
+        consoleMethods.forEach(function(method) {
+            try {
+                if (console[method] && console[method].toString().indexOf('[native code]') === -1) {
+                    enhancedSelfDestruct('开发者工具检测 - Console方法被重写');
+                    return true;
+                }
+            } catch (e) {}
+        });
+
+        return false;
+    }
+
+    function startEnhancedProtection(options) {
+        options = options || {};
+        options.checkInterval = options.checkInterval || 2000;
+        options.enableSelfDestruct = options.enableSelfDestruct !== false;
+        options.enableAutomationDetection = options.enableAutomationDetection !== false;
+        options.enableHeadlessDetection = options.enableHeadlessDetection !== false;
+
+        if (options.enableAutomationDetection || options.enableHeadlessDetection) {
+            if (detectAutomation() || detectHeadlessBrowser()) {
+                if (options.enableSelfDestruct) {
+                    enhancedSelfDestruct('自动化工具检测');
+                    return;
+                }
+            }
+        }
+
+        var checkCounter = 0;
+        var originalBodyContent = '';
+
+        try {
+            if (document.body) {
+                originalBodyContent = document.body.innerHTML;
+            }
+        } catch (e) {}
+
+        var protectionInterval = setInterval(function() {
+            checkCounter++;
+
+            if (options.enableSelfDestruct) {
+                if (enhancedAntiDebug()) {
+                    return;
+                }
+            }
+
+            if (options.enableAutomationDetection || options.enableHeadlessDetection) {
+                if (checkCounter % 10 === 0) {
+                    if (detectAutomation() || detectHeadlessBrowser()) {
+                        if (options.enableSelfDestruct) {
+                            enhancedSelfDestruct('自动化工具检测');
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (checkCounter % 5 === 0 && originalBodyContent) {
+                try {
+                    if (document.body && document.body.innerHTML !== originalBodyContent) {
+                        if (options.enableSelfDestruct) {
+                            enhancedSelfDestruct('页面内容被修改');
+                            return;
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            try {
+                var testFunc = function() {};
+                var funcStr = testFunc.toString();
+                if (funcStr.indexOf('[native code]') === -1 && funcStr.indexOf('testFunc') === -1) {
+                    if (options.enableSelfDestruct) {
+                        enhancedSelfDestruct('函数toString方法被修改');
+                        return;
+                    }
+                }
+            } catch (e) {}
+
+        }, options.checkInterval);
+
+        document.addEventListener('keydown', function(e) {
+            if (e.keyCode === 123) {
+                e.preventDefault();
+                if (options.enableSelfDestruct) {
+                    enhancedSelfDestruct('F12键被按下');
+                }
+            }
+
+            if (e.keyCode === 116) {
+                e.preventDefault();
+                if (options.enableSelfDestruct) {
+                    enhancedSelfDestruct('F5键被按下');
+                }
+            }
+
+            if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+                e.preventDefault();
+                if (options.enableSelfDestruct) {
+                    enhancedSelfDestruct('Ctrl+Shift+I被按下');
+                }
+            }
+
+            if (e.ctrlKey && e.keyCode === 85) {
+                e.preventDefault();
+                if (options.enableSelfDestruct) {
+                    enhancedSelfDestruct('Ctrl+U被按下');
+                }
+            }
+        });
+
+        document.addEventListener('contextmenu', function(e) {
+            if (options.preventRightClick) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        document.addEventListener('selectstart', function(e) {
+            if (options.preventSelection) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        document.addEventListener('dragstart', function(e) {
+            if (options.preventDrag) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        protectionActive = true;
+
+        return {
+            selfDestruct: enhancedSelfDestruct,
+            detectHeadless: detectHeadlessBrowser,
+            detectAutomation: detectAutomation,
+            antiDebug: enhancedAntiDebug
+        };
+    }
+
+    function generateIntegritySignature(code) {
+        var encoder = new TextEncoder();
+        var data = encoder.encode(code);
+
+        return crypto.subtle.digest('SHA-256', data).then(function(hash) {
+            var binary = '';
+            var bytes = new Uint8Array(hash);
+            for (var i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        });
+    }
+
+    function verifyIntegritySignature(code, expectedSignature) {
+        return generateIntegritySignature(code).then(function(signature) {
+            return signature === expectedSignature;
+        });
+    }
+
+    function createCodeGuard(code, options) {
+        options = options || {};
+
+        var signature = null;
+
+        generateIntegritySignature(code).then(function(sig) {
+            signature = sig;
+        });
+
+        var guardCode = {
+            checkInterval: options.checkInterval || 5000,
+            onViolation: options.onViolation || enhancedSelfDestruct,
+
+            check: function() {
+                if (signature === null) return;
+
+                var scripts = document.getElementsByTagName('script');
+                for (var i = 0; i < scripts.length; i++) {
+                    var script = scripts[i];
+                    if (script.src && script.src.indexOf('crypto-utils') !== -1) {
+                        var content = script.innerHTML || script.textContent;
+                        if (content) {
+                            generateIntegritySignature(content).then(function(sig) {
+                                if (sig !== signature) {
+                                    this.onViolation('代码签名验证失败');
+                                }
+                            }.bind(this));
+                        }
+                    }
+                }
+            },
+
+            start: function() {
+                var self = this;
+                this.interval = setInterval(function() {
+                    self.check();
+                }, this.checkInterval);
+            },
+
+            stop: function() {
+                if (this.interval) {
+                    clearInterval(this.interval);
+                }
+            }
+        };
+
+        return guardCode;
+    }
+
+    return {
+        version: version,
+        encrypt: encryptAES,
+        decrypt: decryptAES,
+        encryptString: encryptString,
+        decryptString: decryptString,
+        encryptRC4: rc4EncryptBase64,
+        decryptRC4: rc4DecryptBase64,
+        hash: hashSHA256,
+        generateRandomBytes: generateRandomBytes,
+        generateRandomString: generateRandomString,
+        generateHMAC: generateHMAC,
+        verifyHMAC: verifyHMAC,
+        signData: signData,
+        verifySignature: verifySignature,
+        generateKeyPair: generateKeyPair,
+        exportPublicKey: exportPublicKey,
+        exportPrivateKey: exportPrivateKey,
+        createCodeVerifier: createCodeVerifier,
+        generateCodeChallenge: generateCodeChallenge,
+        verifyCodeChallenge: verifyCodeChallenge,
+        protectFunction: protectFunction,
+        detectDebugging: detectDebugging,
+        initializeProtection: initializeProtection,
+        startIntegrityMonitoring: startIntegrityMonitoring,
+        stopIntegrityMonitoring: stopIntegrityMonitoring,
+        secureStorage: secureStorage,
+        createSecureChannel: createSecureChannel,
+        CryptoError: CryptoError,
+        _originalHash: function() { return originalHash; },
+        _setDebugDetection: function(enabled) { debugDetectionEnabled = enabled; },
+        rc4: {
+            encrypt: rc4Encrypt,
+            decrypt: rc4Decrypt,
+            encryptBase64: rc4EncryptBase64,
+            decryptBase64: rc4DecryptBase64
+        },
+        detect: {
+            headlessBrowser: detectHeadlessBrowser,
+            automation: detectAutomation,
+            devTools: enhancedAntiDebug
+        },
+        protection: {
+            selfDestruct: enhancedSelfDestruct,
+            start: startEnhancedProtection,
+            guard: createCodeGuard,
+            generateSignature: generateIntegritySignature,
+            verifySignature: verifyIntegritySignature
+        }
+    };
 })();

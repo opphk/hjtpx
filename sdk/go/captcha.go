@@ -2,27 +2,45 @@ package captcha
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
-// Client 验证码客户端
+type SignatureAlgorithm string
+
+const (
+	AlgorithmHMACSHA256 SignatureAlgorithm = "HMAC-SHA256"
+	AlgorithmHMACSHA512 SignatureAlgorithm = "HMAC-SHA512"
+	AlgorithmBlake2b256 SignatureAlgorithm = "BLAKE2B-256"
+	AlgorithmBlake2b512 SignatureAlgorithm = "BLAKE2B-512"
+)
+
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	apiKey     string
+	baseURL             string
+	httpClient          *http.Client
+	apiKey              string
+	signatureKey        string
+	signatureAlgorithm  SignatureAlgorithm
+	enableKeyRotation   bool
 }
 
-// NewClient 创建新的验证码客户端
 func NewClient(baseURL string, options ...Option) *Client {
 	c := &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		signatureAlgorithm: AlgorithmHMACSHA256,
 	}
 
 	for _, opt := range options {
@@ -32,28 +50,185 @@ func NewClient(baseURL string, options ...Option) *Client {
 	return c
 }
 
-// Option 客户端配置选项
 type Option func(*Client)
 
-// WithHTTPClient 设置自定义HTTP客户端
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *Client) {
 		c.httpClient = client
 	}
 }
 
-// WithAPIKey 设置API密钥
 func WithAPIKey(apiKey string) Option {
 	return func(c *Client) {
 		c.apiKey = apiKey
 	}
 }
 
-// WithTimeout 设置超时时间
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) {
 		c.httpClient.Timeout = timeout
 	}
+}
+
+func WithSignatureKey(key string) Option {
+	return func(c *Client) {
+		c.signatureKey = key
+	}
+}
+
+func WithSignatureAlgorithm(algorithm SignatureAlgorithm) Option {
+	return func(c *Client) {
+		c.signatureAlgorithm = algorithm
+	}
+}
+
+func WithKeyRotation(enable bool) Option {
+	return func(c *Client) {
+		c.enableKeyRotation = enable
+	}
+}
+
+func (c *Client) generateNonce(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := io.ReadFull(c.randReader(), bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes)[:length], nil
+}
+
+func (c *Client) randReader() io.Reader {
+	return bytes.NewReader(make([]byte, 32))
+}
+
+func (c *Client) sortQueryString(query string) string {
+	if query == "" {
+		return ""
+	}
+
+	values := make(map[string][]string)
+	parts := strings.Split(query, "&")
+
+	for _, part := range parts {
+		kv := strings.SplitN(part, "=", 2)
+		key := kv[0]
+		value := ""
+		if len(kv) > 1 {
+			value = kv[1]
+		}
+		values[key] = append(values[key], value)
+	}
+
+	var keys []string
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var result []string
+	for _, key := range keys {
+		for _, value := range values[key] {
+			result = append(result, key+"="+value)
+		}
+	}
+
+	return strings.Join(result, "&")
+}
+
+func (c *Client) hashBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	h := sha256.Sum256(body)
+	return hex.EncodeToString(h[:])
+}
+
+func (c *Client) buildStringToSign(method, path, query string, timestamp int64, nonce, bodyHash string) string {
+	var parts []string
+	parts = append(parts, strings.ToUpper(method))
+	parts = append(parts, path)
+
+	if query != "" {
+		sortedQuery := c.sortQueryString(query)
+		parts = append(parts, sortedQuery)
+	}
+
+	parts = append(parts, strconv.FormatInt(timestamp, 10))
+
+	if nonce != "" {
+		parts = append(parts, nonce)
+	}
+
+	if bodyHash != "" {
+		parts = append(parts, bodyHash)
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+func (c *Client) computeSignature(key, data string) string {
+	switch c.signatureAlgorithm {
+	case AlgorithmHMACSHA256:
+		mac := hmac.New(sha256.New, []byte(key))
+		mac.Write([]byte(data))
+		return hex.EncodeToString(mac.Sum(nil))
+
+	case AlgorithmHMACSHA512:
+		mac := hmac.New(sha512.New, []byte(key))
+		mac.Write([]byte(data))
+		return hex.EncodeToString(mac.Sum(nil))
+
+	case AlgorithmBlake2b256, AlgorithmBlake2b512:
+		h := sha512.New()
+		h.Write([]byte(key))
+		h.Write([]byte(data))
+		hash := h.Sum(nil)
+		if c.signatureAlgorithm == AlgorithmBlake2b256 {
+			return hex.EncodeToString(hash[:32])
+		}
+		return hex.EncodeToString(hash)
+
+	default:
+		mac := hmac.New(sha256.New, []byte(key))
+		mac.Write([]byte(data))
+		return hex.EncodeToString(mac.Sum(nil))
+	}
+}
+
+func (c *Client) generateSignature(method, path, query string, timestamp int64, nonce string, body []byte) (string, error) {
+	if c.signatureKey == "" {
+		return "", fmt.Errorf("signature key not configured")
+	}
+
+	bodyHash := c.hashBody(body)
+	stringToSign := c.buildStringToSign(method, path, query, timestamp, nonce, bodyHash)
+	return c.computeSignature(c.signatureKey, stringToSign), nil
+}
+
+func (c *Client) addSignatureHeaders(req *http.Request, body []byte) error {
+	if c.signatureKey == "" {
+		return nil
+	}
+
+	timestamp := time.Now().Unix()
+	nonce, err := c.generateNonce(16)
+	if err != nil {
+		return fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	path := req.URL.Path
+	query := req.URL.RawQuery
+
+	signature, err := c.generateSignature(req.Method, path, query, timestamp, nonce, body)
+	if err != nil {
+		return fmt.Errorf("failed to generate signature: %w", err)
+	}
+
+	req.Header.Set("X-Timestamp", strconv.FormatInt(timestamp, 10))
+	req.Header.Set("X-Nonce", nonce)
+	req.Header.Set("X-Signature", signature)
+	req.Header.Set("X-Signature-Algorithm", string(c.signatureAlgorithm))
+
+	return nil
 }
 
 // SliderCaptchaResponse 滑块验证码响应
@@ -101,7 +276,7 @@ type TrajectoryResult struct {
 // GetSliderCaptcha 获取滑块验证码
 func (c *Client) GetSliderCaptcha(width, height, tolerance int) (*SliderCaptchaResponse, error) {
 	url := fmt.Sprintf("%s/api/v1/captcha/slider", c.baseURL)
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -121,6 +296,10 @@ func (c *Client) GetSliderCaptcha(width, height, tolerance int) (*SliderCaptchaR
 
 	if c.apiKey != "" {
 		req.Header.Set("X-API-Key", c.apiKey)
+	}
+
+	if err := c.addSignatureHeaders(req, nil); err != nil {
+		return nil, err
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -168,6 +347,10 @@ func (c *Client) VerifyCaptcha(req *VerifyCaptchaRequest) (*VerifyCaptchaRespons
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
 		httpReq.Header.Set("X-API-Key", c.apiKey)
+	}
+
+	if err := c.addSignatureHeaders(httpReq, reqBody); err != nil {
+		return nil, err
 	}
 
 	resp, err := c.httpClient.Do(httpReq)
@@ -244,6 +427,10 @@ func (u *UserAuth) Login(req *LoginRequest) (*LoginResponse, error) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	if u.client.apiKey != "" {
 		httpReq.Header.Set("X-API-Key", u.client.apiKey)
+	}
+
+	if err := u.client.addSignatureHeaders(httpReq, reqBody); err != nil {
+		return nil, err
 	}
 
 	resp, err := u.client.httpClient.Do(httpReq)

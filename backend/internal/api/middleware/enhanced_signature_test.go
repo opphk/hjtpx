@@ -604,14 +604,53 @@ func TestValidateEnhancedSignature(t *testing.T) {
 	}
 }
 
+func TestEnhancedSignatureInfoFields(t *testing.T) {
+	info := GetEnhancedSignatureInfo()
+
+	if info.Version != "3.0" {
+		t.Errorf("Version should be 3.0, got %s", info.Version)
+	}
+
+	if info.Algorithm != "HMAC-SHA256" {
+		t.Errorf("Default algorithm should be HMAC-SHA256, got %s", info.Algorithm)
+	}
+
+	if len(info.SupportedAlgorithms) != 4 {
+		t.Errorf("Should have 4 supported algorithms, got %d", len(info.SupportedAlgorithms))
+	}
+
+	expectedAlgos := []string{"HMAC-SHA256", "HMAC-SHA512", "BLAKE2B-256", "BLAKE2B-512"}
+	for i, algo := range info.SupportedAlgorithms {
+		if algo != expectedAlgos[i] {
+			t.Errorf("Algorithm %d should be %s, got %s", i, expectedAlgos[i], algo)
+		}
+	}
+
+	if !info.Features.Blake2b {
+		t.Error("Blake2b feature should be enabled")
+	}
+
+	if !info.Features.AuditLog {
+		t.Error("AuditLog feature should be enabled")
+	}
+
+	if !info.Features.PerformanceLog {
+		t.Error("PerformanceLog feature should be enabled")
+	}
+
+	if !info.Features.SignatureCache {
+		t.Error("SignatureCache feature should be enabled")
+	}
+}
+
 func TestGetEnhancedSignatureInfo(t *testing.T) {
 	info := GetEnhancedSignatureInfo()
 
-	if info.Algorithm != "SHA256" {
-		t.Error("Algorithm should be SHA256")
+	if info.Algorithm != "HMAC-SHA256" {
+		t.Error("Algorithm should be HMAC-SHA256")
 	}
-	if info.Version != "2.0" {
-		t.Error("Version should be 2.0")
+	if info.Version != "3.0" {
+		t.Error("Version should be 3.0")
 	}
 	if !info.NonceRequired {
 		t.Error("Nonce should be required")

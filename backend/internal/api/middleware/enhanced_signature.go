@@ -20,14 +20,17 @@ import (
 	"math"
 	"math/big"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	"golang.org/x/crypto/blake2b"
 )
 
 type EnhancedSignatureConfig struct {
@@ -40,8 +43,10 @@ type EnhancedSignatureConfig struct {
 	SignatureHeader       string
 	TimestampHeader       string
 	NonceHeader           string
+	AlgorithmHeader       string
 	ExcludePaths          []string
 	EnableHMAC_SHA512     bool
+	EnableBlake2b         bool
 	EnableDoubleSignature bool
 	EnableSequenceCheck   bool
 	MaxSequenceGap        int64
@@ -57,6 +62,14 @@ type EnhancedSignatureConfig struct {
 	AdditionalHeaders     []string
 	SignatureVersion      string
 	DebugMode             bool
+	EnableKeyRotation     bool
+	KeyRotationInterval   time.Duration
+	MaxKeyHistory         int
+	EnableAuditLog        bool
+	AuditLogPath          string
+	EnablePerformanceLog  bool
+	CacheSignatures       bool
+	SignatureCacheSize    int
 }
 
 type EnhancedSignatureResult struct {
@@ -97,15 +110,431 @@ type ipRequestCounter struct {
 	resetTime time.Time
 }
 
+type SignatureAlgorithm string
+
+const (
+	AlgorithmHMACSHA256  SignatureAlgorithm = "HMAC-SHA256"
+	AlgorithmHMACSHA512  SignatureAlgorithm = "HMAC-SHA512"
+	AlgorithmBlake2b256  SignatureAlgorithm = "BLAKE2B-256"
+	AlgorithmBlake2b512  SignatureAlgorithm = "BLAKE2B-512"
+)
+
+func (a SignatureAlgorithm) IsValid() bool {
+	switch a {
+	case AlgorithmHMACSHA256, AlgorithmHMACSHA512, AlgorithmBlake2b256, AlgorithmBlake2b512:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a SignatureAlgorithm) GetHashFunc() func() hash.Hash {
+	switch a {
+	case AlgorithmHMACSHA256, AlgorithmBlake2b256:
+		return sha256.New
+	case AlgorithmHMACSHA512, AlgorithmBlake2b512:
+		return sha512.New
+	default:
+		return sha256.New
+	}
+}
+
+func (a SignatureAlgorithm) OutputLength() int {
+	switch a {
+	case AlgorithmBlake2b256, AlgorithmHMACSHA256:
+		return 32
+	case AlgorithmBlake2b512, AlgorithmHMACSHA512:
+		return 64
+	default:
+		return 32
+	}
+}
+
+type KeyRotationManager struct {
+	mu              sync.RWMutex
+	currentKey      []byte
+	keyVersion      int
+	keyHistory      []KeyVersion
+	rotationPeriod  time.Duration
+	maxHistory      int
+	lastRotation    time.Time
+	rotating        atomic.Bool
+	rotationCount   int64
+	onRotation      func(oldKey, newKey []byte)
+}
+
+type KeyVersion struct {
+	Version   int
+	Key       []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	Active    bool
+}
+
+func NewKeyRotationManager(initialKey []byte, rotationPeriod time.Duration, maxHistory int) *KeyRotationManager {
+	mgr := &KeyRotationManager{
+		currentKey:     initialKey,
+		keyVersion:    1,
+		keyHistory:    make([]KeyVersion, 0),
+		rotationPeriod: rotationPeriod,
+		maxHistory:    maxHistory,
+		lastRotation:  time.Now(),
+	}
+
+	mgr.keyHistory = append(mgr.keyHistory, KeyVersion{
+		Version:   1,
+		Key:       initialKey,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(rotationPeriod * time.Duration(maxHistory)),
+		Active:    true,
+	})
+
+	return mgr
+}
+
+func (k *KeyRotationManager) GetCurrentKey() []byte {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return k.currentKey
+}
+
+func (k *KeyRotationManager) GetKeyVersion() int {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return k.keyVersion
+}
+
+func (k *KeyRotationManager) ShouldRotate() bool {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return time.Since(k.lastRotation) >= k.rotationPeriod
+}
+
+func (k *KeyRotationManager) RotateKey() error {
+	if k.rotating.Load() {
+		return fmt.Errorf("rotation already in progress")
+	}
+
+	k.rotating.Store(true)
+	defer k.rotating.Store(false)
+
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	oldKey := make([]byte, len(k.currentKey))
+	copy(oldKey, k.currentKey)
+
+	newKey := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, newKey); err != nil {
+		return fmt.Errorf("failed to generate new key: %w", err)
+	}
+
+	for i := range k.keyHistory {
+		k.keyHistory[i].Active = false
+	}
+
+	k.keyVersion++
+	newVersion := KeyVersion{
+		Version:   k.keyVersion,
+		Key:       newKey,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(k.rotationPeriod * time.Duration(k.maxHistory)),
+		Active:    true,
+	}
+
+	k.keyHistory = append(k.keyHistory, newVersion)
+
+	if len(k.keyHistory) > k.maxHistory {
+		k.keyHistory = k.keyHistory[len(k.keyHistory)-k.maxHistory:]
+	}
+
+	k.currentKey = newKey
+	k.lastRotation = time.Now()
+
+	if k.onRotation != nil {
+		go k.onRotation(oldKey, newKey)
+	}
+
+	return nil
+}
+
+func (k *KeyRotationManager) GetHistoricalKey(version int) ([]byte, bool) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	for _, kv := range k.keyHistory {
+		if kv.Version == version {
+			return kv.Key, true
+		}
+	}
+	return nil, false
+}
+
+func (k *KeyRotationManager) GetKeyHistory() []KeyVersion {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	history := make([]KeyVersion, len(k.keyHistory))
+	copy(history, k.keyHistory)
+	return history
+}
+
+func (k *KeyRotationManager) ValidateKey(key []byte) bool {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+
+	if subtle.ConstantTimeCompare(k.currentKey, key) == 1 {
+		return true
+	}
+
+	for _, kv := range k.keyHistory {
+		if kv.Active && subtle.ConstantTimeCompare(kv.Key, key) == 1 {
+			return true
+		}
+	}
+
+	return false
+}
+
+type SignatureAuditLogger struct {
+	mu          sync.Mutex
+	logs        []SignatureAuditEntry
+	maxLogs     int
+	enableFile  bool
+	logFile     *os.File
+	enableJSON  bool
+}
+
+type SignatureAuditEntry struct {
+	Timestamp      time.Time     `json:"timestamp"`
+	RequestPath    string        `json:"request_path"`
+	ClientIP       string        `json:"client_ip"`
+	Algorithm      string        `json:"algorithm"`
+	Signature      string        `json:"signature"`
+	Valid          bool          `json:"valid"`
+	Reason         string        `json:"reason"`
+	ErrorCode      string        `json:"error_code,omitempty"`
+	Duration       time.Duration `json:"duration"`
+	UserAgent      string        `json:"user_agent,omitempty"`
+	KeyVersion     int           `json:"key_version,omitempty"`
+	ReplayDetected bool          `json:"replay_detected,omitempty"`
+}
+
+func NewSignatureAuditLogger(maxLogs int, logPath string) (*SignatureAuditLogger, error) {
+	logger := &SignatureAuditLogger{
+		logs:      make([]SignatureAuditEntry, 0, maxLogs),
+		maxLogs:   maxLogs,
+		enableFile: logPath != "",
+		enableJSON: true,
+	}
+
+	if logger.enableFile {
+		var err error
+		logger.logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open audit log file: %w", err)
+		}
+	}
+
+	return logger, nil
+}
+
+func (l *SignatureAuditLogger) Log(entry SignatureAuditEntry) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	entry.Timestamp = time.Now()
+	l.logs = append(l.logs, entry)
+
+	if len(l.logs) > l.maxLogs {
+		l.logs = l.logs[len(l.logs)-l.maxLogs:]
+	}
+
+	if l.enableFile && l.logFile != nil {
+		data, _ := json.Marshal(entry)
+		l.logFile.Write(data)
+		l.logFile.Write([]byte("\n"))
+	}
+}
+
+func (l *SignatureAuditLogger) GetLogs(limit int) []SignatureAuditEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if limit <= 0 || limit > len(l.logs) {
+		limit = len(l.logs)
+	}
+
+	logs := make([]SignatureAuditEntry, limit)
+	copy(logs, l.logs[len(l.logs)-limit:])
+	return logs
+}
+
+func (l *SignatureAuditLogger) GetFailedLogs(limit int) []SignatureAuditEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	failedLogs := make([]SignatureAuditEntry, 0)
+	for i := len(l.logs) - 1; i >= 0 && len(failedLogs) < limit; i-- {
+		if !l.logs[i].Valid {
+			failedLogs = append(failedLogs, l.logs[i])
+		}
+	}
+
+	return failedLogs
+}
+
+func (l *SignatureAuditLogger) Close() error {
+	if l.logFile != nil {
+		return l.logFile.Close()
+	}
+	return nil
+}
+
+type signatureCache struct {
+	mu      sync.RWMutex
+	cache   map[string]*cacheEntry
+	maxSize int
+	hits    int64
+	misses  int64
+}
+
+type cacheEntry struct {
+	signature []byte
+	expiresAt time.Time
+}
+
+func newSignatureCache(maxSize int) *signatureCache {
+	return &signatureCache{
+		cache:   make(map[string]*cacheEntry),
+		maxSize: maxSize,
+	}
+}
+
+func (c *signatureCache) get(key string) ([]byte, bool) {
+	c.mu.RLock()
+	entry, exists := c.cache[key]
+	c.mu.RUnlock()
+
+	if !exists {
+		atomic.AddInt64(&c.misses, 1)
+		return nil, false
+	}
+
+	if time.Now().After(entry.expiresAt) {
+		c.mu.Lock()
+		delete(c.cache, key)
+		c.mu.Unlock()
+		atomic.AddInt64(&c.misses, 1)
+		return nil, false
+	}
+
+	atomic.AddInt64(&c.hits, 1)
+	return entry.signature, true
+}
+
+func (c *signatureCache) set(key string, signature []byte, ttl time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.cache) >= c.maxSize {
+		c.evictOldest()
+	}
+
+	c.cache[key] = &cacheEntry{
+		signature: signature,
+		expiresAt: time.Now().Add(ttl),
+	}
+}
+
+func (c *signatureCache) evictOldest() {
+	var oldestKey string
+	var oldestTime time.Time
+
+	for key, entry := range c.cache {
+		if oldestTime.IsZero() || entry.expiresAt.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = entry.expiresAt
+		}
+	}
+
+	if oldestKey != "" {
+		delete(c.cache, oldestKey)
+	}
+}
+
+func (c *signatureCache) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache = make(map[string]*cacheEntry)
+}
+
+func (c *signatureCache) stats() (hits, misses int64, size int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.hits, c.misses, len(c.cache)
+}
+
 type signatureValidator struct {
-	config     EnhancedSignatureConfig
-	nonceCache *enhancedNonceCache
-	state      *enhancedSignatureState
+	config       EnhancedSignatureConfig
+	nonceCache   *enhancedNonceCache
+	state        *enhancedSignatureState
+	keyManager   *KeyRotationManager
+	auditLogger  *SignatureAuditLogger
+	signatureCache *signatureCache
+	performanceStats PerformanceStats
+}
+
+type PerformanceStats struct {
+	totalValidations    int64
+	totalValid          int64
+	totalInvalid        int64
+	totalDurationNanos  int64
+	algorithmUsage       map[string]int64
+	mu                  sync.RWMutex
+}
+
+func NewPerformanceStats() *PerformanceStats {
+	return &PerformanceStats{
+		algorithmUsage: make(map[string]int64),
+	}
+}
+
+func (p *PerformanceStats) RecordValidation(algorithm string, valid bool, duration time.Duration) {
+	atomic.AddInt64(&p.totalValidations, 1)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if valid {
+		atomic.AddInt64(&p.totalValid, 1)
+	} else {
+		atomic.AddInt64(&p.totalInvalid, 1)
+	}
+
+	atomic.AddInt64(&p.totalDurationNanos, duration.Nanoseconds())
+	p.algorithmUsage[algorithm]++
+}
+
+func (p *PerformanceStats) GetStats() map[string]interface{} {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	totalDuration := atomic.LoadInt64(&p.totalDurationNanos)
+	totalValidations := atomic.LoadInt64(&p.totalValidations)
+
+	return map[string]interface{}{
+		"total_validations": atomic.LoadInt64(&p.totalValidations),
+		"total_valid":       atomic.LoadInt64(&p.totalValid),
+		"total_invalid":     atomic.LoadInt64(&p.totalInvalid),
+		"average_duration":  time.Duration(totalDuration) / time.Duration(totalValidations),
+		"algorithm_usage":   p.algorithmUsage,
+	}
 }
 
 var defaultEnhancedSignatureConfig = EnhancedSignatureConfig{
 	SecretKey:             "enhanced-secret-key-change-in-production",
-	Algorithm:             "SHA256",
+	Algorithm:             "HMAC-SHA256",
 	TimestampTolerance:    5 * time.Minute,
 	RequireTimestamp:      true,
 	RequireNonce:          true,
@@ -113,8 +542,10 @@ var defaultEnhancedSignatureConfig = EnhancedSignatureConfig{
 	SignatureHeader:       "X-Signature",
 	TimestampHeader:       "X-Timestamp",
 	NonceHeader:           "X-Nonce",
+	AlgorithmHeader:       "X-Signature-Algorithm",
 	ExcludePaths:          []string{"/health", "/api/health", "/metrics", "/api/metrics", "/swagger/*", "/docs/*"},
 	EnableHMAC_SHA512:     false,
+	EnableBlake2b:         true,
 	EnableDoubleSignature: false,
 	EnableSequenceCheck:   false,
 	MaxSequenceGap:        10,
@@ -128,8 +559,16 @@ var defaultEnhancedSignatureConfig = EnhancedSignatureConfig{
 	EnableIntegrityCheck:  true,
 	BodyIntegrityHeader:   "X-Body-Integrity",
 	AdditionalHeaders:     []string{"X-Request-ID", "X-Forwarded-For"},
-	SignatureVersion:      "2.0",
+	SignatureVersion:      "3.0",
 	DebugMode:             false,
+	EnableKeyRotation:     false,
+	KeyRotationInterval:   24 * time.Hour,
+	MaxKeyHistory:         10,
+	EnableAuditLog:        true,
+	AuditLogPath:          "",
+	EnablePerformanceLog:  true,
+	CacheSignatures:       true,
+	SignatureCacheSize:    10000,
 }
 
 var globalEnhancedNonceCache = &enhancedNonceCache{
@@ -145,6 +584,72 @@ var globalEnhancedSignatureState = &enhancedSignatureState{
 func init() {
 	go globalEnhancedNonceCache.cleanupLoop()
 	go globalEnhancedSignatureState.cleanupLoop()
+}
+
+var globalKeyRotationManager *KeyRotationManager
+var globalAuditLogger *SignatureAuditLogger
+var globalSignatureCache *signatureCache
+var globalPerformanceStats *PerformanceStats
+
+func init() {
+	initialKey := []byte(defaultEnhancedSignatureConfig.SecretKey)
+	globalKeyRotationManager = NewKeyRotationManager(initialKey, defaultEnhancedSignatureConfig.KeyRotationInterval, defaultEnhancedSignatureConfig.MaxKeyHistory)
+	globalSignatureCache = newSignatureCache(defaultEnhancedSignatureConfig.SignatureCacheSize)
+	globalPerformanceStats = NewPerformanceStats()
+
+	if defaultEnhancedSignatureConfig.EnableAuditLog {
+		var err error
+		globalAuditLogger, err = NewSignatureAuditLogger(10000, defaultEnhancedSignatureConfig.AuditLogPath)
+		if err != nil {
+			fmt.Printf("[EnhancedSignature] Warning: failed to initialize audit logger: %v\n", err)
+		}
+	}
+
+	if defaultEnhancedSignatureConfig.EnableKeyRotation {
+		go startKeyRotationLoop()
+	}
+}
+
+func startKeyRotationLoop() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if globalKeyRotationManager.ShouldRotate() {
+			if err := globalKeyRotationManager.RotateKey(); err != nil {
+				fmt.Printf("[EnhancedSignature] Key rotation failed: %v\n", err)
+			} else {
+				fmt.Printf("[EnhancedSignature] Key rotated successfully, new version: %d\n", globalKeyRotationManager.GetKeyVersion())
+				if globalSignatureCache != nil {
+					globalSignatureCache.clear()
+					fmt.Printf("[EnhancedSignature] Signature cache cleared after key rotation\n")
+				}
+			}
+		}
+	}
+}
+
+func GetKeyRotationManager() *KeyRotationManager {
+	return globalKeyRotationManager
+}
+
+func GetAuditLogger() *SignatureAuditLogger {
+	return globalAuditLogger
+}
+
+func GetSignatureCache() *signatureCache {
+	return globalSignatureCache
+}
+
+func GetPerformanceStats() *PerformanceStats {
+	return globalPerformanceStats
+}
+
+func TriggerKeyRotation() error {
+	if globalKeyRotationManager == nil {
+		return fmt.Errorf("key rotation manager not initialized")
+	}
+	return globalKeyRotationManager.RotateKey()
 }
 
 func (n *enhancedNonceCache) cleanupLoop() {
@@ -358,6 +863,59 @@ func computeEnhancedHMAC(key, data string, useSHA512 bool) string {
 	mac := hmac.New(h, []byte(key))
 	mac.Write([]byte(data))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func computeSignatureWithAlgorithm(key, data string, algorithm SignatureAlgorithm) string {
+	switch algorithm {
+	case AlgorithmHMACSHA256:
+		mac := hmac.New(sha256.New, []byte(key))
+		mac.Write([]byte(data))
+		return hex.EncodeToString(mac.Sum(nil))
+
+	case AlgorithmHMACSHA512:
+		mac := hmac.New(sha512.New, []byte(key))
+		mac.Write([]byte(data))
+		return hex.EncodeToString(mac.Sum(nil))
+
+	case AlgorithmBlake2b256:
+		hash, err := blake2b.New256([]byte(key))
+		if err != nil {
+			return ""
+		}
+		hash.Write([]byte(data))
+		return hex.EncodeToString(hash.Sum(nil))
+
+	case AlgorithmBlake2b512:
+		hash, err := blake2b.New512([]byte(key))
+		if err != nil {
+			return ""
+		}
+		hash.Write([]byte(data))
+		return hex.EncodeToString(hash.Sum(nil))
+
+	default:
+		mac := hmac.New(sha256.New, []byte(key))
+		mac.Write([]byte(data))
+		return hex.EncodeToString(mac.Sum(nil))
+	}
+}
+
+func computeBlake2b256(key, data []byte) ([]byte, error) {
+	hash, err := blake2b.New256(key)
+	if err != nil {
+		return nil, err
+	}
+	hash.Write(data)
+	return hash.Sum(nil), nil
+}
+
+func computeBlake2b512(key, data []byte) ([]byte, error) {
+	hash, err := blake2b.New512(key)
+	if err != nil {
+		return nil, err
+	}
+	hash.Write(data)
+	return hash.Sum(nil), nil
 }
 
 func hashBodyEnhanced(body []byte) string {
@@ -724,6 +1282,44 @@ func GenerateEnhancedSignature(secretKey, method, path, query string, timestamp 
 	return calculateEnhancedSignature(secretKey, method, path, query, timestamp, nonce, bodyHash, additionalData...)
 }
 
+func GenerateSignatureWithAlgorithm(secretKey, method, path, query string, timestamp int64, nonce string, body []byte, algorithm SignatureAlgorithm, additionalData ...string) string {
+	bodyHash := hashBodyEnhanced(body)
+	stringToSign := buildEnhancedStringToSign(method, path, query, timestamp, nonce, bodyHash, additionalData...)
+	return computeSignatureWithAlgorithm(secretKey, stringToSign, algorithm)
+}
+
+func GenerateSignatureWithKeyManager(keyManager *KeyRotationManager, method, path, query string, timestamp int64, nonce string, body []byte, algorithm SignatureAlgorithm, additionalData ...string) (string, int) {
+	bodyHash := hashBodyEnhanced(body)
+	stringToSign := buildEnhancedStringToSign(method, path, query, timestamp, nonce, bodyHash, additionalData...)
+	key := keyManager.GetCurrentKey()
+	signature := computeSignatureWithAlgorithm(string(key), stringToSign, algorithm)
+	return signature, keyManager.GetKeyVersion()
+}
+
+func VerifySignatureWithAlgorithm(secretKey, method, path, query string, timestamp int64, nonce string, body []byte, providedSignature string, algorithm SignatureAlgorithm, additionalData ...string) bool {
+	expectedSignature := GenerateSignatureWithAlgorithm(secretKey, method, path, query, timestamp, nonce, body, algorithm, additionalData...)
+	return secureCompareEnhanced(providedSignature, expectedSignature)
+}
+
+func VerifySignatureWithKeyManager(keyManager *KeyRotationManager, method, path, query string, timestamp int64, nonce string, body []byte, providedSignature string, algorithm SignatureAlgorithm, keyVersion int, additionalData ...string) bool {
+	bodyHash := hashBodyEnhanced(body)
+	stringToSign := buildEnhancedStringToSign(method, path, query, timestamp, nonce, bodyHash, additionalData...)
+
+	var key []byte
+	if keyVersion == keyManager.GetKeyVersion() {
+		key = keyManager.GetCurrentKey()
+	} else {
+		var found bool
+		key, found = keyManager.GetHistoricalKey(keyVersion)
+		if !found {
+			return false
+		}
+	}
+
+	expectedSignature := computeSignatureWithAlgorithm(string(key), stringToSign, algorithm)
+	return secureCompareEnhanced(providedSignature, expectedSignature)
+}
+
 func GenerateEnhancedNonce(length int) (string, error) {
 	if length < 8 {
 		length = 16
@@ -832,12 +1428,18 @@ type EnhancedSignatureInfo struct {
 	NonceRequired bool   `json:"nonce_required"`
 	Tolerance     string `json:"tolerance"`
 	Version       string `json:"version"`
+	SupportedAlgorithms []string `json:"supported_algorithms"`
 	Features      struct {
 		HMAC_SHA512      bool `json:"hmac_sha512"`
+		Blake2b          bool `json:"blake2b"`
 		DoubleSignature  bool `json:"double_signature"`
 		SequenceCheck    bool `json:"sequence_check"`
 		ReplayProtection bool `json:"replay_protection"`
 		IntegrityCheck   bool `json:"integrity_check"`
+		KeyRotation      bool `json:"key_rotation"`
+		AuditLog         bool `json:"audit_log"`
+		PerformanceLog   bool `json:"performance_log"`
+		SignatureCache   bool `json:"signature_cache"`
 	} `json:"features"`
 }
 
@@ -849,19 +1451,30 @@ func GetEnhancedSignatureInfo() EnhancedSignatureInfo {
 		NonceRequired: cfg.RequireNonce,
 		Tolerance:     cfg.TimestampTolerance.String(),
 		Version:       cfg.SignatureVersion,
+		SupportedAlgorithms: []string{
+			string(AlgorithmHMACSHA256),
+			string(AlgorithmHMACSHA512),
+			string(AlgorithmBlake2b256),
+			string(AlgorithmBlake2b512),
+		},
 	}
 	info.Features.HMAC_SHA512 = cfg.EnableHMAC_SHA512
+	info.Features.Blake2b = cfg.EnableBlake2b
 	info.Features.DoubleSignature = cfg.EnableDoubleSignature
 	info.Features.SequenceCheck = cfg.EnableSequenceCheck
 	info.Features.ReplayProtection = cfg.EnableReplayCache
 	info.Features.IntegrityCheck = cfg.EnableIntegrityCheck
+	info.Features.KeyRotation = cfg.EnableKeyRotation
+	info.Features.AuditLog = cfg.EnableAuditLog
+	info.Features.PerformanceLog = cfg.EnablePerformanceLog
+	info.Features.SignatureCache = cfg.CacheSignatures
 	return info
 }
 
 func NewEnhancedSignatureConfig(secretKey string) EnhancedSignatureConfig {
 	return EnhancedSignatureConfig{
 		SecretKey:             secretKey,
-		Algorithm:             "SHA256",
+		Algorithm:             "HMAC-SHA256",
 		TimestampTolerance:    5 * time.Minute,
 		RequireTimestamp:      true,
 		RequireNonce:          true,
@@ -869,8 +1482,10 @@ func NewEnhancedSignatureConfig(secretKey string) EnhancedSignatureConfig {
 		SignatureHeader:       "X-Signature",
 		TimestampHeader:       "X-Timestamp",
 		NonceHeader:           "X-Nonce",
+		AlgorithmHeader:       "X-Signature-Algorithm",
 		ExcludePaths:          []string{},
 		EnableHMAC_SHA512:     false,
+		EnableBlake2b:         true,
 		EnableDoubleSignature: false,
 		EnableSequenceCheck:   false,
 		MaxSequenceGap:        10,
@@ -884,8 +1499,16 @@ func NewEnhancedSignatureConfig(secretKey string) EnhancedSignatureConfig {
 		EnableIntegrityCheck:  true,
 		BodyIntegrityHeader:   "X-Body-Integrity",
 		AdditionalHeaders:     []string{"X-Request-ID", "X-Forwarded-For"},
-		SignatureVersion:      "2.0",
+		SignatureVersion:      "3.0",
 		DebugMode:             false,
+		EnableKeyRotation:     false,
+		KeyRotationInterval:   24 * time.Hour,
+		MaxKeyHistory:         10,
+		EnableAuditLog:        true,
+		AuditLogPath:          "",
+		EnablePerformanceLog:  true,
+		CacheSignatures:       true,
+		SignatureCacheSize:    10000,
 	}
 }
 
