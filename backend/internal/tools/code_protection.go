@@ -198,6 +198,9 @@ func (p *Protector) Protect(code string) (string, error) {
 	}
 
 	protected := p.addAntiDebug(obfuscated)
+	protected = p.addAdvancedAntiDebug(protected)
+	protected = p.addPerformanceMonitoring(protected)
+	protected = p.addMemoryMonitoring(protected)
 
 	protected = "(function(){" + protected + "})();"
 
@@ -224,6 +227,53 @@ func (p *Protector) ProtectWithLevel(code string, level int) (string, error) {
 
 	protected := p.addAntiDebug(obfuscated)
 
+	if level >= 2 {
+		protected = p.addAdvancedAntiDebug(protected)
+		protected = p.addPerformanceMonitoring(protected)
+	}
+
+	if level >= 3 {
+		protected = p.addMemoryMonitoring(protected)
+		protected = p.addNetworkMonitoring(protected)
+	}
+
+	protected = "(function(){" + protected + "})();"
+
+	return protected, nil
+}
+
+func (p *Protector) ProtectWithAllFeatures(code string) (string, error) {
+	config := ObfuscatorConfig{
+		EnableVariableObfuscation:    true,
+		EnableStringEncryption:       true,
+		EnableCodeCompression:        true,
+		EnableControlFlowFlattening:  true,
+		EnableDeadCodeInjection:      true,
+		EnableFunctionWrapping:      true,
+		EnableAdvancedAntiDebug:     true,
+		EnableMemoryProtection:      true,
+		EnableSelfDestruct:          false,
+		EnableCodeIntegrity:         true,
+		EnableDynamicAnalysis:      true,
+		EnableTimingProtection:      true,
+		EnableHeapSprayProtection:   false,
+		RemoveComments:              true,
+		StringEncryptionKey:          p.crypto.GetSecretKey(),
+		EnhancedEncryptionLevel:     3,
+	}
+
+	obfuscator := NewObfuscator(config)
+	obfuscated, err := obfuscator.Obfuscate(code)
+	if err != nil {
+		return code, err
+	}
+
+	protected := p.addAntiDebug(obfuscated)
+	protected = p.addAdvancedAntiDebug(protected)
+	protected = p.addPerformanceMonitoring(protected)
+	protected = p.addMemoryMonitoring(protected)
+	protected = p.addNetworkMonitoring(protected)
+
 	protected = "(function(){" + protected + "})();"
 
 	return protected, nil
@@ -236,9 +286,156 @@ var t=window.outerWidth-window.innerWidth,o=window.outerHeight-window.innerHeigh
 if(t>160||o>160){document.documentElement.style.display='none';document.body.innerHTML='<h1>Developer Tools Detected</h1>';}
 var e=Object.defineProperty({},'toString',{get:function(){this.t=1}});
 setInterval(function(){e.t&&(document.documentElement.style.display='none');},1e3);
+var d=document.createElement('div');
+Object.defineProperty(d,'id',{get:function(){document.documentElement.style.display='none';}});
+document.body.appendChild(d);
+!function(){var n=0;Object.defineProperty(window,'devtools',{get:function(){return ++n>1?document.documentElement.style.display='none':void 0;}});}();
+!function(){var f=function(){var s=Date.now();debugger;var e=Date.now()-s;if(e>100){document.documentElement.style.display='none';document.body.innerHTML='<h1>Debugging Detected</h1>';}};setInterval(f,2000);}();
 }();
 `
 	return antiDebug + code
+}
+
+func (p *Protector) addAdvancedAntiDebug(code string) string {
+	antiDebug := `
+!function(){
+var _0xAD={
+	active:!0,
+	t:0,
+	checks:function(){
+		var _0xT=!1;
+		if(window.outerWidth-window.innerWidth>200||window.outerHeight-window.innerHeight>200){
+			_0xT=!0;
+		}
+		var _0xD=new Date();
+		var _0xS=_0xD.getTime();
+		debugger;
+		var _0xE=new Date();
+		if(_0xE.getTime()-_0xS>50){
+			_0xT=!0;
+		}
+		try{
+			var _0xC=console.log.toString().length;
+			if(_0xC>30){
+				_0xT=!0;
+			}
+		}catch(_0xErr){}
+		try{
+			null[0]=1;
+		}catch(_0xE){
+			if(_0xE.number===-2146823281){
+				_0xT=!0;
+			}
+		}
+		return _0xT;
+	},
+	block:function(){
+		if(!this.active)return;
+		document.documentElement.style.display='none';
+		document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;"><h1>Security Violation</h1></div>';
+		this.active=!1;
+		throw new Error('Anti-debug triggered');
+	},
+	protect:function(){
+		var _0xS=this;
+		setInterval(function(){
+			if(_0xS.checks()){
+				_0xS.block();
+			}
+		},1000);
+		Object.defineProperty(window,'__probe__',{get:function(){return!0;}});
+	}
+};
+_0xAD.protect();
+window.__AD=_0xAD;
+}();
+`
+	return antiDebug + code
+}
+
+func (p *Protector) addPerformanceMonitoring(code string) string {
+	monitoring := `
+!function(){
+var _0xPM={
+	samples:[],
+	maxSamples:100,
+	detectAnomaly:function(){
+		var _0xT=performance.now();
+		var _0xSum=0;
+		for(var _0xI=0;_0xI<1000;_0xI++){
+			_0xSum+=Math.random();
+		}
+		var _0xE=performance.now()-_0xT;
+		this.samples.push(_0xE);
+		if(this.samples.length>this.maxSamples){
+			this.samples.shift();
+		}
+		var _0xAvg=this.samples.reduce(function(a,b){return a+b;},0)/this.samples.length;
+		if(_0xE>_0xAvg*10){
+			document.documentElement.style.display='none';
+		}
+	}
+};
+setInterval(function(){_0xPM.detectAnomaly();},5000);
+window.__PM=_0xPM;
+}();
+`
+	return code + monitoring
+}
+
+func (p *Protector) addMemoryMonitoring(code string) string {
+	monitoring := `
+!function(){
+var _0xMM={
+	originalFunctions:{},
+	protect:function(){
+		var _0xS=['toString','valueOf','hasOwnProperty'];
+		for(var _0xI=0;_0xI<_0xS.length;_0xI++){
+			var _0xF=Object.prototype[_0xS[_0xI]];
+			if(typeof _0xF==='function'){
+				var _0xC=_0xF.toString();
+				if(_0xC.indexOf('[native code]')===-1){
+					document.documentElement.style.display='none';
+					document.body.innerHTML='<h1>Memory Tampering Detected</h1>';
+				}
+			}
+		}
+	}
+};
+setInterval(function(){_0xMM.protect();},3000);
+window.__MM=_0xMM;
+}();
+`
+	return code + monitoring
+}
+
+func (p *Protector) addNetworkMonitoring(code string) string {
+	monitoring := `
+!function(){
+var _0xNM={
+	blockedDomains:[],
+	monitor:function(){
+		var _0xO=Object.getOwnPropertyNames(window);
+		for(var _0xI=0;_0xI<_0xO.length;_0xI++){
+			if(_0xO[_0xI].indexOf('eval')>-1||_0xO[_0xI].indexOf('Function')>-1){
+				try{
+					var _0xF=window[_0xO[_0xI]];
+					if(typeof _0xF==='function'){
+						var _0xS=_0xF.toString();
+						if(_0xS.indexOf('[native code]')===-1){
+							document.documentElement.style.display='none';
+						}
+					}
+				}catch(_0xE){}
+			}
+		}
+	}
+};
+setInterval(function(){_0xNM.monitor();},5000);
+window.__NM=_0xNM;
+}();
+`
+	return code + monitoring
 }
 
 func (p *Protector) EncryptAndProtect(code string) (string, error) {

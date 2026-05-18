@@ -464,6 +464,16 @@ func (o *Obfuscator) encryptStringAdvanced(s string) string {
 		return o.encryptStringCustomTable(s)
 	case "aes-base64":
 		return o.encryptStringAESBase64(s)
+	case "polynomial":
+		return o.encryptStringPolynomial(s)
+	case "rot13":
+		return o.encryptStringRot13(s)
+	case "base36":
+		return o.encryptStringBase36(s)
+	case "hex":
+		return o.encryptStringHex(s)
+	case "unicode":
+		return o.encryptStringUnicode(s)
 	default:
 		return o.encryptStringAESGCM(s)
 	}
@@ -668,6 +678,73 @@ func (o *Obfuscator) encryptStringXOR(s string) string {
 	return fmt.Sprintf("__xor_%d__('%s')", o.stringCount, encoded)
 }
 
+func (o *Obfuscator) encryptStringPolynomial(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-polynomial-key")
+	}
+
+	var encrypted strings.Builder
+	for i, c := range s {
+		coef := int(key[i%len(key)])
+		poly := coef*coef*coef + coef*coef + coef + 1
+		encrypted.WriteByte(byte(c) ^ byte(poly%256))
+	}
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(encrypted.String()))
+	o.stringCount++
+
+	return fmt.Sprintf("__poly_%d__('%s')", o.stringCount, encoded)
+}
+
+func (o *Obfuscator) encryptStringRot13(s string) string {
+	var encrypted strings.Builder
+	for _, c := range s {
+		if c >= 'a' && c <= 'z' {
+			encrypted.WriteByte((c-'a'+13)%26 + 'a')
+		} else if c >= 'A' && c <= 'Z' {
+			encrypted.WriteByte((c-'A'+13)%26 + 'A')
+		} else {
+			encrypted.WriteByte(byte(c))
+		}
+	}
+
+	o.stringCount++
+	return fmt.Sprintf("__r13_%d__('%s')", o.stringCount, encrypted.String())
+}
+
+func (o *Obfuscator) encryptStringBase36(s string) string {
+	chars := "0123456789abcdefghijklmnopqrstuvwxyz"
+	var encoded strings.Builder
+	for _, c := range s {
+		idx := int(c) % 36
+		encoded.WriteByte(chars[idx])
+	}
+
+	o.stringCount++
+	return fmt.Sprintf("__b36_%d__('%s')", o.stringCount, encoded.String())
+}
+
+func (o *Obfuscator) encryptStringHex(s string) string {
+	var encoded strings.Builder
+	for _, c := range s {
+		encoded.WriteString(fmt.Sprintf("\\x%02x", c))
+	}
+
+	o.stringCount++
+	return fmt.Sprintf("__hex_%d__('%s')", o.stringCount, encoded.String())
+}
+
+func (o *Obfuscator) encryptStringUnicode(s string) string {
+	var encoded strings.Builder
+	for _, c := range s {
+		encoded.WriteString(fmt.Sprintf("\\u%04x", c))
+	}
+
+	o.stringCount++
+	return fmt.Sprintf("__uni_%d__('%s')", o.stringCount, encoded.String())
+}
+
 func (o *Obfuscator) shouldEncryptString(s string) bool {
 	if len(s) < 3 {
 		return false
@@ -852,6 +929,68 @@ func (o *Obfuscator) generateDecoderFunctionsAdvanced() string {
 		}
 		return String.fromCharCode.apply(null,_0xR);
 	};
+
+	window.__poly_=function(_0xD){
+		var _0xC=atob(_0xD);
+		var _0xR=[];
+		for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+			var _0xK=_0xKey.charCodeAt(_0xI%_0xKey.length);
+			var _0xP=_0xK*_0xK*_0xK+_0xK*_0xK+_0xK+1;
+			_0xR.push(_0xC.charCodeAt(_0xI)^(_0xP%256));
+		}
+		return String.fromCharCode.apply(null,_0xR);
+	};
+
+	window.__r13_=function(_0xD){
+		var _0xR='';
+		for(var _0xI=0;_0xI<_0xD.length;_0xI++){
+			var _0xC=_0xD.charCodeAt(_0xI);
+			if(_0xC>=97&&_0xC<=122){
+				_0xR+=String.fromCharCode((_0xC-97+13)%26+97);
+			}else if(_0xC>=65&&_0xC<=90){
+				_0xR+=String.fromCharCode((_0xC-65+13)%26+65);
+			}else{
+				_0xR+=_0xD.charAt(_0xI);
+			}
+		}
+		return _0xR;
+	};
+
+	window.__b36_=function(_0xD){
+		var _0xCH='0123456789abcdefghijklmnopqrstuvwxyz';
+		var _0xR='';
+		for(var _0xI=0;_0xI<_0xD.length;_0xI++){
+			var _0xC=_0xD.charCodeAt(_0xI);
+			var _0xIDX=_0xCH.indexOf(_0xD.charAt(_0xI));
+			if(_0xIDX>=0){
+				var _0xOR=(_0xIDX*36+_0xI)%256;
+				_0xR+=String.fromCharCode(_0xOR);
+			}
+		}
+		return _0xR;
+	};
+
+	window.__hex_=function(_0xD){
+		var _0xR='';
+		var _0xM=_0xD.match(/\\x[0-9a-f]{2}/gi);
+		if(_0xM){
+			for(var _0xI=0;_0xI<_0xM.length;_0xI++){
+				_0xR+=String.fromCharCode(parseInt(_0xM[_0xI].replace('\\x',''),16));
+			}
+		}
+		return _0xR;
+	};
+
+	window.__uni_=function(_0xD){
+		var _0xR='';
+		var _0xM=_0xD.match(/\\\\u[0-9a-f]{4}/gi);
+		if(_0xM){
+			for(var _0xI=0;_0xI<_0xM.length;_0xI++){
+				_0xR+=String.fromCharCode(parseInt(_0xM[_0xI].replace('\\\\u',''),16));
+			}
+		}
+		return _0xR;
+	};
 `)
 
 	buf.WriteString(fmt.Sprintf(`})('%s');`, encodedKey))
@@ -1030,6 +1169,34 @@ func (o *Obfuscator) generateDeadCode() string {
 	buf.WriteString("var _0xD1=Math.random();")
 	buf.WriteString("var _0xD2=_0xD1>0?_0xD1:0;")
 	buf.WriteString("if(_0xD2<0){console.log('" + o.generateRandomString(8) + "');}")
+
+	buf.WriteString("var _0xDC=function(_0xP){return _0xP*Math.random();};")
+	buf.WriteString("var _0xDD=_0xDC(" + fmt.Sprintf("%d", time.Now().UnixNano()%1000) + ");")
+	buf.WriteString("if(_0xDD<0){eval('" + o.generateRandomString(16) + "');}")
+
+	buf.WriteString("var _0xDE={};Object.defineProperty(_0xDE,'" + o.generateRandomString(6) + "',{get:function(){return Math.PI;}});")
+
+	return buf.String()
+}
+
+func (o *Obfuscator) generateAdvancedDeadCode() string {
+	var buf strings.Builder
+
+	buf.WriteString("(function(){")
+	buf.WriteString("var _0xA=Math.random();")
+	buf.WriteString("var _0xB=_0xA>0.5?function(){return 'dead';}:function(){return null;};")
+
+	for i := 0; i < 3; i++ {
+		buf.WriteString(fmt.Sprintf("var _0xF%d=function(){var _0xV%d=%d;return _0xV%d*Math.sin(%d);};",
+			i, i, i+1, i, i+2))
+	}
+
+	buf.WriteString("var _0xG=[];")
+	buf.WriteString("for(var _0xI=0;_0xI<5;_0xI++){_0xG.push(Math.random());}")
+	buf.WriteString("var _0xH=_0xG.reduce(function(a,b){return a+b;},0);")
+
+	buf.WriteString("})();")
+
 	return buf.String()
 }
 
@@ -2268,6 +2435,95 @@ func (o *Obfuscator) AddMemoryProtection(code string) string {
 })();
 `
 	return code + memoryProtection
+}
+
+func (o *Obfuscator) AddAntiVMDetection(code string) string {
+	antiVM := `
+;(function(){
+	var _0xVM={
+		checks:[],
+		detect:function(){
+			var _0xR=false;
+
+			try{
+				if(typeof navigator.cpuClass!=='undefined'){
+					_0xR=true;
+				}
+			}catch(e){}
+
+			try{
+				if(typeof window.orientation!=='undefined'){
+					_0xR=true;
+				}
+			}catch(e){}
+
+			try{
+				var _0xD=document.createElement('div');
+				_0xD.style.cssText='pointer-events:none';
+				if(_0xD.style.pointerEvents==='none'){
+					_0xR=true;
+				}
+			}catch(e){}
+
+			try{
+				if(navigator.language==='en-US'&&!navigator.languages.includes('en-US')){
+					_0xR=true;
+				}
+			}catch(e){}
+
+			try{
+				var _0xC=document.createElement('canvas');
+				if(_0xC.getContext&&!_0xC.toDataURL().startsWith('data:image/png')){
+					_0xR=true;
+				}
+			}catch(e){}
+
+			return _0xR;
+		},
+		protect:function(){
+			if(this.detect()){
+				this.block();
+				return;
+			}
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>VM Detected</h1></div>';
+			throw new Error('Virtual machine detected');
+		}
+	};
+	_0xVM.protect();
+	window.__VM=_0xVM;
+})();
+`
+	return antiVM + code
+}
+
+func (o *Obfuscator) AddSelfDestruct(code string) string {
+	selfDestruct := `
+;(function(){
+	var _0xSD={
+		active:true,
+		timeout:300000,
+		startTime:Date.now(),
+		check:function(){
+			if(!this.active)return;
+			var _0xE=Date.now()-this.startTime;
+			if(_0xE>this.timeout){
+				this.destroy();
+			}
+		},
+		destroy:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='';
+			throw new Error('Session expired');
+		}
+	};
+	setInterval(function(){_0xSD.check();},60000);
+	window.__SD=_0xSD;
+})();
+`
+	return selfDestruct + code
 }
 
 func (o *Obfuscator) ApplyAdvancedObfuscation(code string) (string, error) {

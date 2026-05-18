@@ -2,14 +2,16 @@
     'use strict';
 
     const CryptoWasm = (function() {
-        const VERSION = '2.0.0';
-        const MODULE_NAME = 'CryptoWasm';
-        const DEFAULT_ITERATIONS = 100000;
-        const AES_KEY_LENGTH = 256;
-        const IV_LENGTH = 12;
-        const SALT_LENGTH = 16;
-        const KEY_ROTATION_INTERVAL = 30 * 60 * 1000; // 30 minutes
-        const PRELOAD_PRIORITY = ['high', 'medium', 'low'];
+        const VERSION = '3.0.0';
+    const MODULE_NAME = 'CryptoWasm';
+    const DEFAULT_ITERATIONS = 100000;
+    const AES_KEY_LENGTH = 256;
+    const IV_LENGTH = 12;
+    const SALT_LENGTH = 16;
+    const KEY_ROTATION_INTERVAL = 30 * 60 * 1000;
+    const PRELOAD_PRIORITY = ['high', 'medium', 'low'];
+    const ENCRYPTION_ALGORITHMS = ['AES-GCM', 'AES-CTR', 'AES-CBC'];
+    const HASH_ALGORITHMS = ['SHA-256', 'SHA-384', 'SHA-512', 'SHA-1'];
 
         let wasmModule = null;
         let wasmExports = null;
@@ -179,18 +181,64 @@
 
             const saltBytes = salt instanceof Uint8Array ? salt : new Uint8Array(salt);
             
+            const iterationsToUse = iterations || DEFAULT_ITERATIONS;
+            const hashName = 'SHA-256';
+            
             const derivedBits = await crypto.subtle.deriveBits(
                 {
                     name: 'PBKDF2',
                     salt: saltBytes,
-                    iterations: iterations || DEFAULT_ITERATIONS,
-                    hash: 'SHA-256'
+                    iterations: iterationsToUse,
+                    hash: hashName
                 },
                 keyMaterial,
                 keyLength || AES_KEY_LENGTH
             );
 
             return new Uint8Array(derivedBits);
+        }
+
+        async function pbkdf2DeriveKeyAdvanced(password, salt, iterations, keyLength, hashAlgorithm) {
+            const encoder = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(password),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveBits', 'deriveKey']
+            );
+
+            const saltBytes = salt instanceof Uint8Array ? salt : new Uint8Array(salt);
+            
+            const derivedBits = await crypto.subtle.deriveBits(
+                {
+                    name: 'PBKDF2',
+                    salt: saltBytes,
+                    iterations: iterations || DEFAULT_ITERATIONS,
+                    hash: hashAlgorithm || 'SHA-256'
+                },
+                keyMaterial,
+                keyLength || AES_KEY_LENGTH
+            );
+
+            return new Uint8Array(derivedBits);
+        }
+
+        async function deriveKeyFromPassword(password, salt, options) {
+            options = options || {};
+            const iterations = options.iterations || DEFAULT_ITERATIONS;
+            const keyLength = options.keyLength || AES_KEY_LENGTH;
+            const hashAlgorithm = options.hash || 'SHA-256';
+            
+            const key = await pbkdf2DeriveKeyAdvanced(password, salt, iterations, keyLength, hashAlgorithm);
+            
+            return {
+                key: key,
+                algorithm: 'PBKDF2',
+                iterations: iterations,
+                hash: hashAlgorithm,
+                salt: salt instanceof Uint8Array ? salt : new Uint8Array(salt)
+            };
         }
 
         function allocateBuffer(size) {
@@ -351,6 +399,195 @@
 
                 plaintext = await crypto.subtle.decrypt(
                     algorithmOptions,
+                    importedKey,
+                    ciphertext
+                );
+            }
+
+            const decoder = new TextDecoder();
+            return decoder.decode(plaintext);
+        }
+
+        async function aesEncrypt(plaintext, key, options) {
+            options = options || {};
+            const algorithm = options.algorithm || 'AES-GCM';
+            
+            let keyData;
+            if (typeof key === 'string') {
+                const salt = options.salt || generateRandomBytes(SALT_LENGTH);
+                keyData = await pbkdf2DeriveKey(
+                    key,
+                    salt,
+                    options.iterations || DEFAULT_ITERATIONS,
+                    AES_KEY_LENGTH
+                );
+            } else {
+                keyData = key instanceof Uint8Array ? key : new Uint8Array(key);
+            }
+
+            const iv = options.iv || generateRandomBytes(IV_LENGTH);
+            const encoder = new TextEncoder();
+            const plaintextBuffer = encoder.encode(plaintext);
+
+            let ciphertext;
+            let tagLength = options.tagLength || 128;
+
+            if (algorithm === 'AES-GCM') {
+                const importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData.buffer,
+                    { name: 'AES-GCM' },
+                    false,
+                    ['encrypt']
+                );
+
+                const algorithmOptions = {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    tagLength: tagLength
+                };
+
+                if (options.additionalData) {
+                    algorithmOptions.additionalData = encoder.encode(options.additionalData);
+                }
+
+                ciphertext = await crypto.subtle.encrypt(
+                    algorithmOptions,
+                    importedKey,
+                    plaintextBuffer
+                );
+            } else if (algorithm === 'AES-CBC') {
+                const importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData.buffer,
+                    { name: 'AES-CBC' },
+                    false,
+                    ['encrypt']
+                );
+
+                ciphertext = await crypto.subtle.encrypt(
+                    {
+                        name: 'AES-CBC',
+                        iv: iv
+                    },
+                    importedKey,
+                    plaintextBuffer
+                );
+            } else if (algorithm === 'AES-CTR') {
+                const importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData.buffer,
+                    { name: 'AES-CTR' },
+                    false,
+                    ['encrypt']
+                );
+
+                ciphertext = await crypto.subtle.encrypt(
+                    {
+                        name: 'AES-CTR',
+                        counter: iv,
+                        counterBlockLength: 16
+                    },
+                    importedKey,
+                    plaintextBuffer
+                );
+            }
+
+            const salt = typeof options.salt !== 'undefined' ? 
+                (options.salt instanceof Uint8Array ? arrayBufferToBase64(options.salt) : options.salt) : 
+                null;
+
+            return {
+                ciphertext: arrayBufferToBase64(ciphertext),
+                iv: arrayBufferToBase64(iv),
+                salt: salt,
+                algorithm: algorithm,
+                tagLength: tagLength,
+                wasmUsed: false
+            };
+        }
+
+        async function aesDecrypt(encryptedData, key, options) {
+            options = options || {};
+            const algorithm = encryptedData.algorithm || 'AES-GCM';
+
+            let keyData;
+            if (typeof key === 'string') {
+                const salt = encryptedData.salt ? 
+                    (typeof encryptedData.salt === 'string' ? base64ToArrayBuffer(encryptedData.salt) : encryptedData.salt) :
+                    generateRandomBytes(SALT_LENGTH);
+                keyData = await pbkdf2DeriveKey(
+                    key,
+                    salt,
+                    options.iterations || DEFAULT_ITERATIONS,
+                    AES_KEY_LENGTH
+                );
+            } else {
+                keyData = key instanceof Uint8Array ? key : new Uint8Array(key);
+            }
+
+            const iv = new Uint8Array(base64ToArrayBuffer(encryptedData.iv));
+            const ciphertext = base64ToArrayBuffer(encryptedData.ciphertext);
+
+            let plaintext;
+
+            if (algorithm === 'AES-GCM') {
+                const importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData.buffer,
+                    { name: 'AES-GCM' },
+                    false,
+                    ['decrypt']
+                );
+
+                const algorithmOptions = {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    tagLength: encryptedData.tagLength || 128
+                };
+
+                if (encryptedData.additionalData) {
+                    const encoder = new TextEncoder();
+                    algorithmOptions.additionalData = encoder.encode(encryptedData.additionalData);
+                }
+
+                plaintext = await crypto.subtle.decrypt(
+                    algorithmOptions,
+                    importedKey,
+                    ciphertext
+                );
+            } else if (algorithm === 'AES-CBC') {
+                const importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData.buffer,
+                    { name: 'AES-CBC' },
+                    false,
+                    ['decrypt']
+                );
+
+                plaintext = await crypto.subtle.decrypt(
+                    {
+                        name: 'AES-CBC',
+                        iv: iv
+                    },
+                    importedKey,
+                    ciphertext
+                );
+            } else if (algorithm === 'AES-CTR') {
+                const importedKey = await crypto.subtle.importKey(
+                    'raw',
+                    keyData.buffer,
+                    { name: 'AES-CTR' },
+                    false,
+                    ['decrypt']
+                );
+
+                plaintext = await crypto.subtle.decrypt(
+                    {
+                        name: 'AES-CTR',
+                        counter: iv,
+                        counterBlockLength: 16
+                    },
                     importedKey,
                     ciphertext
                 );
@@ -772,19 +1009,25 @@
 
         return {
             VERSION: VERSION,
+            MODULE_NAME: MODULE_NAME,
+            ENCRYPTION_ALGORITHMS: ENCRYPTION_ALGORITHMS,
+            HASH_ALGORITHMS: HASH_ALGORITHMS,
             initialize: initialize,
             getStatus: getStatus,
             setUseWasm: setUseWasm,
             encrypt: aes256GcmEncrypt,
             decrypt: aes256GcmDecrypt,
+            aesEncrypt: aesEncrypt,
+            aesDecrypt: aesDecrypt,
             pbkdf2: pbkdf2DeriveKey,
+            pbkdf2Advanced: pbkdf2DeriveKeyAdvanced,
+            deriveKeyFromPassword: deriveKeyFromPassword,
             generateRandomBytes: generateRandomBytes,
             hashSHA256: hashSHA256,
             hmacSHA256: hmacSHA256,
             generateKeyPair: generateKeyPair,
             encryptWithPublicKey: encryptWithPublicKey,
             decryptWithPrivateKey: decryptWithPrivateKey,
-            // 新功能导出
             preloadWasm: preloadWasm,
             initializeWithBuffer: initializeWithBuffer,
             initializeKey: initializeKey,
