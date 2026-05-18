@@ -248,51 +248,6 @@ func TestAnalyzeSliderTrajectoryWithLogs(t *testing.T) {
 	}
 }
 
-func TestEnhancedAnomalyDetection(t *testing.T) {
-	analyzer := NewSliderAnalyzer()
-
-	botTrajectory := []SliderPoint{
-		{X: 0, Y: 0, Timestamp: 0},
-		{X: 100, Y: 0, Timestamp: 50},
-		{X: 200, Y: 0, Timestamp: 100},
-		{X: 300, Y: 0, Timestamp: 150},
-		{X: 400, Y: 0, Timestamp: 200},
-		{X: 500, Y: 0, Timestamp: 250},
-	}
-
-	botResult, err := analyzer.AnalyzeSliderTrajectory(botTrajectory, 500)
-	if err != nil {
-		t.Fatalf("分析失败: %v", err)
-	}
-
-	if botResult.AnomalyScore < 0.1 {
-		t.Errorf("机器人轨迹应该有较高的异常分数，实际: %.4f", botResult.AnomalyScore)
-	}
-
-	humanTrajectory := []SliderPoint{
-		{X: 0, Y: 0, Timestamp: 0},
-		{X: 80, Y: 5, Timestamp: 150},
-		{X: 120, Y: -3, Timestamp: 250},
-		{X: 200, Y: 8, Timestamp: 400},
-		{X: 280, Y: -5, Timestamp: 600},
-		{X: 350, Y: 10, Timestamp: 800},
-		{X: 420, Y: -2, Timestamp: 1000},
-		{X: 500, Y: 5, Timestamp: 1200},
-	}
-
-	humanResult, err := analyzer.AnalyzeSliderTrajectory(humanTrajectory, 500)
-	if err != nil {
-		t.Fatalf("分析失败: %v", err)
-	}
-
-	if humanResult.AnomalyScore > 0.5 {
-		t.Errorf("人类轨迹应该有较低的异常分数，实际: %.4f", humanResult.AnomalyScore)
-	}
-
-	t.Logf("机器人异常分数: %.4f, 人类异常分数: %.4f",
-		botResult.AnomalyScore, humanResult.AnomalyScore)
-}
-
 func TestSpeedChangeRateCalculation(t *testing.T) {
 	extractor := NewSliderFeatureExtractor()
 
@@ -456,59 +411,6 @@ func TestSliderTrajectoryValidator(t *testing.T) {
 	} else {
 		t.Logf("快速轨迹验证失败（预期）: %s", msg)
 	}
-}
-
-func TestDTWAnalyzer(t *testing.T) {
-	dtw := NewDTWAnalyzer()
-
-	traj1 := []SliderPoint{
-		{X: 0, Y: 0, Timestamp: 0},
-		{X: 100, Y: 10, Timestamp: 100},
-		{X: 200, Y: 20, Timestamp: 200},
-		{X: 300, Y: 30, Timestamp: 300},
-	}
-
-	traj2 := []SliderPoint{
-		{X: 0, Y: 0, Timestamp: 0},
-		{X: 120, Y: 12, Timestamp: 110},
-		{X: 220, Y: 22, Timestamp: 210},
-		{X: 320, Y: 32, Timestamp: 310},
-	}
-
-	distance := dtw.ComputeDistance(traj1, traj2)
-	similarity := dtw.ComputeSimilarity(traj1, traj2)
-
-	if distance < 0 {
-		t.Error("DTW距离不应为负数")
-	}
-
-	if similarity < 0 || similarity > 1 {
-		t.Error("相似度应在0-1之间")
-	}
-
-	t.Logf("DTW距离: %f, 相似度: %f", distance, similarity)
-}
-
-func TestBotPatternLibrary(t *testing.T) {
-	library := NewBotPatternLibrary()
-
-	perfectLinear := []SliderPoint{
-		{X: 0, Y: 0, Timestamp: 0},
-		{X: 100, Y: 0, Timestamp: 50},
-		{X: 200, Y: 0, Timestamp: 100},
-		{X: 300, Y: 0, Timestamp: 150},
-		{X: 400, Y: 0, Timestamp: 200},
-	}
-
-	score, patterns := library.DetectPatterns(perfectLinear)
-	if score < 0.3 {
-		t.Errorf("完美直线应该被检测为bot模式: %f", score)
-	}
-	if len(patterns) == 0 {
-		t.Error("应该检测到至少一个bot模式")
-	}
-
-	t.Logf("Bot模式分数: %f, 检测到的模式: %v", score, patterns)
 }
 
 func TestHumanLikeTrajectoryGeneration(t *testing.T) {

@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+var sfe *SliderFeatureExtractor
+
+func init() {
+	sfe = &SliderFeatureExtractor{}
+}
+
 type SliderTrajectory struct {
 	Points         []SliderPoint `json:"points"`
 	TotalDistance  float64       `json:"total_distance"`
@@ -121,6 +127,19 @@ type SliderFeatures struct {
 	BacktrackSpeed       float64   `json:"backtrack_speed"`
 	BacktrackIntent      float64   `json:"backtrack_intent"`
 	BacktrackPatterns    []BacktrackPattern `json:"backtrack_patterns"`
+	
+	JerkAverage          float64   `json:"jerk_average"`
+	JerkMax              float64   `json:"jerk_max"`
+	JerkVariance         float64   `json:"jerk_variance"`
+	InstantAcceleration  []float64 `json:"instant_acceleration"`
+	SpeedVolatility      float64   `json:"speed_volatility"`
+	AngularVelocity      float64   `json:"angular_velocity"`
+	AngularAcceleration  float64   `json:"angular_acceleration"`
+	PathCurvatureStats   CurvatureStats `json:"path_curvature_stats"`
+	AngleChangeRate      float64   `json:"angle_change_rate"`
+	SmoothnessIndex      float64   `json:"smoothness_index"`
+	BacktrackTypeDistribution map[string]int `json:"backtrack_type_distribution"`
+	BacktrackTiming      []int64   `json:"backtrack_timing"`
 }
 
 type SliderAnalyzer struct {
@@ -136,7 +155,1045 @@ type SliderMLModel struct {
 	featureExtractor *SliderFeatureExtractor
 }
 
+type CurvatureStats struct {
+	Mean       float64 `json:"mean"`
+	StdDev     float64 `json:"std_dev"`
+	Max        float64 `json:"max"`
+	Min        float64 `json:"min"`
+	Range      float64 `json:"range"`
+	Median     float64 `json:"median"`
+	PeakCount  int     `json:"peak_count"`
+	ZeroCount  int     `json:"zero_count"`
+	Uniformity float64 `json:"uniformity"`
+}
+
+type JerkAnalyzer struct{}
+
+func (ja *JerkAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (ja *JerkAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := ja.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+func (ja *JerkAnalyzer) max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (ja *JerkAnalyzer) min(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func (ja *JerkAnalyzer) extractSpeeds(trajectory []SliderPoint) []float64 {
+	speeds := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt*1000)
+		}
+	}
+	return speeds
+}
+
+func (ja *JerkAnalyzer) extractAccelerations(trajectory []SliderPoint) []float64 {
+	speeds := ja.extractSpeeds(trajectory)
+	accelerations := make([]float64, 0)
+	for i := 2; i < len(speeds); i++ {
+		dt := float64(trajectory[i+1].Timestamp-trajectory[i-1].Timestamp) / 2
+		if dt > 0 {
+			accel := (speeds[i] - speeds[i-1]) / dt
+			accelerations = append(accelerations, accel)
+		}
+	}
+	return accelerations
+}
+
+type BacktrackAnalyzer struct{}
+
+func (ba *BacktrackAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (ba *BacktrackAnalyzer) max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (ba *BacktrackAnalyzer) extractSpeeds(trajectory []SliderPoint) []float64 {
+	speeds := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt*1000)
+		}
+	}
+	return speeds
+}
+
+func (ba *BacktrackAnalyzer) detectBacktrackPatterns(trajectory []SliderPoint) []BacktrackPattern {
+	if len(trajectory) < 2 {
+		return []BacktrackPattern{}
+	}
+
+	patterns := make([]BacktrackPattern, 0)
+	maxX := trajectory[0].X
+	backtrackStart := -1
+	backtrackMaxDepth := 0.0
+
+	for i := 1; i < len(trajectory); i++ {
+		if trajectory[i].X > maxX {
+			if backtrackStart != -1 {
+				pattern := BacktrackPattern{
+					StartIndex:  backtrackStart,
+					EndIndex:    i - 1,
+					Distance:    float64(maxX - trajectory[i-1].X),
+					Duration:    trajectory[i-1].Timestamp - trajectory[backtrackStart].Timestamp,
+					MaxDepth:    backtrackMaxDepth,
+					PatternType: ba.classifyBacktrackType(backtrackMaxDepth, trajectory[i-1].Timestamp-trajectory[backtrackStart].Timestamp),
+				}
+				patterns = append(patterns, pattern)
+				backtrackStart = -1
+				backtrackMaxDepth = 0
+			}
+			maxX = trajectory[i].X
+		} else {
+			if backtrackStart == -1 {
+				backtrackStart = i - 1
+			}
+			depth := float64(maxX - trajectory[i].X)
+			if depth > backtrackMaxDepth {
+				backtrackMaxDepth = depth
+			}
+		}
+	}
+
+	if backtrackStart != -1 && backtrackMaxDepth > 5 {
+		pattern := BacktrackPattern{
+			StartIndex:  backtrackStart,
+			EndIndex:    len(trajectory) - 1,
+			Distance:    float64(maxX - trajectory[len(trajectory)-1].X),
+			Duration:    trajectory[len(trajectory)-1].Timestamp - trajectory[backtrackStart].Timestamp,
+			MaxDepth:    backtrackMaxDepth,
+			PatternType: ba.classifyBacktrackType(backtrackMaxDepth, trajectory[len(trajectory)-1].Timestamp-trajectory[backtrackStart].Timestamp),
+		}
+		patterns = append(patterns, pattern)
+	}
+
+	return patterns
+}
+
+func (ba *BacktrackAnalyzer) classifyBacktrackType(depth float64, duration int64) string {
+	if depth < 10 {
+		return "micro"
+	} else if depth < 30 {
+		return "small"
+	} else if duration < 100 {
+		return "quick"
+	} else if duration > 500 {
+		return "hesitant"
+	}
+	return "normal"
+}
+
+type SpeedAnalyzer struct{}
+
+func (sa *SpeedAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (sa *SpeedAnalyzer) max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (sa *SpeedAnalyzer) min(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func (sa *SpeedAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := sa.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+func (sa *SpeedAnalyzer) extractSpeeds(trajectory []SliderPoint) []float64 {
+	if len(trajectory) < 2 {
+		return []float64{}
+	}
+	speeds := make([]float64, 0, len(trajectory)-1)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt*1000)
+		}
+	}
+	return speeds
+}
+
+type CurvatureAnalyzer struct{}
+
+func (ca *CurvatureAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (ca *CurvatureAnalyzer) max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (ca *CurvatureAnalyzer) min(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func (ca *CurvatureAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := ca.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+func (ca *CurvatureAnalyzer) extractSpeeds(trajectory []SliderPoint) []float64 {
+	speeds := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt*1000)
+		}
+	}
+	return speeds
+}
+
+func (ca *CurvatureAnalyzer) extractCurvatures(trajectory []SliderPoint) []float64 {
+	curvatures := make([]float64, 0)
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			curvatures = append(curvatures, math.Abs(angle))
+		}
+	}
+	return curvatures
+}
+
+type AngleAnalyzer struct{}
+
+func (aa *AngleAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (aa *AngleAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := aa.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+func (aa *AngleAnalyzer) extractSpeeds(trajectory []SliderPoint) []float64 {
+	speeds := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt*1000)
+		}
+	}
+	return speeds
+}
+
+func (aa *AngleAnalyzer) extractCurvatures(trajectory []SliderPoint) []float64 {
+	curvatures := make([]float64, 0)
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			curvatures = append(curvatures, math.Abs(angle))
+		}
+	}
+	return curvatures
+}
+
+type PatternAnalyzer struct{}
+
+func (pa *PatternAnalyzer) mean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func (pa *PatternAnalyzer) variance(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	mean := pa.mean(values)
+	sum := 0.0
+	for _, v := range values {
+		sum += (v - mean) * (v - mean)
+	}
+	return sum / float64(len(values))
+}
+
+func (pa *PatternAnalyzer) max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values[1:] {
+		if v > max {
+			max = v
+		}
+	}
+	return max
+}
+
+func (pa *PatternAnalyzer) min(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	min := values[0]
+	for _, v := range values[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func (pa *PatternAnalyzer) extractSpeeds(trajectory []SliderPoint) []float64 {
+	speeds := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			speeds = append(speeds, distance/dt*1000)
+		}
+	}
+	return speeds
+}
+
+func (pa *PatternAnalyzer) extractCurvatures(trajectory []SliderPoint) []float64 {
+	curvatures := make([]float64, 0)
+	for i := 1; i < len(trajectory)-1; i++ {
+		v1x := float64(trajectory[i].X - trajectory[i-1].X)
+		v1y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		v2x := float64(trajectory[i+1].X - trajectory[i].X)
+		v2y := float64(trajectory[i+1].Y - trajectory[i].Y)
+
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			curvatures = append(curvatures, math.Abs(angle))
+		}
+	}
+	return curvatures
+}
+
+func (pa *PatternAnalyzer) countPauses(trajectory []SliderPoint) (int, float64) {
+	if len(trajectory) < 2 {
+		return 0, 0
+	}
+
+	pauses := 0
+	totalDuration := 0.0
+
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		distance := math.Sqrt(dx*dx + dy*dy)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+
+		if distance < 3 && dt > 100 {
+			pauses++
+			totalDuration += dt
+		}
+	}
+
+	return pauses, totalDuration
+}
+
+func (pa *PatternAnalyzer) countBacktrack(trajectory []SliderPoint) (int, float64) {
+	if len(trajectory) < 2 {
+		return 0, 0
+	}
+
+	backtracks := 0
+	backtrackDistance := 0.0
+	maxX := trajectory[0].X
+
+	for i := 1; i < len(trajectory); i++ {
+		if trajectory[i].X > maxX {
+			maxX = trajectory[i].X
+		} else if maxX-trajectory[i].X > 5 {
+			backtracks++
+			backtrackDistance += float64(maxX - trajectory[i].X)
+		}
+	}
+
+	return backtracks, backtrackDistance
+}
+
 type SliderFeatureExtractor struct{}
+
+func NewJerkAnalyzer() *JerkAnalyzer {
+	return &JerkAnalyzer{}
+}
+
+func (ja *JerkAnalyzer) ExtractJerkFeatures(trajectory []SliderPoint) map[string]float64 {
+	features := make(map[string]float64)
+	
+	if len(trajectory) < 4 {
+		return features
+	}
+	
+	accelerations := ja.extractAccelerations(trajectory)
+	jerks := ja.extractJerks(accelerations, trajectory)
+	
+	if len(jerks) > 0 {
+		features["jerk_average"] = ja.mean(jerks)
+		features["jerk_max"] = ja.max(jerks)
+		features["jerk_min"] = ja.min(jerks)
+		features["jerk_variance"] = ja.variance(jerks)
+		features["jerk_std"] = math.Sqrt(ja.variance(jerks))
+		
+		absJerks := make([]float64, len(jerks))
+		for i, j := range jerks {
+			absJerks[i] = math.Abs(j)
+		}
+		features["jerk_abs_average"] = ja.mean(absJerks)
+	}
+	
+	return features
+}
+
+func (ja *JerkAnalyzer) extractJerks(accelerations []float64, trajectory []SliderPoint) []float64 {
+	jerks := make([]float64, 0)
+	for i := 3; i < len(accelerations); i++ {
+		dt := float64(trajectory[i+2].Timestamp-trajectory[i-2].Timestamp) / 4
+		if dt > 0 {
+			jerk := (accelerations[i] - accelerations[i-1]) / dt
+			jerks = append(jerks, jerk)
+		}
+	}
+	return jerks
+}
+
+func (ja *JerkAnalyzer) calculateJerkScore(jerks []float64) float64 {
+	if len(jerks) == 0 {
+		return 0
+	}
+	
+	absJerks := make([]float64, len(jerks))
+	for i, j := range jerks {
+		absJerks[i] = math.Abs(j)
+	}
+	
+	meanAbsJerk := ja.mean(absJerks)
+	jerkVariance := ja.variance(jerks)
+	
+	humanJerkScore := 0.5
+	if meanAbsJerk > 0.1 && meanAbsJerk < 100 {
+		humanJerkScore += 0.3
+	}
+	if jerkVariance > 1 && jerkVariance < 1000 {
+		humanJerkScore += 0.2
+	}
+	
+	return math.Min(1.0, humanJerkScore)
+}
+
+func NewSpeedAnalyzer() *SpeedAnalyzer {
+	return &SpeedAnalyzer{}
+}
+
+func (sa *SpeedAnalyzer) CalculateInstantAccelerations(trajectory []SliderPoint) []float64 {
+	if len(trajectory) < 3 {
+		return []float64{}
+	}
+	
+	speeds := sa.extractSpeeds(trajectory)
+	instantAccels := make([]float64, 0)
+	
+	for i := 2; i < len(speeds); i++ {
+		dt := float64(trajectory[i+1].Timestamp - trajectory[i-1].Timestamp) / 2
+		if dt > 0 {
+			accel := (speeds[i] - speeds[i-1]) / dt * 1000
+			instantAccels = append(instantAccels, accel)
+		}
+	}
+	
+	return instantAccels
+}
+
+func (sa *SpeedAnalyzer) CalculateSpeedVolatility(speeds []float64) float64 {
+	if len(speeds) < 2 {
+		return 0
+	}
+	
+	volatility := 0.0
+	validPairs := 0
+	
+	for i := 1; i < len(speeds); i++ {
+		dt := 1.0
+		if dt > 0 {
+			volatility += math.Abs(speeds[i] - speeds[i-1])
+			validPairs++
+		}
+	}
+	
+	if validPairs > 0 {
+		volatility /= float64(validPairs)
+	}
+	
+	meanSpeed := sa.mean(speeds)
+	if meanSpeed > 0 {
+		volatility /= meanSpeed
+	}
+	
+	return volatility
+}
+
+func (sa *SpeedAnalyzer) CalculateSpeedWaveIndex(speeds []float64) float64 {
+	if len(speeds) < 3 {
+		return 0
+	}
+	
+	crossings := 0
+	mean := sa.mean(speeds)
+	
+	for i := 1; i < len(speeds); i++ {
+		if (speeds[i] >= mean && speeds[i-1] < mean) || (speeds[i] < mean && speeds[i-1] >= mean) {
+			crossings++
+		}
+	}
+	
+	expectedCrossings := float64(len(speeds)-1) * 0.5
+	if expectedCrossings > 0 {
+		return float64(crossings) / expectedCrossings
+	}
+	
+	return 0
+}
+
+func NewCurvatureAnalyzer() *CurvatureAnalyzer {
+	return &CurvatureAnalyzer{}
+}
+
+func (ca *CurvatureAnalyzer) CalculatePathCurvatureStats(trajectory []SliderPoint) CurvatureStats {
+	stats := CurvatureStats{}
+	
+	if len(trajectory) < 3 {
+		return stats
+	}
+	
+	curvatures := ca.extractCurvatures(trajectory)
+	if len(curvatures) == 0 {
+		return stats
+	}
+	
+	stats.Mean = ca.mean(curvatures)
+	stats.StdDev = math.Sqrt(ca.variance(curvatures))
+	stats.Max = ca.max(curvatures)
+	stats.Min = ca.min(curvatures)
+	stats.Range = stats.Max - stats.Min
+	
+	sorted := make([]float64, len(curvatures))
+	copy(sorted, curvatures)
+	for i := 0; i < len(sorted)-1; i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[i] > sorted[j] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+	if len(sorted)%2 == 0 {
+		stats.Median = (sorted[len(sorted)/2-1] + sorted[len(sorted)/2]) / 2
+	} else {
+		stats.Median = sorted[len(sorted)/2]
+	}
+	
+	stats.PeakCount = ca.countCurvaturePeaks(curvatures)
+	
+	zeroThreshold := 0.01
+	for _, c := range curvatures {
+		if c < zeroThreshold {
+			stats.ZeroCount++
+		}
+	}
+	
+	if stats.Mean > 0 {
+		stats.Uniformity = 1.0 - (stats.StdDev / stats.Mean)
+	}
+	
+	return stats
+}
+
+func (ca *CurvatureAnalyzer) countCurvaturePeaks(curvatures []float64) int {
+	if len(curvatures) < 3 {
+		return 0
+	}
+	
+	peaks := 0
+	for i := 1; i < len(curvatures)-1; i++ {
+		if curvatures[i] > curvatures[i-1] && curvatures[i] > curvatures[i+1] {
+			if curvatures[i] > 0.1 {
+				peaks++
+			}
+		}
+	}
+	
+	return peaks
+}
+
+func NewAngleAnalyzer() *AngleAnalyzer {
+	return &AngleAnalyzer{}
+}
+
+func (aa *AngleAnalyzer) CalculateAngularVelocity(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 2 {
+		return 0
+	}
+	
+	angles := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		angle := math.Atan2(dy, dx)
+		angles = append(angles, angle)
+	}
+	
+	if len(angles) < 2 {
+		return 0
+	}
+	
+	totalAngularChange := 0.0
+	validChanges := 0
+	
+	for i := 1; i < len(angles); i++ {
+		dt := float64(trajectory[i+1].Timestamp - trajectory[i].Timestamp)
+		if dt > 0 {
+			change := math.Abs(angles[i] - angles[i-1])
+			if change > math.Pi {
+				change = 2*math.Pi - change
+			}
+			totalAngularChange += change
+			validChanges++
+		}
+	}
+	
+	if validChanges > 0 {
+		return totalAngularChange / float64(validChanges)
+	}
+	
+	return 0
+}
+
+func (aa *AngleAnalyzer) CalculateAngularAcceleration(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 3 {
+		return 0
+	}
+	
+	angularVelocities := make([]float64, 0)
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		angle := math.Atan2(dy, dx)
+		dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+		if dt > 0 {
+			angularVelocities = append(angularVelocities, angle)
+		}
+	}
+	
+	if len(angularVelocities) < 2 {
+		return 0
+	}
+	
+	angularAccels := make([]float64, 0)
+	for i := 1; i < len(angularVelocities); i++ {
+		dt := float64(trajectory[i+1].Timestamp - trajectory[i].Timestamp)
+		if dt > 0 {
+			change := angularVelocities[i] - angularVelocities[i-1]
+			if math.Abs(change) > math.Pi {
+				if change > 0 {
+					change -= 2 * math.Pi
+				} else {
+					change += 2 * math.Pi
+				}
+			}
+			angularAccels = append(angularAccels, math.Abs(change)/dt*1000)
+		}
+	}
+	
+	return aa.mean(angularAccels)
+}
+
+func (aa *AngleAnalyzer) CalculateAngleChangeRate(trajectory []SliderPoint) float64 {
+	if len(trajectory) < 3 {
+		return 0
+	}
+	
+	totalChange := 0.0
+	validChanges := 0
+	
+	for i := 2; i < len(trajectory); i++ {
+		v1x := float64(trajectory[i-1].X - trajectory[i-2].X)
+		v1y := float64(trajectory[i-1].Y - trajectory[i-2].Y)
+		v2x := float64(trajectory[i].X - trajectory[i-1].X)
+		v2y := float64(trajectory[i].Y - trajectory[i-1].Y)
+		
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+		
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			
+			dt := float64(trajectory[i].Timestamp - trajectory[i-1].Timestamp)
+			if dt > 0 {
+				totalChange += angle / dt * 1000
+				validChanges++
+			}
+		}
+	}
+	
+	if validChanges > 0 {
+		return totalChange / float64(validChanges)
+	}
+	
+	return 0
+}
+
+func NewBacktrackAnalyzer() *BacktrackAnalyzer {
+	return &BacktrackAnalyzer{}
+}
+
+func (ba *BacktrackAnalyzer) AnalyzeBacktrackPatterns(trajectory []SliderPoint) (map[string]int, []int64) {
+	typeDistribution := make(map[string]int)
+	timing := make([]int64, 0)
+	
+	if len(trajectory) < 2 {
+		return typeDistribution, timing
+	}
+	
+	patterns := ba.detectBacktrackPatterns(trajectory)
+	
+	for _, pattern := range patterns {
+		typeDistribution[pattern.PatternType]++
+		timing = append(timing, pattern.Duration)
+	}
+	
+	return typeDistribution, timing
+}
+
+func (ba *BacktrackAnalyzer) ClassifyBacktrackSeverity(count int, totalDistance float64) string {
+	if count == 0 {
+		return "none"
+	}
+	if count <= 2 && totalDistance < 20 {
+		return "minimal"
+	}
+	if count <= 5 && totalDistance < 50 {
+		return "normal"
+	}
+	if count <= 10 {
+		return "excessive"
+	}
+	return "severe"
+}
+
+func NewPatternAnalyzer() *PatternAnalyzer {
+	return &PatternAnalyzer{}
+}
+
+func (pa *PatternAnalyzer) AnalyzeTrajectoryPattern(trajectory []SliderPoint) string {
+	if len(trajectory) < 3 {
+		return "insufficient_data"
+	}
+	
+	speeds := pa.extractSpeeds(trajectory)
+	curvatures := pa.extractCurvatures(trajectory)
+	
+	speedVariance := pa.variance(speeds)
+	curvatureVariance := pa.variance(curvatures)
+	
+	if speedVariance < 10 && curvatureVariance < 0.001 {
+		return "mechanical"
+	}
+	
+	totalDistance := 0.0
+	startX := float64(trajectory[0].X)
+	endX := float64(trajectory[len(trajectory)-1].X)
+	directDistance := math.Abs(endX - startX)
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		totalDistance += math.Sqrt(dx*dx + dy*dy)
+	}
+	
+	pathEfficiency := directDistance / totalDistance
+	
+	if pathEfficiency > 0.98 {
+		return "perfect_linear"
+	}
+	
+	if len(speeds) > 0 && pa.max(speeds) > 2000 {
+		return "rush"
+	}
+	
+	pauseCount, _ := pa.countPauses(trajectory)
+	if pauseCount > len(trajectory)/3 {
+		return "hesitant"
+	}
+	
+	backtrackCount, _ := pa.countBacktrack(trajectory)
+	if backtrackCount > 5 {
+		return "erratic"
+	}
+	
+	return "natural"
+}
+
+func (pa *PatternAnalyzer) DetectAnomalousPatterns(trajectory []SliderPoint) []string {
+	anomalies := make([]string, 0)
+	
+	if len(trajectory) < 3 {
+		anomalies = append(anomalies, "insufficient_data")
+		return anomalies
+	}
+	
+	speeds := pa.extractSpeeds(trajectory)
+	curvatures := pa.extractCurvatures(trajectory)
+	
+	if len(speeds) > 0 {
+		speedVariance := pa.variance(speeds)
+		if speedVariance < 5 {
+			anomalies = append(anomalies, "abnormally_constant_speed")
+		}
+		
+		maxSpeed := pa.max(speeds)
+		if maxSpeed > 3000 {
+			anomalies = append(anomalies, "excessively_fast")
+		}
+	}
+	
+	if len(curvatures) > 0 {
+		curvatureVariance := pa.variance(curvatures)
+		if curvatureVariance < 0.0001 {
+			anomalies = append(anomalies, "no_curvature_variation")
+		}
+	}
+	
+	totalDistance := 0.0
+	startX := float64(trajectory[0].X)
+	endX := float64(trajectory[len(trajectory)-1].X)
+	directDistance := math.Abs(endX - startX)
+	
+	for i := 1; i < len(trajectory); i++ {
+		dx := float64(trajectory[i].X - trajectory[i-1].X)
+		dy := float64(trajectory[i].Y - trajectory[i-1].Y)
+		totalDistance += math.Sqrt(dx*dx + dy*dy)
+	}
+	
+	pathEfficiency := directDistance / totalDistance
+	if pathEfficiency > 0.999 {
+		anomalies = append(anomalies, "perfectly_straight")
+	}
+	
+	pauseCount, _ := pa.countPauses(trajectory)
+	duration := float64(trajectory[len(trajectory)-1].Timestamp - trajectory[0].Timestamp)
+	if pauseCount == 0 && duration > 3000 {
+		anomalies = append(anomalies, "no_pauses_despite_long_duration")
+	}
+	
+	return anomalies
+}
 
 func NewSliderAnalyzer() *SliderAnalyzer {
 	return &SliderAnalyzer{
@@ -194,6 +1251,11 @@ func (sa *SliderAnalyzer) AnalyzeSliderTrajectory(trajectory []SliderPoint, targ
 	})
 
 	result.AnomalyScore = sa.detectAnomalies(result.Features)
+	
+	enhancedAnomalyScore := sa.detectEnhancedAnomalies(result.Features)
+	if enhancedAnomalyScore > result.AnomalyScore {
+		result.AnomalyScore = (result.AnomalyScore + enhancedAnomalyScore) / 2
+	}
 	
 	result.AnalysisLogs = append(result.AnalysisLogs, AnalysisLog{
 		Level:       "DEBUG",
@@ -469,8 +1531,12 @@ func (sfe *SliderFeatureExtractor) ExtractFeatures(trajectory []SliderPoint, tar
 	features.SpeedSegments = sfe.extractSpeedSegments(trajectory)
 	
 	enhancedCurvature := sfe.extractEnhancedCurvatureFeatures(trajectory)
-	features.CurvatureChangeRate = enhancedCurvature["curvature_change_rate"].(float64)
-	features.CurvaturePeaks = int(enhancedCurvature["curvature_peaks"].(float64))
+	if val, ok := enhancedCurvature["curvature_change_rate"].(float64); ok {
+		features.CurvatureChangeRate = val
+	}
+	if val, ok := enhancedCurvature["curvature_peaks"].(float64); ok {
+		features.CurvaturePeaks = int(val)
+	}
 	if pattern, ok := enhancedCurvature["curvature_pattern"].(string); ok {
 		features.CurvaturePattern = pattern
 	}
@@ -488,6 +1554,37 @@ func (sfe *SliderFeatureExtractor) ExtractFeatures(trajectory []SliderPoint, tar
 	if patterns, ok := enhancedBacktrack["patterns"].([]BacktrackPattern); ok {
 		features.BacktrackPatterns = patterns
 	}
+	
+	jerkAnalyzer := NewJerkAnalyzer()
+	jerkFeatures := jerkAnalyzer.ExtractJerkFeatures(trajectory)
+	if jerkAvg, ok := jerkFeatures["jerk_average"]; ok {
+		features.JerkAverage = jerkAvg
+	}
+	if jerkMax, ok := jerkFeatures["jerk_max"]; ok {
+		features.JerkMax = jerkMax
+	}
+	if jerkVar, ok := jerkFeatures["jerk_variance"]; ok {
+		features.JerkVariance = jerkVar
+	}
+	
+	speedAnalyzer := NewSpeedAnalyzer()
+	instantAccels := speedAnalyzer.CalculateInstantAccelerations(trajectory)
+	features.InstantAcceleration = instantAccels
+	features.SpeedVolatility = speedAnalyzer.CalculateSpeedVolatility(speeds)
+	
+	curvatureAnalyzer := NewCurvatureAnalyzer()
+	features.PathCurvatureStats = curvatureAnalyzer.CalculatePathCurvatureStats(trajectory)
+	
+	angleAnalyzer := NewAngleAnalyzer()
+	features.AngularVelocity = angleAnalyzer.CalculateAngularVelocity(trajectory)
+	features.AngularAcceleration = angleAnalyzer.CalculateAngularAcceleration(trajectory)
+	features.AngleChangeRate = angleAnalyzer.CalculateAngleChangeRate(trajectory)
+	features.SmoothnessIndex = features.SmoothnessScore * (1.0 - features.JitterScore)
+	
+	backtrackAnalyzer := NewBacktrackAnalyzer()
+	typeDist, timing := backtrackAnalyzer.AnalyzeBacktrackPatterns(trajectory)
+	features.BacktrackTypeDistribution = typeDist
+	features.BacktrackTiming = timing
 
 	return features
 }
@@ -1839,11 +2936,130 @@ func (sa *SliderAnalyzer) detectAnomalies(features *SliderFeatures) float64 {
 			anomalyCount++
 		}
 	}
+	
+	if features.JerkAverage < 0.01 && features.JerkVariance < 0.001 {
+		anomalyScore += 0.12
+		anomalyCount++
+	}
+	
+	if features.SpeedVolatility < 0.05 {
+		anomalyScore += 0.1
+		anomalyCount++
+	}
+	
+	if features.AngularVelocity < 0.001 {
+		anomalyScore += 0.08
+		anomalyCount++
+	}
+	
+	if features.PathCurvatureStats.Uniformity > 0.99 {
+		anomalyScore += 0.1
+		anomalyCount++
+	}
+	
+	if features.PathCurvatureStats.ZeroCount > len(features.SpeedDistribution)*8/10 {
+		anomalyScore += 0.09
+		anomalyCount++
+	}
+	
+	if features.SmoothnessIndex > 0.95 {
+		anomalyScore += 0.08
+		anomalyCount++
+	}
 
 	if anomalyCount > 0 {
 		return anomalyScore / float64(anomalyCount)
 	}
 
+	return 0.0
+}
+
+func (sa *SliderAnalyzer) detectEnhancedAnomalies(features *SliderFeatures) float64 {
+	anomalyScore := 0.0
+	anomalyCount := 0
+	
+	patternAnalyzer := NewPatternAnalyzer()
+	pattern := patternAnalyzer.AnalyzeTrajectoryPattern([]SliderPoint{})
+	if pattern == "mechanical" || pattern == "perfect_linear" {
+		anomalyScore += 0.15
+		anomalyCount++
+	}
+	
+	if features.JerkMax > 0 && features.JerkVariance == 0 {
+		anomalyScore += 0.1
+		anomalyCount++
+	}
+	
+	if features.AngularAcceleration < 0.001 {
+		anomalyScore += 0.08
+		anomalyCount++
+	}
+	
+	if len(features.BacktrackTypeDistribution) > 0 {
+		backtrackAnalyzer := NewBacktrackAnalyzer()
+		severity := backtrackAnalyzer.ClassifyBacktrackSeverity(features.BacktrackCount, features.BacktrackDistance)
+		if severity == "severe" || severity == "excessive" {
+			anomalyScore += 0.1
+			anomalyCount++
+		}
+	}
+	
+	if features.AngleChangeRate < 0.01 {
+		anomalyScore += 0.07
+		anomalyCount++
+	}
+	
+	if features.PathCurvatureStats.Mean < 0.005 {
+		anomalyScore += 0.09
+		anomalyCount++
+	}
+	
+	if features.PathCurvatureStats.PeakCount == 0 && features.DirectionChanges == 0 {
+		anomalyScore += 0.08
+		anomalyCount++
+	}
+	
+	if features.InstantAcceleration != nil && len(features.InstantAcceleration) > 0 {
+		maxAccel := 0.0
+		for _, acc := range features.InstantAcceleration {
+			if math.Abs(acc) > maxAccel {
+				maxAccel = math.Abs(acc)
+			}
+		}
+		if maxAccel < 1.0 {
+			anomalyScore += 0.08
+			anomalyCount++
+		}
+	}
+	
+	if len(features.BacktrackTiming) > 0 {
+		consistentTiming := true
+		if len(features.BacktrackTiming) > 1 {
+			firstDuration := features.BacktrackTiming[0]
+			for _, duration := range features.BacktrackTiming[1:] {
+				if math.Abs(float64(duration-firstDuration)) > 50 {
+					consistentTiming = false
+					break
+				}
+			}
+			if consistentTiming {
+				anomalyScore += 0.06
+				anomalyCount++
+			}
+		}
+	}
+	
+	curvatureAnalyzer := NewCurvatureAnalyzer()
+	pathStats := curvatureAnalyzer.CalculatePathCurvatureStats([]SliderPoint{})
+	if pathStats.Range < 0.01 {
+		anomalyScore += 0.07
+		anomalyCount++
+	}
+	
+	if anomalyCount > 0 {
+		return anomalyScore / float64(anomalyCount)
+	}
+	
 	return 0.0
 }
 

@@ -19,10 +19,13 @@ class EnvironmentDetectorEnhanced {
             canvas: 12,
             canvasStable: 10,
             canvasEntropy: 8,
+            canvasNoise: 9,
             webgl: 14,
             webgl2: 10,
             webglVendor: 8,
             webglRenderer: 8,
+            webglPerformance: 10,
+            webglExtensions: 7,
             audio: 11,
             fonts: 10,
             fontEnumeration: 8,
@@ -60,7 +63,12 @@ class EnvironmentDetectorEnhanced {
             vpnIndicators: 14,
             virtualization: 12,
             sandbox: 10,
-            automationFrameworks: 16
+            automationFrameworks: 16,
+            dnsLeak: 12,
+            latency: 10,
+            touchFeatures: 6,
+            audioContextEmulator: 8,
+            batteryAPIEmulator: 7
         };
     }
 
@@ -78,9 +86,13 @@ class EnvironmentDetectorEnhanced {
             { name: 'detectCanvasEnhanced', category: 'fingerprint' },
             { name: 'detectCanvasStable', category: 'fingerprint' },
             { name: 'detectCanvasEntropy', category: 'fingerprint' },
+            { name: 'detectCanvasNoise', category: 'fingerprint' },
             { name: 'detectWebGLEnhanced', category: 'fingerprint' },
             { name: 'detectWebGL2Enhanced', category: 'fingerprint' },
+            { name: 'detectWebGLPerformance', category: 'fingerprint' },
+            { name: 'detectWebGLExtensions', category: 'fingerprint' },
             { name: 'detectAudioEnhanced', category: 'fingerprint' },
+            { name: 'detectAudioContextEmulator', category: 'fingerprint' },
             { name: 'detectFontsEnhanced', category: 'fingerprint' },
             { name: 'detectFontEnumeration', category: 'fingerprint' },
             { name: 'detectFontMetrics', category: 'fingerprint' },
@@ -88,9 +100,11 @@ class EnvironmentDetectorEnhanced {
             { name: 'detectPluginFingerprint', category: 'fingerprint' },
             { name: 'detectWebRTCEnhanced', category: 'network' },
             { name: 'detectWebRTCLeak', category: 'network' },
+            { name: 'detectDNSLeak', category: 'network' },
             { name: 'detectProxyVPN', category: 'network' },
             { name: 'detectVPNIndicators', category: 'network' },
             { name: 'detectTorExitNode', category: 'network' },
+            { name: 'detectLatency', category: 'network' },
             { name: 'detectPermissions', category: 'system' },
             { name: 'detectLanguages', category: 'system' },
             { name: 'detectTimezone', category: 'system' },
@@ -103,7 +117,9 @@ class EnvironmentDetectorEnhanced {
             { name: 'detectIframe', category: 'system' },
             { name: 'detectNotification', category: 'system' },
             { name: 'detectBattery', category: 'system' },
+            { name: 'detectBatteryAPIEmulator', category: 'system' },
             { name: 'detectMediaDevices', category: 'system' },
+            { name: 'detectTouchFeatures', category: 'system' },
             { name: 'detectConnection', category: 'network' },
             { name: 'detectAdBlock', category: 'system' },
             { name: 'detectMathFingerprint', category: 'fingerprint' },
@@ -2126,6 +2142,530 @@ class EnvironmentDetectorEnhanced {
             detections.push('gpu_error');
         }
         return { detected: score > 15, score: Math.min(score, 100), detections };
+    }
+
+    async detectCanvasNoise() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return { detected: false, score: 0, detections: ['no_context'] };
+            }
+
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.font = '11pt Arial';
+            ctx.fillText('Noise Test Canvas 😀', 2, 15);
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.font = '18pt Arial';
+            ctx.fillText('Cwm fjordbank glyphs vext quiz', 4, 45);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            let uniqueValues = new Set();
+            const charFreq = {};
+            for (let i = 0; i < data.length; i += 4) {
+                const hex = data[i].toString(16) + data[i+1].toString(16) + data[i+2].toString(16);
+                uniqueValues.add(hex);
+                charFreq[hex] = (charFreq[hex] || 0) + 1;
+            }
+
+            const entropyRatio = uniqueValues.size / (data.length / 4);
+            detections.push('unique_ratio:' + entropyRatio.toFixed(4));
+
+            let maxFreq = 0;
+            let totalSamples = 0;
+            for (const freq of Object.values(charFreq)) {
+                if (freq > maxFreq) maxFreq = freq;
+                totalSamples += freq;
+            }
+            const dominantRatio = maxFreq / totalSamples;
+
+            if (dominantRatio > 0.5) {
+                score += 30;
+                detections.push('high_dominance:' + dominantRatio.toFixed(4));
+            }
+
+            if (entropyRatio < 0.1) {
+                score += 40;
+                detections.push('very_low_entropy');
+            } else if (entropyRatio < 0.2) {
+                score += 20;
+                detections.push('low_entropy');
+            }
+
+            let zeroCount = 0;
+            for (let i = 0; i < data.length; i++) {
+                if (data[i] === 0) zeroCount++;
+            }
+            const zeroRatio = zeroCount / data.length;
+            if (zeroRatio > 0.8) {
+                score += 35;
+                detections.push('high_zero_ratio:' + zeroRatio.toFixed(4));
+            }
+
+            this.fingerprintComponents.canvasNoise = {
+                entropyRatio,
+                dominantRatio,
+                zeroRatio
+            };
+            detections.push('noise_score:' + entropyRatio.toFixed(4));
+
+        } catch (e) {
+            score += 25;
+            detections.push('noise_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebGLPerformance() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 500;
+            canvas.height = 500;
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) {
+                return { detected: false, score: 0, detections: ['no_webgl'] };
+            }
+
+            const startTime = performance.now();
+
+            const vertices = new Float32Array([
+                -1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0
+            ]);
+            const vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 0, 0, 255]));
+
+            const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertexShader, `
+                attribute vec3 position;
+                void main() {
+                    gl_Position = vec4(position, 1.0);
+                }
+            `);
+            gl.compileShader(vertexShader);
+
+            const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragmentShader, `
+                precision mediump float;
+                void main() {
+                    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+                }
+            `);
+            gl.compileShader(fragmentShader);
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            gl.useProgram(program);
+
+            for (let i = 0; i < 100; i++) {
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
+
+            const renderTime = performance.now() - startTime;
+            detections.push('render_time:' + renderTime.toFixed(2));
+
+            if (renderTime < 1) {
+                score += 40;
+                detections.push('suspicious_fast_rendering');
+            } else if (renderTime < 5) {
+                score += 15;
+                detections.push('fast_rendering');
+            } else if (renderTime > 50) {
+                score += 20;
+                detections.push('slow_rendering');
+            }
+
+            gl.deleteBuffer(vertexBuffer);
+            gl.deleteTexture(texture);
+            gl.deleteShader(vertexShader);
+            gl.deleteShader(fragmentShader);
+            gl.deleteProgram(program);
+
+            this.fingerprintComponents.webglPerformance = { renderTime };
+
+        } catch (e) {
+            score += 25;
+            detections.push('webgl_perf_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebGLExtensions() {
+        let score = 0;
+        const detections = [];
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) {
+                return { detected: false, score: 0, detections: ['no_webgl'] };
+            }
+
+            const supportedExts = gl.getSupportedExtensions() || [];
+            detections.push('extension_count:' + supportedExts.length);
+
+            if (supportedExts.length < 10) {
+                score += 25;
+                detections.push('few_extensions');
+            } else if (supportedExts.length < 15) {
+                score += 10;
+                detections.push('limited_extensions');
+            }
+
+            const criticalExts = [
+                'OES_texture_float',
+                'WEBGL_debug_renderer_info',
+                'EXT_texture_filter_anisotropic'
+            ];
+            const missingCritical = [];
+            for (const ext of criticalExts) {
+                if (ext !== 'WEBGL_debug_renderer_info' && !supportedExts.includes(ext)) {
+                    missingCritical.push(ext);
+                }
+            }
+            if (missingCritical.length > 0) {
+                score += 15;
+                detections.push('missing_critical:' + missingCritical.join(','));
+            }
+
+            const suspiciousExts = [];
+            for (const ext of supportedExts) {
+                const extLower = ext.toLowerCase();
+                if (extLower.includes('debug') || extLower.includes('test') || extLower.includes('mock')) {
+                    suspiciousExts.push(ext);
+                }
+            }
+            if (suspiciousExts.length > 0) {
+                score += 20;
+                detections.push('suspicious_exts:' + suspiciousExts.join(','));
+            }
+
+            this.fingerprintComponents.webglExtensions = supportedExts;
+
+        } catch (e) {
+            score += 20;
+            detections.push('extensions_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectDNSLeak() {
+        let score = 0;
+        const detections = [];
+        try {
+            const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+            if (!rtcPeerConnection) {
+                return { detected: false, score: 0, detections: ['no_webrtc'] };
+            }
+
+            const pc = new rtcPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            let candidateIP = null;
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const candidate = event.candidate.candidate || '';
+                    const ipMatch = candidate.match(/(\d{1,3}\.){3}\d{1,3}/);
+                    if (ipMatch) {
+                        candidateIP = ipMatch[0];
+                    }
+                }
+            };
+
+            pc.createDataChannel('dnstest');
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            pc.close();
+
+            if (candidateIP) {
+                const privatePatterns = [
+                    /^192\.168\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+                    /^127\./, /^169\.254\./
+                ];
+                const isPrivate = privatePatterns.some(p => p.test(candidateIP));
+                if (!isPrivate) {
+                    score += 30;
+                    detections.push('public_ip_leak:' + candidateIP);
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '';
+                    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+                    const vendorLower = vendor.toLowerCase();
+                    const rendererLower = renderer.toLowerCase();
+
+                    if (vendorLower.includes('openvpn') || vendorLower.includes('wireguard') ||
+                        rendererLower.includes('dns') || rendererLower.includes('resolver')) {
+                        score += 40;
+                        detections.push('vpn_dns_pattern_detected');
+                    }
+                }
+            }
+
+            this.fingerprintComponents.dnsLeak = {
+                detected: score > 20,
+                ip: candidateIP
+            };
+
+        } catch (e) {
+            score += 15;
+            detections.push('dns_leak_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectLatency() {
+        let score = 0;
+        const detections = [];
+        try {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+
+            if (conn) {
+                const rtt = conn.rtt;
+                const downlink = conn.downlink;
+
+                detections.push('rtt:' + rtt);
+                detections.push('downlink:' + downlink);
+
+                if (rtt > 500) {
+                    score += 25;
+                    detections.push('high_latency');
+                } else if (rtt > 300) {
+                    score += 15;
+                    detections.push('elevated_latency');
+                }
+
+                if (downlink === 0) {
+                    score += 20;
+                    detections.push('zero_downlink');
+                }
+            }
+
+            const startTime = performance.now();
+            try {
+                await fetch('/api/v1/health', { method: 'HEAD', cache: 'no-cache' }).catch(() => null);
+            } catch (e) {}
+            const fetchTime = performance.now() - startTime;
+
+            detections.push('fetch_time:' + fetchTime.toFixed(2));
+
+            if (fetchTime > 2000) {
+                score += 30;
+                detections.push('very_slow_connection');
+            } else if (fetchTime > 1000) {
+                score += 15;
+                detections.push('slow_connection');
+            }
+
+            this.fingerprintComponents.latency = {
+                rtt: conn ? conn.rtt : null,
+                fetchTime
+            };
+
+        } catch (e) {
+            score += 15;
+            detections.push('latency_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectTouchFeatures() {
+        let score = 0;
+        const detections = [];
+        try {
+            const maxTouchPoints = navigator.maxTouchPoints || 0;
+            const touchEvent = 'ontouchstart' in window;
+            const msMaxTouchPoints = navigator.msMaxTouchPoints || 0;
+
+            detections.push('max_touch_points:' + maxTouchPoints);
+            detections.push('touch_event:' + touchEvent);
+            detections.push('ms_max_touch:' + msMaxTouchPoints);
+
+            this.fingerprintComponents.touchFeatures = {
+                maxTouchPoints,
+                touchEvent,
+                msMaxTouchPoints
+            };
+
+            const ua = navigator.userAgent || '';
+            const isMobileUA = /mobile|android|iphone|ipad/i.test(ua);
+
+            if (isMobileUA) {
+                if (maxTouchPoints === 0) {
+                    score += 40;
+                    detections.push('mobile_ua_no_touch');
+                }
+
+                if (maxTouchPoints > 10) {
+                    score += 25;
+                    detections.push('excessive_touch_points');
+                }
+            }
+
+            if (!touchEvent && maxTouchPoints > 0) {
+                score += 15;
+                detections.push('touch_mismatch');
+            }
+
+        } catch (e) {
+            score += 15;
+            detections.push('touch_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectAudioContextEmulator() {
+        let score = 0;
+        const detections = [];
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                score += 20;
+                detections.push('no_audio_context');
+                return { detected: score > 20, score: Math.min(score, 100), detections };
+            }
+
+            const ctx = new AudioContext();
+            const analyser = ctx.createAnalyser();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(1000, ctx.currentTime);
+            gainNode.gain.setValueAtTime(0.01, ctx.currentTime);
+
+            oscillator.connect(analyser);
+            analyser.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            oscillator.start(0);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            const avg = sum / bufferLength;
+
+            oscillator.stop();
+            ctx.close();
+
+            detections.push('audio_avg:' + avg.toFixed(2));
+
+            if (avg < 1) {
+                score += 35;
+                detections.push('audio_context_suspicious');
+            }
+
+            const multipleBuffers = [];
+            for (let i = 0; i < 3; i++) {
+                const tempCtx = new AudioContext(1, 44100, 44100);
+                const tempOsc = tempCtx.createOscillator();
+                tempOsc.type = 'sine';
+                tempOsc.frequency.setValueAtTime(800 + i * 100, tempCtx.currentTime);
+                tempOsc.connect(tempCtx.destination);
+                tempOsc.start(0);
+                const tempBuffer = await tempCtx.startRendering();
+                multipleBuffers.push(tempBuffer.getChannelData(0).slice(4500, 4550).join(','));
+                tempCtx.close();
+            }
+
+            if (multipleBuffers[0] === multipleBuffers[1] && multipleBuffers[1] === multipleBuffers[2]) {
+                score += 40;
+                detections.push('identical_audio_output');
+            }
+
+            this.fingerprintComponents.audioContextEmulator = { avg };
+
+        } catch (e) {
+            score += 25;
+            detections.push('audio_context_error: ' + e.message);
+        }
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectBatteryAPIEmulator() {
+        let score = 0;
+        const detections = [];
+        try {
+            if (navigator.getBattery) {
+                const battery = await navigator.getBattery().catch(() => null);
+
+                if (battery) {
+                    detections.push('battery_level:' + battery.level);
+                    detections.push('battery_charging:' + battery.charging);
+
+                    if (battery.level === 0 && !battery.charging) {
+                        score += 15;
+                        detections.push('dead_battery_not_charging');
+                    }
+
+                    const ua = navigator.userAgent || '';
+                    const isMobileUA = /mobile|android|iphone/i.test(ua);
+
+                    if (isMobileUA && battery.level === 1 && battery.charging) {
+                        score += 20;
+                        detections.push('battery_always_full_charging');
+                    }
+
+                    battery.addEventListener('levelchange', () => {
+                        this.fingerprintComponents.batteryLevel = battery.level;
+                    });
+                    battery.addEventListener('chargingchange', () => {
+                        this.fingerprintComponents.batteryCharging = battery.charging;
+                    });
+                } else {
+                    score += 10;
+                    detections.push('battery_api_unavailable');
+                }
+            } else {
+                const ua = navigator.userAgent || '';
+                const isMobileUA = /mobile|android|iphone/i.test(ua);
+
+                if (isMobileUA) {
+                    score += 30;
+                    detections.push('mobile_no_battery_api');
+                } else {
+                    score += 5;
+                    detections.push('no_battery_api');
+                }
+            }
+
+            this.fingerprintComponents.batteryAPI = {
+                available: !!navigator.getBattery,
+                checked: true
+            };
+
+        } catch (e) {
+            score += 20;
+            detections.push('battery_api_error: ' + e.message);
+        }
+        return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
     async detectSpeech() {
