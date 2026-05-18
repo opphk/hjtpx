@@ -1,702 +1,666 @@
-let requestTrendChart, realtimeChart;
-let ws = null;
-let wsConnected = false;
-let autoRefreshInterval = null;
-let realtimeDataPoints = [];
-let previousStats = null;
-const REALTIME_UPDATE_INTERVAL = 5000;
-const MAX_REALTIME_POINTS = 60;
-const WS_RECONNECT_DELAY = 3000;
-const AUTO_REFRESH_INTERVAL = 30000;
-let isAutoRefreshEnabled = false;
+let dashboardChart, trafficChart, riskDistributionChart, responseTimeChart, regionChart;
+let refreshInterval = null;
+let selectedTimeRange = '1h';
 
-document.addEventListener('DOMContentLoaded', async () => {
-    initECharts();
-    initWebSocket();
-    setupEventListeners();
-    await loadDashboardStats();
-    await loadSystemStatus();
-    loadRecentActivity();
+document.addEventListener('DOMContentLoaded', () => {
+    initializeDashboard();
+    loadDashboardData();
     startAutoRefresh();
-    await loadExtendedStats();
 });
 
-function toggleAutoRefresh() {
-    isAutoRefreshEnabled = !isAutoRefreshEnabled;
-    const statusEl = document.getElementById('autoRefreshStatus');
-    const btnEl = document.getElementById('autoRefreshBtn');
-    
-    if (isAutoRefreshEnabled) {
-        statusEl.textContent = '开启';
-        btnEl.classList.add('btn-success');
-        btnEl.classList.remove('btn-default');
-        autoRefreshInterval = setInterval(() => {
-            loadDashboardStats();
-            loadSystemStatus();
-        }, AUTO_REFRESH_INTERVAL);
-        showToast('自动刷新已开启（每30秒）', 'info');
-    } else {
-        statusEl.textContent = '关闭';
-        btnEl.classList.remove('btn-success');
-        btnEl.classList.add('btn-default');
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-        }
-        showToast('自动刷新已关闭', 'info');
+function initializeDashboard() {
+    document.getElementById('timeRangeSelector')?.addEventListener('change', (e) => {
+        selectedTimeRange = e.target.value;
+        loadDashboardData();
+    });
+
+    document.getElementById('manualRefresh')?.addEventListener('click', loadDashboardData);
+    document.getElementById('exportDashboardBtn')?.addEventListener('click', exportDashboardData);
+
+    initCharts();
+}
+
+function initCharts() {
+    if (document.getElementById('dashboardChart')) {
+        dashboardChart = echarts.init(document.getElementById('dashboardChart'));
+        window.addEventListener('resize', () => dashboardChart.resize());
+    }
+
+    if (document.getElementById('trafficChart')) {
+        trafficChart = echarts.init(document.getElementById('trafficChart'));
+        window.addEventListener('resize', () => trafficChart.resize());
+    }
+
+    if (document.getElementById('riskDistributionChart')) {
+        riskDistributionChart = echarts.init(document.getElementById('riskDistributionChart'));
+        window.addEventListener('resize', () => riskDistributionChart.resize());
+    }
+
+    if (document.getElementById('responseTimeChart')) {
+        responseTimeChart = echarts.init(document.getElementById('responseTimeChart'));
+        window.addEventListener('resize', () => responseTimeChart.resize());
+    }
+
+    if (document.getElementById('regionChart')) {
+        regionChart = echarts.init(document.getElementById('regionChart'));
+        window.addEventListener('resize', () => regionChart.resize());
     }
 }
 
-async function loadExtendedStats() {
+async function loadDashboardData() {
     try {
-        const response = await fetch('/admin/api/dashboard/extended');
-        if (!response.ok) throw new Error('Network error');
-        
+        const response = await fetch(`/admin/dashboard?range=${selectedTimeRange}`);
         const result = await response.json();
         if (result.code === 0) {
-            updateExtendedStats(result.data);
-        } else {
-            loadMockExtendedStats();
+            updateDashboard(result.data);
         }
     } catch (error) {
-        console.error('Extended stats load failed:', error);
-        loadMockExtendedStats();
+        console.error('加载仪表盘数据失败:', error);
+        loadDemoDashboardData();
     }
 }
 
-function loadMockExtendedStats() {
-    updateExtendedStats({
-        total_users: Math.floor(Math.random() * 5000) + 8000,
-        total_apps: Math.floor(Math.random() * 50) + 100,
-        current_qps: Math.floor(Math.random() * 50) + 20,
-        error_rate: (Math.random() * 2 + 0.5).toFixed(2),
-        user_growth: (Math.random() * 15 + 5).toFixed(1),
-        app_growth: (Math.random() * 10 + 2).toFixed(1),
-        error_growth: (Math.random() * 5 - 3).toFixed(1)
-    });
+function loadDemoDashboardData() {
+    const data = generateDemoDashboardData();
+    updateDashboard(data);
 }
 
-function updateExtendedStats(data) {
-    const totalUsersEl = document.getElementById('totalUsers');
-    const totalAppsEl = document.getElementById('totalApps');
-    const currentQPSEl = document.getElementById('currentQPSDisplay');
-    const errorRateEl = document.getElementById('errorRate');
-    const userGrowthEl = document.getElementById('userGrowth');
-    const appGrowthEl = document.getElementById('appGrowth');
-    const errorTrendEl = document.getElementById('errorTrend');
-    
-    if (totalUsersEl) {
-        animateNumber('totalUsers', data.total_users || 0);
-        if (userGrowthEl) {
-            const growth = parseFloat(data.user_growth || 0);
-            userGrowthEl.textContent = growth >= 0 ? `↑ ${growth}%` : `↓ ${Math.abs(growth)}%`;
-            userGrowthEl.className = growth >= 0 ? 'text-success' : 'text-danger';
-        }
+function generateDemoDashboardData() {
+    const now = Date.now();
+    const hours = [];
+    const requestCounts = [];
+    const riskCounts = [];
+    const responseTimes = [];
+    const successRates = [];
+
+    for (let i = 23; i >= 0; i--) {
+        const hour = new Date(now - i * 3600000);
+        hours.push(`${hour.getHours().toString().padStart(2, '0')}:00`);
+        requestCounts.push(1200 + Math.floor(Math.random() * 800));
+        riskCounts.push(Math.floor(Math.random() * 150));
+        responseTimes.push(50 + Math.floor(Math.random() * 80));
+        successRates.push(95 + Math.random() * 4.5);
     }
-    
-    if (totalAppsEl) {
-        animateNumber('totalApps', data.total_apps || 0);
-        if (appGrowthEl) {
-            const growth = parseFloat(data.app_growth || 0);
-            appGrowthEl.textContent = growth >= 0 ? `↑ ${growth}%` : `↓ ${Math.abs(growth)}%`;
-            appGrowthEl.className = growth >= 0 ? 'text-success' : 'text-danger';
-        }
-    }
-    
-    if (currentQPSEl) {
-        animateNumber('currentQPSDisplay', data.current_qps || 0);
-    }
-    
-    if (errorRateEl) {
-        errorRateEl.textContent = (data.error_rate || 0) + '%';
-        if (errorTrendEl) {
-            const growth = parseFloat(data.error_growth || 0);
-            errorTrendEl.textContent = growth <= 0 ? `↓ ${Math.abs(growth)}%` : `↑ ${growth}%`;
-            errorTrendEl.className = growth <= 0 ? 'text-success' : 'text-danger';
-        }
-    }
-}
-
-function initECharts() {
-    initRequestTrendChart();
-    initRealtimeChart();
-}
-
-function initRequestTrendChart() {
-    const container = document.getElementById('requestTrendChart');
-    if (!container) return;
-
-    requestTrendChart = echarts.init(container);
-    window.addEventListener('resize', () => requestTrendChart.resize());
-}
-
-function initRealtimeChart() {
-    const container = document.getElementById('realtimeChart');
-    if (!container) return;
-
-    realtimeDataPoints = Array(MAX_REALTIME_POINTS).fill(0).map((_, i) => ({
-        time: formatTime(new Date(Date.now() - (MAX_REALTIME_POINTS - i) * 5000)),
-        value: Math.floor(Math.random() * 50) + 30
-    }));
-
-    realtimeChart = echarts.init(container);
-    window.addEventListener('resize', () => realtimeChart.resize());
-
-    updateRealtimeChartInit();
-}
-
-function updateRealtimeChartInit() {
-    if (!realtimeChart) return;
-
-    realtimeChart.setOption({
-        xAxis: {
-            type: 'category',
-            data: realtimeDataPoints.map(p => p.time),
-            axisLabel: { color: '#666', rotate: 45 },
-            boundaryGap: false
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: '#666' }
-        },
-        series: [{
-            data: realtimeDataPoints.map(p => p.value),
-            type: 'line',
-            smooth: true,
-            areaStyle: {
-                color: {
-                    type: 'linear',
-                    x: 0, y: 0, x2: 0, y2: 1,
-                    colorStops: [
-                        { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
-                        { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
-                    ]
-                }
-            },
-            lineStyle: { color: '#10b981', width: 2 },
-            itemStyle: { color: '#10b981' },
-            symbol: 'circle',
-            symbolSize: 4
-        }],
-        tooltip: {
-            trigger: 'axis',
-            backgroundColor: 'rgba(0,0,0,0.8)',
-            textStyle: { color: '#fff' }
-        },
-        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
-        animation: false
-    });
-}
-
-function initWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/admin/dashboard/ws`;
-
-    try {
-        ws = new WebSocket(wsUrl);
-
-        ws.onopen = function() {
-            wsConnected = true;
-            updateWsStatus(true);
-            console.log('WebSocket connected');
-        };
-
-        ws.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
-                handleRealtimeData(data);
-            } catch (e) {
-                console.error('Parse WebSocket data failed:', e);
-            }
-        };
-
-        ws.onerror = function(error) {
-            console.error('WebSocket error:', error);
-            wsConnected = false;
-            updateWsStatus(false);
-        };
-
-        ws.onclose = function() {
-            wsConnected = false;
-            updateWsStatus(false);
-            console.log('WebSocket disconnected, reconnecting in', WS_RECONNECT_DELAY, 'ms...');
-            setTimeout(initWebSocket, WS_RECONNECT_DELAY);
-        };
-    } catch (e) {
-        console.error('WebSocket init failed:', e);
-        wsConnected = false;
-        updateWsStatus(false);
-        setTimeout(initWebSocket, WS_RECONNECT_DELAY);
-    }
-}
-
-function updateWsStatus(connected) {
-    const statusEl = document.getElementById('wsStatus');
-    if (!statusEl) return;
-
-    if (connected) {
-        statusEl.className = 'badge badge-success';
-        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已连接';
-    } else {
-        statusEl.className = 'badge badge-danger';
-        statusEl.innerHTML = '<i class="fas fa-wifi mr-1"></i>已断开';
-    }
-}
-
-function handleRealtimeData(data) {
-    if (data.type === 'metrics') {
-        updateRealtimeMetrics(data.payload);
-    } else if (data.type === 'activity') {
-        addActivityRow(data.payload);
-    } else if (data.type === 'stats') {
-        updateStats(data.payload);
-    }
-}
-
-function updateRealtimeMetrics(data) {
-    if (data.total_requests !== undefined) {
-        animateNumber('totalRequests', data.total_requests);
-    }
-
-    if (data.requests_per_second !== undefined) {
-        document.getElementById('currentQPS').textContent = data.requests_per_second.toFixed(0) + ' QPS';
-        updateRealtimeChart(data.requests_per_second);
-    }
-
-    if (data.system_status) {
-        updateSystemStatus(data.system_status);
-    }
-
-    if (data.resource_usage) {
-        updateResourceUsage(data.resource_usage);
-    }
-}
-
-function addActivityRow(data) {
-    const tbody = document.getElementById('recentActivity');
-    if (!tbody) return;
-
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td><small class="text-muted">${data.time || formatTime(new Date())}</small></td>
-        <td>${escapeHtml(data.event || '-')}</td>
-        <td><code>${escapeHtml(data.user || '-')}</code></td>
-        <td><span class="badge ${getStatusBadgeClass(data.status)}">${getStatusText(data.status)}</span></td>
-    `;
-
-    tbody.insertBefore(row, tbody.firstChild);
-
-    while (tbody.children.length > 8) {
-        tbody.removeChild(tbody.lastChild);
-    }
-}
-
-function setupEventListeners() {
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', async () => {
-            await loadDashboardStats();
-            await loadSystemStatus();
-            loadRecentActivity();
-        });
-    }
-
-    const autoRefreshSwitch = document.getElementById('autoRefreshSwitch');
-    if (autoRefreshSwitch) {
-        autoRefreshSwitch.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                startAutoRefresh();
-            } else {
-                stopAutoRefresh();
-            }
-        });
-    }
-
-    const periodButtons = document.querySelectorAll('[data-period]');
-    periodButtons.forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            periodButtons.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
-            const period = e.target.dataset.period;
-            await loadRequestTrendData(period);
-        });
-    });
-}
-
-function startAutoRefresh() {
-    stopAutoRefresh();
-    autoRefreshInterval = setInterval(async () => {
-        await loadDashboardStats();
-        await loadSystemStatus();
-    }, REALTIME_UPDATE_INTERVAL);
-}
-
-function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-    }
-}
-
-async function loadDashboardStats() {
-    const mockData = getMockDashboardStats();
-
-    try {
-        const data = await auth.request('/admin/dashboard/stats');
-        if (data.code === 0) {
-            updateStats(data.data);
-        } else {
-            updateStats(mockData);
-        }
-    } catch (error) {
-        updateStats(mockData);
-    }
-
-    previousStats = {
-        totalUsers: parseInt(document.getElementById('totalUsers').textContent.replace(/[^\d]/g, '')) || 0,
-        totalApps: parseInt(document.getElementById('totalApps').textContent.replace(/[^\d]/g, '')) || 0,
-        totalRequests: parseInt(document.getElementById('totalRequests').textContent.replace(/[^\d]/g, '')) || 0,
-        totalErrors: parseInt(document.getElementById('totalErrors').textContent.replace(/[^\d]/g, '')) || 0
-    };
-
-    await loadRequestTrendData('hour');
-    updateRealtimeChart(mockData.requestsPerMinute || 0);
-}
-
-function getMockDashboardStats() {
-    const baseUsers = 12456;
-    const baseApps = 156;
-    const baseRequests = 8234567;
-    const baseErrors = 1234;
 
     return {
-        totalUsers: baseUsers + Math.floor(Math.random() * 50),
-        totalApps: baseApps + Math.floor(Math.random() * 3),
-        totalRequests: baseRequests + Math.floor(Math.random() * 1000),
-        totalErrors: Math.max(0, baseErrors + Math.floor(Math.random() * 50) - 25),
-        requestsPerMinute: Math.floor(Math.random() * 100) + 50,
-        userGrowth: 12.5,
-        appGrowth: 8.2,
-        requestGrowth: 23.1,
-        errorGrowth: -5.7,
-        systemStatus: {
-            database: { status: 'healthy', latency: Math.floor(Math.random() * 50) + 10 },
-            redis: { status: 'healthy', latency: Math.floor(Math.random() * 10) + 1 },
-            api: { status: 'healthy', latency: Math.floor(Math.random() * 100) + 20 },
-            storage: { status: 'healthy', latency: Math.floor(Math.random() * 30) + 5 }
+        totalRequests: 45680,
+        totalRequestsChange: 12.5,
+        validRequests: 38920,
+        validRequestsChange: 8.3,
+        invalidRequests: 6760,
+        invalidRequestsChange: -5.2,
+        riskScore: 23.5,
+        riskScoreChange: -3.2,
+        anomalyRate: 2.1,
+        anomalyRateChange: 1.8,
+        realtimeMetrics: {
+            currentQPS: 1256,
+            avgResponseTime: 68,
+            peakQPS: 2340,
+            minResponseTime: 25,
+            errorRate: 0.8,
+            concurrentUsers: 4520
         },
-        resourceUsage: {
-            cpu: Math.floor(Math.random() * 40) + 20,
-            memory: Math.floor(Math.random() * 30) + 40,
-            disk: Math.floor(Math.random() * 20) + 50
-        }
+        trafficData: {
+            labels: hours,
+            requests: requestCounts,
+            risks: riskCounts
+        },
+        riskDistribution: [
+            { name: '低风险', value: 6520, percent: 78.5 },
+            { name: '中风险', value: 1280, percent: 15.4 },
+            { name: '高风险', value: 450, percent: 5.4 },
+            { name: '严重风险', value: 60, percent: 0.7 }
+        ],
+        responseTimeData: {
+            labels: hours.slice(-12),
+            avg: responseTimes.slice(-12),
+            p95: responseTimes.slice(-12).map(t => t * 1.5),
+            p99: responseTimes.slice(-12).map(t => t * 2)
+        },
+        regionData: [
+            { name: '北京', value: 12580 },
+            { name: '上海', value: 9860 },
+            { name: '广州', value: 7650 },
+            { name: '深圳', value: 6890 },
+            { name: '杭州', value: 5430 },
+            { name: '成都', value: 4280 },
+            { name: '武汉', value: 3650 },
+            { name: '其他', value: 1300 }
+        ],
+        topEndpoints: [
+            { endpoint: '/api/auth/login', requests: 8520, risk: 15.2, avgTime: 85 },
+            { endpoint: '/api/query/search', requests: 6320, risk: 28.5, avgTime: 120 },
+            { endpoint: '/api/data/submit', requests: 5890, risk: 35.8, avgTime: 95 },
+            { endpoint: '/api/user/profile', requests: 4560, risk: 8.3, avgTime: 45 },
+            { endpoint: '/api/report/generate', requests: 3280, risk: 42.1, avgTime: 256 }
+        ],
+        recentAlerts: [
+            { id: 'ALT001', type: '异常流量', severity: 'high', time: '2分钟前', message: '某IP请求频率异常，触发限流' },
+            { id: 'ALT002', type: '风险行为', severity: 'medium', time: '15分钟前', message: '检测到异常轨迹模式' },
+            { id: 'ALT003', type: '系统告警', severity: 'low', time: '1小时前', message: '响应时间超过阈值' },
+            { id: 'ALT004', type: '安全威胁', severity: 'critical', time: '2小时前', message: '检测到暴力破解攻击' },
+            { id: 'ALT005', type: '性能告警', severity: 'medium', time: '3小时前', message: '数据库查询缓慢' }
+        ]
     };
 }
 
-function updateStats(stats) {
-    animateNumber('totalUsers', stats.totalUsers);
-    animateNumber('totalApps', stats.totalApps);
-    animateNumber('totalRequests', stats.totalRequests);
-    animateNumber('totalErrors', stats.totalErrors);
-
-    updateTrend('usersTrend', stats.userGrowth || 0);
-    updateTrend('appsTrend', stats.appGrowth || 0);
-    updateTrend('requestsTrend', stats.requestGrowth || 0);
-    updateTrend('errorsTrend', stats.errorGrowth || 0, true);
-
-    if (stats.systemStatus) {
-        updateSystemStatus(stats.systemStatus);
-    }
-
-    if (stats.resourceUsage) {
-        updateResourceUsage(stats.resourceUsage);
-    }
+function updateDashboard(data) {
+    updateSummaryCards(data);
+    updateRealtimeMetrics(data.realtimeMetrics);
+    drawDashboardChart(data);
+    drawTrafficChart(data.trafficData);
+    drawRiskDistributionChart(data.riskDistribution);
+    drawResponseTimeChart(data.responseTimeData);
+    drawRegionChart(data.regionData);
+    updateTopEndpoints(data.topEndpoints);
+    updateRecentAlerts(data.recentAlerts);
 }
 
-function updateTrend(elementId, value, isInverse = false) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-
-    const isPositive = value >= 0;
-    const displayValue = Math.abs(value).toFixed(1);
-    const iconClass = (isPositive === !isInverse) ? 'fa-arrow-up' : 'fa-arrow-down';
-    const colorClass = (isPositive === !isInverse) ? 'text-success' : 'text-danger';
-
-    el.className = colorClass;
-    el.innerHTML = `<i class="fas ${iconClass} me-1"></i>${isPositive ? '+' : '-'}${displayValue}%`;
+function updateSummaryCards(data) {
+    updateCard('totalRequests', data.totalRequests, data.totalRequestsChange);
+    updateCard('validRequests', data.validRequests, data.validRequestsChange);
+    updateCard('invalidRequests', data.invalidRequests, data.invalidRequestsChange);
+    updateCard('riskScore', data.riskScore, data.riskScoreChange, 'score');
+    updateCard('anomalyRate', data.anomalyRate, data.anomalyRateChange, 'percent');
 }
 
-function updateSystemStatus(status) {
-    const services = ['db', 'redis', 'api', 'storage'];
-    services.forEach(service => {
-        const statusEl = document.getElementById(`${service}Status`);
-        const latencyEl = document.getElementById(`${service}Latency`);
+function updateCard(id, value, change, format = 'number') {
+    const card = document.getElementById(id);
+    if (!card) return;
 
-        if (statusEl && status[service]) {
-            const isHealthy = status[service].status === 'healthy';
-            statusEl.className = `badge rounded-pill ${isHealthy ? 'bg-success' : 'bg-danger'}`;
-        }
-
-        if (latencyEl && status[service]) {
-            latencyEl.textContent = `${status[service].latency}ms`;
-        }
-    });
-}
-
-function updateResourceUsage(usage) {
-    if (usage.cpu !== undefined) {
-        document.getElementById('cpuUsage').textContent = `${usage.cpu}%`;
-        document.getElementById('cpuProgress').style.width = `${usage.cpu}%`;
-        const cpuBar = document.getElementById('cpuProgress');
-        cpuBar.className = `progress-bar ${usage.cpu > 80 ? 'bg-danger' : usage.cpu > 60 ? 'bg-warning' : 'bg-info'}`;
+    let formattedValue;
+    if (format === 'number') {
+        formattedValue = value.toLocaleString();
+    } else if (format === 'score') {
+        formattedValue = value.toFixed(1);
+    } else if (format === 'percent') {
+        formattedValue = value.toFixed(1) + '%';
     }
 
-    if (usage.memory !== undefined) {
-        document.getElementById('memUsage').textContent = `${usage.memory}%`;
-        document.getElementById('memProgress').style.width = `${usage.memory}%`;
-        const memBar = document.getElementById('memProgress');
-        memBar.className = `progress-bar ${usage.memory > 80 ? 'bg-danger' : usage.memory > 60 ? 'bg-warning' : 'bg-success'}`;
-    }
+    card.querySelector('.card-value').textContent = formattedValue;
 
-    if (usage.disk !== undefined) {
-        document.getElementById('diskUsage').textContent = `${usage.disk}%`;
-        document.getElementById('diskProgress').style.width = `${usage.disk}%`;
-        const diskBar = document.getElementById('diskProgress');
-        diskBar.className = `progress-bar ${usage.disk > 90 ? 'bg-danger' : usage.disk > 70 ? 'bg-warning' : 'bg-warning'}`;
+    const changeEl = card.querySelector('.card-change');
+    if (changeEl) {
+        const icon = change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+        const color = change >= 0 ? 'text-green-500' : 'text-red-500';
+        changeEl.innerHTML = `<i class="fas ${icon} ${color}"></i> ${Math.abs(change).toFixed(1)}%`;
     }
 }
 
-function animateNumber(elementId, target) {
-    const element = document.getElementById(elementId);
-    if (!element) return;
+function updateRealtimeMetrics(metrics) {
+    if (!metrics) return;
 
-    const currentText = element.textContent;
-    const current = parseInt(currentText.replace(/[^\d]/g, '')) || 0;
-    const duration = 1000;
-    const startTime = performance.now();
-
-    function update(currentTime) {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easeProgress = easeOutQuart(progress);
-        const value = Math.floor(current + (target - current) * easeProgress);
-        element.textContent = formatNumber(value);
-
-        if (progress < 1) {
-            requestAnimationFrame(update);
-        }
-    }
-
-    requestAnimationFrame(update);
+    document.getElementById('currentQPS')?.textContent = metrics.currentQPS.toLocaleString();
+    document.getElementById('avgResponseTime')?.textContent = metrics.avgResponseTime + 'ms';
+    document.getElementById('peakQPS')?.textContent = metrics.peakQPS.toLocaleString();
+    document.getElementById('minResponseTime')?.textContent = metrics.minResponseTime + 'ms';
+    document.getElementById('errorRate')?.textContent = metrics.errorRate.toFixed(2) + '%';
+    document.getElementById('concurrentUsers')?.textContent = metrics.concurrentUsers.toLocaleString();
 }
 
-function easeOutQuart(x) {
-    return 1 - Math.pow(1 - x, 4);
-}
+function drawDashboardChart(data) {
+    if (!dashboardChart) return;
 
-function formatNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
-}
-
-async function loadSystemStatus() {
-    try {
-        const data = await auth.request('/admin/dashboard/system-status');
-        if (data.code === 0) {
-            updateSystemStatus(data.data.status || {});
-            updateResourceUsage(data.data.resourceUsage || {});
-        }
-    } catch (error) {
-        const mockStatus = getMockDashboardStats();
-        updateSystemStatus(mockStatus.systemStatus);
-        updateResourceUsage(mockStatus.resourceUsage);
-    }
-}
-
-function formatTime(date) {
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-async function loadRequestTrendData(period) {
-    const mockData = getMockTrendData(period);
-
-    try {
-        const data = await auth.request(`/admin/dashboard/request-trend?period=${period}`);
-        if (data.code === 0) {
-            updateRequestTrendChart(data.data);
-        } else {
-            updateRequestTrendChart(mockData);
-        }
-    } catch (error) {
-        updateRequestTrendChart(mockData);
-    }
-}
-
-function getMockTrendData(period) {
-    let labels, dataValues;
-
-    if (period === 'hour') {
-        labels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
-        dataValues = Array.from({ length: 24 }, () => Math.floor(Math.random() * 5000) + 1000);
-    } else if (period === 'day') {
-        labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-        dataValues = [12000, 15000, 18000, 16000, 20000, 25000, 22000];
-    } else {
-        labels = Array.from({ length: 7 }, (_, i) => `第${i + 1}周`);
-        dataValues = [85000, 92000, 105000, 98000, 120000, 135000, 145000];
-    }
-
-    return { labels, data: dataValues };
-}
-
-function updateRequestTrendChart(data) {
-    if (!requestTrendChart || !data) return;
-
-    const labels = data.labels || [];
-    const values = data.data || [];
-
-    requestTrendChart.setOption({
-        xAxis: {
-            type: 'category',
-            data: labels,
-            axisLabel: { color: '#666', rotate: 45 }
+    const option = {
+        backgroundColor: 'transparent',
+        title: {
+            text: '实时风险仪表盘',
+            left: 'center',
+            textStyle: { fontSize: 16, fontWeight: 'bold', color: '#fff' }
         },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: '#666' }
+        series: [
+            {
+                type: 'gauge',
+                startAngle: 90,
+                endAngle: -270,
+                pointer: {
+                    show: true,
+                    length: '60%',
+                    itemStyle: { color: '#ef4444' }
+                },
+                axisLine: {
+                    lineStyle: {
+                        width: 20,
+                        color: [
+                            [0.3, '#10b981'],
+                            [0.7, '#f59e0b'],
+                            [1, '#ef4444']
+                        ]
+                    }
+                },
+                splitLine: { length: 15, lineStyle: { color: '#9ca3af', width: 2 } },
+                axisTick: { show: false },
+                axisLabel: {
+                    color: '#9ca3af',
+                    distance: 20,
+                    formatter: function(value) {
+                        if (value === 0) return '0';
+                        if (value === 50) return '50';
+                        if (value === 100) return '100';
+                        return '';
+                    }
+                },
+                title: {
+                    offsetCenter: [0, '75%'],
+                    textStyle: { fontSize: 14, color: '#9ca3af' }
+                },
+                detail: {
+                    valueAnimation: true,
+                    formatter: '{value}',
+                    offsetCenter: [0, '50%'],
+                    textStyle: { fontSize: 48, fontWeight: 'bold', color: '#fff' }
+                },
+                data: [{ value: data.riskScore || 23.5, name: '风险评分' }]
+            }
+        ]
+    };
+
+    dashboardChart.setOption(option);
+}
+
+function drawTrafficChart(data) {
+    if (!trafficChart || !data) return;
+
+    const option = {
+        backgroundColor: 'transparent',
+        title: {
+            text: '流量趋势',
+            left: 'center',
+            textStyle: { fontSize: 14, fontWeight: 'normal', color: '#9ca3af' }
         },
-        series: [{
-            data: values,
-            type: 'line',
-            smooth: true,
-            areaStyle: {
-                color: {
-                    type: 'linear',
-                    x: 0, y: 0, x2: 0, y2: 1,
-                    colorStops: [
-                        { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
-                        { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
-                    ]
-                }
-            },
-            lineStyle: { color: '#3b82f6', width: 2 },
-            itemStyle: { color: '#3b82f6' },
-            symbol: 'circle',
-            symbolSize: 4
-        }],
         tooltip: {
             trigger: 'axis',
             backgroundColor: 'rgba(0,0,0,0.8)',
             textStyle: { color: '#fff' },
-            padding: 12
+            axisPointer: { type: 'cross' }
         },
-        grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true }
-    }, false);
-}
-
-function updateRealtimeChart(value) {
-    if (!realtimeChart) return;
-
-    const now = new Date();
-    const timeLabel = formatTime(now);
-
-    realtimeDataPoints.push({ time: timeLabel, value: value });
-
-    if (realtimeDataPoints.length > MAX_REALTIME_POINTS) {
-        realtimeDataPoints.shift();
-    }
-
-    realtimeChart.setOption({
+        legend: {
+            data: ['请求数', '风险数'],
+            bottom: 0,
+            textStyle: { color: '#9ca3af' }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            top: '15%',
+            containLabel: true
+        },
         xAxis: {
-            data: realtimeDataPoints.map(p => p.time)
+            type: 'category',
+            data: data.labels.slice(-12),
+            axisLabel: { color: '#9ca3af', fontSize: 10, rotate: 45 },
+            axisLine: { lineStyle: { color: '#374151' } }
         },
-        series: [{
-            data: realtimeDataPoints.map(p => p.value)
-        }]
-    }, false);
+        yAxis: [
+            {
+                type: 'value',
+                name: '请求数',
+                nameTextStyle: { color: '#9ca3af' },
+                axisLabel: { color: '#9ca3af' },
+                splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+            },
+            {
+                type: 'value',
+                name: '风险数',
+                nameTextStyle: { color: '#9ca3af' },
+                axisLabel: { color: '#9ca3af' },
+                splitLine: { show: false }
+            }
+        ],
+        series: [
+            {
+                name: '请求数',
+                type: 'line',
+                smooth: true,
+                data: data.requests.slice(-12),
+                lineStyle: { color: '#3b82f6', width: 3 },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(59, 130, 246, 0.4)' },
+                        { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+                    ])
+                },
+                symbol: 'circle',
+                symbolSize: 6
+            },
+            {
+                name: '风险数',
+                type: 'bar',
+                yAxisIndex: 1,
+                data: data.risks.slice(-12),
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#ef4444' },
+                        { offset: 1, color: '#dc2626' }
+                    ]),
+                    borderRadius: [4, 4, 0, 0]
+                }
+            }
+        ]
+    };
+
+    trafficChart.setOption(option);
 }
 
-async function loadRecentActivity() {
-    const mockActivities = getMockActivities();
+function drawRiskDistributionChart(data) {
+    if (!riskDistributionChart || !data) return;
 
-    try {
-        const data = await auth.request('/admin/dashboard/activity');
-        if (data.code === 0 && data.data) {
-            renderActivityTable(data.data);
-        } else {
-            renderActivityTable(mockActivities);
-        }
-    } catch (error) {
-        renderActivityTable(mockActivities);
-    }
+    const colors = ['#10b981', '#f59e0b', '#f97316', '#ef4444'];
+
+    const option = {
+        backgroundColor: 'transparent',
+        title: {
+            text: '风险等级分布',
+            left: 'center',
+            textStyle: { fontSize: 14, fontWeight: 'normal', color: '#9ca3af' }
+        },
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' },
+            formatter: function(params) {
+                return `${params.name}: ${params.value} (${params.data.percent}%)`;
+            }
+        },
+        legend: {
+            orient: 'horizontal',
+            bottom: 0,
+            textStyle: { color: '#9ca3af' }
+        },
+        series: [
+            {
+                name: '风险分布',
+                type: 'pie',
+                radius: ['45%', '70%'],
+                center: ['50%', '45%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                    borderRadius: 8,
+                    borderColor: '#1f2937',
+                    borderWidth: 2
+                },
+                label: {
+                    show: true,
+                    color: '#9ca3af',
+                    formatter: '{b}: {d}%'
+                },
+                emphasis: {
+                    label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#fff' },
+                    itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }
+                },
+                labelLine: { show: true },
+                data: data.map((item, index) => ({
+                    ...item,
+                    itemStyle: { color: colors[index] }
+                }))
+            }
+        ]
+    };
+
+    riskDistributionChart.setOption(option);
 }
 
-function getMockActivities() {
-    const activities = [
-        { time: getRelativeTime(0), event: '用户登录', user: 'admin', status: 'success' },
-        { time: getRelativeTime(3), event: '创建应用', user: 'developer1', status: 'success' },
-        { time: getRelativeTime(5), event: 'API请求失败', user: 'app_001', status: 'error' },
-        { time: getRelativeTime(8), event: '更新配置', user: 'admin', status: 'success' },
-        { time: getRelativeTime(12), event: '用户注册', user: 'new_user', status: 'success' },
-        { time: getRelativeTime(15), event: '验证码校验', user: 'user_123', status: 'success' },
-        { time: getRelativeTime(18), event: '批量导出', user: 'admin', status: 'success' },
-        { time: getRelativeTime(22), event: '权限变更', user: 'super_admin', status: 'success' }
-    ];
-    return activities;
+function drawResponseTimeChart(data) {
+    if (!responseTimeChart || !data) return;
+
+    const option = {
+        backgroundColor: 'transparent',
+        title: {
+            text: '响应时间分布',
+            left: 'center',
+            textStyle: { fontSize: 14, fontWeight: 'normal', color: '#9ca3af' }
+        },
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' },
+            formatter: function(params) {
+                let result = `${params[0].axisValue}<br/>`;
+                params.forEach(param => {
+                    result += `${param.seriesName}: ${param.value}ms<br/>`;
+                });
+                return result;
+            }
+        },
+        legend: {
+            data: ['平均响应时间', 'P95响应时间', 'P99响应时间'],
+            bottom: 0,
+            textStyle: { color: '#9ca3af' }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            top: '15%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: data.labels,
+            axisLabel: { color: '#9ca3af', fontSize: 10, rotate: 45 },
+            axisLine: { lineStyle: { color: '#374151' } }
+        },
+        yAxis: {
+            type: 'value',
+            name: '响应时间(ms)',
+            nameTextStyle: { color: '#9ca3af' },
+            axisLabel: { color: '#9ca3af' },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+        },
+        series: [
+            {
+                name: '平均响应时间',
+                type: 'line',
+                smooth: true,
+                data: data.avg,
+                lineStyle: { color: '#10b981', width: 2 },
+                symbol: 'circle',
+                symbolSize: 5
+            },
+            {
+                name: 'P95响应时间',
+                type: 'line',
+                smooth: true,
+                data: data.p95,
+                lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
+                symbol: 'circle',
+                symbolSize: 5
+            },
+            {
+                name: 'P99响应时间',
+                type: 'line',
+                smooth: true,
+                data: data.p99,
+                lineStyle: { color: '#ef4444', width: 2, type: 'dotted' },
+                symbol: 'circle',
+                symbolSize: 5
+            }
+        ]
+    };
+
+    responseTimeChart.setOption(option);
 }
 
-function getRelativeTime(minutesAgo) {
-    const date = new Date(Date.now() - minutesAgo * 60 * 1000);
-    return date.toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    }).replace(/\//g, '-');
+function drawRegionChart(data) {
+    if (!regionChart || !data) return;
+
+    const option = {
+        backgroundColor: 'transparent',
+        title: {
+            text: '地域分布',
+            left: 'center',
+            textStyle: { fontSize: 14, fontWeight: 'normal', color: '#9ca3af' }
+        },
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            textStyle: { color: '#fff' },
+            axisPointer: { type: 'shadow' },
+            formatter: function(params) {
+                const param = params[0];
+                return `${param.name}: ${param.value.toLocaleString()}`;
+            }
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '3%',
+            top: '15%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'value',
+            name: '请求数',
+            nameTextStyle: { color: '#9ca3af' },
+            axisLabel: { color: '#9ca3af' },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+        },
+        yAxis: {
+            type: 'category',
+            data: data.map(item => item.name).reverse(),
+            axisLabel: { color: '#9ca3af' },
+            axisLine: { lineStyle: { color: '#374151' } }
+        },
+        series: [
+            {
+                type: 'bar',
+                data: data.map(item => item.value).reverse(),
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                        { offset: 0, color: '#3b82f6' },
+                        { offset: 1, color: '#1d4ed8' }
+                    ]),
+                    borderRadius: [0, 4, 4, 0]
+                },
+                barWidth: '60%',
+                emphasis: {
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: '#60a5fa' },
+                            { offset: 1, color: '#3b82f6' }
+                        ])
+                    }
+                }
+            }
+        ]
+    };
+
+    regionChart.setOption(option);
 }
 
-function renderActivityTable(activities) {
-    const tbody = document.getElementById('recentActivity');
-    if (!tbody) return;
+function updateTopEndpoints(endpoints) {
+    const tbody = document.getElementById('topEndpointsTable');
+    if (!tbody || !endpoints) return;
 
-    tbody.innerHTML = activities.slice(0, 8).map(activity => `
+    tbody.innerHTML = endpoints.map((ep, index) => `
         <tr>
-            <td><small class="text-muted">${activity.time}</small></td>
-            <td>${escapeHtml(activity.event)}</td>
-            <td><code>${escapeHtml(activity.user)}</code></td>
-            <td><span class="badge ${getStatusBadgeClass(activity.status)}">${getStatusText(activity.status)}</span></td>
+            <td>${index + 1}</td>
+            <td class="endpoint-name">${ep.endpoint}</td>
+            <td>${ep.requests.toLocaleString()}</td>
+            <td><span class="risk-badge ${getRiskBadgeClass(ep.risk)}">${ep.risk.toFixed(1)}</span></td>
+            <td>${ep.avgTime}ms</td>
         </tr>
     `).join('');
 }
 
-function getStatusBadgeClass(status) {
-    const map = {
-        success: 'bg-success',
-        error: 'bg-danger',
-        pending: 'bg-warning',
-        warning: 'bg-warning'
-    };
-    return map[status] || 'bg-secondary';
+function getRiskBadgeClass(risk) {
+    if (risk >= 70) return 'risk-critical';
+    if (risk >= 50) return 'risk-high';
+    if (risk >= 30) return 'risk-medium';
+    return 'risk-low';
 }
 
-function getStatusText(status) {
-    const map = {
-        success: '成功',
-        error: '失败',
-        pending: '处理中',
-        warning: '警告'
-    };
-    return map[status] || status;
+function updateRecentAlerts(alerts) {
+    const container = document.getElementById('recentAlerts');
+    if (!container || !alerts) return;
+
+    container.innerHTML = alerts.map(alert => `
+        <div class="alert-item ${alert.severity}">
+            <div class="alert-icon">${getSeverityIcon(alert.severity)}</div>
+            <div class="alert-content">
+                <div class="alert-header">
+                    <span class="alert-id">${alert.id}</span>
+                    <span class="alert-type">${alert.type}</span>
+                    <span class="severity-badge ${alert.severity}">${getSeverityText(alert.severity)}</span>
+                </div>
+                <p class="alert-message">${alert.message}</p>
+                <span class="alert-time">${alert.time}</span>
+            </div>
+        </div>
+    `).join('');
 }
 
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
+function getSeverityIcon(severity) {
+    const icons = {
+        critical: '<i class="fas fa-exclamation-triangle"></i>',
+        high: '<i class="fas fa-exclamation-circle"></i>',
+        medium: '<i class="fas fa-info-circle"></i>',
+        low: '<i class="fas fa-info"></i>'
+    };
+    return icons[severity] || icons.low;
+}
+
+function getSeverityText(severity) {
+    const texts = {
+        critical: '严重',
+        high: '高',
+        medium: '中',
+        low: '低'
+    };
+    return texts[severity] || '低';
+}
+
+function startAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    refreshInterval = setInterval(loadDashboardData, 10000);
+}
+
+function stopAutoRefresh() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+}
+
+function exportDashboardData() {
+    const data = {
+        timestamp: new Date().toISOString(),
+        timeRange: selectedTimeRange,
+        summary: {
+            totalRequests: document.getElementById('totalRequests')?.querySelector('.card-value').textContent,
+            validRequests: document.getElementById('validRequests')?.querySelector('.card-value').textContent,
+            invalidRequests: document.getElementById('invalidRequests')?.querySelector('.card-value').textContent,
+            riskScore: document.getElementById('riskScore')?.querySelector('.card-value').textContent,
+            anomalyRate: document.getElementById('anomalyRate')?.querySelector('.card-value').textContent
+        }
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dashboard_export_${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function handleCardClick(cardId) {
+    console.log('Card clicked:', cardId);
+}
+
+function toggleFullscreen() {
+    const container = document.getElementById('dashboardContainer');
+    if (!container) return;
+
+    if (document.fullscreenElement) {
+        document.exitFullscreen();
+    } else {
+        container.requestFullscreen();
+    }
 }

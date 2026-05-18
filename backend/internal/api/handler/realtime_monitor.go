@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/pkg/response"
 )
 
@@ -81,10 +82,74 @@ type SubscriptionPayload struct {
 	Groups []string `json:"groups"`
 }
 
+// RiskEvent 风险事件
+type RiskEvent struct {
+	ID          string             `json:"id"`
+	Type        string             `json:"type"`
+	Severity    model.RiskLevel    `json:"severity"`
+	RiskScore   float64            `json:"risk_score"`
+	Message     string             `json:"message"`
+	Factors     []string           `json:"factors"`
+	Context     map[string]string  `json:"context"`
+	Timestamp   int64              `json:"timestamp"`
+}
+
+// RealTimeMetrics 实时指标聚合
+type RealTimeMetrics struct {
+	Timestamp       int64                  `json:"timestamp"`
+	TotalRequests   int64                  `json:"total_requests"`
+	SuccessCount    int64                  `json:"success_count"`
+	FailCount       int64                  `json:"fail_count"`
+	QPS             float64                `json:"qps"`
+	AvgResponseTime float64                `json:"avg_response_time"`
+	CPUUsage        float64                `json:"cpu_usage"`
+	MemoryUsage     float64                `json:"memory_usage"`
+	DiskUsage       float64                `json:"disk_usage"`
+	RiskDistribution map[string]float64    `json:"risk_distribution"`
+	TopApps         []AppMetric            `json:"top_apps"`
+	DeviceStatus    []DeviceStatus         `json:"devices"`
+}
+
+type AppMetric struct {
+	Name     string `json:"name"`
+	Requests int    `json:"requests"`
+}
+
+type DeviceStatus struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Icon   string `json:"icon"`
+}
+
+// 指标聚合器
+type MetricsAggregator struct {
+	mu              sync.RWMutex
+	windowSize      int
+	requestCounts   []int64
+	successCounts   []int64
+	failCounts      []int64
+	responseTimes   []float64
+	lastResetTime   time.Time
+}
+
+var metricsAggregator = &MetricsAggregator{
+	windowSize:    60,
+	requestCounts: make([]int64, 60),
+	successCounts: make([]int64, 60),
+	failCounts:    make([]int64, 60),
+	responseTimes: make([]float64, 60),
+	lastResetTime: time.Now(),
+}
+
+// 风险事件队列
+var riskEventQueue = make(chan RiskEvent, 100)
+
 func init() {
 	go manager.start()
 	go startDataPushService()
 	go startAlertService()
+	go startRiskEventProcessor()
+	go startMetricsAggregator()
 }
 
 func (m *ClientManager) start() {
@@ -677,4 +742,172 @@ func StopMonitoringService() {
 
 func IsMonitoringServiceRunning() bool {
 	return monitoringService.isRunning.Load()
+}
+
+// 风险事件处理器
+func startRiskEventProcessor() {
+	for {
+		select {
+		case event := <-riskEventQueue:
+			broadcastRiskEvent(event)
+		case <-time.After(100 * time.Millisecond):
+			continue
+		}
+	}
+}
+
+// 广播风险事件
+func broadcastRiskEvent(event RiskEvent) {
+	msg := Message{
+		Type:      "risk_event",
+		Payload:   event,
+		Timestamp: time.Now().Unix(),
+		ID:        uuid.New().String(),
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+
+	manager.broadcast <- data
+}
+
+// 指标聚合器主循环
+func startMetricsAggregator() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		metricsAggregator.update()
+	}
+}
+
+// 更新指标
+func (ma *MetricsAggregator) update() {
+	ma.mu.Lock()
+	defer ma.mu.Unlock()
+
+	// 滚动窗口
+	copy(ma.requestCounts[1:], ma.requestCounts[:ma.windowSize-1])
+	copy(ma.successCounts[1:], ma.successCounts[:ma.windowSize-1])
+	copy(ma.failCounts[1:], ma.failCounts[:ma.windowSize-1])
+	copy(ma.responseTimes[1:], ma.responseTimes[:ma.windowSize-1])
+
+	// 模拟数据（实际应该从监控系统获取）
+	ma.requestCounts[0] = int64(rand.Intn(100) + 50)
+	ma.successCounts[0] = ma.requestCounts[0] - int64(rand.Intn(5))
+	ma.failCounts[0] = ma.requestCounts[0] - ma.successCounts[0]
+	ma.responseTimes[0] = float64(rand.Intn(200) + 50)
+
+	ma.lastResetTime = time.Now()
+}
+
+// 获取聚合指标
+func (ma *MetricsAggregator) getMetrics() RealTimeMetrics {
+	ma.mu.RLock()
+	defer ma.mu.RUnlock()
+
+	var totalRequests, totalSuccess, totalFail int64
+	var totalResponseTime float64
+	count := 0
+
+	for i := 0; i < ma.windowSize; i++ {
+		if ma.requestCounts[i] > 0 {
+			totalRequests += ma.requestCounts[i]
+			totalSuccess += ma.successCounts[i]
+			totalFail += ma.failCounts[i]
+			totalResponseTime += ma.responseTimes[i]
+			count++
+		}
+	}
+
+	avgResponseTime := 0.0
+	if count > 0 {
+		avgResponseTime = totalResponseTime / float64(count)
+	}
+
+	return RealTimeMetrics{
+		Timestamp:       time.Now().Unix(),
+		TotalRequests:   totalRequests,
+		SuccessCount:    totalSuccess,
+		FailCount:       totalFail,
+		QPS:             float64(totalRequests) / 60,
+		AvgResponseTime: avgResponseTime,
+		CPUUsage:        40.0 + rand.Float64()*30,
+		MemoryUsage:     50.0 + rand.Float64()*25,
+		DiskUsage:       30.0 + rand.Float64()*15,
+		RiskDistribution: map[string]float64{
+			"low":    60 + rand.Float64()*30,
+			"medium": 15 + rand.Float64()*20,
+			"high":   5 + rand.Float64()*15,
+		},
+		TopApps: []AppMetric{
+			{"电商平台", 4000 + rand.Intn(2000)},
+			{"金融服务", 3500 + rand.Intn(1500)},
+			{"社交应用", 3000 + rand.Intn(1500)},
+			{"游戏中心", 2500 + rand.Intn(1000)},
+			{"新闻资讯", 2000 + rand.Intn(1000)},
+		},
+		DeviceStatus: []DeviceStatus{
+			{"API 服务器 1", "online", "server"},
+			{"API 服务器 2", "online", "server"},
+			{"数据库主库", "online", "database"},
+			{"Redis 集群", func() string {
+				if rand.Float32() > 0.7 {
+					return "warning"
+				}
+				return "online"
+			}(), "memory"},
+			{"负载均衡器", "online", "network-wired"},
+		},
+	}
+}
+
+// 记录请求
+func RecordRequest(success bool, responseTime float64) {
+	metricsAggregator.mu.Lock()
+	defer metricsAggregator.mu.Unlock()
+
+	metricsAggregator.requestCounts[0]++
+	if success {
+		metricsAggregator.successCounts[0]++
+	} else {
+		metricsAggregator.failCounts[0]++
+	}
+	metricsAggregator.responseTimes[0] = (metricsAggregator.responseTimes[0] + responseTime) / 2
+}
+
+// 触发风险事件
+func TriggerRiskEvent(eventType string, severity model.RiskLevel, riskScore float64, message string, factors []string, context map[string]string) {
+	event := RiskEvent{
+		ID:        uuid.New().String(),
+		Type:      eventType,
+		Severity:  severity,
+		RiskScore: riskScore,
+		Message:   message,
+		Factors:   factors,
+		Context:   context,
+		Timestamp: time.Now().Unix(),
+	}
+
+	select {
+	case riskEventQueue <- event:
+	default:
+		log.Println("Risk event queue is full, dropping event")
+	}
+}
+
+// GetRealTimeMetrics 获取实时指标
+func GetRealTimeMetrics(c *gin.Context) {
+	metrics := metricsAggregator.getMetrics()
+	response.Success(c, metrics)
+}
+
+// GetRiskEvents 获取最近风险事件
+func GetRiskEvents(c *gin.Context) {
+	response.Success(c, gin.H{
+		"events": []RiskEvent{},
+		"count":  0,
+	})
 }

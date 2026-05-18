@@ -1127,14 +1127,14 @@ func CombineEnhancedFeatures(features ...*RuleEngineFeatures) *RuleEngineFeature
 	return combined
 }
 
-type RuleVersion struct {
-	Version     string      `json:"version"`
-	ChangeType  string      `json:"change_type"`
-	Description string      `json:"description"`
-	Operator    string      `json:"operator"`
-	CreatedAt   time.Time   `json:"created_at"`
+type EngineRuleVersion struct {
+	Version     string         `json:"version"`
+	ChangeType  string         `json:"change_type"`
+	Description string         `json:"description"`
+	Operator    string         `json:"operator"`
+	CreatedAt   time.Time      `json:"created_at"`
 	Rules       []EnhancedRule `json:"rules"`
-	IsCurrent   bool        `json:"is_current"`
+	IsCurrent   bool           `json:"is_current"`
 }
 
 type RuleEngineConfig struct {
@@ -1219,7 +1219,7 @@ func (ere *EnhancedRuleEngine) SaveToFile(filePath string) error {
 	return nil
 }
 
-func (ere *EnhancedRuleEngine) CreateVersionSnapshot() *RuleVersion {
+func (ere *EnhancedRuleEngine) CreateVersionSnapshot() *EngineRuleVersion {
 	ere.mu.RLock()
 	defer ere.mu.RUnlock()
 
@@ -1230,7 +1230,7 @@ func (ere *EnhancedRuleEngine) CreateVersionSnapshot() *RuleVersion {
 		time.Now().Hour()*100+time.Now().Minute(),
 	)
 
-	return &RuleVersion{
+	return &EngineRuleVersion{
 		Version:     version,
 		ChangeType:  "snapshot",
 		Description: "自动快照",
@@ -1241,7 +1241,7 @@ func (ere *EnhancedRuleEngine) CreateVersionSnapshot() *RuleVersion {
 	}
 }
 
-func (ere *EnhancedRuleEngine) LoadVersionSnapshot(version *RuleVersion) error {
+func (ere *EnhancedRuleEngine) LoadVersionSnapshot(version *EngineRuleVersion) error {
 	if version == nil || version.Rules == nil {
 		return fmt.Errorf("版本快照无效")
 	}

@@ -30,16 +30,6 @@ type AnomalyPattern struct {
 	FeatureValues map[string]float64 `json:"feature_values"`
 }
 
-type AnomalyDetector struct {
-	extractor *TraceExtractor
-}
-
-func NewAnomalyDetector() *AnomalyDetector {
-	return &AnomalyDetector{
-		extractor: NewTraceExtractor(),
-	}
-}
-
 func (a *AnomalyDetector) DetectAnomalies(traceData *model.TraceData) ([]AnomalyPattern, error) {
 	if traceData == nil || len(traceData.Points) < 2 {
 		return nil, errors.New("轨迹数据不足")

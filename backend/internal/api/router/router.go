@@ -265,6 +265,7 @@ func setupAPIRoutes(r *gin.Engine, backupHandler *handler.BackupHandler) {
 	setupMFARoutes(api)
 	setupGDPRRoutes(api)
 	setupAPIV1AdminRoutes(api, backupHandler)
+	setupEdgeRoutes(api)
 }
 
 func setupCaptchaRoutes(api *gin.RouterGroup) {
@@ -382,6 +383,9 @@ func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHa
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthMiddleware())
 
+	// Risk Rules Management
+	handler.RegisterRiskRulesRoutes(admin)
+
 	admin.GET("/stats", handler.GetStats)
 	admin.GET("/stats/detailed", handler.GetDetailedStats)
 	admin.GET("/users", handler.ListUsers)
@@ -462,4 +466,9 @@ func setupAPIV1AdminRoutes(api *gin.RouterGroup, backupHandler *handler.BackupHa
 
 	arHandler := handler.GetAdvancedRateLimitHandler()
 	arHandler.RegisterRoutes(admin)
+}
+
+func setupEdgeRoutes(api *gin.RouterGroup) {
+	edgeHandler := handler.GetEdgeHandler()
+	edgeHandler.RegisterRoutes(api)
 }

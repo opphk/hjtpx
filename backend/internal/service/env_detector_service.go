@@ -41,6 +41,18 @@ type EnvInfo struct {
 	MaxTouchPoints      int      `json:"max_touch_points"`
 	HardwareConcurrency int      `json:"hardware_concurrency"`
 	Fingerprint         string   `json:"fingerprint"`
+	// 增强检测字段
+	CPUIDInfo           string   `json:"cpuid_info"`
+	MemorySize          int      `json:"memory_size"`
+	DeviceMemory        float64  `json:"device_memory"`
+	BatteryLevel        float64  `json:"battery_level"`
+	NetworkType         string   `json:"network_type"`
+	WebRTCIPs           []string `json:"webrtc_ips"`
+	AudioContextHash    string   `json:"audio_context_hash"`
+	// 时序攻击检测相关
+	TimingVariance      float64  `json:"timing_variance"`
+	ExecutionTime       float64  `json:"execution_time"`
+	FrameTimeDelta      float64  `json:"frame_time_delta"`
 }
 
 type AutomationResult struct {
@@ -1222,6 +1234,456 @@ func (d *EnvDetector) EnhancedVMCheck(info *EnvInfo, frontendDetections []string
 			Detected: true,
 			Score:    int(debuggerScore),
 			Reason:   strings.Join(debuggerEvidence, "; "),
+		})
+	}
+
+	if report.EnvScore < 0 {
+		report.EnvScore = 0
+	}
+
+	return report
+}
+
+// DetectCPUIDFeatures 检测CPUID特征，识别虚拟机环境
+func (d *EnvDetector) DetectCPUIDFeatures(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	cpuidPatterns := []string{
+		"vmware", "virtualbox", "qemu", "kvm", "xen", "hyperv",
+		"virtual", "vm", "vbox", "guest",
+	}
+
+	cpuidLower := strings.ToLower(info.CPUIDInfo)
+	for _, pattern := range cpuidPatterns {
+		if strings.Contains(cpuidLower, pattern) {
+			detected = true
+			score += 40.0
+			evidence = append(evidence, fmt.Sprintf("CPUID检测-虚拟机标识: %s", pattern))
+		}
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "cpuid") && 
+		   (strings.Contains(detectionLower, "vm") || strings.Contains(detectionLower, "virtual")) {
+			detected = true
+			score += 35.0
+			evidence = append(evidence, fmt.Sprintf("前端CPUID检测: %s", detection))
+		}
+	}
+
+	if info.HardwareConcurrency == 1 {
+		detected = true
+		score += 25.0
+		evidence = append(evidence, "CPUID检测-单核CPU(常见于虚拟机)")
+	} else if info.HardwareConcurrency == 2 {
+		detected = true
+		score += 15.0
+		evidence = append(evidence, "CPUID检测-双核CPU(可能为虚拟机)")
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+// DetectMemoryMapping 检测内存映射特征
+func (d *EnvDetector) DetectMemoryMapping(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	if info.DeviceMemory > 0 && info.DeviceMemory < 2 {
+		detected = true
+		score += 25.0
+		evidence = append(evidence, fmt.Sprintf("内存映射-低内存配置: %.1fGB", info.DeviceMemory))
+	}
+
+	if info.MemorySize > 0 && info.MemorySize < 4096 {
+		detected = true
+		score += 20.0
+		evidence = append(evidence, fmt.Sprintf("内存映射-内存容量异常: %dMB", info.MemorySize))
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "memory_map") || 
+		   strings.Contains(detectionLower, "memory_layout") ||
+		   strings.Contains(detectionLower, "shared_memory") {
+			if strings.Contains(detectionLower, "anomaly") || strings.Contains(detectionLower, "suspicious") {
+				detected = true
+				score += 30.0
+				evidence = append(evidence, fmt.Sprintf("内存映射检测异常: %s", detection))
+			}
+		}
+	}
+
+	videoMemoryPatterns := []string{"vboxvga", "vmware svga", "qxl", "virtio-gpu", "bochs"}
+	rendererLower := strings.ToLower(info.WebGLRenderer)
+	for _, pattern := range videoMemoryPatterns {
+		if strings.Contains(rendererLower, strings.ToLower(pattern)) {
+			detected = true
+			score += 35.0
+			evidence = append(evidence, fmt.Sprintf("内存映射-虚拟显卡: %s", pattern))
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+// DetectTimingAttack 检测时序攻击特征
+func (d *EnvDetector) DetectTimingAttack(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	if info.TimingVariance > 0.8 {
+		detected = true
+		score += 30.0
+		evidence = append(evidence, fmt.Sprintf("时序攻击-执行时间方差异常: %.2f", info.TimingVariance))
+	}
+
+	if info.ExecutionTime < 0.001 {
+		detected = true
+		score += 25.0
+		evidence = append(evidence, fmt.Sprintf("时序攻击-执行时间过短: %.6fs", info.ExecutionTime))
+	}
+
+	if info.FrameTimeDelta > 100 {
+		detected = true
+		score += 20.0
+		evidence = append(evidence, fmt.Sprintf("时序攻击-帧时间间隔异常: %.2fms", info.FrameTimeDelta))
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "timing") || 
+		   strings.Contains(detectionLower, "execution_time") ||
+		   strings.Contains(detectionLower, "clock_skew") {
+			if strings.Contains(detectionLower, "attack") || 
+			   strings.Contains(detectionLower, "anomaly") ||
+			   strings.Contains(detectionLower, "suspicious") {
+				detected = true
+				score += 35.0
+				evidence = append(evidence, fmt.Sprintf("时序攻击检测: %s", detection))
+			}
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+// DetectFileSystemEscape 检测文件系统逃逸
+func (d *EnvDetector) DetectFileSystemEscape(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	fileSystemPatterns := []string{
+		"/proc/vz", "/proc/cpuinfo_vmware", "/dev/vboxguest",
+		"/dev/vmmemctl", "/var/run/vmware", "/etc/vmware-tools",
+		"/usr/lib/virtualbox", "/Library/Application Support/VirtualBox",
+		"C:\\Program Files\\VMware", "C:\\Program Files\\Oracle\\VirtualBox",
+	}
+
+	uaLower := strings.ToLower(info.UserAgent)
+	for _, pattern := range fileSystemPatterns {
+		if strings.Contains(uaLower, strings.ToLower(pattern)) {
+			detected = true
+			score += 40.0
+			evidence = append(evidence, fmt.Sprintf("文件系统逃逸-检测到虚拟机文件路径: %s", pattern))
+		}
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "file_system") || 
+		   strings.Contains(detectionLower, "directory_enumeration") {
+			if strings.Contains(detectionLower, "escape") || 
+			   strings.Contains(detectionLower, "vm_file") ||
+			   strings.Contains(detectionLower, "host_file") {
+				detected = true
+				score += 35.0
+				evidence = append(evidence, fmt.Sprintf("文件系统逃逸检测: %s", detection))
+			}
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+// DetectNetworkEscape 检测网络逃逸
+func (d *EnvDetector) DetectNetworkEscape(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	if len(info.WebRTCIPs) > 2 {
+		detected = true
+		score += 25.0
+		evidence = append(evidence, fmt.Sprintf("网络逃逸-WebRTC IP数量异常: %d", len(info.WebRTCIPs)))
+	}
+
+	privateIPCount := 0
+	for _, ip := range info.WebRTCIPs {
+		if strings.HasPrefix(ip, "10.") || 
+		   strings.HasPrefix(ip, "172.16.") || 
+		   strings.HasPrefix(ip, "192.168.") ||
+		   strings.HasPrefix(ip, "127.") {
+			privateIPCount++
+		}
+	}
+	if privateIPCount > 0 && privateIPCount < len(info.WebRTCIPs) {
+		detected = true
+		score += 20.0
+		evidence = append(evidence, fmt.Sprintf("网络逃逸-混合私有/公共IP: 私有%d个, 公共%d个", privateIPCount, len(info.WebRTCIPs)-privateIPCount))
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "network_escape") || 
+		   strings.Contains(detectionLower, "webrtc_leak") ||
+		   strings.Contains(detectionLower, "local_ip") {
+			if strings.Contains(detectionLower, "suspicious") || 
+			   strings.Contains(detectionLower, "anomaly") {
+				detected = true
+				score += 30.0
+				evidence = append(evidence, fmt.Sprintf("网络逃逸检测: %s", detection))
+			}
+		}
+	}
+
+	vpnPatterns := []string{"vpn", "proxy", "tor", "datacenter"}
+	networkLower := strings.ToLower(info.NetworkType)
+	for _, pattern := range vpnPatterns {
+		if strings.Contains(networkLower, pattern) {
+			detected = true
+			score += 15.0
+			evidence = append(evidence, fmt.Sprintf("网络逃逸-检测到VPN/代理: %s", pattern))
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+// DetectProcessEscape 检测进程逃逸
+func (d *EnvDetector) DetectProcessEscape(info *EnvInfo, frontendDetections []string) (bool, float64, []string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+
+	processPatterns := []string{
+		"vboxservice", "vboxtray", "vmtoolsd", "vmware-tray",
+		"vmware-user", "qemu-ga", "xenstore", "hyperv-daemon",
+		"virtiofsd", "spice-vdagent", "guest-agent",
+	}
+
+	uaLower := strings.ToLower(info.UserAgent)
+	for _, pattern := range processPatterns {
+		if strings.Contains(uaLower, pattern) {
+			detected = true
+			score += 40.0
+			evidence = append(evidence, fmt.Sprintf("进程逃逸-检测到虚拟机进程: %s", pattern))
+		}
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		if strings.Contains(detectionLower, "process_list") || 
+		   strings.Contains(detectionLower, "task_manager") ||
+		   strings.Contains(detectionLower, "system_process") {
+			if strings.Contains(detectionLower, "vm_process") || 
+			   strings.Contains(detectionLower, "escape") ||
+			   strings.Contains(detectionLower, "sandbox") {
+				detected = true
+				score += 35.0
+				evidence = append(evidence, fmt.Sprintf("进程逃逸检测: %s", detection))
+			}
+		}
+	}
+
+	return detected, math.Min(score, 100.0), evidence
+}
+
+// DetectFingerprintBrowser 检测指纹浏览器(AdsPower、GoLogin、VMLogin等)
+func (d *EnvDetector) DetectFingerprintBrowser(info *EnvInfo, frontendDetections []string) (bool, float64, []string, string) {
+	detected := false
+	score := 0.0
+	evidence := []string{}
+	browserType := ""
+
+	fingerprintBrowserPatterns := map[string][]string{
+		"adspower": {
+			"adspower", "adspowerbrowser", "ads-power",
+			"chrome-adspower", "adspower-chrome",
+		},
+		"gologin": {
+			"gologin", "go-login", "gologin-browser",
+			"chrome-gologin", "gologin-chrome",
+		},
+		"vmlogin": {
+			"vmlogin", "vm-login", "vmlogin-browser",
+			"chrome-vmlogin", "vmlogin-chrome",
+		},
+		"multilogin": {
+			"multilogin", "multi-login", "multiloginapp",
+			"chrome-multilogin", "multilogin-chrome",
+		},
+		"incogniton": {
+			"incogniton", "incogniton-browser",
+			"chrome-incogniton",
+		},
+		"kameleo": {
+			"kameleo", "kameleo-browser",
+			"chrome-kameleo", "kameleo-chrome",
+		},
+		"clonbrowser": {
+			"clonbrowser", "clon-browser",
+			"chrome-clonbrowser",
+		},
+	}
+
+	uaLower := strings.ToLower(info.UserAgent)
+	for browser, patterns := range fingerprintBrowserPatterns {
+		for _, pattern := range patterns {
+			if strings.Contains(uaLower, pattern) {
+				detected = true
+				score += 50.0
+				browserType = browser
+				evidence = append(evidence, fmt.Sprintf("指纹浏览器检测-检测到%s: %s", browser, pattern))
+				break
+			}
+		}
+		if detected {
+			break
+		}
+	}
+
+	for _, detection := range frontendDetections {
+		detectionLower := strings.ToLower(detection)
+		for browser, patterns := range fingerprintBrowserPatterns {
+			for _, pattern := range patterns {
+				if strings.Contains(detectionLower, pattern) {
+					detected = true
+					score += 45.0
+					if browserType == "" {
+						browserType = browser
+					}
+					evidence = append(evidence, fmt.Sprintf("前端指纹浏览器检测-检测到%s: %s", browser, detection))
+				}
+			}
+		}
+	}
+
+	extensionPatterns := []string{
+		"fingerprint-defender", "canvas-defender", "webgl-defender",
+		"anti-fingerprint", "fingerprint-spoof", "browser-fingerprint",
+	}
+	for _, extension := range info.Plugins {
+		extLower := strings.ToLower(extension)
+		for _, pattern := range extensionPatterns {
+			if strings.Contains(extLower, pattern) {
+				detected = true
+				score += 20.0
+				evidence = append(evidence, fmt.Sprintf("指纹浏览器检测-检测到反指纹插件: %s", extension))
+			}
+		}
+	}
+
+	if info.AudioContextHash == "" && info.CanvasFingerprint != "" {
+		detected = true
+		score += 15.0
+		evidence = append(evidence, "指纹浏览器检测-AudioContext缺失(常见于指纹浏览器)")
+	}
+
+	return detected, math.Min(score, 100.0), evidence, browserType
+}
+
+// EnhancedDetectionReport 生成增强的检测报告
+func (d *EnvDetector) EnhancedDetectionReport(info *EnvInfo, frontendDetections []string) *EnvDetectionReport {
+	report := d.EnhancedVMCheck(info, frontendDetections)
+
+	cpuidDetected, cpuidScore, cpuidEvidence := d.DetectCPUIDFeatures(info, frontendDetections)
+	if cpuidDetected {
+		report.EnvScore -= cpuidScore * 0.35
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "cpuid_features_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(cpuidScore),
+			Reason:   strings.Join(cpuidEvidence, "; "),
+		})
+	}
+
+	memoryDetected, memoryScore, memoryEvidence := d.DetectMemoryMapping(info, frontendDetections)
+	if memoryDetected {
+		report.EnvScore -= memoryScore * 0.25
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "memory_mapping_anomaly",
+			Risk:     "medium",
+			Detected: true,
+			Score:    int(memoryScore),
+			Reason:   strings.Join(memoryEvidence, "; "),
+		})
+	}
+
+	timingDetected, timingScore, timingEvidence := d.DetectTimingAttack(info, frontendDetections)
+	if timingDetected {
+		report.EnvScore -= timingScore * 0.2
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "timing_attack_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(timingScore),
+			Reason:   strings.Join(timingEvidence, "; "),
+		})
+	}
+
+	fileSystemDetected, fileSystemScore, fileSystemEvidence := d.DetectFileSystemEscape(info, frontendDetections)
+	if fileSystemDetected {
+		report.EnvScore -= fileSystemScore * 0.3
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "filesystem_escape_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(fileSystemScore),
+			Reason:   strings.Join(fileSystemEvidence, "; "),
+		})
+	}
+
+	networkDetected, networkScore, networkEvidence := d.DetectNetworkEscape(info, frontendDetections)
+	if networkDetected {
+		report.EnvScore -= networkScore * 0.25
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "network_escape_detected",
+			Risk:     "medium",
+			Detected: true,
+			Score:    int(networkScore),
+			Reason:   strings.Join(networkEvidence, "; "),
+		})
+	}
+
+	processDetected, processScore, processEvidence := d.DetectProcessEscape(info, frontendDetections)
+	if processDetected {
+		report.EnvScore -= processScore * 0.3
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "process_escape_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(processScore),
+			Reason:   strings.Join(processEvidence, "; "),
+		})
+	}
+
+	fpBrowserDetected, fpBrowserScore, fpBrowserEvidence, fpBrowserType := d.DetectFingerprintBrowser(info, frontendDetections)
+	if fpBrowserDetected {
+		report.EnvScore -= fpBrowserScore * 0.4
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "fingerprint_browser_detected",
+			Risk:     "high",
+			Detected: true,
+			Score:    int(fpBrowserScore),
+			Reason:   fmt.Sprintf("%s类型: %s", strings.Join(fpBrowserEvidence, "; "), fpBrowserType),
 		})
 	}
 

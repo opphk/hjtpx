@@ -32,6 +32,7 @@ type UnifiedRiskScorer struct {
 	lstmExtractor         *LSTMFeatureExtractor
 	transformerPredictor *TransformerPredictor
 	patternLibrary       *BehaviorPatternLibrary
+	intentClassifier     *IntentClassifier
 	thresholdConfig      *DynamicThresholdConfig
 	dynamicThresholds    map[string]float64
 	mu                   sync.RWMutex
@@ -63,6 +64,7 @@ func NewUnifiedRiskScorer() *UnifiedRiskScorer {
 		lstmExtractor:         NewLSTMFeatureExtractor(),
 		transformerPredictor:  NewTransformerPredictor(),
 		patternLibrary:       NewBehaviorPatternLibrary(),
+		intentClassifier:     NewIntentClassifier(),
 		thresholdConfig:      &DynamicThresholdConfig{
 			MinThreshold:   0.2,
 			MaxThreshold:   0.8,
@@ -139,6 +141,13 @@ func (s *UnifiedRiskScorer) AnalyzeComprehensiveRisk(ctx context.Context, traceD
 		result.ComponentScores["speed_anomaly_score"] = patternResult.SpeedAnomalyScore
 		result.ComponentScores["movement_anomaly_score"] = patternResult.MovementAnomalyScore
 		result.DetectedPatterns = append(result.DetectedPatterns, patternResult.DetectedPatterns...)
+	}
+
+	if s.intentClassifier != nil {
+		intentResult, err := s.intentClassifier.RecognizeIntent(traceData)
+		if err == nil && intentResult != nil {
+			result.IntentRecognition = intentResult
+		}
 	}
 
 	result.TotalRiskScore = s.calculateTotalRiskScore(result.ComponentScores)
@@ -513,6 +522,8 @@ func (s *UnifiedRiskScorer) GetStatistics() map[string]interface{} {
 		}
 		stats["average_score"] = sum / float64(len(s.historyScores))
 		stats["score_count"] = len(s.historyScores)
+	} else {
+		stats["score_count"] = 0
 	}
 
 	stats["thresholds"] = s.GetThresholds()

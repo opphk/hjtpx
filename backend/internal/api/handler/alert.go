@@ -2,12 +2,16 @@ package handler
 
 import (
 	"encoding/json"
+	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 
+	"github.com/hjtpx/hjtpx/internal/model"
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/response"
@@ -558,4 +562,379 @@ func SendTestAlert(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"message": "test alert processed"})
+}
+
+// AlertWebSocketHandler 告警WebSocket连接处理
+func AlertWebSocketHandler(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to upgrade WebSocket connection")
+		return
+	}
+
+	client := &AlertClient{
+		conn:    conn,
+		send:    make(chan []byte, 256),
+		groups:  make(map[string]bool),
+		filters: make(map[string][]string),
+	}
+
+	alertClientsMu.Lock()
+	alertClients[client] = true
+	alertClientsMu.Unlock()
+
+	go client.writePump()
+	go client.readPump()
+}
+
+// AlertClient 告警WebSocket客户端
+type AlertClient struct {
+	conn    *websocket.Conn
+	send    chan []byte
+	groups  map[string]bool
+	filters map[string][]string
+}
+
+var (
+	alertClients   = make(map[*AlertClient]bool)
+	alertClientsMu sync.RWMutex
+)
+
+func (c *AlertClient) readPump() {
+	defer func() {
+		alertClientsMu.Lock()
+		delete(alertClients, c)
+		alertClientsMu.Unlock()
+		c.conn.Close()
+		close(c.send)
+	}()
+
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	for {
+		_, message, err := c.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			}
+			break
+		}
+
+		var msg map[string]interface{}
+		if err := json.Unmarshal(message, &msg); err != nil {
+			continue
+		}
+
+		switch msg["type"] {
+		case "subscribe":
+			c.handleSubscribe(msg)
+		case "filter":
+			c.handleFilter(msg)
+		case "ping":
+			c.handlePing()
+		}
+	}
+}
+
+func (c *AlertClient) writePump() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			if err := w.Close(); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (c *AlertClient) handleSubscribe(msg map[string]interface{}) {
+	if groups, ok := msg["groups"].([]interface{}); ok {
+		for _, g := range groups {
+			if group, ok := g.(string); ok {
+				c.groups[group] = true
+			}
+		}
+	}
+
+	responseMsg := map[string]interface{}{
+		"type":    "subscribed",
+		"groups":  c.groups,
+		"filters": c.filters,
+	}
+	data, _ := json.Marshal(responseMsg)
+	c.send <- data
+}
+
+func (c *AlertClient) handleFilter(msg map[string]interface{}) {
+	if filters, ok := msg["filters"].(map[string]interface{}); ok {
+		for key, value := range filters {
+			if values, ok := value.([]interface{}); ok {
+				strValues := make([]string, 0)
+				for _, v := range values {
+					if s, ok := v.(string); ok {
+						strValues = append(strValues, s)
+					}
+				}
+				c.filters[key] = strValues
+			}
+		}
+	}
+
+	responseMsg := map[string]interface{}{
+		"type":    "filters_updated",
+		"filters": c.filters,
+	}
+	data, _ := json.Marshal(responseMsg)
+	c.send <- data
+}
+
+func (c *AlertClient) handlePing() {
+	responseMsg := map[string]interface{}{
+		"type":      "pong",
+		"timestamp": time.Now().Unix(),
+	}
+	data, _ := json.Marshal(responseMsg)
+	c.send <- data
+}
+
+// BroadcastAlert 通过WebSocket广播告警
+func BroadcastAlert(alert *models.AlertRecord) {
+	alertClientsMu.RLock()
+	defer alertClientsMu.RUnlock()
+
+	for client := range alertClients {
+		if !client.matchesFilter(alert) {
+			continue
+		}
+
+		alertMsg := map[string]interface{}{
+			"type":      "alert",
+			"id":        alert.ID,
+			"rule_id":   alert.RuleID,
+			"rule_name": alert.RuleName,
+			"event_type": alert.EventType,
+			"severity":   alert.Severity,
+			"message":    alert.Message,
+			"context":    alert.Context,
+			"status":     alert.Status,
+			"timestamp":  alert.CreatedAt.Unix(),
+			"count":      alert.Count,
+		}
+
+		data, err := json.Marshal(alertMsg)
+		if err != nil {
+			continue
+		}
+
+		select {
+		case client.send <- data:
+		default:
+			alertClientsMu.Lock()
+			delete(alertClients, client)
+			alertClientsMu.Unlock()
+			close(client.send)
+		}
+	}
+}
+
+func (c *AlertClient) matchesFilter(alert *models.AlertRecord) bool {
+	if len(c.filters) == 0 {
+		return true
+	}
+
+	if severities, ok := c.filters["severity"]; ok && len(severities) > 0 {
+		found := false
+		for _, s := range severities {
+			if s == alert.Severity {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	if eventTypes, ok := c.filters["event_type"]; ok && len(eventTypes) > 0 {
+		found := false
+		for _, t := range eventTypes {
+			if t == alert.EventType {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	return true
+}
+
+// GetAlertsBySeverity 按风险等级获取告警
+// @Summary 按风险等级获取告警
+// @Description 根据严重等级过滤告警记录
+// @Tags 告警管理
+// @Accept json
+// @Produce json
+// @Param severity query string true "严重等级(info/warning/error/critical)"
+// @Param page query int false "页码，默认1"
+// @Param page_size query int false "每页数量，默认20"
+// @Success 200 {object} response.Response "获取成功"
+// @Failure 400 {object} response.Response "请求参数错误"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /api/v1/admin/alerts/severity/{severity} [get]
+func GetAlertsBySeverity(c *gin.Context) {
+	severity := c.Param("severity")
+	
+	var query ListAlertsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.BadRequest(c, "invalid query: "+err.Error())
+		return
+	}
+
+	if query.Page == 0 {
+		query.Page = 1
+	}
+	if query.PageSize == 0 {
+		query.PageSize = 20
+	}
+
+	alerts, total, err := alertServiceInstance.ListAlertsBySeverity(severity, query.Page, query.PageSize)
+	if err != nil {
+		response.InternalServerError(c, "failed to list alerts: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"items":     alerts,
+		"total":     total,
+		"page":      query.Page,
+		"page_size": query.PageSize,
+		"severity":  severity,
+	})
+}
+
+// GetAlertStatistics 获取告警统计
+// @Summary 获取告警统计
+// @Description 获取告警统计信息，包括各等级告警数量
+// @Tags 告警管理
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.Response "获取成功"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /api/v1/admin/alerts/statistics [get]
+func GetAlertStatistics(c *gin.Context) {
+	stats, err := alertServiceInstance.GetAlertStatistics()
+	if err != nil {
+		response.InternalServerError(c, "failed to get alert statistics: "+err.Error())
+		return
+	}
+	response.Success(c, stats)
+}
+
+// TriggerRiskAlert 触发风险告警
+// @Summary 触发风险告警
+// @Description 根据风险评估结果触发告警
+// @Tags 告警管理
+// @Accept json
+// @Produce json
+// @Param body body RiskAlertRequest true "风险告警请求"
+// @Success 200 {object} response.Response "触发成功"
+// @Failure 400 {object} response.Response "请求参数错误"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /api/v1/admin/alerts/risk [post]
+func TriggerRiskAlert(c *gin.Context) {
+	var req RiskAlertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request: "+err.Error())
+		return
+	}
+
+	riskLevel := model.DetermineRiskLevel(req.RiskScore)
+	
+	event := service.AlertEvent{
+		EventType: req.EventType,
+		Message:   req.Message,
+		Context: map[string]interface{}{
+			"risk_score":   req.RiskScore,
+			"risk_level":   riskLevel,
+			"session_id":   req.SessionID,
+			"ip_address":   req.IPAddress,
+			"user_id":      req.UserID,
+			"risk_factors": req.RiskFactors,
+		},
+		Timestamp: time.Now(),
+	}
+
+	if err := alertServiceInstance.ProcessEvent(event); err != nil {
+		response.InternalServerError(c, "failed to trigger risk alert: "+err.Error())
+		return
+	}
+
+	TriggerRiskEvent(req.EventType, riskLevel, req.RiskScore, req.Message, req.RiskFactors, map[string]string{
+		"session_id": req.SessionID,
+		"ip_address": req.IPAddress,
+		"user_id":    req.UserID,
+	})
+
+	response.Success(c, gin.H{
+		"message":     "risk alert triggered",
+		"risk_level":  riskLevel,
+		"risk_score":  req.RiskScore,
+	})
+}
+
+// RiskAlertRequest 风险告警请求
+type RiskAlertRequest struct {
+	EventType   string   `json:"event_type" binding:"required"`
+	Message     string   `json:"message" binding:"required"`
+	RiskScore   float64  `json:"risk_score" binding:"required"`
+	SessionID   string   `json:"session_id"`
+	IPAddress   string   `json:"ip_address"`
+	UserID      string   `json:"user_id"`
+	RiskFactors []string `json:"risk_factors"`
+}
+
+// AlertStatistics 告警统计
+type AlertStatistics struct {
+	TotalCount     int64                  `json:"total_count"`
+	ActiveCount    int64                  `json:"active_count"`
+	ResolvedCount  int64                  `json:"resolved_count"`
+	SeverityStats  map[string]int64       `json:"severity_stats"`
+	EventTypeStats map[string]int64       `json:"event_type_stats"`
+	TrendData      []HourlyAlertStat      `json:"trend_data"`
+}
+
+type HourlyAlertStat struct {
+	Hour      string `json:"hour"`
+	Count     int64  `json:"count"`
+	Severity  string `json:"severity,omitempty"`
 }

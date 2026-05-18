@@ -295,6 +295,15 @@ func generateRandomVarName(seen map[string]bool) string {
 	return name
 }
 
+// GetDetectionScript 获取环境检测脚本
+// @Summary 获取环境检测脚本
+// @Description 获取用于客户端环境检测的JavaScript脚本
+// @Tags 环境检测
+// @Accept json
+// @Produce javascript
+// @Param callback query string false "回调函数名"
+// @Success 200 {string} string "检测脚本"
+// @Router /api/v1/detect/script [get]
 func GetDetectionScript(c *gin.Context) {
 	allMethods := generateDetectionMethods()
 
@@ -388,6 +397,16 @@ return %s>>>0;
 	c.String(http.StatusOK, sb.String())
 }
 
+// SubmitDetectionData 提交检测数据
+// @Summary 提交检测数据
+// @Description 客户端提交环境检测数据进行风险评估
+// @Tags 环境检测
+// @Accept json
+// @Produce json
+// @Param body body DetectionSubmitRequest true "检测数据请求"
+// @Success 200 {object} map[string]interface{} "检测结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Router /api/v1/detect/submit [post]
 func SubmitDetectionData(c *gin.Context) {
 	var req DetectionSubmitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -771,6 +790,16 @@ type FingerprintStatsResponse struct {
 	TopFingerprints  []map[string]interface{} `json:"top_fingerprints"`
 }
 
+// EnvironmentCheck 环境检测
+// @Summary 环境检测
+// @Description 检测客户端环境的风险等级
+// @Tags 环境检测
+// @Accept json
+// @Produce json
+// @Param body body EnvironmentCheckRequest true "环境检测请求"
+// @Success 200 {object} map[string]interface{} "检测结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Router /api/v1/detect/environment [post]
 func EnvironmentCheck(c *gin.Context) {
 	var req EnvironmentCheckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -932,6 +961,16 @@ func calculateEnvironmentRisk(req *EnvironmentCheckRequest) float64 {
 	return math.Min(math.Max(risk, 0), 100)
 }
 
+// GetFingerprintInfo 获取指纹信息
+// @Summary 获取指纹信息
+// @Description 根据指纹查询指纹信息
+// @Tags 环境检测
+// @Accept json
+// @Produce json
+// @Param fingerprint query string true "指纹值"
+// @Success 200 {object} map[string]interface{} "指纹信息"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Router /api/v1/detect/fingerprint [get]
 func GetFingerprintInfo(c *gin.Context) {
 	var req FingerprintQueryRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -952,6 +991,14 @@ func GetFingerprintInfo(c *gin.Context) {
 	})
 }
 
+// GetFingerprintStats 获取指纹统计
+// @Summary 获取指纹统计
+// @Description 获取指纹相关的统计数据
+// @Tags 环境检测
+// @Accept json
+// @Produce json
+// @Success 200 {object} FingerprintStatsResponse "指纹统计"
+// @Router /api/v1/detect/fingerprint/stats [get]
 func GetFingerprintStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

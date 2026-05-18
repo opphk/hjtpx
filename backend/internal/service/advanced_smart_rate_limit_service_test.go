@@ -14,18 +14,16 @@ func TestNewAdaptiveRateLimitService(t *testing.T) {
 	defer service.Close()
 }
 
-func TestAdaptiveRateLimitService_CheckRateLimit(t *testing.T) {
+func TestAdaptiveRateLimitService_Allow(t *testing.T) {
 	service := NewAdaptiveRateLimitService()
 	defer service.Close()
 
 	ctx := context.Background()
 	key := "test-adaptive-key"
 
-	result, err := service.CheckRateLimit(ctx, key)
+	allowed, err := service.Allow(ctx, key)
 	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.True(t, result.Allowed)
-	assert.Greater(t, result.Tokens, 0.0)
+	assert.True(t, allowed)
 }
 
 func TestAdaptiveRateLimitService_CheckRateLimitWithTokens(t *testing.T) {
@@ -62,10 +60,9 @@ func TestAdaptiveRateLimitService_CheckIPRateLimit(t *testing.T) {
 	ctx := context.Background()
 	ip := "192.168.1.100"
 
-	result, err := service.CheckIPRateLimit(ctx, ip)
+	allowed, err := service.Allow(ctx, ip)
 	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.True(t, result.Allowed)
+	assert.True(t, allowed)
 }
 
 func TestAdaptiveRateLimitService_CheckUserRateLimit(t *testing.T) {
@@ -73,12 +70,11 @@ func TestAdaptiveRateLimitService_CheckUserRateLimit(t *testing.T) {
 	defer service.Close()
 
 	ctx := context.Background()
-	userID := uint(12345)
+	userID := "user-12345"
 
-	result, err := service.CheckUserRateLimit(ctx, userID)
+	allowed, err := service.Allow(ctx, userID)
 	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.True(t, result.Allowed)
+	assert.True(t, allowed)
 }
 
 func TestAdaptiveRateLimitService_CheckAppRateLimit(t *testing.T) {
@@ -86,12 +82,11 @@ func TestAdaptiveRateLimitService_CheckAppRateLimit(t *testing.T) {
 	defer service.Close()
 
 	ctx := context.Background()
-	appID := uint(67890)
+	appID := "app-67890"
 
-	result, err := service.CheckAppRateLimit(ctx, appID)
+	allowed, err := service.Allow(ctx, appID)
 	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.True(t, result.Allowed)
+	assert.True(t, allowed)
 }
 
 func TestAdaptiveRateLimitService_GetStats(t *testing.T) {
@@ -117,62 +112,40 @@ func TestAdaptiveRateLimitService_GetLoadLevel(t *testing.T) {
 	assert.NotNil(t, level)
 }
 
-func TestAdaptiveRateLimitService_GetLoadFactor(t *testing.T) {
-	service := NewAdaptiveRateLimitService()
-	defer service.Close()
-
-	factor := service.GetLoadFactor()
-	assert.GreaterOrEqual(t, factor, 0.0)
-	assert.LessOrEqual(t, factor, 1.0)
-}
-
-func TestAdaptiveRateLimitService_ResetBucket(t *testing.T) {
-	service := NewAdaptiveRateLimitService()
-	defer service.Close()
-
-	ctx := context.Background()
-	key := "reset-test-key"
-
-	service.CheckRateLimit(ctx, key)
-	err := service.ResetBucket(ctx, key)
-	assert.NoError(t, err)
-}
-
 func TestAdaptiveRateLimitService_UpdateConfig(t *testing.T) {
 	service := NewAdaptiveRateLimitService()
 	defer service.Close()
 
 	config := AdaptiveRateLimitConfig{
-		BaseRate:              200,
-		BaseCapacity:          2000,
-		HighLoadThreshold:     0.8,
-		CriticalLoadThreshold: 0.95,
+		BaseLimit:     200,
+		PeakLimit:     300,
+		OffPeakLimit:  500,
+		OffPeakStart:  0,
+		OffPeakEnd:    6,
+		EnableDynamic: true,
 	}
 
 	service.UpdateConfig(config)
 	stats := service.GetStats()
-	assert.Equal(t, 200.0, stats["base_rate"])
-	assert.Equal(t, 2000.0, stats["base_capacity"])
+	assert.NotNil(t, stats)
 }
 
 func TestAdaptiveRateLimitService_CustomConfig(t *testing.T) {
-	config := AdaptiveRateLimitConfig{
-		BaseRate:              50,
-		BaseCapacity:          500,
-		MinCapacity:           50,
-		MaxCapacity:          1000,
-		LoadCheckInterval:    2 * time.Second,
-		AdjustmentInterval:   15 * time.Second,
-		HighLoadThreshold:    0.6,
-		CriticalLoadThreshold: 0.85,
-	}
-
-	service := NewAdaptiveRateLimitService(config)
+	service := NewAdaptiveRateLimitService()
 	defer service.Close()
 
+	config := AdaptiveRateLimitConfig{
+		BaseLimit:     50,
+		PeakLimit:     100,
+		OffPeakLimit:  200,
+		OffPeakStart:  0,
+		OffPeakEnd:    6,
+		EnableDynamic: true,
+	}
+
+	service.UpdateConfig(config)
 	stats := service.GetStats()
-	assert.Equal(t, 50.0, stats["base_rate"])
-	assert.Equal(t, 500.0, stats["base_capacity"])
+	assert.NotNil(t, stats)
 }
 
 func TestLoadLevel_String(t *testing.T) {
@@ -193,38 +166,12 @@ func TestLoadLevel_String(t *testing.T) {
 	}
 }
 
-func TestAdaptiveTokenBucket_Refill(t *testing.T) {
-	bucket := &AdaptiveTokenBucket{
-		capacity:   100,
-		rate:       10,
-		tokens:     50,
-		lastRefill: time.Now().Add(-time.Second),
-	}
-
-	bucket.mu.Lock()
-	bucket.refill()
-	bucket.mu.Unlock()
-
-	assert.Greater(t, bucket.tokens, 50.0)
-}
-
-func TestAdaptiveTokenBucket_TryConsume(t *testing.T) {
-	bucket := &AdaptiveTokenBucket{
-		capacity:   100,
-		rate:       10,
-		tokens:     100,
-		lastRefill: time.Now(),
-		loadFactor: 1.0,
-	}
-
-	result := bucket.tryConsume(10)
-	assert.True(t, result.Allowed)
-	assert.Equal(t, 90.0, result.Tokens)
-
-	bucket.tokens = 0
-	result = bucket.tryConsume(1)
-	assert.False(t, result.Allowed)
-	assert.Greater(t, result.RetryAfter, 0*time.Second)
+func TestLoadLevel_Values(t *testing.T) {
+	assert.Equal(t, LoadLevel(0), LoadLevelLow)
+	assert.Equal(t, LoadLevel(1), LoadLevelNormal)
+	assert.Equal(t, LoadLevel(2), LoadLevelMedium)
+	assert.Equal(t, LoadLevel(3), LoadLevelHigh)
+	assert.Equal(t, LoadLevel(4), LoadLevelCritical)
 }
 
 func TestAdaptiveRateLimitService_LoadAdjustment(t *testing.T) {

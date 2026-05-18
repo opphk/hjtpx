@@ -58,6 +58,16 @@ type ChartData struct {
 	Total   []ChartDataPoint `json:"total"`
 }
 
+// GetVerificationStats 获取验证统计
+// @Summary 获取验证统计
+// @Description 获取验证码验证相关的统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "验证统计"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/verification [get]
 func GetVerificationStats(c *gin.Context) {
 	handler := GetStatsHandler()
 
@@ -86,6 +96,17 @@ func GetVerificationStats(c *gin.Context) {
 	})
 }
 
+// GetChartData 获取图表数据
+// @Summary 获取图表数据
+// @Description 获取用于图表展示的统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param days query int false "天数，默认7"
+// @Success 200 {object} ChartData "图表数据"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/chart [get]
 func GetChartData(c *gin.Context) {
 	handler := GetStatsHandler()
 	days := 7
@@ -110,6 +131,16 @@ func GetChartData(c *gin.Context) {
 	})
 }
 
+// GetDashboardStats 获取仪表盘统计
+// @Summary 获取仪表盘统计
+// @Description 获取仪表盘展示的核心统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} DashboardStats "仪表盘统计"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/dashboard [get]
 func GetDashboardStats(c *gin.Context) {
 	handler := GetStatsHandler()
 
@@ -127,6 +158,16 @@ func GetDashboardStats(c *gin.Context) {
 	})
 }
 
+// GetRecentActivity 获取最近活动
+// @Summary 获取最近活动
+// @Description 获取最近的系统活动记录
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} []ActivityItem "活动列表"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/activity [get]
 func GetRecentActivity(c *gin.Context) {
 	handler := GetStatsHandler()
 	var activities []ActivityItem
@@ -162,6 +203,17 @@ func (h *StatsHandler) getRecentLogs(limit int) ([]models.VerificationLog, error
 	return logs, err
 }
 
+// GetTrendData 获取趋势数据
+// @Summary 获取趋势数据
+// @Description 获取验证趋势数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param days query int false "天数，默认7"
+// @Success 200 {object} map[string]interface{} "趋势数据"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/trend [get]
 func GetTrendData(c *gin.Context) {
 	handler := GetStatsHandler()
 	days := 7
@@ -175,6 +227,17 @@ func GetTrendData(c *gin.Context) {
 	response.Success(c, trendData)
 }
 
+// GetHourlyStats 获取小时统计
+// @Summary 获取小时统计
+// @Description 获取指定日期的小时级统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param date query string false "日期，格式YYYY-MM-DD"
+// @Success 200 {object} map[string]interface{} "小时统计"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/hourly [get]
 func GetHourlyStats(c *gin.Context) {
 	handler := GetStatsHandler()
 	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
@@ -188,6 +251,16 @@ func GetHourlyStats(c *gin.Context) {
 	response.Success(c, hourlyStats)
 }
 
+// GetRealtimeStats 获取实时统计
+// @Summary 获取实时统计
+// @Description 获取实时验证统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "实时统计"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/realtime [get]
 func GetRealtimeStats(c *gin.Context) {
 	handler := GetStatsHandler()
 
@@ -200,6 +273,16 @@ func GetRealtimeStats(c *gin.Context) {
 	response.Success(c, realtimeStats)
 }
 
+// GetRiskDistribution 获取风险分布
+// @Summary 获取风险分布
+// @Description 获取验证请求的风险分布数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "风险分布"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/risk-distribution [get]
 func GetRiskDistribution(c *gin.Context) {
 	handler := GetStatsHandler()
 
@@ -212,6 +295,17 @@ func GetRiskDistribution(c *gin.Context) {
 	response.Success(c, distribution)
 }
 
+// GetTopIPs 获取Top IP
+// @Summary 获取Top IP
+// @Description 获取访问量最高的IP地址列表
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "数量限制，默认10"
+// @Success 200 {object} map[string]interface{} "Top IP列表"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/top-ips [get]
 func GetTopIPs(c *gin.Context) {
 	handler := GetStatsHandler()
 	limit := 10
@@ -225,6 +319,17 @@ func GetTopIPs(c *gin.Context) {
 	response.Success(c, topIPs)
 }
 
+// GetApplicationStats 获取应用统计
+// @Summary 获取应用统计
+// @Description 获取各应用的验证统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param limit query int false "数量限制，默认10"
+// @Success 200 {object} map[string]interface{} "应用统计"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/applications [get]
 func GetApplicationStats(c *gin.Context) {
 	handler := GetStatsHandler()
 	limit := 10
@@ -238,6 +343,16 @@ func GetApplicationStats(c *gin.Context) {
 	response.Success(c, applicationStats)
 }
 
+// GetCaptchaTypeStats 获取验证码类型统计
+// @Summary 获取验证码类型统计
+// @Description 获取各验证码类型的统计数据
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "验证码类型统计"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/captcha-types [get]
 func GetCaptchaTypeStats(c *gin.Context) {
 	handler := GetStatsHandler()
 
@@ -256,6 +371,20 @@ type GenerateReportRequest struct {
 	EndDate    string `form:"end_date"`
 }
 
+// GenerateReport 生成报告
+// @Summary 生成报告
+// @Description 生成指定类型的统计报告
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param report_type query string true "报告类型"
+// @Param start_date query string false "开始日期"
+// @Param end_date query string false "结束日期"
+// @Success 200 {object} map[string]interface{} "报告数据"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/report [get]
 func GenerateReport(c *gin.Context) {
 	handler := GetStatsHandler()
 	var req GenerateReportRequest
@@ -324,6 +453,20 @@ type DailyStats struct {
 	AvgResponseTime float64 `json:"avg_response_time"`
 }
 
+// GetDetailedStats 获取详细统计
+// @Summary 获取详细统计
+// @Description 获取详细的验证统计数据，支持按时间分组
+// @Tags 统计
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param start_date query string false "开始日期"
+// @Param end_date query string false "结束日期"
+// @Param group_by query string false "分组方式"
+// @Success 200 {object} DetailedStatsResponse "详细统计"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/stats/detailed [get]
 func GetDetailedStats(c *gin.Context) {
 	handler := GetStatsHandler()
 	var req DetailedStatsRequest

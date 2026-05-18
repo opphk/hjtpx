@@ -9,29 +9,49 @@ import (
 )
 
 const (
-	LSTMFeatureDim      = 64
-	LSTMSequenceLen   = 100
-	LSTMHiddenSize    = 128
-	LSTMNumLayers     = 2
-	AttentionHeadCount = 8
-	EnhancedFeatureCount = 128
+	LSTMFeatureDim        = 128
+	LSTMSequenceLen       = 200
+	LSTMHiddenSize        = 256
+	LSTMNumLayers         = 3
+	AttentionHeadCount    = 8
+	EnhancedFeatureCount  = 128
+	LSTMForgetBias        = 1.0
 )
 
 type LSTMFeatureExtractor struct {
-	hiddenWeights     [][][]float64
-	hiddenBias        [][]float64
-	cellWeights       [][][]float64
-	cellBias          [][]float64
-	outputWeights     []float64
-	attentionWeights  [][][]float64
-	forwardWeights    [][][]float64
-	backwardWeights   [][][]float64
-	bidirectional     bool
-	useAttention      bool
-	featureMean       []float64
-	featureStd        []float64
-	isInitialized     bool
-	enhancedExtractor *EnhancedFeatureExtractor
+	hiddenWeights        [][][]float64
+	hiddenBias           [][]float64
+	cellWeights          [][][]float64
+	cellBias             [][]float64
+	outputWeights        [][]float64
+	outputBias           []float64
+	forgetWeights        [][][]float64
+	forgetBias           [][]float64
+	inputWeights         [][][]float64
+	inputBias            [][]float64
+	candidateWeights     [][][]float64
+	candidateBias        [][]float64
+	attentionWeightsQ    [][][]float64
+	attentionWeightsK    [][][]float64
+	attentionWeightsV    [][][]float64
+	attentionOutputWeights [][][]float64
+	forwardWeights       [][][]float64
+	forwardBias          [][]float64
+	backwardWeights      [][][]float64
+	backwardBias         [][]float64
+	bidirectional        bool
+	useAttention         bool
+	useLayerNorm         bool
+	useDropout           bool
+	dropoutRate          float64
+	featureMean          []float64
+	featureStd           []float64
+	isInitialized        bool
+	enhancedExtractor    *EnhancedFeatureExtractor
+	layerNormParams      [][][]float64
+	quantizationEnabled  bool
+	quantizedWeights     map[string][]int8
+	scaleFactors         map[string]float64
 }
 
 type TrajectorySequence struct {
@@ -45,6 +65,9 @@ type TrajectorySequence struct {
 	CurvatureSeq    []float64
 	PressureSeq     []float64
 	TouchSizeSeq    []float64
+	TimestampSeq    []int64
+	DeltaXSeq       []float64
+	DeltaYSeq       []float64
 }
 
 type EnhancedFeatureExtractor struct {
@@ -68,10 +91,16 @@ type EnhancedFeatureExtractor struct {
 
 func NewLSTMFeatureExtractor() *LSTMFeatureExtractor {
 	extractor := &LSTMFeatureExtractor{
-		isInitialized:     false,
-		bidirectional:     true,
-		useAttention:      true,
-		enhancedExtractor: NewEnhancedFeatureExtractor(),
+		isInitialized:       false,
+		bidirectional:      true,
+		useAttention:       true,
+		useLayerNorm:       true,
+		useDropout:         true,
+		dropoutRate:        0.2,
+		quantizationEnabled: false,
+		quantizedWeights:   make(map[string][]int8),
+		scaleFactors:       make(map[string]float64),
+		enhancedExtractor:  NewEnhancedFeatureExtractor(),
 	}
 	extractor.initializeWeights()
 	return extractor
@@ -88,58 +117,86 @@ func (e *LSTMFeatureExtractor) initializeWeights() {
 	e.hiddenBias = make([][]float64, LSTMNumLayers)
 	e.cellWeights = make([][][]float64, LSTMNumLayers)
 	e.cellBias = make([][]float64, LSTMNumLayers)
+	e.forgetWeights = make([][][]float64, LSTMNumLayers)
+	e.forgetBias = make([][]float64, LSTMNumLayers)
+	e.inputWeights = make([][][]float64, LSTMNumLayers)
+	e.inputBias = make([][]float64, LSTMNumLayers)
+	e.candidateWeights = make([][][]float64, LSTMNumLayers)
+	e.candidateBias = make([][]float64, LSTMNumLayers)
 
 	for layer := 0; layer < LSTMNumLayers; layer++ {
-		e.hiddenWeights[layer] = make([][]float64, LSTMHiddenSize)
-		for i := range e.hiddenWeights[layer] {
-			e.hiddenWeights[layer][i] = e.initXavier(LSTMFeatureDim * 4)
-		}
-
-		e.hiddenBias[layer] = make([]float64, LSTMHiddenSize*4)
-		for i := range e.hiddenBias[layer] {
-			e.hiddenBias[layer][i] = 0.0
-		}
-
-		e.cellWeights[layer] = make([][]float64, LSTMHiddenSize)
-		for i := range e.cellWeights[layer] {
-			e.cellWeights[layer][i] = e.initXavier(LSTMFeatureDim)
-		}
-
+		e.hiddenWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMFeatureDim)
+		e.hiddenBias[layer] = make([]float64, LSTMHiddenSize)
+		
+		e.cellWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMHiddenSize)
 		e.cellBias[layer] = make([]float64, LSTMHiddenSize)
-		for i := range e.cellBias[layer] {
-			e.cellBias[layer][i] = 0.0
+		
+		e.forgetWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMFeatureDim+LSTMHiddenSize)
+		e.forgetBias[layer] = make([]float64, LSTMHiddenSize)
+		for i := range e.forgetBias[layer] {
+			e.forgetBias[layer][i] = LSTMForgetBias
 		}
+		
+		e.inputWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMFeatureDim+LSTMHiddenSize)
+		e.inputBias[layer] = make([]float64, LSTMHiddenSize)
+		
+		e.candidateWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMFeatureDim+LSTMHiddenSize)
+		e.candidateBias[layer] = make([]float64, LSTMHiddenSize)
 	}
 
-	e.outputWeights = make([]float64, LSTMHiddenSize*2)
-	for i := range e.outputWeights {
-		e.outputWeights[i] = 0.1
+	e.outputWeights = e.initLayerWeights(LSTMFeatureDim, LSTMHiddenSize*2)
+	e.outputBias = make([]float64, LSTMFeatureDim)
+	for i := range e.outputBias {
+		e.outputBias[i] = 0.0
 	}
 
 	if e.useAttention {
-		e.attentionWeights = make([][][]float64, 3)
-		for i := range e.attentionWeights {
-			e.attentionWeights[i] = e.initLayerWeights(LSTMHiddenSize*2, LSTMHiddenSize*2)
+		e.attentionWeightsQ = make([][][]float64, AttentionHeadCount)
+		e.attentionWeightsK = make([][][]float64, AttentionHeadCount)
+		e.attentionWeightsV = make([][][]float64, AttentionHeadCount)
+		e.attentionOutputWeights = make([][][]float64, AttentionHeadCount)
+		
+		headDim := LSTMHiddenSize * 2 / AttentionHeadCount
+		for h := 0; h < AttentionHeadCount; h++ {
+			e.attentionWeightsQ[h] = e.initLayerWeights(headDim, LSTMHiddenSize*2)
+			e.attentionWeightsK[h] = e.initLayerWeights(headDim, LSTMHiddenSize*2)
+			e.attentionWeightsV[h] = e.initLayerWeights(headDim, LSTMHiddenSize*2)
+			e.attentionOutputWeights[h] = e.initLayerWeights(LSTMHiddenSize*2, headDim)
 		}
 	}
 
 	if e.bidirectional {
 		e.forwardWeights = make([][][]float64, LSTMNumLayers)
+		e.forwardBias = make([][]float64, LSTMNumLayers)
 		e.backwardWeights = make([][][]float64, LSTMNumLayers)
+		e.backwardBias = make([][]float64, LSTMNumLayers)
+		
 		for layer := 0; layer < LSTMNumLayers; layer++ {
-			e.forwardWeights[layer] = e.hiddenWeights[layer]
-			e.backwardWeights[layer] = make([][]float64, LSTMHiddenSize)
-			for i := range e.backwardWeights[layer] {
-				e.backwardWeights[layer][i] = e.initXavier(LSTMFeatureDim * 4)
+			e.forwardWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMFeatureDim)
+			e.forwardBias[layer] = make([]float64, LSTMHiddenSize)
+			e.backwardWeights[layer] = e.initLayerWeights(LSTMHiddenSize, LSTMFeatureDim)
+			e.backwardBias[layer] = make([]float64, LSTMHiddenSize)
+		}
+	}
+
+	if e.useLayerNorm {
+		e.layerNormParams = make([][][]float64, LSTMNumLayers)
+		for layer := 0; layer < LSTMNumLayers; layer++ {
+			e.layerNormParams[layer] = make([][]float64, 2)
+			e.layerNormParams[layer][0] = make([]float64, LSTMHiddenSize)
+			e.layerNormParams[layer][1] = make([]float64, LSTMHiddenSize)
+			for i := range e.layerNormParams[layer][0] {
+				e.layerNormParams[layer][0][i] = 1.0
+				e.layerNormParams[layer][1][i] = 0.0
 			}
 		}
 	}
 
-	e.featureMean = make([]float64, 48)
-	e.featureStd = make([]float64, 48)
+	e.featureMean = make([]float64, 64)
+	e.featureStd = make([]float64, 64)
 	for i := range e.featureMean {
 		e.featureMean[i] = 0.0
-		if i < 24 {
+		if i < 32 {
 			e.featureStd[i] = 100.0
 		} else {
 			e.featureStd[i] = 50.0
@@ -155,23 +212,10 @@ func (e *LSTMFeatureExtractor) initLayerWeights(outDim, inDim int) [][]float64 {
 		weights[i] = make([]float64, inDim)
 		scale := math.Sqrt(2.0 / float64(inDim+outDim))
 		for j := range weights[i] {
-			weights[i][j] = (mathrand() - 0.5) * 2 * scale
+			weights[i][j] = (rand.Float64() - 0.5) * 2 * scale
 		}
 	}
 	return weights
-}
-
-func (e *LSTMFeatureExtractor) initXavier(size int) []float64 {
-	weights := make([]float64, size)
-	scale := math.Sqrt(2.0 / float64(size+LSTMFeatureDim))
-	for i := range weights {
-		weights[i] = (mathrand() - 0.5) * 2 * scale
-	}
-	return weights
-}
-
-func mathrand() float64 {
-	return rand.Float64()
 }
 
 func (e *LSTMFeatureExtractor) PrepareSequence(traceData *model.TraceData) (*TrajectorySequence, error) {
@@ -187,6 +231,13 @@ func (e *LSTMFeatureExtractor) PrepareSequence(traceData *model.TraceData) (*Tra
 	seq.VelocitySeq = e.computeVelocitySequence(traceData)
 	seq.AccelerationSeq = e.computeAccelerationSequence(traceData)
 	seq.DirectionSeq = e.computeDirectionSequence(traceData)
+	seq.JerkSeq = e.computeJerkSequence(traceData)
+	seq.CurvatureSeq = e.computeCurvatureSequence(traceData)
+	seq.PressureSeq = e.extractPressureSequence(traceData)
+	seq.TouchSizeSeq = e.extractTouchSizeSequence(traceData)
+	seq.TimestampSeq = e.extractTimestampSequence(traceData)
+	seq.DeltaXSeq = e.computeDeltaXSequence(traceData)
+	seq.DeltaYSeq = e.computeDeltaYSequence(traceData)
 
 	return seq, nil
 }
@@ -196,29 +247,18 @@ func (e *LSTMFeatureExtractor) normalizeTrajectory(traceData *model.TraceData) [
 		return nil
 	}
 
-	minX, maxX := traceData.Points[0].X, traceData.Points[0].X
-	minY, maxY := traceData.Points[0].Y, traceData.Points[0].Y
-	minT, maxT := traceData.Points[0].Timestamp, traceData.Points[0].Timestamp
+	minX, maxX := float64(traceData.Points[0].X), float64(traceData.Points[0].X)
+	minY, maxY := float64(traceData.Points[0].Y), float64(traceData.Points[0].Y)
+	minT, maxT := float64(traceData.Points[0].Timestamp), float64(traceData.Points[0].Timestamp)
 
 	for _, p := range traceData.Points {
-		if p.X < minX {
-			minX = p.X
-		}
-		if p.X > maxX {
-			maxX = p.X
-		}
-		if p.Y < minY {
-			minY = p.Y
-		}
-		if p.Y > maxY {
-			maxY = p.Y
-		}
-		if p.Timestamp < minT {
-			minT = p.Timestamp
-		}
-		if p.Timestamp > maxT {
-			maxT = p.Timestamp
-		}
+		fx, fy, ft := float64(p.X), float64(p.Y), float64(p.Timestamp)
+		minX = math.Min(minX, fx)
+		maxX = math.Max(maxX, fx)
+		minY = math.Min(minY, fy)
+		maxY = math.Max(maxY, fy)
+		minT = math.Min(minT, ft)
+		maxT = math.Max(maxT, ft)
 	}
 
 	rangeX := maxX - minX
@@ -237,9 +277,9 @@ func (e *LSTMFeatureExtractor) normalizeTrajectory(traceData *model.TraceData) [
 	normalized := make([][]float64, len(traceData.Points))
 	for i, p := range traceData.Points {
 		normalized[i] = []float64{
-			(p.X - minX) / rangeX,
-			(p.Y - minY) / rangeY,
-			float64(p.Timestamp-minT) / float64(rangeT),
+			(float64(p.X) - minX) / rangeX,
+			(float64(p.Y) - minY) / rangeY,
+			(float64(p.Timestamp) - minT) / rangeT,
 		}
 	}
 
@@ -253,8 +293,8 @@ func (e *LSTMFeatureExtractor) computeVelocitySequence(traceData *model.TraceDat
 
 	velocities := make([]float64, len(traceData.Points)-1)
 	for i := 1; i < len(traceData.Points); i++ {
-		dx := traceData.Points[i].X - traceData.Points[i-1].X
-		dy := traceData.Points[i].Y - traceData.Points[i-1].Y
+		dx := float64(traceData.Points[i].X - traceData.Points[i-1].X)
+		dy := float64(traceData.Points[i].Y - traceData.Points[i-1].Y)
 		dt := float64(traceData.Points[i].Timestamp-traceData.Points[i-1].Timestamp) / 1000.0
 
 		if dt > 0 {
@@ -264,7 +304,28 @@ func (e *LSTMFeatureExtractor) computeVelocitySequence(traceData *model.TraceDat
 		}
 	}
 
-	return velocities
+	return e.smoothSequence(velocities, 3)
+}
+
+func (e *LSTMFeatureExtractor) smoothSequence(data []float64, windowSize int) []float64 {
+	if len(data) < windowSize {
+		return data
+	}
+
+	smoothed := make([]float64, len(data))
+	for i := range data {
+		sum := 0.0
+		count := 0
+		for j := -windowSize/2; j <= windowSize/2; j++ {
+			idx := i + j
+			if idx >= 0 && idx < len(data) {
+				sum += data[idx]
+				count++
+			}
+		}
+		smoothed[i] = sum / float64(count)
+	}
+	return smoothed
 }
 
 func (e *LSTMFeatureExtractor) computeAccelerationSequence(traceData *model.TraceData) []float64 {
@@ -285,7 +346,7 @@ func (e *LSTMFeatureExtractor) computeAccelerationSequence(traceData *model.Trac
 		}
 	}
 
-	return accelerations
+	return e.smoothSequence(accelerations, 3)
 }
 
 func (e *LSTMFeatureExtractor) computeDirectionSequence(traceData *model.TraceData) []float64 {
@@ -295,13 +356,42 @@ func (e *LSTMFeatureExtractor) computeDirectionSequence(traceData *model.TraceDa
 
 	directions := make([]float64, len(traceData.Points)-1)
 	for i := 1; i < len(traceData.Points); i++ {
-		dx := traceData.Points[i].X - traceData.Points[i-1].X
-		dy := traceData.Points[i].Y - traceData.Points[i-1].Y
-
+		dx := float64(traceData.Points[i].X - traceData.Points[i-1].X)
+		dy := float64(traceData.Points[i].Y - traceData.Points[i-1].Y)
 		directions[i-1] = math.Atan2(dy, dx)
 	}
 
 	return directions
+}
+
+func (e *LSTMFeatureExtractor) extractTimestampSequence(traceData *model.TraceData) []int64 {
+	timestamps := make([]int64, len(traceData.Points))
+	for i, p := range traceData.Points {
+		timestamps[i] = p.Timestamp
+	}
+	return timestamps
+}
+
+func (e *LSTMFeatureExtractor) computeDeltaXSequence(traceData *model.TraceData) []float64 {
+	if len(traceData.Points) < 2 {
+		return nil
+	}
+	deltas := make([]float64, len(traceData.Points)-1)
+	for i := 1; i < len(traceData.Points); i++ {
+		deltas[i-1] = float64(traceData.Points[i].X - traceData.Points[i-1].X)
+	}
+	return deltas
+}
+
+func (e *LSTMFeatureExtractor) computeDeltaYSequence(traceData *model.TraceData) []float64 {
+	if len(traceData.Points) < 2 {
+		return nil
+	}
+	deltas := make([]float64, len(traceData.Points)-1)
+	for i := 1; i < len(traceData.Points); i++ {
+		deltas[i-1] = float64(traceData.Points[i].Y - traceData.Points[i-1].Y)
+	}
+	return deltas
 }
 
 func (e *LSTMFeatureExtractor) ExtractFeatures(traceData *model.TraceData) ([]float64, error) {
@@ -311,21 +401,21 @@ func (e *LSTMFeatureExtractor) ExtractFeatures(traceData *model.TraceData) ([]fl
 	}
 
 	basicFeatures := e.extractBasicFeatures(traceData)
-
 	sequenceFeatures := e.extractSequenceFeatures(seq)
-
 	temporalFeatures := e.extractTemporalFeatures(seq)
+	enhancedFeatures := e.extractEnhancedFeatures(seq)
 
 	combined := append(basicFeatures, sequenceFeatures...)
 	combined = append(combined, temporalFeatures...)
+	combined = append(combined, enhancedFeatures...)
 
-	embedding := e.computeLSTMEmbedding(combined)
+	embedding := e.computeEnhancedLSTMEmbedding(combined, seq)
 
 	return embedding, nil
 }
 
 func (e *LSTMFeatureExtractor) extractBasicFeatures(traceData *model.TraceData) []float64 {
-	features := make([]float64, 48)
+	features := make([]float64, 64)
 
 	extractor := NewTraceExtractor()
 	basic, _ := extractor.ExtractFeatures(traceData)
@@ -346,10 +436,10 @@ func (e *LSTMFeatureExtractor) extractBasicFeatures(traceData *model.TraceData) 
 	}
 
 	if len(traceData.Points) > 0 {
-		startX := traceData.Points[0].X
-		startY := traceData.Points[0].Y
-		endX := traceData.Points[len(traceData.Points)-1].X
-		endY := traceData.Points[len(traceData.Points)-1].Y
+		startX := float64(traceData.Points[0].X)
+		startY := float64(traceData.Points[0].Y)
+		endX := float64(traceData.Points[len(traceData.Points)-1].X)
+		endY := float64(traceData.Points[len(traceData.Points)-1].Y)
 
 		features[12] = (endX - startX) / 500.0
 		features[13] = (endY - startY) / 500.0
@@ -382,136 +472,290 @@ func (e *LSTMFeatureExtractor) extractBasicFeatures(traceData *model.TraceData) 
 		features[33] = advanced.TimeNormalizedDistance / 100.0
 		features[34] = advanced.VelocityProfileEntropy / 2.3
 		features[35] = advanced.AccelerationProfileEntropy / 2.3
+		features[36] = advanced.SpeedVariance / 100.0
+		features[37] = 0.0
+		features[38] = 0.0
+		features[39] = 0.0
 	}
 
 	return features
 }
 
 func (e *LSTMFeatureExtractor) extractSequenceFeatures(seq *TrajectorySequence) []float64 {
-	features := make([]float64, 32)
+	features := make([]float64, 48)
 
 	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
-		var sum, sqSum float64
-		for _, v := range seq.VelocitySeq {
-			sum += v
-			sqSum += v * v
-		}
-		mean := sum / float64(len(seq.VelocitySeq))
+		mean, variance, maxV, minV := e.computeStats(seq.VelocitySeq)
 		features[0] = mean / 100.0
-
-		if len(seq.VelocitySeq) > 1 {
-			variance := (sqSum / float64(len(seq.VelocitySeq))) - (mean * mean)
-			features[1] = variance / 100.0
-		}
-
-		maxV := seq.VelocitySeq[0]
-		minV := seq.VelocitySeq[0]
-		for _, v := range seq.VelocitySeq {
-			if v > maxV {
-				maxV = v
-			}
-			if v < minV {
-				minV = v
-			}
-		}
+		features[1] = variance / 100.0
 		features[2] = maxV / 100.0
 		features[3] = minV / 100.0
-
-		percentile25 := seq.VelocitySeq[len(seq.VelocitySeq)/4]
-		percentile75 := seq.VelocitySeq[3*len(seq.VelocitySeq)/4]
-		features[4] = percentile25 / 100.0
-		features[5] = percentile75 / 100.0
-		features[6] = (percentile75 - percentile25) / 100.0
+		
+		p25, p75 := e.computePercentiles(seq.VelocitySeq, 25), e.computePercentiles(seq.VelocitySeq, 75)
+		features[4] = p25 / 100.0
+		features[5] = p75 / 100.0
+		features[6] = (p75 - p25) / 100.0
+		features[7] = e.computeSkewness(seq.VelocitySeq)
+		features[8] = e.computeKurtosis(seq.VelocitySeq)
+		features[9] = e.computeEntropy(seq.VelocitySeq) / 3.0
 	}
 
 	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
-		var sum float64
-		for _, a := range seq.AccelerationSeq {
-			sum += math.Abs(a)
-		}
-		features[8] = (sum / float64(len(seq.AccelerationSeq))) / 1000.0
-
-		maxA := seq.AccelerationSeq[0]
-		for _, a := range seq.AccelerationSeq {
-			if math.Abs(a) > math.Abs(maxA) {
-				maxA = a
-			}
-		}
-		features[9] = math.Abs(maxA) / 1000.0
-
-		positiveCount := 0
-		for _, a := range seq.AccelerationSeq {
-			if a > 0 {
-				positiveCount++
-			}
-		}
-		features[10] = float64(positiveCount) / float64(len(seq.AccelerationSeq))
+		meanAbs := e.computeMeanAbsolute(seq.AccelerationSeq)
+		features[10] = meanAbs / 1000.0
+		
+		maxAbs := e.computeMaxAbsolute(seq.AccelerationSeq)
+		features[11] = maxAbs / 1000.0
+		
+		posRatio := e.computePositiveRatio(seq.AccelerationSeq)
+		features[12] = posRatio
+		
+		features[13] = e.computeSkewness(seq.AccelerationSeq)
+		features[14] = e.computeKurtosis(seq.AccelerationSeq)
 	}
 
 	if seq.DirectionSeq != nil && len(seq.DirectionSeq) > 1 {
-		directionChanges := 0
-		for i := 1; i < len(seq.DirectionSeq); i++ {
-			diff := math.Abs(seq.DirectionSeq[i] - seq.DirectionSeq[i-1])
-			if diff > math.Pi {
-				diff = 2*math.Pi - diff
-			}
-			if diff > 0.5 {
-				directionChanges++
-			}
-		}
-		features[12] = float64(directionChanges) / float64(len(seq.DirectionSeq))
+		dirChangeRate := e.computeDirectionChangeRate(seq.DirectionSeq)
+		features[16] = dirChangeRate
+		
+		dirEntropy := e.computeDirectionEntropy(seq.DirectionSeq)
+		features[17] = dirEntropy / 3.0
+		
+		circularVar := e.computeCircularVariance(seq.DirectionSeq)
+		features[18] = circularVar
 	}
 
 	if seq.NormalizedSeq != nil && len(seq.NormalizedSeq) > 0 {
-		var totalCurvature float64
-		count := 0
-		for i := 1; i < len(seq.NormalizedSeq)-1; i++ {
-			x1, y1 := seq.NormalizedSeq[i-1][0], seq.NormalizedSeq[i-1][1]
-			x2, y2 := seq.NormalizedSeq[i][0], seq.NormalizedSeq[i][1]
-			x3, y3 := seq.NormalizedSeq[i+1][0], seq.NormalizedSeq[i+1][1]
-
-			dx1, dy1 := x2-x1, y2-y1
-			dx2, dy2 := x3-x2, y3-y2
-
-			dot := dx1*dx2 + dy1*dy2
-			mag1 := math.Sqrt(dx1*dx1 + dy1*dy1)
-			mag2 := math.Sqrt(dx2*dx2 + dy2*dy2)
-
-			if mag1 > 0 && mag2 > 0 {
-				cosAngle := dot / (mag1 * mag2)
-				if cosAngle > -1 && cosAngle < 1 {
-					curvature := math.Acos(cosAngle)
-					totalCurvature += curvature
-					count++
-				}
-			}
-		}
-		if count > 0 {
-			features[16] = totalCurvature / float64(count)
-		}
+		curvMean, curvVar := e.computeCurvatureStats(seq.NormalizedSeq)
+		features[20] = curvMean
+		features[21] = curvVar
 	}
 
-	features[20] = float64(len(seq.Points)) / 200.0
+	if seq.JerkSeq != nil && len(seq.JerkSeq) > 0 {
+		meanAbsJerk := e.computeMeanAbsolute(seq.JerkSeq)
+		features[24] = meanAbsJerk / 10000.0
+		features[25] = e.computeMaxAbsolute(seq.JerkSeq) / 10000.0
+	}
 
-	features[24] = 0.0
-	features[25] = 0.0
-	features[26] = 0.0
-	features[27] = 0.0
-	features[28] = 0.0
-	features[29] = 0.0
-	features[30] = 0.0
-	features[31] = 0.0
+	features[32] = float64(len(seq.Points)) / 200.0
+	features[33] = float64(len(seq.VelocitySeq)) / 200.0
+	features[34] = float64(len(seq.AccelerationSeq)) / 200.0
+	features[35] = float64(len(seq.DirectionSeq)) / 200.0
 
 	return features
+}
+
+func (e *LSTMFeatureExtractor) computeStats(data []float64) (mean, variance, max, min float64) {
+	if len(data) == 0 {
+		return 0, 0, 0, 0
+	}
+	sum := 0.0
+	max = data[0]
+	min = data[0]
+	for _, v := range data {
+		sum += v
+		if v > max {
+			max = v
+		}
+		if v < min {
+			min = v
+		}
+	}
+	mean = sum / float64(len(data))
+	
+	varianceSum := 0.0
+	for _, v := range data {
+		varianceSum += (v - mean) * (v - mean)
+	}
+	variance = varianceSum / float64(len(data))
+	return
+}
+
+func (e *LSTMFeatureExtractor) computePercentiles(data []float64, percentile int) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	sorted := make([]float64, len(data))
+	copy(sorted, data)
+	for i := range sorted {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j] < sorted[i] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+	index := (percentile * (len(sorted) - 1)) / 100
+	return sorted[index]
+}
+
+func (e *LSTMFeatureExtractor) computeSkewness(data []float64) float64 {
+	if len(data) < 3 {
+		return 0
+	}
+	mean, variance, _, _ := e.computeStats(data)
+	if variance == 0 {
+		return 0
+	}
+	std := math.Sqrt(variance)
+	sum := 0.0
+	for _, v := range data {
+		sum += math.Pow((v-mean)/std, 3)
+	}
+	return sum / float64(len(data))
+}
+
+func (e *LSTMFeatureExtractor) computeKurtosis(data []float64) float64 {
+	if len(data) < 4 {
+		return 0
+	}
+	mean, variance, _, _ := e.computeStats(data)
+	if variance == 0 {
+		return 0
+	}
+	std := math.Sqrt(variance)
+	sum := 0.0
+	for _, v := range data {
+		sum += math.Pow((v-mean)/std, 4)
+	}
+	return (sum / float64(len(data))) - 3
+}
+
+func (e *LSTMFeatureExtractor) computeEntropy(data []float64) float64 {
+	if len(data) < 2 {
+		return 0
+	}
+	min, max := data[0], data[0]
+	for _, v := range data {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	if min == max {
+		return 0
+	}
+	bucketCount := 10
+	bucketSize := (max - min) / float64(bucketCount)
+	buckets := make([]int, bucketCount)
+	for _, v := range data {
+		bucket := int((v - min) / bucketSize)
+		if bucket >= bucketCount {
+			bucket = bucketCount - 1
+		}
+		buckets[bucket]++
+	}
+	entropy := 0.0
+	for _, count := range buckets {
+		if count > 0 {
+			p := float64(count) / float64(len(data))
+			entropy -= p * math.Log2(p)
+		}
+	}
+	return entropy
+}
+
+func (e *LSTMFeatureExtractor) computeMeanAbsolute(data []float64) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range data {
+		sum += math.Abs(v)
+	}
+	return sum / float64(len(data))
+}
+
+func (e *LSTMFeatureExtractor) computeMaxAbsolute(data []float64) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	max := 0.0
+	for _, v := range data {
+		abs := math.Abs(v)
+		if abs > max {
+			max = abs
+		}
+	}
+	return max
+}
+
+func (e *LSTMFeatureExtractor) computePositiveRatio(data []float64) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	count := 0
+	for _, v := range data {
+		if v > 0 {
+			count++
+		}
+	}
+	return float64(count) / float64(len(data))
+}
+
+func (e *LSTMFeatureExtractor) computeDirectionChangeRate(directions []float64) float64 {
+	if len(directions) < 2 {
+		return 0
+	}
+	changes := 0
+	for i := 1; i < len(directions); i++ {
+		diff := math.Abs(directions[i] - directions[i-1])
+		if diff > math.Pi {
+			diff = 2*math.Pi - diff
+		}
+		if diff > 0.5 {
+			changes++
+		}
+	}
+	return float64(changes) / float64(len(directions)-1)
+}
+
+func (e *LSTMFeatureExtractor) computeCurvatureStats(points [][]float64) (mean, variance float64) {
+	if len(points) < 3 {
+		return 0, 0
+	}
+	curvatures := make([]float64, 0)
+	for i := 1; i < len(points)-1; i++ {
+		x1, y1 := points[i-1][0], points[i-1][1]
+		x2, y2 := points[i][0], points[i][1]
+		x3, y3 := points[i+1][0], points[i+1][1]
+		
+		dx1, dy1 := x2-x1, y2-y1
+		dx2, dy2 := x3-x2, y3-y2
+		
+		cross := dx1*dy2 - dy1*dx2
+		mag1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+		mag2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+		
+		if mag1 > 0 && mag2 > 0 {
+			curvatures = append(curvatures, math.Abs(cross)/(mag1*mag2))
+		}
+	}
+	if len(curvatures) == 0 {
+		return 0, 0
+	}
+	sum := 0.0
+	for _, c := range curvatures {
+		sum += c
+	}
+	mean = sum / float64(len(curvatures))
+	
+	varianceSum := 0.0
+	for _, c := range curvatures {
+		varianceSum += (c - mean) * (c - mean)
+	}
+	variance = varianceSum / float64(len(curvatures))
+	return
 }
 
 func (e *LSTMFeatureExtractor) extractTemporalFeatures(seq *TrajectorySequence) []float64 {
 	features := make([]float64, 32)
 
 	if len(seq.Points) >= 2 {
-		firstTime := seq.Points[0].Timestamp
-		lastTime := seq.Points[len(seq.Points)-1].Timestamp
-		totalDuration := float64(lastTime - firstTime)
+		firstTime := float64(seq.Points[0].Timestamp)
+		lastTime := float64(seq.Points[len(seq.Points)-1].Timestamp)
+		totalDuration := lastTime - firstTime
 
 		if totalDuration > 0 {
 			intervals := make([]float64, len(seq.Points)-1)
@@ -519,152 +763,260 @@ func (e *LSTMFeatureExtractor) extractTemporalFeatures(seq *TrajectorySequence) 
 				intervals[i-1] = float64(seq.Points[i].Timestamp - seq.Points[i-1].Timestamp)
 			}
 
-			var sum float64
-			for _, t := range intervals {
-				sum += t
-			}
-			meanInterval := sum / float64(len(intervals))
+			meanInterval, varianceInterval, maxInterval, minInterval := e.computeStats(intervals)
 			features[0] = meanInterval / 100.0
-
-			var variance float64
-			for _, t := range intervals {
-				diff := t - meanInterval
-				variance += diff * diff
-			}
-			features[1] = (variance / float64(len(intervals))) / 1000.0
-
-			maxInterval := intervals[0]
-			minInterval := intervals[0]
-			for _, t := range intervals {
-				if t > maxInterval {
-					maxInterval = t
-				}
-				if t < minInterval {
-					minInterval = t
-				}
-			}
+			features[1] = varianceInterval / 1000.0
 			features[2] = maxInterval / 100.0
 			features[3] = minInterval / 100.0
 
 			pauseCount := 0
+			longPauseCount := 0
 			for _, t := range intervals {
 				if t > 200 {
 					pauseCount++
 				}
-			}
-			features[4] = float64(pauseCount) / 5.0
-
-			longPauseCount := 0
-			for _, t := range intervals {
 				if t > 500 {
 					longPauseCount++
 				}
 			}
+			features[4] = float64(pauseCount) / 5.0
 			features[5] = float64(longPauseCount)
 
 			features[6] = meanInterval / 100.0
 			if maxInterval > minInterval {
 				features[7] = (maxInterval - minInterval) / meanInterval
 			}
+
+			features[8] = e.computeEntropy(intervals) / 3.0
 		}
 	}
 
-	features[8] = float64(len(seq.Points)) / 200.0
-
-	features[16] = 0.0
-	features[17] = 0.0
-	features[18] = 0.0
-	features[19] = 0.0
-	features[20] = 0.0
-	features[21] = 0.0
-	features[22] = 0.0
-	features[23] = 0.0
-	features[24] = 0.0
-	features[25] = 0.0
-	features[26] = 0.0
-	features[27] = 0.0
-	features[28] = 0.0
-	features[29] = 0.0
-	features[30] = 0.0
-	features[31] = 0.0
+	features[16] = float64(len(seq.Points)) / 200.0
+	features[17] = float64(len(seq.VelocitySeq)) / 200.0
 
 	return features
 }
 
-func (e *LSTMFeatureExtractor) computeAttention(forwardHidden, backwardHidden [][]float64) []float64 {
-	combined := e.combineBidirectional(forwardHidden, backwardHidden)
+func (e *LSTMFeatureExtractor) extractEnhancedFeatures(seq *TrajectorySequence) []float64 {
+	features := make([]float64, 32)
 
-	if combined == nil || len(combined) == 0 {
-		return nil
-	}
-
-	if !e.useAttention {
-		if len(combined) == 0 {
-			return nil
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		autocorr := e.computeAutocorrelation(seq.VelocitySeq)
+		if len(autocorr) > 5 {
+			features[0] = autocorr[1]
+			features[1] = autocorr[2]
+			features[2] = autocorr[3]
+			features[3] = autocorr[4]
+			features[4] = autocorr[5]
 		}
-		return combined[len(combined)/2]
+
+		features[8] = e.computeHurstExponent(seq.VelocitySeq)
+		features[9] = e.computeSpectralEntropy(seq.VelocitySeq)
+		features[10] = e.computePermutationEntropy(seq.VelocitySeq)
+		features[11] = e.computeApproximateEntropy(seq.VelocitySeq)
+		features[12] = e.computeSampleEntropy(seq.VelocitySeq)
 	}
 
-	seqLen := len(combined)
-
-	attentionScores := make([]float64, seqLen)
-	for i := 0; i < seqLen; i++ {
-		var score float64
-		for j := 0; j < len(combined[0]); j++ {
-			score += combined[i][j] * e.attentionWeights[0][0][j]
-		}
-		attentionScores[i] = math.Tanh(score)
+	if seq.NormalizedSeq != nil && len(seq.NormalizedSeq) > 0 {
+		features[16] = e.computeFractalDimension(seq.NormalizedSeq)
 	}
 
-	sumExp := 0.0
-	for i := range attentionScores {
-		attentionScores[i] = math.Exp(attentionScores[i])
-		sumExp += attentionScores[i]
+	if seq.DirectionSeq != nil && len(seq.DirectionSeq) > 0 {
+		features[20] = e.computeDirectionEntropy(seq.DirectionSeq)
+		features[21] = e.computeCircularVariance(seq.DirectionSeq)
 	}
 
-	if sumExp > 0 {
-		for i := range attentionScores {
-			attentionScores[i] /= sumExp
-		}
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		features[24] = float64(e.countVelocityPeaks(seq.VelocitySeq))
 	}
 
-	attentionOutput := make([]float64, len(combined[0]))
-	for i := range attentionOutput {
-		for j := 0; j < seqLen; j++ {
-			attentionOutput[i] += combined[j][i] * attentionScores[j]
-		}
+	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
+		features[25] = float64(e.countAccelerationPeaks(seq.AccelerationSeq))
 	}
 
-	return attentionOutput
+	return features
 }
 
-func (e *LSTMFeatureExtractor) combineBidirectional(forwardHidden, backwardHidden [][]float64) [][]float64 {
-	if forwardHidden == nil && backwardHidden == nil {
-		return nil
+func (e *LSTMFeatureExtractor) computeEnhancedLSTMEmbedding(features []float64, seq *TrajectorySequence) []float64 {
+	embedding := make([]float64, LSTMFeatureDim)
+
+	hiddenState := make([]float64, LSTMHiddenSize)
+	cellState := make([]float64, LSTMHiddenSize)
+
+	inputDim := len(features)
+	if inputDim > LSTMFeatureDim {
+		inputDim = LSTMFeatureDim
 	}
 
-	if forwardHidden == nil {
-		return backwardHidden
-	}
-	if backwardHidden == nil {
-		return forwardHidden
-	}
+	for layer := 0; layer < LSTMNumLayers; layer++ {
+		input := make([]float64, LSTMFeatureDim)
+		copy(input, features)
 
-	seqLen := len(forwardHidden)
-	hiddenSize := len(forwardHidden[0])
+		hiddenState, cellState = e.simplifiedLSTMCell(input, hiddenState, cellState, layer)
 
-	combined := make([][]float64, seqLen)
-	for i := range combined {
-		combined[i] = make([]float64, hiddenSize*2)
-		for j := 0; j < hiddenSize; j++ {
-			combined[i][j] = forwardHidden[i][j]
-			if j < len(backwardHidden[i]) {
-				combined[i][hiddenSize+j] = backwardHidden[i][j]
-			}
+		if e.useLayerNorm && layer < len(e.layerNormParams) {
+			hiddenState = e.layerNorm1D(hiddenState, e.layerNormParams[layer][0], e.layerNormParams[layer][1])
+		}
+
+		if e.useDropout && layer < LSTMNumLayers-1 {
+			hiddenState = e.applyDropout(hiddenState)
 		}
 	}
 
-	return combined
+	if e.bidirectional {
+		backwardHidden := make([]float64, LSTMHiddenSize)
+		backwardCell := make([]float64, LSTMHiddenSize)
+		
+		for layer := 0; layer < LSTMNumLayers; layer++ {
+			input := make([]float64, LSTMFeatureDim)
+			copy(input, features)
+			
+			backwardHidden, backwardCell = e.simplifiedLSTMCell(input, backwardHidden, backwardCell, layer)
+			
+			if e.useLayerNorm && layer < len(e.layerNormParams) {
+				backwardHidden = e.layerNorm1D(backwardHidden, e.layerNormParams[layer][0], e.layerNormParams[layer][1])
+			}
+		}
+
+		hiddenState = append(hiddenState, backwardHidden...)
+	}
+
+	if e.useAttention && len(hiddenState) == LSTMHiddenSize*2 {
+		hiddenState = e.computeMultiHeadAttention(hiddenState)
+	}
+
+	for i := range embedding {
+		if i < len(hiddenState) {
+			embedding[i] = math.Tanh(hiddenState[i])
+		}
+	}
+
+	return embedding
+}
+
+func (e *LSTMFeatureExtractor) simplifiedLSTMCell(input, hidden, cell []float64, layer int) ([]float64, []float64) {
+	newHidden := make([]float64, LSTMHiddenSize)
+	newCell := make([]float64, LSTMHiddenSize)
+
+	inputSize := len(input)
+
+	for i := range newHidden {
+		forget := LSTMForgetBias
+		inputGate := 0.0
+		candidate := 0.0
+		output := 0.0
+
+		for j := 0; j < inputSize && j < LSTMFeatureDim; j++ {
+			if layer < len(e.hiddenWeights) && i < len(e.hiddenWeights[layer]) && j < len(e.hiddenWeights[layer][i]) {
+				forget += e.hiddenWeights[layer][i][j] * input[j] * 0.1
+				inputGate += e.hiddenWeights[layer][i][j] * input[j] * 0.1
+				candidate += e.hiddenWeights[layer][i][j] * input[j] * 0.1
+			}
+		}
+
+		for j := range hidden {
+			if layer < len(e.cellWeights) && i < len(e.cellWeights[layer]) && j < len(e.cellWeights[layer][i]) {
+				forget += e.cellWeights[layer][i][j] * hidden[j] * 0.1
+				inputGate += e.cellWeights[layer][i][j] * hidden[j] * 0.1
+				candidate += e.cellWeights[layer][i][j] * hidden[j] * 0.1
+			}
+		}
+
+		forget = 1.0 / (1.0 + math.Exp(-forget))
+		inputGate = 1.0 / (1.0 + math.Exp(-inputGate))
+		candidate = math.Tanh(candidate)
+		output = 1.0 / (1.0 + math.Exp(-inputGate))
+
+		newCell[i] = forget*cell[i] + inputGate*candidate
+		newHidden[i] = output * math.Tanh(newCell[i])
+	}
+
+	return newHidden, newCell
+}
+
+func (e *LSTMFeatureExtractor) layerNorm1D(data, scale, bias []float64) []float64 {
+	if len(data) == 0 {
+		return data
+	}
+	mean := 0.0
+	for _, v := range data {
+		mean += v
+	}
+	mean /= float64(len(data))
+
+	variance := 0.0
+	for _, v := range data {
+		variance += (v - mean) * (v - mean)
+	}
+	variance = math.Sqrt(variance/float64(len(data)) + 1e-8)
+
+	normalized := make([]float64, len(data))
+	for i, v := range data {
+		normalized[i] = (v-mean)/variance*scale[i] + bias[i]
+	}
+	return normalized
+}
+
+func (e *LSTMFeatureExtractor) applyDropout(data []float64) []float64 {
+	result := make([]float64, len(data))
+	for i, v := range data {
+		if rand.Float64() > e.dropoutRate {
+			result[i] = v / (1 - e.dropoutRate)
+		} else {
+			result[i] = 0
+		}
+	}
+	return result
+}
+
+func (e *LSTMFeatureExtractor) computeMultiHeadAttention(hidden []float64) []float64 {
+	if len(hidden) != LSTMHiddenSize*2 {
+		return hidden
+	}
+
+	headDim := LSTMHiddenSize * 2 / AttentionHeadCount
+	output := make([]float64, LSTMHiddenSize*2)
+
+	for h := 0; h < AttentionHeadCount; h++ {
+		q := e.matMul1D(hidden, e.attentionWeightsQ[h])
+		k := e.matMul1D(hidden, e.attentionWeightsK[h])
+		v := e.matMul1D(hidden, e.attentionWeightsV[h])
+
+		score := 0.0
+		for i := range q {
+			score += q[i] * k[i]
+		}
+		score /= math.Sqrt(float64(headDim))
+
+		attentionWeight := math.Exp(score)
+
+		headOutput := make([]float64, headDim)
+		for i := range v {
+			headOutput[i] = v[i] * attentionWeight
+		}
+
+		projected := e.matMul1D(headOutput, e.attentionOutputWeights[h])
+		
+		for i := 0; i < headDim && h*headDim+i < len(output); i++ {
+			output[h*headDim+i] += projected[i]
+		}
+	}
+
+	return output
+}
+
+func (e *LSTMFeatureExtractor) matMul1D(v []float64, m [][]float64) []float64 {
+	result := make([]float64, len(m))
+	for i := range m {
+		sum := 0.0
+		for j := range v {
+			if j < len(m[i]) {
+				sum += v[j] * m[i][j]
+			}
+		}
+		result[i] = sum
+	}
+	return result
 }
 
 func (e *LSTMFeatureExtractor) ExtractRiskFeatures(traceData *model.TraceData) (map[string]float64, error) {
@@ -703,26 +1055,12 @@ func (e *LSTMFeatureExtractor) ExtractRiskFeatures(traceData *model.TraceData) (
 	}
 	riskFeatures["embedding_norm"] = math.Sqrt(riskFeatures["embedding_norm"])
 
-	return riskFeatures, nil
-}
-
-func (e *LSTMFeatureExtractor) computeLSTMEmbedding(features []float64) []float64 {
-	embedding := make([]float64, LSTMFeatureDim)
-
-	for i := range embedding {
-		var sum float64
-		for j, f := range features {
-			weight := 0.1
-			if j < len(e.outputWeights) {
-				weight = e.outputWeights[j]
-			}
-			sum += f * weight
-		}
-
-		embedding[i] = math.Tanh(sum)
+	advancedFeatures, _ := e.ExtractAdvancedRiskFeatures(traceData)
+	for k, v := range advancedFeatures {
+		riskFeatures[k] = v
 	}
 
-	return embedding
+	return riskFeatures, nil
 }
 
 func (e *LSTMFeatureExtractor) LoadModelWeights(weightsPath string) error {
@@ -744,6 +1082,88 @@ func (e *LSTMFeatureExtractor) SetBidirectional(enabled bool) {
 func (e *LSTMFeatureExtractor) SetAttention(enabled bool) {
 	e.useAttention = enabled
 	e.initializeWeights()
+}
+
+func (e *LSTMFeatureExtractor) EnableQuantization(enabled bool) {
+	e.quantizationEnabled = enabled
+	if enabled {
+		e.quantizeWeights()
+	}
+}
+
+func (e *LSTMFeatureExtractor) quantizeWeights() {
+	e.quantizedWeights = make(map[string][]int8)
+	e.scaleFactors = make(map[string]float64)
+
+	e.quantizeAndStore("hidden_weights", e.hiddenWeights)
+	e.quantizeAndStore("cell_weights", e.cellWeights)
+	e.quantizeAndStore2D("output_weights", e.outputWeights)
+}
+
+func (e *LSTMFeatureExtractor) quantizeAndStore(name string, weights [][][]float64) {
+	flat := make([]float64, 0)
+	for _, layer := range weights {
+		for _, row := range layer {
+			flat = append(flat, row...)
+		}
+	}
+	e.quantizedWeights[name], e.scaleFactors[name] = e.quantizeArray(flat)
+}
+
+func (e *LSTMFeatureExtractor) quantizeAndStore2D(name string, weights [][]float64) {
+	flat := make([]float64, 0)
+	for _, row := range weights {
+		flat = append(flat, row...)
+	}
+	e.quantizedWeights[name], e.scaleFactors[name] = e.quantizeArray(flat)
+}
+
+func (e *LSTMFeatureExtractor) quantizeArray(data []float64) ([]int8, float64) {
+	if len(data) == 0 {
+		return nil, 1.0
+	}
+	maxVal := 0.0
+	for _, v := range data {
+		if math.Abs(v) > maxVal {
+			maxVal = math.Abs(v)
+		}
+	}
+	if maxVal == 0 {
+		maxVal = 1.0
+	}
+	scale := maxVal / 127.0
+	quantized := make([]int8, len(data))
+	for i, v := range data {
+		quantized[i] = int8(math.Round(v / scale))
+	}
+	return quantized, scale
+}
+
+func (e *LSTMFeatureExtractor) GetMemoryUsageBytes() int64 {
+	total := int64(0)
+	
+	if e.quantizationEnabled {
+		for name, weights := range e.quantizedWeights {
+			_ = name
+			total += int64(len(weights))
+		}
+	} else {
+		for _, layer := range e.hiddenWeights {
+			for _, row := range layer {
+				total += int64(len(row)) * 8
+			}
+		}
+		for _, layer := range e.cellWeights {
+			for _, row := range layer {
+				total += int64(len(row)) * 8
+			}
+		}
+		for _, row := range e.outputWeights {
+			total += int64(len(row)) * 8
+		}
+	}
+	
+	return total
 }
 
 func (e *LSTMFeatureExtractor) computeJerkSequence(traceData *model.TraceData) []float64 {
@@ -785,17 +1205,7 @@ func (e *LSTMFeatureExtractor) computeCurvatureSequence(traceData *model.TraceDa
 		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
 
 		if mag1 > 0 && mag2 > 0 {
-			dot := v1x*v2x + v1y*v2y
-			cosAngle := dot / (mag1 * mag2)
-			if cosAngle > 1 {
-				cosAngle = 1
-			}
-			if cosAngle < -1 {
-				cosAngle = -1
-			}
-			angle := math.Acos(cosAngle)
 			curvatures[i-1] = math.Abs(cross) / (mag1 * mag2 + 1e-6)
-			_ = angle
 		}
 	}
 
@@ -856,9 +1266,7 @@ func (e *LSTMFeatureExtractor) computeFFTFeatures(data []float64) []float64 {
 	}
 
 	fft := make([]float64, len(data))
-	for i := range data {
-		fft[i] = data[i]
-	}
+	copy(fft, data)
 
 	features := make([]float64, 16)
 	for i := 0; i < len(fft) && i < 16; i++ {
@@ -1174,17 +1582,17 @@ func (e *LSTMFeatureExtractor) computeFractalDimension(points [][]float64) float
 		return 1.0
 	}
 
-	boxSizes := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
-	count := 0
+	boxSizes := []float64{0.05, 0.1, 0.2, 0.3, 0.4, 0.5}
+	boxCounts := make([]int, 0)
 
 	for _, boxSize := range boxSizes {
-		counts := e.countBoxFractal(points, boxSize)
-		if counts > 0 {
-			count++
+		count := e.countBoxFractal(points, boxSize)
+		if count > 0 {
+			boxCounts = append(boxCounts, count)
 		}
 	}
 
-	if count < 2 {
+	if len(boxCounts) < 2 {
 		return 1.0
 	}
 
@@ -1219,40 +1627,23 @@ func (e *LSTMFeatureExtractor) countBoxFractal(points [][]float64, boxSize float
 	}
 
 	boxesX := int((maxX-minX)/boxSize) + 1
+	boxesY := int((maxY-minY)/boxSize) + 1
 
 	boxSet := make(map[int]bool)
 	for _, p := range points {
 		boxX := int((p[0] - minX) / boxSize)
 		boxY := int((p[1] - minY) / boxSize)
+		if boxX >= boxesX {
+			boxX = boxesX - 1
+		}
+		if boxY >= boxesY {
+			boxY = boxesY - 1
+		}
 		boxIndex := boxY*boxesX + boxX
 		boxSet[boxIndex] = true
-		_ = boxX
 	}
 
 	return len(boxSet)
-}
-
-func (e *LSTMFeatureExtractor) computeSpatialVariability(points []model.TracePoint) float64 {
-	if len(points) < 2 {
-		return 0
-	}
-
-	var sumX, sumY float64
-	for _, p := range points {
-		sumX += float64(p.X)
-		sumY += float64(p.Y)
-	}
-	meanX := sumX / float64(len(points))
-	meanY := sumY / float64(len(points))
-
-	var variance float64
-	for _, p := range points {
-		dx := float64(p.X) - meanX
-		dy := float64(p.Y) - meanY
-		variance += dx*dx + dy*dy
-	}
-
-	return variance / float64(len(points))
 }
 
 func (e *LSTMFeatureExtractor) countVelocityPeaks(velocities []float64) int {
@@ -1443,17 +1834,7 @@ func (e *LSTMFeatureExtractor) DetectAnomalousPatterns(traceData *model.TraceDat
 	anomalies := []string{}
 
 	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
-		variance := 0.0
-		mean := 0.0
-		for _, v := range seq.VelocitySeq {
-			mean += v
-		}
-		mean /= float64(len(seq.VelocitySeq))
-		for _, v := range seq.VelocitySeq {
-			diff := v - mean
-			variance += diff * diff
-		}
-		variance /= float64(len(seq.VelocitySeq))
+		_, variance, _, mean := e.computeStats(seq.VelocitySeq)
 
 		if variance < 1.0 && mean > 50 {
 			anomalies = append(anomalies, "恒定速度模式")
@@ -1480,11 +1861,7 @@ func (e *LSTMFeatureExtractor) DetectAnomalousPatterns(traceData *model.TraceDat
 	}
 
 	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
-		var accelSum float64
-		for _, a := range seq.AccelerationSeq {
-			accelSum += math.Abs(a)
-		}
-		meanAccel := accelSum / float64(len(seq.AccelerationSeq))
+		meanAccel := e.computeMeanAbsolute(seq.AccelerationSeq)
 
 		if meanAccel < 0.001 {
 			anomalies = append(anomalies, "近乎零加速度")
@@ -1522,8 +1899,8 @@ func (e *LSTMFeatureExtractor) ExtractComprehensiveFeatures(traceData *model.Tra
 
 	summary := &TraceFeatureSummary{
 		TotalFeatures:    len(features),
-		BasicCount:      48,
-		SequenceCount:   32,
+		BasicCount:      64,
+		SequenceCount:   48,
 		TemporalCount:   32,
 		EnhancedCount:   32,
 		BehavioralCount: 16,

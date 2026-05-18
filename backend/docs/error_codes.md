@@ -17,12 +17,19 @@
 | 1005 | 400 | Invalid JSON format | JSON格式错误 |
 | 1006 | 400 | Invalid email format | 邮箱格式不正确 |
 | 1007 | 400 | Invalid phone format | 手机号格式不正确 |
-| 1008 | 400 | Password too weak | 密码强度不足 |
-| 1009 | 400 | Captcha expired | 验证码已过期 |
+| 1008 | 400 | Password too weak | 密码强度不足（要求至少8位，包含大小写字母和数字） |
+| 1009 | 400 | Captcha expired | 验证码已过期（有效期5分钟） |
 | 1010 | 400 | Captcha invalid | 验证码不正确 |
-| 1011 | 400 | Rate limit exceeded | 请求频率超限 |
-| 1012 | 400 | Invalid file type | 文件类型不支持 |
-| 1013 | 400 | File too large | 文件大小超过限制 |
+| 1011 | 400 | Rate limit exceeded | 请求频率超限（每分钟最多10次） |
+| 1012 | 400 | Invalid file type | 文件类型不支持（仅支持jpg, png, gif） |
+| 1013 | 400 | File too large | 文件大小超过限制（最大10MB） |
+| 1014 | 400 | Invalid date format | 日期格式不正确（应为YYYY-MM-DD） |
+| 1015 | 400 | Invalid time format | 时间格式不正确（应为HH:MM:SS） |
+| 1016 | 400 | Invalid UUID format | UUID格式不正确 |
+| 1017 | 400 | Invalid URL format | URL格式不正确 |
+| 1018 | 400 | Array length exceeded | 数组长度超过限制 |
+| 1019 | 400 | String length exceeded | 字符串长度超过限制 |
+| 1020 | 400 | Invalid enum value | 枚举值不正确 |
 
 ### 2. 认证与授权错误 (4xx)
 
@@ -35,9 +42,19 @@
 | 2005 | 403 | Forbidden | 禁止访问 |
 | 2006 | 403 | Insufficient permissions | 权限不足 |
 | 2007 | 401 | Invalid credentials | 用户名或密码错误 |
-| 2008 | 401 | Account locked | 账户已被锁定 |
+| 2008 | 401 | Account locked | 账户已被锁定（连续5次登录失败后锁定15分钟） |
 | 2009 | 401 | Account disabled | 账户已被禁用 |
 | 2010 | 401 | Email not verified | 邮箱未验证 |
+| 2011 | 401 | MFA required | 需要多因素认证 |
+| 2012 | 401 | MFA failed | 多因素认证失败 |
+| 2013 | 401 | Session expired | 会话已过期 |
+| 2014 | 401 | Session invalid | 会话无效 |
+| 2015 | 403 | IP blocked | IP地址已被封禁 |
+| 2016 | 403 | Region blocked | 地区访问受限 |
+| 2017 | 401 | Refresh token expired | 刷新Token已过期 |
+| 2018 | 401 | Refresh token invalid | 刷新Token无效 |
+| 2019 | 403 | Access denied | 访问被拒绝 |
+| 2020 | 401 | Credentials expired | 凭证已过期 |
 
 ### 3. 资源错误 (4xx)
 
@@ -53,6 +70,16 @@
 | 3008 | 409 | Email already registered | 邮箱已被注册 |
 | 3009 | 409 | Username already taken | 用户名已被占用 |
 | 3010 | 409 | Conflict | 资源冲突 |
+| 3011 | 404 | Blacklist not found | 黑名单记录不存在 |
+| 3012 | 404 | Captcha not found | 验证码不存在 |
+| 3013 | 404 | Profile not found | 用户档案不存在 |
+| 3014 | 404 | Stats not found | 统计数据不存在 |
+| 3015 | 404 | Log not found | 日志记录不存在 |
+| 3016 | 409 | Application name exists | 应用名称已存在 |
+| 3017 | 409 | Channel name exists | 通道名称已存在 |
+| 3018 | 409 | Rule name exists | 规则名称已存在 |
+| 3019 | 404 | Config not found | 配置不存在 |
+| 3020 | 409 | Cannot delete protected | 无法删除受保护的资源 |
 
 ### 4. 服务器错误 (5xx)
 
@@ -62,12 +89,22 @@
 | 5002 | 500 | Database error | 数据库操作失败 |
 | 5003 | 500 | Cache error | 缓存操作失败 |
 | 5004 | 500 | External API error | 外部API调用失败 |
-| 5005 | 500 | Service unavailable | 服务暂时不可用 |
-| 5006 | 500 | Timeout | 请求超时 |
+| 5005 | 503 | Service unavailable | 服务暂时不可用 |
+| 5006 | 504 | Timeout | 请求超时 |
 | 5007 | 500 | Encryption error | 加密操作失败 |
 | 5008 | 500 | Decryption error | 解密操作失败 |
 | 5009 | 500 | Backup failed | 备份操作失败 |
 | 5010 | 500 | Restore failed | 恢复操作失败 |
+| 5011 | 500 | Queue error | 消息队列操作失败 |
+| 5012 | 500 | Redis error | Redis操作失败 |
+| 5013 | 500 | Network error | 网络连接失败 |
+| 5014 | 500 | File system error | 文件系统操作失败 |
+| 5015 | 500 | Configuration error | 配置错误 |
+| 5016 | 500 | Validation service error | 验证服务错误 |
+| 5017 | 500 | Image processing error | 图片处理错误 |
+| 5018 | 500 | Rate limit service error | 限流服务错误 |
+| 5019 | 500 | Logger error | 日志服务错误 |
+| 5020 | 500 | Notification error | 通知服务错误 |
 
 ### 5. 业务逻辑错误 (4xx)
 
@@ -83,6 +120,16 @@
 | 4008 | 400 | Maintenance mode | 系统维护中 |
 | 4009 | 400 | Feature disabled | 功能已禁用 |
 | 4010 | 400 | Quota exceeded | 配额已用尽 |
+| 4011 | 400 | Invalid challenge | 验证挑战无效 |
+| 4012 | 400 | Challenge expired | 验证挑战已过期 |
+| 4013 | 400 | Too many attempts | 尝试次数过多 |
+| 4014 | 400 | Blacklisted | 已被列入黑名单 |
+| 4015 | 400 | Whitelist required | 需要白名单权限 |
+| 4016 | 400 | Device not trusted | 设备不受信任 |
+| 4017 | 400 | Location not allowed | 位置不允许 |
+| 4018 | 400 | Session limit exceeded | 会话数量超限 |
+| 4019 | 400 | Application quota exceeded | 应用配额已用尽 |
+| 4020 | 400 | Daily limit exceeded | 每日限额已用尽 |
 
 ## 错误响应格式
 
@@ -160,5 +207,6 @@
 
 ---
 
-*文档版本: 1.0*  
-*最后更新: 2024年1月*
+*文档版本: 2.0*  
+*最后更新: 2025年7月*  
+*错误码总数: 100个*

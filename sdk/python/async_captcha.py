@@ -63,6 +63,11 @@ class AsyncCaptchaValidationError(AsyncCaptchaError):
     pass
 
 
+class AsyncCaptchaSessionExpiredError(AsyncCaptchaError):
+    """会话过期异常"""
+    pass
+
+
 @dataclass
 class AsyncTrajectoryPoint:
     """异步客户端轨迹点"""
@@ -73,6 +78,11 @@ class AsyncTrajectoryPoint:
     def to_dict(self) -> Dict[str, int]:
         """转换为字典格式"""
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, int]) -> 'AsyncTrajectoryPoint':
+        """从字典创建"""
+        return cls(**data)
 
 
 @dataclass
@@ -86,6 +96,7 @@ class AsyncSliderCaptchaResponse:
     secret_y: Optional[int] = None
     image_width: Optional[int] = None
     image_height: Optional[int] = None
+    tolerance: Optional[int] = None
 
 
 @dataclass
@@ -140,6 +151,11 @@ class AsyncJigsawPiece:
         """转换为字典"""
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'AsyncJigsawPiece':
+        """从字典创建"""
+        return cls(**data)
+
 
 @dataclass
 class AsyncJigsawCaptchaResponse:
@@ -147,6 +163,7 @@ class AsyncJigsawCaptchaResponse:
     session_id: str
     image_url: str
     pieces: List[AsyncJigsawPiece]
+    piece_images: List[str]
     grid_size: int
     piece_width: int
     piece_height: int
@@ -166,6 +183,15 @@ class AsyncVerifyResult:
     fail_reason: Optional[str] = None
 
 
+@dataclass
+class AsyncLoginResponse:
+    """异步登录响应"""
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    user: Dict
+
+
 class AsyncCaptchaClient:
     """异步验证码客户端
 
@@ -181,6 +207,7 @@ class AsyncCaptchaClient:
         max_retries: int = 3,
         retry_backoff_factor: float = 0.5,
         max_connections: int = 100,
+        connector: Optional[aiohttp.BaseConnector] = None,
     ):
         """
         初始化异步客户端
@@ -192,6 +219,7 @@ class AsyncCaptchaClient:
             max_retries: 最大重试次数
             retry_backoff_factor: 重试退避因子
             max_connections: 最大并发连接数
+            connector: 自定义连接器（可选）
         """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
@@ -202,17 +230,25 @@ class AsyncCaptchaClient:
         self._token = None
         self._refresh_token = None
         self._session: Optional[aiohttp.ClientSession] = None
+        self._connector = connector
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """获取或创建aiohttp会话"""
         if self._session is None or self._session.closed:
-            connector = aiohttp.TCPConnector(
-                limit=self.max_connections,
-                limit_per_host=self.max_connections,
-            )
+            if self._connector:
+                connector = self._connector
+            else:
+                connector = aiohttp.TCPConnector(
+                    limit=self.max_connections,
+                    limit_per_host=self.max_connections,
+                    ttl_dns_cache=300,
+                )
             self._session = aiohttp.ClientSession(
                 connector=connector,
                 timeout=self.timeout,
+                headers={
+                    'User-Agent': 'Captcha-Python-Async-SDK/1.0',
+                },
             )
         return self._session
 
@@ -220,7 +256,6 @@ class AsyncCaptchaClient:
         """获取请求头"""
         headers = {
             'Content-Type': 'application/json',
-            'User-Agent': 'Captcha-Python-Async-SDK/1.0',
         }
         if self.api_key:
             headers['X-API-Key'] = self.api_key
@@ -262,7 +297,14 @@ class AsyncCaptchaClient:
                     code = result.get('code')
                     if code != 0 and code is not None:
                         message = result.get('message', 'Unknown error')
-                        raise AsyncCaptchaAPIError(message, code=code)
+                        resp_data = result.get('data')
+
+                        if code == 404 or '不存在' in message or '过期' in message:
+                            raise AsyncCaptchaSessionExpiredError(message)
+                        if code == 400:
+                            raise AsyncCaptchaValidationError(message)
+
+                        raise AsyncCaptchaAPIError(message, code=code, data=resp_data)
 
                     return result.get('data')
 
@@ -270,16 +312,21 @@ class AsyncCaptchaClient:
                 if attempt >= self.max_retries:
                     raise AsyncCaptchaTimeoutError("Request timed out")
                 delay = self.retry_backoff_factor * (2 ** attempt)
-                logger.warning(f"Request timeout, retrying in {delay}s...")
+                logger.warning(f"Request timeout, retrying in {delay:.2f}s...")
                 await asyncio.sleep(delay)
 
             except aiohttp.ClientError as e:
                 if attempt >= self.max_retries:
                     raise AsyncCaptchaNetworkError(str(e))
                 delay = self.retry_backoff_factor * (2 ** attempt)
-                logger.warning(f"Request failed, retrying in {delay}s...")
+                logger.warning(f"Request failed, retrying in {delay:.2f}s...")
                 await asyncio.sleep(delay)
 
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode JSON response: {e}")
+                raise AsyncCaptchaAPIError("Invalid JSON response")
+
+    # ==================== 滑块验证码 ====================
     async def get_slider_captcha(
         self,
         width: int = 320,
@@ -347,6 +394,7 @@ class AsyncCaptchaClient:
             fail_reason=data.get('fail_reason'),
         )
 
+    # ==================== 点击验证码 ====================
     async def get_click_captcha(
         self,
         mode: Union[AsyncClickMode, str] = AsyncClickMode.NUMBER,
@@ -421,10 +469,13 @@ class AsyncCaptchaClient:
             fail_reason=data.get('fail_reason'),
         )
 
+    # ==================== 图形验证码 ====================
     async def get_image_captcha(
         self,
         type_: str = 'mixed',
         count: int = 4,
+        noise_mode: int = 0,
+        line_mode: int = 0,
     ) -> AsyncImageCaptchaResponse:
         """
         异步获取图形验证码
@@ -432,13 +483,15 @@ class AsyncCaptchaClient:
         Args:
             type_: 验证码类型
             count: 字符数量
+            noise_mode: 噪音模式
+            line_mode: 线条模式
 
         Returns:
             图形验证码响应
         """
         data = await self._request(
             'GET', '/api/v1/captcha/image',
-            params={'type': type_, 'count': count},
+            params={'type': type_, 'count': count, 'noise_mode': noise_mode, 'line_mode': line_mode},
         )
         return AsyncImageCaptchaResponse(**data)
 
@@ -466,6 +519,7 @@ class AsyncCaptchaClient:
             message=data.get('message', ''),
         )
 
+    # ==================== 旋转验证码 ====================
     async def get_rotation_captcha(self) -> AsyncRotationCaptchaResponse:
         """异步获取旋转验证码"""
         data = await self._request('GET', '/api/v1/captcha/rotation')
@@ -495,6 +549,7 @@ class AsyncCaptchaClient:
             message=data.get('message', ''),
         )
 
+    # ==================== 手势验证码 ====================
     async def get_gesture_captcha(self) -> AsyncGestureCaptchaResponse:
         """异步获取手势验证码"""
         data = await self._request('GET', '/api/v1/captcha/gesture')
@@ -529,6 +584,7 @@ class AsyncCaptchaClient:
             message=data.get('message', ''),
         )
 
+    # ==================== 拼图验证码 ====================
     async def get_jigsaw_captcha(
         self,
         width: int = 300,
@@ -555,6 +611,7 @@ class AsyncCaptchaClient:
             session_id=data.get('session_id', ''),
             image_url=data.get('image_url', ''),
             pieces=pieces,
+            piece_images=data.get('piece_images', []),
             grid_size=data.get('grid_size', 3),
             piece_width=data.get('piece_width', 0),
             piece_height=data.get('piece_height', 0),
@@ -587,6 +644,7 @@ class AsyncCaptchaClient:
             remaining_attempts=data.get('remaining_attempts'),
         )
 
+    # ==================== 通用验证方法 ====================
     async def verify_captcha(
         self,
         captcha_type: Union[AsyncCaptchaType, str],
@@ -624,6 +682,16 @@ class AsyncCaptchaClient:
             fail_reason=data.get('fail_reason'),
         )
 
+    # ==================== 用户认证 ====================
+    async def auth(self) -> 'AsyncUserAuth':
+        """获取用户认证API"""
+        return AsyncUserAuth(self)
+
+    # ==================== 环境检测 ====================
+    async def env(self) -> 'AsyncEnvironment':
+        """获取环境检测API"""
+        return AsyncEnvironment(self)
+
     async def close(self):
         """关闭异步客户端，释放资源"""
         if self._session and not self._session.closed:
@@ -637,6 +705,155 @@ class AsyncCaptchaClient:
         """上下文管理器退出"""
         await self.close()
 
+
+class AsyncUserAuth:
+    """异步用户认证API"""
+
+    def __init__(self, client: AsyncCaptchaClient):
+        self.client = client
+
+    async def register(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        behavior_data: Optional[str] = None,
+    ) -> Dict:
+        """
+        用户注册
+
+        Args:
+            username: 用户名
+            email: 邮箱
+            password: 密码
+            behavior_data: 行为数据
+
+        Returns:
+            注册结果
+        """
+        data = {
+            'username': username,
+            'email': email,
+            'password': password,
+        }
+        if behavior_data:
+            data['behavior_data'] = behavior_data
+
+        return await self.client._request('POST', '/api/v1/auth/register', data=data)
+
+    async def login(
+        self,
+        username: str,
+        password: str,
+        captcha_token: Optional[str] = None,
+    ) -> AsyncLoginResponse:
+        """
+        用户登录
+
+        Args:
+            username: 用户名
+            password: 密码
+            captcha_token: 验证码令牌
+
+        Returns:
+            登录响应
+        """
+        data = {'username': username, 'password': password}
+        if captcha_token:
+            data['captcha_token'] = captcha_token
+
+        result = await self.client._request('POST', '/api/v1/auth/login', data=data)
+        self.client._token = result.get('access_token')
+        self.client._refresh_token = result.get('refresh_token')
+        return AsyncLoginResponse(**result)
+
+    async def refresh_token(self, refresh_token: Optional[str] = None) -> Dict:
+        """
+        刷新访问令牌
+
+        Args:
+            refresh_token: 刷新令牌
+
+        Returns:
+            刷新结果
+        """
+        token = refresh_token or self.client._refresh_token
+        if not token:
+            raise AsyncCaptchaError("No refresh token available")
+
+        result = await self.client._request(
+            'POST',
+            '/api/v1/auth/refresh',
+            data={'refresh_token': token},
+        )
+
+        self.client._token = result.get('access_token')
+        if result.get('refresh_token'):
+            self.client._refresh_token = result.get('refresh_token')
+
+        return result
+
+    async def logout(self) -> None:
+        """用户登出"""
+        try:
+            await self.client._request('POST', '/api/v1/auth/logout')
+        finally:
+            self.client._token = None
+            self.client._refresh_token = None
+
+
+class AsyncEnvironment:
+    """异步环境检测API"""
+
+    def __init__(self, client: AsyncCaptchaClient):
+        self.client = client
+
+    async def get_detection_script(self, callback: Optional[str] = None) -> str:
+        """
+        获取检测脚本
+
+        Args:
+            callback: 回调函数名
+
+        Returns:
+            脚本内容
+        """
+        params = {}
+        if callback:
+            params['callback'] = callback
+
+        url = f"{self.client.base_url}/api/v1/detect/script"
+        session = await self.client._get_session()
+        async with session.get(url, params=params, timeout=self.client.timeout) as response:
+            response.raise_for_status()
+            return await response.text()
+
+    async def submit_detection(self, data: Dict) -> Dict:
+        """
+        提交检测数据
+
+        Args:
+            data: 检测数据
+
+        Returns:
+            提交结果
+        """
+        return await self.client._request('POST', '/api/v1/detect/submit', data=data)
+
+    async def check_environment(self, data: Dict) -> Dict:
+        """
+        环境检测
+
+        Args:
+            data: 检测数据
+
+        Returns:
+            检测结果
+        """
+        return await self.client._request('POST', '/api/v1/detect/check', data=data)
+
+
+# ==================== 示例代码 ====================
 
 async def async_basic_example():
     """基础异步使用示例"""
@@ -662,7 +879,7 @@ async def async_concurrent_example():
     print("异步并发示例")
     print("="*50)
 
-    async with AsyncCaptchaClient(base_url="http://localhost:8080") as client:
+    async with AsyncCaptchaClient(base_url="http://localhost:8080", max_connections=20) as client:
         tasks = [
             client.get_slider_captcha(width=320, height=160)
             for _ in range(10)
@@ -691,14 +908,17 @@ async def async_mixed_captcha_example():
             client.get_slider_captcha(),
             client.get_click_captcha(),
             client.get_image_captcha(),
+            client.get_rotation_captcha(),
+            client.get_gesture_captcha(),
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for i, result in enumerate(results):
+        captcha_names = ["滑块", "点击", "图形", "旋转", "手势"]
+        for i, (name, result) in enumerate(zip(captcha_names, results)):
             if isinstance(result, Exception):
-                print(f"验证码 {i+1} 获取失败: {result}")
+                print(f"{name}验证码获取失败: {result}")
             else:
-                print(f"验证码 {i+1} 获取成功")
+                print(f"{name}验证码获取成功")
 
 
 async def async_error_handling_example():
@@ -720,6 +940,10 @@ async def async_error_handling_example():
             print(f"超时错误: {e}")
         except AsyncCaptchaNetworkError as e:
             print(f"网络错误: {e}")
+        except AsyncCaptchaSessionExpiredError as e:
+            print(f"会话过期: {e}")
+        except AsyncCaptchaValidationError as e:
+            print(f"验证错误: {e}")
         except AsyncCaptchaError as e:
             print(f"验证码错误: {e}")
 
@@ -752,6 +976,35 @@ async def async_batch_verification_example():
         print(f"批量验证成功率: {success_count}/{len(verify_results)}")
 
 
+async def async_user_auth_example():
+    """异步用户认证示例"""
+    print("\n" + "="*50)
+    print("异步用户认证示例")
+    print("="*50)
+
+    async with AsyncCaptchaClient(base_url="http://localhost:8080") as client:
+        auth = await client.auth()
+
+        try:
+            print("1. 登录...")
+            login_result = await auth.login(
+                username="testuser",
+                password="password123",
+            )
+            print(f"   登录成功! 令牌: {login_result.access_token[:50]}...")
+
+            print("\n2. 刷新令牌...")
+            refresh_result = await auth.refresh_token()
+            print(f"   刷新成功!")
+
+            print("\n3. 登出...")
+            await auth.logout()
+            print("   登出成功!")
+
+        except AsyncCaptchaError as e:
+            print(f"   错误: {e}")
+
+
 async def main():
     """主函数，运行所有示例"""
     print("="*50)
@@ -764,6 +1017,7 @@ async def main():
         ("混合验证码示例", async_mixed_captcha_example),
         ("错误处理示例", async_error_handling_example),
         ("批量验证示例", async_batch_verification_example),
+        ("用户认证示例", async_user_auth_example),
     ]
 
     for name, func in examples:

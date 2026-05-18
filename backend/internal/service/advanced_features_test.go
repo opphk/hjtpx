@@ -122,11 +122,7 @@ func TestIntelligentRecommendationService(t *testing.T) {
 		t.Logf("备选方案: %d个", len(result.AlternativeMethods))
 	}
 
-	service.UpdateUserProfile("user_123", result.RecommendedMethod, true, 4.5, &DeviceInfo{
-		DeviceType:   "desktop",
-		IsMobile:     false,
-		TouchEnabled: false,
-	})
+	service.UpdateUserProfile("user_123", result.RecommendedMethod, true, 4.5, nil)
 
 	t.Log("智能推荐服务测试通过")
 }

@@ -3,11 +3,18 @@ import {
   CaptchaClientConfig,
   SliderCaptchaResponse,
   ClickCaptchaResponse,
+  ImageCaptchaResponse,
+  RotationCaptchaResponse,
+  GestureCaptchaResponse,
+  JigsawCaptchaResponse,
+  JigsawPiece,
   VerifyCaptchaRequest,
   VerifyCaptchaResponse,
   LoginRequest,
   LoginResponse,
+  RegisterRequest,
   ApiResponse,
+  TrajectoryPoint,
 } from './types';
 import {
   CaptchaError,
@@ -31,6 +38,8 @@ export class CaptchaClient {
   private connectionPool: ConnectionPool;
   private retryManager: RetryManager;
   private baseUrl: string;
+  private _token: string | null = null;
+  private _refreshToken: string | null = null;
 
   constructor(config: CaptchaClientConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -42,6 +51,11 @@ export class CaptchaClient {
     this.retryManager = new RetryManager(this.config.retryConfig);
   }
 
+  setToken(token: string | null): void {
+    this._token = token;
+  }
+
+  // ==================== 滑块验证码 ====================
   async getSliderCaptcha(options?: {
     width?: number;
     height?: number;
@@ -65,6 +79,28 @@ export class CaptchaClient {
     return this.request<SliderCaptchaResponse>(url, { method: 'GET' });
   }
 
+  async verifySliderCaptcha(
+    sessionId: string,
+    x: number,
+    options?: {
+      y?: number;
+      trajectory?: TrajectoryPoint[];
+      behaviorData?: Record<string, unknown>[];
+    }
+  ): Promise<VerifyCaptchaResponse> {
+    const request: VerifyCaptchaRequest = {
+      session_id: sessionId,
+      type: 'slider',
+      x,
+      y: options?.y,
+      trajectory: options?.trajectory,
+      behavior_data: options?.behaviorData,
+    };
+
+    return this.verifyCaptcha(request);
+  }
+
+  // ==================== 点击验证码 ====================
   async getClickCaptcha(options?: {
     mode?: 'number' | 'letter' | 'chinese' | 'mixed' | 'icon';
     shuffle?: boolean;
@@ -88,17 +124,93 @@ export class CaptchaClient {
     return this.request<ClickCaptchaResponse>(url, { method: 'GET' });
   }
 
-  async getGestureCaptcha(): Promise<any> {
+  async verifyClickCaptcha(
+    sessionId: string,
+    points: [number, number][],
+    options?: {
+      clickSequence?: number[];
+      behaviorData?: Record<string, unknown>[];
+    }
+  ): Promise<VerifyCaptchaResponse> {
+    const request: VerifyCaptchaRequest = {
+      session_id: sessionId,
+      type: 'click',
+      points,
+      click_sequence: options?.clickSequence,
+      behavior_data: options?.behaviorData,
+    };
+
+    return this.verifyCaptcha(request);
+  }
+
+  // ==================== 图形验证码 ====================
+  async getImageCaptcha(options?: {
+    type?: 'number' | 'letter' | 'mixed';
+    count?: number;
+    noiseMode?: number;
+    lineMode?: number;
+  }): Promise<ImageCaptchaResponse> {
+    const params = new URLSearchParams();
+    if (options?.type) {
+      params.append('type', options.type);
+    }
+    if (options?.count !== undefined) {
+      params.append('count', options.count.toString());
+    }
+    if (options?.noiseMode !== undefined) {
+      params.append('noise_mode', options.noiseMode.toString());
+    }
+    if (options?.lineMode !== undefined) {
+      params.append('line_mode', options.lineMode.toString());
+    }
+
+    const url = `${this.baseUrl}/api/v1/captcha/image${
+      params.toString() ? `?${params.toString()}` : ''
+    }`;
+
+    return this.request<ImageCaptchaResponse>(url, { method: 'GET' });
+  }
+
+  async verifyImageCaptcha(
+    challengeId: string,
+    answer: string
+  ): Promise<VerifyCaptchaResponse> {
+    const url = `${this.baseUrl}/api/v1/captcha/image/verify`;
+    return this.request<VerifyCaptchaResponse>(url, {
+      method: 'POST',
+      body: JSON.stringify({ challenge_id: challengeId, answer }),
+    });
+  }
+
+  // ==================== 旋转验证码 ====================
+  async getRotationCaptcha(): Promise<RotationCaptchaResponse> {
+    const url = `${this.baseUrl}/api/v1/captcha/rotation`;
+    return this.request<RotationCaptchaResponse>(url, { method: 'GET' });
+  }
+
+  async verifyRotationCaptcha(
+    challengeId: string,
+    angle: number
+  ): Promise<VerifyCaptchaResponse> {
+    const url = `${this.baseUrl}/api/v1/captcha/rotation/verify`;
+    return this.request<VerifyCaptchaResponse>(url, {
+      method: 'POST',
+      body: JSON.stringify({ challenge_id: challengeId, angle }),
+    });
+  }
+
+  // ==================== 手势验证码 ====================
+  async getGestureCaptcha(): Promise<GestureCaptchaResponse> {
     const url = `${this.baseUrl}/api/v1/captcha/gesture`;
-    return this.request(url, { method: 'GET' });
+    return this.request<GestureCaptchaResponse>(url, { method: 'GET' });
   }
 
   async verifyGestureCaptcha(
-    session_id: string,
+    sessionId: string,
     pattern: number[]
   ): Promise<VerifyCaptchaResponse> {
     const request: VerifyCaptchaRequest = {
-      session_id,
+      session_id: sessionId,
       type: 'gesture',
       points: pattern.map((p) => [p, 0] as [number, number]),
     };
@@ -106,6 +218,44 @@ export class CaptchaClient {
     return this.verifyCaptcha(request);
   }
 
+  // ==================== 拼图验证码 ====================
+  async getJigsawCaptcha(options?: {
+    width?: number;
+    height?: number;
+    gridSize?: number;
+  }): Promise<JigsawCaptchaResponse> {
+    const params = new URLSearchParams();
+    if (options?.width !== undefined) {
+      params.append('width', options.width.toString());
+    }
+    if (options?.height !== undefined) {
+      params.append('height', options.height.toString());
+    }
+    if (options?.gridSize !== undefined) {
+      params.append('grid_size', options.gridSize.toString());
+    }
+
+    const url = `${this.baseUrl}/api/v1/captcha/jigsaw${
+      params.toString() ? `?${params.toString()}` : ''
+    }`;
+
+    return this.request<JigsawCaptchaResponse>(url, { method: 'GET' });
+  }
+
+  async verifyJigsawCaptcha(
+    sessionId: string,
+    pieces: JigsawPiece[]
+  ): Promise<VerifyCaptchaResponse> {
+    const request: VerifyCaptchaRequest = {
+      session_id: sessionId,
+      type: 'jigsaw',
+      pieces,
+    };
+
+    return this.verifyCaptcha(request);
+  }
+
+  // ==================== 通用验证方法 ====================
   async verifyCaptcha(
     request: VerifyCaptchaRequest
   ): Promise<VerifyCaptchaResponse> {
@@ -116,40 +266,81 @@ export class CaptchaClient {
     });
   }
 
+  // ==================== 用户认证 ====================
   async authLogin(request: LoginRequest): Promise<LoginResponse> {
     const url = `${this.baseUrl}/api/v1/auth/login`;
+    const response = await this.request<LoginResponse>(url, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    this._token = response.access_token;
+    this._refreshToken = response.refresh_token;
+    return response;
+  }
+
+  async authRegister(request: RegisterRequest): Promise<LoginResponse> {
+    const url = `${this.baseUrl}/api/v1/auth/register`;
     return this.request<LoginResponse>(url, {
       method: 'POST',
       body: JSON.stringify(request),
     });
   }
 
-  async authRegister(request: {
-    username: string;
-    email: string;
-    password: string;
-    behavior_data?: string;
-  }): Promise<any> {
-    const url = `${this.baseUrl}/api/v1/auth/register`;
-    return this.request(url, {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
-  }
+  async authRefreshToken(refreshToken?: string): Promise<any> {
+    const token = refreshToken || this._refreshToken;
+    if (!token) {
+      throw new CaptchaError('No refresh token available');
+    }
 
-  async authRefreshToken(refreshToken: string): Promise<any> {
     const url = `${this.baseUrl}/api/v1/auth/refresh`;
-    return this.request(url, {
+    const result = await this.request(url, {
       method: 'POST',
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({ refresh_token: token }),
     });
+
+    if (result.access_token) {
+      this._token = result.access_token;
+      if (result.refresh_token) {
+        this._refreshToken = result.refresh_token;
+      }
+    }
+
+    return result;
   }
 
   async authLogout(): Promise<void> {
     const url = `${this.baseUrl}/api/v1/auth/logout`;
-    await this.request(url, { method: 'POST' });
+    try {
+      await this.request(url, { method: 'POST' });
+    } finally {
+      this._token = null;
+      this._refreshToken = null;
+    }
   }
 
+  async authVerifyEmail(token: string): Promise<any> {
+    const params = new URLSearchParams({ token });
+    const url = `${this.baseUrl}/api/v1/auth/verify-email?${params.toString()}`;
+    return this.request(url, { method: 'GET' });
+  }
+
+  async authRequestPasswordReset(email: string): Promise<any> {
+    const url = `${this.baseUrl}/api/v1/auth/request-password-reset`;
+    return this.request(url, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async authResetPassword(token: string, newPassword: string): Promise<any> {
+    const url = `${this.baseUrl}/api/v1/auth/reset-password`;
+    return this.request(url, {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+  }
+
+  // ==================== 环境检测 ====================
   async getDetectionScript(callback?: string): Promise<string> {
     const params = new URLSearchParams();
     if (callback) {
@@ -180,6 +371,7 @@ export class CaptchaClient {
     });
   }
 
+  // ==================== 内部方法 ====================
   private async request<T>(
     url: string,
     options: {
@@ -206,6 +398,10 @@ export class CaptchaClient {
 
     if (this.config.apiKey) {
       headers['X-API-Key'] = this.config.apiKey;
+    }
+
+    if (this._token) {
+      headers['Authorization'] = `Bearer ${this._token}`;
     }
 
     const fetchOptions: RequestInit = {

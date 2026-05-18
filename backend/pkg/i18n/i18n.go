@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	translations   map[string]map[string]string
-	mu             sync.RWMutex
-	defaultLang    = "zh-CN"
+		translations   map[string]map[string]interface{}
+		mu             sync.RWMutex
+		defaultLang    = "zh-CN"
 	supportedLangs = []string{
 		"zh-CN",
+		"zh-TW",
 		"en-US",
 		"ja-JP",
 		"ko-KR",
@@ -33,6 +34,9 @@ var (
 		"th-TH",
 		"id-ID",
 		"tr-TR",
+		"ms-MY",
+		"bn-BD",
+		"ta-IN",
 	}
 )
 
@@ -259,10 +263,54 @@ var langInfos = map[string]LangInfo{
 		NativeName:   "Türkçe",
 		Direction:    "ltr",
 		IsRTL:        false,
-		DateFormat:   "02.01.2006",
+		DateFormat:   "2006-01-02",
 		NumberFormat: "tr-TR",
 		Currency:     "TRY",
 		Timezone:     "Europe/Istanbul",
+	},
+	"zh-TW": {
+		Code:         "zh-TW",
+		Name:         "Chinese (Traditional)",
+		NativeName:   "繁體中文",
+		Direction:    "ltr",
+		IsRTL:        false,
+		DateFormat:   "2006/01/02",
+		NumberFormat: "zh-TW",
+		Currency:     "TWD",
+		Timezone:     "Asia/Taipei",
+	},
+	"ms-MY": {
+		Code:         "ms-MY",
+		Name:         "Malay",
+		NativeName:   "Bahasa Melayu",
+		Direction:    "ltr",
+		IsRTL:        false,
+		DateFormat:   "dd/MM/yyyy",
+		NumberFormat: "ms-MY",
+		Currency:     "MYR",
+		Timezone:     "Asia/Kuala_Lumpur",
+	},
+	"bn-BD": {
+		Code:         "bn-BD",
+		Name:         "Bengali",
+		NativeName:   "বাংলা",
+		Direction:    "ltr",
+		IsRTL:        false,
+		DateFormat:   "dd/MM/yyyy",
+		NumberFormat: "bn-BD",
+		Currency:     "BDT",
+		Timezone:     "Asia/Dhaka",
+	},
+	"ta-IN": {
+		Code:         "ta-IN",
+		Name:         "Tamil",
+		NativeName:   "தமிழ்",
+		Direction:    "ltr",
+		IsRTL:        false,
+		DateFormat:   "dd/MM/yyyy",
+		NumberFormat: "ta-IN",
+		Currency:     "INR",
+		Timezone:     "Asia/Kolkata",
 	},
 }
 
@@ -277,7 +325,7 @@ func Init(config LocaleConfig) error {
 		supportedLangs = config.SupportedLangs
 	}
 
-	translations = make(map[string]map[string]string)
+	translations = make(map[string]map[string]interface{})
 
 	dir := config.TranslationsDir
 	if dir == "" {
@@ -297,7 +345,7 @@ func Init(config LocaleConfig) error {
 				return fmt.Errorf("failed to read translation file %s: %w", entry.Name(), err)
 			}
 
-			var langTrans map[string]string
+			var langTrans map[string]interface{}
 			if err := json.Unmarshal(data, &langTrans); err != nil {
 				return fmt.Errorf("failed to parse translation file %s: %w", entry.Name(), err)
 			}
@@ -360,17 +408,22 @@ func Translate(lang, key string, args ...interface{}) string {
 			if defaultValue, ok := defaultTrans[key]; ok {
 				value = defaultValue
 			} else {
-				value = key
+				return key
 			}
 		} else {
-			value = key
+			return key
 		}
 	}
 
-	if len(args) > 0 {
-		return fmt.Sprintf(value, args...)
+	strValue, isString := value.(string)
+	if !isString {
+		return key
 	}
-	return value
+
+	if len(args) > 0 {
+		return fmt.Sprintf(strValue, args...)
+	}
+	return strValue
 }
 
 func T(lang, key string, args ...interface{}) string {
@@ -393,7 +446,9 @@ func GetAllTranslations(lang string) map[string]string {
 
 	result := make(map[string]string)
 	for k, v := range trans {
-		result[k] = v
+		if strValue, ok := v.(string); ok {
+			result[k] = strValue
+		}
 	}
 	return result
 }

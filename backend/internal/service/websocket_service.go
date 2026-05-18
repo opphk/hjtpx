@@ -92,7 +92,7 @@ type WebSocketSession struct {
 	LastActive time.Time
 	ClientID   string
 	Status     string
-	mu         sync.RWMutex
+	Mu         sync.RWMutex
 }
 
 // WebSocketService 管理所有WebSocket连接
@@ -257,9 +257,9 @@ func (s *WebSocketService) ReadPump(session *WebSocketSession, handler func(*Web
 		}
 
 		wsMsg.SessionID = session.ID
-		session.mu.Lock()
+		session.Mu.Lock()
 		session.LastActive = time.Now()
-		session.mu.Unlock()
+		session.Mu.Unlock()
 
 		if handler != nil {
 			go handler(session, wsMsg)
@@ -333,9 +333,9 @@ func (s *WebSocketService) handleHello(session *WebSocketSession, msg WebSocketM
 		return
 	}
 
-	session.mu.Lock()
+	session.Mu.Lock()
 	session.ClientID = payload.ClientID
-	session.mu.Unlock()
+	session.Mu.Unlock()
 
 	// 发送响应
 	response := WebSocketMessage{

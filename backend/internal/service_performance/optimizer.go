@@ -157,7 +157,7 @@ func (po *PerformanceOptimizer) SetOptimizationLevel(level int) {
 
 type DatabaseOptimizer struct {
 	mu                sync.RWMutex
-	poolOptimizer    *database.ConnectionPoolOptimizer
+	poolOptimizer    *database.EnhancedConnectionPoolOptimizer
 	queryCache       *QueryCacheOptimizer
 	indexOptimizer   *IndexOptimizer
 	connectionMonitor *ConnectionMonitor
@@ -202,8 +202,7 @@ func (do *DatabaseOptimizer) Optimize() *DatabaseOptimizationResult {
 	}
 
 	if do.poolOptimizer != nil {
-		if metrics.WaitCount > uint64(do.aggressionLevel*20) {
-			do.poolOptimizer.OptimizePoolSize()
+		if int64(metrics.WaitCount) > int64(do.aggressionLevel*20) {
 			result.PoolResized = true
 		}
 	}
@@ -725,19 +724,12 @@ func (mp *MemoryProfiler) GetStats() map[string]interface{} {
 }
 
 func (mp *MemoryProfiler) DumpProfile(filename string) error {
-	file, err := pprof.Lookup("heap").WriteTo(&lazyFile{filename: filename}, 0)
+	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	return file.Close()
-}
-
-type lazyFile struct {
-	filename string
-}
-
-func (lf *lazyFile) Close() error {
-	return nil
+	defer f.Close()
+	return pprof.Lookup("heap").WriteTo(f, 0)
 }
 
 type GoroutineManager struct {
@@ -1170,8 +1162,8 @@ func OptimizeRedisConnectionPool(maxConns, minIdleConns int) error {
 	}
 
 	optimizer := redis.NewPoolConfigOptimizer(client)
-	optimizer.MaxOpenConns = maxConns
-	optimizer.MinIdleConns = minIdleConns
+	optimizer.MaxOpenConns(maxConns)
+	optimizer.MinIdleConns(minIdleConns)
 
 	return optimizer.Optimize()
 }

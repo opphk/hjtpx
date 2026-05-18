@@ -122,7 +122,7 @@ type InterceptionRule struct {
 	RuleID         string
 	RuleType       string
 	Priority       int
-	Conditions     []RuleCondition
+	Conditions     []InterceptionRuleCondition
 	Action         string
 	IsEnabled      bool
 	HitCount       int
@@ -130,7 +130,7 @@ type InterceptionRule struct {
 	Effectiveness  float64
 }
 
-type RuleCondition struct {
+type InterceptionRuleCondition struct {
 	Field     string
 	Operator  string
 	Value     interface{}
@@ -354,7 +354,7 @@ func (s *BehaviorPredictionService) initializeDefaultRules() {
 		RuleID:    "rapid_fire",
 		RuleType:  "rate_limit",
 		Priority:  1,
-		Conditions: []RuleCondition{
+		Conditions: []InterceptionRuleCondition{
 			{Field: "action_count", Operator: ">", Value: 10, Threshold: 10},
 			{Field: "time_window", Operator: "<", Value: 5, Threshold: 5},
 		},
@@ -367,7 +367,7 @@ func (s *BehaviorPredictionService) initializeDefaultRules() {
 		RuleID:    "suspicious_pattern",
 		RuleType:  "pattern_match",
 		Priority:  2,
-		Conditions: []RuleCondition{
+		Conditions: []InterceptionRuleCondition{
 			{Field: "pattern_match", Operator: "==", Value: "suspicious", Threshold: 0.8},
 		},
 		Action:        "block",
@@ -832,7 +832,7 @@ func (si *SmartInterceptor) evaluateRule(rule *InterceptionRule, req *Prediction
 	return true
 }
 
-func (si *SmartInterceptor) evaluateCondition(condition RuleCondition, req *PredictionRequest, assessment *RiskAssessment) bool {
+func (si *SmartInterceptor) evaluateCondition(condition InterceptionRuleCondition, req *PredictionRequest, assessment *RiskAssessment) bool {
 	switch condition.Field {
 	case "action_count":
 		actionCount := len(req.RecentActions)

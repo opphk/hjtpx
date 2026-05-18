@@ -12,7 +12,7 @@ groups:
           description: "HJTPX application instance {{ $labels.instance }} has been down for more than 1 minute"
 
       - alert: HJTXPHighErrorRate
-        expr: rate(http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.05
+        expr: rate(hjtpx_http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(hjtpx_http_requests_total{job="hjtpx-app"}[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
@@ -21,7 +21,7 @@ groups:
           description: "HJTPX application error rate is above 5% for more than 5 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
 
       - alert: HJTXPTooManyErrors
-        expr: rate(http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(http_requests_total{job="hjtpx-app"}[5m]) > 0.15
+        expr: rate(hjtpx_http_requests_total{job="hjtpx-app",status=~"5.."}[5m]) / rate(hjtpx_http_requests_total{job="hjtpx-app"}[5m]) > 0.15
         for: 3m
         labels:
           severity: critical
@@ -30,7 +30,7 @@ groups:
           description: "HJTPX application error rate is above 15% for more than 3 minutes. Current rate: {{ $value | printf \"%.2f\" }}%"
 
       - alert: HJTXPHighLatency
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 1
+        expr: histogram_quantile(0.95, rate(hjtpx_http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 1
         for: 5m
         labels:
           severity: warning
@@ -39,7 +39,7 @@ groups:
           description: "HJTPX 95th percentile latency is above 1 second for more than 5 minutes. Current p95: {{ $value | printf \"%.2f\" }}s"
 
       - alert: HJTXPTooHighLatency
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 3
+        expr: histogram_quantile(0.95, rate(hjtpx_http_request_duration_seconds_bucket{job="hjtpx-app"}[5m])) > 3
         for: 3m
         labels:
           severity: critical
@@ -84,7 +84,7 @@ groups:
           description: "HJTPX CPU usage is above 95% for more than 5 minutes. Current usage: {{ $value | printf \"%.2f\" }}%"
 
       - alert: HJTXPHighRequestRate
-        expr: rate(http_requests_total{job="hjtpx-app"}[5m]) > 1000
+        expr: rate(hjtpx_http_requests_total{job="hjtpx-app"}[5m]) > 1000
         for: 5m
         labels:
           severity: info
@@ -93,7 +93,7 @@ groups:
           description: "HJTPX request rate is above 1000 req/s for more than 5 minutes"
 
       - alert: HJTXPBlockedRequests
-        expr: rate(captcha_blocked_total{job="hjtpx-app"}[5m]) > 10
+        expr: rate(hjtpx_captcha_blocked_total{job="hjtpx-app"}[5m]) > 10
         for: 5m
         labels:
           severity: warning
@@ -102,7 +102,7 @@ groups:
           description: "HJTPX blocked request rate is above 10/s for more than 5 minutes"
 
       - alert: HJTXPTooManyBlockedRequests
-        expr: rate(captcha_blocked_total{job="hjtpx-app"}[5m]) > 100
+        expr: rate(hjtpx_captcha_blocked_total{job="hjtpx-app"}[5m]) > 100
         for: 3m
         labels:
           severity: critical
@@ -111,7 +111,7 @@ groups:
           description: "HJTPX blocked request rate is above 100/s for more than 3 minutes"
 
       - alert: HJTXPHighSlowQueryRate
-        expr: rate(http_request_duration_seconds_count{job="hjtpx-app-slow"}[5m]) > 10
+        expr: rate(hjtpx_http_request_duration_seconds_count{job="hjtpx-app-slow"}[5m]) > 10
         for: 5m
         labels:
           severity: info
@@ -127,6 +127,69 @@ groups:
         annotations:
           summary: "HJTPX health check failure"
           description: "HJTPX health check endpoint is not responding for more than 2 minutes"
+
+      - alert: HJTXPHighBusinessErrors
+        expr: rate(hjtpx_business_errors_total{job="hjtpx-app"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high business errors"
+          description: "HJTPX business error rate is above 10/s for more than 5 minutes"
+
+      - alert: HJTXPHighAuthFailures
+        expr: rate(hjtpx_auth_failure_total{job="hjtpx-app"}[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high authentication failures"
+          description: "HJTPX authentication failure rate is above 50/s for more than 5 minutes"
+
+      - alert: HJTXPTooManyAuthFailures
+        expr: rate(hjtpx_auth_failure_total{job="hjtpx-app"}[5m]) > 200
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX critical authentication failures"
+          description: "HJTPX authentication failure rate is above 200/s - possible brute force attack"
+
+      - alert: HJTXPHighRateLimitRejections
+        expr: rate(hjtpx_rate_limit_rejected_total{job="hjtpx-app"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high rate limit rejections"
+          description: "HJTPX rate limit rejection rate is above 100/s for more than 5 minutes"
+
+      - alert: HJTXPDBErrors
+        expr: rate(hjtpx_db_errors_total{job="hjtpx-app"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HJTPX database errors"
+          description: "HJTPX database error rate is above 5/s for more than 2 minutes"
+
+      - alert: HJTXPInFlightRequestsHigh
+        expr: hjtpx_http_requests_in_flight{job="hjtpx-app"} > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX high in-flight requests"
+          description: "HJTPX has more than 100 concurrent requests for more than 2 minutes"
+
+      - alert: HJTXPLowAvailability
+        expr: hjtpx_availability{job="hjtpx-app"} < 99.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HJTPX low availability"
+          description: "HJTPX availability dropped below 99.9% for more than 10 minutes"
 
   - name: database
     interval: 30s
@@ -184,6 +247,15 @@ groups:
         annotations:
           summary: "PostgreSQL replication lag"
           description: "PostgreSQL replication lag is above 30 seconds. Current lag: {{ $value | printf \"%.2f\" }}s"
+
+      - alert: PostgreSQLHighQueryRate
+        expr: rate(pg_stat_database_xact_commit{job="postgres-exporter"}[5m]) + rate(pg_stat_database_xact_rollback{job="postgres-exporter"}[5m]) > 1000
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "PostgreSQL high query rate"
+          description: "PostgreSQL query rate is above 1000/s for more than 5 minutes"
 
   - name: redis
     interval: 30s
@@ -403,3 +475,21 @@ groups:
         annotations:
           summary: "Loki high ingester errors"
           description: "Loki ingester is experiencing high reconnection errors"
+
+      - alert: LokiHighBackpressure
+        expr: loki_ingester_backpressure > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki high backpressure"
+          description: "Loki ingester is experiencing backpressure above 50%"
+
+      - alert: LokiHighErrorRate
+        expr: rate(loki_request_duration_seconds_count{status_code!~"2.."}[5m]) / rate(loki_request_duration_seconds_count[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loki high error rate"
+          description: "Loki error rate is above 10%"

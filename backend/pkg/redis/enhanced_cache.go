@@ -37,16 +37,20 @@ type CacheLevel int
 const (
 	CacheLevelL1 CacheLevel = iota
 	CacheLevelL2
+	CacheLevelL3
 	CacheLevelBoth
+	CacheLevelAll
 )
 
 type CacheConfig struct {
 	Enabled           bool
 	L1Enabled         bool
 	L2Enabled         bool
+	L3Enabled         bool
 	L1Size            int
 	L1TTL             time.Duration
 	L2TTL             time.Duration
+	L3TTL             time.Duration
 	CompressEnabled   bool
 	CompressThreshold int
 	StatsEnabled      bool
@@ -59,9 +63,11 @@ var DefaultCacheConfig = &CacheConfig{
 	Enabled:           true,
 	L1Enabled:         true,
 	L2Enabled:         true,
+	L3Enabled:         false,
 	L1Size:            DefaultMaxCacheSize,
 	L1TTL:             DefaultL1TTL,
 	L2TTL:             DefaultL2TTL,
+	L3TTL:             DefaultL3TTL,
 	CompressEnabled:   true,
 	CompressThreshold: DefaultCompressThreshold,
 	StatsEnabled:      true,
@@ -81,6 +87,7 @@ type EnhancedCache struct {
 	config         *CacheConfig
 	l1Cache        *sync.Map
 	l1Metrics      *l1Metrics
+	l3Cache        *L3Cache
 	stats          *CacheStats
 	breaker        *CircuitBreaker
 	hotKeys        *sync.Map
@@ -108,6 +115,8 @@ type CacheStats struct {
 	L1Misses     atomic.Int64
 	L2Hits       atomic.Int64
 	L2Misses     atomic.Int64
+	L3Hits       atomic.Int64
+	L3Misses     atomic.Int64
 	Errors       atomic.Int64
 	TotalLatency atomic.Int64
 	RequestCount atomic.Int64
@@ -187,6 +196,10 @@ func NewEnhancedCache(config *CacheConfig) *EnhancedCache {
 		go cache.startHotKeyTracking()
 	}
 
+	if config.L3Enabled {
+		cache.l3Cache = GetL3Cache()
+	}
+
 	return cache
 }
 
@@ -196,7 +209,7 @@ func (ec *EnhancedCache) Get(ctx context.Context, key string, opts *GetOptions) 
 	}
 
 	if opts == nil {
-		opts = &GetOptions{Level: CacheLevelBoth}
+		opts = &GetOptions{Level: CacheLevelAll}
 	}
 
 	start := time.Now()
@@ -210,7 +223,7 @@ func (ec *EnhancedCache) Get(ctx context.Context, key string, opts *GetOptions) 
 		return nil, ErrCacheMiss
 	}
 
-	if ec.config.L1Enabled && opts.Level != CacheLevelL2 && !opts.SkipLocal {
+	if ec.config.L1Enabled && opts.Level != CacheLevelL2 && opts.Level != CacheLevelL3 && !opts.SkipLocal {
 		if val, err := ec.getFromL1(key); err == nil {
 			ec.stats.Hits.Add(1)
 			ec.stats.L1Hits.Add(1)
@@ -219,7 +232,7 @@ func (ec *EnhancedCache) Get(ctx context.Context, key string, opts *GetOptions) 
 		ec.stats.L1Misses.Add(1)
 	}
 
-	if ec.config.L2Enabled && opts.Level != CacheLevelL1 && !opts.SkipRemote {
+	if ec.config.L2Enabled && opts.Level != CacheLevelL1 && opts.Level != CacheLevelL3 && !opts.SkipRemote {
 		if val, err := ec.getFromL2(ctx, key); err == nil {
 			ec.stats.Hits.Add(1)
 			ec.stats.L2Hits.Add(1)
@@ -229,6 +242,21 @@ func (ec *EnhancedCache) Get(ctx context.Context, key string, opts *GetOptions) 
 			return val, nil
 		}
 		ec.stats.L2Misses.Add(1)
+	}
+
+	if ec.config.L3Enabled && opts.Level != CacheLevelL1 && opts.Level != CacheLevelL2 {
+		if val, err := ec.getFromL3(ctx, key); err == nil {
+			ec.stats.Hits.Add(1)
+			ec.stats.L3Hits.Add(1)
+			if ec.config.L1Enabled {
+				ec.setToL1(key, val, ec.config.L1TTL, 0)
+			}
+			if ec.config.L2Enabled {
+				ec.setToL2(ctx, key, val, ec.config.L2TTL, 0, nil, false)
+			}
+			return val, nil
+		}
+		ec.stats.L3Misses.Add(1)
 	}
 
 	ec.stats.Misses.Add(1)
@@ -241,7 +269,7 @@ func (ec *EnhancedCache) Set(ctx context.Context, key string, value []byte, opts
 	}
 
 	if opts == nil {
-		opts = &SetOptions{Level: CacheLevelBoth}
+		opts = &SetOptions{Level: CacheLevelAll}
 	}
 
 	ec.stats.Sets.Add(1)
@@ -259,19 +287,35 @@ func (ec *EnhancedCache) Set(ctx context.Context, key string, value []byte, opts
 	}
 
 	if opts.TTL == 0 {
-		if opts.Level == CacheLevelL1 {
+		switch opts.Level {
+		case CacheLevelL1:
 			opts.TTL = ec.config.L1TTL
-		} else {
+		case CacheLevelL2:
+			opts.TTL = ec.config.L2TTL
+		case CacheLevelL3:
+			opts.TTL = ec.config.L3TTL
+		default:
 			opts.TTL = ec.config.L2TTL
 		}
 	}
 
-	if ec.config.L1Enabled && (opts.Level == CacheLevelL1 || opts.Level == CacheLevelBoth) {
+	if ec.config.L1Enabled && (opts.Level == CacheLevelL1 || opts.Level == CacheLevelAll) {
 		ec.setToL1(key, value, opts.TTL, opts.Version)
 	}
 
-	if ec.config.L2Enabled && (opts.Level == CacheLevelL2 || opts.Level == CacheLevelBoth) {
+	if ec.config.L2Enabled && (opts.Level == CacheLevelL2 || opts.Level == CacheLevelAll) {
 		if err := ec.setToL2(ctx, key, value, opts.TTL, opts.Version, opts.Tags, useCompression); err != nil {
+			ec.stats.Errors.Add(1)
+			return err
+		}
+	}
+
+	if ec.config.L3Enabled && (opts.Level == CacheLevelL3 || opts.Level == CacheLevelAll) {
+		l3TTL := opts.TTL
+		if opts.Level == CacheLevelAll {
+			l3TTL = ec.config.L3TTL
+		}
+		if err := ec.setToL3(ctx, key, value, l3TTL, opts.Version, opts.Tags, useCompression); err != nil {
 			ec.stats.Errors.Add(1)
 			return err
 		}
@@ -287,7 +331,7 @@ func (ec *EnhancedCache) Delete(ctx context.Context, key string, opts *DeleteOpt
 	}
 
 	if opts == nil {
-		opts = &DeleteOptions{Level: CacheLevelBoth}
+		opts = &DeleteOptions{Level: CacheLevelAll}
 	}
 
 	ec.stats.Deletes.Add(1)
@@ -296,12 +340,19 @@ func (ec *EnhancedCache) Delete(ctx context.Context, key string, opts *DeleteOpt
 		return ec.deleteByTag(ctx, key)
 	}
 
-	if ec.config.L1Enabled && (opts.Level == CacheLevelL1 || opts.Level == CacheLevelBoth) {
+	if ec.config.L1Enabled && (opts.Level == CacheLevelL1 || opts.Level == CacheLevelAll) {
 		ec.deleteFromL1(key)
 	}
 
-	if ec.config.L2Enabled && (opts.Level == CacheLevelL2 || opts.Level == CacheLevelBoth) {
+	if ec.config.L2Enabled && (opts.Level == CacheLevelL2 || opts.Level == CacheLevelAll) {
 		if err := ec.deleteFromL2(ctx, key); err != nil {
+			ec.stats.Errors.Add(1)
+			return err
+		}
+	}
+
+	if ec.config.L3Enabled && (opts.Level == CacheLevelL3 || opts.Level == CacheLevelAll) {
+		if err := ec.deleteFromL3(ctx, key); err != nil {
 			ec.stats.Errors.Add(1)
 			return err
 		}
@@ -591,6 +642,39 @@ func (ec *EnhancedCache) deleteFromL2(ctx context.Context, key string) error {
 	return Client.Del(ctx, key).Err()
 }
 
+func (ec *EnhancedCache) getFromL3(ctx context.Context, key string) ([]byte, error) {
+	if ec.l3Cache == nil {
+		return nil, ErrCacheMiss
+	}
+
+	val, err := ec.l3Cache.Get(ctx, key)
+	if err != nil {
+		if err == ErrCacheMiss {
+			return nil, ErrCacheMiss
+		}
+		ec.stats.Errors.Add(1)
+		return nil, err
+	}
+
+	return val, nil
+}
+
+func (ec *EnhancedCache) setToL3(ctx context.Context, key string, value []byte, ttl time.Duration, version int64, tags []string, compressed bool) error {
+	if ec.l3Cache == nil {
+		return nil
+	}
+
+	return ec.l3Cache.Set(ctx, key, value, ttl, version, tags, compressed)
+}
+
+func (ec *EnhancedCache) deleteFromL3(ctx context.Context, key string) error {
+	if ec.l3Cache == nil {
+		return nil
+	}
+
+	return ec.l3Cache.Delete(ctx, key)
+}
+
 func (ec *EnhancedCache) deleteByTag(ctx context.Context, tag string) error {
 	if Client == nil {
 		return nil
@@ -675,6 +759,8 @@ func (ec *EnhancedCache) GetStats() *CacheStatsSnapshot {
 		L1Misses:     ec.stats.L1Misses.Load(),
 		L2Hits:       ec.stats.L2Hits.Load(),
 		L2Misses:     ec.stats.L2Misses.Load(),
+		L3Hits:       ec.stats.L3Hits.Load(),
+		L3Misses:     ec.stats.L3Misses.Load(),
 		Errors:       ec.stats.Errors.Load(),
 		HitRate:      ec.calculateHitRate(),
 		AvgLatency:   ec.calculateAvgLatency(),
@@ -700,12 +786,12 @@ func (ec *EnhancedCache) calculateAvgLatency() time.Duration {
 }
 
 func (ec *EnhancedCache) Clear(ctx context.Context, level CacheLevel) error {
-	if level == CacheLevelL1 || level == CacheLevelBoth {
+	if level == CacheLevelL1 || level == CacheLevelAll {
 		ec.l1Cache = &sync.Map{}
 		ec.l1Metrics = &l1Metrics{}
 	}
 
-	if level == CacheLevelL2 || level == CacheLevelBoth {
+	if level == CacheLevelL2 || level == CacheLevelAll {
 		if Client != nil {
 			iter := Client.Scan(ctx, 0, "*", 0).Iterator()
 			var keys []string
@@ -715,6 +801,12 @@ func (ec *EnhancedCache) Clear(ctx context.Context, level CacheLevel) error {
 			if len(keys) > 0 {
 				Client.Del(ctx, keys...)
 			}
+		}
+	}
+
+	if level == CacheLevelL3 || level == CacheLevelAll {
+		if ec.l3Cache != nil {
+			ec.l3Cache.DeleteExpired(ctx)
 		}
 	}
 
@@ -732,6 +824,8 @@ type CacheStatsSnapshot struct {
 	L1Misses     int64
 	L2Hits       int64
 	L2Misses     int64
+	L3Hits       int64
+	L3Misses     int64
 	Errors       int64
 	HitRate      float64
 	AvgLatency   time.Duration

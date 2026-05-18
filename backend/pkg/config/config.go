@@ -6,14 +6,15 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Postgres PostgresConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
-	Database DatabaseConfig
-	Alert    AlertConfig
-	I18n     I18nConfig
-	Backup   BackupConfig
+	Server    ServerConfig
+	Postgres  PostgresConfig
+	Redis     RedisConfig
+	JWT       JWTConfig
+	Database  DatabaseConfig
+	Alert     AlertConfig
+	I18n      I18nConfig
+	Backup    BackupConfig
+	Edge      EdgeConfig
 }
 
 type DatabaseConfig struct {
@@ -274,6 +275,30 @@ func LoadConfig() *Config {
 			EncryptionEnabled:       getEnvAsBool("BACKUP_ENCRYPTION_ENABLED", false),
 			EncryptionKey:           getEnv("BACKUP_ENCRYPTION_KEY", ""),
 		},
+		Edge: EdgeConfig{
+			Enabled:                 getEnvAsBool("EDGE_ENABLED", false),
+			NodeID:                  getEnv("EDGE_NODE_ID", "edge-node-001"),
+			NodeName:                getEnv("EDGE_NODE_NAME", "Edge Node 001"),
+			NodeType:                getEnv("EDGE_NODE_TYPE", "edge"),
+			Region:                  getEnv("EDGE_REGION", "cn-east-1"),
+			Zone:                    getEnv("EDGE_ZONE", "zone-a"),
+			LoadBalanceStrategy:     getEnv("EDGE_LOAD_BALANCE_STRATEGY", "least_load"),
+			SyncIntervalSecs:        getEnvAsInt("EDGE_SYNC_INTERVAL_SECS", 60),
+			HealthCheckIntervalSecs: getEnvAsInt("EDGE_HEALTH_CHECK_INTERVAL_SECS", 30),
+			HeartbeatIntervalSecs:   getEnvAsInt("EDGE_HEARTBEAT_INTERVAL_SECS", 10),
+			MaxSyncBatchSize:        getEnvAsInt("EDGE_MAX_SYNC_BATCH_SIZE", 1000),
+			CloudEndpoint:           getEnv("EDGE_CLOUD_ENDPOINT", "https://api.example.com"),
+			CloudAPIKey:             getEnv("EDGE_CLOUD_API_KEY", ""),
+			LocalCacheTTLMinutes:    getEnvAsInt("EDGE_LOCAL_CACHE_TTL_MINUTES", 60),
+			EnableLocalVerification: getEnvAsBool("EDGE_ENABLE_LOCAL_VERIFICATION", true),
+			MetricsEnabled:          getEnvAsBool("EDGE_METRICS_ENABLED", true),
+			Capacity: EdgeCapacity{
+				MaxRequestsPerSecond:   getEnvAsInt("EDGE_CAPACITY_MAX_RPS", 10000),
+				MaxConcurrentRequests:  getEnvAsInt("EDGE_CAPACITY_MAX_CONCURRENT", 1000),
+				MemoryLimitMB:          getEnvAsInt("EDGE_CAPACITY_MEMORY_LIMIT_MB", 4096),
+				CPUCores:               getEnvAsInt("EDGE_CAPACITY_CPU_CORES", 4),
+			},
+		},
 	}
 }
 
@@ -293,6 +318,33 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 		return value == "true" || value == "1"
 	}
 	return defaultValue
+}
+
+type EdgeConfig struct {
+	Enabled                bool              `yaml:"enabled"`
+	NodeID                 string            `yaml:"node_id"`
+	NodeName               string            `yaml:"node_name"`
+	NodeType               string            `yaml:"node_type"`
+	Region                 string            `yaml:"region"`
+	Zone                   string            `yaml:"zone"`
+	Capacity               EdgeCapacity      `yaml:"capacity"`
+	LoadBalanceStrategy    string            `yaml:"load_balance_strategy"`
+	SyncIntervalSecs       int               `yaml:"sync_interval_secs"`
+	HealthCheckIntervalSecs int              `yaml:"health_check_interval_secs"`
+	HeartbeatIntervalSecs  int               `yaml:"heartbeat_interval_secs"`
+	MaxSyncBatchSize       int               `yaml:"max_sync_batch_size"`
+	CloudEndpoint          string            `yaml:"cloud_endpoint"`
+	CloudAPIKey            string            `yaml:"cloud_api_key"`
+	LocalCacheTTLMinutes   int               `yaml:"local_cache_ttl_minutes"`
+	EnableLocalVerification bool             `yaml:"enable_local_verification"`
+	MetricsEnabled         bool              `yaml:"metrics_enabled"`
+}
+
+type EdgeCapacity struct {
+	MaxRequestsPerSecond   int `yaml:"max_requests_per_second"`
+	MaxConcurrentRequests  int `yaml:"max_concurrent_requests"`
+	MemoryLimitMB          int `yaml:"memory_limit_mb"`
+	CPUCores               int `yaml:"cpu_cores"`
 }
 
 func getEnv(key, defaultValue string) string {

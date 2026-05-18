@@ -73,6 +73,44 @@ function setGroupLogic(groupId, logic) {
     updateRuleExpression();
 }
 
+function addNestedGroup(parentGroupId) {
+    const nestedContainer = document.getElementById('nestedGroups');
+    if (!nestedContainer) return;
+    
+    const nestedId = `nested_group_${Date.now()}`;
+    const nestedGroup = document.createElement('div');
+    nestedGroup.className = 'rule-group nested';
+    nestedGroup.id = nestedId;
+    nestedGroup.dataset.logic = 'AND';
+    
+    nestedGroup.innerHTML = `
+        <div class="rule-group-header">
+            <div class="btn-group btn-group-sm me-2">
+                <button class="btn btn-outline-primary active" data-logic="AND" onclick="setGroupLogic('${nestedId}', 'AND')">AND</button>
+                <button class="btn btn-outline-primary" data-logic="OR" onclick="setGroupLogic('${nestedId}', 'OR')">OR</button>
+                <button class="btn btn-outline-primary" data-logic="NOT" onclick="setGroupLogic('${nestedId}', 'NOT')">NOT</button>
+                <button class="btn btn-outline-primary" data-logic="XOR" onclick="setGroupLogic('${nestedId}', 'XOR')">XOR</button>
+            </div>
+            <span class="text-muted small">嵌套规则组</span>
+            <button class="btn btn-sm btn-success" onclick="addRuleCondition('${nestedId}')"><i class="fas fa-plus me-1"></i>添加条件</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="removeNestedGroup('${nestedId}')"><i class="fas fa-trash"></i></button>
+        </div>
+        <div class="rule-conditions" id="${nestedId.replace('Group', 'Conditions')}">
+        </div>
+    `;
+    
+    nestedContainer.appendChild(nestedGroup);
+    updateRuleExpression();
+}
+
+function removeNestedGroup(groupId) {
+    const group = document.getElementById(groupId);
+    if (group) {
+        group.remove();
+        updateRuleExpression();
+    }
+}
+
 function addRuleCondition(groupId) {
     conditionCounter++;
     const conditionsContainer = document.getElementById(groupId.replace('RuleGroup', 'RuleConditions'));
@@ -376,6 +414,19 @@ function evaluateRules(conditions, features, logic) {
             case 'lt': matched = featureValue < cond.value; break;
             case 'lte': matched = featureValue <= cond.value; break;
             case 'eq': matched = Math.abs(featureValue - cond.value) < 0.001; break;
+            case 'neq': matched = Math.abs(featureValue - cond.value) >= 0.001; break;
+            case 'contains': 
+                const strValue = String(featureValue);
+                matched = strValue.includes(String(cond.value));
+                break;
+            case 'regex':
+                try {
+                    const regex = new RegExp(String(cond.value));
+                    matched = regex.test(String(featureValue));
+                } catch {
+                    matched = false;
+                }
+                break;
         }
         
         return {
@@ -388,18 +439,28 @@ function evaluateRules(conditions, features, logic) {
     });
     
     let isTriggered;
-    if (logic === 'AND') {
-        isTriggered = results.every(r => r.matched);
-    } else if (logic === 'OR') {
-        isTriggered = results.some(r => r.matched);
-    } else {
-        isTriggered = !results.every(r => r.matched);
+    switch (logic) {
+        case 'AND':
+            isTriggered = results.length > 0 && results.every(r => r.matched);
+            break;
+        case 'OR':
+            isTriggered = results.some(r => r.matched);
+            break;
+        case 'NOT':
+            isTriggered = results.length > 0 && !results.every(r => r.matched);
+            break;
+        case 'XOR':
+            const trueCount = results.filter(r => r.matched).length;
+            isTriggered = trueCount % 2 === 1;
+            break;
+        default:
+            isTriggered = results.every(r => r.matched);
     }
     
     const matchedCount = results.filter(r => r.matched).length;
     const totalScore = conditions.length > 0 ? matchedCount / conditions.length : 0;
     const mlScore = features.ml_score || 0;
-    const finalScore = (totalScore + mlScore) / 2;
+    const finalScore = (totalScore * 0.7 + mlScore * 0.3);
     
     let riskLevel;
     if (finalScore >= 0.8) riskLevel = 'critical';
@@ -414,21 +475,40 @@ function evaluateRules(conditions, features, logic) {
     if (finalScore > 0.7) {
         recommendations.push('建议增加额外的验证步骤');
     }
-    if (matchedCount >= 3) {
-        recommendations.push('触发多条规则，建议直接拒绝访问');
+    if (finalScore > 0.85) {
+        recommendations.push('建议直接拒绝访问');
     }
+    if (matchedCount >= 3) {
+        recommendations.push('触发多条规则，建议深度分析');
+    }
+    
+    const confidence = calculateConfidence(matchedCount, conditions.length, finalScore);
     
     return {
         isBot: isTriggered,
-        totalScore: finalScore,
+        totalScore: Math.min(Math.max(finalScore, 0), 1),
         riskLevel,
-        confidence: 0.85,
+        confidence,
         triggeredRules,
         recommendations,
         analysisTime: Math.floor(Math.random() * 10) + 1,
-        matchedConditions: results.filter(r => r.matched).length,
+        matchedConditions: matchedCount,
         totalConditions: results.length
     };
+}
+
+function calculateConfidence(matchedCount, totalCount, score) {
+    let confidence = 0.7;
+    
+    if (totalCount >= 5) confidence += 0.1;
+    if (totalCount >= 10) confidence += 0.1;
+    
+    if (matchedCount >= 2) confidence += 0.05;
+    if (matchedCount >= 4) confidence += 0.05;
+    
+    if (score > 0.7) confidence += 0.05;
+    
+    return Math.min(confidence, 0.99);
 }
 
 function renderTestHistory() {

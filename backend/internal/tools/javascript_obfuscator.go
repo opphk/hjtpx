@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 type ObfuscatorConfig struct {
@@ -1144,6 +1146,130 @@ func EncryptString(plaintext string, key []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
+// ChaCha20Poly1305Encrypt encrypts plaintext using ChaCha20-Poly1305 algorithm
+func ChaCha20Poly1305Encrypt(plaintext string, key []byte) (string, error) {
+	if len(key) == 0 {
+		key = []byte("hjtpx-chacha20-key-2024")
+	}
+
+	// Ensure key is 32 bytes (256 bits)
+	if len(key) != 32 {
+		keyHash := sha256.Sum256(key)
+		key = keyHash[:]
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create ChaCha20-Poly1305 AEAD: %w", err)
+	}
+
+	nonce := make([]byte, chacha20poly1305.NonceSize)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	ciphertext := aead.Seal(nonce, nonce, []byte(plaintext), nil)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+// ChaCha20Poly1305Decrypt decrypts ciphertext using ChaCha20-Poly1305 algorithm
+func ChaCha20Poly1305Decrypt(encryptedBase64 string, key []byte) (string, error) {
+	if len(key) == 0 {
+		key = []byte("hjtpx-chacha20-key-2024")
+	}
+
+	// Ensure key is 32 bytes (256 bits)
+	if len(key) != 32 {
+		keyHash := sha256.Sum256(key)
+		key = keyHash[:]
+	}
+
+	ciphertext, err := base64.StdEncoding.DecodeString(encryptedBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create ChaCha20-Poly1305 AEAD: %w", err)
+	}
+
+	if len(ciphertext) < chacha20poly1305.NonceSize {
+		return "", errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:chacha20poly1305.NonceSize], ciphertext[chacha20poly1305.NonceSize:]
+
+	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return string(plaintext), nil
+}
+
+// ChaCha20Poly1305EncryptWithAAD encrypts plaintext with additional authenticated data
+func ChaCha20Poly1305EncryptWithAAD(plaintext string, key []byte, aad []byte) (string, error) {
+	if len(key) == 0 {
+		key = []byte("hjtpx-chacha20-key-2024")
+	}
+
+	// Ensure key is 32 bytes (256 bits)
+	if len(key) != 32 {
+		keyHash := sha256.Sum256(key)
+		key = keyHash[:]
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create ChaCha20-Poly1305 AEAD: %w", err)
+	}
+
+	nonce := make([]byte, chacha20poly1305.NonceSize)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	ciphertext := aead.Seal(nonce, nonce, []byte(plaintext), aad)
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+// ChaCha20Poly1305DecryptWithAAD decrypts ciphertext with additional authenticated data
+func ChaCha20Poly1305DecryptWithAAD(encryptedBase64 string, key []byte, aad []byte) (string, error) {
+	if len(key) == 0 {
+		key = []byte("hjtpx-chacha20-key-2024")
+	}
+
+	// Ensure key is 32 bytes (256 bits)
+	if len(key) != 32 {
+		keyHash := sha256.Sum256(key)
+		key = keyHash[:]
+	}
+
+	ciphertext, err := base64.StdEncoding.DecodeString(encryptedBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	aead, err := chacha20poly1305.New(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create ChaCha20-Poly1305 AEAD: %w", err)
+	}
+
+	if len(ciphertext) < chacha20poly1305.NonceSize {
+		return "", errors.New("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:chacha20poly1305.NonceSize], ciphertext[chacha20poly1305.NonceSize:]
+
+	plaintext, err := aead.Open(nil, nonce, ciphertext, aad)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return string(plaintext), nil
+}
+
 type CodeAnalyzer struct {
 	linesOfCode          int
 	functions            int
@@ -2042,10 +2168,13 @@ func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 	antiDebug := `
 ;(function(){
 	var _0xEAD={
-		version:'3.0',
+		version:'4.0',
 		detectionCount:0,
 		maxDetections:3,
 		isBlocked:false,
+		isInitialized:false,
+		checkInterval:1500,
+		sensitivity:100,
 		checks:[],
 		// 检测1: 窗口尺寸检测 - 检测开发者工具打开时窗口尺寸变化
 		checkWindowSize:function(){
@@ -2054,20 +2183,43 @@ func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 			var hDiff=window.outerHeight-window.innerHeight;
 			return wDiff>threshold||hDiff>threshold;
 		},
-		// 检测2: Debugger时间检测 - 通过时间差检测debugger是否被断点
+		// 检测2: 高精度Debugger时间检测
 		checkDebuggerTiming:function(){
 			var start=performance.now();
 			debugger;
 			var end=performance.now();
-			return end-start>100;
+			return end-start>this.sensitivity;
 		},
-		// 检测3: 控制台API检测 - 检测console._commandLineAPI等调试器API
+		// 检测3: 异步Debugger检测
+		checkDebuggerAsync:function(callback){
+			var self=this;
+			var startTime=performance.now();
+			var completed=false;
+			
+			setTimeout(function(){
+				if(!completed){
+					var elapsed=performance.now()-startTime;
+					if(elapsed>self.sensitivity*2){
+						callback(true);
+					}else{
+						callback(false);
+					}
+				}
+			}, 0);
+			
+			debugger;
+			completed=true;
+			var elapsed=performance.now()-startTime;
+			return elapsed>self.sensitivity;
+		},
+		// 检测4: 控制台API检测
 		checkConsoleAPI:function(){
 			return typeof console._commandLineAPI!=='undefined'||
 				   typeof console.profiles!=='undefined'||
-				   typeof window.webkitDebuggerAPI!=='undefined';
+				   typeof window.webkitDebuggerAPI!=='undefined'||
+				   typeof window.chrome!=='undefined'&&typeof window.chrome.devtools!=='undefined';
 		},
-		// 检测4: 函数toString检测 - 检测函数toString是否被调试器修改
+		// 检测5: 函数toString检测 - 检测函数toString是否被调试器修改
 		checkFunctionToString:function(){
 			var result=false;
 			var testFunc=function(){};
@@ -2076,15 +2228,15 @@ func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 					result=true;
 				}
 			};
-			console.log(testFunc);
+			try{console.log(testFunc);}catch(e){}
 			return result;
 		},
-		// 检测5: Firebug检测 - 检测Firebug扩展
+		// 检测6: Firebug检测
 		checkFirebug:function(){
 			return typeof window.firebug!=='undefined'||
 				   typeof Firebug!=='undefined';
 		},
-		// 检测6: 异常捕获检测 - 检测try-catch中debugger语句的异常处理
+		// 检测7: 异常捕获检测
 		checkExceptionHandler:function(){
 			var errorCaught=false;
 			try{
@@ -2094,6 +2246,80 @@ func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 			}
 			return !errorCaught;
 		},
+		// 检测8: 代码覆盖率检测
+		checkCodeCoverage:function(){
+			return typeof window.__coverage__!=='undefined'||
+				   typeof window.__VUE_DEVTOOLS__!=='undefined'||
+				   typeof window.__REACT_DEVTOOLS_GLOBAL_HOOK__!=='undefined';
+		},
+		// 检测9: 检测扩展程序
+		checkExtensions:function(){
+			var suspicious=[
+				'__firebug__',
+				'firebug',
+				'_firebugConsole',
+				'chrome',
+				'safari',
+				'opera',
+				'__extension__'
+			];
+			for(var i=0;i<suspicious.length;i++){
+				if(window[suspicious[i]]!==undefined){
+					return true;
+				}
+			}
+			return false;
+		},
+		// 检测10: 检测断点状态
+		checkBreakpoints:function(){
+			var hasBreakpoint=false;
+			var originalAddEventListener=EventTarget.prototype.addEventListener;
+			EventTarget.prototype.addEventListener=function(type,listener,options){
+				if(type==='pause'||type==='debugger'){
+					hasBreakpoint=true;
+				}
+				return originalAddEventListener.call(this,type,listener,options);
+			};
+			return hasBreakpoint;
+		},
+		// 检测11: 检测内存快照工具
+		checkMemorySnapshot:function(){
+			try{
+				if(typeof performance!=='undefined'&&
+				   typeof performance.getEntriesByType!=='undefined'){
+					var entries=performance.getEntriesByType('measure');
+					for(var i=0;i<entries.length;i++){
+						if(entries[i].name.indexOf('memory')!==-1||
+						   entries[i].name.indexOf('Heap')!==-1){
+							return true;
+						}
+					}
+				}
+			}catch(e){}
+			return false;
+		},
+		// 检测12: 检测性能分析器
+		checkProfiler:function(){
+			return typeof console.profile!=='undefined'||
+				   typeof console.profileEnd!=='undefined';
+		},
+		// 检测13: 检测SourceMap
+		checkSourceMap:function(){
+			var scripts=document.getElementsByTagName('script');
+			for(var i=0;i<scripts.length;i++){
+				if(scripts[i].src&&scripts[i].src.indexOf('.map')!==-1){
+					return true;
+				}
+			}
+			return false;
+		},
+		// 检测14: 检测调试器语句计数
+		checkDebuggerStatements:function(){
+			var count=0;
+			var checkCode='debugger;';
+			var func=new Function(checkCode);
+			return true;
+		},
 		runAllChecks:function(){
 			var detections=0;
 			if(this.checkWindowSize())detections++;
@@ -2102,11 +2328,17 @@ func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 			if(this.checkFunctionToString())detections++;
 			if(this.checkFirebug())detections++;
 			if(this.checkExceptionHandler())detections++;
+			if(this.checkCodeCoverage())detections++;
+			if(this.checkExtensions())detections++;
+			if(this.checkBreakpoints())detections++;
+			if(this.checkMemorySnapshot())detections++;
+			if(this.checkProfiler())detections++;
+			if(this.checkSourceMap())detections++;
 			return detections;
 		},
 		protect:function(){
 			var self=this;
-			setInterval(function(){
+			this.protectionInterval=setInterval(function(){
 				if(self.isBlocked)return;
 				var count=self.runAllChecks();
 				if(count>0){
@@ -2115,39 +2347,109 @@ func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 						self.block();
 					}
 				}
-			},2000);
+			},this.checkInterval);
+			
+			this.asyncProtection();
+		},
+		asyncProtection:function(){
+			var self=this;
+			setTimeout(function(){
+				if(self.isBlocked)return;
+				self.checkDebuggerAsync(function(detected){
+					if(detected){
+						self.detectionCount++;
+						if(self.detectionCount>=self.maxDetections){
+							self.block();
+						}
+					}
+				});
+			}, 500);
 		},
 		block:function(){
 			if(this.isBlocked)return;
 			this.isBlocked=true;
+			
+			if(this.protectionInterval){
+				clearInterval(this.protectionInterval);
+			}
+			
 			document.documentElement.style.display='none';
-			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1>访问受限</h1><p>检测到异常调试行为</p></div></div>';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div style="text-align:center;"><div style="font-size:72px;margin-bottom:20px;">&#9888;</div><h1 style="font-size:36px;margin-bottom:16px;">访问受限</h1><p style="font-size:18px;color:#ccc;margin-bottom:8px;">检测到异常调试行为</p><p style="font-size:14px;color:#999;">您的访问已被系统拒绝</p></div></div>';
+			
+			try{
+				window.stop();
+			}catch(e){}
+			
 			throw new Error('Anti-debug protection triggered');
 		},
 		init:function(){
+			if(this.isInitialized)return;
+			this.isInitialized=true;
+			
 			var self=this;
 			this.protect();
+			
 			document.addEventListener('keydown',function(e){
 				if(e.key==='F12'||
 				   (e.ctrlKey&&e.shiftKey&&e.key==='I')||
 				   (e.ctrlKey&&e.shiftKey&&e.key==='J')||
-				   (e.ctrlKey&&e.key==='U')){
+				   (e.ctrlKey&&e.key==='U')||
+				   (e.metaKey&&e.key==='I')||
+				   (e.metaKey&&e.shiftKey&&e.key==='I')){
 					e.preventDefault();
+					e.stopPropagation();
 					self.detectionCount++;
 					if(self.detectionCount>=self.maxDetections){
 						self.block();
 					}
 				}
-			});
+			},true);
+			
 			document.addEventListener('contextmenu',function(e){
 				e.preventDefault();
+				e.stopPropagation();
+			},true);
+			
+			document.addEventListener('copy',function(e){
+				e.preventDefault();
+			});
+			
+			document.addEventListener('cut',function(e){
+				e.preventDefault();
+			});
+			
+			window.addEventListener('beforeunload',function(){
+				if(!self.isBlocked){
+					self.detectionCount++;
+				}
+			});
+			
+			Object.defineProperty(window,'debugger',{
+				get:function(){
+					self.detectionCount++;
+					if(self.detectionCount>=self.maxDetections){
+						self.block();
+					}
+					return function(){};
+				},
+				configurable:false,
+				enumerable:false
 			});
 		}
 	};
-	_0xEAD.init();
+	
+	try{
+		_0xEAD.init();
+	}catch(e){
+		_0xEAD.block();
+	}
+	
 	window.__EAD=_0xEAD;
+	
 	if(document.readyState==='loading'){
-		document.addEventListener('DOMContentLoaded',function(){_0xEAD.init();});
+		document.addEventListener('DOMContentLoaded',function(){
+			try{_0xEAD.init();}catch(e){_0xEAD.block();}
+		});
 	}
 })();
 `
@@ -4343,8 +4645,8 @@ func (o *Obfuscator) ApplyMaximumProtection(code string) (string, error) {
 
 	if o.config.EnableControlFlowFlattening {
 		result = o.flattenControlFlowAdvanced(result)
-		result = o.addStateMachineFlattening(result)
-		result = o.addOpaquePredicate(result)
+		result = o.addMultiLevelStateMachine(result)
+		result = o.addOpaquePredicates(result)
 		result = o.addLoopUnswitching(result)
 	}
 

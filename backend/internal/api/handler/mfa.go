@@ -41,6 +41,17 @@ type EnableMFARequest struct {
 	Email   string `json:"email"`
 }
 
+// GetMFAStatusHandler 获取MFA状态
+// @Summary 获取MFA状态
+// @Description 获取当前用户的多因素认证状态
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "MFA状态"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/status [get]
 func GetMFAStatusHandler(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	if userID == 0 {
@@ -90,6 +101,17 @@ func GenerateTOTPHandler(c *gin.Context) {
 	})
 }
 
+// VerifyTOTPHandler 验证TOTP
+// @Summary 验证TOTP
+// @Description 验证TOTP验证码
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Param body body VerifyTOTPRequest true "TOTP验证请求"
+// @Success 200 {object} map[string]interface{} "验证结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/totp/verify [post]
 func VerifyTOTPHandler(c *gin.Context) {
 	var req VerifyTOTPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -147,6 +169,19 @@ func EnableTOTPHandler(c *gin.Context) {
 	})
 }
 
+// SendSMSCodeHandler 发送SMS验证码
+// @Summary 发送SMS验证码
+// @Description 向用户手机发送验证码
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body SendSMSCodeRequest true "SMS验证码请求"
+// @Success 200 {object} map[string]interface{} "发送成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/sms/send [post]
 func SendSMSCodeHandler(c *gin.Context) {
 	var req SendSMSCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -212,6 +247,16 @@ func SendEmailCodeHandler(c *gin.Context) {
 	})
 }
 
+// VerifyCodeHandler 验证验证码
+// @Summary 验证验证码
+// @Description 验证SMS或邮箱验证码
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Param body body VerifyCodeRequest true "验证码验证请求"
+// @Success 200 {object} map[string]interface{} "验证成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Router /api/v1/mfa/verify-code [post]
 func VerifyCodeHandler(c *gin.Context) {
 	var req VerifyCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -293,6 +338,17 @@ func DisableMFAHandler(c *gin.Context) {
 	})
 }
 
+// GenerateBackupCodesHandler 生成备用码
+// @Summary 生成备用验证码
+// @Description 为用户生成一组备用验证码，用于无法使用主MFA方法时使用
+// @Tags MFA
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "备用码"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/mfa/backup-codes/generate [post]
 func GenerateBackupCodesHandler(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	if userID == 0 {

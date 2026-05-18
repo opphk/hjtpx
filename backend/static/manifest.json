@@ -5,42 +5,78 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": ["standalone", "minimal-ui", "fullscreen", "window-controls-overlay"],
   "background_color": "#1a1a2e",
   "theme_color": "#c9a96e",
-  "orientation": "portrait-primary",
-  "orientation_lock": "portrait",
+  "orientation": "any",
   "categories": ["utilities", "security", "productivity"],
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "id": "/",
+  "version": "3.0.0",
+  "version_name": "v3.0.0",
   "icons": [
+    {
+      "src": "/static/icons/icon-48x48.png",
+      "sizes": "48x48",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%231a1a2e' rx='10'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='%23c9a96e'>墨</text></svg>",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    },
-    {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%231a1a2e' rx='20'/><text x='96' y='120' font-size='90' text-anchor='middle' fill='%23c9a96e'>墨</text></svg>",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%231a1a2e' rx='50'/><text x='256' y='320' font-size='240' text-anchor='middle' fill='%23c9a96e'>墨</text></svg>",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
     }
   ],
-  "screenshots": [],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "handfulness": "optimal",
-  "lang": "zh-CN",
-  "dir": "ltr",
-  "edge_side_panel": {
-    "preferred_width": 400
-  },
-  "iarc_rating_id": "",
   "shortcuts": [
     {
       "name": "滑块验证",
@@ -67,6 +103,50 @@
           "type": "image/svg+xml"
         }
       ]
+    },
+    {
+      "name": "旋转验证",
+      "short_name": "旋转",
+      "description": "体验旋转图片验证",
+      "url": "/captcha?type=rotation",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' fill='%23c9a96e' rx='10'/><text x='48' y='65' font-size='40' text-anchor='middle' fill='white'>↻</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "handfulness": "optimal",
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "iarc_rating_id": "",
+  "protocol_handlers": [
+    {
+      "protocol": "web+hjtpx",
+      "url": "/captcha?type=%s"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "background_service": {
+    "service_worker": "/static/service-worker.js"
+  },
+  "file_handlers": [],
+  "contacts": []
 }

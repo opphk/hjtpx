@@ -1,595 +1,389 @@
 /**
- * 行为验证系统 JavaScript SDK - 浏览器端完整示例
- *
- * 本文件包含多种集成模式和使用示例
+ * HJT Captcha JavaScript SDK 浏览器端完整示例
+ * 
+ * 本文件包含多种浏览器端集成示例，可直接在HTML页面中使用
  */
 
-(function() {
-  'use strict';
+// 初始化客户端
+const client = new CaptchaClient('http://localhost:8080', {
+    timeout: 30000,
+    retryCount: 3,
+});
 
-  const CaptchaBrowserExamples = {
-
-    /**
-     * 模式1: 直接API调用（适用于简单的验证码验证）
-     */
-    directApiExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
-        return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      client.getSliderCaptcha({ width: 320, height: 160 })
-        .then(function(captcha) {
-          console.log('获取验证码成功:', captcha);
-
-          container.innerHTML = `
-            <div class="captcha-wrapper">
-              <img src="${captcha.image_url}" alt="验证码背景" class="captcha-bg" />
-              <p>Session ID: ${captcha.session_id}</p>
-              <button onclick="CaptchaBrowserExamples.verifyDirect('${captcha.session_id}', ${captcha.secret_y || 0})">
-                模拟验证
-              </button>
-            </div>
-          `;
-        })
-        .catch(function(error) {
-          console.error('获取验证码失败:', error);
-          container.innerHTML = '<p class="error">加载失败: ' + error.message + '</p>';
+/**
+ * 示例1: 滑块验证码集成
+ */
+async function sliderCaptchaExample() {
+    console.log('=== 滑块验证码示例 ===');
+    
+    try {
+        // 获取滑块验证码
+        const captcha = await client.getSliderCaptcha({ width: 320, height: 160 });
+        console.log('获取验证码成功:', captcha.session_id);
+        
+        // 模拟用户滑动轨迹
+        const trajectory = [
+            { x: 0, y: captcha.secret_y || 80, t: 0 },
+            { x: 50, y: (captcha.secret_y || 80) + 5, t: 200 },
+            { x: 100, y: (captcha.secret_y || 80) - 3, t: 400 },
+            { x: 150, y: (captcha.secret_y || 80) + 2, t: 600 },
+            { x: 185, y: captcha.secret_y || 80, t: 800 },
+        ];
+        
+        // 验证验证码
+        const result = await client.verifySliderCaptcha({
+            session_id: captcha.session_id,
+            x: 185,
+            y: captcha.secret_y,
+            trajectory: trajectory,
         });
-    },
+        
+        console.log('验证结果:', result.success ? '成功' : '失败');
+        console.log('消息:', result.message);
+        
+    } catch (error) {
+        console.error('滑块验证码示例失败:', error.message);
+    }
+}
 
-    /**
-     * 直接验证（演示用）
-     */
-    verifyDirect: function(sessionId, secretY) {
-      const client = new window.CaptchaClient('http://localhost:8080');
+/**
+ * 示例2: 点击验证码集成
+ */
+async function clickCaptchaExample() {
+    console.log('\n=== 点击验证码示例 ===');
+    
+    try {
+        // 获取点击验证码
+        const captcha = await client.getClickCaptcha({
+            mode: 'number',
+            max_points: 3,
+            shuffle: true,
+        });
+        console.log('获取验证码成功:', captcha.session_id);
+        console.log('提示:', captcha.hint);
+        
+        // 模拟用户点击（实际应用中由用户交互获取）
+        const clicks = [
+            [100, 100],
+            [200, 150],
+            [150, 200],
+        ];
+        
+        // 验证验证码
+        const result = await client.verifyClickCaptcha({
+            session_id: captcha.session_id,
+            points: clicks,
+            click_sequence: [0, 1, 2],
+        });
+        
+        console.log('验证结果:', result.success ? '成功' : '失败');
+        
+    } catch (error) {
+        console.error('点击验证码示例失败:', error.message);
+    }
+}
 
-      client.verifySliderCaptcha({
-        session_id: sessionId,
-        x: 150,
-        y: secretY
-      })
-      .then(function(result) {
-        if (result.success) {
-          alert('验证成功！');
-        } else {
-          alert('验证失败: ' + result.message);
+/**
+ * 示例3: 图形验证码集成
+ */
+async function imageCaptchaExample() {
+    console.log('\n=== 图形验证码示例 ===');
+    
+    try {
+        // 获取图形验证码
+        const captcha = await client.getImageCaptcha({
+            type: 'mixed',
+            count: 4,
+        });
+        console.log('获取验证码成功:', captcha.challenge_id);
+        console.log('图片长度:', captcha.image.length, '字符');
+        
+        // 模拟用户输入（实际应用中由用户输入）
+        const userAnswer = 'ABCD';
+        
+        // 验证验证码
+        const result = await client.verifyImageCaptcha(captcha.challenge_id, userAnswer);
+        console.log('验证结果:', result.success ? '成功' : '失败');
+        
+    } catch (error) {
+        console.error('图形验证码示例失败:', error.message);
+    }
+}
+
+/**
+ * 示例4: 手势验证码集成
+ */
+async function gestureCaptchaExample() {
+    console.log('\n=== 手势验证码示例 ===');
+    
+    try {
+        // 获取手势验证码
+        const captcha = await client.getGestureCaptcha();
+        console.log('获取验证码成功:', captcha.session_id);
+        if (captcha.hint) {
+            console.log('提示:', captcha.hint);
         }
-      })
-      .catch(function(error) {
-        alert('验证出错: ' + error.message);
-      });
-    },
+        
+        // 模拟手势模式（实际应用中由用户绘制）
+        const pattern = [1, 2, 3, 5, 7];
+        
+        // 验证验证码
+        const result = await client.verifyGestureCaptcha({
+            session_id: captcha.session_id,
+            pattern: pattern,
+        });
+        
+        console.log('验证结果:', result.success ? '成功' : '失败');
+        
+    } catch (error) {
+        console.error('手势验证码示例失败:', error.message);
+    }
+}
 
-    /**
-     * 模式2: 使用UI组件（滑块验证码）
-     */
-    sliderWidgetExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
+/**
+ * 示例5: 轨迹记录功能
+ */
+function trajectoryRecordingExample() {
+    console.log('\n=== 轨迹记录示例 ===');
+    
+    // 获取滑块容器元素
+    const sliderContainer = document.getElementById('slider-container');
+    
+    // 创建轨迹记录器
+    const recorder = client.recordTrajectory((points) => {
+        // 实时回调，每次轨迹更新时触发
+        console.log('轨迹点数量:', points.length);
+    }, sliderContainer);
+    
+    // 使用方式：
+    // recorder.start();  // 开始记录
+    // const points = recorder.stop();  // 停止记录并获取轨迹
+    // recorder.reset();  // 重置轨迹
+    // recorder.destroy();  // 销毁记录器
+    
+    console.log('轨迹记录器已创建');
+    return recorder;
+}
+
+/**
+ * 示例6: 用户认证功能
+ */
+async function userAuthExample() {
+    console.log('\n=== 用户认证示例 ===');
+    
+    const auth = client.auth();
+    
+    try {
+        // 登录
+        const loginResult = await auth.login({
+            username: 'testuser',
+            password: 'password123',
+        });
+        console.log('登录成功!');
+        console.log('访问令牌:', loginResult.access_token?.substring(0, 20) + '...');
+        
+        // 刷新令牌
+        const refreshResult = await auth.refreshToken();
+        console.log('令牌刷新成功!');
+        
+        // 登出
+        await auth.logout();
+        console.log('登出成功!');
+        
+    } catch (error) {
+        console.error('用户认证示例失败:', error.message);
+    }
+}
+
+/**
+ * 示例7: 环境检测功能
+ */
+async function environmentDetectionExample() {
+    console.log('\n=== 环境检测示例 ===');
+    
+    const env = client.env();
+    
+    try {
+        // 获取检测脚本
+        const script = await env.getDetectionScript('onDetectReady');
+        console.log('检测脚本长度:', script.length, '字符');
+        
+        // 收集浏览器数据
+        const browserData = env.collectBrowserData();
+        console.log('浏览器数据:', {
+            userAgent: browserData.user_agent?.substring(0, 50) + '...',
+            screenWidth: browserData.screen_width,
+            screenHeight: browserData.screen_height,
+        });
+        
+        // 提交检测数据
+        const result = await env.submitDetection({
+            detection_id: 'test-' + Date.now(),
+            risk_score: 0.1,
+            fingerprint: browserData.canvas_hash?.substring(0, 30) + '...',
+            timestamp: Date.now(),
+        });
+        console.log('检测数据提交成功:', result);
+        
+    } catch (error) {
+        console.error('环境检测示例失败:', error.message);
+    }
+}
+
+/**
+ * 示例8: UI组件 - 滑块验证码组件
+ */
+function sliderWidgetExample() {
+    console.log('\n=== 滑块UI组件示例 ===');
+    
+    const container = document.getElementById('slider-widget-container');
+    if (!container) {
+        console.error('请创建滑块容器元素');
         return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      if (typeof window.SliderCaptchaWidget !== 'function') {
-        console.error('SliderCaptchaWidget not loaded');
-        return;
-      }
-
-      new window.SliderCaptchaWidget(container, client, {
+    }
+    
+    // 创建滑块验证码组件
+    const sliderWidget = new SliderCaptchaWidget(container, client, {
         width: 320,
         height: 160,
         tolerance: 8,
-        onSuccess: function(result) {
-          console.log('验证成功:', result);
-          alert('验证成功！');
+        onSuccess: (result) => {
+            console.log('滑块验证成功:', result);
+            // 验证成功后的业务逻辑
+            alert('验证成功!');
         },
-        onFail: function(message) {
-          console.log('验证失败:', message);
-        }
-      });
-    },
+        onFail: (message) => {
+            console.log('滑块验证失败:', message);
+        },
+    });
+    
+    return sliderWidget;
+}
 
-    /**
-     * 模式3: 使用UI组件（点击验证码）
-     */
-    clickWidgetExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
+/**
+ * 示例9: UI组件 - 点击验证码组件
+ */
+function clickWidgetExample() {
+    console.log('\n=== 点击UI组件示例 ===');
+    
+    const container = document.getElementById('click-widget-container');
+    if (!container) {
+        console.error('请创建点击容器元素');
         return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      if (typeof window.ClickCaptchaWidget !== 'function') {
-        console.error('ClickCaptchaWidget not loaded');
-        return;
-      }
-
-      new window.ClickCaptchaWidget(container, client, {
+    }
+    
+    // 创建点击验证码组件
+    const clickWidget = new ClickCaptchaWidget(container, client, {
         mode: 'number',
         points: 3,
-        onSuccess: function(result) {
-          console.log('验证成功:', result);
-          alert('验证成功！');
+        shuffle: true,
+        onSuccess: (result) => {
+            console.log('点击验证成功:', result);
+            alert('验证成功!');
         },
-        onFail: function(message) {
-          console.log('验证失败:', message);
-        }
-      });
-    },
+        onFail: (message) => {
+            console.log('点击验证失败:', message);
+        },
+    });
+    
+    return clickWidget;
+}
 
-    /**
-     * 模式4: 带轨迹记录的滑块验证
-     */
-    sliderWithTrajectoryExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
-        return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      client.getSliderCaptcha({ width: 320, height: 160 })
-        .then(function(captcha) {
-          console.log('获取验证码成功:', captcha);
-
-          container.innerHTML = `
-            <div class="captcha-slider-with-trajectory">
-              <img src="${captcha.image_url}" alt="验证码背景" id="slider-bg" />
-              <div id="slider-track">
-                <div id="slider-thumb"></div>
-              </div>
-              <div class="captcha-info">
-                <p>Session ID: <span id="session-id">${captcha.session_id}</span></p>
-                <p>Secret Y: <span id="secret-y">${captcha.secret_y || 0}</span></p>
-              </div>
-            </div>
-          `;
-
-          const thumb = document.getElementById('slider-thumb');
-          const track = document.getElementById('slider-track');
-          const trajectoryRecorder = client.recordTrajectory(function(points) {
-            console.log('当前轨迹点数:', points.length);
-          }, track);
-
-          let isDragging = false;
-          let startX = 0;
-          let currentX = 0;
-
-          thumb.addEventListener('mousedown', function(e) {
-            isDragging = true;
-            startX = e.clientX;
-            trajectoryRecorder.start();
-            thumb.classList.add('dragging');
-          });
-
-          document.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
-
-            currentX = e.clientX - startX;
-            const maxX = track.offsetWidth - thumb.offsetWidth;
-            currentX = Math.max(0, Math.min(currentX, maxX));
-
-            thumb.style.left = currentX + 'px';
-          });
-
-          document.addEventListener('mouseup', async function() {
-            if (!isDragging) return;
-            isDragging = false;
-            thumb.classList.remove('dragging');
-
-            const trajectory = trajectoryRecorder.stop();
-            const targetX = Math.round(currentX);
-
-            try {
-              const result = await client.verifySliderCaptcha({
-                session_id: document.getElementById('session-id').textContent,
-                x: targetX,
-                y: parseInt(document.getElementById('secret-y').textContent),
-                trajectory: trajectory
-              });
-
-              if (result.success) {
-                alert('验证成功！轨迹点数量: ' + trajectory.length);
-              } else {
-                alert('验证失败: ' + result.message);
-                thumb.style.left = '0';
-              }
-            } catch (error) {
-              alert('验证出错: ' + error.message);
-              thumb.style.left = '0';
-            }
-          });
-        })
-        .catch(function(error) {
-          console.error('获取验证码失败:', error);
-          container.innerHTML = '<p class="error">加载失败: ' + error.message + '</p>';
+/**
+ * 示例10: 错误处理
+ */
+async function errorHandlingExample() {
+    console.log('\n=== 错误处理示例 ===');
+    
+    try {
+        // 尝试连接到不存在的服务
+        const badClient = new CaptchaClient('http://nonexistent.example.com', {
+            timeout: 5000,
         });
-    },
-
-    /**
-     * 模式5: 登录表单集成
-     */
-    loginFormIntegration: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
-        return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      container.innerHTML = `
-        <div class="captcha-login-form">
-          <h2>登录示例</h2>
-          <form id="login-form">
-            <div class="form-group">
-              <label for="username">用户名:</label>
-              <input type="text" id="username" name="username" required />
-            </div>
-            <div class="form-group">
-              <label for="password">密码:</label>
-              <input type="password" id="password" name="password" required />
-            </div>
-            <div class="form-group">
-              <div id="captcha-area"></div>
-            </div>
-            <button type="submit">登录</button>
-          </form>
-          <div id="login-result"></div>
-        </div>
-      `;
-
-      const captchaArea = document.getElementById('captcha-area');
-      let currentCaptchaSession = null;
-
-      function loadCaptcha() {
-        client.getSliderCaptcha({ width: 300, height: 150 })
-          .then(function(captcha) {
-            currentCaptchaSession = captcha.session_id;
-
-            captchaArea.innerHTML = `
-              <div class="inline-slider">
-                <img src="${captcha.image_url}" alt="验证码" style="max-width: 100%;" />
-                <input type="range" id="captcha-slider" min="0" max="260" value="0" />
-                <button type="button" id="verify-captcha-btn">验证</button>
-              </div>
-              <p id="captcha-status"></p>
-            `;
-
-            const verifyBtn = document.getElementById('verify-captcha-btn');
-            const slider = document.getElementById('captcha-slider');
-            const status = document.getElementById('captcha-status');
-
-            verifyBtn.addEventListener('click', function() {
-              const x = parseInt(slider.value);
-
-              client.verifySliderCaptcha({
-                session_id: currentCaptchaSession,
-                x: x,
-                y: captcha.secret_y
-              })
-              .then(function(result) {
-                if (result.success) {
-                  status.textContent = '验证成功！';
-                  status.className = 'success';
-                  verifyBtn.disabled = true;
-                  slider.disabled = true;
-                } else {
-                  status.textContent = '验证失败，请重试';
-                  status.className = 'error';
-                  slider.value = 0;
-                  loadCaptcha();
-                }
-              })
-              .catch(function(error) {
-                status.textContent = '验证出错: ' + error.message;
-                status.className = 'error';
-              });
-            });
-          })
-          .catch(function(error) {
-            captchaArea.innerHTML = '<p class="error">验证码加载失败</p>';
-          });
-      }
-
-      loadCaptcha();
-
-      const loginForm = document.getElementById('login-form');
-      const loginResult = document.getElementById('login-result');
-
-      loginForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-
-        if (!currentCaptchaSession) {
-          loginResult.innerHTML = '<p class="error">请先完成验证码验证</p>';
-          return;
+        
+        await badClient.getSliderCaptcha();
+        
+    } catch (error) {
+        if (error.status === 404) {
+            console.error('服务不存在:', error.message);
+        } else if (error.message.includes('timeout')) {
+            console.error('请求超时:', error.message);
+        } else {
+            console.error('未知错误:', error.message);
         }
-
-        const auth = client.auth();
-        auth.login({
-          username: username,
-          password: password,
-          captcha_token: currentCaptchaSession
-        })
-        .then(function(result) {
-          loginResult.innerHTML = '<p class="success">登录成功！</p>';
-          console.log('登录结果:', result);
-        })
-        .catch(function(error) {
-          loginResult.innerHTML = '<p class="error">登录失败: ' + error.message + '</p>';
-        });
-      });
-    },
-
-    /**
-     * 模式6: 环境检测集成
-     */
-    environmentDetectionExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
-        return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-      const env = client.env();
-
-      container.innerHTML = `
-        <div class="captcha-env-detection">
-          <h2>环境检测示例</h2>
-          <button id="run-detection-btn">运行环境检测</button>
-          <div id="detection-results"></div>
-        </div>
-      `;
-
-      const runBtn = document.getElementById('run-detection-btn');
-      const resultsDiv = document.getElementById('detection-results');
-
-      runBtn.addEventListener('click', function() {
-        resultsDiv.innerHTML = '<p>正在收集环境数据...</p>';
-
-        const browserData = env.collectBrowserData();
-
-        resultsDiv.innerHTML = `
-          <div class="detection-results">
-            <h3>收集到的数据:</h3>
-            <pre>${JSON.stringify(browserData, null, 2)}</pre>
-            <button id="submit-detection-btn">提交检测数据</button>
-          </div>
-        `;
-
-        const submitBtn = document.getElementById('submit-detection-btn');
-        submitBtn.addEventListener('click', function() {
-          env.submitDetection(browserData)
-            .then(function(result) {
-              resultsDiv.innerHTML += `
-                <div class="submission-result">
-                  <h3>提交结果:</h3>
-                  <pre>${JSON.stringify(result, null, 2)}</pre>
-                </div>
-              `;
-            })
-            .catch(function(error) {
-              resultsDiv.innerHTML += `
-                <div class="error">
-                  <p>提交失败: ${error.message}</p>
-                </div>
-              `;
-            });
-        });
-      });
-    },
-
-    /**
-     * 模式7: React/Vue集成示例（框架无关）
-     */
-    frameworkIntegrationExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
-        return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      function createCaptchaComponent(container, options) {
-        let sessionId = null;
-        let secretY = null;
-        let isVerified = false;
-
-        function render() {
-          client.getSliderCaptcha(options)
-            .then(function(captcha) {
-              sessionId = captcha.session_id;
-              secretY = captcha.secret_y;
-
-              container.innerHTML = `
-                <div class="react-style-captcha" data-session="${sessionId}">
-                  <div class="captcha-header">
-                    <span>安全验证</span>
-                    <button class="refresh-btn">↻</button>
-                  </div>
-                  <div class="captcha-body">
-                    <img src="${captcha.image_url}" alt="验证码" />
-                    <div class="slider-container">
-                      <div class="slider-track">
-                        <div class="slider-fill"></div>
-                        <div class="slider-handle"></div>
-                      </div>
-                      <span class="slider-tip">拖动滑块完成验证</span>
-                    </div>
-                  </div>
-                  <div class="captcha-footer"></div>
-                </div>
-              `;
-
-              const refreshBtn = container.querySelector('.refresh-btn');
-              const sliderHandle = container.querySelector('.slider-handle');
-              const sliderFill = container.querySelector('.slider-fill');
-              const footer = container.querySelector('.captcha-footer');
-
-              refreshBtn.addEventListener('click', function() {
-                render();
-              });
-
-              let isDragging = false;
-              let startX = 0;
-              let currentX = 0;
-              const trackWidth = 260;
-
-              sliderHandle.addEventListener('mousedown', function(e) {
-                if (isVerified) return;
-                isDragging = true;
-                startX = e.clientX;
-                sliderHandle.classList.add('active');
-              });
-
-              document.addEventListener('mousemove', function(e) {
-                if (!isDragging) return;
-
-                currentX = e.clientX - startX;
-                currentX = Math.max(0, Math.min(currentX, trackWidth));
-
-                sliderHandle.style.left = currentX + 'px';
-                sliderFill.style.width = currentX + 'px';
-              });
-
-              document.addEventListener('mouseup', function() {
-                if (!isDragging) return;
-                isDragging = false;
-                sliderHandle.classList.remove('active');
-
-                const targetX = Math.round(currentX);
-
-                client.verifySliderCaptcha({
-                  session_id: sessionId,
-                  x: targetX,
-                  y: secretY
-                })
-                .then(function(result) {
-                  if (result.success) {
-                    isVerified = true;
-                    sliderHandle.classList.add('success');
-                    footer.textContent = '验证成功！';
-                    footer.className = 'captcha-footer success';
-                  } else {
-                    footer.textContent = '验证失败，请重试';
-                    footer.className = 'captcha-footer error';
-                    sliderHandle.style.left = '0';
-                    sliderFill.style.width = '0';
-                    setTimeout(render, 1500);
-                  }
-                })
-                .catch(function(error) {
-                  footer.textContent = '验证出错';
-                  footer.className = 'captcha-footer error';
-                });
-              });
-            })
-            .catch(function(error) {
-              container.innerHTML = '<p class="error">加载失败</p>';
-            });
-        }
-
-        return {
-          render: render,
-          reload: function() {
-            isVerified = false;
-            render();
-          }
-        };
-      }
-
-      const captchaComponent = createCaptchaComponent(container, { width: 300, height: 150 });
-      captchaComponent.render();
-    },
-
-    /**
-     * 模式8: 批量获取验证码示例
-     */
-    batchCaptchaExample: function() {
-      const container = document.getElementById('captcha-container');
-      if (!container) {
-        console.error('Container element not found');
-        return;
-      }
-
-      const client = new window.CaptchaClient('http://localhost:8080');
-
-      container.innerHTML = `
-        <div class="batch-captcha-example">
-          <h2>批量验证码示例</h2>
-          <button id="batch-load-btn">加载5个验证码</button>
-          <div id="batch-results"></div>
-        </div>
-      `;
-
-      const loadBtn = document.getElementById('batch-load-btn');
-      const resultsDiv = document.getElementById('batch-results');
-
-      loadBtn.addEventListener('click', function() {
-        loadBtn.disabled = true;
-        loadBtn.textContent = '加载中...';
-        resultsDiv.innerHTML = '<p>正在并发获取验证码...</p>';
-
-        const promises = [];
-        for (let i = 0; i < 5; i++) {
-          promises.push(client.getSliderCaptcha({ width: 200, height: 100 }));
-        }
-
-        Promise.allSettled(promises)
-          .then(function(results) {
-            let successCount = 0;
-            let html = '<div class="batch-list">';
-
-            results.forEach(function(result, index) {
-              if (result.status === 'fulfilled') {
-                successCount++;
-                html += `
-                  <div class="batch-item">
-                    <img src="${result.value.image_url}" alt="验证码 ${index + 1}" />
-                    <p>${result.value.session_id.substring(0, 20)}...</p>
-                  </div>
-                `;
-              } else {
-                html += `
-                  <div class="batch-item error">
-                    <p>验证码 ${index + 1} 加载失败</p>
-                  </div>
-                `;
-              }
-            });
-
-            html += '</div>';
-            html += `<p>成功: ${successCount}/${results.length}</p>`;
-
-            resultsDiv.innerHTML = html;
-            loadBtn.disabled = false;
-            loadBtn.textContent = '重新加载';
-          })
-          .catch(function(error) {
-            resultsDiv.innerHTML = '<p class="error">批量加载失败: ' + error.message + '</p>';
-            loadBtn.disabled = false;
-            loadBtn.textContent = '重新加载';
-          });
-      });
     }
-  };
+}
 
-  if (typeof window !== 'undefined') {
-    window.CaptchaBrowserExamples = CaptchaBrowserExamples;
-  }
+/**
+ * 示例11: 设置访问令牌
+ */
+function setTokenExample() {
+    console.log('\n=== 设置访问令牌示例 ===');
+    
+    // 设置令牌（通常从登录响应获取）
+    client.setToken('your-jwt-token-here');
+    console.log('访问令牌已设置');
+    
+    // 后续请求会自动携带令牌
+    // const result = await client.someProtectedApi();
+}
 
-})();
+/**
+ * 运行所有示例
+ */
+async function runAllExamples() {
+    console.log('='.repeat(50));
+    console.log('HJT Captcha JavaScript SDK 浏览器端示例');
+    console.log('='.repeat(50));
+    
+    // 运行异步示例
+    await sliderCaptchaExample();
+    await clickCaptchaExample();
+    await imageCaptchaExample();
+    await gestureCaptchaExample();
+    await userAuthExample();
+    await environmentDetectionExample();
+    await errorHandlingExample();
+    
+    // 运行同步/UI示例
+    setTokenExample();
+    
+    // 注意：UI组件示例需要页面上有对应的DOM元素
+    // sliderWidgetExample();
+    // clickWidgetExample();
+    // trajectoryRecordingExample();
+    
+    console.log('\n' + '='.repeat(50));
+    console.log('所有示例运行完成');
+    console.log('='.repeat(50));
+}
+
+// 如果在浏览器环境中自动运行示例
+if (typeof window !== 'undefined') {
+    // 页面加载完成后运行示例
+    document.addEventListener('DOMContentLoaded', () => {
+        // 可以选择性地调用特定示例
+        // sliderCaptchaExample();
+        
+        // 或者运行所有示例
+        // runAllExamples();
+    });
+}
+
+// 导出示例函数供外部使用
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        sliderCaptchaExample,
+        clickCaptchaExample,
+        imageCaptchaExample,
+        gestureCaptchaExample,
+        trajectoryRecordingExample,
+        userAuthExample,
+        environmentDetectionExample,
+        sliderWidgetExample,
+        clickWidgetExample,
+        errorHandlingExample,
+        setTokenExample,
+        runAllExamples,
+    };
+}

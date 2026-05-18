@@ -77,7 +77,7 @@ func (g *ImageGenerator) GenerateSliderCaptcha() (*CaptchaResult, error) {
 
 	bgImage = g.applyAdvancedEdgeDetection(bgImage, gap)
 
-	bgImage = g.applyEnhancedShadowDetection(bgImage, gap)
+	bgImage = g.applyMultiLayerShadowDetection(bgImage, gap)
 
 	bgImage = g.addInterference(bgImage)
 

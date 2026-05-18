@@ -1,11 +1,14 @@
 package database
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -449,4 +452,246 @@ func (iqc *IntelligentQueryCache) GetPatternStats() map[string]interface{} {
 	stats["total_queries"] = totalQueries
 
 	return stats
+}
+
+func (c *QueryCache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
+	if !c.enabled {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.cache) >= c.maxSize {
+		c.evictByStrategy()
+	}
+
+	entry := cacheEntry{
+		value:       value,
+		expiration:  time.Now().Add(ttl),
+		accessCount: 1,
+		lastAccess:  time.Now(),
+		frequency:   1.0,
+	}
+
+	c.cache[key] = entry
+	c.stats.TotalSets.Add(1)
+
+	if int64(len(c.cache)) > c.stats.PeakSize.Load() {
+		c.stats.PeakSize.Store(int64(len(c.cache)))
+	}
+}
+
+func (c *QueryCache) InvalidateKeysByPattern(pattern string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for k := range c.cache {
+		if strings.Contains(k, pattern) {
+			delete(c.cache, k)
+			c.stats.TotalEvictions.Add(1)
+		}
+	}
+}
+
+func (c *QueryCache) GetKeysByPattern(pattern string) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var keys []string
+	for k := range c.cache {
+		if strings.Contains(k, pattern) {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+func (c *QueryCache) GetEntryInfo(key string) (*CacheEntryInfo, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, exists := c.cache[key]
+	if !exists {
+		return nil, false
+	}
+
+	return &CacheEntryInfo{
+		Key:          key,
+		AccessCount:  entry.accessCount,
+		LastAccess:   entry.lastAccess,
+		Expiration:   entry.expiration,
+		Frequency:    entry.frequency,
+		TTLRemaining: time.Until(entry.expiration),
+	}, true
+}
+
+type CacheEntryInfo struct {
+	Key          string
+	AccessCount  int64
+	LastAccess   time.Time
+	Expiration   time.Time
+	Frequency    float64
+	TTLRemaining time.Duration
+}
+
+func (c *QueryCache) Warmup(entries map[string]interface{}, ttl time.Duration) {
+	if !c.enabled {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for key, value := range entries {
+		if len(c.cache) >= c.maxSize {
+			c.evictByStrategy()
+		}
+
+		entry := cacheEntry{
+			value:       value,
+			expiration:  time.Now().Add(ttl),
+			accessCount: 1,
+			lastAccess:  time.Now(),
+			frequency:   1.0,
+		}
+
+		c.cache[key] = entry
+		c.stats.TotalSets.Add(1)
+	}
+}
+
+func (c *QueryCache) SmartWarmup(ctx context.Context, warmupFunc func() (map[string]interface{}, error), ttl time.Duration) error {
+	if !c.enabled {
+		return nil
+	}
+
+	data, err := warmupFunc()
+	if err != nil {
+		return err
+	}
+
+	c.Warmup(data, ttl)
+	return nil
+}
+
+func (c *QueryCache) GetWarmupStatus() map[string]interface{} {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	now := time.Now()
+	expiringSoon := 0
+	expired := 0
+
+	for _, entry := range c.cache {
+		if now.After(entry.expiration) {
+			expired++
+		} else if time.Until(entry.expiration) < 5*time.Minute {
+			expiringSoon++
+		}
+	}
+
+	return map[string]interface{}{
+		"total_entries":   len(c.cache),
+		"expired_entries": expired,
+		"expiring_soon":   expiringSoon,
+		"max_size":        c.maxSize,
+	}
+}
+
+func (c *QueryCache) AutoAdjustStrategy() {
+	hitRate := c.calculateHitRate()
+
+	if hitRate < 50 {
+		c.strategy = StrategyLFU
+	} else if hitRate < 70 {
+		c.strategy = StrategyAdaptive
+	} else {
+		c.strategy = StrategyLRU
+	}
+}
+
+func (c *QueryCache) GetStrategyPerformance() map[string]interface{} {
+	return map[string]interface{}{
+		"strategy":       c.getStrategyName(),
+		"hit_rate":       c.calculateHitRate(),
+		"evictions":      c.evictions.Load(),
+		"current_size":   len(c.cache),
+		"max_size":       c.maxSize,
+	}
+}
+
+func (c *QueryCache) SetMaxSize(maxSize int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.maxSize = maxSize
+
+	for len(c.cache) > c.maxSize {
+		c.evictByStrategy()
+	}
+}
+
+func (c *QueryCache) TTLBasedEviction() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := time.Now()
+	for k, v := range c.cache {
+		if now.After(v.expiration) {
+			delete(c.cache, k)
+			c.evictions.Add(1)
+			c.stats.TotalEvictions.Add(1)
+		}
+	}
+}
+
+func (iqc *IntelligentQueryCache) AutoAdjustTTL() {
+	iqc.mu.Lock()
+	defer iqc.mu.Unlock()
+
+	for _, pattern := range iqc.queryPatterns {
+		if pattern.HitRate > 90 {
+			pattern.OptimalTTL *= 2
+			if pattern.OptimalTTL > 1*time.Hour {
+				pattern.OptimalTTL = 1 * time.Hour
+			}
+		} else if pattern.HitRate < 30 {
+			pattern.OptimalTTL /= 2
+			if pattern.OptimalTTL < 30*time.Second {
+				pattern.OptimalTTL = 30 * time.Second
+			}
+		}
+	}
+}
+
+func (iqc *IntelligentQueryCache) GetTopPatterns(count int) []*QueryPattern {
+	iqc.mu.RLock()
+	defer iqc.mu.RUnlock()
+
+	patterns := make([]*QueryPattern, 0, len(iqc.queryPatterns))
+	for _, p := range iqc.queryPatterns {
+		patterns = append(patterns, p)
+	}
+
+	sort.Slice(patterns, func(i, j int) bool {
+		return patterns[i].TotalQueries > patterns[j].TotalQueries
+	})
+
+	if count > len(patterns) {
+		count = len(patterns)
+	}
+
+	return patterns[:count]
+}
+
+func (iqc *IntelligentQueryCache) EvictLowPriority() {
+	iqc.mu.Lock()
+	defer iqc.mu.Unlock()
+
+	thresholdTime := time.Now().Add(-10 * time.Minute)
+	for query, pattern := range iqc.queryPatterns {
+		if pattern.LastQuery.Before(thresholdTime) && pattern.Priority == 1 {
+			delete(iqc.queryPatterns, query)
+		}
+	}
 }

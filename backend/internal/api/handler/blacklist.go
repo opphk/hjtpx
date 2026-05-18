@@ -129,6 +129,17 @@ func ListBlacklist(c *gin.Context) {
 	})
 }
 
+// GetBlacklistSummary 获取黑名单统计摘要
+// @Summary 获取黑名单统计摘要
+// @Description 获取黑名单的统计信息摘要
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "黑名单统计摘要"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/summary [get]
 func GetBlacklistSummary(c *gin.Context) {
 	handler := GetBlacklistHandler()
 
@@ -177,6 +188,19 @@ func GetBlacklistByID(c *gin.Context) {
 	response.Success(c, item)
 }
 
+// CreateBlacklist 创建黑名单记录
+// @Summary 创建黑名单记录
+// @Description 创建新的黑名单记录
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body CreateBlacklistRequest true "创建黑名单请求"
+// @Success 200 {object} map[string]interface{} "创建成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist [post]
 func CreateBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	var req CreateBlacklistRequest
@@ -268,6 +292,20 @@ func UpdateBlacklist(c *gin.Context) {
 	response.Success(c, item)
 }
 
+// DeleteBlacklist 删除黑名单记录
+// @Summary 删除黑名单记录
+// @Description 删除指定的黑名单记录
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "黑名单ID"
+// @Success 200 {object} map[string]interface{} "删除成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "黑名单记录不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/{id} [delete]
 func DeleteBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	idStr := c.Param("id")
@@ -290,6 +328,20 @@ func DeleteBlacklist(c *gin.Context) {
 	response.Success(c, gin.H{"message": "删除成功"})
 }
 
+// UnblockBlacklist 解封黑名单记录
+// @Summary 解封黑名单记录
+// @Description 解除指定黑名单记录的封禁状态
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "黑名单ID"
+// @Success 200 {object} map[string]interface{} "解封成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "黑名单记录不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/{id}/unblock [post]
 func UnblockBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	idStr := c.Param("id")
@@ -312,6 +364,19 @@ func UnblockBlacklist(c *gin.Context) {
 	response.Success(c, item)
 }
 
+// ImportBlacklist 批量导入黑名单
+// @Summary 批量导入黑名单
+// @Description 批量导入多个目标到黑名单
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body ImportBlacklistRequest true "导入黑名单请求"
+// @Success 200 {object} map[string]interface{} "导入结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/import [post]
 func ImportBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	var req ImportBlacklistRequest
@@ -417,6 +482,18 @@ func AdvancedSearchBlacklist(c *gin.Context) {
 }
 
 // SaveBlacklistSearch 保存黑名单搜索
+// @Summary 保存黑名单搜索
+// @Description 保存当前的搜索条件以便后续使用
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body map[string]interface{} true "保存搜索请求"
+// @Success 200 {object} map[string]interface{} "保存结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/save-search [post]
 func SaveBlacklistSearch(c *gin.Context) {
 	var req struct {
 		Name        string                      `json:"name" binding:"required"`
@@ -445,6 +522,16 @@ func SaveBlacklistSearch(c *gin.Context) {
 }
 
 // GetSavedBlacklistSearches 获取保存的黑名单搜索
+// @Summary 获取保存的黑名单搜索
+// @Description 获取当前用户保存的黑名单搜索条件列表
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "保存的搜索列表"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/saved-searches [get]
 func GetSavedBlacklistSearches(c *gin.Context) {
 	adminID, _ := c.Get("admin_id")
 	var createdBy uint
@@ -463,6 +550,18 @@ func GetSavedBlacklistSearches(c *gin.Context) {
 }
 
 // DeleteSavedBlacklistSearch 删除保存的黑名单搜索
+// @Summary 删除保存的黑名单搜索
+// @Description 删除指定保存的黑名单搜索条件
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "搜索ID"
+// @Success 200 {object} map[string]interface{} "删除结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/saved-searches/{id} [delete]
 func DeleteSavedBlacklistSearch(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

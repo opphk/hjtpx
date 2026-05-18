@@ -207,6 +207,46 @@ var dateFormats = map[string]DateTimeFormat{
 		MonthDay:  "2 Ocak",
 		YearMonth: "Ocak 2006",
 	},
+	"zh-TW": {
+		Full:      "2006年1月2日 15:04:05",
+		Long:      "2006年1月2日 15:04",
+		Medium:    "2006年1月2日",
+		Short:     "2006/1/2",
+		TimeOnly:  "15:04:05",
+		DateOnly:  "2006/01/02",
+		MonthDay:  "1月2日",
+		YearMonth: "2006年1月",
+	},
+	"ms-MY": {
+		Full:      "2 Januari 2006 15:04:05",
+		Long:      "2 Januari 2006 15:04",
+		Medium:    "2 Januari 2006",
+		Short:     "2/1/06",
+		TimeOnly:  "15:04:05",
+		DateOnly:  "02/01/2006",
+		MonthDay:  "2 Januari",
+		YearMonth: "Januari 2006",
+	},
+	"bn-BD": {
+		Full:      "2 জানুয়ারি 2006 15:04:05",
+		Long:      "2 জানুয়ারি 2006 15:04",
+		Medium:    "2 জানুয়ারি 2006",
+		Short:     "2/1/06",
+		TimeOnly:  "15:04:05",
+		DateOnly:  "02/01/2006",
+		MonthDay:  "2 জানুয়ারি",
+		YearMonth: "জানুয়ারি 2006",
+	},
+	"ta-IN": {
+		Full:      "2 ஜனவரி 2006 15:04:05",
+		Long:      "2 ஜனவரி 2006 15:04",
+		Medium:    "2 ஜனவரி 2006",
+		Short:     "2/1/06",
+		TimeOnly:  "15:04:05",
+		DateOnly:  "02/01/2006",
+		MonthDay:  "2 ஜனவரி",
+		YearMonth: "ஜனவரி 2006",
+	},
 }
 
 func FormatDateTime(t time.Time, lang string, formatType string) string {
@@ -415,6 +455,26 @@ var numberFormats = map[string]NumberFormat{
 	"tr-TR": {
 		DecimalSep:   ",",
 		ThousandSep:  ".",
+		DecimalDigits: 2,
+	},
+	"zh-TW": {
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
+	"ms-MY": {
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
+	"bn-BD": {
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
+	"ta-IN": {
+		DecimalSep:   ".",
+		ThousandSep:  ",",
 		DecimalDigits: 2,
 	},
 }
@@ -663,6 +723,34 @@ var currencyFormats = map[string]CurrencyFormat{
 		ThousandSep:  ".",
 		DecimalDigits: 2,
 	},
+	"zh-TW": {
+		Symbol:       "NT$",
+		SymbolPos:    "before",
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
+	"ms-MY": {
+		Symbol:       "RM",
+		SymbolPos:    "before",
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
+	"bn-BD": {
+		Symbol:       "৳",
+		SymbolPos:    "before",
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
+	"ta-IN": {
+		Symbol:       "₹",
+		SymbolPos:    "before",
+		DecimalSep:   ".",
+		ThousandSep:  ",",
+		DecimalDigits: 2,
+	},
 }
 
 func FormatCurrency(value float64, lang string) string {
@@ -686,5 +774,70 @@ func FormatCurrency(value float64, lang string) string {
 }
 
 func FormatCurrencyWithCode(value float64, lang string, currencyCode string) string {
-	return FormatCurrency(value, lang) + " " + currencyCode
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	currency, ok := currencyFormats[targetLang]
+	if !ok {
+		currency = currencyFormats[defaultLang]
+	}
+
+	number := formatFloat(value, currency.DecimalSep, currency.ThousandSep, currency.DecimalDigits)
+	
+	if currencyCode == "" {
+		currencyCode = GetLangInfo(targetLang).Currency
+	}
+
+	if currency.SymbolPos == "before" {
+		return currency.Symbol + number + " " + currencyCode
+	} else {
+		return number + currency.Symbol + " " + currencyCode
+	}
+}
+
+var currencyCodeSymbols = map[string]string{
+	"CNY": "¥",
+	"USD": "$",
+	"JPY": "¥",
+	"KRW": "₩",
+	"EUR": "€",
+	"GBP": "£",
+	"BRL": "R$",
+	"RUB": "₽",
+	"SAR": "ر.س",
+	"IRR": "ریال",
+	"ILS": "₪",
+	"PKR": "₨",
+	"INR": "₹",
+	"VND": "₫",
+	"THB": "฿",
+	"IDR": "Rp",
+	"TRY": "₺",
+	"MYR": "RM",
+	"BDT": "৳",
+	"TWD": "NT$",
+}
+
+func FormatCurrencyCustom(value float64, lang string, currencyCode string, useSymbol bool) string {
+	targetLang := lang
+	if !IsSupported(targetLang) {
+		targetLang = defaultLang
+	}
+
+	numberFormat, ok := numberFormats[targetLang]
+	if !ok {
+		numberFormat = numberFormats[defaultLang]
+	}
+
+	number := formatFloat(value, numberFormat.DecimalSep, numberFormat.ThousandSep, numberFormat.DecimalDigits)
+	
+	if useSymbol {
+		if symbol, ok := currencyCodeSymbols[currencyCode]; ok {
+			return symbol + number
+		}
+	}
+	
+	return number + " " + currencyCode
 }

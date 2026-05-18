@@ -410,9 +410,11 @@
                                             <button class="btn btn-outline-primary active" data-logic="AND" onclick="setGroupLogic('mainRuleGroup', 'AND')">AND</button>
                                             <button class="btn btn-outline-primary" data-logic="OR" onclick="setGroupLogic('mainRuleGroup', 'OR')">OR</button>
                                             <button class="btn btn-outline-primary" data-logic="NOT" onclick="setGroupLogic('mainRuleGroup', 'NOT')">NOT</button>
+                                            <button class="btn btn-outline-primary" data-logic="XOR" onclick="setGroupLogic('mainRuleGroup', 'XOR')">XOR</button>
                                         </div>
                                         <span class="text-muted small">规则组合逻辑</span>
-                                        <button class="btn btn-sm btn-success ms-auto" onclick="addRuleCondition('mainRuleGroup')"><i class="fas fa-plus me-1"></i>添加条件</button>
+                                        <button class="btn btn-sm btn-success" onclick="addRuleCondition('mainRuleGroup')"><i class="fas fa-plus me-1"></i>添加条件</button>
+                                        <button class="btn btn-sm btn-info" onclick="addNestedGroup('mainRuleGroup')"><i class="fas fa-layer-group me-1"></i>添加嵌套组</button>
                                     </div>
                                     <div class="rule-conditions" id="mainRuleConditions">
                                         <div class="rule-condition-row" data-condition-id="cond1">
@@ -426,6 +428,9 @@
                                                 <option value="hesitation_time">犹豫时间</option>
                                                 <option value="ml_score">ML分数</option>
                                                 <option value="anomaly_score">异常分数</option>
+                                                <option value="max_speed">最大速度</option>
+                                                <option value="micro_corrections">微修正次数</option>
+                                                <option value="direction_changes">方向变化次数</option>
                                             </select>
                                             <select class="form-select form-select-sm condition-operator">
                                                 <option value="gt">></option>
@@ -433,8 +438,11 @@
                                                 <option value="lt"><</option>
                                                 <option value="lte"><=</option>
                                                 <option value="eq">=</option>
+                                                <option value="neq">!=</option>
+                                                <option value="contains">contains</option>
+                                                <option value="regex">regex</option>
                                             </select>
-                                            <input type="number" class="form-control form-control-sm condition-value" placeholder="阈值" step="0.01">
+                                            <input type="text" class="form-control form-control-sm condition-value" placeholder="阈值">
                                             <button class="btn btn-outline-danger btn-sm" onclick="removeCondition('cond1')"><i class="fas fa-times"></i></button>
                                         </div>
                                     </div>

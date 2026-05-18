@@ -484,3 +484,519 @@ func BenchmarkProxyDetection(b *testing.B) {
 		_, _ = detection.DetectProxy(ctx, "203.0.113.1", headers)
 	}
 }
+
+func TestEnvDetectorCPUIDFeatures(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("detect_vmware_cpuid", func(t *testing.T) {
+		info := &EnvInfo{
+			CPUIDInfo:           "VMware Virtual CPU",
+			HardwareConcurrency: 2,
+		}
+
+		detected, score, evidence := detector.DetectCPUIDFeatures(info, nil)
+
+		if !detected {
+			t.Error("Expected VMware CPUID to be detected")
+		}
+		if score < 40 {
+			t.Errorf("Expected score >= 40, got %.2f", score)
+		}
+		if len(evidence) == 0 {
+			t.Error("Expected evidence to be present")
+		}
+	})
+
+	t.Run("detect_virtualbox_cpuid", func(t *testing.T) {
+		info := &EnvInfo{
+			CPUIDInfo:           "VirtualBox CPU",
+			HardwareConcurrency: 1,
+		}
+
+		detected, score, evidence := detector.DetectCPUIDFeatures(info, nil)
+
+		if !detected {
+			t.Error("Expected VirtualBox CPUID to be detected")
+		}
+		if score < 65 {
+			t.Errorf("Expected score >= 65 (CPUID + single core), got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("normal_cpu_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			CPUIDInfo:           "Intel Core i7",
+			HardwareConcurrency: 8,
+		}
+
+		detected, _, _ := detector.DetectCPUIDFeatures(info, nil)
+
+		if detected {
+			t.Error("Expected normal CPU not to be detected as VM")
+		}
+	})
+}
+
+func TestEnvDetectorMemoryMapping(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("low_memory_vm", func(t *testing.T) {
+		info := &EnvInfo{
+			DeviceMemory: 1.0,
+			MemorySize:   2048,
+		}
+
+		detected, score, evidence := detector.DetectMemoryMapping(info, nil)
+
+		if !detected {
+			t.Error("Expected low memory to be detected")
+		}
+		if score < 45 {
+			t.Errorf("Expected score >= 45, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("virtual_gpu_detected", func(t *testing.T) {
+		info := &EnvInfo{
+			WebGLRenderer: "VMware SVGA II",
+		}
+
+		detected, score, evidence := detector.DetectMemoryMapping(info, nil)
+
+		if !detected {
+			t.Error("Expected virtual GPU to be detected")
+		}
+		if score < 35 {
+			t.Errorf("Expected score >= 35, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("normal_memory_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			DeviceMemory: 16.0,
+			MemorySize:   16384,
+			WebGLRenderer: "NVIDIA GeForce RTX 3080",
+		}
+
+		detected, _, _ := detector.DetectMemoryMapping(info, nil)
+
+		if detected {
+			t.Error("Expected normal memory not to be detected")
+		}
+	})
+}
+
+func TestEnvDetectorTimingAttack(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("high_timing_variance", func(t *testing.T) {
+		info := &EnvInfo{
+			TimingVariance: 0.95,
+		}
+
+		detected, score, evidence := detector.DetectTimingAttack(info, nil)
+
+		if !detected {
+			t.Error("Expected high timing variance to be detected")
+		}
+		if score < 30 {
+			t.Errorf("Expected score >= 30, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("too_fast_execution", func(t *testing.T) {
+		info := &EnvInfo{
+			ExecutionTime: 0.0005,
+		}
+
+		detected, score, evidence := detector.DetectTimingAttack(info, nil)
+
+		if !detected {
+			t.Error("Expected too fast execution to be detected")
+		}
+		if score < 25 {
+			t.Errorf("Expected score >= 25, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("frame_time_anomaly", func(t *testing.T) {
+		info := &EnvInfo{
+			FrameTimeDelta: 200,
+		}
+
+		detected, score, evidence := detector.DetectTimingAttack(info, nil)
+
+		if !detected {
+			t.Error("Expected frame time anomaly to be detected")
+		}
+		if score < 20 {
+			t.Errorf("Expected score >= 20, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("normal_timing_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			TimingVariance: 0.1,
+			ExecutionTime:  0.1,
+			FrameTimeDelta: 16,
+		}
+
+		detected, _, _ := detector.DetectTimingAttack(info, nil)
+
+		if detected {
+			t.Error("Expected normal timing not to be detected")
+		}
+	})
+}
+
+func TestEnvDetectorFileSystemEscape(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("vmware_file_path", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 /var/run/vmware/test",
+		}
+
+		detected, score, evidence := detector.DetectFileSystemEscape(info, nil)
+
+		if !detected {
+			t.Error("Expected VMware file path to be detected")
+		}
+		if score < 40 {
+			t.Errorf("Expected score >= 40, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("virtualbox_file_path", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 /dev/vboxguest",
+		}
+
+		detected, score, evidence := detector.DetectFileSystemEscape(info, nil)
+
+		if !detected {
+			t.Error("Expected VirtualBox file path to be detected")
+		}
+		if score < 40 {
+			t.Errorf("Expected score >= 40, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("normal_user_agent_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+		}
+
+		detected, _, _ := detector.DetectFileSystemEscape(info, nil)
+
+		if detected {
+			t.Error("Expected normal user agent not to be detected")
+		}
+	})
+}
+
+func TestEnvDetectorNetworkEscape(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("multiple_webrtc_ips", func(t *testing.T) {
+		info := &EnvInfo{
+			WebRTCIPs: []string{"192.168.1.100", "10.0.0.5", "203.0.113.50"},
+		}
+
+		detected, score, evidence := detector.DetectNetworkEscape(info, nil)
+
+		if !detected {
+			t.Error("Expected multiple WebRTC IPs to be detected")
+		}
+		if score < 45 {
+			t.Errorf("Expected score >= 45, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("vpn_network_type", func(t *testing.T) {
+		info := &EnvInfo{
+			NetworkType: "vpn",
+		}
+
+		detected, score, evidence := detector.DetectNetworkEscape(info, nil)
+
+		if !detected {
+			t.Error("Expected VPN network type to be detected")
+		}
+		if score < 15 {
+			t.Errorf("Expected score >= 15, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("normal_network_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			WebRTCIPs:   []string{"203.0.113.50"},
+			NetworkType: "wifi",
+		}
+
+		detected, _, _ := detector.DetectNetworkEscape(info, nil)
+
+		if detected {
+			t.Error("Expected normal network not to be detected")
+		}
+	})
+}
+
+func TestEnvDetectorProcessEscape(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("vboxservice_process", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 vboxservice.exe",
+		}
+
+		detected, score, evidence := detector.DetectProcessEscape(info, nil)
+
+		if !detected {
+			t.Error("Expected vboxservice process to be detected")
+		}
+		if score < 40 {
+			t.Errorf("Expected score >= 40, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("vmware_process", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 vmtoolsd.exe",
+		}
+
+		detected, score, evidence := detector.DetectProcessEscape(info, nil)
+
+		if !detected {
+			t.Error("Expected vmware process to be detected")
+		}
+		if score < 40 {
+			t.Errorf("Expected score >= 40, got %.2f", score)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("normal_process_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 chrome.exe",
+		}
+
+		detected, _, _ := detector.DetectProcessEscape(info, nil)
+
+		if detected {
+			t.Error("Expected normal process not to be detected")
+		}
+	})
+}
+
+func TestEnvDetectorFingerprintBrowser(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("detect_adspower", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 AdsPower/1.0.0 Chrome/91.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected AdsPower to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "adspower" {
+			t.Errorf("Expected browser type 'adspower', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_gologin", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 GoLogin/2.0.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected GoLogin to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "gologin" {
+			t.Errorf("Expected browser type 'gologin', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_vmlogin", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 VMLogin/3.0.0 Chrome/91.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected VMLogin to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "vmlogin" {
+			t.Errorf("Expected browser type 'vmlogin', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_multilogin", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 MultiLoginApp/4.0.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected MultiLogin to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "multilogin" {
+			t.Errorf("Expected browser type 'multilogin', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_kameleo", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 Kameleo/5.0.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected Kameleo to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "kameleo" {
+			t.Errorf("Expected browser type 'kameleo', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_incogniton", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 Incogniton/6.0.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected Incogniton to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "incogniton" {
+			t.Errorf("Expected browser type 'incogniton', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_clonbrowser", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent: "Mozilla/5.0 ClonBrowser/7.0.0",
+		}
+
+		detected, score, evidence, browserType := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected ClonBrowser to be detected")
+		}
+		if score < 50 {
+			t.Errorf("Expected score >= 50, got %.2f", score)
+		}
+		if browserType != "clonbrowser" {
+			t.Errorf("Expected browser type 'clonbrowser', got '%s'", browserType)
+		}
+		t.Logf("Evidence: %v", evidence)
+	})
+
+	t.Run("detect_via_extension", func(t *testing.T) {
+		info := &EnvInfo{
+			Plugins: []string{"fingerprint-defender", "canvas-defender"},
+		}
+
+		detected, score, _, _ := detector.DetectFingerprintBrowser(info, nil)
+
+		if !detected {
+			t.Error("Expected anti-fingerprint extensions to be detected")
+		}
+		if score < 20 {
+			t.Errorf("Expected score >= 20, got %.2f", score)
+		}
+	})
+
+	t.Run("normal_browser_no_detection", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent:        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0",
+			AudioContextHash: "audio_hash_123",
+			CanvasFingerprint: "canvas_hash_456",
+		}
+
+		detected, _, _, _ := detector.DetectFingerprintBrowser(info, nil)
+
+		if detected {
+			t.Error("Expected normal browser not to be detected")
+		}
+	})
+}
+
+func TestEnhancedDetectionReport(t *testing.T) {
+	detector := &EnvDetector{}
+
+	t.Run("generate_enhanced_report", func(t *testing.T) {
+		info := &EnvInfo{
+			UserAgent:             "Mozilla/5.0 AdsPower/1.0.0",
+			CPUIDInfo:            "VMware Virtual CPU",
+			DeviceMemory:         1.0,
+			HardwareConcurrency:  2,
+			WebGLRenderer:        "VMware SVGA II",
+			TimingVariance:       0.9,
+			ExecutionTime:        0.0001,
+			WebRTCIPs:            []string{"192.168.1.100", "10.0.0.5", "203.0.113.50"},
+			NetworkType:          "vpn",
+			CanvasFingerprint:    "canvas_abc",
+			AudioContextHash:     "",
+		}
+
+		report := detector.EnhancedDetectionReport(info, nil)
+
+		if report == nil {
+			t.Fatal("Expected report to be non-nil")
+		}
+
+		if report.EnvScore < 0 {
+			t.Logf("EnvScore: %.2f (negative score indicates high risk)", report.EnvScore)
+		}
+
+		t.Logf("EnvScore: %.2f", report.EnvScore)
+		t.Logf("RiskLevel: %s", report.RiskLevel)
+		t.Logf("DetectedTools: %v", report.DetectedTools)
+		t.Logf("Checks count: %d", len(report.Checks))
+	})
+}

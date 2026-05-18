@@ -520,7 +520,11 @@ func (s *TraceService) GetModelInfo() map[string]interface{} {
 
 	if s.transformerPredictor != nil {
 		info["transformer_embedding_dim"] = s.transformerPredictor.GetEmbeddingDimension()
+		info["transformer_attention_heads"] = s.transformerPredictor.GetAttentionHeads()
 	}
+
+	info["intent_recognition_enabled"] = true
+	info["anomaly_detection_enabled"] = true
 
 	return info
 }

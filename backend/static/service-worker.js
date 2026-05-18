@@ -1,7 +1,8 @@
-const CACHE_NAME = 'hjtpx-v2.0.0';
-const CAPTCHA_CACHE = 'hjtpx-captcha-v2';
-const OFFLINE_VERIFICATION = 'hjtpx-offline-v2';
-const IMAGE_CACHE = 'hjtpx-images-v1';
+const CACHE_NAME = 'hjtpx-v3.0.0';
+const CAPTCHA_CACHE = 'hjtpx-captcha-v3';
+const OFFLINE_VERIFICATION = 'hjtpx-offline-v3';
+const IMAGE_CACHE = 'hjtpx-images-v2';
+const FONT_CACHE = 'hjtpx-fonts-v2';
 
 const ASSETS_TO_CACHE = [
   '/',
@@ -23,14 +24,29 @@ const CDN_ASSETS = [
   'https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js'
 ];
 
+const FONT_ASSETS = [
+  'https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/webfonts/fa-solid-900.woff2',
+  'https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/webfonts/fa-regular-400.woff2'
+];
+
 const API_CACHE_RULES = [
   { pattern: /\/api\/v1\/captcha\/(slider|click|rotation)/, maxAge: 3600 },
   { pattern: /\/api\/v1\/health/, maxAge: 300 },
   { pattern: /\/api\/v1\/captcha\/verify/, maxAge: 0 }
 ];
 
+const CACHE_CONFIG = {
+  defaultTTL: 86400000,
+  imageTTL: 604800000,
+  fontTTL: 2592000000,
+  maxCacheSize: 50 * 1024 * 1024
+};
+
+let cacheConfig = CACHE_CONFIG;
+
 self.addEventListener('install', (event) => {
-  console.log('[ServiceWorker] 安装 Service Worker v2');
+  console.log('[ServiceWorker] 安装 Service Worker v3');
+  
   event.waitUntil(
     Promise.all([
       caches.open(CACHE_NAME).then((cache) => {
@@ -50,6 +66,12 @@ self.addEventListener('install', (event) => {
       caches.open(IMAGE_CACHE).then(() => {
         console.log('[ServiceWorker] 图片缓存就绪');
         return Promise.resolve();
+      }),
+      caches.open(FONT_CACHE).then((cache) => {
+        console.log('[ServiceWorker] 字体缓存就绪');
+        return cache.addAll(FONT_ASSETS).catch((err) => {
+          console.warn('[ServiceWorker] 字体缓存失败:', err);
+        });
       })
     ]).then(() => {
       console.log('[ServiceWorker] 缓存初始化完成');
@@ -59,12 +81,13 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[ServiceWorker] 激活 Service Worker v2');
+  console.log('[ServiceWorker] 激活 Service Worker v3');
+  
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          const validCaches = [CACHE_NAME, CAPTCHA_CACHE, OFFLINE_VERIFICATION, IMAGE_CACHE];
+          const validCaches = [CACHE_NAME, CAPTCHA_CACHE, OFFLINE_VERIFICATION, IMAGE_CACHE, FONT_CACHE];
           if (!validCaches.includes(cacheName)) {
             console.log('[ServiceWorker] 清理旧缓存:', cacheName);
             return caches.delete(cacheName);
@@ -100,6 +123,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (FONT_ASSETS.some(url => request.url === url)) {
+    event.respondWith(handleFontRequest(request));
+    return;
+  }
+
   if (request.url.startsWith('http')) {
     event.respondWith(handleDefaultRequest(request));
   }
@@ -110,7 +138,7 @@ function isApiRequest(url) {
 }
 
 function isImageRequest(url) {
-  return /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/.test(url);
+  return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?|$)/.test(url);
 }
 
 async function handleApiRequest(request) {
@@ -125,19 +153,21 @@ async function handleApiRequest(request) {
 
     if (networkResponse.ok) {
       const cache = await caches.open(CAPTCHA_CACHE);
-      cache.put(request, networkResponse.clone());
-
+      const responseToCache = networkResponse.clone();
+      
       if (cacheRule && cacheRule.maxAge > 0) {
-        const headers = new Headers(networkResponse.headers);
+        const headers = new Headers(responseToCache.headers);
         headers.set('Cache-Timestamp', Date.now().toString());
         headers.set('Cache-MaxAge', cacheRule.maxAge.toString());
 
-        const responseWithHeaders = new Response(await networkResponse.clone().blob(), {
+        const responseWithHeaders = new Response(await responseToCache.blob(), {
           status: networkResponse.status,
           statusText: networkResponse.statusText,
           headers: headers
         });
         cache.put(request, responseWithHeaders);
+      } else {
+        cache.put(request, responseToCache);
       }
     }
 
@@ -159,7 +189,8 @@ async function handleApiRequest(request) {
 
     return new Response(JSON.stringify({
       success: false,
-      error: '网络请求失败'
+      error: '网络请求失败',
+      offline: true
     }), {
       headers: { 'Content-Type': 'application/json' },
       status: 503
@@ -183,7 +214,17 @@ async function handleImageRequest(request) {
 
     if (networkResponse.ok) {
       const cache = await caches.open(IMAGE_CACHE);
-      cache.put(request, networkResponse.clone());
+      const responseToCache = networkResponse.clone();
+      
+      const headers = new Headers(responseToCache.headers);
+      headers.set('Cache-Timestamp', Date.now().toString());
+      
+      const responseWithHeaders = new Response(await responseToCache.blob(), {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: headers
+      });
+      cache.put(request, responseWithHeaders);
     }
 
     return networkResponse;
@@ -192,12 +233,13 @@ async function handleImageRequest(request) {
     const cachedResponse = await cache.match(request);
 
     if (cachedResponse) {
-      return cachedResponse;
+      const cacheTimestamp = parseInt(cachedResponse.headers.get('Cache-Timestamp') || '0');
+      if (Date.now() - cacheTimestamp < cacheConfig.imageTTL) {
+        return cachedResponse;
+      }
     }
 
-    return new Response('', {
-      status: 503
-    });
+    return new Response('', { status: 503 });
   }
 }
 
@@ -215,9 +257,25 @@ async function handleCDNRequest(request) {
     if (cachedResponse) {
       return cachedResponse;
     }
-    return new Response('CDN resource unavailable offline', {
-      status: 503
-    });
+    return new Response('CDN resource unavailable offline', { status: 503 });
+  }
+}
+
+async function handleFontRequest(request) {
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const cache = await caches.open(FONT_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  } catch (error) {
+    const cache = await caches.open(FONT_CACHE);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    return new Response('Font unavailable offline', { status: 503 });
   }
 }
 
@@ -344,6 +402,21 @@ self.addEventListener('message', (event) => {
       });
     });
   }
+
+  if (event.data && event.data.type === 'CACHE_CONFIG') {
+    console.log('[ServiceWorker] 更新缓存配置');
+    cacheConfig = { ...CACHE_CONFIG, ...event.data.config };
+  }
+
+  if (event.data && event.data.type === 'PRECACHE_ASSETS') {
+    console.log('[ServiceWorker] 预缓存资源');
+    const assets = event.data.assets || [];
+    caches.open(CACHE_NAME).then((cache) => {
+      cache.addAll(assets).catch(err => {
+        console.warn('[ServiceWorker] 预缓存失败:', err);
+      });
+    });
+  }
 });
 
 self.addEventListener('sync', (event) => {
@@ -368,6 +441,7 @@ async function syncOfflineVerifications() {
 
       if (response.ok) {
         console.log('[ServiceWorker] 离线数据同步成功');
+        await cache.delete('offline-verification-data');
       }
     }
   } catch (error) {
@@ -388,12 +462,14 @@ self.addEventListener('push', (event) => {
       badge: '/static/icons/badge-72x72.png',
       vibrate: [100, 50, 100],
       data: {
-        url: data.url || '/'
+        url: data.url || '/',
+        timestamp: Date.now()
       },
       actions: [
         { action: 'open', title: '查看' },
         { action: 'close', title: '关闭' }
-      ]
+      ],
+      requireInteraction: data.requireInteraction || false
     };
 
     event.waitUntil(
@@ -431,6 +507,44 @@ self.addEventListener('notificationclose', (event) => {
   console.log('[ServiceWorker] 通知被关闭');
 });
 
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'daily-sync') {
+    event.waitUntil(performDailySync());
+  }
+});
+
+async function performDailySync() {
+  console.log('[ServiceWorker] 执行每日同步');
+  try {
+    await fetch('/api/v1/sync');
+    console.log('[ServiceWorker] 每日同步完成');
+  } catch (error) {
+    console.error('[ServiceWorker] 每日同步失败:', error);
+  }
+}
+
 function generateVerificationId() {
   return 'offline_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
+
+async function cleanupOldCache() {
+  const cacheNames = await caches.keys();
+  const thresholdTime = Date.now() - cacheConfig.defaultTTL;
+  
+  for (const cacheName of cacheNames) {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    
+    for (const key of keys) {
+      const response = await cache.match(key);
+      const timestamp = parseInt(response.headers.get('Cache-Timestamp') || '0');
+      
+      if (timestamp > 0 && timestamp < thresholdTime) {
+        await cache.delete(key);
+        console.log('[ServiceWorker] 删除过期缓存:', key.url);
+      }
+    }
+  }
+}
+
+setInterval(cleanupOldCache, 3600000);

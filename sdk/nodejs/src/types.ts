@@ -97,6 +97,86 @@ export interface ClickCaptchaResponse {
 }
 
 /**
+ * 图形验证码响应
+ */
+export interface ImageCaptchaResponse {
+  /** 挑战ID */
+  challenge_id: string;
+  /** 图片数据（base64） */
+  image: string;
+}
+
+/**
+ * 旋转验证码响应
+ */
+export interface RotationCaptchaResponse {
+  /** 挑战ID */
+  challenge_id: string;
+  /** 图片数据（base64） */
+  image: string;
+}
+
+/**
+ * 手势验证码响应
+ */
+export interface GestureCaptchaResponse {
+  /** 会话ID */
+  session_id: string;
+  /** 手势模式 */
+  pattern?: string;
+  /** 网格大小 */
+  grid_size?: number;
+  /** 提示信息 */
+  hint?: string;
+}
+
+/**
+ * 拼图碎片
+ */
+export interface JigsawPiece {
+  /** 碎片索引 */
+  index: number;
+  /** 原始X坐标 */
+  original_x: number;
+  /** 原始Y坐标 */
+  original_y: number;
+  /** 当前X坐标 */
+  current_x: number;
+  /** 当前Y坐标 */
+  current_y: number;
+  /** 碎片宽度 */
+  width: number;
+  /** 碎片高度 */
+  height: number;
+  /** 旋转角度 */
+  rotation?: number;
+}
+
+/**
+ * 拼图验证码响应
+ */
+export interface JigsawCaptchaResponse {
+  /** 会话ID */
+  session_id: string;
+  /** 图片URL */
+  image_url: string;
+  /** 碎片列表 */
+  pieces: JigsawPiece[];
+  /** 碎片图片列表 */
+  piece_images: string[];
+  /** 网格大小 */
+  grid_size: number;
+  /** 碎片宽度 */
+  piece_width: number;
+  /** 碎片高度 */
+  piece_height: number;
+  /** 图片宽度 */
+  image_width: number;
+  /** 图片高度 */
+  image_height: number;
+}
+
+/**
  * 验证码验证请求基础字段
  */
 export interface VerifyCaptchaRequestBase {

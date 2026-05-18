@@ -649,6 +649,7 @@ type AdvancedFeatures struct {
 	AccelerationSkewness    float64
 	JerkMean                float64
 	JerkMax                 float64
+	JerkVariance            float64
 	CurvatureMedian         float64
 	CurvatureVariance       float64
 	CurvatureMax            float64
@@ -660,6 +661,24 @@ type AdvancedFeatures struct {
 	TimeNormalizedDistance  float64
 	VelocityProfileEntropy  float64
 	AccelerationProfileEntropy float64
+	HurstExponent           float64
+	FractalDimension        float64
+	SpectralEntropy         float64
+	PermutationEntropy      float64
+	ApproximateEntropy      float64
+	SampleEntropy           float64
+	CircularVariance        float64
+	LyapunovExponent        float64
+	CorrelationDimension    float64
+	KurtosisExcess          float64
+	VelocityPeakCount       int
+	AccelerationPeakCount   int
+	AutocorrelationLag1     float64
+	AutocorrelationLag2     float64
+	ZeroCrossingRate        float64
+	TemporalIrregularity    float64
+	SpatialDispersion       float64
+	DirectionalConsistency  float64
 }
 
 func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*AdvancedFeatures, error) {
@@ -676,6 +695,16 @@ func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*A
 		features.SpeedSkewness = e.calculateSkewness(speeds)
 		features.SpeedKurtosis = e.calculateKurtosis(speeds)
 		features.SpeedEntropy = e.calculateEntropy(speeds, 10)
+		features.HurstExponent = e.calculateHurstExponent(speeds)
+		features.SpectralEntropy = e.calculateSpectralEntropy(speeds)
+		features.PermutationEntropy = e.calculatePermutationEntropy(speeds)
+		features.ApproximateEntropy = e.calculateApproximateEntropy(speeds)
+		features.SampleEntropy = e.calculateSampleEntropy(speeds)
+		features.VelocityPeakCount = e.countPeaks(speeds)
+		features.AutocorrelationLag1 = e.calculateAutocorrelation(speeds, 1)
+		features.AutocorrelationLag2 = e.calculateAutocorrelation(speeds, 2)
+		features.ZeroCrossingRate = e.calculateZeroCrossingRate(speeds)
+		features.KurtosisExcess = features.SpeedKurtosis - 3.0
 	}
 
 	accelerations := e.computeAccelerations(traceData)
@@ -683,12 +712,14 @@ func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*A
 		features.MedianAcceleration = e.medianFloat(accelerations)
 		features.AccelerationVariance = e.varianceFloat(accelerations)
 		features.AccelerationSkewness = e.calculateSkewness(accelerations)
+		features.AccelerationPeakCount = e.countPeaks(accelerations)
 	}
 
 	jerks := e.computeJerks(traceData)
 	if len(jerks) > 0 {
 		features.JerkMean = e.meanFloat(jerks)
 		features.JerkMax = e.maxAbsFloat(jerks)
+		features.JerkVariance = e.varianceFloat(jerks)
 	}
 
 	curvatures := e.computeCurvatures(traceData)
@@ -702,6 +733,8 @@ func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*A
 	if len(directions) > 1 {
 		features.DirectionChangeRate = e.calculateDirectionChangeRate(directions)
 		features.DirectionEntropy = e.calculateDirectionEntropy(directions)
+		features.CircularVariance = e.calculateCircularVariance(directions)
+		features.DirectionalConsistency = e.calculateDirectionalConsistency(directions)
 	}
 
 	if len(traceData.Points) > 1 {
@@ -709,10 +742,16 @@ func (e *TraceExtractor) ExtractAdvancedFeatures(traceData *model.TraceData) (*A
 		features.StartEndAngle = e.calculateStartEndAngle(traceData)
 		features.AreaUnderCurve = e.calculateAreaUnderCurve(traceData)
 		features.TimeNormalizedDistance = e.calculateTimeNormalizedDistance(traceData)
+		features.FractalDimension = e.calculateFractalDimension(traceData)
+		features.CorrelationDimension = e.calculateCorrelationDimension(traceData)
+		features.SpatialDispersion = e.calculateSpatialDispersion(traceData)
+		features.TemporalIrregularity = e.calculateTemporalIrregularity(traceData)
 	}
 
 	features.VelocityProfileEntropy = e.calculateProfileEntropy(speeds, 5)
 	features.AccelerationProfileEntropy = e.calculateProfileEntropy(accelerations, 5)
+
+	features.LyapunovExponent = e.calculateLyapunovExponent(speeds)
 
 	return features, nil
 }
@@ -1097,4 +1136,665 @@ func (e *TraceExtractor) calculateKurtosis(values []float64) float64 {
 	}
 	n := float64(len(values))
 	return (sum / n) - 3.0
+}
+
+func (e *TraceExtractor) calculateHurstExponent(values []float64) float64 {
+	if len(values) < 10 {
+		return 0.5
+	}
+
+	n := len(values)
+	stdDev := math.Sqrt(e.varianceFloat(values))
+
+	if stdDev == 0 {
+		return 0.5
+	}
+
+	ranges := []int{4, 8, 16, 32}
+	rsValues := make([]float64, 0)
+
+	for _, lag := range ranges {
+		if n < lag*2 {
+			continue
+		}
+
+		subseries := n / lag
+		rSum := 0.0
+
+		for i := 0; i < subseries; i++ {
+			endIdx := (i + 1) * lag
+			if endIdx > n {
+				endIdx = n
+			}
+			subseq := values[i*lag : endIdx]
+			subMean := e.meanFloat(subseq)
+
+			maxDev := -1e10
+			minDev := 1e10
+			cumsum := 0.0
+			for _, v := range subseq {
+				cumsum += v - subMean
+				if cumsum > maxDev {
+					maxDev = cumsum
+				}
+				if cumsum < minDev {
+					minDev = cumsum
+				}
+			}
+
+			r := maxDev - minDev
+			rSum += r
+		}
+
+		avgR := rSum / float64(subseries)
+		rsValues = append(rsValues, avgR/stdDev)
+	}
+
+	if len(rsValues) < 2 {
+		return 0.5
+	}
+
+	sumLogN := 0.0
+	sumLogRS := 0.0
+	sumLogN2 := 0.0
+	sumLogNLogRS := 0.0
+
+	for i, lag := range ranges[:len(rsValues)] {
+		logN := math.Log(float64(lag))
+		logRS := math.Log(rsValues[i])
+
+		sumLogN += logN
+		sumLogRS += logRS
+		sumLogN2 += logN * logN
+		sumLogNLogRS += logN * logRS
+	}
+
+	m := float64(len(rsValues))
+	denom := m*sumLogN2 - sumLogN*sumLogN
+	if denom == 0 {
+		return 0.5
+	}
+
+	hurst := (m*sumLogNLogRS - sumLogN*sumLogRS) / denom
+
+	if hurst < 0 {
+		hurst = 0
+	}
+	if hurst > 1 {
+		hurst = 1
+	}
+
+	return hurst
+}
+
+func (e *TraceExtractor) calculateSpectralEntropy(values []float64) float64 {
+	if len(values) < 4 {
+		return 0
+	}
+
+	fft := e.computeFFT(values)
+	if len(fft) == 0 {
+		return 0
+	}
+
+	var sum float64
+	for _, v := range fft {
+		sum += v
+	}
+
+	if sum == 0 {
+		return 0
+	}
+
+	entropy := 0.0
+	for _, v := range fft {
+		p := v / sum
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *TraceExtractor) computeFFT(values []float64) []float64 {
+	n := len(values)
+	if n < 2 {
+		return values
+	}
+
+	result := make([]float64, n/2)
+	for i := 0; i < n/2; i++ {
+		var real, imag float64
+		for j := 0; j < n; j++ {
+			angle := -2 * math.Pi * float64(i*j) / float64(n)
+			real += values[j] * math.Cos(angle)
+			imag += values[j] * math.Sin(angle)
+		}
+		result[i] = math.Sqrt(real*real + imag*imag)
+	}
+
+	return result
+}
+
+func (e *TraceExtractor) calculatePermutationEntropy(values []float64) float64 {
+	if len(values) < 5 {
+		return 0
+	}
+
+	order := 3
+	n := len(values) - order + 1
+	if n < 1 {
+		return 0
+	}
+
+	patterns := make(map[int]int)
+	for i := 0; i < n; i++ {
+		indices := make([]int, order)
+		for j := 0; j < order; j++ {
+			indices[j] = j
+		}
+
+		for j := 0; j < order; j++ {
+			for k := j + 1; k < order; k++ {
+				if values[i+k] < values[i+j] {
+					indices[j], indices[k] = indices[k], indices[j]
+				}
+			}
+		}
+
+		pattern := 0
+		for j := 0; j < order; j++ {
+			pattern += indices[j] * int(math.Pow(float64(order), float64(j)))
+		}
+		patterns[pattern]++
+	}
+
+	entropy := 0.0
+	total := float64(n)
+	for _, count := range patterns {
+		p := float64(count) / total
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	maxEntropy := math.Log2(math.Pow(float64(order), float64(order)))
+	if maxEntropy > 0 {
+		entropy /= maxEntropy
+	}
+
+	return entropy
+}
+
+func (e *TraceExtractor) calculateApproximateEntropy(values []float64) float64 {
+	if len(values) < 10 {
+		return 0
+	}
+
+	m := 2
+	r := 0.2 * e.stdDev(values)
+
+	phi := e.computePhi(values, m, r)
+	phi1 := e.computePhi(values, m+1, r)
+
+	if phi == 0 || phi1 == 0 {
+		return 0
+	}
+
+	return phi - phi1
+}
+
+func (e *TraceExtractor) calculateSampleEntropy(values []float64) float64 {
+	if len(values) < 10 {
+		return 0
+	}
+
+	m := 2
+	r := 0.2 * e.stdDev(values)
+
+	b := e.countTemplateMatches(values, m, r)
+	a := e.countTemplateMatches(values, m+1, r)
+
+	if b == 0 || a == 0 {
+		return 0
+	}
+
+	return -math.Log(a / b)
+}
+
+func (e *TraceExtractor) computePhi(data []float64, m int, r float64) float64 {
+	n := len(data)
+	if n < m {
+		return 0
+	}
+
+	count := 0
+	for i := 0; i < n-m+1; i++ {
+		for j := 0; j < n-m+1; j++ {
+			if i == j {
+				continue
+			}
+			match := true
+			for k := 0; k < m; k++ {
+				if math.Abs(data[i+k]-data[j+k]) > r {
+					match = false
+					break
+				}
+			}
+			if match {
+				count++
+			}
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return math.Log(float64(count) / float64((n-m+1)*(n-m)))
+}
+
+func (e *TraceExtractor) countTemplateMatches(data []float64, m int, r float64) float64 {
+	n := len(data)
+	if n < m {
+		return 0
+	}
+
+	count := 0
+	for i := 0; i < n-m+1; i++ {
+		for j := i + 1; j < n-m+1; j++ {
+			match := true
+			for k := 0; k < m; k++ {
+				if math.Abs(data[i+k]-data[j+k]) > r {
+					match = false
+					break
+				}
+			}
+			if match {
+				count++
+			}
+		}
+	}
+
+	return float64(count)
+}
+
+func (e *TraceExtractor) stdDev(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	return math.Sqrt(e.varianceFloat(values))
+}
+
+func (e *TraceExtractor) countPeaks(values []float64) int {
+	if len(values) < 3 {
+		return 0
+	}
+
+	peaks := 0
+	threshold := e.stdDev(values) * 0.3
+
+	for i := 1; i < len(values)-1; i++ {
+		if values[i] > values[i-1]+threshold && values[i] > values[i+1]+threshold {
+			peaks++
+		}
+	}
+
+	return peaks
+}
+
+func (e *TraceExtractor) calculateAutocorrelation(values []float64, lag int) float64 {
+	if len(values) < lag+1 {
+		return 0
+	}
+
+	mean := e.meanFloat(values)
+	n := len(values) - lag
+
+	numerator := 0.0
+	denominator := 0.0
+
+	for i := 0; i < n; i++ {
+		numerator += (values[i] - mean) * (values[i+lag] - mean)
+		denominator += (values[i] - mean) * (values[i] - mean)
+	}
+
+	if denominator == 0 {
+		return 0
+	}
+
+	return numerator / denominator
+}
+
+func (e *TraceExtractor) calculateZeroCrossingRate(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+
+	crossings := 0
+	for i := 1; i < len(values); i++ {
+		if values[i-1]*values[i] < 0 {
+			crossings++
+		}
+	}
+
+	return float64(crossings) / float64(len(values)-1)
+}
+
+func (e *TraceExtractor) calculateCircularVariance(directions []float64) float64 {
+	if len(directions) < 2 {
+		return 0
+	}
+
+	var sinSum, cosSum float64
+	for _, dir := range directions {
+		sinSum += math.Sin(dir)
+		cosSum += math.Cos(dir)
+	}
+
+	sinMean := sinSum / float64(len(directions))
+	cosMean := cosSum / float64(len(directions))
+
+	r := math.Sqrt(sinMean*sinMean + cosMean*cosMean)
+
+	return 1.0 - r
+}
+
+func (e *TraceExtractor) calculateDirectionalConsistency(directions []float64) float64 {
+	if len(directions) < 2 {
+		return 0
+	}
+
+	meanDir := 0.0
+	for _, dir := range directions {
+		meanDir += dir
+	}
+	meanDir /= float64(len(directions))
+
+	var sumDiff float64
+	for _, dir := range directions {
+		diff := math.Abs(dir - meanDir)
+		if diff > math.Pi {
+			diff = 2*math.Pi - diff
+		}
+		sumDiff += diff
+	}
+
+	avgDiff := sumDiff / float64(len(directions))
+
+	return 1.0 - avgDiff/math.Pi
+}
+
+func (e *TraceExtractor) calculateFractalDimension(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 10 {
+		return 1.0
+	}
+
+	points := make([][]float64, len(traceData.Points))
+	for i, p := range traceData.Points {
+		points[i] = []float64{p.X, p.Y}
+	}
+
+	return e.boxCountFractalDimension(points)
+}
+
+func (e *TraceExtractor) boxCountFractalDimension(points [][]float64) float64 {
+	if len(points) < 5 {
+		return 1.0
+	}
+
+	minX, maxX := points[0][0], points[0][0]
+	minY, maxY := points[0][1], points[0][1]
+
+	for _, p := range points {
+		if p[0] < minX {
+			minX = p[0]
+		}
+		if p[0] > maxX {
+			maxX = p[0]
+		}
+		if p[1] < minY {
+			minY = p[1]
+		}
+		if p[1] > maxY {
+			maxY = p[1]
+		}
+	}
+
+	boxSizes := []float64{0.05, 0.1, 0.2, 0.3, 0.4}
+	counts := make([]int, 0)
+
+	for _, boxSize := range boxSizes {
+		count := e.countBoxes(points, boxSize, minX, maxX, minY, maxY)
+		if count > 0 && count < len(points) {
+			counts = append(counts, count)
+		}
+	}
+
+	if len(counts) < 2 {
+		return 1.5
+	}
+
+	sumLogS := 0.0
+	sumLogN := 0.0
+	sumLogS2 := 0.0
+	sumLogSLogN := 0.0
+
+	for i, count := range counts {
+		logS := math.Log(1.0 / boxSizes[i])
+		logN := math.Log(float64(count))
+
+		sumLogS += logS
+		sumLogN += logN
+		sumLogS2 += logS * logS
+		sumLogSLogN += logS * logN
+	}
+
+	n := float64(len(counts))
+	denom := n*sumLogS2 - sumLogS*sumLogS
+	if denom == 0 {
+		return 1.5
+	}
+
+	dimension := (n*sumLogSLogN - sumLogS*sumLogN) / denom
+
+	if dimension < 1 {
+		dimension = 1
+	}
+	if dimension > 2 {
+		dimension = 2
+	}
+
+	return dimension
+}
+
+func (e *TraceExtractor) countBoxes(points [][]float64, boxSize, minX, maxX, minY, maxY float64) int {
+	boxesX := int((maxX-minX)/boxSize) + 1
+	boxesY := int((maxY-minY)/boxSize) + 1
+
+	boxSet := make(map[int]bool)
+	for _, p := range points {
+		boxX := int((p[0] - minX) / boxSize)
+		boxY := int((p[1] - minY) / boxSize)
+		if boxX >= boxesX {
+			boxX = boxesX - 1
+		}
+		if boxY >= boxesY {
+			boxY = boxesY - 1
+		}
+		if boxX < 0 {
+			boxX = 0
+		}
+		if boxY < 0 {
+			boxY = 0
+		}
+		boxIndex := boxY*boxesX + boxX
+		boxSet[boxIndex] = true
+	}
+
+	return len(boxSet)
+}
+
+func (e *TraceExtractor) calculateCorrelationDimension(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 20 {
+		return 1.0
+	}
+
+	points := make([][]float64, len(traceData.Points))
+	for i, p := range traceData.Points {
+		points[i] = []float64{p.X, p.Y}
+	}
+
+	return e.computeCorrelationDimension(points)
+}
+
+func (e *TraceExtractor) computeCorrelationDimension(points [][]float64) float64 {
+	n := len(points)
+	if n < 10 {
+		return 1.0
+	}
+
+	radii := []float64{2, 5, 10, 20, 30}
+	counts := make([]int, 0)
+
+	for _, r := range radii {
+		count := 0
+		for i := 0; i < n; i++ {
+			for j := i + 1; j < n; j++ {
+				dx := points[i][0] - points[j][0]
+				dy := points[i][1] - points[j][1]
+				dist := math.Sqrt(dx*dx + dy*dy)
+				if dist < r {
+					count++
+				}
+			}
+		}
+		if count > 0 {
+			counts = append(counts, count)
+		}
+	}
+
+	if len(counts) < 2 {
+		return 1.5
+	}
+
+	sumLogR := 0.0
+	sumLogC := 0.0
+	sumLogR2 := 0.0
+	sumLogRLogC := 0.0
+
+	for i, count := range counts {
+		logR := math.Log(radii[i])
+		logC := math.Log(float64(count))
+
+		sumLogR += logR
+		sumLogC += logC
+		sumLogR2 += logR * logR
+		sumLogRLogC += logR * logC
+	}
+
+	m := float64(len(counts))
+	denom := m*sumLogR2 - sumLogR*sumLogR
+	if denom == 0 {
+		return 1.5
+	}
+
+	dimension := (m*sumLogRLogC - sumLogR*sumLogC) / denom
+
+	if dimension < 1 {
+		dimension = 1
+	}
+	if dimension > 2 {
+		dimension = 2
+	}
+
+	return dimension
+}
+
+func (e *TraceExtractor) calculateSpatialDispersion(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 2 {
+		return 0
+	}
+
+	var sumX, sumY float64
+	for _, p := range traceData.Points {
+		sumX += p.X
+		sumY += p.Y
+	}
+	meanX := sumX / float64(len(traceData.Points))
+	meanY := sumY / float64(len(traceData.Points))
+
+	var variance float64
+	for _, p := range traceData.Points {
+		dx := p.X - meanX
+		dy := p.Y - meanY
+		variance += dx*dx + dy*dy
+	}
+	variance /= float64(len(traceData.Points))
+
+	return math.Sqrt(variance)
+}
+
+func (e *TraceExtractor) calculateTemporalIrregularity(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 0
+	}
+
+	intervals := make([]float64, len(traceData.Points)-1)
+	for i := 1; i < len(traceData.Points); i++ {
+		intervals[i-1] = float64(traceData.Points[i].Timestamp - traceData.Points[i-1].Timestamp)
+	}
+
+	mean := e.meanFloat(intervals)
+	if mean == 0 {
+		return 0
+	}
+
+	var sumRatio float64
+	for _, interval := range intervals {
+		sumRatio += math.Abs(interval - mean) / mean
+	}
+
+	return sumRatio / float64(len(intervals))
+}
+
+func (e *TraceExtractor) calculateLyapunovExponent(values []float64) float64 {
+	if len(values) < 50 {
+		return 0
+	}
+
+	n := len(values)
+	exponents := make([]float64, 0)
+
+	for i := 0; i < n-20; i += 10 {
+		d0 := math.Abs(values[i+1] - values[i])
+		if d0 == 0 {
+			continue
+		}
+
+		for j := i + 1; j < n-10; j++ {
+			d1 := math.Abs(values[j+1] - values[j])
+			if d1 == 0 {
+				continue
+			}
+
+			if math.Abs(d0-d1)/d0 < 0.1 {
+				dist := 0.0
+				for k := 0; k < 5 && i+k < n && j+k < n; k++ {
+					dist += math.Abs(values[i+k] - values[j+k])
+				}
+				if dist > 0 {
+					exponents = append(exponents, math.Log(dist/d0))
+				}
+				break
+			}
+		}
+	}
+
+	if len(exponents) == 0 {
+		return 0
+	}
+
+	return e.meanFloat(exponents)
 }

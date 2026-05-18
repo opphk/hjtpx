@@ -34,17 +34,14 @@ func TestIncrementFailureCount(t *testing.T) {
 func TestGetSuccessRate(t *testing.T) {
 	ResetMetrics()
 
-	// Test with no requests
 	assert.Equal(t, 100.0, GetSuccessRate())
 
-	// Test with all successes
 	IncrementRequestCount()
 	IncrementSuccessCount()
 	IncrementRequestCount()
 	IncrementSuccessCount()
 	assert.Equal(t, 100.0, GetSuccessRate())
 
-	// Test with mixed results
 	ResetMetrics()
 	IncrementRequestCount()
 	IncrementSuccessCount()
@@ -57,7 +54,6 @@ func TestGetUptime(t *testing.T) {
 	uptime := GetUptime()
 	assert.True(t, uptime >= 0)
 
-	// Wait a little to ensure it increases
 	time.Sleep(1 * time.Millisecond)
 	newUptime := GetUptime()
 	assert.True(t, newUptime > uptime)
@@ -78,4 +74,81 @@ func TestResetMetrics(t *testing.T) {
 	assert.Equal(t, uint64(0), GetRequestCount())
 	assert.Equal(t, uint64(0), GetSuccessCount())
 	assert.Equal(t, uint64(0), GetFailureCount())
+}
+
+func TestRecordCacheHit(t *testing.T) {
+	RecordCacheHit()
+}
+
+func TestRecordCacheMiss(t *testing.T) {
+	RecordCacheMiss()
+}
+
+func TestRecordCacheSize(t *testing.T) {
+	RecordCacheSize(100)
+}
+
+func TestRecordCacheOperation(t *testing.T) {
+	RecordCacheOperation("set")
+	RecordCacheOperation("delete")
+}
+
+func TestRecordDBQueryDuration(t *testing.T) {
+	RecordDBQueryDuration("select", 10*time.Millisecond)
+	RecordDBQueryDuration("insert", 5*time.Millisecond)
+}
+
+func TestRecordDBError(t *testing.T) {
+	RecordDBError()
+}
+
+func TestRecordBusinessError(t *testing.T) {
+	RecordBusinessError("validation", "/api/user")
+	RecordBusinessError("authorization", "/api/admin")
+}
+
+func TestRecordAuthSuccess(t *testing.T) {
+	RecordAuthSuccess()
+}
+
+func TestRecordAuthFailure(t *testing.T) {
+	RecordAuthFailure("invalid_token")
+	RecordAuthFailure("wrong_password")
+}
+
+func TestRecordCaptchaSuccess(t *testing.T) {
+	RecordCaptchaSuccess()
+}
+
+func TestRecordCaptchaFailure(t *testing.T) {
+	RecordCaptchaFailure()
+}
+
+func TestRecordCaptchaBlocked(t *testing.T) {
+	RecordCaptchaBlocked()
+}
+
+func TestRecordRateLimitAccepted(t *testing.T) {
+	RecordRateLimitAccepted()
+}
+
+func TestRecordRateLimitRejected(t *testing.T) {
+	RecordRateLimitRejected()
+}
+
+func TestRecordHealthCheck(t *testing.T) {
+	RecordHealthCheck("success")
+	RecordHealthCheck("failure")
+}
+
+func TestSetAvailability(t *testing.T) {
+	SetAvailability(99.9)
+	SetAvailability(100.0)
+}
+
+func TestGetMetricsSummary(t *testing.T) {
+	summary := GetMetricsSummary()
+	assert.Contains(t, summary, "http_requests_total")
+	assert.Contains(t, summary, "http_success_rate")
+	assert.Contains(t, summary, "uptime_seconds")
 }

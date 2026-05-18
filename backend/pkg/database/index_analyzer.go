@@ -12,8 +12,10 @@ import (
 )
 
 type IndexAnalyzer struct {
-	db *gorm.DB
-	mu sync.RWMutex
+	db           *gorm.DB
+	mu           sync.RWMutex
+	analysisCache map[string]interface{}
+	cacheTime     time.Time
 }
 
 type RedundantIndex struct {
@@ -936,5 +938,265 @@ func (io *IndexOptimizer) SetAutoCreate(enabled bool) {
 
 func (io *IndexOptimizer) SetAutoAnalyze(enabled bool) {
 	io.enableAutoAnalyze = enabled
+}
+
+func (io *IndexOptimizer) GetFragmentedIndexes(threshold float64) ([]IndexFragmentation, error) {
+	if io.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var fragmented []IndexFragmentation
+
+	err := io.db.Raw(`
+		SELECT
+			idx.relname AS index_name,
+			tbl.relname AS table_name,
+			pg_size_pretty(pg_relation_size(idx.oid)) AS index_size,
+			round((pg_relation_size(idx.oid) - pg_indexes_size(tbl.oid) / (SELECT count(*) FROM pg_index WHERE indrelid = tbl.oid))::numeric / 
+				NULLIF(pg_relation_size(idx.oid), 0) * 100, 2) AS fragmentation_ratio,
+			pg_stat_user_indexes.idx_scan AS scan_count,
+			pg_stat_user_indexes.idx_tup_read AS tuples_read,
+			pg_stat_user_indexes.idx_tup_fetch AS tuples_fetched
+		FROM pg_class idx
+		JOIN pg_index i ON idx.oid = i.indexrelid
+		JOIN pg_class tbl ON i.indrelid = tbl.oid
+		JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+		LEFT JOIN pg_stat_user_indexes ON pg_stat_user_indexes.indexrelid = idx.oid
+		WHERE ns.nspname = 'public'
+			AND idx.relkind = 'i'
+			AND NOT i.indisprimary
+		HAVING round((pg_relation_size(idx.oid) - pg_indexes_size(tbl.oid) / (SELECT count(*) FROM pg_index WHERE indrelid = tbl.oid))::numeric / 
+			NULLIF(pg_relation_size(idx.oid), 0) * 100, 2) >= $1
+		ORDER BY fragmentation_ratio DESC
+	`, threshold).Scan(&fragmented).Error
+
+	return fragmented, err
+}
+
+type IndexFragmentation struct {
+	IndexName         string  `json:"index_name"`
+	TableName         string  `json:"table_name"`
+	IndexSize         string  `json:"index_size"`
+	FragmentationRatio float64 `json:"fragmentation_ratio"`
+	ScanCount         int64   `json:"scan_count"`
+	TuplesRead        int64   `json:"tuples_read"`
+	TuplesFetched     int64   `json:"tuples_fetched"`
+}
+
+func (io *IndexOptimizer) ReindexFragmentedIndexes(threshold float64, concurrency int) error {
+	fragmented, err := io.GetFragmentedIndexes(threshold)
+	if err != nil {
+		return err
+	}
+
+	if len(fragmented) == 0 {
+		log.Println("[INDEX_OPTIMIZER] No fragmented indexes found")
+		return nil
+	}
+
+	log.Printf("[INDEX_OPTIMIZER] Found %d fragmented indexes with fragmentation >= %.2f%%", len(fragmented), threshold)
+
+	for _, idx := range fragmented {
+		if err := io.ReindexIndex(idx.IndexName); err != nil {
+			log.Printf("[INDEX_OPTIMIZER] Failed to reindex %s: %v", idx.IndexName, err)
+			continue
+		}
+		log.Printf("[INDEX_OPTIMIZER] Successfully reindexed %s", idx.IndexName)
+	}
+
+	return nil
+}
+
+func (io *IndexOptimizer) ReindexIndex(indexName string) error {
+	sql := fmt.Sprintf("REINDEX INDEX CONCURRENTLY %s", indexName)
+	return io.db.Exec(sql).Error
+}
+
+func (io *IndexOptimizer) AnalyzeIndexEfficiency() ([]IndexEfficiency, error) {
+	if io.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var efficiency []IndexEfficiency
+
+	err := io.db.Raw(`
+		SELECT
+			idx.relname AS index_name,
+			tbl.relname AS table_name,
+			pg_size_pretty(pg_relation_size(idx.oid)) AS index_size,
+			COALESCE(pg_stat_user_indexes.idx_scan, 0) AS scan_count,
+			COALESCE(pg_stat_user_indexes.idx_tup_read, 0) AS tuples_read,
+			COALESCE(pg_stat_user_indexes.idx_tup_fetch, 0) AS tuples_fetched,
+			CASE
+				WHEN COALESCE(pg_stat_user_indexes.idx_scan, 0) = 0 THEN 0.0
+				ELSE ROUND(COALESCE(pg_stat_user_indexes.idx_tup_fetch, 0)::numeric / NULLIF(COALESCE(pg_stat_user_indexes.idx_tup_read, 0), 0) * 100, 2)
+			END AS hit_ratio,
+			CASE
+				WHEN COALESCE(pg_stat_user_indexes.idx_scan, 0) = 0 THEN 'unused'
+				WHEN pg_stat_user_indexes.idx_scan < 100 THEN 'low'
+				WHEN pg_stat_user_indexes.idx_scan < 1000 THEN 'medium'
+				ELSE 'high'
+			END AS usage_level
+		FROM pg_class idx
+		JOIN pg_index i ON idx.oid = i.indexrelid
+		JOIN pg_class tbl ON i.indrelid = tbl.oid
+		JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+		LEFT JOIN pg_stat_user_indexes ON pg_stat_user_indexes.indexrelid = idx.oid
+		WHERE ns.nspname = 'public'
+			AND idx.relkind = 'i'
+			AND NOT i.indisprimary
+		ORDER BY scan_count DESC
+	`).Scan(&efficiency).Error
+
+	return efficiency, err
+}
+
+type IndexEfficiency struct {
+	IndexName   string  `json:"index_name"`
+	TableName   string  `json:"table_name"`
+	IndexSize   string  `json:"index_size"`
+	ScanCount   int64   `json:"scan_count"`
+	TuplesRead  int64   `json:"tuples_read"`
+	TuplesFetched int64 `json:"tuples_fetched"`
+	HitRatio    float64 `json:"hit_ratio"`
+	UsageLevel  string  `json:"usage_level"`
+}
+
+func (io *IndexOptimizer) GenerateIntelligentRecommendations() ([]IndexRecommendation, error) {
+	if io.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	var recommendations []IndexRecommendation
+
+	efficiency, err := io.AnalyzeIndexEfficiency()
+	if err != nil {
+		return nil, err
+	}
+
+	unusedIndexes := make([]string, 0)
+	for _, idx := range efficiency {
+		if idx.UsageLevel == "unused" {
+			unusedIndexes = append(unusedIndexes, idx.IndexName)
+		} else if idx.HitRatio < 30 && idx.ScanCount > 1000 {
+			recommendations = append(recommendations, IndexRecommendation{
+				TableName:     idx.TableName,
+				IndexName:     idx.IndexName,
+				Columns:       []string{},
+				IndexType:     "btree",
+				Priority:      "high",
+				EstimatedSize: idx.IndexSize,
+				QueryBenefits: []string{fmt.Sprintf("索引命中率低(%.2f%%)，建议优化查询或重建索引", idx.HitRatio)},
+				CreationSQL:   fmt.Sprintf("REINDEX INDEX CONCURRENTLY %s", idx.IndexName),
+				EstimatedImpact: "可能提升查询性能",
+			})
+		}
+	}
+
+	fragmented, err := io.GetFragmentedIndexes(30)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, idx := range fragmented {
+		recommendations = append(recommendations, IndexRecommendation{
+			TableName:     idx.TableName,
+			IndexName:     idx.IndexName,
+			Columns:       []string{},
+			IndexType:     "btree",
+			Priority:      "high",
+			EstimatedSize: idx.IndexSize,
+			QueryBenefits: []string{fmt.Sprintf("索引碎片率高(%.2f%%)，建议重建", idx.FragmentationRatio)},
+			CreationSQL:   fmt.Sprintf("REINDEX INDEX CONCURRENTLY %s", idx.IndexName),
+			EstimatedImpact: "减少索引大小，提升查询速度",
+		})
+	}
+
+	if len(unusedIndexes) > 0 {
+		log.Printf("[INDEX_OPTIMIZER] Found %d unused indexes that could be dropped", len(unusedIndexes))
+	}
+
+	return recommendations, nil
+}
+
+func (io *IndexOptimizer) GetIndexStatistics() (map[string]interface{}, error) {
+	if io.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	result := make(map[string]interface{})
+
+	var totalIndexSize int64
+	if err := io.db.Raw(`
+		SELECT COALESCE(SUM(pg_relation_size(idx.oid)), 0)
+		FROM pg_class idx
+		JOIN pg_index i ON idx.oid = i.indexrelid
+		JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+		WHERE ns.nspname = 'public' AND idx.relkind = 'i'
+	`).Scan(&totalIndexSize).Error; err != nil {
+		return nil, err
+	}
+
+	var totalIndexes int
+	if err := io.db.Raw(`
+		SELECT COUNT(*)
+		FROM pg_class idx
+		JOIN pg_index i ON idx.oid = i.indexrelid
+		JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+		WHERE ns.nspname = 'public' AND idx.relkind = 'i'
+	`).Scan(&totalIndexes).Error; err != nil {
+		return nil, err
+	}
+
+	efficiency, err := io.AnalyzeIndexEfficiency()
+	if err != nil {
+		return nil, err
+	}
+
+	unusedCount := 0
+	lowUsageCount := 0
+	mediumUsageCount := 0
+	highUsageCount := 0
+
+	for _, idx := range efficiency {
+		switch idx.UsageLevel {
+		case "unused":
+			unusedCount++
+		case "low":
+			lowUsageCount++
+		case "medium":
+			mediumUsageCount++
+		case "high":
+			highUsageCount++
+		}
+	}
+
+	fragmented, err := io.GetFragmentedIndexes(20)
+	if err != nil {
+		return nil, err
+	}
+
+	result["total_indexes"] = totalIndexes
+	result["total_index_size_bytes"] = totalIndexSize
+	result["total_index_size_human"] = formatBytes(totalIndexSize)
+	result["unused_count"] = unusedCount
+	result["low_usage_count"] = lowUsageCount
+	result["medium_usage_count"] = mediumUsageCount
+	result["high_usage_count"] = highUsageCount
+	result["fragmented_count"] = len(fragmented)
+	result["efficiency_details"] = efficiency
+
+	return result, nil
+}
+
+func formatBytes(bytes int64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	} else if bytes < 1024*1024 {
+		return fmt.Sprintf("%.2f KB", float64(bytes)/1024)
+	} else if bytes < 1024*1024*1024 {
+		return fmt.Sprintf("%.2f MB", float64(bytes)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(bytes)/(1024*1024*1024))
 }
 

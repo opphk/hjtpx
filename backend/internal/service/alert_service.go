@@ -533,3 +533,56 @@ func (as *AlertService) GetAlertHistory(alertID uint) ([]models.AlertHistory, er
 	}
 	return histories, nil
 }
+
+// ListAlertsBySeverity 按严重级别列出告警记录
+func (as *AlertService) ListAlertsBySeverity(severity string, page, pageSize int) ([]models.AlertRecord, int64, error) {
+	var alerts []models.AlertRecord
+	var total int64
+	if as.db == nil {
+		return []models.AlertRecord{}, 0, nil
+	}
+	query := as.db.Model(&models.AlertRecord{})
+	if severity != "" {
+		query = query.Where("severity = ?", severity)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&alerts).Error; err != nil {
+		return nil, 0, err
+	}
+	return alerts, total, nil
+}
+
+// GetAlertStatistics 获取告警统计信息
+func (as *AlertService) GetAlertStatistics() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+	if as.db == nil {
+		stats["total"] = 0
+		stats["critical"] = 0
+		stats["warning"] = 0
+		stats["info"] = 0
+		stats["resolved"] = 0
+		stats["active"] = 0
+		return stats, nil
+	}
+
+	var total, critical, warning, info, resolved, active int64
+
+	as.db.Model(&models.AlertRecord{}).Count(&total)
+	as.db.Model(&models.AlertRecord{}).Where("severity = ?", "critical").Count(&critical)
+	as.db.Model(&models.AlertRecord{}).Where("severity = ?", "warning").Count(&warning)
+	as.db.Model(&models.AlertRecord{}).Where("severity = ?", "info").Count(&info)
+	as.db.Model(&models.AlertRecord{}).Where("status = ?", "resolved").Count(&resolved)
+	as.db.Model(&models.AlertRecord{}).Where("status != ?", "resolved").Count(&active)
+
+	stats["total"] = total
+	stats["critical"] = critical
+	stats["warning"] = warning
+	stats["info"] = info
+	stats["resolved"] = resolved
+	stats["active"] = active
+
+	return stats, nil
+}

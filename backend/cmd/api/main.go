@@ -17,6 +17,7 @@ import (
 	"github.com/hjtpx/hjtpx/internal/repository/db"
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/internal/service/captcha"
+	"github.com/hjtpx/hjtpx/internal/service/edge"
 	"github.com/hjtpx/hjtpx/pkg/config"
 	"github.com/hjtpx/hjtpx/pkg/database"
 	"github.com/hjtpx/hjtpx/pkg/i18n"
@@ -149,6 +150,11 @@ func main() {
 		}
 	}
 
+	if cfg.Edge.Enabled {
+		log.Println("Initializing edge computing services...")
+		initEdgeServices(ctx, cfg)
+	}
+
 	r := router.SetupRouter()
 
 	srv := &http.Server{
@@ -221,4 +227,24 @@ func seedAdmin() {
 	}
 
 	log.Println("Default admin user created (username: admin, password: admin123)")
+}
+
+func initEdgeServices(ctx context.Context, cfg *config.Config) {
+	repo := repository.NewEdgeRepository()
+	syncService := edge.NewEdgeSyncService(repo, cfg)
+	healthMonitor := edge.NewEdgeHealthMonitor(repo, cfg, syncService)
+
+	if err := syncService.StartSyncScheduler(ctx); err != nil {
+		log.Printf("Warning: Failed to start edge sync scheduler: %v", err)
+	} else {
+		log.Println("Edge sync scheduler started successfully")
+	}
+
+	if err := healthMonitor.StartMonitoring(ctx); err != nil {
+		log.Printf("Warning: Failed to start edge health monitor: %v", err)
+	} else {
+		log.Println("Edge health monitor started successfully")
+	}
+
+	log.Println("Edge computing services initialized successfully")
 }

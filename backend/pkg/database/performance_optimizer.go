@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -366,4 +367,280 @@ func (o *PerformanceOptimizer) AnalyzeTables(ctx context.Context) error {
 
 func (o *PerformanceOptimizer) VacuumAnalyze(ctx context.Context) error {
 	return o.db.WithContext(ctx).Exec("VACUUM ANALYZE").Error
+}
+
+type TableFragmentation struct {
+	TableName      string  `json:"table_name"`
+	TotalSize      string  `json:"total_size"`
+	TableSize      string  `json:"table_size"`
+	IndexSize      string  `json:"index_size"`
+	DeadTuples     int64   `json:"dead_tuples"`
+	LiveTuples     int64   `json:"live_tuples"`
+	FragmentationRatio float64 `json:"fragmentation_ratio"`
+	LastVacuum     time.Time `json:"last_vacuum"`
+	LastAutoVacuum time.Time `json:"last_auto_vacuum"`
+	LastAnalyze    time.Time `json:"last_analyze"`
+}
+
+func (o *PerformanceOptimizer) AnalyzeTableFragmentation(ctx context.Context, threshold float64) ([]TableFragmentation, error) {
+	var fragmented []TableFragmentation
+
+	err := o.db.WithContext(ctx).Raw(`
+		SELECT
+			pg_class.relname AS table_name,
+			pg_size_pretty(pg_total_relation_size(pg_class.oid)) AS total_size,
+			pg_size_pretty(pg_relation_size(pg_class.oid)) AS table_size,
+			pg_size_pretty(pg_indexes_size(pg_class.oid)) AS index_size,
+			pg_stat_user_tables.n_dead_tup AS dead_tuples,
+			pg_stat_user_tables.n_live_tup AS live_tuples,
+			CASE
+				WHEN pg_stat_user_tables.n_live_tup = 0 THEN 0.0
+				ELSE ROUND(pg_stat_user_tables.n_dead_tup::numeric / NULLIF(pg_stat_user_tables.n_live_tup + pg_stat_user_tables.n_dead_tup, 0) * 100, 2)
+			END AS fragmentation_ratio,
+			pg_stat_user_tables.last_vacuum,
+			pg_stat_user_tables.last_autovacuum,
+			pg_stat_user_tables.last_analyze
+		FROM pg_class
+		JOIN pg_stat_user_tables ON pg_class.relname = pg_stat_user_tables.relname
+		JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+		WHERE pg_namespace.nspname = 'public'
+			AND pg_class.relkind = 'r'
+			AND CASE
+				WHEN pg_stat_user_tables.n_live_tup = 0 THEN 0.0
+				ELSE ROUND(pg_stat_user_tables.n_dead_tup::numeric / NULLIF(pg_stat_user_tables.n_live_tup + pg_stat_user_tables.n_dead_tup, 0) * 100, 2)
+			END >= $1
+		ORDER BY fragmentation_ratio DESC
+	`, threshold).Scan(&fragmented).Error
+
+	return fragmented, err
+}
+
+func (o *PerformanceOptimizer) AnalyzeAllTableFragmentation(ctx context.Context) ([]TableFragmentation, error) {
+	return o.AnalyzeTableFragmentation(ctx, 0)
+}
+
+func (o *PerformanceOptimizer) VacuumTable(ctx context.Context, tableName string, full bool, analyze bool) error {
+	query := "VACUUM"
+	if full {
+		query += " FULL"
+	}
+	query += " " + tableName
+	if analyze {
+		query += " ANALYZE"
+	}
+
+	return o.db.WithContext(ctx).Exec(query).Error
+}
+
+func (o *PerformanceOptimizer) VacuumFragmentedTables(ctx context.Context, threshold float64, full bool) error {
+	fragmented, err := o.AnalyzeTableFragmentation(ctx, threshold)
+	if err != nil {
+		return err
+	}
+
+	if len(fragmented) == 0 {
+		log.Println("[PERFORMANCE_OPTIMIZER] No fragmented tables found")
+		return nil
+	}
+
+	log.Printf("[PERFORMANCE_OPTIMIZER] Found %d fragmented tables with fragmentation >= %.2f%%", len(fragmented), threshold)
+
+	for _, table := range fragmented {
+		log.Printf("[PERFORMANCE_OPTIMIZER] Vacuuming table: %s (fragmentation: %.2f%%)", table.TableName, table.FragmentationRatio)
+		if err := o.VacuumTable(ctx, table.TableName, full, true); err != nil {
+			log.Printf("[PERFORMANCE_OPTIMIZER] Failed to vacuum table %s: %v", table.TableName, err)
+			continue
+		}
+		log.Printf("[PERFORMANCE_OPTIMIZER] Successfully vacuumed table: %s", table.TableName)
+	}
+
+	return nil
+}
+
+func (o *PerformanceOptimizer) ReindexTable(ctx context.Context, tableName string, concurrently bool) error {
+	query := "REINDEX"
+	if concurrently {
+		query += " CONCURRENTLY"
+	}
+	query += " TABLE " + tableName
+
+	return o.db.WithContext(ctx).Exec(query).Error
+}
+
+func (o *PerformanceOptimizer) ReindexAllTables(ctx context.Context, concurrently bool) error {
+	var tables []string
+
+	err := o.db.WithContext(ctx).Raw(`
+		SELECT relname
+		FROM pg_class
+		JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+		WHERE pg_namespace.nspname = 'public'
+			AND pg_class.relkind = 'r'
+	`).Scan(&tables).Error
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[PERFORMANCE_OPTIMIZER] Reindexing %d tables", len(tables))
+
+	for _, table := range tables {
+		log.Printf("[PERFORMANCE_OPTIMIZER] Reindexing table: %s", table)
+		if err := o.ReindexTable(ctx, table, concurrently); err != nil {
+			log.Printf("[PERFORMANCE_OPTIMIZER] Failed to reindex table %s: %v", table, err)
+			continue
+		}
+		log.Printf("[PERFORMANCE_OPTIMIZER] Successfully reindexed table: %s", table)
+	}
+
+	return nil
+}
+
+func (o *PerformanceOptimizer) AutoMaintainFragmentation(ctx context.Context, vacuumThreshold, reindexThreshold float64) error {
+	fragmented, err := o.AnalyzeTableFragmentation(ctx, vacuumThreshold)
+	if err != nil {
+		return err
+	}
+
+	for _, table := range fragmented {
+		if table.FragmentationRatio >= reindexThreshold {
+			log.Printf("[PERFORMANCE_OPTIMIZER] Table %s has high fragmentation (%.2f%%), reindexing", table.TableName, table.FragmentationRatio)
+			if err := o.ReindexTable(ctx, table.TableName, true); err != nil {
+				log.Printf("[PERFORMANCE_OPTIMIZER] Failed to reindex table %s, falling back to vacuum", table.TableName)
+				if err := o.VacuumTable(ctx, table.TableName, true, true); err != nil {
+					log.Printf("[PERFORMANCE_OPTIMIZER] Failed to vacuum table %s: %v", table.TableName, err)
+				}
+			}
+		} else {
+			log.Printf("[PERFORMANCE_OPTIMIZER] Vacuuming table %s (fragmentation: %.2f%%)", table.TableName, table.FragmentationRatio)
+			if err := o.VacuumTable(ctx, table.TableName, false, true); err != nil {
+				log.Printf("[PERFORMANCE_OPTIMIZER] Failed to vacuum table %s: %v", table.TableName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+type FragmentationReport struct {
+	Timestamp       time.Time           `json:"timestamp"`
+	TotalTables     int                 `json:"total_tables"`
+	FragmentedTables int                `json:"fragmented_tables"`
+	AverageFragmentation float64        `json:"average_fragmentation"`
+	MaxFragmentation float64            `json:"max_fragmentation"`
+	MinFragmentation float64            `json:"min_fragmentation"`
+	Details         []TableFragmentation `json:"details"`
+}
+
+func (o *PerformanceOptimizer) GenerateFragmentationReport(ctx context.Context) (*FragmentationReport, error) {
+	tables, err := o.AnalyzeAllTableFragmentation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	report := &FragmentationReport{
+		Timestamp:       time.Now(),
+		TotalTables:     len(tables),
+		FragmentedTables: 0,
+		Details:         tables,
+	}
+
+	if len(tables) > 0 {
+		report.MaxFragmentation = tables[0].FragmentationRatio
+		report.MinFragmentation = tables[0].FragmentationRatio
+
+		var totalFragmentation float64
+		fragmentedCount := 0
+
+		for _, table := range tables {
+			totalFragmentation += table.FragmentationRatio
+
+			if table.FragmentationRatio > report.MaxFragmentation {
+				report.MaxFragmentation = table.FragmentationRatio
+			}
+			if table.FragmentationRatio < report.MinFragmentation {
+				report.MinFragmentation = table.FragmentationRatio
+			}
+			if table.FragmentationRatio > 10 {
+				fragmentedCount++
+			}
+		}
+
+		report.AverageFragmentation = totalFragmentation / float64(len(tables))
+		report.FragmentedTables = fragmentedCount
+	}
+
+	return report, nil
+}
+
+func (o *PerformanceOptimizer) GetTableStatistics(ctx context.Context, tableName string) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+
+	var stats struct {
+		TableName      string
+		TotalSize      string
+		TableSize      string
+		IndexSize      string
+		RowCount       int64
+		DeadTuples     int64
+		LiveTuples     int64
+		Fragmentation  float64
+		LastVacuum     time.Time
+		LastAnalyze    time.Time
+		IndexCount     int
+	}
+
+	err := o.db.WithContext(ctx).Raw(`
+		SELECT
+			pc.relname AS table_name,
+			pg_size_pretty(pg_total_relation_size(pc.oid)) AS total_size,
+			pg_size_pretty(pg_relation_size(pc.oid)) AS table_size,
+			pg_size_pretty(pg_indexes_size(pc.oid)) AS index_size,
+			(SELECT reltuples FROM pg_class WHERE oid = pc.oid) AS row_count,
+			COALESCE(pst.n_dead_tup, 0) AS dead_tuples,
+			COALESCE(pst.n_live_tup, 0) AS live_tuples,
+			CASE
+				WHEN COALESCE(pst.n_live_tup, 0) = 0 THEN 0.0
+				ELSE ROUND(COALESCE(pst.n_dead_tup, 0)::numeric / NULLIF(COALESCE(pst.n_live_tup, 0) + COALESCE(pst.n_dead_tup, 0), 0) * 100, 2)
+			END AS fragmentation,
+			pst.last_vacuum,
+			pst.last_analyze,
+			(SELECT COUNT(*) FROM pg_index WHERE indrelid = pc.oid) AS index_count
+		FROM pg_class pc
+		LEFT JOIN pg_stat_user_tables pst ON pc.relname = pst.relname
+		JOIN pg_namespace pn ON pc.relnamespace = pn.oid
+		WHERE pn.nspname = 'public' AND pc.relname = $1
+	`, tableName).Scan(&stats).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	result["table_name"] = stats.TableName
+	result["total_size"] = stats.TotalSize
+	result["table_size"] = stats.TableSize
+	result["index_size"] = stats.IndexSize
+	result["row_count"] = stats.RowCount
+	result["dead_tuples"] = stats.DeadTuples
+	result["live_tuples"] = stats.LiveTuples
+	result["fragmentation_ratio"] = stats.Fragmentation
+	result["last_vacuum"] = stats.LastVacuum
+	result["last_analyze"] = stats.LastAnalyze
+	result["index_count"] = stats.IndexCount
+
+	var recommendations []string
+	if stats.Fragmentation > 30 {
+		recommendations = append(recommendations, "建议执行 VACUUM FULL 或 REINDEX")
+	} else if stats.Fragmentation > 10 {
+		recommendations = append(recommendations, "建议执行 VACUUM ANALYZE")
+	}
+	if stats.LastAnalyze.IsZero() || time.Since(stats.LastAnalyze) > 7*24*time.Hour {
+		recommendations = append(recommendations, "建议执行 ANALYZE 更新统计信息")
+	}
+	if stats.RowCount > 1000000 {
+		recommendations = append(recommendations, "表数据量较大，建议考虑分区")
+	}
+
+	result["recommendations"] = recommendations
+
+	return result, nil
 }

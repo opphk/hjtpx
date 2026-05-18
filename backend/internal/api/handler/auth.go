@@ -184,6 +184,18 @@ func Login(c *gin.Context) {
 	})
 }
 
+// RefreshTokenHandler 刷新访问令牌
+// @Summary 刷新访问令牌
+// @Description 使用刷新令牌获取新的访问令牌
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body RefreshTokenRequest true "刷新令牌请求"
+// @Success 200 {object} map[string]interface{} "刷新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/refresh [post]
 func RefreshTokenHandler(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -208,6 +220,15 @@ func RefreshTokenHandler(c *gin.Context) {
 	})
 }
 
+// Logout 管理员登出
+// @Summary 管理员登出
+// @Description 使当前令牌失效并清除会话
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "登出成功"
+// @Router /api/v1/auth/logout [post]
 func Logout(c *gin.Context) {
 	token := c.GetHeader("Authorization")
 	if len(token) > 7 && token[:7] == "Bearer " {
@@ -225,6 +246,17 @@ func Logout(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// GetLoginHistory 获取登录历史
+// @Summary 获取登录历史
+// @Description 获取当前管理员的登录历史记录
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "登录历史列表"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/login-history [get]
 func GetLoginHistory(c *gin.Context) {
 	adminID := middleware.GetAdminID(c)
 	if adminID == 0 {
@@ -266,6 +298,19 @@ func GetLoginHistory(c *gin.Context) {
 	})
 }
 
+// ChangePassword 修改密码
+// @Summary 修改密码
+// @Description 修改当前管理员的登录密码
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body ChangePasswordRequest true "修改密码请求"
+// @Success 200 {object} map[string]interface{} "修改成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权或原密码错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/change-password [post]
 func ChangePassword(c *gin.Context) {
 	type ChangePasswordRequest struct {
 		OldPassword string `json:"old_password" binding:"required"`
@@ -311,6 +356,17 @@ func ChangePassword(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// GetCurrentUser 获取当前用户信息
+// @Summary 获取当前用户信息
+// @Description 获取当前登录管理员的详细信息
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} AdminInfo "用户信息"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/me [get]
 func GetCurrentUser(c *gin.Context) {
 	adminID := middleware.GetAdminID(c)
 	if adminID == 0 {
@@ -335,6 +391,17 @@ func GetCurrentUser(c *gin.Context) {
 	})
 }
 
+// AdminDashboard 管理员仪表盘
+// @Summary 管理员仪表盘
+// @Description 获取管理员仪表盘数据，包括统计信息和最近活动
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "仪表盘数据"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/dashboard [get]
 func AdminDashboard(c *gin.Context) {
 	adminID := middleware.GetAdminID(c)
 	if adminID == 0 {

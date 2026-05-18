@@ -273,11 +273,15 @@ func (cwm *CacheWarmupManager) runTask(task *CacheWarmupTask) {
 		return
 	}
 
-	ticker := time.NewTicker(task.Frequency)
-	defer ticker.Stop()
-
 	if err := cwm.executeTask(task); err != nil {
 	}
+
+	if task.Frequency <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(task.Frequency)
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -315,7 +319,7 @@ func (cwm *CacheWarmupManager) executeTask(task *CacheWarmupTask) error {
 		task.Stats.LastError = err.Error()
 		task.RetryCount++
 
-		if task.RetryCount < task.MaxRetries {
+		if task.RetryCount <= task.MaxRetries {
 			go func() {
 				time.Sleep(time.Duration(task.RetryCount) * time.Second)
 				cwm.executeTask(task)

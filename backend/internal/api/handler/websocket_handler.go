@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -17,12 +18,17 @@ var (
 	wsService     *service.WebSocketService
 	wsServiceOnce sync.Once
 	upgrader      = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
 	}
+
+	// 消息确认超时时间
+	msgAckTimeout = 30 * time.Second
+	// 消息重试次数
+	maxRetries = 3
 )
 
 // GetWebSocketService 获取单例 WebSocket 服务
@@ -33,24 +39,275 @@ func GetWebSocketService() *service.WebSocketService {
 	return wsService
 }
 
+// 待确认消息存储
+var pendingMessages = make(map[string]*PendingMessage)
+var pendingMu sync.RWMutex
+
+type PendingMessage struct {
+	Message    *service.WebSocketMessage
+	SessionID  string
+	Retries    int
+	Timestamp  time.Time
+	Timer      *time.Timer
+}
+
 // WebSocketHandler WebSocket 连接处理函数
 func WebSocketVerificationHandler(c *gin.Context) {
-	// 升级 HTTP 连接为 WebSocket
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Failed to upgrade WebSocket connection")
 		return
 	}
 
-	// 获取 WebSocket 服务
 	svc := GetWebSocketService()
-
-	// 注册新会话
 	session := svc.RegisterSession(conn)
 
-	// 启动读写协程
 	go svc.WritePump(session)
 	go svc.ReadPump(session, handleVerificationMessage)
+}
+
+// WebSocketAdminHandler 管理员WebSocket连接处理
+func WebSocketAdminHandler(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to upgrade WebSocket connection")
+		return
+	}
+
+	svc := GetWebSocketService()
+	session := svc.RegisterSession(conn)
+
+	go adminWritePump(session, svc)
+	go adminReadPump(session, svc)
+}
+
+func adminWritePump(session *service.WebSocketSession, svc *service.WebSocketService) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer func() {
+		ticker.Stop()
+		session.Conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-session.Send:
+			session.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if !ok {
+				session.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := session.Conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			n := len(session.Send)
+			for i := 0; i < n; i++ {
+				w.Write(<-session.Send)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			session.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := session.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func adminReadPump(session *service.WebSocketSession, svc *service.WebSocketService) {
+	defer func() {
+		svc.UnregisterSession(session)
+		session.Conn.Close()
+	}()
+
+	session.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	session.Conn.SetPongHandler(func(string) error {
+		session.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	for {
+		_, message, err := session.Conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			}
+			break
+		}
+
+		var msg service.WebSocketMessage
+		if err := json.Unmarshal(message, &msg); err != nil {
+			continue
+		}
+
+		handleAdminMessage(session, msg, svc)
+	}
+}
+
+func handleAdminMessage(session *service.WebSocketSession, msg service.WebSocketMessage, svc *service.WebSocketService) {
+	switch msg.Type {
+	case service.MessageTypePing:
+		handlePing(session, svc)
+	case "subscribe":
+		handleSubscribe(session, msg)
+	case "unsubscribe":
+		handleUnsubscribe(session, msg)
+	case "ack":
+		handleAck(session, msg)
+	default:
+		sendErrorResponse(session, "UNSUPPORTED_TYPE", "Unsupported message type", svc)
+	}
+}
+
+// 订阅分组
+func handleSubscribe(session *service.WebSocketSession, msg service.WebSocketMessage) {
+	var payload struct {
+		Groups []string `json:"groups"`
+	}
+	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+		return
+	}
+
+	session.Mu.Lock()
+	if session.ClientID == "" {
+		session.ClientID = uuid.New().String()
+	}
+	session.Mu.Unlock()
+
+	for _, group := range payload.Groups {
+		registerToGroup(group, session)
+	}
+
+	ackMsg := service.WebSocketMessage{
+		Type:      "subscribed",
+		SessionID: session.ID,
+		Timestamp: time.Now().Unix(),
+	}
+	payloadBytes, _ := json.Marshal(map[string]interface{}{"groups": payload.Groups})
+	ackMsg.Payload = payloadBytes
+	svc := GetWebSocketService()
+	svc.SendMessage(session.ID, ackMsg)
+}
+
+// 取消订阅
+func handleUnsubscribe(session *service.WebSocketSession, msg service.WebSocketMessage) {
+	var payload struct {
+		Groups []string `json:"groups"`
+	}
+	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+		return
+	}
+
+	for _, group := range payload.Groups {
+		unregisterFromGroup(group, session)
+	}
+
+	ackMsg := service.WebSocketMessage{
+		Type:      "unsubscribed",
+		SessionID: session.ID,
+		Timestamp: time.Now().Unix(),
+	}
+	payloadBytes, _ := json.Marshal(map[string]interface{}{"groups": payload.Groups})
+	ackMsg.Payload = payloadBytes
+	svc := GetWebSocketService()
+	svc.SendMessage(session.ID, ackMsg)
+}
+
+// 处理消息确认
+func handleAck(session *service.WebSocketSession, msg service.WebSocketMessage) {
+	var payload struct {
+		MessageID string `json:"message_id"`
+	}
+	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+		return
+	}
+
+	pendingMu.Lock()
+	if pendingMsg, ok := pendingMessages[payload.MessageID]; ok {
+		if pendingMsg.Timer != nil {
+			pendingMsg.Timer.Stop()
+		}
+		delete(pendingMessages, payload.MessageID)
+	}
+	pendingMu.Unlock()
+}
+
+// 分组管理
+var groups = make(map[string][]*service.WebSocketSession)
+var groupsMu sync.RWMutex
+
+func registerToGroup(group string, session *service.WebSocketSession) {
+	groupsMu.Lock()
+	if groups[group] == nil {
+		groups[group] = []*service.WebSocketSession{}
+	}
+	groups[group] = append(groups[group], session)
+	groupsMu.Unlock()
+}
+
+func unregisterFromGroup(group string, session *service.WebSocketSession) {
+	groupsMu.Lock()
+	if sessions, ok := groups[group]; ok {
+		for i, s := range sessions {
+			if s.ID == session.ID {
+				groups[group] = append(sessions[:i], sessions[i+1:]...)
+				break
+			}
+		}
+	}
+	groupsMu.Unlock()
+}
+
+// BroadcastToGroup 向指定分组广播消息
+func BroadcastToGroup(group string, msg service.WebSocketMessage) {
+	groupsMu.RLock()
+	sessions, ok := groups[group]
+	groupsMu.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	svc := GetWebSocketService()
+	for _, session := range sessions {
+		go sendWithRetry(session.ID, msg, svc)
+	}
+}
+
+// 带重试的消息发送
+func sendWithRetry(sessionID string, msg service.WebSocketMessage, svc *service.WebSocketService) {
+	msgID := uuid.New().String()
+	
+	pendingMu.Lock()
+	pendingMsg := &PendingMessage{
+		Message:   &msg,
+		SessionID: sessionID,
+		Retries:   0,
+		Timestamp: time.Now(),
+	}
+	
+	pendingMsg.Timer = time.AfterFunc(msgAckTimeout, func() {
+		pendingMu.Lock()
+		if pendingMsg.Retries < maxRetries {
+			pendingMsg.Retries++
+			pendingMu.Unlock()
+			sendWithRetry(sessionID, msg, svc)
+		} else {
+			delete(pendingMessages, msgID)
+			pendingMu.Unlock()
+		}
+	})
+	
+	pendingMessages[msgID] = pendingMsg
+	pendingMu.Unlock()
+
+	svc.SendMessage(sessionID, msg)
 }
 
 // handleVerificationMessage 处理验证消息

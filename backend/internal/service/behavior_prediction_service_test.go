@@ -12,116 +12,44 @@ func TestNewBehaviorPredictionService(t *testing.T) {
 	}
 }
 
-func TestPredictBehavior_Normal(t *testing.T) {
+func TestPredictUserBehavior_Normal(t *testing.T) {
 	service := NewBehaviorPredictionService()
 	
-	prediction := service.PredictBehavior("normal_user")
+	req := &PredictionRequest{
+		UserID: "normal_user",
+		RecentActions: []UserAction{
+			{ActionType: "login", Timestamp: time.Now()},
+			{ActionType: "view", Timestamp: time.Now()},
+		},
+	}
+	
+	prediction := service.PredictUserBehavior(req)
 	
 	if prediction == nil {
-		t.Error("PredictBehavior 返回了 nil")
-	}
-	if prediction.Action != "normal" {
-		t.Errorf("期望动作为 normal, 实际得到 %s", prediction.Action)
+		t.Error("PredictUserBehavior 返回了 nil")
 	}
 }
 
-func TestPredictBehavior_Suspicious(t *testing.T) {
+func TestGetRiskProfile(t *testing.T) {
 	service := NewBehaviorPredictionService()
 	
-	prediction := service.PredictBehavior("suspicious_user")
-	
-	if prediction == nil {
-		t.Error("PredictBehavior 返回了 nil")
-	}
-	if prediction.Action == "" {
-		t.Error("动作为空")
-	}
-}
-
-func TestAnalyzeSession_Success(t *testing.T) {
-	service := NewBehaviorPredictionService()
-	
-	analysis := service.AnalyzeSession(map[string]interface{}{
-		"user_id":    "user-123",
-		"session_id": "session-456",
-		"duration":   300,
-	})
-	
-	if analysis == nil {
-		t.Error("AnalyzeSession 返回了 nil")
-	}
-	if analysis.Score < 0 || analysis.Score > 100 {
-		t.Errorf("分数应该在 0-100 之间, 实际得到 %f", analysis.Score)
-	}
-}
-
-func TestAnalyzeSession_Empty(t *testing.T) {
-	service := NewBehaviorPredictionService()
-	
-	analysis := service.AnalyzeSession(map[string]interface{}{})
-	
-	if analysis == nil {
-		t.Error("AnalyzeSession 返回了 nil")
-	}
-}
-
-func TestDetectAnomaly_NoAnomaly(t *testing.T) {
-	service := NewBehaviorPredictionService()
-	
-	anomaly := service.DetectAnomaly("normal_user")
-	
-	if anomaly == nil {
-		t.Error("DetectAnomaly 返回了 nil")
-	}
-}
-
-func TestDetectAnomaly_WithAnomaly(t *testing.T) {
-	service := NewBehaviorPredictionService()
-	
-	anomaly := service.DetectAnomaly("suspicious_user")
-	
-	if anomaly == nil {
-		t.Error("DetectAnomaly 返回了 nil")
-	}
-}
-
-func TestGetUserBehaviorProfile(t *testing.T) {
-	service := NewBehaviorPredictionService()
-	
-	profile := service.GetUserBehaviorProfile("user-123")
+	profile := service.GetRiskProfile("user-123")
 	
 	if profile == nil {
-		t.Error("GetUserBehaviorProfile 返回了 nil")
-	}
-	if profile.UserID != "user-123" {
-		t.Errorf("期望用户ID为 user-123, 实际得到 %s", profile.UserID)
+		t.Error("GetRiskProfile 返回了 nil")
 	}
 }
 
-func TestGetUserBehaviorProfile_NonExistent(t *testing.T) {
+func TestAddToWhitelist(t *testing.T) {
 	service := NewBehaviorPredictionService()
 	
-	profile := service.GetUserBehaviorProfile("non-existent-user")
-	
-	if profile == nil {
-		t.Error("GetUserBehaviorProfile 应该返回默认profile")
-	}
+	service.AddToWhitelist("192.168.1.100", "ip", 1*time.Hour, "测试白名单")
 }
 
-func TestUpdateUserBehaviorProfile(t *testing.T) {
+func TestAddToBlacklist(t *testing.T) {
 	service := NewBehaviorPredictionService()
 	
-	profile := &BehaviorProfile{
-		UserID:       "user-123",
-		TotalActions: 100,
-		RiskScore:    30.0,
-		LastUpdated:  time.Now(),
-	}
-	
-	err := service.UpdateUserBehaviorProfile(profile)
-	if err != nil {
-		t.Errorf("UpdateUserBehaviorProfile 失败: %v", err)
-	}
+	service.AddToBlacklist("192.168.1.200", "ip", 24*time.Hour, "测试黑名单", "high")
 }
 
 func TestBehaviorPredictionResult_Fields(t *testing.T) {

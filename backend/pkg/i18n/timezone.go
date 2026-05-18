@@ -2,6 +2,8 @@ package i18n
 
 import (
 	"fmt"
+	"net"
+	"strings"
 	"time"
 )
 
@@ -498,4 +500,230 @@ func GetPreviousDSTTransition(tz string, before time.Time) (time.Time, error) {
 	}
 
 	return time.Time{}, fmt.Errorf("no DST transition found within a year")
+}
+
+var timezoneAliases = map[string]string{
+	"UTC":             "UTC",
+	"Z":               "UTC",
+	"GMT":             "GMT",
+	"EST":             "America/New_York",
+	"EDT":             "America/New_York",
+	"CST":             "America/Chicago",
+	"CDT":             "America/Chicago",
+	"MST":             "America/Denver",
+	"MDT":             "America/Denver",
+	"PST":             "America/Los_Angeles",
+	"PDT":             "America/Los_Angeles",
+	"AKST":            "America/Anchorage",
+	"AKDT":            "America/Anchorage",
+	"HST":             "America/Honolulu",
+	"AST":             "America/Santiago",
+	"ADT":             "America/Santiago",
+	"BST":             "Europe/London",
+	"CET":             "Europe/Berlin",
+	"CEST":            "Europe/Berlin",
+	"EET":             "Europe/Istanbul",
+	"EEST":            "Europe/Istanbul",
+	"MSK":             "Europe/Moscow",
+	"WIB":             "Asia/Jakarta",
+	"WITA":            "Asia/Makassar",
+	"WIT":             "Asia/Jayapura",
+	"AWST":            "Australia/Perth",
+	"ACST":            "Australia/Adelaide",
+	"AEST":            "Australia/Sydney",
+	"AEDT":            "Australia/Sydney",
+	"NZST":            "Pacific/Auckland",
+	"NZDST":           "Pacific/Auckland",
+	"JST":             "Asia/Tokyo",
+	"KST":             "Asia/Seoul",
+	"HKT":             "Asia/Hong_Kong",
+	"CST8":            "Asia/Shanghai",
+	"CT":              "Asia/Shanghai",
+	"ICT":             "Asia/Bangkok",
+	"IST":             "Asia/Kolkata",
+	"PKT":             "Asia/Karachi",
+	"ART":             "America/Buenos_Aires",
+	"BRT":             "America/Sao_Paulo",
+	"MSD":             "Europe/Moscow",
+	"CAT":             "Africa/Johannesburg",
+	"EAT":             "Africa/Nairobi",
+	"SAST":            "Africa/Johannesburg",
+}
+
+func ResolveTimezoneAlias(alias string) string {
+	alias = strings.ToUpper(strings.TrimSpace(alias))
+	
+	if resolved, ok := timezoneAliases[alias]; ok {
+		return resolved
+	}
+	
+	return alias
+}
+
+func NormalizeTimezone(tz string) string {
+	tz = strings.TrimSpace(tz)
+	
+	if tz == "" {
+		return defaultTimezone
+	}
+	
+	resolved := ResolveTimezoneAlias(tz)
+	
+	if IsSupportedTimezone(resolved) {
+		return resolved
+	}
+	
+	_, err := time.LoadLocation(resolved)
+	if err == nil {
+		return resolved
+	}
+	
+	return defaultTimezone
+}
+
+func ValidateTimezone(tz string) error {
+	_, err := time.LoadLocation(tz)
+	if err != nil {
+		return fmt.Errorf("invalid timezone: %s", tz)
+	}
+	return nil
+}
+
+func DetectTimezoneFromIP(ip string) (string, error) {
+	ipAddr := net.ParseIP(ip)
+	if ipAddr == nil {
+		return "", fmt.Errorf("invalid IP address")
+	}
+	
+	if ipAddr.IsPrivate() {
+		return defaultTimezone, nil
+	}
+	
+	return defaultTimezone, nil
+}
+
+func DetectTimezoneFromLocale(lang string) string {
+	lang = strings.ToLower(lang)
+	
+	localeTzMap := map[string]string{
+		"zh-cn":     "Asia/Shanghai",
+		"zh-tw":     "Asia/Taipei",
+		"zh-hk":     "Asia/Hong_Kong",
+		"en-us":     "America/New_York",
+		"en-gb":     "Europe/London",
+		"en-au":     "Australia/Sydney",
+		"en-ca":     "America/Toronto",
+		"ja-jp":     "Asia/Tokyo",
+		"ko-kr":     "Asia/Seoul",
+		"fr-fr":     "Europe/Paris",
+		"de-de":     "Europe/Berlin",
+		"es-es":     "Europe/Madrid",
+		"pt-br":     "America/Sao_Paulo",
+		"pt-pt":     "Europe/Lisbon",
+		"it-it":     "Europe/Rome",
+		"ru-ru":     "Europe/Moscow",
+		"ar-sa":     "Asia/Riyadh",
+		"fa-ir":     "Asia/Tehran",
+		"he-il":     "Asia/Jerusalem",
+		"ur-pk":     "Asia/Karachi",
+		"hi-in":     "Asia/Kolkata",
+		"vi-vn":     "Asia/Ho_Chi_Minh",
+		"th-th":     "Asia/Bangkok",
+		"id-id":     "Asia/Jakarta",
+		"tr-tr":     "Europe/Istanbul",
+		"ms-my":     "Asia/Kuala_Lumpur",
+		"bn-bd":     "Asia/Dhaka",
+		"ta-in":     "Asia/Kolkata",
+	}
+	
+	if tz, ok := localeTzMap[lang]; ok {
+		return tz
+	}
+	
+	parts := strings.Split(lang, "-")
+	if len(parts) > 0 {
+		for l := range localeTzMap {
+			if strings.HasPrefix(l, parts[0]) {
+				return localeTzMap[l]
+			}
+		}
+	}
+	
+	return defaultTimezone
+}
+
+func GetTimezoneDisplayName(tz string, lang string) string {
+	tzNames := map[string]map[string]string{
+		"Asia/Shanghai": {
+			"zh-CN": "中国标准时间",
+			"en-US": "China Standard Time",
+			"ja-JP": "中国標準時",
+			"ko-KR": "중국 표준 시간",
+		},
+		"America/New_York": {
+			"zh-CN": "美国东部时间",
+			"en-US": "Eastern Time",
+			"ja-JP": "アメリカ東部時間",
+		},
+		"Europe/London": {
+			"zh-CN": "英国时间",
+			"en-US": "Greenwich Mean Time",
+			"ja-JP": "英国時間",
+		},
+		"Asia/Tokyo": {
+			"zh-CN": "日本标准时间",
+			"en-US": "Japan Standard Time",
+			"ja-JP": "日本標準時",
+			"ko-KR": "일본 표준 시간",
+		},
+		"Asia/Seoul": {
+			"zh-CN": "韩国标准时间",
+			"en-US": "Korea Standard Time",
+			"ja-JP": "韓国標準時",
+			"ko-KR": "한국 표준 시간",
+		},
+	}
+	
+	if names, ok := tzNames[tz]; ok {
+		if name, ok := names[lang]; ok {
+			return name
+		}
+		if name, ok := names["en-US"]; ok {
+			return name
+		}
+	}
+	
+	return tz
+}
+
+func GetCommonTimezones() []TimezoneInfo {
+	common := []string{
+		"UTC",
+		"Asia/Shanghai",
+		"America/New_York",
+		"America/Los_Angeles",
+		"Europe/London",
+		"Europe/Paris",
+		"Europe/Berlin",
+		"Asia/Tokyo",
+		"Asia/Seoul",
+		"Australia/Sydney",
+		"Asia/Singapore",
+		"Asia/Dubai",
+		"Asia/Kolkata",
+	}
+	
+	result := make([]TimezoneInfo, 0, len(common))
+	for _, tz := range common {
+		result = append(result, GetTimezoneInfo(tz))
+	}
+	return result
+}
+
+func GetAllTimezoneInfos() []TimezoneInfo {
+	result := make([]TimezoneInfo, 0, len(supportedTimezones))
+	for _, tz := range supportedTimezones {
+		result = append(result, GetTimezoneInfo(tz))
+	}
+	return result
 }

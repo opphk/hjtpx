@@ -269,6 +269,19 @@ func (h *UserHandler) Login(c *gin.Context) {
 	})
 }
 
+// RefreshToken 刷新用户访问令牌
+// @Summary 刷新用户访问令牌
+// @Description 使用刷新令牌获取新的用户访问令牌
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param body body RefreshRequest true "刷新令牌请求"
+// @Success 200 {object} RefreshResponse "刷新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 403 {object} map[string]interface{} "账户被禁用"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/refresh [post]
 func (h *UserHandler) RefreshToken(c *gin.Context) {
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -320,6 +333,15 @@ func (h *UserHandler) RefreshToken(c *gin.Context) {
 	})
 }
 
+// Logout 用户登出
+// @Summary 用户登出
+// @Description 用户退出登录，使当前令牌失效
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "登出成功"
+// @Router /api/v1/auth/logout [post]
 func (h *UserHandler) Logout(c *gin.Context) {
 	token := c.GetHeader("Authorization")
 	if len(token) > 7 && token[:7] == "Bearer " {
@@ -375,6 +397,20 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	response.Success(c, service.ToUserResponse(user))
 }
 
+// UpdateProfile 更新用户资料
+// @Summary 更新用户资料
+// @Description 更新当前登录用户的个人资料
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body UpdateProfileRequest true "更新资料请求"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "用户不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/profile [put]
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -457,6 +493,17 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	response.Success(c, gin.H{"message": "password changed successfully"})
 }
 
+// RequestPasswordReset 请求重置密码
+// @Summary 请求重置密码
+// @Description 发送密码重置链接到用户邮箱
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param body body RequestPasswordResetRequest true "请求重置密码请求"
+// @Success 200 {object} PasswordResetResponse "请求成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/request-password-reset [post]
 func (h *UserHandler) RequestPasswordReset(c *gin.Context) {
 	var req RequestPasswordResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -527,6 +574,17 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 	response.Success(c, gin.H{"message": "password reset successfully"})
 }
 
+// VerifyEmail 验证邮箱
+// @Summary 验证邮箱
+// @Description 使用验证令牌验证用户邮箱
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param token query string true "验证令牌"
+// @Success 200 {object} map[string]interface{} "验证成功"
+// @Failure 400 {object} map[string]interface{} "令牌无效"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/verify-email [get]
 func (h *UserHandler) VerifyEmail(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {

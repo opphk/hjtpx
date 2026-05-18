@@ -3,10 +3,12 @@ server:
   http_listen_port: 9080
   grpc_listen_address: ""
   grpc_listen_port: 0
+  log_level: info
 
 positions:
   filename: /var/log/promtail/positions.yaml
   ignore_invalid_lines: true
+  sync_period: 10s
 
 client:
   url: http://loki:3100/loki/api/v1/push
@@ -17,6 +19,8 @@ client:
     min_period: 100ms
     max_period: 30s
     max_retries: 10
+  follow_redirects: true
+  enable_http2: true
 
 scrape_configs:
   - job_name: nginx
@@ -31,11 +35,12 @@ scrape_configs:
       - regex:
           expression: '^(?P<remote_addr>[^ ]+) - (?P<remote_user>[^ ]+) \[(?P<time>[^\]]+)\] "(?P<request>[^"]+)" (?P<status>[^ ]+) (?P<body_bytes_sent>[^ ]+) "(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)"'
       - labels:
-          job: nginx
           status:
           remote_addr:
-          request:
           http_user_agent:
+      - timestamp:
+          source: time
+          format: "02/Jan/2006:15:04:05 -0700"
 
   - job_name: app
     static_configs:
@@ -49,6 +54,7 @@ scrape_configs:
       - json:
           expressions:
             time: time
+            level: level
             status: status
             latency: latency
             ip: ip
@@ -57,14 +63,39 @@ scrape_configs:
             error: error
             request_id: request_id
             user_id: user_id
+            message: message
+            stack_trace: stack_trace
       - labels:
-          job: hjtpx-app
+          level:
           status:
           method:
           path:
           error:
           request_id:
           user_id:
+      - timestamp:
+          source: time
+          format: RFC3339
+
+  - job_name: app-access
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: hjtpx-app-access
+          env: ${ENV:-production}
+          __path__: /var/log/hjtpx/access.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<remote_addr>[^ ]+) - - \[(?P<time>[^\]]+)\] "(?P<method>[A-Z]+) (?P<path>[^ ]+) [^"]+" (?P<status>[0-9]+) (?P<bytes>[0-9]+) "(?P<referer>[^"]*)" "(?P<user_agent>[^"]*)" "(?P<request_id>[^"]*)"'
+      - labels:
+          method:
+          status:
+          path:
+          request_id:
+      - timestamp:
+          source: time
+          format: "02/Jan/2006:15:04:05 -0700"
 
   - job_name: docker
     type: journal
@@ -78,3 +109,43 @@ scrape_configs:
         target_label: 'unit'
       - source_labels: ['__journal_container_name']
         target_label: 'container_name'
+      - source_labels: ['__journal_container_id']
+        target_label: 'container_id'
+      - source_labels: ['__journal_priority']
+        target_label: 'priority'
+
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          env: ${ENV:-production}
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<time>[^ ]+ [^ ]+) (?P<host>[^ ]+) (?P<process>[^[]+)\[(?P<pid>[0-9]+)\]: (?P<message>.*)'
+      - labels:
+          host:
+          process:
+      - timestamp:
+          source: time
+          format: "Jan 2 15:04:05"
+
+  - job_name: auth
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: auth
+          env: ${ENV:-production}
+          __path__: /var/log/auth.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<time>[^ ]+ [^ ]+) (?P<host>[^ ]+) (?P<service>[^[]+)\[(?P<pid>[0-9]+)\]: (?P<message>.*)'
+      - labels:
+          host:
+          service:
+      - timestamp:
+          source: time
+          format: "Jan 2 15:04:05"

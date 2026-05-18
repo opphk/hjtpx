@@ -164,6 +164,21 @@ func CreateApplication(c *gin.Context) {
 	response.Success(c, service.ToApplicationResponse(app))
 }
 
+// UpdateApplication 更新应用
+// @Summary 更新应用
+// @Description 更新指定应用的信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Param body body UpdateApplicationRequest true "更新应用请求"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id} [put]
 func UpdateApplication(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -234,6 +249,20 @@ func DeleteApplication(c *gin.Context) {
 	response.Success(c, gin.H{"message": "application deleted successfully"})
 }
 
+// RegenerateApplicationKey 重新生成应用密钥
+// @Summary 重新生成应用密钥
+// @Description 为指定应用重新生成API密钥，旧密钥将失效
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Success 200 {object} map[string]interface{} "重新生成成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id}/regenerate-key [post]
 func RegenerateApplicationKey(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -351,6 +380,20 @@ func UpdateApplicationConfig(c *gin.Context) {
 	})
 }
 
+// GetApplicationStatistics 获取应用统计
+// @Summary 获取应用统计
+// @Description 获取指定应用的统计信息
+// @Tags 应用管理
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "应用ID"
+// @Success 200 {object} map[string]interface{} "应用统计"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "应用不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/applications/{id}/statistics [get]
 func GetApplicationStatistics(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

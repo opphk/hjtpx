@@ -699,3 +699,19 @@ type RiskRuleAuditLog struct {
 func (RiskRuleAuditLog) TableName() string {
 	return "risk_rule_audit_logs"
 }
+
+// RiskRuleVersion 规则版本记录
+type RiskRuleVersion struct {
+	gorm.Model
+	Version     string `gorm:"size:50;uniqueIndex:idx_rule_version" json:"version"`
+	ChangeType  string `gorm:"size:20" json:"change_type"`
+	Description string `gorm:"type:text" json:"description"`
+	Operator    string `gorm:"size:100" json:"operator"`
+	RulesJSON   string `gorm:"type:text" json:"rules_json"`
+	RuleCount   int    `gorm:"default:0" json:"rule_count"`
+	IsCurrent   bool   `gorm:"default:false;index:idx_rule_version_current" json:"is_current"`
+}
+
+func (RiskRuleVersion) TableName() string {
+	return "risk_rule_versions"
+}

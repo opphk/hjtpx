@@ -489,3 +489,236 @@ func (r *DBRouter) Close() error {
 func (r *DBRouter) IsEnabled() bool {
 	return r.enabled
 }
+
+func (r *DBRouter) GetSlaveWithLeastConnections() *gorm.DB {
+	if !r.enabled || len(r.slaveDBs) == 0 {
+		return r.masterDB
+	}
+
+	if r.healthChecker != nil {
+		healthySlaves := r.healthChecker.GetHealthySlaves()
+		if len(healthySlaves) == 0 {
+			return r.masterDB
+		}
+	}
+
+	minConns := -1
+	var bestSlave *gorm.DB
+
+	for i, slave := range r.slaveDBs {
+		if r.healthChecker != nil {
+			status := r.healthChecker.slaveStatus[i]
+			if !status.Healthy {
+				continue
+			}
+		}
+
+		sqlDB, err := slave.DB()
+		if err != nil {
+			continue
+		}
+
+		stats := sqlDB.Stats()
+		if minConns == -1 || stats.InUse < minConns {
+			minConns = stats.InUse
+			bestSlave = slave
+		}
+	}
+
+	if bestSlave != nil {
+		return bestSlave
+	}
+
+	return r.masterDB
+}
+
+func (r *DBRouter) GetSlaveByLatency() *gorm.DB {
+	if !r.enabled || len(r.slaveDBs) == 0 {
+		return r.masterDB
+	}
+
+	if r.healthChecker == nil {
+		return r.Slave()
+	}
+
+	healthySlaves := r.healthChecker.GetHealthySlaves()
+	if len(healthySlaves) == 0 {
+		return r.masterDB
+	}
+
+	var bestSlave *gorm.DB
+	var minLatency time.Duration = time.Hour
+
+	for _, idx := range healthySlaves {
+		status := r.healthChecker.slaveStatus[idx]
+		if status.Latency < minLatency {
+			minLatency = status.Latency
+			bestSlave = r.slaveDBs[idx]
+		}
+	}
+
+	if bestSlave != nil {
+		return bestSlave
+	}
+
+	return r.masterDB
+}
+
+func (r *DBRouter) ReadWithFallback(ctx context.Context, retries int) (*gorm.DB, error) {
+	for i := 0; i < retries; i++ {
+		slave := r.GetOptimalSlave()
+		if slave == r.masterDB {
+			return slave, nil
+		}
+
+		sqlDB, err := slave.DB()
+		if err != nil {
+			if i == retries-1 {
+				return r.masterDB, fmt.Errorf("failed to get slave connection after %d retries", retries)
+			}
+			r.RecordFailure()
+			time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+			continue
+		}
+
+		if err := sqlDB.Ping(); err != nil {
+			if r.healthChecker != nil {
+				for idx, s := range r.slaveDBs {
+					if s == slave {
+						r.healthChecker.markUnhealthy(idx)
+						break
+					}
+				}
+			}
+			r.RecordFailure()
+			r.RecordSlaveSwitch()
+
+			if i == retries-1 {
+				return r.masterDB, nil
+			}
+			time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+			continue
+		}
+
+		return slave.WithContext(ctx), nil
+	}
+
+	return r.masterDB.WithContext(ctx), nil
+}
+
+func (r *DBRouter) GetConnectionPoolStats() []map[string]interface{} {
+	stats := make([]map[string]interface{}, 0, len(r.slaveDBs)+1)
+
+	if r.masterDB != nil {
+		sqlDB, err := r.masterDB.DB()
+		if err == nil {
+			dbStats := sqlDB.Stats()
+			stats = append(stats, map[string]interface{}{
+				"role":              "master",
+				"max_open":          dbStats.MaxOpenConnections,
+				"open":              dbStats.OpenConnections,
+				"in_use":            dbStats.InUse,
+				"idle":              dbStats.Idle,
+				"wait_count":        dbStats.WaitCount,
+				"wait_duration_ms":  dbStats.WaitDuration.Milliseconds(),
+				"max_idle_closed":   dbStats.MaxIdleClosed,
+				"max_lifetime_closed": dbStats.MaxLifetimeClosed,
+			})
+		}
+	}
+
+	for i, slave := range r.slaveDBs {
+		healthy := true
+		if r.healthChecker != nil {
+			status := r.healthChecker.slaveStatus[i]
+			healthy = status.Healthy
+		}
+
+		sqlDB, err := slave.DB()
+		if err != nil {
+			stats = append(stats, map[string]interface{}{
+				"role":    "slave",
+				"index":   i,
+				"healthy": false,
+				"error":   err.Error(),
+			})
+			continue
+		}
+
+		dbStats := sqlDB.Stats()
+		latency := time.Duration(0)
+		if r.healthChecker != nil {
+			status := r.healthChecker.slaveStatus[i]
+			latency = status.Latency
+		}
+
+		stats = append(stats, map[string]interface{}{
+			"role":              "slave",
+			"index":             i,
+			"healthy":           healthy,
+			"max_open":          dbStats.MaxOpenConnections,
+			"open":              dbStats.OpenConnections,
+			"in_use":            dbStats.InUse,
+			"idle":              dbStats.Idle,
+			"wait_count":        dbStats.WaitCount,
+			"wait_duration_ms":  dbStats.WaitDuration.Milliseconds(),
+			"max_idle_closed":   dbStats.MaxIdleClosed,
+			"max_lifetime_closed": dbStats.MaxLifetimeClosed,
+			"latency_ms":        latency.Milliseconds(),
+		})
+	}
+
+	return stats
+}
+
+func (r *DBRouter) GetDetailedMetrics() map[string]interface{} {
+	result := r.GetMetrics()
+
+	result["slave_count"] = len(r.slaveDBs)
+	result["strategy"] = r.loadBalanceMode
+	result["enabled"] = r.enabled
+
+	if r.healthChecker != nil {
+		healthyCount := len(r.healthChecker.GetHealthySlaves())
+		result["healthy_slaves"] = healthyCount
+		result["unhealthy_slaves"] = len(r.slaveDBs) - healthyCount
+	}
+
+	result["connection_pool_stats"] = r.GetConnectionPoolStats()
+
+	return result
+}
+
+func (r *DBRouter) FailoverToMaster() {
+	log.Println("[DB_ROUTER] Manual failover to master initiated")
+	r.mu.Lock()
+	r.enabled = false
+	r.mu.Unlock()
+}
+
+func (r *DBRouter) RestoreSlaves() {
+	log.Println("[DB_ROUTER] Restoring slave connections")
+	r.mu.Lock()
+	r.enabled = true
+	r.mu.Unlock()
+
+	if r.healthChecker != nil {
+		for i := range r.slaveDBs {
+			r.healthChecker.markHealthy(i)
+		}
+	}
+}
+
+func (r *DBRouter) GetSlaveStatusDetailed() []*SlaveStatus {
+	if r.healthChecker == nil {
+		return nil
+	}
+	return r.healthChecker.GetSlaveStatus()
+}
+
+func (r *DBRouter) SetLoadBalanceMode(mode string) {
+	r.mu.Lock()
+	r.loadBalanceMode = mode
+	r.mu.Unlock()
+	log.Printf("[DB_ROUTER] Load balance mode changed to: %s", mode)
+}

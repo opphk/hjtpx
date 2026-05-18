@@ -532,3 +532,348 @@ func TestPoolStatsRecord(t *testing.T) {
 		t.Error("Timestamp should not be zero")
 	}
 }
+
+func TestQueryCacheStrategies(t *testing.T) {
+	cache := &QueryCache{
+		cache:    make(map[string]cacheEntry),
+		maxSize:  100,
+		ttl:      5 * time.Minute,
+		enabled:  true,
+		strategy: StrategyLRU,
+	}
+
+	if cache.strategy != StrategyLRU {
+		t.Errorf("Initial strategy should be LRU, got %d", cache.strategy)
+	}
+
+	cache.SetStrategy(StrategyLFU)
+	if cache.strategy != StrategyLFU {
+		t.Errorf("Strategy should be LFU, got %d", cache.strategy)
+	}
+
+	cache.SetStrategy(StrategyAdaptive)
+	if cache.strategy != StrategyAdaptive {
+		t.Errorf("Strategy should be Adaptive, got %d", cache.strategy)
+	}
+}
+
+func TestQueryCacheEvictionStrategies(t *testing.T) {
+	cache := &QueryCache{
+		cache:    make(map[string]cacheEntry),
+		maxSize:  3,
+		ttl:      1 * time.Hour,
+		enabled:  true,
+		strategy: StrategyLRU,
+	}
+
+	cache.Set("key1", "value1")
+	cache.Set("key2", "value2")
+	cache.Set("key3", "value3")
+
+	if len(cache.cache) != 3 {
+		t.Errorf("Cache size should be 3, got %d", len(cache.cache))
+	}
+
+	cache.Set("key4", "value4")
+	if len(cache.cache) != 3 {
+		t.Errorf("After eviction, cache size should be 3, got %d", len(cache.cache))
+	}
+
+	cache.SetStrategy(StrategyLFU)
+	cache.Set("key5", "value5")
+	if len(cache.cache) != 3 {
+		t.Errorf("After LFU eviction, cache size should be 3, got %d", len(cache.cache))
+	}
+}
+
+func TestQueryCacheAutoAdjustStrategy(t *testing.T) {
+	cache := &QueryCache{
+		cache:    make(map[string]cacheEntry),
+		maxSize:  100,
+		ttl:      5 * time.Minute,
+		enabled:  true,
+		strategy: StrategyLRU,
+	}
+
+	cache.hits.Store(40)
+	cache.misses.Store(60)
+	cache.AutoAdjustStrategy()
+	if cache.strategy != StrategyLFU {
+		t.Errorf("With hit rate 40%, strategy should be LFU, got %s", cache.getStrategyName())
+	}
+
+	cache.hits.Store(60)
+	cache.misses.Store(40)
+	cache.AutoAdjustStrategy()
+	if cache.strategy != StrategyAdaptive {
+		t.Errorf("With hit rate 60%, strategy should be Adaptive, got %s", cache.getStrategyName())
+	}
+
+	cache.hits.Store(80)
+	cache.misses.Store(20)
+	cache.AutoAdjustStrategy()
+	if cache.strategy != StrategyLRU {
+		t.Errorf("With hit rate 80%, strategy should be LRU, got %s", cache.getStrategyName())
+	}
+}
+
+func TestQueryCacheWarmup(t *testing.T) {
+	cache := &QueryCache{
+		cache:    make(map[string]cacheEntry),
+		maxSize:  100,
+		ttl:      5 * time.Minute,
+		enabled:  true,
+		strategy: StrategyLRU,
+	}
+
+	data := map[string]interface{}{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	cache.Warmup(data, 10*time.Minute)
+
+	if len(cache.cache) != 3 {
+		t.Errorf("After warmup, cache size should be 3, got %d", len(cache.cache))
+	}
+
+	status := cache.GetWarmupStatus()
+	if status["total_entries"] != 3 {
+		t.Errorf("Warmup status total_entries should be 3, got %v", status["total_entries"])
+	}
+}
+
+func TestQueryCacheInvalidation(t *testing.T) {
+	cache := &QueryCache{
+		cache:    make(map[string]cacheEntry),
+		maxSize:  100,
+		ttl:      5 * time.Minute,
+		enabled:  true,
+		strategy: StrategyLRU,
+	}
+
+	cache.Set("table:users:1", "user1")
+	cache.Set("table:users:2", "user2")
+	cache.Set("table:products:1", "product1")
+
+	if len(cache.cache) != 3 {
+		t.Errorf("Cache size should be 3, got %d", len(cache.cache))
+	}
+
+	cache.InvalidateKeysByPattern("table:users")
+
+	if len(cache.cache) != 1 {
+		t.Errorf("After invalidation, cache size should be 1, got %d", len(cache.cache))
+	}
+}
+
+func TestDBRouterLoadBalanceStrategies(t *testing.T) {
+	router := &DBRouter{
+		enabled:         true,
+		loadBalanceMode: "round_robin",
+	}
+
+	if router.loadBalanceMode != "round_robin" {
+		t.Errorf("Load balance mode should be round_robin, got %s", router.loadBalanceMode)
+	}
+
+	router.SetLoadBalanceMode("random")
+	if router.loadBalanceMode != "random" {
+		t.Errorf("Load balance mode should be random, got %s", router.loadBalanceMode)
+	}
+
+	router.SetLoadBalanceMode("weighted_round_robin")
+	if router.loadBalanceMode != "weighted_round_robin" {
+		t.Errorf("Load balance mode should be weighted_round_robin, got %s", router.loadBalanceMode)
+	}
+}
+
+func TestDBRouterMetrics(t *testing.T) {
+	router := &DBRouter{
+		enabled:         true,
+		loadBalanceMode: "round_robin",
+		metrics:         &RouterMetrics{},
+	}
+
+	router.RecordQuery(true, 10*time.Millisecond)
+	router.RecordQuery(false, 5*time.Millisecond)
+
+	metrics := router.GetMetrics()
+	if metrics["master_queries"] != int64(1) {
+		t.Errorf("Master queries should be 1, got %v", metrics["master_queries"])
+	}
+	if metrics["slave_queries"] != int64(1) {
+		t.Errorf("Slave queries should be 1, got %v", metrics["slave_queries"])
+	}
+
+	router.RecordFailure()
+	metrics = router.GetMetrics()
+	if metrics["failed_queries"] != int64(1) {
+		t.Errorf("Failed queries should be 1, got %v", metrics["failed_queries"])
+	}
+}
+
+func TestSlaveHealthChecker(t *testing.T) {
+	checker := NewSlaveHealthChecker(nil, 30*time.Second)
+
+	if !checker.enabled {
+		t.Error("Health checker should be enabled by default")
+	}
+
+	if checker.maxFailCount != 3 {
+		t.Errorf("Max fail count should be 3, got %d", checker.maxFailCount)
+	}
+
+	checker.SetMaxFailCount(5)
+	if checker.maxFailCount != 5 {
+		t.Errorf("Max fail count should be 5, got %d", checker.maxFailCount)
+	}
+
+	checker.SetFailoverEnabled(false)
+	if checker.failoverEnabled {
+		t.Error("Failover should be disabled")
+	}
+}
+
+func TestIndexFragmentationStruct(t *testing.T) {
+	frag := IndexFragmentation{
+		IndexName:         "idx_test",
+		TableName:         "test_table",
+		IndexSize:         "10MB",
+		FragmentationRatio: 25.5,
+		ScanCount:         1000,
+	}
+
+	if frag.IndexName != "idx_test" {
+		t.Errorf("IndexName should be idx_test, got %s", frag.IndexName)
+	}
+
+	if frag.FragmentationRatio != 25.5 {
+		t.Errorf("FragmentationRatio should be 25.5, got %f", frag.FragmentationRatio)
+	}
+}
+
+func TestIndexEfficiencyStruct(t *testing.T) {
+	eff := IndexEfficiency{
+		IndexName:     "idx_test",
+		TableName:     "test_table",
+		IndexSize:     "10MB",
+		ScanCount:     1000,
+		HitRatio:      85.5,
+		UsageLevel:    "high",
+	}
+
+	if eff.HitRatio != 85.5 {
+		t.Errorf("HitRatio should be 85.5, got %f", eff.HitRatio)
+	}
+
+	if eff.UsageLevel != "high" {
+		t.Errorf("UsageLevel should be high, got %s", eff.UsageLevel)
+	}
+}
+
+func TestTableFragmentationStruct(t *testing.T) {
+	frag := TableFragmentation{
+		TableName:         "test_table",
+		TotalSize:         "100MB",
+		TableSize:         "80MB",
+		IndexSize:         "20MB",
+		DeadTuples:        1000,
+		LiveTuples:        9000,
+		FragmentationRatio: 10.0,
+	}
+
+	if frag.FragmentationRatio != 10.0 {
+		t.Errorf("FragmentationRatio should be 10.0, got %f", frag.FragmentationRatio)
+	}
+
+	if frag.DeadTuples != 1000 {
+		t.Errorf("DeadTuples should be 1000, got %d", frag.DeadTuples)
+	}
+}
+
+func TestFragmentationReportStruct(t *testing.T) {
+	report := &FragmentationReport{
+		Timestamp:       time.Now(),
+		TotalTables:     10,
+		FragmentedTables: 3,
+		AverageFragmentation: 15.5,
+		MaxFragmentation: 30.0,
+		MinFragmentation: 5.0,
+	}
+
+	if report.TotalTables != 10 {
+		t.Errorf("TotalTables should be 10, got %d", report.TotalTables)
+	}
+
+	if report.AverageFragmentation != 15.5 {
+		t.Errorf("AverageFragmentation should be 15.5, got %f", report.AverageFragmentation)
+	}
+}
+
+func TestIntelligentQueryCachePatterns(t *testing.T) {
+	iqc := &IntelligentQueryCache{
+		queryPatterns: make(map[string]*QueryPattern),
+	}
+
+	iqc.RecordQuery("SELECT * FROM users", 50*time.Millisecond, true)
+
+	if len(iqc.queryPatterns) != 1 {
+		t.Errorf("Query patterns count should be 1, got %d", len(iqc.queryPatterns))
+	}
+
+	stats := iqc.GetPatternStats()
+	if stats["total_patterns"] != 1 {
+		t.Errorf("Total patterns should be 1, got %v", stats["total_patterns"])
+	}
+
+	ttl := iqc.GetOptimalTTL("SELECT * FROM users")
+	if ttl != 5*time.Minute {
+		t.Errorf("Optimal TTL should be 5m, got %v", ttl)
+	}
+}
+
+func TestIntelligentQueryCacheAutoAdjustTTL(t *testing.T) {
+	iqc := &IntelligentQueryCache{
+		queryPatterns: make(map[string]*QueryPattern),
+	}
+
+	iqc.queryPatterns["test_query"] = &QueryPattern{
+		Pattern:    "test_query",
+		HitRate:    95.0,
+		OptimalTTL: 5 * time.Minute,
+	}
+
+	iqc.AutoAdjustTTL()
+
+	pattern := iqc.queryPatterns["test_query"]
+	if pattern.OptimalTTL != 10*time.Minute {
+		t.Errorf("High hit rate should increase TTL to 10m, got %v", pattern.OptimalTTL)
+	}
+
+	pattern.HitRate = 20.0
+	iqc.AutoAdjustTTL()
+	if pattern.OptimalTTL != 2*time.Minute+30*time.Second {
+		t.Errorf("Low hit rate should decrease TTL, got %v", pattern.OptimalTTL)
+	}
+}
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		input    int64
+		expected string
+	}{
+		{1000, "1000 B"},
+		{1500, "1.46 KB"},
+		{2000000, "1.91 MB"},
+		{3000000000, "2.79 GB"},
+	}
+
+	for _, tt := range tests {
+		result := formatBytes(tt.input)
+		if result != tt.expected {
+			t.Errorf("formatBytes(%d) = %s, want %s", tt.input, result, tt.expected)
+		}
+	}
+}
