@@ -1,121 +1,108 @@
-class EnvironmentDetectorEnhanced {
+class EnhancedEnvironmentDetector {
     constructor(options = {}) {
         this.options = Object.assign({
             apiBase: '/api/v1',
-            sampleRate: 1.0,
-            chainCount: 25,
+            sampleRate: 0.3,
+            chainCount: 15,
             enableAll: true,
             sessionId: null,
-            timeout: 10000,
-            retries: 2
+            enableNetworkAnalysis: true,
+            enableEmulatorDetection: true,
+            enableAutomationDetection: true,
+            fingerprintPrecision: 'high'
         }, options);
         this.results = {};
         this.riskScore = 0;
         this.detectionChain = [];
-        this.detectionId = 'det_enhanced_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        this.timingData = {};
-        this.fingerprintComponents = {};
+        this.detectionId = 'det_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
         this.weights = {
-            canvas: 12,
-            canvasStable: 10,
-            canvasEntropy: 8,
-            webgl: 14,
+            canvas: 10,
+            webgl: 12,
             webgl2: 10,
-            webglVendor: 8,
-            webglRenderer: 8,
             audio: 11,
-            fonts: 10,
-            fontEnumeration: 8,
-            fontMetrics: 6,
-            plugins: 6,
-            pluginFingerprint: 5,
-            webrtc: 15,
-            webrtcLeak: 12,
-            webdriver: 20,
-            selenium: 18,
-            puppeteer: 18,
-            playwright: 18,
-            chromeRuntime: 10,
+            fonts: 9,
+            webrtc_ip: 12,
+            webdriver: 18,
+            selenium: 20,
+            puppeteer: 20,
+            playwright: 20,
+            chrome_runtime: 12,
             headless: 15,
-            permissions: 6,
-            languages: 4,
-            timezone: 5,
-            screen: 3,
-            hardware: 5,
-            memory: 4,
-            storage: 5,
-            navigator: 5,
-            windowProps: 4,
-            iframe: 6,
-            notification: 3,
-            battery: 4,
-            mediaDevices: 5,
-            connection: 8,
-            adblock: 5,
-            math: 4,
-            gpu: 7,
-            speech: 3,
-            proxyVPN: 18,
-            torExitNode: 15,
-            vpnIndicators: 14,
-            virtualization: 12,
-            sandbox: 10,
-            automationFrameworks: 16,
-            vmFeatures: 15,
-            sandboxEscape: 14,
-            debuggerDetection: 12
+            permissions: 8,
+            plugins: 7,
+            languages: 6,
+            timezone: 7,
+            screen: 5,
+            hardware: 6,
+            memory: 5,
+            storage: 7,
+            navigator: 6,
+            window_props: 6,
+            iframe: 8,
+            notification: 5,
+            battery: 5,
+            media_devices: 6,
+            connection: 7,
+            adblock: 6,
+            math: 5,
+            gpu: 8,
+            speech: 5,
+            emulator: 18,
+            virtualization: 16,
+            container: 15,
+            vpn: 14,
+            tor: 18,
+            proxy: 12,
+            latency: 8,
+            dns: 10,
+            automation_framework: 20
         };
     }
 
     getDetectionMethods() {
-        return [
-            { name: 'detectHeadless', category: 'automation' },
-            { name: 'detectWebDriver', category: 'automation' },
-            { name: 'detectPuppeteer', category: 'automation' },
-            { name: 'detectPlaywright', category: 'automation' },
-            { name: 'detectSelenium', category: 'automation' },
-            { name: 'detectChromeRuntime', category: 'automation' },
-            { name: 'detectAutomationFrameworks', category: 'automation' },
-            { name: 'detectVirtualization', category: 'environment' },
-            { name: 'detectSandbox', category: 'environment' },
-            { name: 'detectCanvasEnhanced', category: 'fingerprint' },
-            { name: 'detectCanvasStable', category: 'fingerprint' },
-            { name: 'detectCanvasEntropy', category: 'fingerprint' },
-            { name: 'detectWebGLEnhanced', category: 'fingerprint' },
-            { name: 'detectWebGL2Enhanced', category: 'fingerprint' },
-            { name: 'detectAudioEnhanced', category: 'fingerprint' },
-            { name: 'detectFontsEnhanced', category: 'fingerprint' },
-            { name: 'detectFontEnumeration', category: 'fingerprint' },
-            { name: 'detectFontMetrics', category: 'fingerprint' },
-            { name: 'detectPluginsEnhanced', category: 'fingerprint' },
-            { name: 'detectPluginFingerprint', category: 'fingerprint' },
-            { name: 'detectWebRTCEnhanced', category: 'network' },
-            { name: 'detectWebRTCLeak', category: 'network' },
-            { name: 'detectProxyVPN', category: 'network' },
-            { name: 'detectVPNIndicators', category: 'network' },
-            { name: 'detectTorExitNode', category: 'network' },
-            { name: 'detectPermissions', category: 'system' },
-            { name: 'detectLanguages', category: 'system' },
-            { name: 'detectTimezone', category: 'system' },
-            { name: 'detectScreen', category: 'system' },
-            { name: 'detectHardwareConcurrency', category: 'system' },
-            { name: 'detectDeviceMemory', category: 'system' },
-            { name: 'detectStorage', category: 'system' },
-            { name: 'detectNavigatorProps', category: 'system' },
-            { name: 'detectWindowProps', category: 'system' },
-            { name: 'detectIframe', category: 'system' },
-            { name: 'detectNotification', category: 'system' },
-            { name: 'detectBattery', category: 'system' },
-            { name: 'detectMediaDevices', category: 'system' },
-            { name: 'detectConnection', category: 'network' },
-            { name: 'detectAdBlock', category: 'system' },
-            { name: 'detectMathFingerprint', category: 'fingerprint' },
-            { name: 'detectGPUFingerprint', category: 'fingerprint' },
-            { name: 'detectSpeech', category: 'system' },
-            { name: 'detectVMFeatures', category: 'vm' },
-            { name: 'detectSandboxEscape', category: 'sandbox' },
-            { name: 'detectDebuggerEnhanced', category: 'debugger' }
+        const methods = [
+            'detectHeadless',
+            'detectWebDriver',
+            'detectPuppeteer',
+            'detectPlaywright',
+            'detectSelenium',
+            'detectChromeRuntime',
+            'detectPermissions',
+            'detectPlugins',
+            'detectLanguages',
+            'detectTimezone',
+            'detectScreen',
+            'detectHardwareConcurrency',
+            'detectDeviceMemory',
+            'detectStorage',
+            'detectCanvas',
+            'detectWebGL',
+            'detectWebGL2',
+            'detectAudio',
+            'detectFonts',
+            'detectNavigatorProps',
+            'detectWindowProps',
+            'detectIframe',
+            'detectNotification',
+            'detectBattery',
+            'detectMediaDevices',
+            'detectWebRTCIP',
+            'detectConnection',
+            'detectAdBlock',
+            'detectMathFingerprint',
+            'detectGPUFingerprint',
+            'detectSpeech',
+            'detectVirtualization',
+            'detectEmulator',
+            'detectContainer',
+            'detectVPNConnection',
+            'detectTorNetwork',
+            'detectNetworkLatency',
+            'detectDNSAnalysis',
+            'detectProxy',
+            'detectAutomationFramework'
         ];
+        return methods;
     }
 
     generateDetectionChain(count) {
@@ -124,30 +111,28 @@ class EnvironmentDetectorEnhanced {
         const selected = shuffled.slice(0, Math.min(count, allMethods.length));
         const methodAliases = {};
         selected.forEach((method, i) => {
-            methodAliases[method.name] = 'chk_' + i.toString(36) + '_' + Math.random().toString(36).substr(2, 4);
+            methodAliases[method] = 'chk_' + i.toString(36) + '_' + Math.random().toString(36).substr(2, 4);
         });
         return { selected, methodAliases };
     }
 
     async runChain() {
-        const { selected, methodAliases } = this.generateDetectionChain(this.options.chainCount);
+        const { selected, methodAliases } = this.generateDetectionChain(
+            this.options.chainCount
+        );
         this.detectionChain = selected;
         const chainResults = {};
         const startTime = performance.now();
 
         for (const method of selected) {
-            const methodStart = performance.now();
             try {
-                const alias = methodAliases[method.name];
-                const result = await this[method.name]();
-                const methodDuration = performance.now() - methodStart;
-                result.duration_ms = Math.round(methodDuration);
+                const alias = methodAliases[method];
+                const result = await this[method]();
                 chainResults[alias] = result;
-                this.results[method.name] = result;
-                this.timingData[method.name] = methodDuration;
+                this.results[method] = result;
             } catch (e) {
-                const alias = methodAliases[method.name];
-                chainResults[alias] = { detected: false, score: 0, error: e.message, duration_ms: 0 };
+                const alias = methodAliases[method];
+                chainResults[alias] = { detected: false, score: 0, error: e.message };
             }
         }
 
@@ -158,30 +143,20 @@ class EnvironmentDetectorEnhanced {
             detection_id: this.detectionId,
             chain: chainResults,
             chain_order: Object.values(methodAliases),
-            chain_categories: selected.map(m => m.category),
             risk_score: this.riskScore,
             duration_ms: Math.round(duration),
-            timing_data: this.timingData,
-            timestamp: Date.now(),
-            fingerprint: this.generateFingerprint()
+            timestamp: Date.now()
         };
     }
 
     calculateRiskScore() {
         let weightedScore = 0;
         let totalWeight = 0;
-        const categoryScores = { automation: 0, fingerprint: 0, network: 0, system: 0, environment: 0 };
-        const categoryWeights = { automation: 0, fingerprint: 0, network: 0, system: 0, environment: 0 };
 
         for (const key in this.results) {
             const result = this.results[key];
             if (result && typeof result.score === 'number') {
                 const weight = this.weights[key] || 5;
-                const category = this.getMethodCategory(key);
-                if (category) {
-                    categoryScores[category] += result.score * weight;
-                    categoryWeights[category] += weight;
-                }
                 weightedScore += result.score * weight;
                 totalWeight += weight;
             }
@@ -191,61 +166,517 @@ class EnvironmentDetectorEnhanced {
 
         let baseScore = weightedScore / totalWeight;
 
-        const automationMethods = ['detectWebDriver', 'detectPuppeteer', 'detectPlaywright', 'detectSelenium', 'detectAutomationFrameworks'];
-        const automationDetected = automationMethods.filter(m => {
+        const autoTools = ['detectWebDriver', 'detectPuppeteer', 'detectPlaywright', 'detectSelenium', 'detectAutomationFramework'];
+        const autoDetected = autoTools.filter(m => {
             const r = this.results[m];
             return r && r.detected === true;
         }).length;
 
-        if (automationDetected >= 3) {
-            baseScore = Math.min(baseScore * 1.8 + 25, 100);
-        } else if (automationDetected >= 2) {
-            baseScore = Math.min(baseScore * 1.5 + 15, 100);
-        } else if (automationDetected >= 1) {
+        if (autoDetected >= 3) {
+            baseScore = Math.min(baseScore * 1.8 + 30, 100);
+        } else if (autoDetected >= 2) {
+            baseScore = Math.min(baseScore * 1.5 + 20, 100);
+        } else if (autoDetected >= 1) {
             baseScore = Math.min(baseScore * 1.3 + 10, 100);
         }
 
-        const proxyMethods = ['detectProxyVPN', 'detectVPNIndicators', 'detectTorExitNode', 'detectWebRTCLeak'];
-        const proxyDetected = proxyMethods.filter(m => {
+        const proxyIndicators = ['detectWebRTCIP', 'detectConnection', 'detectVPNConnection', 'detectProxy'];
+        const proxyAnomalies = proxyIndicators.filter(m => {
             const r = this.results[m];
-            return r && r.detected === true;
+            return r && r.score > 30;
         }).length;
 
-        if (proxyDetected >= 2) {
-            baseScore = Math.min(baseScore * 1.4 + 20, 100);
-        } else if (proxyDetected >= 1) {
-            baseScore = Math.min(baseScore * 1.2 + 10, 100);
+        if (proxyAnomalies >= 3) {
+            baseScore = Math.min(baseScore * 1.5 + 20, 100);
+        } else if (proxyAnomalies >= 2) {
+            baseScore = Math.min(baseScore * 1.3 + 15, 100);
         }
 
-        const virtualizationMethods = ['detectVirtualization', 'detectSandbox'];
-        const virtualizationDetected = virtualizationMethods.filter(m => {
+        const emulationIndicators = ['detectEmulator', 'detectVirtualization', 'detectContainer'];
+        const emulationDetected = emulationIndicators.filter(m => {
             const r = this.results[m];
             return r && r.detected === true;
         }).length;
 
-        if (virtualizationDetected >= 2) {
-            baseScore = Math.min(baseScore * 1.3 + 15, 100);
+        if (emulationDetected >= 2) {
+            baseScore = Math.min(baseScore * 1.4 + 15, 100);
+        } else if (emulationDetected >= 1) {
+            baseScore = Math.min(baseScore * 1.2 + 8, 100);
         }
 
         return Math.round(Math.min(Math.max(baseScore, 0), 100));
     }
 
-    getMethodCategory(methodName) {
-        const methods = this.getDetectionMethods();
-        const method = methods.find(m => m.name === methodName);
-        return method ? method.category : null;
-    }
-
-    async detectCanvasEnhanced() {
+    async detectHeadless() {
         let score = 0;
         const detections = [];
+        
+        if (navigator.webdriver === true || navigator.webdriver === false) {
+        } else {
+            score += 35;
+            detections.push('webdriver_undefined');
+        }
+        
+        if (navigator.plugins && navigator.plugins.length === 0) {
+            score += 20;
+            detections.push('no_plugins');
+        }
+        
+        if (navigator.languages && navigator.languages.length === 0) {
+            score += 20;
+            detections.push('no_languages');
+        }
+        
+        if (window.chrome && window.chrome.runtime === undefined) {
+            score += 25;
+            detections.push('chrome_no_runtime');
+        }
+        
+        const mimeTypes = navigator.mimeTypes;
+        if (mimeTypes && mimeTypes.length === 0) {
+            score += 25;
+            detections.push('no_mimetypes');
+        }
+        
+        try {
+            const ua = navigator.userAgent || '';
+            if (/headless|phantom/i.test(ua)) {
+                score += 40;
+                detections.push('headless_ua');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.outerHeight === 0 && window.outerWidth === 0) {
+                score += 30;
+                detections.push('zero_window_size');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.outerWidth && window.outerWidth < 100) {
+                score += 25;
+                detections.push('abnormal_window_width');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.devicePixelRatio && window.devicePixelRatio === 0) {
+                score += 30;
+                detections.push('zero_device_pixel_ratio');
+            }
+        } catch (e) {}
+        
+        try {
+            if (typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints === 0) {
+                const ua = navigator.userAgent || '';
+                if (/mobile|android|iphone/i.test(ua)) {
+                    score += 35;
+                    detections.push('touch_discrepancy');
+                }
+            }
+        } catch (e) {}
+        
+        try {
+            if (navigator.webgl && !navigator.webgl.getExtension('WEBGL_debug_renderer_info')) {
+                score += 30;
+                detections.push('webgl_debug_blocked');
+            }
+        } catch (e) {}
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebDriver() {
+        let score = 0;
+        const detections = [];
+        const wdProps = [
+            'webdriver', '__webdriver_evaluate', '__selenium_evaluate',
+            '__webdriver_script_fn', '__driver_evaluate', '__fxdriver_evaluate',
+            '__webdriver_unwrapped', '__lastWatirAlert', '__$webdriverAsyncExecutor',
+            'callSelenium', '__selenium', 'Selenium', '_selenium',
+            'document.__selenium', ' Selenium', '__webdriver_script_func'
+        ];
+        
+        for (const prop of wdProps) {
+            if (window[prop] !== undefined) {
+                score += 18;
+                detections.push(prop);
+            }
+        }
+        
+        try {
+            if (navigator.webdriver === true) {
+                score += 35;
+                detections.push('navigator.webdriver');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onclick', 'return __webdriver_script_fn()');
+            if (el.onclick !== null) {
+                score += 12;
+                detections.push('webdriver_script_fn');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onmousemove', 'return __driver_evaluate()');
+            if (el.onmousemove !== null) {
+                score += 12;
+                detections.push('driver_evaluate');
+            }
+        } catch (e) {}
+        
+        try {
+            const keys = Object.keys(window);
+            const seleniumKeys = keys.filter(k => /selenium|webdriver|__wd|__sel/i.test(k));
+            if (seleniumKeys.length > 0) {
+                score += 25;
+                detections.push('selenium_keys_found:' + seleniumKeys.length);
+            }
+        } catch (e) {}
+        
+        return { detected: score > 25, score: Math.min(score, 100), detections };
+    }
+
+    async detectPuppeteer() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            if (navigator.webdriver === true) {
+                score += 30;
+                detections.push('webdriver_true');
+            }
+        } catch (e) {}
+        
+        try {
+            if (document.$cdc_asdjflasutopfhvcZLmcfl_) {
+                score += 45;
+                detections.push('cdc_marker');
+            }
+        } catch (e) {}
+        
+        try {
+            if (document.$chrome_asyncScriptInfo) {
+                score += 35;
+                detections.push('chrome_async_script');
+            }
+        } catch (e) {}
+        
+        try {
+            if (document.__webdriver_evaluate) {
+                score += 40;
+                detections.push('webdriver_evaluate');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onpaste', 'return function(){throw new Error("puppeteer")}');
+            if (el.onpaste !== null) {
+                score += 25;
+                detections.push('puppeteer_onpaste');
+            }
+        } catch (e) {}
+        
+        try {
+            const userAgent = navigator.userAgent || '';
+            if (/headless/i.test(userAgent)) {
+                score += 35;
+                detections.push('headless_ua');
+            }
+            if (/puppet/i.test(userAgent)) {
+                score += 50;
+                detections.push('puppeteer_ua');
+            }
+            if (/Chrome\/[\d.]+\s+Headless/i.test(userAgent)) {
+                score += 55;
+                detections.push('chrome_headless_ua');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window._puppeteer_globals !== undefined) {
+                score += 40;
+                detections.push('puppeteer_globals');
+            }
+        } catch (e) {}
+        
         try {
             const canvas = document.createElement('canvas');
-            canvas.width = 400;
-            canvas.height = 120;
+            canvas.width = 200;
+            canvas.height = 100;
             const ctx = canvas.getContext('2d');
-            if (!ctx) {
+            if (ctx) {
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#f60';
+                ctx.fillText('Puppeteer', 2, 2);
+                const dataURL = canvas.toDataURL();
+                if (dataURL.includes('puppeteer') || dataURL.includes('Headless')) {
+                    score += 50;
+                    detections.push('puppeteer_canvas_signature');
+                }
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.navigator.permissions !== undefined) {
+                const permission = await navigator.permissions.query({ name: 'notifications' }).catch(() => null);
+                if (permission && permission.state === 'prompt' && navigator.webdriver) {
+                    score += 40;
+                    detections.push('puppeteer_permission_state');
+                }
+            }
+        } catch (e) {}
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectPlaywright() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            if (window.__playwright__ !== undefined ||
+                window.__pw_tags !== undefined ||
+                window.__pw_resume__ !== undefined ||
+                window.__pw_connect__ !== undefined) {
+                score += 55;
+                detections.push('playwright_global');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.__playwright_unstripped__) {
+                score += 60;
+                detections.push('playwright_unstripped');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onfocus', 'return __pw_resume__()');
+            if (el.onfocus !== null) {
+                score += 40;
+                detections.push('playwright_onfocus');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onmouseenter', 'return __pw_resume__()');
+            if (el.onmouseenter !== null) {
+                score += 30;
+                detections.push('playwright_mouseenter');
+            }
+        } catch (e) {}
+        
+        try {
+            const ua = navigator.userAgent || '';
+            if (/playwright/i.test(ua)) {
+                score += 60;
+                detections.push('playwright_ua');
+            }
+            if (/Mozilla\/5.0.*Windows.*AppleWebKit\/[\d.]+.*\(KHTML, like Gecko\).*Chrome\/[\d.]+\s+Safari\/[\d.]+$/.test(ua)) {
+                const browserKeys = Object.keys(window).filter(k => /__pw|pw_|playwright/i.test(k));
+                if (browserKeys.length > 0) {
+                    score += 65;
+                    detections.push('playwright_browser_detected');
+                }
+            }
+        } catch (e) {}
+        
+        try {
+            if (navigator.plugins.length === 0 && navigator.mimeTypes.length === 0) {
+                score += 45;
+                detections.push('playwright_no_plugins');
+            }
+        } catch (e) {}
+        
+        try {
+            const langs = navigator.languages;
+            if (langs && langs.length === 1 && langs[0] === 'en-US') {
+                score += 30;
+                detections.push('playwright_default_language');
+            }
+        } catch (e) {}
+        
+        return { detected: score > 40, score: Math.min(score, 100), detections };
+    }
+
+    async detectSelenium() {
+        let score = 0;
+        const detections = [];
+        const selProps = [
+            'selenium', '_selenium', 'callSelenium', '__selenium',
+            'document__selenium', 'Selenium', '__webdriver_script_fn',
+            'Selenium.prototype', '_selenium_evaluate', 'selenium_evaluate',
+            '__selenium_script_fn', '__selenium_script_func'
+        ];
+        
+        for (const prop of selProps) {
+            if (window[prop] !== undefined || document[prop] !== undefined) {
+                score += 25;
+                detections.push(prop);
+            }
+        }
+        
+        try {
+            if (document.documentElement.getAttribute('webdriver') !== null) {
+                score += 35;
+                detections.push('webdriver_attr');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onmouseover', 'return Selenium.prototype.whatever');
+            if (el.onmouseover !== null) {
+                score += 20;
+                detections.push('selenium_prototype');
+            }
+        } catch (e) {}
+        
+        try {
+            const el = document.createElement('div');
+            el.setAttribute('onkeydown', 'return selenium_executor.onkeydown');
+            if (el.onkeydown !== null) {
+                score += 20;
+                detections.push('selenium_executor');
+            }
+        } catch (e) {}
+        
+        try {
+            const ua = navigator.userAgent || '';
+            if (/selenium/i.test(ua)) {
                 score += 50;
+                detections.push('selenium_ua');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.__$webdriverAsyncExecutor !== undefined) {
+                score += 30;
+                detections.push('webdriver_async_executor');
+            }
+        } catch (e) {}
+        
+        try {
+            const keys = Object.keys(window);
+            const seleniumRelated = keys.filter(k => /selenium|webdriver|__sel/i.test(k));
+            if (seleniumRelated.length > 3) {
+                score += 45;
+                detections.push('selenium_multiple_markers:' + seleniumRelated.length);
+            }
+        } catch (e) {}
+        
+        try {
+            if (typeof navigator.product === 'string' && 
+                navigator.product === 'Gecko' && 
+                !/Firefox/i.test(navigator.userAgent || '')) {
+                score += 35;
+                detections.push('selenium_gecko_mismatch');
+            }
+        } catch (e) {}
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectAutomationFramework() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const automationGlobals = [
+                '__webdriver', '__driver', '__fxdriver', '__selenium',
+                '__webdriver_func', '__selenium_func', '__driver_func',
+                '__webdriver_script_func', '__selenium_script_func',
+                '__webdriver_unwrapped', '__fxdriver_unwrapped',
+                '__driver_unwrapped', '__selenium_unwrapped'
+            ];
+            
+            for (const global of automationGlobals) {
+                if (window[global] !== undefined) {
+                    score += 35;
+                    detections.push('automation_global:' + global);
+                }
+            }
+        } catch (e) {}
+        
+        try {
+            const automationPatterns = [
+                { name: 'cypress', pattern: /cypress/i, window: 'Cypress' },
+                { name: 'nightmare', pattern: /nightmare/i, window: 'Nightmare' },
+                { name: 'testcafe', pattern: /testcafe/i, window: '__TESTCAFE' },
+                { name: 'webdriverio', pattern: /webdriver/i, window: 'WebDriver' },
+                { name: ' WDIO', pattern: /wdio/i, window: '_WDIO' },
+                { name: 'splinter', pattern: /splinter/i, window: 'Splinter' },
+                { name: 'mechanize', pattern: /mechanize/i, window: 'Mechanize' }
+            ];
+            
+            for (const ap of automationPatterns) {
+                if (window[ap.window] !== undefined) {
+                    score += 50;
+                    detections.push('framework_window:' + ap.name);
+                }
+                if (ap.pattern.test(navigator.userAgent || '')) {
+                    score += 45;
+                    detections.push('framework_ua:' + ap.name);
+                }
+            }
+        } catch (e) {}
+        
+        try {
+            const keys = Object.keys(window);
+            const automationKeys = keys.filter(k => 
+                /^(?:__)?(?:selenium|webdriver|driver|wdio|cypress|pw_|playwright_|__pw)/i.test(k) ||
+                /_(?:selenium|webdriver|driver|pw_|playwright_)(?:_)?/i.test(k)
+            );
+            
+            if (automationKeys.length > 2) {
+                score += 40;
+                detections.push('automation_keys:' + automationKeys.length);
+            }
+        } catch (e) {}
+        
+        try {
+            const ua = navigator.userAgent || '';
+            if (/automation|bot|crawler|spider|scraper/i.test(ua)) {
+                score += 60;
+                detections.push('automation_ua_detected');
+            }
+        } catch (e) {}
+        
+        try {
+            const startTime = performance.now();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const elapsed = performance.now() - startTime;
+            if (elapsed < 0.5) {
+                score += 30;
+                detections.push('unrealistic_timing');
+            }
+        } catch (e) {}
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectCanvas() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 280;
+            canvas.height = 80;
+            const ctx = canvas.getContext('2d');
+            
+            if (!ctx) {
+                score += 45;
                 detections.push('no_canvas_context');
                 return { detected: true, score: Math.min(score, 100), detections };
             }
@@ -279,365 +710,268 @@ class EnvironmentDetectorEnhanced {
 
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 16pt Arial';
-            ctx.fillText('abcdefghijklmnopqrstuvwxyz 0123456789', 4, 70);
-
-            ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
-            ctx.beginPath();
-            ctx.moveTo(10, 80);
-            ctx.lineTo(100, 20);
-            ctx.lineTo(200, 80);
-            ctx.lineTo(300, 20);
-            ctx.lineTo(390, 80);
-            ctx.stroke();
-
-            const gradients = ctx.createLinearGradient(0, 0, 200, 0);
-            gradients.addColorStop(0, 'red');
-            gradients.addColorStop(1, 'blue');
-            ctx.fillStyle = gradients;
-            ctx.fillRect(10, 90, 380, 25);
+            ctx.fillText('abcdefghijklmnopqrstuvwxyz', 4, 70);
 
             const dataURL = canvas.toDataURL();
             const dataURL2 = canvas.toDataURL();
+            
             if (dataURL !== dataURL2) {
                 score += 30;
                 detections.push('canvas_unstable');
             }
 
-            const imageData = ctx.getImageData(0, 0, 50, 50);
-            const pixelSum = Array.from(imageData.data.slice(0, 200)).reduce((a, b) => a + b, 0);
+            const imageData = ctx.getImageData(0, 0, 10, 10);
+            const pixelSum = Array.from(imageData.data.slice(0, 40)).reduce((a, b) => a + b, 0);
+            
             if (pixelSum === 0) {
                 score += 25;
                 detections.push('canvas_empty_readback');
             }
 
-            const hash = this.hashString(dataURL);
-            this.fingerprintComponents.canvas = hash;
-            detections.push('canvas_hash:' + hash.substring(0, 16));
-
+            const allZeros = Array.from(imageData.data).every(v => v === 0);
+            if (allZeros) {
+                score += 40;
+                detections.push('canvas_all_black');
+            }
         } catch (e) {
             score += 40;
-            detections.push('canvas_error: ' + e.message);
+            detections.push('canvas_error');
         }
+        
+        try {
+            const canvas2 = document.createElement('canvas');
+            canvas2.width = 200;
+            canvas2.height = 100;
+            const ctx2 = canvas2.getContext('webgl') || canvas2.getContext('experimental-webgl');
+            
+            if (ctx2) {
+                const buffer = ctx2.createBuffer();
+                ctx2.bindBuffer(ctx2.ARRAY_BUFFER, buffer);
+                ctx2.bufferData(ctx2.ARRAY_BUFFER, new Float32Array([1,2,3,4,5,6,7,8,9,10]), ctx2.STATIC_DRAW);
+                
+                const ext = ctx2.getExtension('WEBGL_debug_renderer_info');
+                if (ext) {
+                    const renderer = ctx2.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '';
+                    if (/swiftshader|llvmpipe|mesa|software/i.test(renderer)) {
+                        score += 35;
+                        detections.push('software_rendering_canvas');
+                    }
+                }
+            }
+        } catch (e) {}
+        
+        try {
+            const testCanvas = document.createElement('canvas');
+            testCanvas.width = 100;
+            testCanvas.height = 100;
+            const testCtx = testCanvas.getContext('2d');
+            
+            testCtx.fillStyle = '#ff0000';
+            testCtx.fillRect(0, 0, 50, 50);
+            testCtx.fillStyle = '#0000ff';
+            testCtx.fillRect(50, 0, 50, 50);
+            
+            const data = testCtx.getImageData(0, 0, 100, 100).data;
+            let nonZero = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] !== 0 || data[i+1] !== 0 || data[i+2] !== 0) {
+                    nonZero++;
+                }
+            }
+            
+            if (nonZero === 0) {
+                score += 50;
+                detections.push('canvas_fully_blocked');
+            }
+        } catch (e) {}
+        
         return { detected: score > 35, score: Math.min(score, 100), detections };
     }
 
-    async detectCanvasStable() {
+    async detectWebGL() {
         let score = 0;
         const detections = [];
-        const results = [];
-        try {
-            for (let i = 0; i < 3; i++) {
-                const canvas = document.createElement('canvas');
-                canvas.width = 200;
-                canvas.height = 50;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.fillStyle = '#f60';
-                    ctx.fillRect(10, 10, 50, 30);
-                    ctx.fillStyle = '#069';
-                    ctx.font = '14px Arial';
-                    ctx.fillText('Fingerprint Test ' + i, 20, 30);
-                    results.push(canvas.toDataURL());
-                }
-            }
-
-            if (results.length >= 2 && results[0] !== results[1]) {
-                score += 15;
-                detections.push('canvas_unstable_across_renders');
-            }
-
-            const emptyCanvas = document.createElement('canvas');
-            emptyCanvas.width = 100;
-            emptyCanvas.height = 100;
-            const emptyCtx = emptyCanvas.getContext('2d');
-            if (emptyCtx) {
-                const emptyData = emptyCtx.getImageData(0, 0, 10, 10);
-                const allZero = Array.from(emptyData.data).every(v => v === 0);
-                if (allZero) {
-                    score += 20;
-                    detections.push('empty_canvas_reads_zero');
-                }
-            }
-
-            const hiddenCanvas = document.createElement('canvas');
-            hiddenCanvas.style.display = 'none';
-            hiddenCanvas.width = 200;
-            hiddenCanvas.height = 50;
-            document.body.appendChild(hiddenCanvas);
-            const hiddenCtx = hiddenCanvas.getContext('2d');
-            if (hiddenCtx) {
-                hiddenCtx.fillStyle = '#000';
-                hiddenCtx.fillRect(0, 0, 200, 50);
-                const hiddenData = hiddenCtx.getImageData(0, 0, 10, 10);
-                const allBlack = Array.from(hiddenData.data.slice(0, 40)).every(v => v === 0);
-                if (allBlack) {
-                    score += 10;
-                    detections.push('hidden_canvas_unreadable');
-                }
-            }
-            document.body.removeChild(hiddenCanvas);
-
-        } catch (e) {
-            score += 25;
-            detections.push('canvas_stable_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectCanvasEntropy() {
-        let score = 0;
-        const detections = [];
-        try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 300;
-            canvas.height = 100;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                return { detected: false, score: 0, detections: ['no_context'] };
-            }
-
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-            const text = Array.from({ length: 50 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-            ctx.font = '12px Arial';
-            ctx.fillText(text, 5, 20);
-
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-
-            let uniqueValues = new Set();
-            for (let i = 0; i < data.length; i += 4) {
-                const hex = data[i].toString(16) + data[i+1].toString(16) + data[i+2].toString(16);
-                uniqueValues.add(hex);
-            }
-
-            const entropyRatio = uniqueValues.size / (data.length / 4);
-            if (entropyRatio < 0.1) {
-                score += 30;
-                detections.push('very_low_entropy:' + entropyRatio.toFixed(4));
-            } else if (entropyRatio < 0.2) {
-                score += 15;
-                detections.push('low_entropy:' + entropyRatio.toFixed(4));
-            }
-
-            let zeroCount = 0;
-            for (let i = 0; i < data.length; i++) {
-                if (data[i] === 0) zeroCount++;
-            }
-            const zeroRatio = zeroCount / data.length;
-            if (zeroRatio > 0.8) {
-                score += 25;
-                detections.push('high_zero_ratio:' + zeroRatio.toFixed(4));
-            }
-
-            this.fingerprintComponents.canvasEntropy = entropyRatio;
-            detections.push('entropy:' + entropyRatio.toFixed(4));
-
-        } catch (e) {
-            score += 20;
-            detections.push('entropy_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectWebGLEnhanced() {
-        let score = 0;
-        const detections = [];
+        
         try {
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            
             if (!gl) {
-                score += 50;
+                score += 45;
                 detections.push('no_webgl');
                 return { detected: true, score: Math.min(score, 100), detections };
             }
-
+            
             const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
             if (debugInfo) {
                 const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
                 const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-
+                
                 if (!vendor || !renderer) {
                     score += 20;
-                    detections.push('webgl_no_vendor_renderer');
-                } else {
-                    this.fingerprintComponents.webglVendor = vendor;
-                    this.fingerprintComponents.webglRenderer = renderer;
-                    detections.push('webgl_vendor:' + vendor.substring(0, 30));
-                    detections.push('webgl_renderer:' + renderer.substring(0, 50));
+                    detections.push('webgl_no_vendor');
                 }
-
-                const softwarePatterns = [
-                    /swiftshader/i, /llvmpipe/i, /mesa/i, /virtual/i,
-                    /google\s*inc/i, /software/i, /microsoft/i,
-                    /vmware/i, /parallels/i, /virtualbox/i, /qxl/i
-                ];
-
-                for (const pattern of softwarePatterns) {
-                    if (pattern.test(renderer)) {
-                        score += 35;
-                        detections.push('software_renderer_detected');
-                        break;
-                    }
+                
+                if (/swiftshader|llvmpipe|mesa|virtual|google\s*inc|software/i.test(renderer || '')) {
+                    score += 40;
+                    detections.push('software_renderer');
                 }
-
-                const unknownPatterns = [/unknown/i, /generic/i, /default/i];
-                for (const pattern of unknownPatterns) {
-                    if (pattern.test(renderer)) {
-                        score += 20;
-                        detections.push('generic_renderer');
-                        break;
-                    }
+                
+                if (/vmware|virtualbox|parallels|qemu/i.test(renderer || '')) {
+                    score += 50;
+                    detections.push('vm_renderer_detected');
                 }
             } else {
                 score += 25;
-                detections.push('no_webgl_debug_info');
+                detections.push('no_webgl_debug');
             }
-
+            
             const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-            detections.push('max_texture_size:' + maxTexSize);
             if (maxTexSize <= 1024) {
                 score += 20;
-                detections.push('small_max_texture');
+                detections.push('small_tex_size');
             }
-
+            
             const maxVertAttribs = gl.getParameter(gl.MAX_VERTEX_ATTRIBS);
-            detections.push('max_vertex_attribs:' + maxVertAttribs);
             if (maxVertAttribs <= 8) {
                 score += 15;
                 detections.push('few_vertex_attribs');
             }
-
+            
             const aliasedRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
             if (aliasedRange && aliasedRange[1] <= 1) {
                 score += 15;
-                detections.push('aliased_only');
+                detections.push('aliased_line_only');
             }
-
+            
             const shaderPrecision = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
-            if (shaderPrecision) {
-                detections.push('shader_precision:' + shaderPrecision.precision);
-                if (shaderPrecision.precision < 16) {
-                    score += 20;
-                    detections.push('low_shader_precision');
-                }
+            if (shaderPrecision && shaderPrecision.precision < 16) {
+                score += 20;
+                detections.push('low_shader_precision');
             }
-
+            
             const ext = gl.getExtension('EXT_texture_filter_anisotropic');
             if (!ext) {
-                score += 10;
-                detections.push('no_anisotropic_filtering');
+                score += 8;
+                detections.push('no_anisotropic');
             }
-
+            
             const supportedExts = gl.getSupportedExtensions();
-            if (supportedExts) {
-                detections.push('extension_count:' + supportedExts.length);
-                if (supportedExts.length < 15) {
-                    score += 15;
-                    detections.push('few_webgl_extensions');
-                }
-                const criticalExts = ['OES_texture_float', 'WEBGL_debug_renderer_info', 'EXT_texture_filter_anisotropic'];
-                for (const extName of criticalExts) {
-                    if (!supportedExts.includes(extName) && extName !== 'WEBGL_debug_renderer_info') {
-                        score += 5;
-                        detections.push('missing_critical_ext:' + extName);
-                    }
-                }
+            if (supportedExts && supportedExts.length < 10) {
+                score += 15;
+                detections.push('few_webgl_extensions:' + (supportedExts ? supportedExts.length : 0));
             }
-
-            const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-            const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-            gl.shaderSource(vertexShader, 'attribute vec2 position; void main() { gl_Position = vec4(position, 0.0, 1.0); }');
-            gl.compileShader(vertexShader);
-            const vertCompiled = gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS);
-            if (!vertCompiled) {
+            
+            if (supportedExts && supportedExts.length > 50) {
+                score += 5;
+                detections.push('many_webgl_extensions');
+            }
+            
+            const vertexTextureUnits = gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS);
+            if (vertexTextureUnits === 0) {
                 score += 10;
-                detections.push('vertex_shader_compile_failed');
+                detections.push('no_vertex_texture_units');
             }
-
+            
         } catch (e) {
             score += 40;
-            detections.push('webgl_error: ' + e.message);
+            detections.push('webgl_error');
         }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
     }
 
-    async detectWebGL2Enhanced() {
+    async detectWebGL2() {
         let score = 0;
         const detections = [];
+        
         try {
             const canvas = document.createElement('canvas');
             const gl2 = canvas.getContext('webgl2');
+            
             if (!gl2) {
                 return { detected: false, score: 0, detections: ['no_webgl2'] };
             }
-
+            
             const debugInfo = gl2.getExtension('WEBGL_debug_renderer_info');
             if (debugInfo) {
                 const renderer = gl2.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                const softwarePatterns = [/swiftshader/i, /llvmpipe/i, /mesa/i, /virtual/i];
-
-                for (const pattern of softwarePatterns) {
-                    if (pattern.test(renderer)) {
-                        score += 30;
-                        detections.push('webgl2_software_renderer');
-                        break;
-                    }
+                if (/swiftshader|llvmpipe|mesa|virtual|software/i.test(renderer || '')) {
+                    score += 35;
+                    detections.push('webgl2_software_renderer');
+                }
+                if (/vmware|virtualbox|parallels|qemu/i.test(renderer || '')) {
+                    score += 50;
+                    detections.push('webgl2_vm_renderer');
                 }
             }
-
+            
             const maxTexSize = gl2.getParameter(gl2.MAX_TEXTURE_SIZE);
-            detections.push('webgl2_max_texture:' + maxTexSize);
             if (maxTexSize <= 1024) {
                 score += 15;
-                detections.push('webgl2_small_texture');
+                detections.push('webgl2_small_tex');
             }
-
+            
             const supportedExts = gl2.getSupportedExtensions();
-            if (supportedExts) {
-                detections.push('webgl2_ext_count:' + supportedExts.length);
-                if (supportedExts.length < 10) {
-                    score += 10;
-                    detections.push('few_webgl2_extensions');
-                }
+            if (supportedExts && supportedExts.length < 5) {
+                score += 15;
+                detections.push('few_webgl2_extensions:' + (supportedExts ? supportedExts.length : 0));
             }
-
-            const transformFeedback = gl2.getParameter(gl2.MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS);
-            detections.push('transform_feedback_attrs:' + transformFeedback);
-
+            
+            const max3DTextureSize = gl2.getParameter(gl2.MAX_3D_TEXTURE_SIZE);
+            if (max3DTextureSize < 512) {
+                score += 20;
+                detections.push('webgl2_limited_3d_texture');
+            }
+            
+            const maxRenderbufferSize = gl2.getParameter(gl2.MAX_RENDERBUFFER_SIZE);
+            if (maxRenderbufferSize < 4096) {
+                score += 15;
+                detections.push('webgl2_small_renderbuffer');
+            }
+            
         } catch (e) {
             score += 25;
-            detections.push('webgl2_error: ' + e.message);
+            detections.push('webgl2_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
-    async detectAudioEnhanced() {
+    async detectAudio() {
         let score = 0;
         const detections = [];
+        
         try {
             const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            
             if (!AudioContext) {
                 score += 35;
-                detections.push('no_audio_context');
+                detections.push('no_audiocontext');
                 return { detected: true, score: Math.min(score, 100), detections };
             }
-
+            
             const ctx = new AudioContext(1, 44100, 44100);
             const osc = ctx.createOscillator();
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(10000, ctx.currentTime);
-
+            
             const compressor = ctx.createDynamicsCompressor();
             compressor.threshold.setValueAtTime(-50, ctx.currentTime);
             compressor.knee.setValueAtTime(40, ctx.currentTime);
             compressor.ratio.setValueAtTime(12, ctx.currentTime);
             compressor.attack.setValueAtTime(0, ctx.currentTime);
             compressor.release.setValueAtTime(0.25, ctx.currentTime);
-
+            
             const gain = ctx.createGain();
             gain.gain.setValueAtTime(0.5, ctx.currentTime);
-
-            osc.connect(compressor);
+            
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(5000, ctx.currentTime);
+            
+            osc.connect(filter);
+            filter.connect(compressor);
             compressor.connect(gain);
             gain.connect(ctx.destination);
             osc.start(0);
@@ -646,65 +980,56 @@ class EnvironmentDetectorEnhanced {
             const buffer = await ctx.startRendering();
             const renderTime = performance.now() - startTime;
 
-            detections.push('audio_render_time:' + renderTime.toFixed(2));
             if (renderTime < 5) {
                 score += 25;
                 detections.push('audio_render_too_fast');
+            }
+            
+            if (renderTime > 1000) {
+                score += 20;
+                detections.push('audio_render_too_slow');
             }
 
             const channelData = buffer.getChannelData(0);
             let sumAbs = 0;
             let sumSq = 0;
-            let nonZeroCount = 0;
+            
             for (let i = 4500; i < 5000; i++) {
-                const abs = Math.abs(channelData[i]);
-                sumAbs += abs;
-                if (abs > 0) nonZeroCount++;
+                sumAbs += Math.abs(channelData[i]);
             }
             for (let i = 0; i < channelData.length; i++) {
                 sumSq += channelData[i] * channelData[i];
             }
-
-            detections.push('audio_non_zero_ratio:' + (nonZeroCount / 500).toFixed(4));
-            if (nonZeroCount < 100) {
+            
+            if (sumAbs === 0 && sumSq === 0) {
+                score += 35;
+                detections.push('audio_silent');
+            }
+            
+            let uniqueValues = new Set();
+            for (let i = 0; i < Math.min(1000, channelData.length); i++) {
+                uniqueValues.add(channelData[i].toFixed(6));
+            }
+            if (uniqueValues.size < 10) {
                 score += 30;
-                detections.push('audio_mostly_silent');
+                detections.push('audio_low_entropy');
             }
-
-            const variance = sumSq / channelData.length;
-            if (variance < 0.0001) {
-                score += 20;
-                detections.push('audio_no_variance');
+            
+            const stats = ctx.sampleRate;
+            if (stats !== 44100 && stats !== 48000) {
+                score += 15;
+                detections.push('audio_unusual_sample_rate:' + stats);
             }
-
-            const multipleBuffers = [];
-            for (let i = 0; i < 3; i++) {
-                const tempCtx = new AudioContext(1, 44100, 44100);
-                const tempOsc = tempCtx.createOscillator();
-                tempOsc.frequency.setValueAtTime(1000, tempCtx.currentTime);
-                tempOsc.connect(tempCtx.destination);
-                tempOsc.start(0);
-                const tempBuffer = await tempCtx.startRendering();
-                multipleBuffers.push(tempBuffer.getChannelData(0).slice(4500, 4550).join(','));
-            }
-
-            if (multipleBuffers[0] === multipleBuffers[1]) {
-                score += 25;
-                detections.push('audio_identical_across_renders');
-            }
-
-            const hash = this.hashString(multipleBuffers[0]);
-            this.fingerprintComponents.audio = hash;
-            detections.push('audio_hash:' + hash.substring(0, 16));
-
+            
         } catch (e) {
             score += 35;
-            detections.push('audio_error: ' + e.message);
+            detections.push('audio_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
-    async detectFontsEnhanced() {
+    async detectFonts() {
         let score = 0;
         const detections = [];
         const baseFonts = ['monospace', 'sans-serif', 'serif'];
@@ -720,762 +1045,708 @@ class EnvironmentDetectorEnhanced {
             'Noto Serif', 'Lora', 'IBM Plex Sans', 'JetBrains Mono',
             'SF Pro Display', 'SF Pro Text', 'Calibri', 'Candara',
             'Corbel', 'Cambria', 'Bookman', 'Futura', 'Optima',
-            'Arial Black', 'Arial Narrow', 'Century Gothic', 'Franklin Gothic Medium',
-            'Rockwell', 'Rockwell Extra Bold', 'Courier', 'Constantia'
+            'Century Gothic', 'Consolas', 'Monaco', 'Menlo'
         ];
-
+        
         try {
             const el = document.createElement('div');
             el.style.cssText = 'position:absolute;left:-9999px;font-size:72px;visibility:hidden;white-space:nowrap';
             el.textContent = 'mmmmmmmmmmlli';
             document.body.appendChild(el);
-
+            
             const baseWidths = {};
             for (const base of baseFonts) {
                 el.style.fontFamily = base;
                 baseWidths[base] = el.offsetWidth;
             }
-
+            
+            let fontCount = 0;
             const detectedFonts = [];
-            const fontWidths = {};
+            
             for (const font of testFonts) {
                 for (const base of baseFonts) {
                     el.style.fontFamily = `"${font}", ${base}`;
-                    const width = el.offsetWidth;
-                    if (width !== baseWidths[base]) {
+                    if (el.offsetWidth !== baseWidths[base]) {
+                        fontCount++;
                         detectedFonts.push(font);
-                        fontWidths[font] = width;
                         break;
                     }
                 }
             }
-
+            
             document.body.removeChild(el);
-
-            detections.push('detected_font_count:' + detectedFonts.length);
-            if (detectedFonts.length < 3) {
-                score += 35;
-                detections.push('very_few_fonts');
-            } else if (detectedFonts.length < 8) {
+            
+            if (fontCount < 3) {
+                score += 30;
+                detections.push('too_few_fonts:' + fontCount);
+            }
+            
+            if (fontCount < 8) {
+                score += 15;
+                detections.push('limited_fonts:' + fontCount);
+            }
+            
+            if (detectedFonts.length === 0) {
+                score += 45;
+                detections.push('no_detected_fonts');
+            }
+            
+            const uncommonFonts = detectedFonts.filter(f => 
+                !['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Georgia'].includes(f)
+            );
+            if (uncommonFonts.length === 0 && fontCount > 0) {
                 score += 20;
-                detections.push('few_fonts');
-            } else if (detectedFonts.length < 15) {
-                score += 10;
-                detections.push('limited_fonts');
+                detections.push('only_system_fonts');
             }
-
-            this.fingerprintComponents.fonts = detectedFonts;
-            detections.push('fonts:' + detectedFonts.slice(0, 10).join(','));
-
-            const suspiciousFonts = ['Keyboard', 'Fake Font', 'Font1', 'TestFont'];
-            for (const suspicious of suspiciousFonts) {
-                if (detectedFonts.some(f => f.includes(suspicious))) {
-                    score += 15;
-                    detections.push('suspicious_font');
-                    break;
-                }
-            }
-
+            
         } catch (e) {
             score += 30;
-            detections.push('font_detection_error: ' + e.message);
+            detections.push('font_detection_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
-    async detectFontEnumeration() {
+    async detectEmulator() {
         let score = 0;
         const detections = [];
+        
         try {
-            if (document.fonts && document.fonts.forEach) {
-                const fontList = [];
-                document.fonts.forEach(font => {
-                    fontList.push(font.family);
-                });
-
-                detections.push('enumerated_fonts:' + fontList.length);
-                if (fontList.length === 0) {
-                    score += 20;
-                    detections.push('no_enumerated_fonts');
-                } else if (fontList.length < 5) {
-                    score += 10;
-                    detections.push('few_enumerated_fonts');
-                }
-
-                this.fingerprintComponents.enumeratedFonts = fontList;
-            } else {
-                score += 15;
-                detections.push('font_api_unavailable');
-            }
-
-            if (navigator.permissions) {
-                try {
-                    const result = await navigator.permissions.query({ name: 'font-access' });
-                    if (result.state === 'granted') {
-                        detections.push('font_access_granted');
-                    } else if (result.state === 'denied') {
-                        score += 10;
-                        detections.push('font_access_denied');
-                    }
-                } catch (e) {
-                    detections.push('font_access_query_failed');
+            const ua = navigator.userAgent || '';
+            const emulatorPatterns = [
+                { pattern: /android.*emulator/i, name: 'android_emulator_ua' },
+                { pattern: /iphone.*simulator|ipad.*simulator/i, name: 'ios_simulator_ua' },
+                { pattern: /bluestacks/i, name: 'bluestacks' },
+                { pattern: /nox|genymotion/i, name: 'genymotion' },
+                { pattern: /memu/i, name: 'memu' },
+                { pattern: /ldplayer/i, name: 'ldplayer' },
+                { pattern: /koplayer/i, name: 'koplayer' },
+                { pattern: /droid4x/i, name: 'droid4x' },
+                { pattern: /mitsumeshi/i, name: 'mitsumeshi' },
+                { pattern: /x86.*android/i, name: 'x86_android' }
+            ];
+            
+            for (const emu of emulatorPatterns) {
+                if (emu.pattern.test(ua)) {
+                    score += 50;
+                    detections.push(emu.name);
                 }
             }
-
-        } catch (e) {
-            score += 20;
-            detections.push('font_enumeration_error: ' + e.message);
-        }
-        return { detected: score > 20, score: Math.min(score, 100), detections };
-    }
-
-    async detectFontMetrics() {
-        let score = 0;
-        const detections = [];
-        try {
-            const testString = 'mmmmmmmmmmlli';
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            const metrics = [];
-            const testFonts = ['Arial', 'Times New Roman', 'Courier New', 'Georgia', 'Verdana'];
-
-            for (const font of testFonts) {
-                ctx.font = `72px "${font}", sans-serif`;
-                const metrics2 = ctx.measureText(testString);
-                metrics.push({
-                    font: font,
-                    width: metrics2.width,
-                    actualBoundingBoxLeft: metrics2.actualBoundingBoxLeft,
-                    actualBoundingBoxRight: metrics2.actualBoundingBoxRight,
-                    fontBoundingBoxAscent: metrics2.fontBoundingBoxAscent,
-                    fontBoundingBoxDescent: metrics2.fontBoundingBoxDescent
-                });
+            
+            if (/iPhone.*CPU.*OS/i.test(ua)) {
+                const platform = navigator.platform || '';
+                if (!/iPhone|iPad/i.test(platform)) {
+                    score += 45;
+                    detections.push('ios_platform_mismatch');
+                }
             }
-
-            let uniqueWidths = new Set(metrics.map(m => Math.round(m.width)));
-            detections.push('unique_widths:' + uniqueWidths.size);
-
-            if (uniqueWidths.size < 3) {
+            
+            if (navigator.maxTouchPoints === 0) {
+                const ua = navigator.userAgent || '';
+                if (/mobile|android|iphone|ipad/i.test(ua)) {
+                    score += 40;
+                    detections.push('mobile_no_touch');
+                }
+            }
+            
+            if (navigator.maxTouchPoints && navigator.maxTouchPoints > 10) {
                 score += 25;
-                detections.push('fonts_have_same_width');
+                detections.push('unusual_touch_points:' + navigator.maxTouchPoints);
             }
-
-            const avgWidth = metrics.reduce((sum, m) => sum + m.width, 0) / metrics.length;
-            const variance = metrics.reduce((sum, m) => sum + Math.pow(m.width - avgWidth, 2), 0) / metrics.length;
-            const stdDev = Math.sqrt(variance);
-
-            detections.push('metrics_variance:' + stdDev.toFixed(2));
-            if (stdDev < 50) {
-                score += 15;
-                detections.push('low_font_variance');
+            
+            if (navigator.platform) {
+                const platform = navigator.platform.toLowerCase();
+                if (platform.includes('linux') && /mobile|android/i.test(ua)) {
+                    score += 45;
+                    detections.push('linux_android_emulator');
+                }
             }
-
-        } catch (e) {
-            score += 20;
-            detections.push('font_metrics_error: ' + e.message);
-        }
-        return { detected: score > 20, score: Math.min(score, 100), detections };
-    }
-
-    async detectPluginsEnhanced() {
-        let score = 0;
-        const detections = [];
-        try {
-            const plugins = navigator.plugins;
-            if (!plugins || plugins.length === 0) {
-                score += 30;
-                detections.push('no_plugins');
-            } else {
-                const pluginNames = Array.from(plugins).map(p => p.name);
-                detections.push('plugin_count:' + plugins.length);
-                detections.push('plugins:' + pluginNames.slice(0, 5).join(','));
-
-                if (plugins.length < 2) {
+            
+            try {
+                const width = screen.width;
+                const height = screen.height;
+                if (width === 320 && height === 480) {
+                    score += 35;
+                    detections.push('iphone_3gs_resolution');
+                }
+                if (width === 375 && height === 667) {
+                    score += 30;
+                    detections.push('iphone_6_resolution');
+                }
+                if (width === 414 && height === 896) {
+                    score += 30;
+                    detections.push('iphone_xr_resolution');
+                }
+            } catch (e) {}
+            
+            try {
+                if (screen.width === screen.availWidth && screen.height === screen.availHeight) {
                     score += 25;
-                    detections.push('very_few_plugins');
+                    detections.push('fullscreen_emulator');
                 }
-
-                const commonPlugins = ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer',
-                    'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'];
-                const hasPDF = pluginNames.some(p =>
-                    commonPlugins.some(cp => p.includes(cp))
-                );
-                if (!hasPDF) {
-                    score += 15;
-                    detections.push('no_pdf_plugin');
-                }
-
-                const chromePlugins = pluginNames.filter(p =>
-                    p.includes('Chrome') || p.includes('Chromium')
-                );
-                if (chromePlugins.length === 0 && /Chrome|Chromium|Edge/i.test(navigator.userAgent || '')) {
-                    score += 20;
-                    detections.push('missing_chrome_plugins');
-                }
-            }
-
-            if (navigator.mimeTypes) {
-                const mimeTypes = Array.from(navigator.mimeTypes).map(m => m.type);
-                detections.push('mime_type_count:' + mimeTypes.length);
-                if (mimeTypes.length < 2) {
-                    score += 15;
-                    detections.push('few_mime_types');
-                }
-            }
-
-        } catch (e) {
-            score += 35;
-            detections.push('plugins_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectPluginFingerprint() {
-        let score = 0;
-        const detections = [];
-        try {
-            const plugins = navigator.plugins;
-            const mimeTypes = navigator.mimeTypes || [];
-
-            const pluginData = {
-                plugins: [],
-                mimeTypes: [],
-                totalLength: 0
-            };
-
-            if (plugins && plugins.length > 0) {
-                for (let i = 0; i < plugins.length; i++) {
-                    const p = plugins[i];
-                    const pluginInfo = {
-                        name: p.name,
-                        filename: p.filename,
-                        description: p.description,
-                        version: p.version
-                    };
-                    pluginData.plugins.push(pluginInfo);
-                    pluginData.totalLength += (p.name + p.description + p.filename).length;
-
-                    for (let j = 0; j < p.length; j++) {
-                        const m = p[j];
-                        pluginData.mimeTypes.push(m.type);
-                        pluginData.totalLength += m.type.length;
-                    }
-                }
-            }
-
-            for (const m of mimeTypes) {
-                if (m && m.type) {
-                    pluginData.totalLength += m.type.length;
-                }
-            }
-
-            const hash = this.hashString(JSON.stringify(pluginData.plugins));
-            this.fingerprintComponents.pluginFingerprint = hash;
-            detections.push('plugin_hash:' + hash.substring(0, 16));
-            detections.push('plugin_data_length:' + pluginData.totalLength);
-
-            if (pluginData.totalLength < 50) {
-                score += 20;
-                detections.push('minimal_plugin_data');
-            }
-
-            const chromePattern = /Chrome|Chromium|Edg/i;
-            const hasChromePlugin = pluginData.plugins.some(p =>
-                chromePattern.test(p.name) || chromePattern.test(p.description)
-            );
-
-            if (chromePattern.test(navigator.userAgent || '') && !hasChromePlugin) {
-                score += 25;
-                detections.push('plugin_ua_mismatch');
-            }
-
-        } catch (e) {
-            score += 25;
-            detections.push('plugin_fingerprint_error: ' + e.message);
-        }
-        return { detected: score > 20, score: Math.min(score, 100), detections };
-    }
-
-    async detectWebRTCEnhanced() {
-        let score = 0;
-        const detections = [];
-        try {
-            const RTCPeerConnection = window.RTCPeerConnection ||
-                window.webkitRTCPeerConnection ||
-                window.mozRTCPeerConnection;
-
-            if (!RTCPeerConnection) {
-                score += 20;
-                detections.push('no_webrtc');
-                return { detected: true, score: Math.min(score, 100), detections };
-            }
-
-            const ips = new Set();
-            const pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                    { urls: 'stun:stun3.l.google.com:19302' },
-                    { urls: 'stun:stun4.l.google.com:19302' }
-                ]
-            });
-
-            pc.createDataChannel('');
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            const sdp = pc.localDescription.sdp;
-            const lines = sdp.split('\n');
-            for (const line of lines) {
-                if (line.indexOf('candidate') > -1) {
-                    const parts = line.split(' ');
-                    if (parts[4] && parts[4] !== '0.0.0.0') {
-                        ips.add(parts[4]);
-                        if (parts[7] !== 'host') {
-                            detections.push('relay_candidate:' + parts[4]);
+            } catch (e) {}
+            
+            try {
+                const gl = document.createElement('canvas').getContext('webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+                        if (/android|adr|goldfish|llvmpipe/i.test(renderer)) {
+                            score += 40;
+                            detections.push('android_emulator_renderer');
                         }
                     }
                 }
-            }
-
-            pc.close();
-
-            detections.push('ip_count:' + ips.size);
-            detections.push('ips:' + Array.from(ips).slice(0, 3).join(','));
-
-            if (ips.size === 0) {
-                score += 15;
-                detections.push('no_webrtc_ips');
-            }
-
-            const privateIPs = Array.from(ips).filter(ip =>
-                ip.startsWith('10.') ||
-                ip.startsWith('172.16.') || ip.startsWith('172.17.') ||
-                ip.startsWith('172.18.') || ip.startsWith('172.19.') ||
-                ip.startsWith('172.20.') || ip.startsWith('172.21.') ||
-                ip.startsWith('172.22.') || ip.startsWith('172.23.') ||
-                ip.startsWith('172.24.') || ip.startsWith('172.25.') ||
-                ip.startsWith('172.26.') || ip.startsWith('172.27.') ||
-                ip.startsWith('172.28.') || ip.startsWith('172.29.') ||
-                ip.startsWith('172.30.') || ip.startsWith('172.31.') ||
-                ip.startsWith('192.168.') ||
-                ip.startsWith('127.') ||
-                ip.startsWith('169.254.')
-            );
-
-            const publicIPs = Array.from(ips).filter(ip => !privateIPs.includes(ip));
-
-            if (publicIPs.length > 0) {
-                this.fingerprintComponents.publicIP = publicIPs[0];
-                detections.push('public_ip_found');
-            }
-
-            if (privateIPs.length > 0 && publicIPs.length > 0) {
-                score += 25;
-                detections.push('vpn_ip_mismatch');
-            }
-
-            this.fingerprintComponents.webrtcIPs = Array.from(ips);
-
+            } catch (e) {}
+            
         } catch (e) {
-            score += 20;
-            detections.push('webrtc_error: ' + e.message);
-        }
-        return { detected: score > 20, score: Math.min(score, 100), detections };
-    }
-
-    async detectWebRTCLeak() {
-        let score = 0;
-        const detections = [];
-        try {
-            const RTCPeerConnection = window.RTCPeerConnection ||
-                window.webkitRTCPeerConnection ||
-                window.mozRTCPeerConnection;
-
-            if (!RTCPeerConnection) {
-                return { detected: false, score: 0, detections: ['no_webrtc'] };
-            }
-
-            const ipsBefore = this.fingerprintComponents.webrtcIPs || [];
-
-            const pc = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-            });
-
-            pc.createDataChannel('leaktest');
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            const sdp = pc.localDescription.sdp;
-            const lines = sdp.split('\n');
-            const newIPs = [];
-            for (const line of lines) {
-                if (line.indexOf('candidate') > -1) {
-                    const parts = line.split(' ');
-                    if (parts[4] && parts[4] !== '0.0.0.0' && !ipsBefore.includes(parts[4])) {
-                        newIPs.push(parts[4]);
-                    }
-                }
-            }
-
-            pc.close();
-
-            if (newIPs.length > 0) {
-                score += 30;
-                detections.push('ip_leak_detected');
-                detections.push('leaked_ips:' + newIPs.join(','));
-            }
-
-            const ipv6Pattern = /([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|::/;
-            const hasIPv6 = Array.from(newIPs).some(ip => ipv6Pattern.test(ip));
-            if (hasIPv6) {
-                score += 10;
-                detections.push('ipv6_leak');
-            }
-
-        } catch (e) {
-            score += 15;
-            detections.push('webrtc_leak_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectProxyVPN() {
-        let score = 0;
-        const detections = [];
-        try {
-            const xff = this.getHeader('X-Forwarded-For');
-            const xri = this.getHeader('X-Real-IP');
-            const via = this.getHeader('Via');
-            const proxyChain = this.getHeader('X-ProxyChain');
-            const forwarded = this.getHeader('Forwarded');
-
-            if (xff) {
-                const xffIPs = xff.split(',').map(ip => ip.trim());
-                detections.push('xff_count:' + xffIPs.length);
-                if (xffIPs.length > 2) {
-                    score += 25;
-                    detections.push('multi_hop_proxy');
-                }
-            }
-
-            if (via) {
-                score += 15;
-                detections.push('via_header_present');
-                const proxyKeywords = ['proxy', 'vpn', 'squid', 'nginx', 'apache', ' varnish'];
-                for (const keyword of proxyKeywords) {
-                    if (via.toLowerCase().includes(keyword)) {
-                        score += 15;
-                        detections.push('known_proxy_via:' + keyword);
-                        break;
-                    }
-                }
-            }
-
-            if (xff && xri && xff !== xri) {
-                score += 20;
-                detections.push('ip_mismatch');
-            }
-
-            const publicIP = this.fingerprintComponents.publicIP;
-            if (publicIP) {
-                const isDatacenter = this.checkDatacenterIP(publicIP);
-                if (isDatacenter) {
-                    score += 30;
-                    detections.push('datacenter_ip');
-                }
-            }
-
-        } catch (e) {
-            score += 15;
-            detections.push('proxy_vpn_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectVPNIndicators() {
-        let score = 0;
-        const detections = [];
-        try {
-            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-
-            if (conn) {
-                if (conn.type === 'vpn' || conn.type === 'vpn' ) {
-                    score += 40;
-                    detections.push('vpn_type_detected');
-                }
-
-                if (conn.type === 'ethernet' || conn.type === 'wifi') {
-                    const effectiveType = conn.effectiveType;
-                    detections.push('connection_type:' + effectiveType);
-
-                    if (effectiveType === 'slow-2g' || effectiveType === '2g') {
-                        score += 10;
-                        detections.push('slow_connection');
-                    }
-                }
-
-                if (conn.saveData === true) {
-                    score += 10;
-                    detections.push('data_saver_enabled');
-                }
-            }
-
-            const latency = conn ? conn.rtt : null;
-            if (latency !== null && latency > 500) {
-                score += 15;
-                detections.push('high_latency:' + latency);
-            }
-
-            if (navigator.onLine === false) {
-                score += 10;
-                detections.push('offline');
-            }
-
-        } catch (e) {
-            score += 15;
-            detections.push('vpn_indicators_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectTorExitNode() {
-        let score = 0;
-        const detections = [];
-        try {
-            const publicIP = this.fingerprintComponents.publicIP;
-
-            if (publicIP) {
-                const torExitNodes = [
-                    '128.31.0.34', '128.93.34.5', '131.188.40.189',
-                    '154.35.22.1', '171.25.193.77', '176.10.99.200'
-                ];
-
-                const isKnownTorIP = torExitNodes.some(node =>
-                    publicIP.startsWith(node.substring(0, 8))
-                );
-
-                if (isKnownTorIP) {
-                    score += 50;
-                    detections.push('known_tor_exit_node');
-                }
-
-                const torPorts = [9001, 9030, 9050, 9051, 9150];
-                detections.push('tor_check_performed');
-            }
-
-            const userAgent = navigator.userAgent || '';
-            if (/tor|onion/i.test(userAgent)) {
-                score += 40;
-                detections.push('tor_in_user_agent');
-            }
-
-            if (this.fingerprintComponents.webrtcIPs) {
-                const hasTorIndicator = this.fingerprintComponents.webrtcIPs.some(ip =>
-                    ip.endsWith('.onion') || ip.match(/\.exit$/i)
-                );
-                if (hasTorIndicator) {
-                    score += 35;
-                    detections.push('tor_onion_detected');
-                }
-            }
-
-        } catch (e) {
-            score += 15;
-            detections.push('tor_check_error: ' + e.message);
-        }
-        return { detected: score > 35, score: Math.min(score, 100), detections };
-    }
-
-    async detectHeadless() {
-        let score = 0;
-        const detections = [];
-        if (navigator.webdriver === true || navigator.webdriver === false) {
-        } else {
-            score += 30;
-            detections.push('webdriver_undefined');
-        }
-        if (navigator.plugins && navigator.plugins.length === 0) {
-            score += 20;
-            detections.push('no_plugins');
-        }
-        if (navigator.languages && navigator.languages.length === 0) {
-            score += 20;
-            detections.push('no_languages');
-        }
-        if (window.chrome && window.chrome.runtime === undefined) {
             score += 25;
-            detections.push('chrome_no_runtime');
+            detections.push('emulator_error');
         }
-        const mimeTypes = navigator.mimeTypes;
-        if (mimeTypes && mimeTypes.length === 0) {
-            score += 25;
-            detections.push('no_mimetypes');
-        }
-        try {
-            const ua = navigator.userAgent || '';
-            if (/headless|phantom/i.test(ua)) {
-                score += 40;
-                detections.push('headless_ua');
-            }
-        } catch (e) {}
-        try {
-            if (window.outerHeight === 0 && window.outerWidth === 0) {
-                score += 30;
-                detections.push('zero_window_size');
-            }
-        } catch (e) {}
-
-        try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.fillStyle = 'rgba(255,0,0,0.5)';
-                ctx.fillRect(0, 0, 10, 10);
-                const imageData = ctx.getImageData(0, 0, 10, 10);
-                const hasNonZero = Array.from(imageData.data).some(v => v > 0);
-                if (!hasNonZero) {
-                    score += 25;
-                    detections.push('headless_pixel_pattern');
-                }
-            }
-        } catch (e) {}
-
-        return { detected: score > 35, score: Math.min(score, 100), detections };
-    }
-
-    async detectWebDriver() {
-        let score = 0;
-        const detections = [];
-        const wdProps = [
-            'webdriver', '__webdriver_evaluate', '__selenium_evaluate',
-            '__webdriver_script_fn', '__driver_evaluate', '__fxdriver_evaluate',
-            '__webdriver_unwrapped', '__lastWatirAlert', '__$webdriverAsyncExecutor',
-            'callSelenium', '__selenium', 'Selenium'
-        ];
-        for (const prop of wdProps) {
-            if (window[prop] !== undefined) {
-                score += 20;
-                detections.push(prop);
-            }
-        }
-        try {
-            if (navigator.webdriver === true) {
-                score += 35;
-                detections.push('navigator_webdriver_true');
-            }
-        } catch (e) {}
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    async detectPuppeteer() {
-        let score = 0;
-        const detections = [];
-        try {
-            if (navigator.webdriver === true) {
-                score += 30;
-                detections.push('webdriver_true');
-            }
-        } catch (e) {}
-        try {
-            if (document.$cdc_asdjflasutopfhvcZLmcfl_) {
-                score += 45;
-                detections.push('puppeteer_cdc_marker');
-            }
-        } catch (e) {}
-        try {
-            if (document.$chrome_asyncScriptInfo) {
-                score += 35;
-                detections.push('chrome_async_script');
-            }
-        } catch (e) {}
-        try {
-            const userAgent = navigator.userAgent || '';
-            if (/headless/i.test(userAgent)) {
-                score += 35;
-                detections.push('headless_ua');
-            }
-            if (/puppet/i.test(userAgent)) {
-                score += 50;
-                detections.push('puppeteer_ua');
-            }
-        } catch (e) {}
-        return { detected: score > 35, score: Math.min(score, 100), detections };
-    }
-
-    async detectPlaywright() {
-        let score = 0;
-        const detections = [];
-        try {
-            if (window.__playwright__ !== undefined ||
-                window.__pw_tags !== undefined ||
-                window.__pw_resume__ !== undefined) {
-                score += 55;
-                detections.push('playwright_global');
-            }
-        } catch (e) {}
-        try {
-            const el = document.createElement('div');
-            el.setAttribute('onfocus', 'return __pw_resume__()');
-            if (el.onfocus !== null) {
-                score += 40;
-                detections.push('playwright_onfocus');
-            }
-        } catch (e) {}
-        try {
-            const ua = navigator.userAgent || '';
-            if (/playwright/i.test(ua)) {
-                score += 55;
-                detections.push('playwright_ua');
-            }
-        } catch (e) {}
+        
         return { detected: score > 40, score: Math.min(score, 100), detections };
     }
 
-    async detectSelenium() {
+    async detectVirtualization() {
         let score = 0;
         const detections = [];
-        const selProps = [
-            'selenium', '_selenium', 'callSelenium', '__selenium',
-            'document__selenium', 'Selenium', '__webdriver_script_fn',
-            'Selenium.prototype'
-        ];
-        for (const prop of selProps) {
-            if (window[prop] !== undefined || document[prop] !== undefined) {
-                score += 25;
-                detections.push(prop);
-            }
-        }
-        try {
-            if (document.documentElement.getAttribute('webdriver') !== null) {
-                score += 35;
-                detections.push('webdriver_attr');
-            }
-        } catch (e) {}
+        
         try {
             const ua = navigator.userAgent || '';
-            if (/selenium/i.test(ua)) {
-                score += 50;
-                detections.push('selenium_ua');
+            const vmPatterns = [
+                { pattern: /vmware|virtualbox|parallels/i, name: 'vm_detected' },
+                { pattern: /xen/i, name: 'xen_vm' },
+                { pattern: /hyperv/i, name: 'hyperv_vm' },
+                { pattern: /qemu|kvm/i, name: 'qemu_kvm' },
+                { pattern: /virtual/i, name: 'virtual_generic' },
+                { pattern: /openvz/i, name: 'openvz' },
+                { pattern: /container/i, name: 'container_marker' }
+            ];
+            
+            for (const vm of vmPatterns) {
+                if (vm.pattern.test(ua)) {
+                    score += 45;
+                    detections.push(vm.name);
+                }
             }
-        } catch (e) {}
-        return { detected: score > 30, score: Math.min(score, 100), detections };
+            
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+                        const vmRendererPatterns = [
+                            { pattern: /vmware|virtualbox|parallels/i, name: 'vm_renderer' },
+                            { pattern: /swiftshader|llvmpipe|mesa|software/i, name: 'software_renderer_vm' },
+                            { pattern: /virtual|gpu|graphics/i, name: 'virtual_gpu' }
+                        ];
+                        for (const r of vmRendererPatterns) {
+                            if (r.pattern.test(renderer)) {
+                                score += 50;
+                                detections.push(r.name);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+            
+            if (navigator.hardwareConcurrency) {
+                if (navigator.hardwareConcurrency === 1) {
+                    score += 30;
+                    detections.push('single_core_vm');
+                }
+                if (navigator.hardwareConcurrency === 2) {
+                    score += 20;
+                    detections.push('dual_core_vm');
+                }
+                if (navigator.hardwareConcurrency > 16) {
+                    score += 20;
+                    detections.push('high_cores_vm');
+                }
+            }
+            
+            if (navigator.deviceMemory) {
+                if (navigator.deviceMemory <= 0.5) {
+                    score += 25;
+                    detections.push('minimal_memory_vm');
+                }
+                if (navigator.deviceMemory > 64) {
+                    score += 15;
+                    detections.push('high_memory_unusual');
+                }
+            }
+            
+            try {
+                const cpuProps = ['加速', 'CPUID', 'Hypervisor', 'hypervisor'];
+                let cpuScore = 0;
+                for (const prop of cpuProps) {
+                    if (navigator.userAgent.includes(prop)) {
+                        cpuScore += 30;
+                        detections.push('cpu_' + prop);
+                    }
+                }
+                if (cpuScore > 0) {
+                    score += cpuScore;
+                }
+            } catch (e) {}
+            
+        } catch (e) {
+            score += 30;
+            detections.push('virtualization_error');
+        }
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectContainer() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const ua = navigator.userAgent || '';
+            const containerPatterns = [
+                { pattern: /docker/i, name: 'docker' },
+                { pattern: /kubernetes|k8s/i, name: 'kubernetes' },
+                { pattern: /lxc/i, name: 'lxc_container' },
+                { pattern: /containerd/i, name: 'containerd' }
+            ];
+            
+            for (const container of containerPatterns) {
+                if (container.pattern.test(ua)) {
+                    score += 55;
+                    detections.push(container.name);
+                }
+            }
+            
+            try {
+                const response = await fetch('/.dockerenv', { method: 'HEAD' }).catch(() => null);
+                if (response && response.ok) {
+                    score += 65;
+                    detections.push('dockerenv_file');
+                }
+            } catch (e) {}
+            
+            try {
+                if (navigator.storage && navigator.storage.estimate) {
+                    const estimate = await navigator.storage.estimate();
+                    if (estimate.quota === 0) {
+                        score += 40;
+                        detections.push('zero_quota_container');
+                    }
+                    if (estimate.quota && estimate.quota < 100000000) {
+                        score += 30;
+                        detections.push('low_quota_container');
+                    }
+                }
+            } catch (e) {}
+            
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 100;
+                canvas.height = 100;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(0, 0, 50, 50);
+                    ctx.fillStyle = '#0000ff';
+                    ctx.fillRect(50, 0, 50, 50);
+                    
+                    const data = ctx.getImageData(25, 25, 50, 50).data;
+                    let blackCount = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i] === 0 && data[i+1] === 0 && data[i+2] === 0) {
+                            blackCount++;
+                        }
+                    }
+                    if (blackCount > data.length / 4 * 0.8) {
+                        score += 35;
+                        detections.push('canvas_container_artifact');
+                    }
+                }
+            } catch (e) {}
+            
+        } catch (e) {
+            score += 30;
+            detections.push('container_error');
+        }
+        
+        return { detected: score > 45, score: Math.min(score, 100), detections };
+    }
+
+    async detectVPNConnection() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+            if (rtcPeerConnection) {
+                const ips = new Set();
+                const pc = new rtcPeerConnection({ 
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] 
+                });
+                pc.createDataChannel('');
+                
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    const sdp = pc.localDescription.sdp;
+                    
+                    const lines = sdp.split('\n');
+                    for (const line of lines) {
+                        if (line.indexOf('candidate') > -1) {
+                            const parts = line.split(' ');
+                            if (parts[4] && parts[4] !== '0.0.0.0') {
+                                const ip = parts[4];
+                                if (!ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+                                    score += 55;
+                                    detections.push('external_ip_detected');
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+                
+                pc.close();
+            }
+            
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                if (conn.type === 'vpn' || conn.type === 'pptp' || conn.type === 'tunnel') {
+                    score += 60;
+                    detections.push('vpn_connection_type');
+                }
+                if (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g') {
+                    score += 25;
+                    detections.push('slow_connection_vpn');
+                }
+            }
+            
+            try {
+                const startTime = Date.now();
+                await fetch('/api/v1/health', { method: 'HEAD', cache: 'no-cache' }).catch(() => null);
+                const latency = Date.now() - startTime;
+                if (latency > 5000) {
+                    score += 30;
+                    detections.push('high_latency_vpn');
+                }
+            } catch (e) {}
+            
+        } catch (e) {
+            score += 20;
+            detections.push('vpn_error');
+        }
+        
+        return { detected: score > 45, score: Math.min(score, 100), detections };
+    }
+
+    async detectTorNetwork() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const ua = navigator.userAgent || '';
+            if (/tor|onion/i.test(ua)) {
+                score += 65;
+                detections.push('tor_user_agent');
+            }
+            
+            const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+            if (rtcPeerConnection) {
+                const pc = new rtcPeerConnection({ 
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] 
+                });
+                pc.createDataChannel('');
+                
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    const sdp = pc.localDescription.sdp;
+                    
+                    if (/tls|inject_host_overwrite/i.test(sdp)) {
+                        score += 55;
+                        detections.push('tor_sdp_signature');
+                    }
+                    
+                    if (/candidate.*tcp|tcptype/i.test(sdp)) {
+                        score += 40;
+                        detections.push('tor_tcp_candidate');
+                    }
+                } catch (e) {}
+                
+                pc.close();
+            }
+            
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                if (conn.rtt && conn.rtt > 500) {
+                    score += 45;
+                    detections.push('high_rtt_tor');
+                }
+            }
+            
+        } catch (e) {
+            score += 30;
+            detections.push('tor_error');
+        }
+        
+        return { detected: score > 50, score: Math.min(score, 100), detections };
+    }
+
+    async detectNetworkLatency() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const endpoints = [
+                { url: 'https://www.google.com/favicon.ico', name: 'google' },
+                { url: 'https://www.cloudflare.com/favicon.ico', name: 'cloudflare' },
+                { url: 'https://www.microsoft.com/favicon.ico', name: 'microsoft' }
+            ];
+            
+            const latencies = [];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const startTime = performance.now();
+                    await fetch(endpoint.url + '?t=' + Date.now(), { 
+                        method: 'HEAD',
+                        mode: 'no-cors',
+                        cache: 'no-cache' 
+                    }).catch(() => null);
+                    const latency = performance.now() - startTime;
+                    latencies.push(latency);
+                } catch (e) {}
+            }
+            
+            if (latencies.length > 0) {
+                const avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+                
+                if (avgLatency > 1000) {
+                    score += 50;
+                    detections.push('very_high_latency:' + Math.round(avgLatency));
+                } else if (avgLatency > 500) {
+                    score += 35;
+                    detections.push('high_latency:' + Math.round(avgLatency));
+                } else if (avgLatency > 200) {
+                    score += 20;
+                    detections.push('moderate_latency:' + Math.round(avgLatency));
+                }
+                
+                const variance = latencies.reduce((sum, lat) => {
+                    return sum + Math.pow(lat - avgLatency, 2);
+                }, 0) / latencies.length;
+                
+                if (variance > 100000) {
+                    score += 30;
+                    detections.push('high_latency_variance');
+                }
+            } else {
+                score += 40;
+                detections.push('network_latency_check_failed');
+            }
+            
+            try {
+                const startTime = performance.now();
+                await new Promise(resolve => setTimeout(resolve, 100));
+                const elapsed = performance.now() - startTime;
+                
+                if (elapsed > 200 || elapsed < 50) {
+                    score += 25;
+                    detections.push('timing_anomaly:' + Math.round(elapsed));
+                }
+            } catch (e) {}
+            
+        } catch (e) {
+            score += 20;
+            detections.push('network_latency_error');
+        }
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectDNSAnalysis() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const dnsProviders = {
+                'dns.google': ['8.8.8.8', '8.8.4.4'],
+                'dns.cloudflare': ['1.1.1.1', '1.0.0.1'],
+                'dns.opendns': ['208.67.222.222', '208.67.220.220'],
+                'dns.quad9': ['9.9.9.9']
+            };
+            
+            const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+            if (rtcPeerConnection) {
+                const pc = new rtcPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:dns.google' },
+                        { urls: 'stun:dns.cloudflare' }
+                    ]
+                });
+                pc.createDataChannel('');
+                
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    const sdp = pc.localDescription.sdp;
+                    
+                    if (/srflx|prflx|relay/i.test(sdp)) {
+                        score += 35;
+                        detections.push('non_host_candidates');
+                    }
+                    
+                    const candidateCount = (sdp.match(/candidate:/g) || []).length;
+                    if (candidateCount < 2) {
+                        score += 25;
+                        detections.push('minimal_dns_candidates');
+                    }
+                } catch (e) {}
+                
+                pc.close();
+            }
+            
+            try {
+                const domain = 'cdn.' + Date.now() + '.test.com';
+                const startTime = Date.now();
+                try {
+                    await fetch('https://' + domain, { 
+                        method: 'HEAD',
+                        mode: 'no-cors' 
+                    }).catch(() => null);
+                } catch (e) {}
+                const resolveTime = Date.now() - startTime;
+                
+                if (resolveTime > 3000) {
+                    score += 40;
+                    detections.push('slow_dns_resolution');
+                } else if (resolveTime > 1000) {
+                    score += 25;
+                    detections.push('moderate_dns_delay');
+                }
+            } catch (e) {}
+            
+            try {
+                if (!navigator.onLine) {
+                    score += 30;
+                    detections.push('offline_but_online_api');
+                }
+            } catch (e) {}
+            
+        } catch (e) {
+            score += 20;
+            detections.push('dns_analysis_error');
+        }
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
+    }
+
+    async detectProxy() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            if (navigator.connection) {
+                const conn = navigator.connection;
+                if (conn.type === 'proxy' || conn.type === 'socks') {
+                    score += 60;
+                    detections.push('proxy_connection_type');
+                }
+                if (conn.type === 'vpn') {
+                    score += 50;
+                    detections.push('vpn_proxy');
+                }
+            }
+            
+            try {
+                const rtcPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+                if (rtcPeerConnection) {
+                    const pc = new rtcPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+                    pc.createDataChannel('');
+                    
+                    try {
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        const sdp = pc.localDescription.sdp;
+                        
+                        const candidates = sdp.split('\n').filter(line => line.includes('candidate'));
+                        let relayCount = 0;
+                        
+                        for (const candidate of candidates) {
+                            if (/relay|prflx|srflx/i.test(candidate)) {
+                                relayCount++;
+                            }
+                        }
+                        
+                        if (relayCount > 0) {
+                            score += 45;
+                            detections.push('relay_candidates:' + relayCount);
+                        }
+                        
+                        if (candidates.length > 10) {
+                            score += 30;
+                            detections.push('many_ice_candidates');
+                        }
+                    } catch (e) {}
+                    
+                    pc.close();
+                }
+            } catch (e) {}
+            
+            try {
+                const testProxy = await fetch('https://ipinfo.io/json', {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                }).then(r => r.json()).catch(() => null);
+                
+                if (testProxy) {
+                    if (testProxy.proxy === true || testProxy.proxy === 'true') {
+                        score += 55;
+                        detections.push('proxy_api_detected');
+                    }
+                    if (testProxy.hosting === true || testProxy.hosting === 'true') {
+                        score += 45;
+                        detections.push('hosting_detected');
+                    }
+                }
+            } catch (e) {}
+            
+            try {
+                const startTime = performance.now();
+                await fetch('/api/v1/health', { method: 'HEAD' }).catch(() => null);
+                const elapsed = performance.now() - startTime;
+                
+                if (elapsed > 3000) {
+                    score += 35;
+                    detections.push('high_fetch_latency_proxy');
+                }
+            } catch (e) {}
+            
+        } catch (e) {
+            score += 20;
+            detections.push('proxy_error');
+        }
+        
+        return { detected: score > 40, score: Math.min(score, 100), detections };
     }
 
     async detectChromeRuntime() {
         let score = 0;
         const detections = [];
+        
         try {
             if (window.chrome) {
                 if (window.chrome.runtime === undefined) {
                     score += 25;
                     detections.push('chrome_runtime_missing');
+                } else if (window.chrome.runtime && window.chrome.runtime.id === undefined) {
+                    score += 15;
+                    detections.push('chrome_runtime_no_id');
                 }
                 if (window.chrome.loadTimes === undefined) {
                     score += 15;
@@ -1489,9 +1760,13 @@ class EnvironmentDetectorEnhanced {
                     score += 15;
                     detections.push('chrome_app_missing');
                 }
+                if (window.chrome.webstore === undefined) {
+                    score += 10;
+                    detections.push('chrome_webstore_missing');
+                }
             } else {
-                if (!/Edge|Edg|Firefox|Safari/i.test(navigator.userAgent || '')) {
-                    score += 35;
+                if (!/Edge|Edg|Firefox|Safari|iOS|Android/i.test(navigator.userAgent || '')) {
+                    score += 40;
                     detections.push('no_chrome_no_alt');
                 }
             }
@@ -1499,184 +1774,39 @@ class EnvironmentDetectorEnhanced {
             score += 30;
             detections.push('chrome_check_error');
         }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
-    }
-
-    async detectAutomationFrameworks() {
-        let score = 0;
-        const detections = [];
-        const knownMarkers = {
-            puppeteer: ['$cdc_asdjflasutopfhvcZLmcfl_', '$chrome_asyncScriptInfo'],
-            playwright: ['__playwright__', '__pw_tags', '__pw_resume__'],
-            selenium: ['__selenium_evaluate', '__webdriver_evaluate'],
-            automation: ['navigator.webdriver === true']
-        };
-
-        for (const [framework, markers] of Object.entries(knownMarkers)) {
-            for (const marker of markers) {
-                if (marker.includes('navigator')) {
-                    if (eval(marker)) {
-                        score += 50;
-                        detections.push(`${framework}_detected:${marker}`);
-                    }
-                } else if (window[marker] !== undefined || document[marker] !== undefined) {
-                    score += 45;
-                    detections.push(`${framework}_detected:${marker}`);
-                }
-            }
-        }
-
-        try {
-            const testElement = document.createElement('div');
-            testElement.style.cssText = 'display:none';
-
-            const automationFunctions = [
-                '__webdriver_script_fn', '__driver_evaluate', '__fxdriver_evaluate',
-                '__selenium_evaluate', '__webdriver_unwrapped', '__$webdriverAsyncExecutor'
-            ];
-
-            for (const func of automationFunctions) {
-                try {
-                    testElement.setAttribute('onclick', `return ${func}()`);
-                    if (testElement.onclick !== null) {
-                        score += 30;
-                        detections.push(`automation_fn:${func}`);
-                    }
-                } catch (e) {}
-            }
-        } catch (e) {}
-
+        
         return { detected: score > 35, score: Math.min(score, 100), detections };
-    }
-
-    async detectVirtualization() {
-        let score = 0;
-        const detections = [];
-        try {
-            const vmIndicators = [
-                { name: 'vmware', check: () => /vmware/i.test(navigator.userAgent || '') },
-                { name: 'virtualbox', check: () => /virtualbox/i.test(navigator.userAgent || '') },
-                { name: 'parallels', check: () => /parallels/i.test(navigator.userAgent || '') },
-                { name: 'hyperv', check: () => /hyperv/i.test(navigator.userAgent || '') },
-                { name: 'qemu', check: () => /qemu/i.test(navigator.userAgent || '') }
-            ];
-
-            for (const indicator of vmIndicators) {
-                if (indicator.check()) {
-                    score += 40;
-                    detections.push(`${indicator.name}_detected`);
-                }
-            }
-
-            const cpu = navigator.hardwareConcurrency;
-            if (cpu && cpu < 2) {
-                score += 20;
-                detections.push('low_core_count');
-            }
-
-            const mem = navigator.deviceMemory;
-            if (mem && mem < 1) {
-                score += 25;
-                detections.push('low_device_memory');
-            }
-
-            try {
-                const canvas = document.createElement('canvas');
-                const gl = canvas.getContext('webgl');
-                if (gl) {
-                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                    if (debugInfo) {
-                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                        if (/vmware|virtualbox|parallels|qemu|kvm|hyperv/i.test(renderer)) {
-                            score += 45;
-                            detections.push('vm_webgl_renderer');
-                        }
-                    }
-                }
-            } catch (e) {}
-
-        } catch (e) {
-            score += 20;
-            detections.push('virtualization_error: ' + e.message);
-        }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
-    }
-
-    async detectSandbox() {
-        let score = 0;
-        const detections = [];
-        try {
-            try {
-                new Worker('data:text/javascript;base64,');
-                detections.push('worker_available');
-            } catch (e) {
-                score += 20;
-                detections.push('worker_blocked');
-            }
-
-            try {
-                const blob = new Blob([''], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const worker = new Worker(url);
-                worker.terminate();
-                URL.revokeObjectURL(url);
-                detections.push('blob_worker_ok');
-            } catch (e) {
-                score += 15;
-                detections.push('blob_worker_blocked');
-            }
-
-            try {
-                if (typeof SharedArrayBuffer !== 'undefined') {
-                    detections.push('shared_array_buffer_available');
-                } else {
-                    score += 10;
-                    detections.push('shared_array_buffer_unavailable');
-                }
-            } catch (e) {
-                score += 10;
-                detections.push('shared_array_buffer_error');
-            }
-
-            try {
-                const testChannel = new MessageChannel();
-                testChannel.port1.postMessage('test');
-                testChannel.port2.onmessage = () => {};
-                testChannel.port1.close();
-                testChannel.port2.close();
-                detections.push('message_channel_ok');
-            } catch (e) {
-                score += 15;
-                detections.push('message_channel_blocked');
-            }
-
-        } catch (e) {
-            score += 20;
-            detections.push('sandbox_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
     async detectPermissions() {
         let score = 0;
         const detections = [];
+        
         try {
             if (navigator.permissions && navigator.permissions.query) {
-                const permNames = ['notifications', 'geolocation', 'camera', 'microphone', 'midi'];
+                const permNames = ['notifications', 'geolocation', 'camera', 'microphone', 'midi', 'persistent-storage'];
                 const permChecks = await Promise.all(
                     permNames.map(name =>
                         navigator.permissions.query({ name }).catch(() => ({ state: 'error' }))
                     )
                 );
+                
                 const allDenied = permChecks.every(p => p.state === 'denied' || p.state === 'error');
                 if (allDenied) {
                     score += 25;
                     detections.push('all_permissions_denied');
                 }
+                
                 const deniedCount = permChecks.filter(p => p.state === 'denied').length;
                 if (deniedCount >= 4) {
                     score += 15;
-                    detections.push('most_permissions_denied');
+                    detections.push('most_permissions_denied:' + deniedCount);
+                }
+                
+                const promptCount = permChecks.filter(p => p.state === 'prompt').length;
+                if (promptCount >= 5) {
+                    score += 10;
+                    detections.push('all_permissions_prompt');
                 }
             } else {
                 score += 25;
@@ -1686,12 +1816,50 @@ class EnvironmentDetectorEnhanced {
             score += 30;
             detections.push('permissions_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectPlugins() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const plugins = navigator.plugins;
+            if (!plugins || plugins.length === 0) {
+                score += 30;
+                detections.push('no_plugins');
+            } else {
+                const commonPlugins = ['PDF Viewer', 'Chrome PDF Viewer', 'Chromium PDF Viewer',
+                    'Microsoft Edge PDF Viewer', 'WebKit built-in PDF'];
+                const hasPDF = Array.from(plugins).some(p =>
+                    commonPlugins.some(cp => p.name.includes(cp))
+                );
+                if (!hasPDF) {
+                    score += 15;
+                    detections.push('no_pdf_plugin');
+                }
+                if (plugins.length < 3) {
+                    score += 15;
+                    detections.push('too_few_plugins:' + plugins.length);
+                }
+                if (plugins.length > 15) {
+                    score += 8;
+                    detections.push('too_many_plugins:' + plugins.length);
+                }
+            }
+        } catch (e) {
+            score += 35;
+            detections.push('plugins_access_error');
+        }
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectLanguages() {
         let score = 0;
         const detections = [];
+        
         try {
             const langs = navigator.languages;
             if (!langs || langs.length === 0) {
@@ -1708,17 +1876,23 @@ class EnvironmentDetectorEnhanced {
                     score += 20;
                     detections.push('languages_mismatch');
                 }
+                if (langs.length === 1 && langs[0] === 'en-US') {
+                    score += 15;
+                    detections.push('single_default_language');
+                }
             }
         } catch (e) {
             score += 35;
             detections.push('languages_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectTimezone() {
         let score = 0;
         const detections = [];
+        
         try {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
             if (!tz) {
@@ -1749,12 +1923,14 @@ class EnvironmentDetectorEnhanced {
             score += 40;
             detections.push('timezone_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectScreen() {
         let score = 0;
         const detections = [];
+        
         try {
             const { width, height, colorDepth, pixelDepth, availWidth, availHeight } = screen;
             if (!width || !height) {
@@ -1769,20 +1945,30 @@ class EnvironmentDetectorEnhanced {
                 score += 15;
                 detections.push('small_screen');
             }
+            if ('isExtended' in screen && screen.isExtended === undefined) {
+                score += 15;
+                detections.push('screen_extended_missing');
+            }
             if (availWidth === 0 || availHeight === 0) {
                 score += 20;
                 detections.push('zero_avail_size');
+            }
+            if (width === height && width > 1000) {
+                score += 20;
+                detections.push('unusual_screen_ratio');
             }
         } catch (e) {
             score += 35;
             detections.push('screen_error');
         }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 35, score: Math.min(score, 100), detections };
     }
 
     async detectHardwareConcurrency() {
         let score = 0;
         const detections = [];
+        
         try {
             const c = navigator.hardwareConcurrency;
             if (c === undefined || c === null) {
@@ -1793,18 +1979,20 @@ class EnvironmentDetectorEnhanced {
                 detections.push('single_core');
             } else if (c > 64) {
                 score += 25;
-                detections.push('unrealistic_cores');
+                detections.push('unrealistic_cores:' + c);
             }
         } catch (e) {
             score += 35;
             detections.push('concurrency_error');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectDeviceMemory() {
         let score = 0;
         const detections = [];
+        
         try {
             const mem = navigator.deviceMemory;
             if (mem === undefined || mem === null) {
@@ -1815,18 +2003,20 @@ class EnvironmentDetectorEnhanced {
                 detections.push('low_memory');
             } else if (mem > 64) {
                 score += 20;
-                detections.push('unrealistic_memory');
+                detections.push('unrealistic_memory:' + mem);
             }
         } catch (e) {
             score += 25;
             detections.push('memory_error');
         }
-        return { detected: score > 20, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
     async detectStorage() {
         let score = 0;
         const detections = [];
+        
         try {
             localStorage.setItem('_md_test', '1');
             localStorage.removeItem('_md_test');
@@ -1848,6 +2038,9 @@ class EnvironmentDetectorEnhanced {
                     score += 20;
                     detections.push('zero_storage_quota');
                 }
+            } else {
+                score += 15;
+                detections.push('storage_api_missing');
             }
         } catch (e) {
             score += 20;
@@ -1859,12 +2052,86 @@ class EnvironmentDetectorEnhanced {
                 detections.push('cookies_disabled');
             }
         } catch (e) {}
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
+    }
+
+    async detectWebRTCIP() {
+        let score = 0;
+        const detections = [];
+        
+        try {
+            const RTCPeerConnection = window.RTCPeerConnection ||
+                window.webkitRTCPeerConnection ||
+                window.mozRTCPeerConnection;
+            if (!RTCPeerConnection) {
+                score += 20;
+                detections.push('no_webrtc');
+                return { detected: true, score: Math.min(score, 100), detections };
+            }
+            
+            const ips = new Set();
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
+                ]
+            });
+            pc.createDataChannel('');
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            const sdp = pc.localDescription.sdp;
+            const lines = sdp.split('\n');
+            
+            for (const line of lines) {
+                if (line.indexOf('candidate') > -1) {
+                    const parts = line.split(' ');
+                    if (parts[4] && parts[4] !== '0.0.0.0') {
+                        ips.add(parts[4]);
+                        if (parts[7] !== 'host') {
+                            detections.push('relay_ip:' + parts[4]);
+                        }
+                    }
+                }
+            }
+            pc.close();
+            
+            if (ips.size > 1) {
+                const ipsArr = Array.from(ips);
+                const privateIPs = ipsArr.filter(ip =>
+                    ip.startsWith('10.') ||
+                    ip.startsWith('172.16.') || ip.startsWith('172.31.') ||
+                    ip.startsWith('192.168.')
+                );
+                const publicIPs = ipsArr.filter(ip => !privateIPs.includes(ip));
+                
+                if (publicIPs.length > 0) {
+                    detections.push('public_ip_detected');
+                    if (privateIPs.length > 0) {
+                        score += 25;
+                        detections.push('vpn_possible');
+                    }
+                }
+            }
+            
+            if (ips.size === 0) {
+                score += 30;
+                detections.push('no_ip_candidates');
+            }
+            
+        } catch (e) {
+            score += 20;
+            detections.push('webrtc_error');
+        }
+        
+        return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
     async detectNavigatorProps() {
         let score = 0;
         const detections = [];
+        
         try {
             if (navigator.connection) {
                 if (navigator.connection.type === 'none' && navigator.onLine === false) {
@@ -1873,6 +2140,7 @@ class EnvironmentDetectorEnhanced {
                 }
             }
         } catch (e) {}
+        
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
                 const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
@@ -1880,40 +2148,67 @@ class EnvironmentDetectorEnhanced {
                     score += 20;
                     detections.push('no_media_devices');
                 }
+            } else {
+                score += 15;
+                detections.push('no_enumerate_devices');
             }
         } catch (e) {
             score += 20;
             detections.push('media_devices_error');
         }
+        
         try {
             if (!navigator.credentials || !navigator.credentials.preventSilentAccess) {
-                score += 10;
+                score += 8;
                 detections.push('no_credentials_api');
             }
         } catch (e) {}
+        
         try {
             if (navigator.serviceWorker === undefined) {
                 score += 15;
                 detections.push('no_serviceworker');
             }
         } catch (e) {}
+        
+        try {
+            if (typeof navigator.getBattery === 'function') {
+                const battery = await navigator.getBattery().catch(() => null);
+                if (battery && battery.charging === undefined) {
+                    score += 15;
+                    detections.push('battery_no_charging');
+                }
+            }
+        } catch (e) {}
+        
         try {
             if (navigator.product === 'Gecko' && !/Firefox/i.test(navigator.userAgent || '')) {
                 score += 25;
                 detections.push('gecko_no_firefox');
             }
         } catch (e) {}
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        try {
+            if (navigator.vendor === '' && navigator.product === 'Gecko') {
+            } else if (navigator.vendor === '') {
+                score += 15;
+                detections.push('empty_vendor');
+            }
+        } catch (e) {}
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectWindowProps() {
         let score = 0;
         const detections = [];
+        
         try {
             const outerW = window.outerWidth;
             const outerH = window.outerHeight;
             const innerW = window.innerWidth;
             const innerH = window.innerHeight;
+            
             if (outerW === 0 || outerH === 0) {
                 score += 30;
                 detections.push('zero_outer_size');
@@ -1926,24 +2221,49 @@ class EnvironmentDetectorEnhanced {
             score += 25;
             detections.push('window_size_error');
         }
+        
         try {
             if (window.screenX === undefined || window.screenY === undefined) {
                 score += 15;
                 detections.push('no_screen_position');
             }
         } catch (e) {}
+        
+        try {
+            if (window.openDatabase === undefined) {
+                score += 8;
+                detections.push('no_opendatabase');
+            }
+        } catch (e) {}
+        
         try {
             if (window.indexedDB === undefined) {
                 score += 15;
                 detections.push('no_indexeddb');
             }
         } catch (e) {}
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        try {
+            if (typeof window.postMessage !== 'function') {
+                score += 25;
+                detections.push('no_postmessage');
+            }
+        } catch (e) {}
+        
+        try {
+            if (window.screenTop === undefined || window.screenLeft === undefined) {
+                score += 8;
+                detections.push('no_screen_edge');
+            }
+        } catch (e) {}
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectIframe() {
         let score = 0;
         const detections = [];
+        
         try {
             if (window.self !== window.top) {
                 score += 20;
@@ -1953,16 +2273,31 @@ class EnvironmentDetectorEnhanced {
             score += 40;
             detections.push('cross_origin_frame');
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        try {
+            const frameEl = document.createElement('iframe');
+            frameEl.style.display = 'none';
+            frameEl.sandbox = 'allow-scripts';
+            document.body.appendChild(frameEl);
+            const frameWin = frameEl.contentWindow;
+            if (frameWin && frameWin.document) {}
+            document.body.removeChild(frameEl);
+        } catch (e) {
+            score += 20;
+            detections.push('iframe_access_error');
+        }
+        
+        return { detected: score > 30, score: Math.min(score, 100), detections };
     }
 
     async detectNotification() {
         let score = 0;
         const detections = [];
+        
         try {
             if ('Notification' in window) {
                 if (Notification.permission === 'denied') {
-                    score += 10;
+                    score += 8;
                     detections.push('notification_denied');
                 }
             } else {
@@ -1973,12 +2308,14 @@ class EnvironmentDetectorEnhanced {
             score += 20;
             detections.push('notification_error');
         }
-        return { detected: score > 15, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
     async detectBattery() {
         let score = 0;
         const detections = [];
+        
         try {
             if (navigator.getBattery) {
                 const battery = await navigator.getBattery().catch(() => null);
@@ -1986,6 +2323,10 @@ class EnvironmentDetectorEnhanced {
                     if (battery.level === undefined || battery.charging === undefined) {
                         score += 20;
                         detections.push('battery_props_missing');
+                    }
+                    if (battery.level === 0 && battery.charging === false) {
+                        score += 8;
+                        detections.push('battery_dead_not_charging');
                     }
                 }
             } else {
@@ -1996,21 +2337,25 @@ class EnvironmentDetectorEnhanced {
             score += 20;
             detections.push('battery_error');
         }
-        return { detected: score > 15, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
     async detectMediaDevices() {
         let score = 0;
         const detections = [];
+        
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
                 const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
                 const videoInputs = devices.filter(d => d.kind === 'videoinput');
                 const audioInputs = devices.filter(d => d.kind === 'audioinput');
+                
                 if (videoInputs.length === 0 && audioInputs.length === 0) {
                     score += 25;
                     detections.push('no_media_inputs');
                 }
+                
                 const allHaveLabels = devices.every(d => d.label !== '');
                 if (!allHaveLabels) {
                     score += 15;
@@ -2024,12 +2369,14 @@ class EnvironmentDetectorEnhanced {
             score += 25;
             detections.push('media_error');
         }
-        return { detected: score > 20, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
     async detectConnection() {
         let score = 0;
         const detections = [];
+        
         try {
             const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
             if (!conn) {
@@ -2037,11 +2384,11 @@ class EnvironmentDetectorEnhanced {
                 detections.push('no_connection_api');
             } else {
                 if (conn.type === 'vpn') {
-                    score += 45;
+                    score += 50;
                     detections.push('vpn_detected');
                 }
                 if (conn.type === 'proxy') {
-                    score += 45;
+                    score += 50;
                     detections.push('proxy_detected');
                 }
                 if (conn.saveData === true) {
@@ -2057,33 +2404,40 @@ class EnvironmentDetectorEnhanced {
             score += 15;
             detections.push('connection_error');
         }
+        
         return { detected: score > 25, score: Math.min(score, 100), detections };
     }
 
     async detectAdBlock() {
         let score = 0;
         const detections = [];
+        
         try {
             const el = document.createElement('div');
             el.innerHTML = '&nbsp;';
-            el.className = 'adsbox';
+            el.className = 'adsbox adsponsor';
+            el.id = 'google_ads_frame';
             el.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px';
             document.body.appendChild(el);
-            if (el.offsetHeight === 0) {
+            
+            if (el.offsetHeight === 0 || el.offsetWidth === 0) {
                 score += 20;
                 detections.push('adblock_detected');
             }
+            
             document.body.removeChild(el);
         } catch (e) {
             score += 15;
             detections.push('adblock_check_error');
         }
+        
         return { detected: score > 15, score: Math.min(score, 100), detections };
     }
 
     async detectMathFingerprint() {
         let score = 0;
         const detections = [];
+        
         try {
             const mathResults = {
                 sin: Math.sin(Math.PI / 3),
@@ -2095,6 +2449,7 @@ class EnvironmentDetectorEnhanced {
                 exp: Math.exp(1),
                 sqrt: Math.sqrt(2)
             };
+            
             for (const key in mathResults) {
                 if (!isFinite(mathResults[key]) || isNaN(mathResults[key])) {
                     score += 20;
@@ -2105,19 +2460,23 @@ class EnvironmentDetectorEnhanced {
             score += 25;
             detections.push('math_error');
         }
-        return { detected: score > 15, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
     async detectGPUFingerprint() {
         let score = 0;
         const detections = [];
+        
         try {
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            
             if (gl) {
                 const maxRenderSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
                 const maxViewport = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
                 const maxCombinedTexUnits = gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+                
                 if (maxRenderSize <= 1024) {
                     score += 20;
                     detections.push('small_renderbuffer');
@@ -2126,17 +2485,23 @@ class EnvironmentDetectorEnhanced {
                     score += 15;
                     detections.push('few_texture_units');
                 }
+                if (maxViewport && (maxViewport[0] < 2048 || maxViewport[1] < 2048)) {
+                    score += 15;
+                    detections.push('limited_viewport');
+                }
             }
         } catch (e) {
             score += 15;
             detections.push('gpu_error');
         }
-        return { detected: score > 15, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 20, score: Math.min(score, 100), detections };
     }
 
     async detectSpeech() {
         let score = 0;
         const detections = [];
+        
         try {
             if ('speechSynthesis' in window) {
                 const voices = window.speechSynthesis.getVoices();
@@ -2152,477 +2517,247 @@ class EnvironmentDetectorEnhanced {
             score += 15;
             detections.push('speech_error');
         }
-        return { detected: score > 10, score: Math.min(score, 100), detections };
+        
+        return { detected: score > 15, score: Math.min(score, 100), detections };
     }
 
-    async detectVMFeatures() {
-        let score = 0;
-        const detections = [];
+    async collectEnhancedEnvironmentData() {
+        const data = {};
+        
         try {
-            const vmPatterns = {
-                vmware: [/vmware/i, /virtualbox/i, /parallels/i, /hyper[- ]?v/i, /qemu/i, /kvm/i, /xen/i],
-                cpuFeatures: [/[0-9]+cpu/i, /core\s*\d+/i, /processor/i],
-                biosIndicators: [/bios/i, /firmware/i, /uefi/i]
-            };
-
-            const ua = navigator.userAgent || '';
-            for (const [vmType, patterns] of Object.entries(vmPatterns)) {
-                for (const pattern of patterns) {
-                    if (pattern.test(ua)) {
-                        score += 35;
-                        detections.push(`vm_pattern:${vmType}_${pattern}`);
-                    }
-                }
-            }
-
-            try {
-                const canvas = document.createElement('canvas');
-                const gl = canvas.getContext('webgl');
-                if (gl) {
-                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                    if (debugInfo) {
-                        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                        const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-
-                        const vmRendererPatterns = [
-                            /vmware/i, /virtualbox/i, /parallels/i, /qemu/i,
-                            /kvm/i, /xen/i, /hyper[ -]?v/i, /virtual/i,
-                            /microsoft.*basic/i, /swiftshader/i, /llvmpipe/i
-                        ];
-
-                        for (const pattern of vmRendererPatterns) {
-                            if (pattern.test(renderer) || pattern.test(vendor)) {
-                                score += 40;
-                                detections.push(`vm_renderer:${pattern}`);
-                            }
-                        }
-
-                        this.fingerprintComponents.vmRenderer = renderer;
-                        this.fingerprintComponents.vmVendor = vendor;
-                    }
-                }
-            } catch (e) {
-                detections.push('vm_webgl_check_error');
-            }
-
-            try {
-                const cpuCores = navigator.hardwareConcurrency;
-                if (cpuCores) {
-                    detections.push(`cpu_cores:${cpuCores}`);
-                    if (cpuCores === 1) {
-                        score += 20;
-                        detections.push('vm_single_core');
-                    } else if (cpuCores === 2) {
-                        score += 10;
-                        detections.push('vm_dual_core');
-                    }
-                }
-            } catch (e) {}
-
-            try {
-                const memory = navigator.deviceMemory;
-                if (memory) {
-                    detections.push(`device_memory:${memory}`);
-                    if (memory < 2) {
-                        score += 25;
-                        detections.push('vm_low_memory');
-                    }
-                }
-            } catch (e) {}
-
-            try {
-                const startPerf = performance.now();
-                let dummy = 0;
-                for (let i = 0; i < 1000000; i++) {
-                    dummy += Math.sqrt(i);
-                }
-                const endPerf = performance.now();
-                const perfTime = endPerf - startPerf;
-
-                detections.push(`perf_time:${perfTime.toFixed(2)}`);
-
-                if (perfTime < 1) {
-                    score += 30;
-                    detections.push('vm_unusual_performance');
-                } else if (perfTime > 100) {
-                    score += 15;
-                    detections.push('vm_slow_performance');
-                }
-
-                this.fingerprintComponents.perfTime = perfTime;
-            } catch (e) {}
-
-            try {
-                const platform = navigator.platform || '';
-                const vmPlatforms = [/vm/i, /virtual/i, /parallels/i, /virtualbox/i];
-                for (const pattern of vmPlatforms) {
-                    if (pattern.test(platform)) {
-                        score += 35;
-                        detections.push(`vm_platform:${pattern}`);
-                    }
-                }
-            } catch (e) {}
-
-            try {
-                const screenProps = {
-                    width: screen.width,
-                    height: screen.height,
-                    colorDepth: screen.colorDepth
-                };
-
-                const vmScreenPatterns = [
-                    { w: 800, h: 600, name: 'vm_800x600' },
-                    { w: 1024, h: 768, name: 'vm_1024x768' },
-                    { w: 1366, h: 768, name: 'vm_1366x768' }
-                ];
-
-                for (const pattern of vmScreenPatterns) {
-                    if (screenProps.width === pattern.w && screenProps.height === pattern.h) {
-                        score += 15;
-                        detections.push(pattern.name);
-                    }
-                }
-            } catch (e) {}
-
+            data.canvasHash = await this.generateCanvasHash();
         } catch (e) {
-            score += 25;
-            detections.push('vm_features_error: ' + e.message);
+            data.canvasHash = '';
         }
-        return { detected: score > 30, score: Math.min(score, 100), detections };
-    }
-
-    async detectSandboxEscape() {
-        let score = 0;
-        const detections = [];
+        
         try {
-            const sandboxFilePaths = [
-                '/system/bin/vboxservice',
-                '/system/bin/vboxguest',
-                '/usr/bin/vmware-toolbox-cmd',
-                '/usr/bin/VBoxControl',
-                '/Applications/VMware Fusion.app',
-                '/Applications/VirtualBox.app',
-                'C:\\Windows\\System32\\drivers\\vboxguest.sys',
-                'C:\\Windows\\System32\\drivers\\VBoxMouse.sys',
-                '/proc/self/status',
-                '/proc/1/cgroup'
-            ];
-
-            const sandboxRegistryPaths = [
-                'HKLM\\SYSTEM\\CurrentControlSet\\Services\\VBoxGuest',
-                'HKLM\\SYSTEM\\CurrentControlSet\\Services\\VBoxMouse',
-                'HKLM\\SYSTEM\\CurrentControlSet\\Services\\VBoxService',
-                'HKLM\\SOFTWARE\\Oracle\\VirtualBox',
-                'HKLM\\SOFTWARE\\VMware, Inc.\\VMware Tools'
-            ];
-
-            try {
-                if (typeof process !== 'undefined') {
-                    detections.push('node_env_detected');
-                    score += 30;
-                }
-            } catch (e) {}
-
-            try {
-                const testFunc = new Function('return this')();
-                if (testFunc && testFunc.require) {
-                    detections.push('require_available');
-                    score += 35;
-                }
-            } catch (e) {}
-
-            try {
-                if (typeof require !== 'undefined') {
-                    detections.push('require_defined');
-                    score += 40;
-                }
-            } catch (e) {}
-
-            try {
-                const testObj = {}.toString.call('test');
-                if (testObj === '[object process]') {
-                    detections.push('process_object');
-                    score += 30;
-                }
-            } catch (e) {}
-
-            try {
-                if (typeof module !== 'undefined' && module.exports) {
-                    detections.push('module_exports');
-                    score += 25;
-                }
-            } catch (e) {}
-
-            try {
-                if (typeof __dirname !== 'undefined' || typeof __filename !== 'undefined') {
-                    detections.push('node_path_vars');
-                    score += 35;
-                }
-            } catch (e) {}
-
-            try {
-                if (typeof global !== 'undefined') {
-                    detections.push('global_object');
-                    score += 20;
-                }
-            } catch (e) {}
-
-            try {
-                const testElement = document.createElement('input');
-                testElement.type = 'file';
-                if (testElement.webkitdirectory !== undefined) {
-                    detections.push('webkitdirectory_available');
-                    score += 15;
-                }
-            } catch (e) {}
-
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = 10;
-                canvas.height = 10;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    const imageData = ctx.getImageData(0, 0, 1, 1);
-                    const isZero = Array.from(imageData.data).every(v => v === 0);
-                    if (isZero) {
-                        score += 25;
-                        detections.push('sandbox_read_zero');
-                    }
-                }
-            } catch (e) {}
-
-            try {
-                const start = performance.now();
-                const testArr = new Array(10000);
-                for (let i = 0; i < testArr.length; i++) {
-                    testArr[i] = i;
-                }
-                testArr.sort();
-                const end = performance.now();
-                const sortTime = end - start;
-
-                if (sortTime < 0.5) {
-                    score += 20;
-                    detections.push('sandbox_fast_sort');
-                }
-            } catch (e) {}
-
-            try {
-                const testDate = new Date();
-                const dateStr = testDate.toString();
-                if (/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/.test(dateStr) === false) {
-                    score += 15;
-                    detections.push('sandbox_date_format');
-                }
-            } catch (e) {}
-
-            try {
-                if (typeof navigator !== 'undefined') {
-                    const plugins = navigator.plugins || [];
-                    const pluginNames = Array.from(plugins).map(p => p.name.toLowerCase());
-
-                    const sandboxPlugins = ['vbox', 'vmware', 'virtual', 'sandbox'];
-                    for (const name of pluginNames) {
-                        for (const sandbox of sandboxPlugins) {
-                            if (name.includes(sandbox)) {
-                                score += 30;
-                                detections.push(`sandbox_plugin:${sandbox}`);
-                            }
-                        }
-                    }
-                }
-            } catch (e) {}
-
+            data.webglHash = await this.generateWebGLHash();
         } catch (e) {
-            score += 20;
-            detections.push('sandbox_escape_error: ' + e.message);
+            data.webglHash = '';
         }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
+        
+        try {
+            data.webglRenderer = this.getWebGLRenderer();
+        } catch (e) {
+            data.webglRenderer = '';
+        }
+        
+        try {
+            data.webglVendor = this.getWebGLVendor();
+        } catch (e) {
+            data.webglVendor = '';
+        }
+        
+        try {
+            data.audioHash = await this.generateAudioHash();
+        } catch (e) {
+            data.audioHash = '';
+        }
+        
+        try {
+            data.fonts = await this.detectFontsList();
+        } catch (e) {
+            data.fonts = [];
+        }
+        
+        try {
+            data.plugins = Array.from(navigator.plugins || []).map(p => p.name);
+        } catch (e) {
+            data.plugins = [];
+        }
+        
+        try {
+            data.languages = navigator.languages || [navigator.language];
+        } catch (e) {
+            data.languages = [];
+        }
+        
+        try {
+            data.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        } catch (e) {
+            data.timezone = '';
+        }
+        
+        try {
+            data.screen = {
+                width: screen.width,
+                height: screen.height,
+                colorDepth: screen.colorDepth,
+                pixelRatio: window.devicePixelRatio,
+                availWidth: screen.availWidth,
+                availHeight: screen.availHeight
+            };
+        } catch (e) {
+            data.screen = {};
+        }
+        
+        try {
+            data.hardware = {
+                concurrency: navigator.hardwareConcurrency,
+                memory: navigator.deviceMemory,
+                maxTouchPoints: navigator.maxTouchPoints
+            };
+        } catch (e) {
+            data.hardware = {};
+        }
+        
+        try {
+            data.connection = navigator.connection ? {
+                type: navigator.connection.type,
+                effectiveType: navigator.connection.effectiveType,
+                rtt: navigator.connection.rtt,
+                downlink: navigator.connection.downlink
+            } : {};
+        } catch (e) {
+            data.connection = {};
+        }
+        
+        try {
+            data.browserInfo = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                vendor: navigator.vendor,
+                product: navigator.product
+            };
+        } catch (e) {
+            data.browserInfo = {};
+        }
+        
+        return data;
     }
 
-    async detectDebuggerEnhanced() {
-        let score = 0;
-        const detections = [];
-        try {
-            const devToolsChecks = {
-                windowSize: () => {
-                    return window.outerWidth === 0 || window.outerHeight === 0;
-                },
-                consoleDebug: () => {
-                    const start = performance.now();
-                    console.debug('debugger check');
-                    const end = performance.now();
-                    return end - start > 100;
-                },
-                breakpoint: () => {
-                    const start = Date.now();
-                    debugger;
-                    const end = Date.now();
-                    return end - start > 100;
-                },
-                devToolsOrientation: () => {
-                    return window.outerWidth - window.innerWidth > 150 ||
-                           window.outerHeight - window.innerHeight > 150;
-                }
-            };
+    async generateCanvasHash() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 280;
+        canvas.height = 80;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return '';
 
-            for (const [checkName, checkFn] of Object.entries(devToolsChecks)) {
-                try {
-                    if (checkFn()) {
-                        score += 25;
-                        detections.push(`devtools_${checkName}`);
-                    }
-                } catch (e) {}
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#f60';
+        ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069';
+        ctx.font = '11pt Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 2, 15);
+        ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+        ctx.font = '18pt Arial';
+        ctx.fillText('Cwm fjordbank glyphs vext quiz, 😀', 4, 45);
+
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgb(255,0,255)';
+        ctx.beginPath();
+        ctx.arc(50, 50, 50, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.fill();
+
+        const dataURL = canvas.toDataURL();
+        return this.hashString(dataURL);
+    }
+
+    async generateWebGLHash() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return '';
+
+        const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        const combined = `${vendor}~${renderer}`;
+        return this.hashString(combined);
+    }
+
+    getWebGLRenderer() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return '';
+
+        return gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+    }
+
+    getWebGLVendor() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return '';
+
+        return gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '';
+    }
+
+    async generateAudioHash() {
+        try {
+            const AudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            if (!AudioContext) return '';
+
+            const ctx = new AudioContext(1, 44100, 44100);
+            const osc = ctx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(10000, ctx.currentTime);
+            const compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-50, ctx.currentTime);
+            compressor.knee.setValueAtTime(40, ctx.currentTime);
+            compressor.ratio.setValueAtTime(12, ctx.currentTime);
+            compressor.attack.setValueAtTime(0, ctx.currentTime);
+            compressor.release.setValueAtTime(0.25, ctx.currentTime);
+            osc.connect(compressor);
+            compressor.connect(ctx.destination);
+            osc.start(0);
+
+            const buffer = await ctx.startRendering();
+            const channelData = buffer.getChannelData(0);
+            let hash = 0;
+            for (let i = 0; i < 1000; i++) {
+                hash = ((hash << 5) - hash) + channelData[i];
+                hash = hash & hash;
+            }
+            return hash.toString(16);
+        } catch (e) {
+            return '';
+        }
+    }
+
+    async detectFontsList() {
+        const baseFonts = ['monospace', 'sans-serif', 'serif'];
+        const testFonts = [
+            'Arial', 'Helvetica', 'Times New Roman', 'Courier New',
+            'Verdana', 'Georgia', 'Palatino', 'Garamond',
+            'Impact', 'Comic Sans MS', 'Trebuchet MS', 'Lucida Console',
+            'Tahoma', 'Segoe UI', 'Roboto', 'Open Sans'
+        ];
+        const detected = [];
+
+        try {
+            const el = document.createElement('div');
+            el.style.cssText = 'position:absolute;left:-9999px;font-size:72px;visibility:hidden;white-space:nowrap';
+            el.textContent = 'mmmmmmmmmmlli';
+            document.body.appendChild(el);
+
+            const baseWidths = {};
+            for (const base of baseFonts) {
+                el.style.fontFamily = base;
+                baseWidths[base] = el.offsetWidth;
             }
 
-            try {
-                const getStackTrace = () => {
-                    const err = new Error();
-                    return err.stack || '';
-                };
-                const stack = getStackTrace();
-
-                const debuggerPatterns = [
-                    /debugger/i,
-                    /devtools/i,
-                    /__webdriver_evaluate/i,
-                    /__selenium_evaluate/i,
-                    /__fxdriver_evaluate/i,
-                    /__driver_evaluate/i,
-                    /__webdriver_script_fn/i
-                ];
-
-                for (const pattern of debuggerPatterns) {
-                    if (pattern.test(stack)) {
-                        score += 30;
-                        detections.push(`stack_debugger:${pattern}`);
-                    }
-                }
-            } catch (e) {}
-
-            try {
-                const timingSamples = [];
-                for (let i = 0; i < 10; i++) {
-                    const start = performance.now();
-                    const dummy = [];
-                    for (let j = 0; j < 1000; j++) {
-                        dummy.push(j);
-                    }
-                    const end = performance.now();
-                    timingSamples.push(end - start);
-                }
-
-                const avgTime = timingSamples.reduce((a, b) => a + b, 0) / timingSamples.length;
-                const variance = timingSamples.reduce((a, b) => a + Math.pow(b - avgTime, 2), 0) / timingSamples.length;
-                const stdDev = Math.sqrt(variance);
-
-                detections.push(`timing_avg:${avgTime.toFixed(3)}`);
-                detections.push(`timing_std:${stdDev.toFixed(3)}`);
-
-                if (stdDev > 50) {
-                    score += 20;
-                    detections.push('timing_high_variance');
-                }
-
-                if (avgTime > 10) {
-                    score += 25;
-                    detections.push('timing_too_slow');
-                }
-
-                this.fingerprintComponents.timingStdDev = stdDev;
-            } catch (e) {}
-
-            try {
-                let isDebugger = false;
-                const originalLog = console.log;
-                console.log = function(...args) {
-                    if (args.length === 0) {
-                        isDebugger = true;
-                    }
-                    return originalLog.apply(console, args);
-                };
-
-                console.log();
-                console.log = originalLog;
-
-                if (isDebugger) {
-                    score += 20;
-                    detections.push('console_empty_log');
-                }
-            } catch (e) {}
-
-            try {
-                const obj = {};
-                const originalDefineProperty = Object.defineProperty;
-                Object.defineProperty = function(obj, prop, descriptor) {
-                    if (prop === 'devtools' || prop === 'Debugger') {
-                        score += 35;
-                        detections.push('define_property_debugger');
-                    }
-                    return originalDefineProperty.apply(this, arguments);
-                };
-            } catch (e) {}
-
-            try {
-                const testFn = () => {
-                    const start = performance.now();
-                    let result = 0;
-                    for (let i = 0; i < 100; i++) {
-                        result += Math.sqrt(i);
-                    }
-                    const end = performance.now();
-                    return end - start;
-                };
-
-                const normalTime = testFn();
-                const threshold = normalTime * 10;
-
-                for (let i = 0; i < 5; i++) {
-                    const start = performance.now();
-                    void({});
-                    const end = performance.now();
-                    if (end - start > threshold) {
-                        score += 20;
-                        detections.push('execution_paused');
+            for (const font of testFonts) {
+                for (const base of baseFonts) {
+                    el.style.fontFamily = `"${font}", ${base}`;
+                    if (el.offsetWidth !== baseWidths[base]) {
+                        detected.push(font);
                         break;
                     }
                 }
-            } catch (e) {}
+            }
 
-            try {
-                if (typeof window !== 'undefined') {
-                    const props = ['__webdriver_evaluate', '__selenium_evaluate', '__webdriver_script_fn'];
-                    for (const prop of props) {
-                        if (window[prop] !== undefined) {
-                            score += 30;
-                            detections.push(`debugger_prop:${prop}`);
-                        }
-                    }
-                }
-            } catch (e) {}
+            document.body.removeChild(el);
+        } catch (e) {}
 
-            try {
-                const date1 = new Date();
-                let counter = 0;
-                while (new Date() - date1 < 100) {
-                    counter++;
-                }
-
-                if (counter < 1000) {
-                    score += 15;
-                    detections.push('date_loop_inhibited');
-                }
-            } catch (e) {}
-
-        } catch (e) {
-            score += 20;
-            detections.push('debugger_enhanced_error: ' + e.message);
-        }
-        return { detected: score > 25, score: Math.min(score, 100), detections };
-    }
-
-    getHeader(name) {
-        return null;
+        return detected;
     }
 
     hashString(str) {
@@ -2635,56 +2770,48 @@ class EnvironmentDetectorEnhanced {
         return Math.abs(hash).toString(16);
     }
 
-    checkDatacenterIP(ip) {
-        const datacenterPrefixes = [
-            '3.', '4.', '8.', '13.', '15.', '16.', '17.', '18.', '20.',
-            '23.', '34.', '35.', '40.', '44.', '45.', '47.', '48.', '49.',
-            '50.', '52.', '54.', '63.', '64.', '65.', '66.', '67.', '68.',
-            '69.', '70.', '71.', '72.', '73.', '74.', '75.', '76.', '77.',
-            '78.', '79.', '80.', '81.', '82.', '83.', '84.', '85.', '86.',
-            '87.', '88.', '89.', '90.', '91.', '92.', '93.', '94.', '95.',
-            '96.', '97.', '98.', '99.', '104.', '108.', '130.', '131.',
-            '136.', '142.', '143.', '144.', '146.', '147.', '148.', '149.',
-            '150.', '151.', '157.', '158.', '159.', '160.', '161.', '162.',
-            '163.', '164.', '165.', '166.', '167.', '168.', '169.', '170.',
-            '171.', '172.', '173.', '174.', '175.', '176.', '177.', '178.',
-            '179.', '180.', '181.', '182.', '183.', '184.', '185.', '186.',
-            '187.', '188.', '189.', '190.', '191.', '192.', '193.', '194.',
-            '195.', '196.', '197.', '198.', '199.', '200.', '204.', '207.',
-            '208.', '209.', '210.', '211.', '212.', '213.', '214.', '215.',
-            '216.', '217.', '218.', '219.', '220.', '221.', '222.', '223.',
-            '224.', '225.', '226.', '227.', '228.', '229.', '230.', '231.',
-            '232.', '233.', '234.', '235.', '236.', '237.', '238.', '239.'
-        ];
-
-        for (const prefix of datacenterPrefixes) {
-            if (ip.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
+    async runAll() {
+        const chainResult = await this.runChain();
+        const fingerprint = this.generateFingerprint();
+        const enhancedData = await this.collectEnhancedEnvironmentData();
+        return Object.assign(chainResult, { fingerprint, enhancedData });
     }
 
     generateFingerprint() {
         const components = [];
+        
         try {
             components.push('scrn:' + screen.width + 'x' + screen.height + 'x' + screen.colorDepth);
         } catch (e) {}
+        
         try {
             components.push('lang:' + (navigator.language || ''));
         } catch (e) {}
+        
         try {
             components.push('tz:' + (Intl.DateTimeFormat().resolvedOptions().timeZone || ''));
         } catch (e) {}
+        
         try {
             components.push('cpu:' + (navigator.hardwareConcurrency || ''));
         } catch (e) {}
+        
         try {
             components.push('mem:' + (navigator.deviceMemory || ''));
         } catch (e) {}
+        
         try {
             components.push('plat:' + (navigator.platform || ''));
         } catch (e) {}
+        
+        try {
+            components.push('prod:' + (navigator.product || ''));
+        } catch (e) {}
+        
+        try {
+            components.push('vendor:' + (navigator.vendor || ''));
+        } catch (e) {}
+        
         try {
             const canvas = document.createElement('canvas');
             canvas.width = 100;
@@ -2702,6 +2829,7 @@ class EnvironmentDetectorEnhanced {
                 components.push('cnv:' + hash.substring(0, 32));
             }
         } catch (e) {}
+        
         try {
             const gl = document.createElement('canvas').getContext('webgl');
             if (gl) {
@@ -2712,47 +2840,42 @@ class EnvironmentDetectorEnhanced {
                 }
             }
         } catch (e) {}
+        
         try {
             const offset = new Date().getTimezoneOffset();
             components.push('tzoff:' + offset);
         } catch (e) {}
+        
         try {
             components.push('cookie:' + (navigator.cookieEnabled ? '1' : '0'));
         } catch (e) {}
+        
         try {
             if (navigator.languages && navigator.languages.length > 0) {
                 components.push('langs:' + navigator.languages.join(','));
             }
         } catch (e) {}
-        if (this.fingerprintComponents.canvas) {
-            components.push('canvash:' + this.fingerprintComponents.canvas.substring(0, 16));
-        }
-        if (this.fingerprintComponents.audio) {
-            components.push('audioh:' + this.fingerprintComponents.audio.substring(0, 16));
-        }
-        if (this.fingerprintComponents.fonts && this.fingerprintComponents.fonts.length > 0) {
-            components.push('fonts:' + this.fingerprintComponents.fonts.slice(0, 5).join(','));
-        }
+        
+        try {
+            components.push('touch:' + (navigator.maxTouchPoints || 0));
+        } catch (e) {}
+        
+        try {
+            components.push('pixel:' + (window.devicePixelRatio || ''));
+        } catch (e) {}
+        
         return components.join('|');
-    }
-
-    async runAll() {
-        const chainResult = await this.runChain();
-        const fingerprint = this.generateFingerprint();
-        return Object.assign(chainResult, { fingerprint });
     }
 
     toJSON() {
         return {
             risk_score: this.riskScore,
             chain_count: this.detectionChain.length,
-            results: this.results,
-            fingerprint_components: this.fingerprintComponents,
-            timing_data: this.timingData
+            results: this.results
         };
     }
 }
 
 if (typeof window !== 'undefined') {
-    window.EnvironmentDetectorEnhanced = EnvironmentDetectorEnhanced;
+    window.EnhancedEnvironmentDetector = EnhancedEnvironmentDetector;
 }
