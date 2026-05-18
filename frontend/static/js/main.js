@@ -364,6 +364,130 @@ function injectCaptchaStyles() {
             25% { transform: translateX(-10px); }
             75% { transform: translateX(10px); }
         }
+        .captcha-slider-button.touch-active {
+            box-shadow: 0 4px 16px rgba(102,126,234,0.5);
+        }
+        .captcha-slider-button.touch-fast {
+            box-shadow: 0 6px 20px rgba(102,126,234,0.6);
+        }
+        .slider-button-inner {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        .slider-button-inner svg {
+            position: absolute;
+            transition: opacity 0.3s ease;
+        }
+        .slider-icon-default { display: block; }
+        .slider-icon-success, .slider-icon-error { display: none; }
+        .captcha-slider-button.success .slider-icon-default { display: none; }
+        .captcha-slider-button.success .slider-icon-success { display: block; }
+        .captcha-slider-button.error .slider-icon-default { display: none; }
+        .captcha-slider-button.error .slider-icon-error { display: block; }
+        .slider-button-ripple {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .slider-button-ripple.ripple-success::before,
+        .slider-button-ripple.ripple-success::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2px solid #52c41a;
+            animation: ripple-expand 0.6s ease-out forwards;
+        }
+        .slider-button-ripple.ripple-success::after {
+            animation-delay: 0.15s;
+        }
+        .slider-button-ripple.ripple-error::before,
+        .slider-button-ripple.ripple-error::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2px solid #ff4d4f;
+            animation: ripple-expand 0.6s ease-out forwards;
+        }
+        .slider-button-ripple.ripple-error::after {
+            animation-delay: 0.15s;
+        }
+        @keyframes ripple-expand {
+            0% {
+                width: 100%;
+                height: 100%;
+                opacity: 1;
+            }
+            100% {
+                width: 200%;
+                height: 200%;
+                opacity: 0;
+            }
+        }
+        .captcha-slider-progress {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+        .captcha-slider-progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .captcha-slider-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 2px;
+            transition: width 0.1s ease;
+            width: 0%;
+        }
+        .captcha-slider-progress-fill.near-complete {
+            background: linear-gradient(90deg, #52c41a, #73d13d);
+        }
+        .captcha-slider-progress-text {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: 500;
+            min-width: 32px;
+            text-align: right;
+        }
+        .captcha-slider-target-indicator {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(102, 126, 234, 0.5);
+            animation: pulse-target 2s infinite;
+            pointer-events: none;
+        }
+        @keyframes pulse-target {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        .success-particle {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+        }
         .captcha-click-hint {
             text-align: center;
             padding: 10px;

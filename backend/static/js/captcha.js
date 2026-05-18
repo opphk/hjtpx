@@ -204,7 +204,14 @@ class Captcha {
             targetX: 0,
             targetY: 0,
             puzzleStyle: 0,
-            tolerance: 10
+            tolerance: 10,
+            touchStartY: 0,
+            touchOffsetY: 0,
+            lastTouchTime: 0,
+            touchVelocity: 0,
+            isMobile: false,
+            rafId: null,
+            smoothPosition: 0
         };
 
         this.rotationState = {
@@ -376,18 +383,37 @@ class Captcha {
                              aria-label="${this.i18n.t('sliderAriaLabel')}"
                              aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
                              tabindex="0">
+                            <div class="captcha-slider-progress" id="slider-progress-container">
+                                <div class="captcha-slider-progress-bar" id="slider-progress-bar">
+                                    <div class="captcha-slider-progress-fill" id="slider-progress-fill-value"></div>
+                                </div>
+                                <div class="captcha-slider-progress-text" id="slider-progress-text">0%</div>
+                            </div>
                             <div class="captcha-slider-track" id="slider-track"></div>
                             <div class="captcha-slider-text" id="slider-text" aria-hidden="true">${this.i18n.t('dragToVerify')}</div>
                             <div class="captcha-slider-button" id="slider-button" role="button" 
                                  aria-label="${this.i18n.t('sliderButtonAria')}"
                                  tabindex="-1">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
-                                </svg>
+                                <div class="slider-button-inner">
+                                    <svg class="slider-icon-default" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                    <svg class="slider-icon-success" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <svg class="slider-icon-error" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </div>
+                                <div class="slider-button-ripple"></div>
                             </div>
                             <div class="captcha-slider-hint" aria-hidden="true">
                                 <span class="hint-icon"><i class="fas fa-info-circle"></i></span>
                                 <span class="hint-text">${this.i18n.t('sliderHint')}</span>
+                            </div>
+                            <div class="captcha-slider-target-indicator" id="slider-target-indicator" aria-hidden="true">
+                                <span class="target-arrow"><i class="fas fa-chevron-left"></i></span>
                             </div>
                         </div>
                     </div>
@@ -611,6 +637,11 @@ class Captcha {
             sliderLoadingMessage: this.container.querySelector('#slider-loading-message'),
             sliderImageWrapper: this.container.querySelector('#slider-image-wrapper'),
             sliderSkeleton: this.container.querySelector('#slider-skeleton'),
+            sliderProgressContainer: this.container.querySelector('#slider-progress-container'),
+            sliderProgressBar: this.container.querySelector('#slider-progress-bar'),
+            sliderProgressFillValue: this.container.querySelector('#slider-progress-fill-value'),
+            sliderProgressText: this.container.querySelector('#slider-progress-text'),
+            sliderTargetIndicator: this.container.querySelector('#slider-target-indicator'),
             clickHint: this.container.querySelector('#click-hint'),
             clickGrid: this.container.querySelector('#click-grid'),
             clickImage: this.container.querySelector('#click-image'),
@@ -787,10 +818,19 @@ class Captcha {
             if (this.sliderState.isDragging || this.isLoading) return;
 
             this.sliderState.isDragging = true;
-            const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            
+            const isTouchEvent = e.type.startsWith('touch');
+            const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            
             this.sliderState.startX = clientX;
+            this.sliderState.touchStartY = clientY;
             this.sliderState.currentX = 0;
+            this.sliderState.smoothPosition = 0;
             this.sliderState.maxX = container.offsetWidth - button.offsetWidth - 4;
+            this.sliderState.isMobile = isTouchEvent;
+            this.sliderState.lastTouchTime = Date.now();
+            this.sliderState.touchVelocity = 0;
 
             this.speedData = {
                 points: [],
@@ -806,19 +846,56 @@ class Captcha {
             button.classList.add('dragging');
             container.classList.add('is-dragging');
             this.elements.sliderText.textContent = this.i18n.t('sliding');
+            
+            if (this.elements.sliderProgressContainer) {
+                this.elements.sliderProgressContainer.style.opacity = '1';
+            }
+            
             this.announceToScreenReader(this.i18n.t('sliderDragStarted'), 'assertive');
+            
+            if (isTouchEvent) {
+                this.startTouchFeedback(e.touches[0]);
+            }
         };
 
         const drag = (e) => {
             if (!this.sliderState.isDragging) return;
 
             e.preventDefault();
-            const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+            
+            const isTouchEvent = e.type.startsWith('touch');
+            const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            
             let deltaX = clientX - this.sliderState.startX;
+            
+            if (isTouchEvent) {
+                const deltaY = clientY - this.sliderState.touchStartY;
+                const currentTime = Date.now();
+                const dt = currentTime - this.sliderState.lastTouchTime;
+                
+                if (dt > 0) {
+                    this.sliderState.touchVelocity = Math.abs(deltaY) / dt * 1000;
+                }
+                
+                this.sliderState.touchOffsetY = deltaY;
+                this.sliderState.lastTouchTime = currentTime;
+                
+                const maxVerticalDrift = 50;
+                const verticalPenalty = Math.min(Math.abs(deltaY) / maxVerticalDrift, 1) * 30;
+                deltaX = deltaX - verticalPenalty * Math.sign(deltaY);
+                
+                this.updateTouchFeedback(deltaY);
+            }
 
             deltaX = Math.max(0, Math.min(deltaX, this.sliderState.maxX));
             const prevX = this.sliderState.currentX;
-            this.sliderState.currentX = deltaX;
+            
+            const smoothingFactor = this.sliderState.isMobile ? 0.3 : 0.6;
+            this.sliderState.smoothPosition = this.sliderState.smoothPosition + 
+                (deltaX - this.sliderState.smoothPosition) * smoothingFactor;
+            
+            this.sliderState.currentX = this.sliderState.smoothPosition;
 
             const currentTime = Date.now();
             const dt = currentTime - (this.speedData.points.length > 0 ?
@@ -842,8 +919,9 @@ class Captcha {
 
             this.addTrajectoryPoint(deltaX, this.sliderState.puzzleY, 'move');
 
-            this.animateSliderPosition(deltaX);
+            this.animateSliderPosition(this.sliderState.currentX);
             this.updateSliderAccessibility();
+            this.updateProgressIndicator();
         };
 
         const endDrag = (e) => {
@@ -853,6 +931,8 @@ class Captcha {
             this.speedData.endTime = Date.now();
             button.classList.remove('dragging');
             this.elements.sliderContainer.classList.remove('is-dragging');
+            
+            this.endTouchFeedback();
 
             this.addTrajectoryPoint(this.sliderState.currentX, this.sliderState.puzzleY, 'end');
 
@@ -872,6 +952,55 @@ class Captcha {
         
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
+        document.addEventListener('touchcancel', endDrag);
+    }
+    
+    startTouchFeedback(touch) {
+        const button = this.elements.sliderButton;
+        if (!button) return;
+        
+        button.classList.add('touch-active');
+    }
+    
+    updateTouchFeedback(deltaY) {
+        const button = this.elements.sliderButton;
+        const container = this.elements.sliderContainer;
+        
+        if (!button || !container) return;
+        
+        const maxDrift = 30;
+        const clampedDrift = Math.max(-maxDrift, Math.min(maxDrift, deltaY * 0.3));
+        
+        button.style.transform = `translateY(${clampedDrift}px)`;
+        
+        if (this.sliderState.touchVelocity > 500) {
+            button.classList.add('touch-fast');
+        } else {
+            button.classList.remove('touch-fast');
+        }
+    }
+    
+    endTouchFeedback() {
+        const button = this.elements.sliderButton;
+        if (!button) return;
+        
+        button.classList.remove('touch-active', 'touch-fast');
+        button.style.transform = '';
+    }
+    
+    updateProgressIndicator() {
+        if (!this.elements.sliderProgressFillValue || !this.elements.sliderProgressText) return;
+        
+        const progress = Math.min(100, Math.round((this.sliderState.currentX / this.sliderState.maxX) * 100));
+        
+        this.elements.sliderProgressFillValue.style.width = progress + '%';
+        this.elements.sliderProgressText.textContent = progress + '%';
+        
+        if (progress >= 80) {
+            this.elements.sliderProgressFillValue.classList.add('near-complete');
+        } else {
+            this.elements.sliderProgressFillValue.classList.remove('near-complete');
+        }
     }
 
     addTrajectoryPoint(x, y, event) {
@@ -1795,12 +1924,19 @@ class Captcha {
         
         this.elements.sliderButton.classList.add('verifying');
         this.elements.sliderText.textContent = this.i18n.t('verifying');
+        
+        const innerIcon = this.elements.sliderButton.querySelector('.slider-button-inner');
+        if (innerIcon) {
+            innerIcon.querySelector('.slider-icon-default').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-success').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-error').style.display = 'none';
+        }
     }
 
     handleVerificationResult(success) {
+        this.elements.sliderButton.classList.remove('verifying');
+        
         if (success) {
-            this.elements.sliderButton.classList.remove('verifying');
-            this.elements.sliderButton.classList.add('success');
             this.playSuccessAnimation();
             this.elements.sliderText.textContent = this.i18n.t('verifySuccess');
             this.showResult(this.i18n.t('verifySuccess'), 'success');
@@ -1810,8 +1946,6 @@ class Captcha {
                 this.options.onSuccess({ type: 'slider', session_id: this.sessionId });
             }
         } else {
-            this.elements.sliderButton.classList.remove('verifying');
-            this.elements.sliderButton.classList.add('error');
             this.playErrorAnimation();
             this.showResult(this.i18n.t('verifyFailed'), 'error');
             this.announceToScreenReader(this.i18n.t('verifyFailed'), 'assertive');
@@ -1837,16 +1971,24 @@ class Captcha {
             return;
         }
 
+        button.classList.add('success');
+        const innerIcon = button.querySelector('.slider-button-inner');
+        if (innerIcon) {
+            innerIcon.querySelector('.slider-icon-default').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-success').style.display = 'block';
+            innerIcon.querySelector('.slider-icon-error').style.display = 'none';
+        }
+
         let progress = 0;
         const animate = () => {
-            progress += 0.05;
+            progress += 0.04;
             if (progress >= 1) {
                 button.style.left = (finalX + 2) + 'px';
                 this.updatePuzzlePosition(finalX);
                 return;
             }
 
-            const overshoot = Math.sin(progress * Math.PI) * 10;
+            const overshoot = Math.sin(progress * Math.PI) * 15;
             const easeOut = 1 - Math.pow(1 - progress, 3);
             const currentX = finalX * easeOut - overshoot * (1 - easeOut);
 
@@ -1858,40 +2000,61 @@ class Captcha {
 
         requestAnimationFrame(animate);
         this.playSuccessParticles();
+        this.playSuccessRipple();
+    }
+    
+    playSuccessRipple() {
+        const button = this.elements.sliderButton;
+        const ripple = button.querySelector('.slider-button-ripple');
+        if (!ripple) return;
+        
+        ripple.classList.add('ripple-success');
+        setTimeout(() => {
+            ripple.classList.remove('ripple-success');
+        }, 600);
     }
 
     playSuccessParticles() {
         const container = this.elements.sliderContainer;
         const rect = container.getBoundingClientRect();
+        const particleColors = ['#52c41a', '#73d13d', '#95de64', '#f6ffed'];
         
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 12; i++) {
             const particle = document.createElement('div');
             particle.className = 'success-particle';
+            const size = 4 + Math.random() * 8;
+            const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+            
             particle.style.cssText = `
                 position: absolute;
                 left: ${rect.left + this.sliderState.currentX}px;
                 top: ${rect.top + 20}px;
-                width: 8px;
-                height: 8px;
-                background: #52c41a;
+                width: ${size}px;
+                height: ${size}px;
+                background: ${color};
                 border-radius: 50%;
                 pointer-events: none;
                 z-index: 100;
             `;
             document.body.appendChild(particle);
             
-            const angle = (i / 8) * Math.PI * 2;
-            const velocity = 50 + Math.random() * 50;
+            const angle = (i / 12) * Math.PI * 2 + Math.random() * 0.5;
+            const velocity = 80 + Math.random() * 80;
             const vx = Math.cos(angle) * velocity;
-            const vy = Math.sin(angle) * velocity;
+            const vy = Math.sin(angle) * velocity - 30;
             
-            let x = 0, y = 0, opacity = 1;
+            let x = 0, y = 0, opacity = 1, scale = 1;
+            const gravity = 2;
+            let vyActual = vy;
+            
             const animate = () => {
-                x += vx * 0.02;
-                y += vy * 0.02;
-                opacity -= 0.03;
+                x += vx * 0.016;
+                vyActual += gravity * 0.016;
+                y += vyActual * 0.016;
+                opacity -= 0.025;
+                scale = opacity;
                 
-                particle.style.transform = `translate(${x}px, ${y}px)`;
+                particle.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
                 particle.style.opacity = opacity;
                 
                 if (opacity > 0) {
@@ -1915,6 +2078,16 @@ class Captcha {
             this.resetSlider();
             return;
         }
+
+        button.classList.add('error');
+        const innerIcon = button.querySelector('.slider-button-inner');
+        if (innerIcon) {
+            innerIcon.querySelector('.slider-icon-default').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-success').style.display = 'none';
+            innerIcon.querySelector('.slider-icon-error').style.display = 'block';
+        }
+        
+        this.playErrorRipple();
 
         let shakeCount = 0;
         const maxShakes = 6;
@@ -1941,6 +2114,17 @@ class Captcha {
 
         shake();
         this.playErrorFlash();
+    }
+    
+    playErrorRipple() {
+        const button = this.elements.sliderButton;
+        const ripple = button.querySelector('.slider-button-ripple');
+        if (!ripple) return;
+        
+        ripple.classList.add('ripple-error');
+        setTimeout(() => {
+            ripple.classList.remove('ripple-error');
+        }, 600);
     }
 
     playErrorFlash() {
@@ -2059,14 +2243,27 @@ class Captcha {
     resetSlider() {
         this.sliderState.isDragging = false;
         this.sliderState.currentX = 0;
+        this.sliderState.smoothPosition = 0;
         this.elements.sliderButton.style.left = '2px';
         this.elements.sliderButton.style.pointerEvents = 'auto';
+        this.elements.sliderButton.style.transform = '';
         this.elements.sliderContainer.style.cursor = 'pointer';
-        this.elements.sliderButton.classList.remove('success', 'error', 'dragging', 'verifying');
+        this.elements.sliderButton.classList.remove('success', 'error', 'dragging', 'verifying', 'touch-active', 'touch-fast');
         this.elements.sliderTrack.style.width = '0px';
         this.elements.sliderText.textContent = this.i18n.t('dragToVerify');
         this.elements.sliderPuzzle.style.left = '0px';
         this.updateSliderAccessibility();
+        
+        if (this.elements.sliderProgressFillValue) {
+            this.elements.sliderProgressFillValue.style.width = '0%';
+            this.elements.sliderProgressFillValue.classList.remove('near-complete');
+        }
+        if (this.elements.sliderProgressText) {
+            this.elements.sliderProgressText.textContent = '0%';
+        }
+        if (this.elements.sliderProgressContainer) {
+            this.elements.sliderProgressContainer.style.opacity = '0.6';
+        }
 
         this.trajectoryData = [];
         this.speedData = {
@@ -2601,6 +2798,8 @@ class CaptchaI18n {
                 sliderButtonAria: '拖动滑块',
                 dragToVerify: '向右滑动完成验证',
                 sliderHint: '按住滑块拖动到最右侧',
+                sliderNearComplete: '即将完成',
+                sliderTouchHint: '触摸并向右滑动',
                 clickHint: '请依次点击图中的文字',
                 clickGridLabel: '点选验证码图片',
                 clickImageAlt: '点选验证码图片，请按顺序点击指定位置',
@@ -2667,6 +2866,8 @@ class CaptchaI18n {
                 sliderButtonAria: 'Drag slider',
                 dragToVerify: 'Slide right to verify',
                 sliderHint: 'Hold and drag slider to the right',
+                sliderNearComplete: 'Almost there',
+                sliderTouchHint: 'Touch and drag to the right',
                 clickHint: 'Click the specified areas in order',
                 clickGridLabel: 'Click captcha image',
                 clickImageAlt: 'Click captcha image, click specified positions in order',
