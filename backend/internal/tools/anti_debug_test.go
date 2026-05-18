@@ -430,8 +430,8 @@ func TestGenerateIntegrityReport(t *testing.T) {
 		t.Fatal("Report should not be nil")
 	}
 
-	if report.IsValid {
-		t.Error("Fresh monitor should report as valid")
+	if !report.IsValid {
+		t.Error("Fresh monitor should report as valid (no compromise)")
 	}
 
 	monitor.antiDebug.MarkCompromised()
