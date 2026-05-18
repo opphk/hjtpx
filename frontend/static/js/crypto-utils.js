@@ -2,13 +2,15 @@
     'use strict';
 
     var CryptoUtils = (function() {
-        var version = '2.0.0';
+        var version = '3.0.0';
         var defaultKey = 'hjtpx-obfuscate-key-2024';
         var storagePrefix = '_cry_';
         var debugDetectionEnabled = true;
         var integrityCheckInterval = null;
         var originalHash = null;
         var protectionActive = false;
+        var selfDestructTriggered = false;
+        var monitorInterval = null;
 
         var SignatureAlgorithm = {
             HMAC_SHA256: 'HMAC-SHA256',
@@ -26,6 +28,512 @@
         }
         CryptoError.prototype = Object.create(Error.prototype);
         CryptoError.prototype.constructor = CryptoError;
+
+        var AntiDebugManager = (function() {
+            var instance = null;
+            var detectors = [];
+            var checkInterval = 2000;
+            var compromised = false;
+            var detectionCount = 0;
+            var lastCheckTime = 0;
+
+            function AntiDebugManager() {
+                if (instance) return instance;
+                instance = this;
+                this.init();
+            }
+
+            AntiDebugManager.prototype.init = function() {
+                this.registerDefaultDetectors();
+                this.startMonitoring();
+                this.preventDebugKeys();
+                this.preventContextMenu();
+            };
+
+            AntiDebugManager.prototype.registerDefaultDetectors = function() {
+                var self = this;
+
+                this.registerDetector(function() {
+                    var threshold = 160;
+                    if (window.outerWidth - window.innerWidth > threshold ||
+                        window.outerHeight - window.innerHeight > threshold) {
+                        return true;
+                    }
+                    return false;
+                });
+
+                this.registerDetector(function() {
+                    var start = performance.now();
+                    debugger;
+                    var end = performance.now();
+                    if (end - start > 100) {
+                        return true;
+                    }
+                    return false;
+                });
+
+                this.registerDetector(function() {
+                    var result = false;
+                    (function(x) {
+                        var d = document.createElement('div');
+                        d.innerHTML = '<x id="_detect"/>';
+                        d.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+                        Object.defineProperty(x, 'inspect', {
+                            get: function() {
+                                result = true;
+                                return function() {};
+                            }
+                        });
+                        document.body.appendChild(d);
+                        setTimeout(function() {
+                            document.body.removeChild(d);
+                        }, 100);
+                    })(window);
+
+                    if (result) return true;
+
+                    try {
+                        if (window.devtools && window.devtools.isOpen) {
+                            return true;
+                        }
+                    } catch (e) {}
+
+                    return false;
+                });
+
+                this.registerDetector(function() {
+                    try {
+                        if (Function.prototype.toString.toString().indexOf('[native code]') === -1) {
+                            return true;
+                        }
+                    } catch (e) {}
+                    return false;
+                });
+
+                this.registerDetector(function() {
+                    try {
+                        if (console.log.toString().indexOf('[native code]') === -1) {
+                            return true;
+                        }
+                    } catch (e) {}
+                    return false;
+                });
+
+                this.registerDetector(function() {
+                    var ua = navigator.userAgent.toLowerCase();
+                    var headlessIndicators = [
+                        'headlesschrome', 'phantomjs', 'selenium', 'puppeteer',
+                        'nightmare', 'slimerjs', 'zombie', 'ghost'
+                    ];
+                    for (var i = 0; i < headlessIndicators.length; i++) {
+                        if (ua.indexOf(headlessIndicators[i]) !== -1) {
+                            return true;
+                        }
+                    }
+
+                    if (navigator.webdriver === true) return true;
+                    if (window.callPhantom || window._phantom) return true;
+
+                    try {
+                        if (window.Buffer) return true;
+                    } catch (e) {}
+
+                    try {
+                        var canvas = document.createElement('canvas');
+                        var gl = canvas.getContext('webgl');
+                        if (gl && gl.getExtension('WEBGL_debug_renderer_info')) {
+                            var renderer = gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL);
+                            if (renderer.indexOf('SwiftShader') !== -1 || renderer.indexOf('llvmpipe') !== -1) {
+                                return true;
+                            }
+                        }
+                    } catch (e) {}
+
+                    return false;
+                });
+
+                this.registerDetector(function() {
+                    try {
+                        var testFunc = function() {};
+                        var funcStr = testFunc.toString();
+                        if (funcStr.indexOf('[native code]') === -1 && funcStr.indexOf('testFunc') === -1) {
+                            return true;
+                        }
+                    } catch (e) {}
+                    return false;
+                });
+            };
+
+            AntiDebugManager.prototype.registerDetector = function(fn) {
+                if (typeof fn === 'function') {
+                    detectors.push(fn);
+                }
+            };
+
+            AntiDebugManager.prototype.check = function() {
+                if (compromised) return true;
+
+                var now = Date.now();
+                if (now - lastCheckTime < 500) return false;
+                lastCheckTime = now;
+
+                for (var i = 0; i < detectors.length; i++) {
+                    try {
+                        if (detectors[i]()) {
+                            detectionCount++;
+                            this.onDetected();
+                            return true;
+                        }
+                    } catch (e) {}
+                }
+                return false;
+            };
+
+            AntiDebugManager.prototype.onDetected = function() {
+                if (compromised) return;
+                compromised = true;
+                this.triggerSelfDestruct('debug_detected');
+            };
+
+            AntiDebugManager.prototype.triggerSelfDestruct = function(reason) {
+                if (selfDestructTriggered) return;
+                selfDestructTriggered = true;
+
+                if (monitorInterval) {
+                    clearInterval(monitorInterval);
+                    monitorInterval = null;
+                }
+
+                if (document.documentElement) {
+                    document.documentElement.style.display = 'none';
+                }
+
+                if (document.body) {
+                    document.body.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:#000;color:#fff;font-family:sans-serif;z-index:2147483647;min-height:100vh;">' +
+                        '<h1 style="color:#ff0000;font-size:48px;margin-bottom:20px;">安全警告</h1>' +
+                        '<p style="font-size:24px;margin-bottom:10px;">检测到异常访问行为</p>' +
+                        '<p style="font-size:16px;color:#ff6666;">' + (reason || '访问已终止') + '</p>' +
+                        '<p style="font-size:12px;margin-top:30px;">系统已自动保护</p></div>';
+                }
+
+                setTimeout(function() {
+                    try {
+                        var scripts = document.getElementsByTagName('script');
+                        for (var i = scripts.length - 1; i >= 0; i--) {
+                            try {
+                                if (scripts[i].parentNode) {
+                                    scripts[i].parentNode.removeChild(scripts[i]);
+                                }
+                            } catch (e) {}
+                        }
+
+                        Object.keys(window).forEach(function(key) {
+                            if (key !== 'window' && key !== 'document' && key !== 'location' &&
+                                key !== 'navigator' && key !== 'history' && key !== 'screen') {
+                                try {
+                                    if (typeof window[key] === 'function') {
+                                        window[key] = function() {};
+                                    }
+                                } catch (e) {}
+                            }
+                        });
+                    } catch (e) {}
+                }, 100);
+
+                throw new Error('Security violation: ' + (reason || 'Access denied'));
+            };
+
+            AntiDebugManager.prototype.startMonitoring = function() {
+                var self = this;
+                if (monitorInterval) {
+                    clearInterval(monitorInterval);
+                }
+
+                monitorInterval = setInterval(function() {
+                    self.check();
+                }, checkInterval);
+            };
+
+            AntiDebugManager.prototype.preventDebugKeys = function() {
+                var self = this;
+                document.addEventListener('keydown', function(e) {
+                    if (e.keyCode === 123) {
+                        e.preventDefault();
+                        self.triggerSelfDestruct('F12 key pressed');
+                    }
+
+                    if (e.keyCode === 116) {
+                        e.preventDefault();
+                    }
+
+                    if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+                        e.preventDefault();
+                        self.triggerSelfDestruct('Ctrl+Shift+I pressed');
+                    }
+
+                    if (e.ctrlKey && e.keyCode === 85) {
+                        e.preventDefault();
+                        self.triggerSelfDestruct('Ctrl+U pressed');
+                    }
+
+                    if (e.ctrlKey && e.shiftKey && e.keyCode === 74) {
+                        e.preventDefault();
+                        self.triggerSelfDestruct('Ctrl+Shift+J pressed');
+                    }
+                });
+            };
+
+            AntiDebugManager.prototype.preventContextMenu = function() {
+                document.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    return false;
+                });
+            };
+
+            AntiDebugManager.prototype.getStatus = function() {
+                return {
+                    compromised: compromised,
+                    detectionCount: detectionCount,
+                    detectorCount: detectors.length,
+                    monitoring: monitorInterval !== null
+                };
+            };
+
+            AntiDebugManager.prototype.disable = function() {
+                if (monitorInterval) {
+                    clearInterval(monitorInterval);
+                    monitorInterval = null;
+                }
+                detectors = [];
+                compromised = false;
+            };
+
+            return AntiDebugManager;
+        })();
+
+        var MemoryGuard = (function() {
+            var instance = null;
+            var protectedObjects = {};
+            var originalDescriptors = {};
+            var originalToStrings = {};
+            var checkInterval = null;
+
+            function MemoryGuard() {
+                if (instance) return instance;
+                instance = this;
+            }
+
+            MemoryGuard.prototype.protect = function(obj, prop) {
+                var key = obj + '::' + prop;
+                if (protectedObjects[key]) return;
+
+                try {
+                    var descriptor = Object.getOwnPropertyDescriptor(window[obj], prop);
+                    if (descriptor) {
+                        originalDescriptors[key] = {
+                            value: descriptor.value,
+                            writable: descriptor.writable,
+                            enumerable: descriptor.enumerable,
+                            configurable: descriptor.configurable
+                        };
+
+                        if (descriptor.value) {
+                            originalToStrings[key] = descriptor.value.toString();
+                        }
+
+                        var self = this;
+                        Object.defineProperty(window[obj], prop, {
+                            get: function() {
+                                return originalDescriptors[key].value;
+                            },
+                            set: function(v) {
+                                if (v && v.toString && v.toString().indexOf('[native code]') === -1) {
+                                    throw new Error('Memory modification detected');
+                                }
+                                originalDescriptors[key].value = v;
+                            },
+                            enumerable: descriptor.enumerable,
+                            configurable: false
+                        });
+
+                        protectedObjects[key] = true;
+                    }
+                } catch (e) {}
+            };
+
+            MemoryGuard.prototype.check = function() {
+                for (var key in originalDescriptors) {
+                    try {
+                        var parts = key.split('::');
+                        var obj = parts[0];
+                        var prop = parts[1];
+
+                        if (originalToStrings[key]) {
+                            var current = window[obj][prop];
+                            if (current && current.toString && current.toString().indexOf('[native code]') === -1) {
+                                return true;
+                            }
+                        }
+                    } catch (e) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            MemoryGuard.prototype.startProtection = function() {
+                this.protect('Function', 'prototype');
+                this.protect('console', 'log');
+                this.protect('console', 'error');
+                this.protect('console', 'warn');
+                this.protect('console', 'info');
+
+                var self = this;
+                if (checkInterval) {
+                    clearInterval(checkInterval);
+                }
+
+                checkInterval = setInterval(function() {
+                    if (self.check()) {
+                        if (typeof AntiDebugManager !== 'undefined') {
+                            var ad = new AntiDebugManager();
+                            ad.triggerSelfDestruct('Memory modification detected');
+                        }
+                    }
+                }, 3000);
+            };
+
+            MemoryGuard.prototype.stopProtection = function() {
+                if (checkInterval) {
+                    clearInterval(checkInterval);
+                    checkInterval = null;
+                }
+            };
+
+            return MemoryGuard;
+        })();
+
+        var IntegrityChecker = (function() {
+            var instance = null;
+            var scriptHashes = {};
+            var integrityHash = null;
+            var checkInterval = null;
+
+            function IntegrityChecker() {
+                if (instance) return instance;
+                instance = this;
+            }
+
+            IntegrityChecker.prototype.hashCode = function(str) {
+                var hash = 0;
+                for (var i = 0; i < str.length; i++) {
+                    var char = str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return hash.toString();
+            };
+
+            IntegrityChecker.prototype.computeSHA256 = async function(data) {
+                var encoder = new TextEncoder();
+                var dataBuffer = encoder.encode(data);
+                var hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+                var bytes = new Uint8Array(hashBuffer);
+                var binary = '';
+                for (var i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                return btoa(binary);
+            };
+
+            IntegrityChecker.prototype.registerScript = function(script) {
+                try {
+                    var content = script.innerHTML || script.textContent;
+                    if (content) {
+                        var hash = this.hashCode(content);
+                        scriptHashes[script.src || 'inline_' + Math.random()] = hash;
+                        return hash;
+                    }
+                } catch (e) {}
+                return null;
+            };
+
+            IntegrityChecker.prototype.checkScripts = function() {
+                try {
+                    var scripts = document.getElementsByTagName('script');
+                    for (var i = 0; i < scripts.length; i++) {
+                        var s = scripts[i];
+                        if (s.src && s.src.indexOf('crypto-utils') !== -1) {
+                            var content = s.innerHTML || s.textContent;
+                            if (content) {
+                                var currentHash = this.hashCode(content);
+                                var storedHash = scriptHashes[s.src];
+
+                                if (storedHash && storedHash !== currentHash) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+                return false;
+            };
+
+            IntegrityChecker.prototype.setIntegrityHash = function(hash) {
+                integrityHash = hash;
+            };
+
+            IntegrityChecker.prototype.verifyIntegrity = async function() {
+                if (!integrityHash) return true;
+
+                try {
+                    var scripts = document.getElementsByTagName('script');
+                    for (var i = 0; i < scripts.length; i++) {
+                        var s = scripts[i];
+                        if (s.src && s.src.indexOf('crypto-utils') !== -1) {
+                            var content = s.innerHTML || s.textContent;
+                            if (content) {
+                                var currentHash = await this.computeSHA256(content);
+                                if (currentHash !== integrityHash) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {}
+                return true;
+            };
+
+            IntegrityChecker.prototype.startMonitoring = function(interval) {
+                var self = this;
+                var scripts = document.getElementsByTagName('script');
+                for (var i = 0; i < scripts.length; i++) {
+                    this.registerScript(scripts[i]);
+                }
+
+                if (checkInterval) {
+                    clearInterval(checkInterval);
+                }
+
+                checkInterval = setInterval(function() {
+                    if (self.checkScripts()) {
+                        if (typeof AntiDebugManager !== 'undefined') {
+                            var ad = new AntiDebugManager();
+                            ad.triggerSelfDestruct('Script tampering detected');
+                        }
+                    }
+                }, interval || 5000);
+            };
+
+            IntegrityChecker.prototype.stopMonitoring = function() {
+                if (checkInterval) {
+                    clearInterval(checkInterval);
+                    checkInterval = null;
+                }
+            };
+
+            return IntegrityChecker;
+        })();
 
         function arrayBufferToBase64(buffer) {
             var bytes = new Uint8Array(buffer);
@@ -94,24 +602,6 @@
             return crypto.subtle.digest('SHA-256', dataBuffer).then(function(hash) {
                 return arrayBufferToBase64(hash);
             });
-        }
-
-        function hashSHA256Sync(data) {
-            var encoder = new TextEncoder();
-            var dataBuffer = encoder.encode(data);
-            var hashBuffer = null;
-
-            var originalDigest = crypto.subtle.digest;
-            crypto.subtle.digest = function() {
-                hashBuffer = originalDigest.apply(this, arguments);
-                return hashBuffer;
-            };
-
-            crypto.subtle.digest('SHA-256', dataBuffer);
-
-            crypto.subtle.digest = originalDigest;
-
-            return hashBuffer ? arrayBufferToBase64(hashBuffer) : null;
         }
 
         async function encryptAES(plaintext, key, options) {
@@ -223,7 +713,6 @@
             try {
                 var actualKey = key || defaultKey;
                 var data = new Uint8Array(base64ToArrayBuffer(encryptedBase64));
-                var version = data[0];
                 var iv = data.slice(1, 17);
                 var ciphertext = data.slice(17);
 
@@ -336,13 +825,11 @@
                 return true;
             }
 
-            if (typeof console.clear !== 'undefined') {
-                var originalClear = console.clear;
-                console.clear = function() {
-                    return;
-                };
-                console.clear = originalClear;
-            }
+            try {
+                if (Function.prototype.toString.toString().indexOf('[native code]') === -1) {
+                    return true;
+                }
+            } catch (e) {}
 
             return false;
         }
@@ -738,33 +1225,6 @@
             return arrayBufferToHex(signature);
         }
 
-        async function generateBlake2b(data, key, bits) {
-            var encoder = new TextEncoder();
-            var dataBuffer = encoder.encode(data);
-
-            var keyBuffer = encoder.encode(key);
-
-            var hashBuffer = await crypto.subtle.digest(
-                { name: 'SHA-256' },
-                dataBuffer
-            );
-
-            var combined = new Uint8Array(keyBuffer.length + dataBuffer.length);
-            combined.set(keyBuffer);
-            combined.set(new Uint8Array(hashBuffer), keyBuffer.length);
-
-            var finalHash = await crypto.subtle.digest(
-                { name: 'SHA-512' },
-                combined
-            );
-
-            if (bits === 256) {
-                return arrayBufferToHex(finalHash.slice(0, 32));
-            } else {
-                return arrayBufferToHex(finalHash);
-            }
-        }
-
         function arrayBufferToHex(buffer) {
             var bytes = new Uint8Array(buffer);
             var hex = '';
@@ -784,10 +1244,6 @@
                     return generateHMACHex(data, key, 'HMAC-SHA256');
                 case SignatureAlgorithm.HMAC_SHA512:
                     return generateHMACHex(data, key, 'HMAC-SHA512');
-                case SignatureAlgorithm.BLAKE2B_256:
-                    return generateBlake2b(data, key, 256);
-                case SignatureAlgorithm.BLAKE2B_512:
-                    return generateBlake2b(data, key, 512);
                 default:
                     return generateHMACHex(data, key, 'HMAC-SHA256');
             }
@@ -883,94 +1339,6 @@
             return signature === expectedSignature;
         }
 
-        function signData(data, privateKey) {
-            var encoder = new TextEncoder();
-            var dataBuffer = encoder.encode(data);
-
-            return crypto.subtle.importKey(
-                'pkcs8',
-                base64ToArrayBuffer(privateKey),
-                { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-                false,
-                ['sign']
-            ).then(function(key) {
-                return crypto.subtle.sign(
-                    { name: 'RSASSA-PKCS1-v1_5' },
-                    key,
-                    dataBuffer
-                );
-            }).then(function(signature) {
-                return arrayBufferToBase64(signature);
-            });
-        }
-
-        function verifySignature(data, signature, publicKey) {
-            var encoder = new TextEncoder();
-            var dataBuffer = encoder.encode(data);
-
-            return crypto.subtle.importKey(
-                'spki',
-                base64ToArrayBuffer(publicKey),
-                { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-                false,
-                ['verify']
-            ).then(function(key) {
-                return crypto.subtle.verify(
-                    { name: 'RSASSA-PKCS1-v1_5' },
-                    key,
-                    base64ToArrayBuffer(signature),
-                    dataBuffer
-                );
-            });
-        }
-
-        function generateKeyPair() {
-            return crypto.subtle.generateKey(
-                {
-                    name: 'RSASSA-PKCS1-v1_5',
-                    modulusLength: 2048,
-                    publicExponent: new Uint8Array([1, 0, 1]),
-                    hash: 'SHA-256'
-                },
-                true,
-                ['sign', 'verify']
-            );
-        }
-
-        function exportPublicKey(keyPair) {
-            return crypto.subtle.exportKey('spki', keyPair.publicKey);
-        }
-
-        function exportPrivateKey(keyPair) {
-            return crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-        }
-
-        function createCodeVerifier() {
-            var verifier = generateRandomString(64);
-            var hash = null;
-
-            hashSHA256(verifier).then(function(h) {
-                hash = h;
-            });
-
-            return {
-                verifier: verifier,
-                getChallenge: function() {
-                    return hash || hashSHA256(verifier);
-                }
-            };
-        }
-
-        function generateCodeChallenge(verifier) {
-            return hashSHA256(verifier);
-        }
-
-        function verifyCodeChallenge(verifier, challenge) {
-            return hashSHA256(verifier).then(function(hash) {
-                return hash === challenge;
-            });
-        }
-
         return {
             version: version,
             encrypt: encryptAES,
@@ -982,19 +1350,10 @@
             generateRandomString: generateRandomString,
             generateHMAC: generateHMAC,
             generateHMACHex: generateHMACHex,
-            generateBlake2b: generateBlake2b,
             computeSignature: computeSignature,
             generateRequestSignature: generateRequestSignature,
             verifyRequestSignature: verifyRequestSignature,
             verifyHMAC: verifyHMAC,
-            signData: signData,
-            verifySignature: verifySignature,
-            generateKeyPair: generateKeyPair,
-            exportPublicKey: exportPublicKey,
-            exportPrivateKey: exportPrivateKey,
-            createCodeVerifier: createCodeVerifier,
-            generateCodeChallenge: generateCodeChallenge,
-            verifyCodeChallenge: verifyCodeChallenge,
             protectFunction: protectFunction,
             detectDebugging: detectDebugging,
             initializeProtection: initializeProtection,
@@ -1004,6 +1363,9 @@
             createSecureChannel: createSecureChannel,
             CryptoError: CryptoError,
             SignatureAlgorithm: SignatureAlgorithm,
+            AntiDebugManager: AntiDebugManager,
+            MemoryGuard: MemoryGuard,
+            IntegrityChecker: IntegrityChecker,
             setSignatureAlgorithm: function(algorithm) {
                 if (SignatureAlgorithm[algorithm] || Object.values(SignatureAlgorithm).indexOf(algorithm) !== -1) {
                     currentSignatureAlgorithm = SignatureAlgorithm[algorithm] || algorithm;
@@ -1029,854 +1391,3 @@
     }
 
 })(typeof window !== 'undefined' ? window : this);
-
-(function() {
-    'use strict';
-
-    var RuntimeProtection = (function() {
-        var originalCode = null;
-        var integrityHash = null;
-        var protectionActive = false;
-        var monitorInterval = null;
-        var memorySnapshots = {};
-        var selfDestructTriggered = false;
-
-        function computeSHA256(data) {
-            var encoder = new TextEncoder();
-            var dataBuffer = encoder.encode(data);
-            return crypto.subtle.digest('SHA-256', dataBuffer).then(function(hash) {
-                var bytes = new Uint8Array(hash);
-                var binary = '';
-                for (var i = 0; i < bytes.byteLength; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-                return btoa(binary);
-            });
-        }
-
-        function takeMemorySnapshot() {
-            var snapshot = {
-                timestamp: Date.now(),
-                functions: [],
-                objects: {}
-            };
-
-            if (window.Function) {
-                var originalToString = Function.prototype.toString;
-                var functionKeys = Object.keys(window.Function.prototype);
-                functionKeys.forEach(function(key) {
-                    try {
-                        var desc = Object.getOwnPropertyDescriptor(window.Function.prototype, key);
-                        if (desc && desc.value) {
-                            snapshot.functions.push({
-                                key: key,
-                                type: typeof desc.value
-                            });
-                        }
-                    } catch (e) {}
-                });
-            }
-
-            memorySnapshots[snapshot.timestamp] = snapshot;
-            
-            var maxSnapshots = 5;
-            var timestamps = Object.keys(memorySnapshots).sort();
-            if (timestamps.length > maxSnapshots) {
-                var oldTimestamps = timestamps.slice(0, timestamps.length - maxSnapshots);
-                oldTimestamps.forEach(function(ts) {
-                    delete memorySnapshots[ts];
-                });
-            }
-
-            return snapshot;
-        }
-
-        function detectMemoryModification() {
-            if (window.Function && Function.prototype.toString) {
-                var originalToString = Function.prototype.toString.toString();
-                if (originalToString.indexOf('[native code]') === -1) {
-                    return true;
-                }
-            }
-
-            if (window.console && console.log) {
-                var originalLog = console.log.toString();
-                if (originalLog.indexOf('[native code]') === -1) {
-                    return true;
-                }
-            }
-
-            try {
-                var testFunc = function() { return 'test'; };
-                var funcString = testFunc.toString();
-                if (funcString.indexOf('test') === -1) {
-                    return true;
-                }
-            } catch (e) {
-                return true;
-            }
-
-            return false;
-        }
-
-        function detectCodeTampering() {
-            if (!integrityHash) {
-                return false;
-            }
-
-            var scripts = document.getElementsByTagName('script');
-            for (var i = 0; i < scripts.length; i++) {
-                var script = scripts[i];
-                if (script.src && script.src.indexOf('crypto-utils') !== -1) {
-                    var scriptContent = script.innerHTML || script.textContent;
-                    if (scriptContent && scriptContent.length > 0) {
-                        return computeSHA256(scriptContent).then(function(hash) {
-                            return hash !== integrityHash;
-                        });
-                    }
-                }
-            }
-
-            return Promise.resolve(false);
-        }
-
-        function triggerSelfDestruct() {
-            if (selfDestructTriggered) {
-                return;
-            }
-            selfDestructTriggered = true;
-
-            if (monitorInterval) {
-                clearInterval(monitorInterval);
-                monitorInterval = null;
-            }
-
-            if (document.documentElement) {
-                document.documentElement.style.display = 'none';
-            }
-
-            if (document.body) {
-                document.body.innerHTML = '<div style="padding:50px;text-align:center;font-family:sans-serif;background:#000;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;">' +
-                    '<h1 style="color:#ff0000;">安全警告</h1>' +
-                    '<p>检测到代码篡改或异常访问行为</p>' +
-                    '<p>系统已自动保护</p>' +
-                    '</div>';
-            }
-
-            setTimeout(function() {
-                var scripts = document.getElementsByTagName('script');
-                for (var i = scripts.length - 1; i >= 0; i--) {
-                    scripts[i].parentNode.removeChild(scripts[i]);
-                }
-
-                if (document.head) {
-                    var metas = document.head.getElementsByTagName('meta');
-                    for (var j = metas.length - 1; j >= 0; j--) {
-                        metas[j].parentNode.removeChild(metas[j]);
-                    }
-                }
-
-                Object.keys(window).forEach(function(key) {
-                    if (key !== 'window' && key !== 'document' && key !== 'location' && key !== 'navigator') {
-                        try {
-                            if (typeof window[key] === 'function') {
-                                (function(k) {
-                                    try {
-                                        delete window[k];
-                                        window[k] = function() {};
-                                    } catch (e) {}
-                                })(key);
-                            }
-                        } catch (e) {}
-                    }
-                });
-            }, 100);
-
-            throw new Error('Security violation detected');
-        }
-
-        function detectDevTools() {
-            var threshold = 160;
-            if (window.outerWidth - window.innerWidth > threshold ||
-                window.outerHeight - window.innerHeight > threshold) {
-                return true;
-            }
-
-            var startTime = Date.now();
-            debugger;
-            var endTime = Date.now();
-            if (endTime - startTime > 100) {
-                return true;
-            }
-
-            var enabled = false;
-            (function(x) {
-                var d = document.createElement('div');
-                d.innerHTML = '<x id="__y"/>';
-                d.style.visibility = 'hidden';
-                document.head.appendChild(d);
-                Object.defineProperty(x, 'inspect', {
-                    get: function() {
-                        enabled = true;
-                        return function() {};
-                    }
-                });
-            })(window);
-
-            if (window.__y && window.__y.id === '__y') {
-                enabled = true;
-            }
-
-            if (enabled) {
-                return true;
-            }
-
-            return false;
-        }
-
-        function startProtection(options) {
-            options = options || {};
-            options.checkInterval = options.checkInterval || 2000;
-            options.enableSelfDestruct = options.enableSelfDestruct !== false;
-            options.enableMemoryProtection = options.enableMemoryProtection !== false;
-
-            var scriptContent = '';
-            var scripts = document.getElementsByTagName('script');
-            for (var i = 0; i < scripts.length; i++) {
-                if (scripts[i].src && scripts[i].src.indexOf('crypto-utils') !== -1) {
-                    scriptContent = scripts[i].innerHTML || scripts[i].textContent;
-                    break;
-                }
-            }
-
-            if (scriptContent) {
-                computeSHA256(scriptContent).then(function(hash) {
-                    integrityHash = hash;
-                });
-            }
-
-            takeMemorySnapshot();
-
-            monitorInterval = setInterval(function() {
-                if (detectMemoryModification()) {
-                    console.error('Memory modification detected');
-                    if (options.enableSelfDestruct) {
-                        triggerSelfDestruct();
-                    }
-                }
-
-                if (detectDevTools()) {
-                    console.error('Developer tools detected');
-                    if (options.enableSelfDestruct) {
-                        triggerSelfDestruct();
-                    }
-                }
-
-                if (options.enableMemoryProtection) {
-                    takeMemorySnapshot();
-                }
-
-                detectCodeTampering().then(function(tampered) {
-                    if (tampered) {
-                        console.error('Code tampering detected');
-                        if (options.enableSelfDestruct) {
-                            triggerSelfDestruct();
-                        }
-                    }
-                });
-            }, options.checkInterval);
-
-            document.addEventListener('keydown', function(e) {
-                if (e.keyCode === 123) {
-                    e.preventDefault();
-                    if (options.enableSelfDestruct) {
-                        triggerSelfDestruct();
-                    }
-                }
-            });
-
-            document.addEventListener('contextmenu', function(e) {
-                if (options.preventRightClick) {
-                    e.preventDefault();
-                }
-            });
-
-            protectionActive = true;
-        }
-
-        function stopProtection() {
-            if (monitorInterval) {
-                clearInterval(monitorInterval);
-                monitorInterval = null;
-            }
-            protectionActive = false;
-        }
-
-        function getProtectionStatus() {
-            return {
-                active: protectionActive,
-                selfDestructTriggered: selfDestructTriggered,
-                hasIntegrityHash: integrityHash !== null,
-                snapshotCount: Object.keys(memorySnapshots).length,
-                monitorRunning: monitorInterval !== null
-            };
-        }
-
-        function initializeRuntimeProtection(options) {
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
-                    startProtection(options);
-                });
-            } else {
-                startProtection(options);
-            }
-
-            return {
-                start: startProtection,
-                stop: stopProtection,
-                status: getProtectionStatus,
-                snapshot: takeMemorySnapshot,
-                selfDestruct: triggerSelfDestruct
-            };
-        }
-
-        return initializeRuntimeProtection;
-    })();
-
-    if (typeof window !== 'undefined') {
-        window.RuntimeProtection = RuntimeProtection;
-    }
-
-    if (typeof CryptoUtils !== 'undefined') {
-        CryptoUtils.RuntimeProtection = RuntimeProtection;
-    }
-
-    if (typeof CryptoUtils !== 'undefined') {
-        CryptoUtils.initializeRuntimeProtection = function(options) {
-            return RuntimeProtection(options);
-        };
-
-        CryptoUtils.verifyRuntimeIntegrity = function() {
-            return detectCodeTampering();
-        };
-
-        CryptoUtils.protectMemory = function() {
-            return takeMemorySnapshot();
-        };
-
-        CryptoUtils.emergencyShutdown = function() {
-            triggerSelfDestruct();
-        };
-    }
-
-    function detectCodeTampering() {
-        if (!integrityHash) {
-            return Promise.resolve(false);
-        }
-
-        var scripts = document.getElementsByTagName('script');
-        for (var i = 0; i < scripts.length; i++) {
-            var script = scripts[i];
-            if (script.src && script.src.indexOf('crypto-utils') !== -1) {
-                var scriptContent = script.innerHTML || script.textContent;
-                if (scriptContent && scriptContent.length > 0) {
-                    return computeSHA256(scriptContent).then(function(hash) {
-                        return hash !== integrityHash;
-                    });
-                }
-            }
-        }
-
-        return Promise.resolve(false);
-    }
-
-    function computeSHA256(data) {
-        var encoder = new TextEncoder();
-        var dataBuffer = encoder.encode(data);
-        return crypto.subtle.digest('SHA-256', dataBuffer).then(function(hash) {
-            var bytes = new Uint8Array(hash);
-            var binary = '';
-            for (var i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return btoa(binary);
-        });
-    }
-
-    function rc4Encrypt(plaintext, key) {
-        var s = new Array(256);
-        for (var i = 0; i < 256; i++) {
-            s[i] = i;
-        }
-
-        var j = 0;
-        for (var i = 0; i < 256; i++) {
-            j = (j + s[i] + key.charCodeAt(i % key.length)) % 256;
-            var temp = s[i];
-            s[i] = s[j];
-            s[j] = temp;
-        }
-
-        var i = 0;
-        j = 0;
-        var result = new Array(plaintext.length);
-
-        for (var k = 0; k < plaintext.length; k++) {
-            i = (i + 1) % 256;
-            j = (j + s[i]) % 256;
-            var temp = s[i];
-            s[i] = s[j];
-            s[j] = temp;
-            result[k] = String.fromCharCode(plaintext.charCodeAt(k) ^ s[(s[i] + s[j]) % 256]);
-        }
-
-        return result.join('');
-    }
-
-    function rc4Decrypt(ciphertext, key) {
-        return rc4Encrypt(ciphertext, key);
-    }
-
-    function rc4EncryptBase64(plaintext, key) {
-        var encrypted = rc4Encrypt(plaintext, key);
-        return btoa(encrypted);
-    }
-
-    function rc4DecryptBase64(ciphertextBase64, key) {
-        var ciphertext = atob(ciphertextBase64);
-        return rc4Decrypt(ciphertext, key);
-    }
-
-    function detectHeadlessBrowser() {
-        var userAgent = navigator.userAgent.toLowerCase();
-
-        var headlessIndicators = [
-            'headlesschrome',
-            'phantomjs',
-            'selenium',
-            'puppeteer',
-            'nightmare',
-            'slimerjs',
-            'ghost',
-            'zombie'
-        ];
-
-        for (var i = 0; i < headlessIndicators.length; i++) {
-            if (userAgent.indexOf(headlessIndicators[i]) !== -1) {
-                return true;
-            }
-        }
-
-        if (window.callPhantom || window._phantom) {
-            return true;
-        }
-
-        if (navigator.webdriver === true) {
-            return true;
-        }
-
-        try {
-            if (window.Buffer) {
-                return true;
-            }
-        } catch (e) {}
-
-        if (!window.chrome) {
-            try {
-                var canvas = document.createElement('canvas');
-                var gl = canvas.getContext('webgl');
-                if (gl && gl.getExtension('WEBGL_debug_renderer_info')) {
-                    var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                    var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-                    if (renderer.indexOf('SwiftShader') !== -1 || renderer.indexOf('llvmpipe') !== -1) {
-                        return true;
-                    }
-                }
-            } catch (e) {}
-        }
-
-        return false;
-    }
-
-    function detectAutomation() {
-        if (detectHeadlessBrowser()) {
-            return true;
-        }
-
-        if (document.documentElement.getAttribute('webdriver')) {
-            return true;
-        }
-
-        if (navigator.permissions && navigator.permissions.query) {
-            return navigator.permissions.query({name: 'notifications'}).then(function(result) {
-                return result.state === 'prompt';
-            }).catch(function() {
-                return false;
-            });
-        }
-
-        try {
-            var testFn = function() {};
-            var testStr = testFn.toString();
-            if (testStr.indexOf('[native code]') === -1 && testStr.indexOf('testFn') === -1) {
-                return true;
-            }
-        } catch (e) {}
-
-        return false;
-    }
-
-    function enhancedSelfDestruct(reason) {
-        protectionActive = true;
-
-        var scripts = document.getElementsByTagName('script');
-        for (var i = scripts.length - 1; i >= 0; i--) {
-            try {
-                scripts[i].parentNode.removeChild(scripts[i]);
-            } catch (e) {}
-        }
-
-        if (document.head) {
-            var metas = document.head.getElementsByTagName('meta');
-            for (var j = metas.length - 1; j >= 0; j--) {
-                try {
-                    metas[j].parentNode.removeChild(metas[j]);
-                } catch (e) {}
-            }
-        }
-
-        if (document.documentElement) {
-            document.documentElement.style.display = 'none';
-        }
-
-        if (document.body) {
-            document.body.innerHTML = '<div style="position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:#000;color:#fff;font-family:sans-serif;z-index:9999999;">' +
-                '<h1 style="color:#ff0000;font-size:48px;margin-bottom:20px;">安全警告</h1>' +
-                '<p style="font-size:24px;margin-bottom:10px;">检测到异常访问行为</p>' +
-                '<p style="font-size:16px;color:#ff6666;">' + (reason || '访问已终止') + '</p>' +
-                '<p style="font-size:12px;margin-top:30px;">系统已自动保护</p></div>';
-        }
-
-        setTimeout(function() {
-            try {
-                Object.keys(window).forEach(function(key) {
-                    if (key !== 'window' && key !== 'document' && key !== 'location' && key !== 'navigator' && key !== 'history' && key !== 'screen') {
-                        try {
-                            if (typeof window[key] === 'function') {
-                                window[key] = function() {};
-                            }
-                        } catch (e) {}
-                    }
-                });
-            } catch (e) {}
-        }, 100);
-
-        throw new Error('Security violation: ' + (reason || 'Access denied'));
-    }
-
-    function enhancedAntiDebug() {
-        if (!debugDetectionEnabled) return false;
-
-        var threshold = 160;
-
-        if (window.outerWidth - window.innerWidth > threshold ||
-            window.outerHeight - window.innerHeight > threshold) {
-            enhancedSelfDestruct('开发者工具检测 - 窗口大小异常');
-            return true;
-        }
-
-        var startTime = performance.now();
-        debugger;
-        var endTime = performance.now();
-        if (endTime - startTime > 100) {
-            enhancedSelfDestruct('开发者工具检测 - 调试器中断');
-            return true;
-        }
-
-        (function(x) {
-            Object.defineProperty(x, 'inspect', {
-                get: function() {
-                    enhancedSelfDestruct('开发者工具检测 - inspect API');
-                    return function() {};
-                }
-            });
-        })(window);
-
-        if (typeof window.__inspect !== 'undefined') {
-            enhancedSelfDestruct('开发者工具检测 - __inspect变量');
-            return true;
-        }
-
-        if (window.devtools && window.devtools.isOpen) {
-            enhancedSelfDestruct('开发者工具检测 - DevTools已打开');
-            return true;
-        }
-
-        if (window.Firebug && window.Firebug.chrome && window.Firebug.chrome.isVisible) {
-            enhancedSelfDestruct('开发者工具检测 - Firebug已打开');
-            return true;
-        }
-
-        var consoleMethods = ['log', 'error', 'warn', 'info', 'debug'];
-        consoleMethods.forEach(function(method) {
-            try {
-                if (console[method] && console[method].toString().indexOf('[native code]') === -1) {
-                    enhancedSelfDestruct('开发者工具检测 - Console方法被重写');
-                    return true;
-                }
-            } catch (e) {}
-        });
-
-        return false;
-    }
-
-    function startEnhancedProtection(options) {
-        options = options || {};
-        options.checkInterval = options.checkInterval || 2000;
-        options.enableSelfDestruct = options.enableSelfDestruct !== false;
-        options.enableAutomationDetection = options.enableAutomationDetection !== false;
-        options.enableHeadlessDetection = options.enableHeadlessDetection !== false;
-
-        if (options.enableAutomationDetection || options.enableHeadlessDetection) {
-            if (detectAutomation() || detectHeadlessBrowser()) {
-                if (options.enableSelfDestruct) {
-                    enhancedSelfDestruct('自动化工具检测');
-                    return;
-                }
-            }
-        }
-
-        var checkCounter = 0;
-        var originalBodyContent = '';
-
-        try {
-            if (document.body) {
-                originalBodyContent = document.body.innerHTML;
-            }
-        } catch (e) {}
-
-        var protectionInterval = setInterval(function() {
-            checkCounter++;
-
-            if (options.enableSelfDestruct) {
-                if (enhancedAntiDebug()) {
-                    return;
-                }
-            }
-
-            if (options.enableAutomationDetection || options.enableHeadlessDetection) {
-                if (checkCounter % 10 === 0) {
-                    if (detectAutomation() || detectHeadlessBrowser()) {
-                        if (options.enableSelfDestruct) {
-                            enhancedSelfDestruct('自动化工具检测');
-                            return;
-                        }
-                    }
-                }
-            }
-
-            if (checkCounter % 5 === 0 && originalBodyContent) {
-                try {
-                    if (document.body && document.body.innerHTML !== originalBodyContent) {
-                        if (options.enableSelfDestruct) {
-                            enhancedSelfDestruct('页面内容被修改');
-                            return;
-                        }
-                    }
-                } catch (e) {}
-            }
-
-            try {
-                var testFunc = function() {};
-                var funcStr = testFunc.toString();
-                if (funcStr.indexOf('[native code]') === -1 && funcStr.indexOf('testFunc') === -1) {
-                    if (options.enableSelfDestruct) {
-                        enhancedSelfDestruct('函数toString方法被修改');
-                        return;
-                    }
-                }
-            } catch (e) {}
-
-        }, options.checkInterval);
-
-        document.addEventListener('keydown', function(e) {
-            if (e.keyCode === 123) {
-                e.preventDefault();
-                if (options.enableSelfDestruct) {
-                    enhancedSelfDestruct('F12键被按下');
-                }
-            }
-
-            if (e.keyCode === 116) {
-                e.preventDefault();
-                if (options.enableSelfDestruct) {
-                    enhancedSelfDestruct('F5键被按下');
-                }
-            }
-
-            if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
-                e.preventDefault();
-                if (options.enableSelfDestruct) {
-                    enhancedSelfDestruct('Ctrl+Shift+I被按下');
-                }
-            }
-
-            if (e.ctrlKey && e.keyCode === 85) {
-                e.preventDefault();
-                if (options.enableSelfDestruct) {
-                    enhancedSelfDestruct('Ctrl+U被按下');
-                }
-            }
-        });
-
-        document.addEventListener('contextmenu', function(e) {
-            if (options.preventRightClick) {
-                e.preventDefault();
-                return false;
-            }
-        });
-
-        document.addEventListener('selectstart', function(e) {
-            if (options.preventSelection) {
-                e.preventDefault();
-                return false;
-            }
-        });
-
-        document.addEventListener('dragstart', function(e) {
-            if (options.preventDrag) {
-                e.preventDefault();
-                return false;
-            }
-        });
-
-        protectionActive = true;
-
-        return {
-            selfDestruct: enhancedSelfDestruct,
-            detectHeadless: detectHeadlessBrowser,
-            detectAutomation: detectAutomation,
-            antiDebug: enhancedAntiDebug
-        };
-    }
-
-    function generateIntegritySignature(code) {
-        var encoder = new TextEncoder();
-        var data = encoder.encode(code);
-
-        return crypto.subtle.digest('SHA-256', data).then(function(hash) {
-            var binary = '';
-            var bytes = new Uint8Array(hash);
-            for (var i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return btoa(binary);
-        });
-    }
-
-    function verifyIntegritySignature(code, expectedSignature) {
-        return generateIntegritySignature(code).then(function(signature) {
-            return signature === expectedSignature;
-        });
-    }
-
-    function createCodeGuard(code, options) {
-        options = options || {};
-
-        var signature = null;
-
-        generateIntegritySignature(code).then(function(sig) {
-            signature = sig;
-        });
-
-        var guardCode = {
-            checkInterval: options.checkInterval || 5000,
-            onViolation: options.onViolation || enhancedSelfDestruct,
-
-            check: function() {
-                if (signature === null) return;
-
-                var scripts = document.getElementsByTagName('script');
-                for (var i = 0; i < scripts.length; i++) {
-                    var script = scripts[i];
-                    if (script.src && script.src.indexOf('crypto-utils') !== -1) {
-                        var content = script.innerHTML || script.textContent;
-                        if (content) {
-                            generateIntegritySignature(content).then(function(sig) {
-                                if (sig !== signature) {
-                                    this.onViolation('代码签名验证失败');
-                                }
-                            }.bind(this));
-                        }
-                    }
-                }
-            },
-
-            start: function() {
-                var self = this;
-                this.interval = setInterval(function() {
-                    self.check();
-                }, this.checkInterval);
-            },
-
-            stop: function() {
-                if (this.interval) {
-                    clearInterval(this.interval);
-                }
-            }
-        };
-
-        return guardCode;
-    }
-
-    return {
-        version: version,
-        encrypt: encryptAES,
-        decrypt: decryptAES,
-        encryptString: encryptString,
-        decryptString: decryptString,
-        encryptRC4: rc4EncryptBase64,
-        decryptRC4: rc4DecryptBase64,
-        hash: hashSHA256,
-        generateRandomBytes: generateRandomBytes,
-        generateRandomString: generateRandomString,
-        generateHMAC: generateHMAC,
-        verifyHMAC: verifyHMAC,
-        signData: signData,
-        verifySignature: verifySignature,
-        generateKeyPair: generateKeyPair,
-        exportPublicKey: exportPublicKey,
-        exportPrivateKey: exportPrivateKey,
-        createCodeVerifier: createCodeVerifier,
-        generateCodeChallenge: generateCodeChallenge,
-        verifyCodeChallenge: verifyCodeChallenge,
-        protectFunction: protectFunction,
-        detectDebugging: detectDebugging,
-        initializeProtection: initializeProtection,
-        startIntegrityMonitoring: startIntegrityMonitoring,
-        stopIntegrityMonitoring: stopIntegrityMonitoring,
-        secureStorage: secureStorage,
-        createSecureChannel: createSecureChannel,
-        CryptoError: CryptoError,
-        _originalHash: function() { return originalHash; },
-        _setDebugDetection: function(enabled) { debugDetectionEnabled = enabled; },
-        rc4: {
-            encrypt: rc4Encrypt,
-            decrypt: rc4Decrypt,
-            encryptBase64: rc4EncryptBase64,
-            decryptBase64: rc4DecryptBase64
-        },
-        detect: {
-            headlessBrowser: detectHeadlessBrowser,
-            automation: detectAutomation,
-            devTools: enhancedAntiDebug
-        },
-        protection: {
-            selfDestruct: enhancedSelfDestruct,
-            start: startEnhancedProtection,
-            guard: createCodeGuard,
-            generateSignature: generateIntegritySignature,
-            verifySignature: verifyIntegritySignature
-        }
-    };
-})();
