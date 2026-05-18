@@ -13,6 +13,7 @@ type Config struct {
 	Database DatabaseConfig
 	Alert    AlertConfig
 	I18n     I18nConfig
+	Backup   BackupConfig
 }
 
 type DatabaseConfig struct {
@@ -91,6 +92,25 @@ type I18nConfig struct {
 	TranslationsDir   string   `yaml:"translations_dir"`
 	DefaultTimezone   string   `yaml:"default_timezone"`
 	SupportedTimezones []string `yaml:"supported_timezones"`
+}
+
+type BackupConfig struct {
+	Enabled                 bool   `yaml:"enabled"`
+	BackupDir               string `yaml:"backup_dir"`
+	AutoBackupEnabled       bool   `yaml:"auto_backup_enabled"`
+	AutoBackupIntervalHours int    `yaml:"auto_backup_interval_hours"`
+	IncrementalEnabled      bool   `yaml:"incremental_enabled"`
+	IncrementalIntervalMins int    `yaml:"incremental_interval_mins"`
+	RemoteBackupEnabled     bool   `yaml:"remote_backup_enabled"`
+	RemoteBackupType        string `yaml:"remote_backup_type"`
+	RemoteBackupPath        string `yaml:"remote_backup_path"`
+	RemoteBackupEndpoint    string `yaml:"remote_backup_endpoint"`
+	RemoteBackupAccessKey   string `yaml:"remote_backup_access_key"`
+	RemoteBackupSecretKey   string `yaml:"remote_backup_secret_key"`
+	RetentionDays           int    `yaml:"retention_days"`
+	CompressionEnabled      bool   `yaml:"compression_enabled"`
+	EncryptionEnabled       bool   `yaml:"encryption_enabled"`
+	EncryptionKey           string `yaml:"encryption_key"`
 }
 
 var globalConfig *Config
@@ -219,6 +239,24 @@ func LoadConfig() *Config {
 			TranslationsDir:  getEnv("TRANSLATIONS_DIR", "translations"),
 			DefaultTimezone:  getEnv("DEFAULT_TIMEZONE", "Asia/Shanghai"),
 			SupportedTimezones: []string{"Asia/Shanghai", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Europe/Berlin", "Asia/Tokyo", "Asia/Seoul", "Australia/Sydney", "Pacific/Auckland"},
+		},
+		Backup: BackupConfig{
+			Enabled:                 getEnvAsBool("BACKUP_ENABLED", true),
+			BackupDir:               getEnv("BACKUP_DIR", "./backups"),
+			AutoBackupEnabled:       getEnvAsBool("BACKUP_AUTO_ENABLED", true),
+			AutoBackupIntervalHours: getEnvAsInt("BACKUP_AUTO_INTERVAL_HOURS", 24),
+			IncrementalEnabled:        getEnvAsBool("BACKUP_INCREMENTAL_ENABLED", true),
+			IncrementalIntervalMins: getEnvAsInt("BACKUP_INCREMENTAL_INTERVAL_MINS", 60),
+			RemoteBackupEnabled:     getEnvAsBool("BACKUP_REMOTE_ENABLED", false),
+			RemoteBackupType:        getEnv("BACKUP_REMOTE_TYPE", "s3"),
+			RemoteBackupPath:        getEnv("BACKUP_REMOTE_PATH", ""),
+			RemoteBackupEndpoint:   getEnv("BACKUP_REMOTE_ENDPOINT", ""),
+			RemoteBackupAccessKey:  getEnv("BACKUP_REMOTE_ACCESS_KEY", ""),
+			RemoteBackupSecretKey:  getEnv("BACKUP_REMOTE_SECRET_KEY", ""),
+			RetentionDays:           getEnvAsInt("BACKUP_RETENTION_DAYS", 30),
+			CompressionEnabled:     getEnvAsBool("BACKUP_COMPRESSION_ENABLED", true),
+			EncryptionEnabled:     getEnvAsBool("BACKUP_ENCRYPTION_ENABLED", false),
+			EncryptionKey:         getEnv("BACKUP_ENCRYPTION_KEY", ""),
 		},
 	}
 }

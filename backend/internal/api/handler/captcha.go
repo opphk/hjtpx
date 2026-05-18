@@ -1182,6 +1182,15 @@ func generateSliderCaptchaImages() (string, string, int, int) {
 	return imageURL, puzzleImage, targetX, targetY
 }
 
+// GetSliderCaptcha 获取滑动验证码
+// @Summary 获取滑动验证码
+// @Description 生成并返回一个新的滑动验证码，包含验证码图片和滑动块图片
+// @Tags 验证码
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "成功返回验证码数据"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/captcha/slider [get]
 func GetSliderCaptcha(c *gin.Context) {
 	sessionID := generateSessionID()
 	imageURL, puzzleImage, targetX, targetY := generateSliderCaptchaImages()
@@ -1210,6 +1219,17 @@ func GetSliderCaptcha(c *gin.Context) {
 	})
 }
 
+// GetClickCaptcha 获取点击验证码
+// @Summary 获取点击验证码
+// @Description 生成并返回一个点击式验证码，支持多种模式（数字、字母、中文、图标、混合等)
+// @Tags 验证码
+// @Accept json
+// @Produce json
+// @Param mode query string false "验证码模式" Enums(number, letter, chinese, mixed, icon)"
+// @Param shuffle query string false "是否允许打乱顺序"
+// @Param points query int false "点击点数"
+// @Success 200 {object} map[string]interface{} "成功返回验证码数据"
+// @Router /api/v1/captcha/click [get]
 func GetClickCaptcha(c *gin.Context) {
 	sessionID := generateSessionID()
 	modeStr := c.DefaultQuery("mode", "number")
@@ -1269,21 +1289,34 @@ func GetClickCaptcha(c *gin.Context) {
 	})
 }
 
+// VerifyRequest 验证码验证请求参数
+// @Description 验证验证码时发送的请求结构，支持滑动验证码和点击验证码
 type VerifyRequest struct {
-	SessionID       string              `json:"session_id" binding:"required"`
-	Type            string              `json:"type" binding:"required"`
-	X               int                 `json:"x"`
-	Y               int                 `json:"y"`
-	Points          [][2]int            `json:"points"`
-	ClickSequence   []int               `json:"click_sequence"`
-	BehaviorData    []BehaviorDataPoint `json:"behavior_data"`
-	SpeedData       json.RawMessage     `json:"speed_data,omitempty"`
-	ApplicationID   uint                `json:"application_id"`
-	EnvironmentData json.RawMessage     `json:"environment_data,omitempty"`
+	SessionID       string              `json:"session_id" binding:"required"` // 会话 ID
+	Type            string              `json:"type" binding:"required"`      // 验证码类型: slider 或 click
+	X               int                 `json:"x"`                            // 滑动验证码 X 坐标
+	Y               int                 `json:"y"`                            // 滑动验证码 Y 坐标
+	Points          [][2]int            `json:"points"`                       // 点击验证码坐标数组
+	ClickSequence   []int               `json:"click_sequence"`               // 点击顺序
+	BehaviorData    []BehaviorDataPoint `json:"behavior_data"`                // 行为分析数据
+	SpeedData       json.RawMessage     `json:"speed_data,omitempty" swaggerignore:"true"` // 速度数据 (内部使用)
+	ApplicationID   uint                `json:"application_id"`               // 应用 ID
+	EnvironmentData json.RawMessage     `json:"environment_data,omitempty" swaggerignore:"true"` // 环境检测数据 (内部使用)
 }
 
 
 
+// VerifyCaptcha 验证码验证
+// @Summary 验证用户输入
+// @Description 验证用户对验证码的操作（滑动或点击）是否正确，并进行行为分析
+// @Tags 验证码
+// @Accept json
+// @Produce json
+// @Param body body VerifyRequest true "验证请求参数"
+// @Success 200 {object} map[string]interface{} "验证结果"
+// @Failure 400 {object} map[string]interface{} "请求参数无效"
+// @Failure 404 {object} map[string]interface{} "会话不存在或已过期"
+// @Router /api/v1/captcha/verify [post]
 func VerifyCaptcha(c *gin.Context) {
 	startTime := time.Now()
 	var req VerifyRequest

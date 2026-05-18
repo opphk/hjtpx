@@ -15,16 +15,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// LoginRequest 登录请求参数
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username string `json:"username" binding:"required"` // 用户名
+	Password string `json:"password" binding:"required"` // 密码
 }
 
+// LoginResponse 登录响应数据
 type LoginResponse struct {
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token,omitempty"`
-	ExpiresIn    int64     `json:"expires_in"`
-	User         AdminInfo `json:"user"`
+	Token        string    `json:"token"`         // 访问令牌
+	RefreshToken string    `json:"refresh_token,omitempty"` // 刷新令牌
+	ExpiresIn    int64     `json:"expires_in"`    // 过期时间(秒)
+	User         AdminInfo `json:"user"`          // 用户信息
 }
 
 type RefreshTokenRequest struct {
@@ -95,6 +97,19 @@ func updateAdminLogin(db *gorm.DB, adminID uint, ip string) {
 	})
 }
 
+// Login 管理员登录
+// @Summary 管理员登录
+// @Description 使用用户名和密码进行管理员登录，返回访问令牌
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param body body LoginRequest true "登录请求参数"
+// @Success 200 {object} LoginResponse "登录成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "认证失败"
+// @Failure 403 {object} map[string]interface{} "账户被禁用"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/login [post]
 func Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

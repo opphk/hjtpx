@@ -482,3 +482,68 @@ type MFACode struct {
 func (MFACode) TableName() string {
 	return "mfa_codes"
 }
+
+// UserConsent 用户同意设置模型
+type UserConsent struct {
+	gorm.Model
+	UserID                uint      `gorm:"not null;uniqueIndex:idx_consent_user" json:"user_id"`
+	ConsentMarketing      bool      `gorm:"default:false" json:"consent_marketing"`       // 营销信息同意
+	ConsentAnalytics      bool      `gorm:"default:true" json:"consent_analytics"`       // 分析数据收集同意
+	ConsentPersonalization bool     `gorm:"default:true" json:"consent_personalization"` // 个性化同意
+	ConsentDataSharing    bool      `gorm:"default:false" json:"consent_data_sharing"`   // 数据共享同意
+	ConsentUpdatedAt      time.Time `json:"consent_updated_at"`                          // 同意更新时间
+	ConsentIP             string    `gorm:"size:50" json:"consent_ip"`                   // 同意时的IP地址
+	ConsentUserAgent      string    `gorm:"size:500" json:"consent_user_agent"`          // 同意时的User Agent
+	User                  User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (UserConsent) TableName() string {
+	return "user_consents"
+}
+
+// DataExportRequest 数据导出请求模型
+type DataExportRequest struct {
+	gorm.Model
+	UserID       uint      `gorm:"not null;index:idx_export_user" json:"user_id"`
+	ExportFormat string    `gorm:"size:20;default:json" json:"export_format"` // json, csv
+	Status       string    `gorm:"size:50;default:pending;index:idx_export_status" json:"status"` // pending, processing, completed, failed
+	FilePath     string    `gorm:"size:500" json:"file_path,omitempty"`       // 导出文件路径
+	RequestedAt  time.Time `json:"requested_at"`                             // 请求时间
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`                  // 完成时间
+	Error        string    `gorm:"type:text" json:"error,omitempty"`          // 错误信息
+	User         User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (DataExportRequest) TableName() string {
+	return "data_export_requests"
+}
+
+// DataDeletionRequest 数据删除请求模型
+type DataDeletionRequest struct {
+	gorm.Model
+	UserID        uint      `gorm:"not null;index:idx_deletion_user" json:"user_id"`
+	Status        string    `gorm:"size:50;default:pending;index:idx_deletion_status" json:"status"` // pending, processing, completed, rejected
+	RequestedAt   time.Time `json:"requested_at"`                            // 请求时间
+	ProcessedAt   *time.Time `json:"processed_at,omitempty"`                 // 处理时间
+	Reason        string    `gorm:"type:text" json:"reason,omitempty"`       // 删除原因
+	AuditLog      string    `gorm:"type:text" json:"audit_log,omitempty"`    // 审计日志
+	ProcessedBy   *uint     `json:"processed_by,omitempty"`                  // 处理人ID
+	User          User      `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (DataDeletionRequest) TableName() string {
+	return "data_deletion_requests"
+}
+
+// UserDataSnapshot 用户数据快照（用于软删除后保留数据）
+type UserDataSnapshot struct {
+	gorm.Model
+	UserID       uint      `gorm:"not null;uniqueIndex:idx_snapshot_user" json:"user_id"`
+	UserData     string    `gorm:"type:text" json:"user_data"`              // 用户数据JSON
+	DeletedAt    time.Time `json:"deleted_at"`                             // 删除时间
+	RetentionEnd time.Time `json:"retention_end"`                          // 保留结束时间
+}
+
+func (UserDataSnapshot) TableName() string {
+	return "user_data_snapshots"
+}

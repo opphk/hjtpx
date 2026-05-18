@@ -3,6 +3,7 @@ let currentTrajectoryIndex = 0;
 let isPlaying = false;
 let animationFrameId = null;
 let riskChart, interactionChart, speedChart;
+let sankeyChart, heatmapEcharts, radarChart;
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
@@ -57,6 +58,11 @@ function updateUI() {
     drawRiskChart(behaviorData.riskDistribution);
     drawInteractionChart(behaviorData.summary);
     drawSpeedChart();
+    
+    // 绘制高级分析图表
+    drawSankeyChart(behaviorData.sankeyData);
+    drawHeatmapEcharts(behaviorData.heatmap);
+    drawRadarChart(behaviorData.radarData);
     
     // 更新轨迹选择
     updateTrajectorySelect();
@@ -438,4 +444,195 @@ function exportData(format) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// 绘制桑基图
+function drawSankeyChart(sankeyData) {
+    if (!sankeyChart) {
+        sankeyChart = echarts.init(document.getElementById('sankeyChart'));
+        window.addEventListener('resize', () => {
+            sankeyChart.resize();
+        });
+    }
+    
+    // 默认数据
+    const defaultData = {
+        nodes: [
+            { name: '进入页面' },
+            { name: '浏览内容' },
+            { name: '点击验证码' },
+            { name: '验证成功' },
+            { name: '验证失败' },
+            { name: '重新验证' },
+            { name: '离开页面' }
+        ],
+        links: [
+            { source: '进入页面', target: '浏览内容', value: 1000 },
+            { source: '浏览内容', target: '点击验证码', value: 800 },
+            { source: '点击验证码', target: '验证成功', value: 600 },
+            { source: '点击验证码', target: '验证失败', value: 200 },
+            { source: '验证失败', target: '重新验证', value: 150 },
+            { source: '验证失败', target: '离开页面', value: 50 },
+            { source: '重新验证', target: '验证成功', value: 120 },
+            { source: '重新验证', target: '离开页面', value: 30 },
+            { source: '验证成功', target: '离开页面', value: 720 },
+            { source: '浏览内容', target: '离开页面', value: 200 }
+        ]
+    };
+    
+    const data = sankeyData || defaultData;
+    
+    const option = {
+        tooltip: {
+            trigger: 'item',
+            triggerOn: 'mousemove'
+        },
+        series: [
+            {
+                type: 'sankey',
+                data: data.nodes,
+                links: data.links,
+                emphasis: {
+                    focus: 'adjacency'
+                },
+                lineStyle: {
+                    color: 'gradient',
+                    curveness: 0.5
+                },
+                label: {
+                    color: '#333'
+                }
+            }
+        ]
+    };
+    
+    sankeyChart.setOption(option);
+}
+
+// 绘制ECharts热力图
+function drawHeatmapEcharts(heatmapData) {
+    if (!heatmapEcharts) {
+        heatmapEcharts = echarts.init(document.getElementById('heatmapEcharts'));
+        window.addEventListener('resize', () => {
+            heatmapEcharts.resize();
+        });
+    }
+    
+    // 处理数据
+    const data = heatmapData || [];
+    const points = data.map(point => [point.x, point.y, point.intensity]);
+    
+    const option = {
+        tooltip: {
+            position: 'top',
+            formatter: function (params) {
+                return `坐标: (${params.data[0]}, ${params.data[1]})<br/>强度: ${(params.data[2] * 100).toFixed(1)}%`;
+            }
+        },
+        grid: {
+            height: '80%',
+            top: '10%'
+        },
+        xAxis: {
+            type: 'value',
+            min: 0,
+            max: 1920,
+            splitNumber: 10,
+            axisLine: { onZero: false }
+        },
+        yAxis: {
+            type: 'value',
+            min: 0,
+            max: 1080,
+            splitNumber: 10,
+            axisLine: { onZero: false }
+        },
+        visualMap: {
+            min: 0,
+            max: 1,
+            calculable: true,
+            orient: 'horizontal',
+            left: 'center',
+            bottom: '0%',
+            inRange: {
+                color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026']
+            }
+        },
+        series: [{
+            name: '点击强度',
+            type: 'heatmap',
+            data: points,
+            label: {
+                show: false
+            },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+            },
+            blurSize: 30,
+            pointSize: 20
+        }]
+    };
+    
+    heatmapEcharts.setOption(option);
+}
+
+// 绘制雷达图
+function drawRadarChart(radarData) {
+    if (!radarChart) {
+        radarChart = echarts.init(document.getElementById('radarChart'));
+        window.addEventListener('resize', () => {
+            radarChart.resize();
+        });
+    }
+    
+    // 默认数据
+    const defaultData = {
+        indicator: [
+            { name: '鼠标移动速度', max: 100 },
+            { name: '点击间隔', max: 100 },
+            { name: '轨迹直线度', max: 100 },
+            { name: '操作频率', max: 100 },
+            { name: '响应时间', max: 100 },
+            { name: '一致性', max: 100 }
+        ],
+        data: [
+            {
+                value: [20, 15, 25, 30, 20, 25],
+                name: '正常用户',
+                itemStyle: { color: '#28a745' },
+                areaStyle: { opacity: 0.3 }
+            },
+            {
+                value: [75, 80, 85, 70, 80, 90],
+                name: '高风险用户',
+                itemStyle: { color: '#dc3545' },
+                areaStyle: { opacity: 0.3 }
+            }
+        ]
+    };
+    
+    const data = radarData || defaultData;
+    
+    const option = {
+        tooltip: {},
+        legend: {
+            data: data.data.map(item => item.name),
+            bottom: '0%'
+        },
+        radar: {
+            indicator: data.indicator,
+            center: ['50%', '55%'],
+            radius: '65%'
+        },
+        series: [{
+            name: '风险分析',
+            type: 'radar',
+            data: data.data
+        }]
+    };
+    
+    radarChart.setOption(option);
 }

@@ -1,0 +1,34 @@
+{
+  "name": "hjtpx/captcha-sdk",
+  "description": "HJTPX 验证码系统 PHP SDK",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "HJTPX Team"
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "guzzlehttp/guzzle": "^7.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.0",
+    "squizlabs/php_codesniffer": "^3.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "HJTPX\\Captcha\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "HJTPX\\Captcha\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "cs-check": "phpcs",
+    "cs-fix": "phpcbf"
+  }
+}

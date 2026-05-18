@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"strconv"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -9,6 +10,17 @@ import (
 )
 
 var rateLimitService = service.NewRateLimitService()
+
+var (
+	tokenBucketRateLimitService     *service.TokenBucketRateLimitService
+	quotaManagementService          *service.QuotaManagementService
+	advancedRateLimitServicesOnce   sync.Once
+)
+
+func initAdvancedRateLimitServices() {
+	tokenBucketRateLimitService = service.NewTokenBucketRateLimitService()
+	quotaManagementService = service.NewQuotaManagementService()
+}
 
 type RateLimitOptions struct {
 	MaxRequests int
@@ -257,4 +269,178 @@ func ClearFailedAttemptsMiddleware() gin.HandlerFunc {
 
 func GetRateLimitService() *service.RateLimitService {
 	return rateLimitService
+}
+
+// TokenBucketOptions 令牌桶配置
+type TokenBucketOptions struct {
+	Rate         float64
+	Capacity     float64
+	BurstSize    float64
+	InitialTokens float64
+}
+
+// TokenBucketRateLimitMiddleware 令牌桶限流中间件
+func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc {
+	advancedRateLimitServicesOnce.Do(initAdvancedRateLimitServices)
+	
+	return func(c *gin.Context) {
+		if options == nil {
+			options = &TokenBucketOptions{
+				Rate:         10,
+				Capacity:     100,
+				BurstSize:    50,
+				InitialTokens: 100,
+			}
+		}
+
+		ip := c.ClientIP()
+		if ip == "" {
+			ip = c.GetHeader("X-Forwarded-For")
+			if ip == "" {
+				ip = c.GetHeader("X-Real-IP")
+			}
+		}
+
+		config := &service.TokenBucketConfig{
+			Rate:         options.Rate,
+			Capacity:     options.Capacity,
+			BurstSize:    options.BurstSize,
+			InitialTokens: options.InitialTokens,
+		}
+
+		result, err := tokenBucketRateLimitService.CheckIPTokenBucketLimit(c.Request.Context(), ip, config)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Header("X-TokenBucket-Limit", strconv.FormatFloat(config.Capacity, 'f', 2, 64))
+		c.Header("X-TokenBucket-Remaining", strconv.FormatFloat(result.Tokens, 'f', 2, 64))
+		if result.RetryAfter > 0 {
+			c.Header("X-TokenBucket-RetryAfter", strconv.FormatFloat(result.RetryAfter.Seconds(), 'f', 2, 64))
+		}
+
+		if !result.Allowed {
+			if result.RetryAfter > 0 {
+				c.Header("Retry-After", strconv.FormatInt(int64(result.RetryAfter.Seconds()), 10))
+			}
+			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// QuotaOptions 配额配置
+type QuotaOptions struct {
+	Type   service.QuotaType
+	Limit  int64
+	HardLimit bool
+}
+
+// QuotaMiddleware 配额中间件
+func QuotaMiddleware(options *QuotaOptions) gin.HandlerFunc {
+	advancedRateLimitServicesOnce.Do(initAdvancedRateLimitServices)
+	
+	return func(c *gin.Context) {
+		if options == nil {
+			options = &QuotaOptions{
+				Type:   service.QuotaTypeDaily,
+				Limit:  10000,
+				HardLimit: true,
+			}
+		}
+
+		var key string
+		userID := GetUserID(c)
+		if userID > 0 {
+			key = service.UserQuotaKey(userID, "api", options.Type)
+		} else {
+			appIDStr := c.GetHeader("X-App-ID")
+			if appIDStr != "" {
+				if appID, err := strconv.ParseUint(appIDStr, 10, 64); err == nil {
+					key = service.AppQuotaKey(uint(appID), "api", options.Type)
+				}
+			}
+			if key == "" {
+				ip := c.ClientIP()
+				if ip == "" {
+					ip = c.GetHeader("X-Forwarded-For")
+					if ip == "" {
+						ip = c.GetHeader("X-Real-IP")
+					}
+				}
+				key = "ip:" + ip + ":" + string(options.Type)
+			}
+		}
+
+		// 确保配额存在
+		_, err := quotaManagementService.GetQuota(c.Request.Context(), key)
+		if err == nil {
+			config := &service.QuotaConfig{
+				Type:         options.Type,
+				Limit:        options.Limit,
+				WarningThreshold: 80,
+				HardLimit:    options.HardLimit,
+			}
+			_ = quotaManagementService.CreateOrUpdateQuota(c.Request.Context(), key, config)
+		}
+
+		status, allowed, err := quotaManagementService.ConsumeQuota(c.Request.Context(), key, 1)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Header("X-Quota-Limit", strconv.FormatInt(status.Limit, 10))
+		c.Header("X-Quota-Remaining", strconv.FormatInt(status.Remaining, 10))
+		c.Header("X-Quota-ResetAt", strconv.FormatInt(status.ResetAt.Unix(), 10))
+
+		if !allowed {
+			response.TooManyRequests(c, "配额已用尽，请稍后再试或升级套餐")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// AdvancedCombinedMiddleware 高级组合限流中间件
+func AdvancedCombinedMiddleware(tbOptions *TokenBucketOptions, quotaOptions *QuotaOptions) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if tbOptions != nil {
+			tbHandler := TokenBucketRateLimitMiddleware(tbOptions)
+			tbHandler(c)
+			if c.IsAborted() {
+				return
+			}
+		}
+
+		if quotaOptions != nil && !c.IsAborted() {
+			quotaHandler := QuotaMiddleware(quotaOptions)
+			quotaHandler(c)
+			if c.IsAborted() {
+				return
+			}
+		}
+
+		if !c.IsAborted() {
+			c.Next()
+		}
+	}
+}
+
+// GetTokenBucketRateLimitService 获取令牌桶服务
+func GetTokenBucketRateLimitService() *service.TokenBucketRateLimitService {
+	advancedRateLimitServicesOnce.Do(initAdvancedRateLimitServices)
+	return tokenBucketRateLimitService
+}
+
+// GetQuotaManagementService 获取配额管理服务
+func GetQuotaManagementService() *service.QuotaManagementService {
+	advancedRateLimitServicesOnce.Do(initAdvancedRateLimitServices)
+	return quotaManagementService
 }

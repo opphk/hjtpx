@@ -23,8 +23,39 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/models"
 	"github.com/hjtpx/hjtpx/pkg/postgres"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	_ "github.com/hjtpx/hjtpx/docs"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// @title HJTPX API
+// @version 1.0
+// @description HJTPX 是一个强大的验证码系统，提供多种验证码类型和验证机制
+// @description
+// @description ## 功能特性
+// @description - 滑动验证码
+// @description - 点击验证码（支持字母、数字、中文、图标模式）
+// @description - 连连看验证码
+// @description - 语音验证码
+// @description - 3D 验证码
+// @description - 用户认证系统
+// @description - MFA 多因素认证
+// @description - 行为分析与风险评估
+// @description - 管理后台接口
+// @termsOfService https://example.com/terms
+// @contact.name API Support
+// @contact.email support@example.com
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+// @host localhost:8080
+// @BasePath /
+// @schemes http https
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+// @securityDefinitions.bearer Bearer
+// @in header
+// @name Authorization
+// @description 请输入您的 Bearer Token，格式为：Bearer {token}
 
 func main() {
 	cfg := config.LoadConfig()

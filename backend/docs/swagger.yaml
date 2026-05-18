@@ -1,0 +1,1254 @@
+basePath: /
+definitions:
+  github_com_hjtpx_hjtpx_internal_service.QuotaConfig:
+    properties:
+      hardLimit:
+        description: 是否硬限制
+        type: boolean
+      limit:
+        description: 配额限制
+        format: int64
+        type: integer
+      type:
+        allOf:
+        - $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.QuotaType'
+        description: 配额类型
+      warningThreshold:
+        description: 警告阈值（百分比）
+        format: float64
+        type: number
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.QuotaType:
+    enum:
+    - daily
+    - weekly
+    - monthly
+    - hourly
+    - per_minute
+    type: string
+    x-enum-varnames:
+    - QuotaTypeDaily
+    - QuotaTypeWeekly
+    - QuotaTypeMonthly
+    - QuotaTypeHourly
+    - QuotaTypePerMinute
+  github_com_hjtpx_hjtpx_internal_service.TokenBucketConfig:
+    properties:
+      burstSize:
+        description: 突发流量大小
+        format: float64
+        type: number
+      capacity:
+        description: 桶的最大容量
+        format: float64
+        type: number
+      initialTokens:
+        description: 初始令牌数
+        format: float64
+        type: number
+      rate:
+        description: 每秒填充的令牌数
+        format: float64
+        type: number
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory:
+    properties:
+      application:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application'
+      application_id:
+        type: integer
+      changed_at:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      id:
+        type: integer
+      new_api_key:
+        type: string
+      old_api_key:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.Application:
+    properties:
+      api_key:
+        type: string
+      api_key_histories:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory'
+        type: array
+      config:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      description:
+        type: string
+      domain:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
+      user_id:
+        type: integer
+      verifications:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification'
+        type: array
+      website:
+        type: string
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.BehaviorData:
+    properties:
+      createdAt:
+        type: string
+      data:
+        type: string
+      data_type:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      id:
+        type: integer
+      timestamp:
+        type: string
+      updatedAt:
+        type: string
+      verification:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification'
+      verification_id:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.DataDeletionRequest:
+    properties:
+      audit_log:
+        description: 审计日志
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      id:
+        type: integer
+      processed_at:
+        description: 处理时间
+        type: string
+      processed_by:
+        description: 处理人ID
+        type: integer
+      reason:
+        description: 删除原因
+        type: string
+      requested_at:
+        description: 请求时间
+        type: string
+      status:
+        description: pending, processing, completed, rejected
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
+      user_id:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.DataExportRequest:
+    properties:
+      completed_at:
+        description: 完成时间
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      error:
+        description: 错误信息
+        type: string
+      export_format:
+        description: json, csv
+        type: string
+      file_path:
+        description: 导出文件路径
+        type: string
+      id:
+        type: integer
+      requested_at:
+        description: 请求时间
+        type: string
+      status:
+        description: pending, processing, completed, failed
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
+      user_id:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.User:
+    properties:
+      applications:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application'
+        type: array
+      avatar:
+        type: string
+      bio:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      email:
+        type: string
+      id:
+        type: integer
+      is_verified:
+        type: boolean
+      last_login_at:
+        type: string
+      last_login_ip:
+        type: string
+      login_count:
+        type: integer
+      nickname:
+        type: string
+      password_reset_at:
+        type: string
+      phone:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        type: string
+      username:
+        type: string
+      verifications:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification'
+        type: array
+      verified_at:
+        type: string
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.UserConsent:
+    properties:
+      consent_analytics:
+        description: 分析数据收集同意
+        type: boolean
+      consent_data_sharing:
+        description: 数据共享同意
+        type: boolean
+      consent_ip:
+        description: 同意时的IP地址
+        type: string
+      consent_marketing:
+        description: 营销信息同意
+        type: boolean
+      consent_personalization:
+        description: 个性化同意
+        type: boolean
+      consent_updated_at:
+        description: 同意更新时间
+        type: string
+      consent_user_agent:
+        description: 同意时的User Agent
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      id:
+        type: integer
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
+      user_id:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_pkg_models.Verification:
+    properties:
+      application:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application'
+      application_id:
+        type: integer
+      behavior_data:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.BehaviorData'
+        type: array
+      captcha_type:
+        type: string
+      created_at:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      duration:
+        type: integer
+      id:
+        type: integer
+      ip_address:
+        type: string
+      risk_score:
+        type: number
+      session_id:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.User'
+      user_agent:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_pkg_response.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  gorm.DeletedAt:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
+    type: object
+  internal_api_handler.AdminInfo:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      is_super_admin:
+        type: boolean
+      last_login_at:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_api_handler.BehaviorDataPoint:
+    properties:
+      event:
+        type: string
+      timestamp:
+        type: integer
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  internal_api_handler.CheckTokenBucketRequest:
+    properties:
+      config:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.TokenBucketConfig'
+      key:
+        type: string
+    required:
+    - key
+    type: object
+  internal_api_handler.CheckTokenBucketResponse:
+    properties:
+      allowed:
+        type: boolean
+      capacity:
+        type: number
+      is_burst:
+        type: boolean
+      retry_after_seconds:
+        type: number
+      tokens:
+        type: number
+      wait_time_seconds:
+        type: number
+    type: object
+  internal_api_handler.CombinedCheckRequest:
+    properties:
+      app_id:
+        type: integer
+      ip:
+        type: string
+      quota_key:
+        type: string
+      token_bucket_config:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.TokenBucketConfig'
+      token_bucket_key:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  internal_api_handler.CombinedCheckResponse:
+    properties:
+      allowed:
+        type: boolean
+      quota_result:
+        $ref: '#/definitions/internal_api_handler.ConsumeQuotaResponse'
+      reason:
+        type: string
+      token_bucket_result:
+        $ref: '#/definitions/internal_api_handler.CheckTokenBucketResponse'
+    type: object
+  internal_api_handler.ConsumeQuotaRequest:
+    properties:
+      amount:
+        type: integer
+      key:
+        type: string
+    required:
+    - key
+    type: object
+  internal_api_handler.ConsumeQuotaResponse:
+    properties:
+      allowed:
+        type: boolean
+      status:
+        $ref: '#/definitions/internal_api_handler.GetQuotaStatusResponse'
+    type: object
+  internal_api_handler.CreateQuotaRequest:
+    properties:
+      config:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.QuotaConfig'
+      key:
+        type: string
+    required:
+    - config
+    - key
+    type: object
+  internal_api_handler.DataDeletionRequest:
+    properties:
+      reason:
+        type: string
+    type: object
+  internal_api_handler.DataExportRequest:
+    properties:
+      format:
+        description: 必须是json或csv
+        enum:
+        - json
+        - csv
+        type: string
+    required:
+    - format
+    type: object
+  internal_api_handler.DeleteQuotaRequest:
+    properties:
+      key:
+        type: string
+    required:
+    - key
+    type: object
+  internal_api_handler.GetBucketStatsResponse:
+    properties:
+      burst_size:
+        type: number
+      capacity:
+        type: number
+      key:
+        type: string
+      last_refill:
+        type: string
+      rate:
+        type: number
+      tokens:
+        type: number
+    type: object
+  internal_api_handler.GetQuotaStatusResponse:
+    properties:
+      limit:
+        type: integer
+      percentage:
+        type: number
+      remaining:
+        type: integer
+      reset_at:
+        type: string
+      type:
+        type: string
+      used:
+        type: integer
+    type: object
+  internal_api_handler.ListQuotasResponse:
+    properties:
+      quotas:
+        items:
+          $ref: '#/definitions/internal_api_handler.QuotaInfo'
+        type: array
+    type: object
+  internal_api_handler.LoginRequest:
+    properties:
+      password:
+        description: 密码
+        type: string
+      username:
+        description: 用户名
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  internal_api_handler.LoginResponse:
+    properties:
+      expires_in:
+        description: 过期时间(秒)
+        type: integer
+      refresh_token:
+        description: 刷新令牌
+        type: string
+      token:
+        description: 访问令牌
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/internal_api_handler.AdminInfo'
+        description: 用户信息
+    type: object
+  internal_api_handler.QuotaInfo:
+    properties:
+      key:
+        type: string
+      limit:
+        type: integer
+      percentage:
+        type: number
+      remaining:
+        type: integer
+      reset_at:
+        type: string
+      type:
+        type: string
+      used:
+        type: integer
+    type: object
+  internal_api_handler.ResetQuotaRequest:
+    properties:
+      key:
+        type: string
+    required:
+    - key
+    type: object
+  internal_api_handler.ResetTokenBucketRequest:
+    properties:
+      key:
+        type: string
+    required:
+    - key
+    type: object
+  internal_api_handler.SliderCaptchaRequest:
+    properties:
+      height:
+        description: 验证码图片高度
+        type: integer
+      slider_height:
+        description: 滑动块高度
+        type: integer
+      slider_width:
+        description: 滑动块宽度
+        type: integer
+      width:
+        description: 验证码图片宽度
+        type: integer
+    type: object
+  internal_api_handler.SliderVerifyRequest:
+    properties:
+      env_score:
+        description: 环境评分
+        type: number
+      position_x:
+        description: X 坐标
+        type: integer
+      position_y:
+        description: Y 坐标
+        type: integer
+      risk_score:
+        description: 风险评分
+        type: number
+      session_id:
+        description: 会话 ID
+        type: string
+      trace_score:
+        description: 轨迹评分
+        type: number
+    required:
+    - position_x
+    - position_y
+    - session_id
+    type: object
+  internal_api_handler.UpdateConsentRequest:
+    properties:
+      consent_analytics:
+        type: boolean
+      consent_data_sharing:
+        type: boolean
+      consent_marketing:
+        type: boolean
+      consent_personalization:
+        type: boolean
+    type: object
+  internal_api_handler.VerifyRequest:
+    description: 验证验证码时发送的请求结构，支持滑动验证码和点击验证码
+    properties:
+      application_id:
+        description: 应用 ID
+        type: integer
+      behavior_data:
+        description: 行为分析数据
+        items:
+          $ref: '#/definitions/internal_api_handler.BehaviorDataPoint'
+        type: array
+      click_sequence:
+        description: 点击顺序
+        items:
+          type: integer
+        type: array
+      points:
+        description: 点击验证码坐标数组
+        items:
+          items:
+            type: integer
+          type: array
+        type: array
+      session_id:
+        description: 会话 ID
+        type: string
+      type:
+        description: '验证码类型: slider 或 click'
+        type: string
+      x:
+        description: 滑动验证码 X 坐标
+        type: integer
+      "y":
+        description: 滑动验证码 Y 坐标
+        type: integer
+    required:
+    - session_id
+    - type
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+  description: 请输入您的 Bearer Token，格式为：Bearer {token}
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://example.com/terms
+  title: HJTPX API
+  version: "1.0"
+paths:
+  /api/v1/advanced-rate-limit/combined-check:
+    post:
+      consumes:
+      - application/json
+      description: 同时检查令牌桶和配额
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.CombinedCheckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handler.CombinedCheckResponse'
+      summary: 综合限流检查
+      tags:
+      - 高级限流
+  /api/v1/advanced-rate-limit/quota/consume:
+    post:
+      consumes:
+      - application/json
+      description: 消费指定键的配额
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.ConsumeQuotaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handler.ConsumeQuotaResponse'
+      summary: 消费配额
+      tags:
+      - 高级限流-配额
+  /api/v1/advanced-rate-limit/quota/create:
+    post:
+      consumes:
+      - application/json
+      description: 创建新的配额
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.CreateQuotaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 创建配额
+      tags:
+      - 高级限流-配额
+  /api/v1/advanced-rate-limit/quota/delete:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定键的配额
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.DeleteQuotaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 删除配额
+      tags:
+      - 高级限流-配额
+  /api/v1/advanced-rate-limit/quota/list:
+    get:
+      consumes:
+      - application/json
+      description: 列出所有配额
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handler.ListQuotasResponse'
+      summary: 列出所有配额
+      tags:
+      - 高级限流-配额
+  /api/v1/advanced-rate-limit/quota/reset:
+    post:
+      consumes:
+      - application/json
+      description: 重置指定键的配额
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.ResetQuotaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 重置配额
+      tags:
+      - 高级限流-配额
+  /api/v1/advanced-rate-limit/quota/status:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定键的配额状态
+      parameters:
+      - description: 配额键
+        in: query
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handler.GetQuotaStatusResponse'
+      summary: 获取配额状态
+      tags:
+      - 高级限流-配额
+  /api/v1/advanced-rate-limit/token-bucket/check:
+    post:
+      consumes:
+      - application/json
+      description: 检查指定键的令牌桶限流状态
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.CheckTokenBucketRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handler.CheckTokenBucketResponse'
+      summary: 检查令牌桶限流
+      tags:
+      - 高级限流
+  /api/v1/advanced-rate-limit/token-bucket/reset:
+    post:
+      consumes:
+      - application/json
+      description: 重置指定键的令牌桶
+      parameters:
+      - description: 请求参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.ResetTokenBucketRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: 重置令牌桶
+      tags:
+      - 高级限流
+  /api/v1/advanced-rate-limit/token-bucket/stats:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定键的令牌桶统计信息
+      parameters:
+      - description: 令牌桶键
+        in: query
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_api_handler.GetBucketStatsResponse'
+      summary: 获取令牌桶统计
+      tags:
+      - 高级限流
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 使用用户名和密码进行管理员登录，返回访问令牌
+      parameters:
+      - description: 登录请求参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            $ref: '#/definitions/internal_api_handler.LoginResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 认证失败
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: 账户被禁用
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 管理员登录
+      tags:
+      - 认证
+  /api/v1/captcha/check/{session_id}:
+    get:
+      consumes:
+      - application/json
+      description: 检查验证码会话是否仍然有效
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 检查结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 检查验证码是否有效
+      tags:
+      - 验证码
+  /api/v1/captcha/click:
+    get:
+      consumes:
+      - application/json
+      description: 生成并返回一个点击式验证码，支持多种模式（数字、字母、中文、图标、混合等)
+      parameters:
+      - description: 验证码模式
+        enum:
+        - number
+        - letter
+        - chinese
+        - mixed
+        - icon
+        in: query
+        name: mode
+        type: string
+      - description: 是否允许打乱顺序
+        in: query
+        name: shuffle
+        type: string
+      - description: 点击点数
+        in: query
+        name: points
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回验证码数据
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取点击验证码
+      tags:
+      - 验证码
+  /api/v1/captcha/create:
+    post:
+      consumes:
+      - application/json
+      description: 生成一个新的滑动验证码
+      parameters:
+      - description: 验证码参数
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/internal_api_handler.SliderCaptchaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回验证码数据
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 生成失败
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建滑动验证码
+      tags:
+      - 验证码
+  /api/v1/captcha/slider:
+    get:
+      consumes:
+      - application/json
+      description: 生成并返回一个新的滑动验证码，包含验证码图片和滑动块图片
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功返回验证码数据
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取滑动验证码
+      tags:
+      - 验证码
+  /api/v1/captcha/status/{session_id}:
+    get:
+      consumes:
+      - application/json
+      description: 通过 session_id 获取验证码会话的当前状态
+      parameters:
+      - description: 会话 ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 会话状态
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 会话不存在
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取验证码会话状态
+      tags:
+      - 验证码
+  /api/v1/captcha/verify:
+    post:
+      consumes:
+      - application/json
+      description: 验证用户对验证码的操作（滑动或点击）是否正确，并进行行为分析
+      parameters:
+      - description: 验证请求参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.VerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数无效
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 会话不存在或已过期
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 验证用户输入
+      tags:
+      - 验证码
+  /api/v1/captcha/verify-v2:
+    post:
+      consumes:
+      - application/json
+      description: 验证用户对滑动验证码的操作
+      parameters:
+      - description: 验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.SliderVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 验证失败
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 验证滑动验证码
+      tags:
+      - 验证码
+  /api/v1/gdpr/consent:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户的GDPR同意设置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.UserConsent'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 获取用户同意设置
+      tags:
+      - GDPR
+    put:
+      consumes:
+      - application/json
+      description: 更新当前用户的GDPR同意设置
+      parameters:
+      - description: 同意设置
+        in: body
+        name: consent
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.UpdateConsentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.UserConsent'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 更新用户同意设置
+      tags:
+      - GDPR
+  /api/v1/gdpr/data-deletion:
+    post:
+      consumes:
+      - application/json
+      description: 请求删除当前用户的数据
+      parameters:
+      - description: 删除请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.DataDeletionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.DataDeletionRequest'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 请求数据删除
+      tags:
+      - GDPR
+  /api/v1/gdpr/data-export:
+    post:
+      consumes:
+      - application/json
+      description: 请求导出当前用户的数据
+      parameters:
+      - description: 导出请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.DataExportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_models.DataExportRequest'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response'
+      security:
+      - ApiKeyAuth: []
+      summary: 请求数据导出
+      tags:
+      - GDPR
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

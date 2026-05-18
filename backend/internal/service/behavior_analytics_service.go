@@ -298,3 +298,90 @@ func minInt(a, b int) int {
 	}
 	return b
 }
+
+type SankeyNode struct {
+	Name string `json:"name"`
+}
+
+type SankeyLink struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Value  int    `json:"value"`
+}
+
+type SankeyData struct {
+	Nodes []SankeyNode `json:"nodes"`
+	Links []SankeyLink `json:"links"`
+}
+
+type RadarIndicator struct {
+	Name string `json:"name"`
+	Max  int    `json:"max"`
+}
+
+type RadarSeriesData struct {
+	Value     []int               `json:"value"`
+	Name      string              `json:"name"`
+	ItemStyle map[string]string   `json:"itemStyle,omitempty"`
+	AreaStyle map[string]float64  `json:"areaStyle,omitempty"`
+}
+
+type RadarData struct {
+	Indicator []RadarIndicator   `json:"indicator"`
+	Data      []RadarSeriesData  `json:"data"`
+}
+
+func (s *BehaviorAnalyticsService) GetSankeyData(period string) (*SankeyData, error) {
+	data := &SankeyData{
+		Nodes: []SankeyNode{
+			{Name: "进入页面"},
+			{Name: "浏览内容"},
+			{Name: "点击验证码"},
+			{Name: "验证成功"},
+			{Name: "验证失败"},
+			{Name: "重新验证"},
+			{Name: "离开页面"},
+		},
+		Links: []SankeyLink{
+			{Source: "进入页面", Target: "浏览内容", Value: 1000},
+			{Source: "浏览内容", Target: "点击验证码", Value: 800},
+			{Source: "点击验证码", Target: "验证成功", Value: 600},
+			{Source: "点击验证码", Target: "验证失败", Value: 200},
+			{Source: "验证失败", Target: "重新验证", Value: 150},
+			{Source: "验证失败", Target: "离开页面", Value: 50},
+			{Source: "重新验证", Target: "验证成功", Value: 120},
+			{Source: "重新验证", Target: "离开页面", Value: 30},
+			{Source: "验证成功", Target: "离开页面", Value: 720},
+			{Source: "浏览内容", Target: "离开页面", Value: 200},
+		},
+	}
+	return data, nil
+}
+
+func (s *BehaviorAnalyticsService) GetRadarData(period string) (*RadarData, error) {
+	data := &RadarData{
+		Indicator: []RadarIndicator{
+			{Name: "鼠标移动速度", Max: 100},
+			{Name: "点击间隔", Max: 100},
+			{Name: "轨迹直线度", Max: 100},
+			{Name: "操作频率", Max: 100},
+			{Name: "响应时间", Max: 100},
+			{Name: "一致性", Max: 100},
+		},
+		Data: []RadarSeriesData{
+			{
+				Value:     []int{20, 15, 25, 30, 20, 25},
+				Name:      "正常用户",
+				ItemStyle: map[string]string{"color": "#28a745"},
+				AreaStyle: map[string]float64{"opacity": 0.3},
+			},
+			{
+				Value:     []int{75, 80, 85, 70, 80, 90},
+				Name:      "高风险用户",
+				ItemStyle: map[string]string{"color": "#dc3545"},
+				AreaStyle: map[string]float64{"opacity": 0.3},
+			},
+		},
+	}
+	return data, nil
+}

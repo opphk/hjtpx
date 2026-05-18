@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <style>
         .heatmap-canvas {
             background: linear-gradient(to bottom, #f0f0f0, #e0e0e0);
@@ -23,6 +24,10 @@
         .sidebar-bg { background-color: #1a1a2e; }
         .card-hover:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.3s ease; }
         .nav-link.active { background-color: #c23a2b !important; }
+        .echarts-container {
+            width: 100%;
+            height: 400px;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -233,6 +238,47 @@
                             </div>
                             <div class="card-body">
                                 <canvas id="speedChart" height="300"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 高级分析图表 -->
+                <div class="row g-4 mt-4">
+                    <!-- 桑基图 - 用户行为流向 -->
+                    <div class="col-md-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-project-diagram me-2" style="color:#b8924e;"></i>用户行为流向</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="sankeyChart" class="echarts-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row g-4 mt-4">
+                    <!-- ECharts 热力图 -->
+                    <div class="col-md-6">
+                        <div class="card shadow-sm">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-fire me-2" style="color:#c23a2b;"></i>点击热力图</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="heatmapEcharts" class="echarts-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 雷达图 - 用户风险多维度分析 -->
+                    <div class="col-md-6">
+                        <div class="card shadow-sm">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-radar me-2" style="color:#c23a2b;"></i>用户风险多维度分析</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="radarChart" class="echarts-container"></div>
                             </div>
                         </div>
                     </div>

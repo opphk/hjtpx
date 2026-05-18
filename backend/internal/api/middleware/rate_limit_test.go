@@ -325,3 +325,187 @@ func TestRateLimitResponseFormat(t *testing.T) {
 		}
 	}
 }
+
+// ==================== Token Bucket Rate Limit Middleware Tests ====================
+
+func TestTokenBucketRateLimitMiddleware_DefaultOptions(t *testing.T) {
+	r := setupTestRouter()
+	r.Use(TokenBucketRateLimitMiddleware(nil))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestTokenBucketRateLimitMiddleware_CustomOptions(t *testing.T) {
+	r := setupTestRouter()
+	options := &TokenBucketOptions{
+		Rate:          100,
+		Capacity:      1000,
+		BurstSize:     500,
+		InitialTokens: 1000,
+	}
+	r.Use(TokenBucketRateLimitMiddleware(options))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.2:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, w.Header().Get("X-TokenBucket-Limit"))
+}
+
+func TestTokenBucketRateLimitMiddleware_WithXForwardedFor(t *testing.T) {
+	r := setupTestRouter()
+	r.Use(TokenBucketRateLimitMiddleware(nil))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-Forwarded-For", "10.0.0.1, 192.168.1.1")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestGetTokenBucketRateLimitService(t *testing.T) {
+	service := GetTokenBucketRateLimitService()
+	assert.NotNil(t, service)
+}
+
+// ==================== Quota Middleware Tests ====================
+
+func TestQuotaMiddleware_DefaultOptions(t *testing.T) {
+	r := setupTestRouter()
+	r.Use(QuotaMiddleware(nil))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestQuotaMiddleware_CustomOptions(t *testing.T) {
+	r := setupTestRouter()
+	options := &QuotaOptions{
+		Type:      QuotaTypeDaily,
+		Limit:     10000,
+		HardLimit: true,
+	}
+	r.Use(QuotaMiddleware(options))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.2:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, w.Header().Get("X-Quota-Limit"))
+}
+
+func TestQuotaMiddleware_WithUserID(t *testing.T) {
+	r := setupTestRouter()
+	options := &QuotaOptions{
+		Type:      QuotaTypeDaily,
+		Limit:     5000,
+		HardLimit: true,
+	}
+	r.Use(QuotaMiddleware(options))
+	r.GET("/test", func(c *gin.Context) {
+		c.Set("user_id", uint(123))
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestQuotaMiddleware_WithAppID(t *testing.T) {
+	r := setupTestRouter()
+	options := &QuotaOptions{
+		Type:      QuotaTypeHourly,
+		Limit:     1000,
+		HardLimit: true,
+	}
+	r.Use(QuotaMiddleware(options))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-App-ID", "12345")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestGetQuotaManagementService(t *testing.T) {
+	service := GetQuotaManagementService()
+	assert.NotNil(t, service)
+}
+
+// ==================== Advanced Combined Middleware Tests ====================
+
+func TestAdvancedCombinedMiddleware(t *testing.T) {
+	r := setupTestRouter()
+	tbOptions := &TokenBucketOptions{
+		Rate:          10,
+		Capacity:      100,
+		BurstSize:     50,
+		InitialTokens: 100,
+	}
+	quotaOptions := &QuotaOptions{
+		Type:      QuotaTypeDaily,
+		Limit:     10000,
+		HardLimit: true,
+	}
+	r.Use(AdvancedCombinedMiddleware(tbOptions, quotaOptions))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAdvancedCombinedMiddleware_NilOptions(t *testing.T) {
+	r := setupTestRouter()
+	r.Use(AdvancedCombinedMiddleware(nil, nil))
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "success"})
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}

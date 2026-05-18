@@ -109,12 +109,26 @@ func GetBehaviorAnalytics(c *gin.Context) {
 		return
 	}
 
+	sankeyData, err := handler.behaviorService.GetSankeyData(period)
+	if err != nil {
+		response.InternalServerError(c, "获取桑基图数据失败")
+		return
+	}
+
+	radarData, err := handler.behaviorService.GetRadarData(period)
+	if err != nil {
+		response.InternalServerError(c, "获取雷达图数据失败")
+		return
+	}
+
 	response.Success(c, gin.H{
 		"summary":         summary,
 		"heatmap":         heatmapData,
 		"trajectories":    trajectories,
 		"anomalies":       anomalies,
 		"riskDistribution": riskDistribution,
+		"sankeyData":      sankeyData,
+		"radarData":       radarData,
 	})
 }
 
