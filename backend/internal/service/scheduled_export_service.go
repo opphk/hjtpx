@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/database"
@@ -106,12 +107,16 @@ func (s *ScheduledExportService) loadScheduledTasks() {
 
 func (s *ScheduledExportService) scheduleTask(task *models.ScheduledExport) {
 	_, err := s.cronScheduler.AddFunc(task.CronExpression, func() {
-		_ = s.executeTask(task)
+		if err := s.executeTask(task); err != nil {
+			log.Printf("定时导出任务执行失败: %v", err)
+		}
 	})
 
 	if err == nil {
 		s.calculateNextRun(task)
-		_ = database.DB.Save(task).Error
+		if err := database.DB.Save(task).Error; err != nil {
+			log.Printf("保存定时任务失败: %v", err)
+		}
 	}
 }
 
@@ -124,25 +129,33 @@ func (s *ScheduledExportService) executeTask(task *models.ScheduledExport) error
 	now := time.Now()
 	task.LastRunAt = &now
 	task.LastStatus = "running"
-	_ = database.DB.Save(task).Error
+	if err := database.DB.Save(task).Error; err != nil {
+		log.Printf("保存任务状态失败: %v", err)
+	}
 
 	// 执行导出
 	history, err := s.performExport(task)
 	if err != nil {
 		task.LastStatus = "failed"
 		task.LastErrorMessage = err.Error()
-		_ = database.DB.Save(task).Error
+		if saveErr := database.DB.Save(task).Error; saveErr != nil {
+			log.Printf("保存任务失败状态失败: %v", saveErr)
+		}
 		return err
 	}
 
 	task.LastStatus = "success"
 	task.LastErrorMessage = ""
 	s.calculateNextRun(task)
-	_ = database.DB.Save(task).Error
+	if err := database.DB.Save(task).Error; err != nil {
+		log.Printf("保存任务成功状态失败: %v", err)
+	}
 
 	// 记录导出历史
 	if history != nil {
-		_ = database.DB.Create(history).Error
+		if err := database.DB.Create(history).Error; err != nil {
+			log.Printf("创建导出历史记录失败: %v", err)
+		}
 	}
 
 	return nil

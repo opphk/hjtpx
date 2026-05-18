@@ -115,12 +115,44 @@ func (s *OWASPService) checkSSRF(r *http.Request) (bool, string) {
 		"http://127.0.0.1", "http://localhost", "http://0.0.0.0",
 		"http://[::]", "file://", "gopher://", "ftp://",
 	}
+	
+	ssrfRegex := regexp.MustCompile(`(?i)(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.)`)
+	
 	for _, pattern := range ssrfPatterns {
 		if strings.Contains(query, pattern) {
 			return false, "Potential SSRF attempt"
 		}
 	}
+	
+	if ssrfRegex.MatchString(query) {
+		return false, "Potential SSRF attempt: internal network access"
+	}
+	
 	return true, ""
+}
+
+func (s *OWASPService) CheckBrokenAccessControl(r *http.Request) (bool, string) {
+	return s.checkBrokenAccessControl(r)
+}
+
+func (s *OWASPService) CheckCryptographicFailures(r *http.Request) (bool, string) {
+	return s.checkCryptographicFailures(r)
+}
+
+func (s *OWASPService) CheckInjection(r *http.Request) (bool, string) {
+	return s.checkInjection(r)
+}
+
+func (s *OWASPService) CheckSecurityMisconfiguration(r *http.Request) (bool, string) {
+	return s.checkSecurityMisconfiguration(r)
+}
+
+func (s *OWASPService) CheckAuthFailures(r *http.Request) (bool, string) {
+	return s.checkAuthFailures(r)
+}
+
+func (s *OWASPService) CheckSSRF(r *http.Request) (bool, string) {
+	return s.checkSSRF(r)
 }
 
 func (s *OWASPService) SanitizeInput(input string) string {

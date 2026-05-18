@@ -1,6 +1,8 @@
 package service_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -585,6 +587,344 @@ func (d *testEnvDetector) RunAllChecks(info *EnvInfo) *EnvDetectionReport {
 		Checks:        checks,
 		Action:        d.determineAction(&AutomationResult{Detected: envScore < 80, Risks: detectedTools}, envScore),
 	}
+}
+
+func (d *testEnvDetector) CalculateCanvasSimilarity(hash1, hash2 string) float64 {
+	if hash1 == "" || hash2 == "" {
+		return 0.0
+	}
+
+	if hash1 == hash2 {
+		return 100.0
+	}
+
+	if len(hash1) != len(hash2) {
+		return 0.0
+	}
+
+	matchCount := 0
+	totalLength := len(hash1)
+	for i := 0; i < totalLength; i++ {
+		if hash1[i] == hash2[i] {
+			matchCount++
+		}
+	}
+
+	return float64(matchCount) / float64(totalLength) * 100.0
+}
+
+func (d *testEnvDetector) DetectCanvasAnomalies(info *EnvInfo) []string {
+	anomalies := []string{}
+
+	if info.CanvasFingerprint == "" {
+		return anomalies
+	}
+
+	if len(info.CanvasFingerprint) < 32 {
+		anomalies = append(anomalies, "Canvas指纹长度异常短")
+	}
+
+	if len(info.CanvasFingerprint) > 128 {
+		anomalies = append(anomalies, "Canvas指纹长度异常长")
+	}
+
+	hasHexOnly := true
+	for _, c := range info.CanvasFingerprint {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			hasHexOnly = false
+			break
+		}
+	}
+	if !hasHexOnly && len(info.CanvasFingerprint) > 0 {
+		anomalies = append(anomalies, "Canvas指纹包含非十六进制字符")
+	}
+
+	repeatCount := 0
+	maxRepeat := 0
+	var lastChar rune
+	for _, c := range info.CanvasFingerprint {
+		if c == lastChar {
+			repeatCount++
+			if repeatCount > maxRepeat {
+				maxRepeat = repeatCount
+			}
+		} else {
+			repeatCount = 0
+		}
+		lastChar = c
+	}
+	if maxRepeat > len(info.CanvasFingerprint)/2 {
+		anomalies = append(anomalies, "Canvas指纹存在异常重复模式")
+	}
+
+	return anomalies
+}
+
+func (d *testEnvDetector) AnalyzeWebGLDetails(info *EnvInfo) map[string]interface{} {
+	analysis := make(map[string]interface{})
+
+	if info.WebGLRenderer == "" {
+		analysis["status"] = "missing"
+		analysis["risk"] = "high"
+		return analysis
+	}
+
+	analysis["status"] = "present"
+	analysis["renderer"] = info.WebGLRenderer
+	analysis["vendor"] = info.WebGLVendor
+
+	rendererLower := toLower(info.WebGLRenderer)
+	vendorLower := toLower(info.WebGLVendor)
+
+	softwareIndicators := []string{"swiftshader", "llvmpipe", "software", "emulated", "virtual"}
+	for _, indicator := range softwareIndicators {
+		if contains(rendererLower, indicator) || contains(vendorLower, indicator) {
+			analysis["software_detected"] = true
+			analysis["risk"] = "medium"
+			analysis["reason"] = fmt.Sprintf("检测到软件渲染器: %s", indicator)
+			return analysis
+		}
+	}
+
+	anonymizedIndicators := []string{"generic", "unknown", "default", "standard"}
+	matchCount := 0
+	for _, indicator := range anonymizedIndicators {
+		if contains(rendererLower, indicator) || contains(vendorLower, indicator) {
+			matchCount++
+		}
+	}
+	if matchCount >= 2 {
+		analysis["anonymized"] = true
+		analysis["risk"] = "medium"
+		analysis["reason"] = "WebGL信息可能被故意匿名化"
+		return analysis
+	}
+
+	unusualPatterns := []string{"headless", "bot", "automation", "test"}
+	for _, pattern := range unusualPatterns {
+		if contains(rendererLower, pattern) || contains(vendorLower, pattern) {
+			analysis["unusual_pattern"] = true
+			analysis["risk"] = "high"
+			analysis["reason"] = fmt.Sprintf("WebGL信息包含异常标识: %s", pattern)
+			return analysis
+		}
+	}
+
+	analysis["risk"] = "low"
+	return analysis
+}
+
+func (d *testEnvDetector) DetectEmulatorIndicators(info *EnvInfo) (bool, []string) {
+	indicators := []string{}
+
+	uaLower := toLower(info.UserAgent)
+
+	emulatorPatterns := []string{
+		"android sdk",
+		"sdk_phone",
+		"genymotion",
+		"bluestacks",
+		"nox",
+		"memu",
+		"ldplayer",
+		"koplayer",
+		"droid4x",
+		"left",
+		"mumu",
+		"xyson",
+		"youwave",
+		"andy",
+		"remix os",
+		"phoenix",
+		"tencent",
+		"smartgaga",
+	}
+
+	for _, pattern := range emulatorPatterns {
+		if contains(uaLower, toLower(pattern)) {
+			indicators = append(indicators, fmt.Sprintf("检测到模拟器标识: %s", pattern))
+		}
+	}
+
+	if contains(uaLower, "android") && contains(uaLower, "build/") {
+		buildIndex := strings.Index(uaLower, "build/")
+		if buildIndex > 0 {
+			buildPart := uaLower[buildIndex:]
+			if contains(buildPart, "emulator") || contains(buildPart, "test") || contains(buildPart, "vbox") || contains(buildPart, "x86") {
+				indicators = append(indicators, "Android Build标签包含模拟器特征")
+			}
+		}
+	}
+
+	if contains(uaLower, "android") {
+		if info.MaxTouchPoints == 0 || info.MaxTouchPoints > 10 {
+			indicators = append(indicators, "Android设备触摸点数异常")
+		}
+
+		if info.HardwareConcurrency > 16 {
+			indicators = append(indicators, fmt.Sprintf("Android设备CPU核心数异常: %d", info.HardwareConcurrency))
+		}
+
+		if contains(uaLower, "x86") || contains(uaLower, "x64") {
+			if !contains(uaLower, "chrome") {
+				indicators = append(indicators, "非Chrome浏览器的x86/x64架构")
+			}
+		}
+	}
+
+	browserPatterns := []string{
+		"chromium",
+		"phantomjs",
+		"slimerjs",
+		"webkit2png",
+	}
+
+	for _, pattern := range browserPatterns {
+		if contains(uaLower, pattern) && !contains(uaLower, "chrome") && !contains(uaLower, "safari") {
+			indicators = append(indicators, fmt.Sprintf("异常浏览器引擎: %s", pattern))
+		}
+	}
+
+	return len(indicators) > 0, indicators
+}
+
+func (d *testEnvDetector) CalculateProxyRiskScore(ip string, headers map[string]string) float64 {
+	score := 0.0
+
+	xff := headers["X-Forwarded-For"]
+	xri := headers["X-Real-IP"]
+	via := headers["Via"]
+
+	if xff != "" {
+		score += 25.0
+		parts := strings.Split(xff, ",")
+		if len(parts) > 2 {
+			score += 15.0
+		}
+	}
+
+	if xri != "" && xri != ip {
+		score += 15.0
+	}
+
+	if via != "" {
+		viaLower := toLower(via)
+		proxyKeywords := []string{"proxy", "squid", "nginx", "apache", "varnish", "traefik", "haproxy"}
+		for _, keyword := range proxyKeywords {
+			if contains(viaLower, keyword) {
+				score += 20.0
+				break
+			}
+		}
+	}
+
+	proxyChain := headers["X-ProxyChain"]
+	if proxyChain != "" {
+		score += 30.0
+	}
+
+	cdnHeaders := headers["X-CDN-Original-IP"]
+	if cdnHeaders != "" {
+		score += 20.0
+	}
+
+	if score > 100.0 {
+		score = 100.0
+	}
+
+	return score
+}
+
+func (d *testEnvDetector) DetectVPNPatterns(info *EnvInfo, headers map[string]string) (bool, float64, []string) {
+	isVPN := false
+	confidence := 0.0
+	evidence := []string{}
+
+	vpnHeaderIndicators := []string{
+		"X-VPN-Connection",
+		"X-VPN-Type",
+		"X-ProxyVPN",
+		"X-Anonymizer",
+	}
+
+	for _, header := range vpnHeaderIndicators {
+		if _, exists := headers[header]; exists {
+			isVPN = true
+			if confidence < 0.95 {
+				confidence = 0.95
+			}
+			evidence = append(evidence, fmt.Sprintf("检测到VPN头部标识: %s", header))
+		}
+	}
+
+	if info.WebGLVendor != "" {
+		vendorLower := toLower(info.WebGLVendor)
+		vpnKeywords := []string{"virtual", "vpn", "virtualbox", "vmware"}
+		for _, keyword := range vpnKeywords {
+			if contains(vendorLower, keyword) {
+				isVPN = true
+				if confidence < 0.70 {
+					confidence = 0.70
+				}
+				evidence = append(evidence, fmt.Sprintf("WebGL厂商包含VPN标识: %s", keyword))
+			}
+		}
+	}
+
+	if info.WebGLRenderer != "" {
+		rendererLower := toLower(info.WebGLRenderer)
+		vmPatterns := []string{"vmware", "virtualbox", "virtual", "parallels"}
+		for _, pattern := range vmPatterns {
+			if contains(rendererLower, pattern) {
+				isVPN = true
+				if confidence < 0.75 {
+					confidence = 0.75
+				}
+				evidence = append(evidence, fmt.Sprintf("WebGL渲染器检测到虚拟机: %s", pattern))
+			}
+		}
+	}
+
+	return isVPN, confidence, evidence
+}
+
+func (d *testEnvDetector) EnhancedEnvCheck(info *EnvInfo) *EnvDetectionReport {
+	report := d.RunAllChecks(info)
+
+	canvasAnomalies := d.DetectCanvasAnomalies(info)
+	if len(canvasAnomalies) > 0 {
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "canvas_anomaly",
+			Risk:     "medium",
+			Detected: true,
+			Score:    20,
+			Reason:   strings.Join(canvasAnomalies, "; "),
+		})
+	}
+
+	webglAnalysis := d.AnalyzeWebGLDetails(info)
+	if risk, ok := webglAnalysis["risk"].(string); ok && risk != "low" {
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "webgl_anomaly",
+			Risk:     risk,
+			Detected: true,
+			Score:    15,
+			Reason:   webglAnalysis["reason"].(string),
+		})
+	}
+
+	emulatorDetected, emulatorIndicators := d.DetectEmulatorIndicators(info)
+	if emulatorDetected {
+		report.Checks = append(report.Checks, RiskCheckResult{
+			Name:     "emulator_detected",
+			Risk:     "medium",
+			Detected: true,
+			Score:    30,
+			Reason:   strings.Join(emulatorIndicators, "; "),
+		})
+	}
+
+	return report
 }
 
 type AutomationResult struct {

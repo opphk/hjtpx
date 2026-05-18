@@ -202,9 +202,6 @@ func (s *StatsService) GetHourlyStats(date string) ([]HourlyStats, error) {
 		targetDate = time.Now()
 	}
 
-	startOfDay := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, targetDate.Location())
-	_ = startOfDay.Add(24 * time.Hour)
-
 	var results []HourlyStats
 
 	for hour := 0; hour < 24; hour++ {

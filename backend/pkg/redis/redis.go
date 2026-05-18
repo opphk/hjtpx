@@ -164,18 +164,6 @@ func (rc *RedisClient) SetPoolConfig(cfg *Config) error {
 		cfg = defaultConfig
 	}
 
-	opts := &redis.Options{
-		PoolSize:     cfg.PoolSize,
-		MinIdleConns: cfg.MinIdleConns,
-		MaxRetries:   cfg.MaxRetries,
-		DialTimeout:  cfg.DialTimeout,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		PoolTimeout:  cfg.PoolTimeout,
-	}
-
-	_ = opts
-
 	return nil
 }
 

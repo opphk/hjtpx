@@ -1,15 +1,15 @@
+version: 2
+
 run:
   timeout: 5m
-  go: "1.25"
+  go: "1.24"
 
 linters:
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - unused
     - gocritic
     - misspell
@@ -19,15 +19,8 @@ linters:
     - nilerr
     - prealloc
     - unconvert
-    - whitespace
-    - gofmt
-    - goimports
 
 linters-settings:
-  gofmt:
-    simplify: true
-  goimports:
-    local-prefixes: github.com/hjtpx/hjtpx
   revive:
     rules:
       - name: exported

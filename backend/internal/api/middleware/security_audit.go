@@ -74,8 +74,7 @@ func SecurityAuditMiddleware(config ...SecurityAuditConfig) gin.HandlerFunc {
 		c.Next()
 
 		intrusionEvents := securityAudit.DetectIntrusionAttempts(c.Request)
-		for _, event := range intrusionEvents {
-			_ = event
+		if len(intrusionEvents) > 0 {
 		}
 
 		duration := time.Since(start)

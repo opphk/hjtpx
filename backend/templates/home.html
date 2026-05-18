@@ -538,6 +538,8 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
             initNavbarScroll();
             initKeyboardNav();
             initErrorHandling();
+            initPageLoadProgress();
+            initPerformanceMonitoring();
         });
 
         function initTheme() {
@@ -661,6 +663,54 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
             const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
             toast.show();
             toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+        }
+
+        function initPageLoadProgress() {
+            const progressBar = document.createElement('div');
+            progressBar.id = 'home-page-progress';
+            progressBar.innerHTML = '<div class="home-progress-bar"></div>';
+            progressBar.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:3px;z-index:10000;background:rgba(13,110,253,0.1);';
+            const innerBar = progressBar.querySelector('.home-progress-bar');
+            innerBar.style.cssText = 'height:100%;background:linear-gradient(90deg,#0d6efd,#6610f2);width:0%;transition:width 0.3s ease;';
+            document.body.appendChild(progressBar);
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress >= 90) {
+                    clearInterval(interval);
+                    innerBar.style.width = '90%';
+                } else {
+                    innerBar.style.width = progress + '%';
+                }
+            }, 100);
+            
+            window.addEventListener('load', function() {
+                clearInterval(interval);
+                innerBar.style.width = '100%';
+                setTimeout(() => {
+                    progressBar.style.opacity = '0';
+                    setTimeout(() => progressBar.remove(), 300);
+                }, 200);
+            });
+        }
+
+        function initPerformanceMonitoring() {
+            if (!window.PerformanceObserver) return;
+            
+            try {
+                const observer = new PerformanceObserver((list) => {
+                    list.getEntries().forEach((entry) => {
+                        if (entry.entryType === 'navigation') {
+                            const loadTime = Math.round(entry.loadEventEnd - entry.startTime);
+                            console.log('首页加载时间:', loadTime + 'ms');
+                        }
+                    });
+                });
+                observer.observe({ entryTypes: ['navigation'] });
+            } catch (e) {
+                console.log('性能监控不可用');
+            }
         }
 
         function loadCaptcha(type) {

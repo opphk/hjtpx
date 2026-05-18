@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/hjtpx/hjtpx/pkg/models"
@@ -83,7 +84,9 @@ func GetExporter(format string) Exporter {
 func (e *ExcelExporter) Export(data ExportData) ([]byte, error) {
 	f := excelize.NewFile()
 	defer func() {
-		_ = f.Close()
+		if err := f.Close(); err != nil {
+			log.Printf("关闭Excel文件失败: %v", err)
+		}
 	}()
 
 	sheetName := "Sheet1"
@@ -94,12 +97,18 @@ func (e *ExcelExporter) Export(data ExportData) ([]byte, error) {
 
 	// 写入标题
 	if data.Title != "" {
-		_ = f.SetCellValue(sheetName, "A1", data.Title)
+		if err := f.SetCellValue(sheetName, "A1", data.Title); err != nil {
+			log.Printf("设置标题失败: %v", err)
+		}
 		style, _ := f.NewStyle(&excelize.Style{
 			Font: &excelize.Font{Bold: true, Size: 16},
 		})
-		_ = f.SetCellStyle(sheetName, "A1", getColumnName(len(data.Headers))+"1", style)
-		_ = f.MergeCell(sheetName, "A1", getColumnName(len(data.Headers))+"1")
+		if err := f.SetCellStyle(sheetName, "A1", getColumnName(len(data.Headers))+"1", style); err != nil {
+			log.Printf("设置标题样式失败: %v", err)
+		}
+		if err := f.MergeCell(sheetName, "A1", getColumnName(len(data.Headers))+"1"); err != nil {
+			log.Printf("合并标题单元格失败: %v", err)
+		}
 	}
 
 	// 写入表头
@@ -109,26 +118,34 @@ func (e *ExcelExporter) Export(data ExportData) ([]byte, error) {
 	}
 	for i, header := range data.Headers {
 		cell, _ := excelize.CoordinatesToCellName(i+1, headerRow)
-		_ = f.SetCellValue(sheetName, cell, header)
+		if err := f.SetCellValue(sheetName, cell, header); err != nil {
+			log.Printf("设置表头失败: %v", err)
+		}
 	}
 	headerStyle, _ := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true},
 		Fill: excelize.Fill{Type: "pattern", Color: []string{"#EFEFEF"}, Pattern: 1},
 	})
-	_ = f.SetCellStyle(sheetName, fmt.Sprintf("A%d", headerRow), fmt.Sprintf("%s%d", getColumnName(len(data.Headers)), headerRow), headerStyle)
+	if err := f.SetCellStyle(sheetName, fmt.Sprintf("A%d", headerRow), fmt.Sprintf("%s%d", getColumnName(len(data.Headers)), headerRow), headerStyle); err != nil {
+		log.Printf("设置表头样式失败: %v", err)
+	}
 
 	// 写入数据
 	for rowIdx, row := range data.Rows {
 		for colIdx, cellValue := range row {
 			cell, _ := excelize.CoordinatesToCellName(colIdx+1, headerRow+rowIdx+1)
-			_ = f.SetCellValue(sheetName, cell, cellValue)
+			if err := f.SetCellValue(sheetName, cell, cellValue); err != nil {
+				log.Printf("设置单元格值失败: %v", err)
+			}
 		}
 	}
 
 	// 自动调整列宽
 	for i := range data.Headers {
 		colName, _ := excelize.ColumnNumberToName(i + 1)
-		_ = f.SetColWidth(sheetName, colName, colName, 20)
+		if err := f.SetColWidth(sheetName, colName, colName, 20); err != nil {
+			log.Printf("设置列宽失败: %v", err)
+		}
 	}
 
 	// 写入元数据
@@ -137,8 +154,12 @@ func (e *ExcelExporter) Export(data ExportData) ([]byte, error) {
 		_, _ = f.NewSheet(metaSheet)
 		row := 1
 		for k, v := range data.Metadata {
-			_ = f.SetCellValue(metaSheet, fmt.Sprintf("A%d", row), k)
-			_ = f.SetCellValue(metaSheet, fmt.Sprintf("B%d", row), v)
+			if err := f.SetCellValue(metaSheet, fmt.Sprintf("A%d", row), k); err != nil {
+				log.Printf("设置元数据键失败: %v", err)
+			}
+			if err := f.SetCellValue(metaSheet, fmt.Sprintf("B%d", row), v); err != nil {
+				log.Printf("设置元数据值失败: %v", err)
+			}
 			row++
 		}
 	}

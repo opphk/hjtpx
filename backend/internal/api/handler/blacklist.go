@@ -23,44 +23,72 @@ func GetBlacklistHandler() *BlacklistHandler {
 	return NewBlacklistHandler()
 }
 
+// ListBlacklistQuery 黑名单列表查询参数
+// @Description 黑名单列表查询参数
 type ListBlacklistQuery struct {
-	Page      int    `form:"page,default=1"`
-	Size      int    `form:"size,default=20"`
-	Type      string `form:"type"`
-	Source    string `form:"source"`
-	Status    string `form:"status"`
-	Keyword   string `form:"keyword"`
-	StartDate string `form:"start_date"`
-	EndDate   string `form:"end_date"`
+	Page      int    `form:"page,default=1"`       // 页码
+	Size      int    `form:"size,default=20"`      // 每页数量
+	Type      string `form:"type"`                 // 类型
+	Source    string `form:"source"`               // 来源
+	Status    string `form:"status"`               // 状态
+	Keyword   string `form:"keyword"`               // 关键词
+	StartDate string `form:"start_date"`           // 开始日期
+	EndDate   string `form:"end_date"`             // 结束日期
 }
 
+// CreateBlacklistRequest 创建黑名单请求
+// @Description 创建黑名单请求参数
 type CreateBlacklistRequest struct {
-	Type           string   `json:"type" binding:"required"`
-	Target         string   `json:"target" binding:"required"`
-	Reason         string   `json:"reason"`
-	Action         string   `json:"action"`
-	ApplicationIDs []string `json:"application_ids"`
-	Expiration     string   `json:"expiration"`
-	Note           string   `json:"note"`
+	Type           string   `json:"type" binding:"required"`            // 类型
+	Target         string   `json:"target" binding:"required"`          // 目标
+	Reason         string   `json:"reason"`                             // 原因
+	Action         string   `json:"action"`                             // 操作
+	ApplicationIDs []string `json:"application_ids"`                   // 应用ID列表
+	Expiration     string   `json:"expiration"`                         // 过期时间
+	Note           string   `json:"note"`                               // 备注
 }
 
+// UpdateBlacklistRequest 更新黑名单请求
+// @Description 更新黑名单请求参数
 type UpdateBlacklistRequest struct {
-	Type           *string  `json:"type"`
-	Reason         *string  `json:"reason"`
-	Action         *string  `json:"action"`
-	ApplicationIDs []string `json:"application_ids"`
-	Expiration     *string  `json:"expiration"`
-	Note           *string  `json:"note"`
+	Type           *string  `json:"type"`            // 类型
+	Reason         *string  `json:"reason"`         // 原因
+	Action         *string  `json:"action"`         // 操作
+	ApplicationIDs []string `json:"application_ids"` // 应用ID列表
+	Expiration     *string  `json:"expiration"`     // 过期时间
+	Note           *string  `json:"note"`           // 备注
 }
 
+// ImportBlacklistRequest 导入黑名单请求
+// @Description 批量导入黑名单请求参数
 type ImportBlacklistRequest struct {
-	Type      string   `json:"type" binding:"required"`
-	Targets   []string `json:"targets" binding:"required,min=1"`
-	Reason    string   `json:"reason"`
-	Action    string   `json:"action"`
-	ExpiresAt string   `json:"expiration"`
+	Type      string   `json:"type" binding:"required"`       // 类型
+	Targets   []string `json:"targets" binding:"required,min=1"` // 目标列表
+	Reason    string   `json:"reason"`                        // 原因
+	Action    string   `json:"action"`                        // 操作
+	ExpiresAt string   `json:"expiration"`                    // 过期时间
 }
 
+// ListBlacklist 获取黑名单列表
+// @Summary 获取黑名单列表
+// @Description 分页获取黑名单记录列表
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码，默认1"
+// @Param size query int false "每页数量，默认20"
+// @Param type query string false "类型：ip, user_id, device_id, email"
+// @Param source query string false "来源"
+// @Param status query string false "状态：active, expired, deleted"
+// @Param keyword query string false "关键词搜索"
+// @Param start_date query string false "开始日期 YYYY-MM-DD"
+// @Param end_date query string false "结束日期 YYYY-MM-DD"
+// @Success 200 {object} map[string]interface{} "黑名单列表"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist [get]
 func ListBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	var query ListBlacklistQuery
@@ -113,6 +141,20 @@ func GetBlacklistSummary(c *gin.Context) {
 	response.Success(c, summary)
 }
 
+// GetBlacklistByID 获取黑名单详情
+// @Summary 获取黑名单详情
+// @Description 根据ID获取黑名单详细信息
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "黑名单ID"
+// @Success 200 {object} map[string]interface{} "黑名单详情"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "黑名单记录不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/{id} [get]
 func GetBlacklistByID(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	idStr := c.Param("id")
@@ -174,6 +216,21 @@ func CreateBlacklist(c *gin.Context) {
 	response.Success(c, item)
 }
 
+// UpdateBlacklist 更新黑名单
+// @Summary 更新黑名单
+// @Description 更新指定黑名单记录
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "黑名单ID"
+// @Param body body UpdateBlacklistRequest true "更新黑名单请求"
+// @Success 200 {object} map[string]interface{} "更新成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "黑名单记录不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/{id} [put]
 func UpdateBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	idStr := c.Param("id")
@@ -294,6 +351,18 @@ func ImportBlacklist(c *gin.Context) {
 	})
 }
 
+// CheckBlacklist 检查黑名单
+// @Summary 检查目标是否在黑名单中
+// @Description 检查指定目标是否已被加入黑名单
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Param target query string true "目标值"
+// @Param type query string false "类型，默认ip"
+// @Success 200 {object} map[string]interface{} "检查结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/check [get]
 func CheckBlacklist(c *gin.Context) {
 	handler := GetBlacklistHandler()
 	target := c.Query("target")
@@ -318,6 +387,18 @@ func CheckBlacklist(c *gin.Context) {
 }
 
 // AdvancedSearchBlacklist 高级搜索黑名单
+// @Summary 高级搜索黑名单
+// @Description 使用高级查询条件搜索黑名单
+// @Tags 黑名单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body service.AdvancedSearchQuery true "高级搜索查询"
+// @Success 200 {object} map[string]interface{} "搜索结果"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/admin/blacklist/search [post]
 func AdvancedSearchBlacklist(c *gin.Context) {
 	var query service.AdvancedSearchQuery
 	if err := c.ShouldBindJSON(&query); err != nil {

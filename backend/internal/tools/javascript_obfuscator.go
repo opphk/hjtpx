@@ -4,11 +4,13 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/rc4"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/chacha20"
 	"io"
 	"math"
 	"math/big"
@@ -32,6 +34,13 @@ type ObfuscatorConfig struct {
 	CompressWhitespace          bool
 	RemoveComments              bool
 	PreserveConsole             bool
+	EnableAdvancedAntiDebug     bool
+	EnableSelfDestruct          bool
+	EnableMemoryProtection      bool
+	EnableCodeVirtualization    bool
+	StringEncryptionMethod      string
+	EnableNameMangling          bool
+	EnableScopeTracking         bool
 }
 
 var defaultObfuscatorConfig = ObfuscatorConfig{
@@ -45,6 +54,13 @@ var defaultObfuscatorConfig = ObfuscatorConfig{
 	CompressWhitespace:          true,
 	RemoveComments:              true,
 	PreserveConsole:             true,
+	EnableAdvancedAntiDebug:     false,
+	EnableSelfDestruct:          false,
+	EnableMemoryProtection:      false,
+	EnableCodeVirtualization:    false,
+	StringEncryptionMethod:      "aes-gcm",
+	EnableNameMangling:          true,
+	EnableScopeTracking:         false,
 }
 
 type Obfuscator struct {
@@ -242,7 +258,7 @@ func (o *Obfuscator) encryptStrings(code string) string {
 
 			originalStr := strContent.String()
 			if o.shouldEncryptString(originalStr) {
-				encrypted := o.encryptString(originalStr)
+				encrypted := o.encryptStringAdvanced(originalStr)
 				result.WriteByte(quote)
 				result.WriteString(encrypted)
 				result.WriteByte(quote)
@@ -256,6 +272,128 @@ func (o *Obfuscator) encryptStrings(code string) string {
 	}
 
 	return result.String()
+}
+
+func (o *Obfuscator) encryptStringAdvanced(s string) string {
+	method := o.config.StringEncryptionMethod
+	if method == "" {
+		method = "aes-gcm"
+	}
+
+	switch method {
+	case "aes-gcm":
+		return o.encryptStringAESGCM(s)
+	case "rc4":
+		return o.encryptStringRC4(s)
+	case "chacha20":
+		return o.encryptStringChaCha20(s)
+	case "xor":
+		return o.encryptStringXOR(s)
+	default:
+		return o.encryptStringAESGCM(s)
+	}
+}
+
+func (o *Obfuscator) encryptStringAESGCM(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-obfuscate-key-2024")
+	}
+
+	keyHash := sha256.Sum256(key)
+	encryptionKey := keyHash[:]
+
+	block, err := aes.NewCipher(encryptionKey)
+	if err != nil {
+		return s
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return s
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return s
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, []byte(s), nil)
+	encoded := base64.StdEncoding.EncodeToString(ciphertext)
+
+	o.stringCount++
+	decoderFunc := fmt.Sprintf("__d%d__('%s')", o.stringCount, encoded)
+
+	return decoderFunc
+}
+
+func (o *Obfuscator) encryptStringRC4(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-obfuscate-key-2024")
+	}
+
+	cipher, err := rc4.NewCipher(key)
+	if err != nil {
+		return s
+	}
+
+	dst := make([]byte, len(s))
+	cipher.XORKeyStream(dst, []byte(s))
+
+	encoded := base64.StdEncoding.EncodeToString(dst)
+	o.stringCount++
+
+	return fmt.Sprintf("__rc4_%d__('%s')", o.stringCount, encoded)
+}
+
+func (o *Obfuscator) encryptStringChaCha20(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-obfuscate-key-2024-chacha20")
+	}
+
+	if len(key) != chacha20.KeySize {
+		keyHash := sha256.Sum256(key)
+		key = keyHash[:chacha20.KeySize]
+	}
+
+	nonce := make([]byte, chacha20.NonceSize)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return s
+	}
+
+	cipher, err := chacha20.NewCipher(nonce, key)
+	if err != nil {
+		return s
+	}
+
+	dst := make([]byte, len(s))
+	cipher.XORKeyStream(dst, []byte(s))
+
+	combined := append(nonce, dst...)
+	encoded := base64.StdEncoding.EncodeToString(combined)
+	o.stringCount++
+
+	return fmt.Sprintf("__cc20_%d__('%s')", o.stringCount, encoded)
+}
+
+func (o *Obfuscator) encryptStringXOR(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-xor-key")
+	}
+
+	var encrypted strings.Builder
+	for i, c := range s {
+		xorChar := key[i%len(key)]
+		encrypted.WriteByte(byte(c) ^ xorChar)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString([]byte(encrypted.String()))
+	o.stringCount++
+
+	return fmt.Sprintf("__xor_%d__('%s')", o.stringCount, encoded)
 }
 
 func (o *Obfuscator) shouldEncryptString(s string) bool {
@@ -310,33 +448,85 @@ func (o *Obfuscator) encryptString(s string) string {
 }
 
 func (o *Obfuscator) wrapCode(code string) string {
-	decoders := o.generateDecoderFunctions()
+	decoders := o.generateDecoderFunctionsAdvanced()
 	return decoders + "\n" + code
 }
 
-func (o *Obfuscator) generateDecoderFunctions() string {
+func (o *Obfuscator) generateDecoderFunctionsAdvanced() string {
 	var buf strings.Builder
 
-	buf.WriteString("(function(_0xK1,_0xK2){")
-	buf.WriteString("_0xK1=atob(_0xK1);")
-	buf.WriteString("window.__d=function(_0xK7,_0xK8){")
-	buf.WriteString("var _0xK9=_0xK7,_0xKa='';")
-	buf.WriteString("for(var _0xKb=0;_0xKb<_0xK9.length;_0xKb++){")
-	buf.WriteString("_0xKa+=String.fromCharCode(((_0xK9.charCodeAt(_0xKb)-_0xK8+256)%256));")
-	buf.WriteString("}")
-	buf.WriteString("return _0xKa;")
-	buf.WriteString("};")
-	buf.WriteString("})('")
+	buf.WriteString("(function(_0xK){\n")
 
 	key := o.config.StringEncryptionKey
 	if len(key) == 0 {
 		key = []byte("hjtpx-obfuscate-key-2024")
 	}
 	encodedKey := base64.StdEncoding.EncodeToString(key)
-	buf.WriteString(encodedKey)
-	buf.WriteString("',Math.floor(Math.random()*25+5));")
+
+	buf.WriteString(fmt.Sprintf("var _0xKey=atob('%s');\n", encodedKey))
+
+	buf.WriteString(`
+	window.__d=function(_0xE){
+		var _0xN=_0xE.substring(0,12);
+		var _0xC=atob(_0xE.substring(12));
+		var _0xK=[];
+		for(var _0xI=0;_0xI<32;_0xI++){
+			_0xK.push(_0xKey.charCodeAt(_0xI%_0xKey.length));
+		}
+		var _0xR=[];
+		for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+			_0xR.push(_0xC.charCodeAt(_0xI)^_0xK[_0xI%_0xK.length]);
+		}
+		return String.fromCharCode.apply(null,_0xR);
+	};
+
+	window.__rc4_=function(_0xD){
+		var _0xS=[],_0xB=[];
+		for(var _0xI=0;_0xI<256;_0xI++){_0xS[_0xI]=_0xI;}
+		var _0xJ=0;
+		for(var _0xI=0;_0xI<256;_0xI++){
+			_0xJ=(_0xJ+_0xS[_0xI]+_0xKey.charCodeAt(_0xI%_0xKey.length))%256;
+			[_0xS[_0xI],_0xS[_0xJ]]=[_0xS[_0xJ],_0xS[_0xI]];
+		}
+		var _0xC=atob(_0xD);
+		var _0xO='';
+		_0xI=0;_0xJ=0;
+		for(var _0xP=0;_0xP<_0xC.length;_0xP++){
+			_0xI=(_0xI+1)%256;
+			_0xJ=(_0xJ+_0xS[_0xI])%256;
+			[_0xS[_0xI],_0xS[_0xJ]]=[_0xS[_0xJ],_0xS[_0xI]];
+			_0xO+=String.fromCharCode(_0xC.charCodeAt(_0xP)^_0xS[(_0xS[_0xI]+_0xS[_0xJ])%256]);
+		}
+		return _0xO;
+	};
+
+	window.__cc20_=function(_0xD){
+		var _0xN=_0xD.substring(0,12);
+		var _0xC=atob(_0xD.substring(12));
+		var _0xO='';
+		for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+			_0xO+=String.fromCharCode(_0xC.charCodeAt(_0xI)^_0xKey.charCodeAt(_0xI%_0xKey.length));
+		}
+		return _0xO;
+	};
+
+	window.__xor_=function(_0xD){
+		var _0xC=atob(_0xD);
+		var _0xO='';
+		for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+			_0xO+=String.fromCharCode(_0xC.charCodeAt(_0xI)^_0xKey.charCodeAt(_0xI%_0xKey.length));
+		}
+		return _0xO;
+	};
+`)
+
+	buf.WriteString(fmt.Sprintf(`})('%s');`, encodedKey))
 
 	return buf.String()
+}
+
+func (o *Obfuscator) generateDecoderFunctions() string {
+	return o.generateDecoderFunctionsAdvanced()
 }
 
 func (o *Obfuscator) flattenControlFlow(code string) string {
@@ -832,6 +1022,150 @@ func InjectAntiDebug(code string) string {
 		_0xT.toString=function(){};
 		console.log('%c',_0xT);
 	},1000);
+})();
+`
+	return antiDebug + code
+}
+
+func InjectAdvancedAntiDebug(code string) string {
+	antiDebug := `
+;(function(){
+	var _0xAD={
+		checks:[],
+		register:function(fn){
+			this.checks.push(fn);
+		},
+		detectDevTools:function(){
+			var threshold=160;
+			var widthThreshold=window.outerWidth-window.innerWidth>threshold;
+			var heightThreshold=window.outerHeight-window.innerHeight>threshold;
+			if(widthThreshold||heightThreshold){
+				return true;
+			}
+			var timeThreshold=100;
+			var start=Date.now();
+				debugger;
+			var end=Date.now();
+			if(end-start>timeThreshold){
+				return true;
+			}
+			if(typeof console._commandLineAPI!=='undefined'){
+				return true;
+			}
+			if(window.firebug){
+				return true;
+			}
+			if(typeof window.__proto__!=='undefined'){
+				try{
+					window.__proto__={};
+					if(Object.getOwnPropertyDescriptor(window,'__proto__')===undefined){
+						return true;
+					}
+				}catch(e){}
+			}
+			return false;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.detectDevTools()){
+					self.block();
+				}
+			},500);
+			Object.defineProperty(window,'devtools',{
+				get:function(){
+					return {isOpen:true,version:'2.0'};
+				},
+				enumerable:true,
+				configurable:false
+			});
+			document.addEventListener('keydown',function(e){
+				if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&e.key==='I')||(e.ctrlKey&&e.shiftKey&&e.key==='J')||(e.ctrlKey&&e.key==='U')){
+					e.preventDefault();
+					self.block();
+				}
+			});
+			document.addEventListener('contextmenu',function(e){
+				e.preventDefault();
+			});
+		},
+		block:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;font-family:Arial,sans-serif;display:flex;justify-content:center;align-items:center;flex-direction:column;"><h1>访问受限</h1><p>检测到开发者工具</p></div>';
+			throw new Error('Debug detected');
+		},
+		start:function(){
+			var self=this;
+			for(var i=0;i<this.checks.length;i++){
+				if(this.checks[i]()){
+					this.block();
+					return;
+				}
+			}
+			this.protect();
+		}
+	};
+	_0xAD.start();
+	window.__AD=_0xAD;
+	if(document.readyState==='loading'){
+		document.addEventListener('DOMContentLoaded',function(){_0xAD.start();});
+	}else{
+		_0xAD.start();
+	}
+})();
+`
+	return antiDebug + code
+}
+
+func InjectEnhancedAntiDebug(code string) string {
+	antiDebug := `
+;(function(){
+	var _0xAD={
+		check:function(){
+			if(window.outerHeight-window.innerHeight>100||window.outerWidth-window.innerWidth>100){
+				_0xAD.trigger();
+			}
+			var _0xT=function(){};
+			_0xT.toString=function(){
+				var _0xD=new Date();
+				var _0xE=_0xD.getTime();
+				debugger;
+				var _0xF=new Date();
+				if(_0xF.getTime()-_0xE>100){
+					_0xAD.trigger();
+				}
+			};
+			setInterval(function(){console.log(_0xT);},1000);
+		},
+		trigger:function(){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="padding:50px;text-align:center;"><h1>访问受限</h1></div>';
+			throw new Error('Debug detected');
+		},
+		start:function(){
+			document.addEventListener('keydown',function(e){
+				if(e.keyCode==123){
+					_0xAD.trigger();
+				}
+			});
+			document.addEventListener('contextmenu',function(e){
+				e.preventDefault();
+			});
+			setInterval(function(){
+				var _0xW=window.outerWidth-window.innerWidth>100;
+				var _0xH=window.outerHeight-window.innerHeight>100;
+				if(_0xW||_0xH){
+					_0xAD.trigger();
+				}
+			},1000);
+		}
+	};
+	if(document.readyState==='complete'){
+		_0xAD.start();
+	}else{
+		window.addEventListener('load',function(){_0xAD.start();});
+	}
+	_0xAD.check();
 })();
 `
 	return antiDebug + code
@@ -1391,7 +1725,11 @@ func (o *Obfuscator) ApplyAdvancedObfuscation(code string) (string, error) {
 	}
 
 	if o.config.EnableVariableObfuscation {
-		result = o.obfuscateVariables(result)
+		result = o.obfuscateVariablesAdvanced(result)
+	}
+
+	if o.config.EnableNameMangling {
+		result = o.applyNameMangling(result)
 	}
 
 	if o.config.EnableStringEncryption {
@@ -1408,7 +1746,21 @@ func (o *Obfuscator) ApplyAdvancedObfuscation(code string) (string, error) {
 
 	result = o.addStateMachineFlattening(result)
 
-	result = o.InjectEnhancedAntiDebug(result)
+	if o.config.EnableAdvancedAntiDebug {
+		result = InjectAdvancedAntiDebug(result)
+	}
+
+	if o.config.EnableSelfDestruct {
+		result = o.addSelfDestructProtection(result)
+	}
+
+	if o.config.EnableMemoryProtection {
+		result = o.AddMemoryProtection(result)
+	}
+
+	if o.config.EnableCodeVirtualization {
+		result = o.createVirtualization(result)
+	}
 
 	if o.config.EnableDeadCodeInjection {
 		result = o.injectDeadCodeAdvanced(result)
@@ -1416,6 +1768,206 @@ func (o *Obfuscator) ApplyAdvancedObfuscation(code string) (string, error) {
 
 	if o.config.EnableCodeCompression {
 		result = o.compressCodeAdvanced(result)
+	}
+
+	result = o.addIntegrityCheck(result)
+
+	return result, nil
+}
+
+func (o *Obfuscator) obfuscateVariablesAdvanced(code string) string {
+	result := code
+
+	identifierPattern := regexp.MustCompile(`\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*`)
+	result = identifierPattern.ReplaceAllStringFunc(result, func(match string) string {
+		name := match[:len(match)-2]
+		if !o.isReservedWord(name) && !o.isAlreadyObfuscated(name) {
+			newName := o.generateObfuscatedName()
+			o.variableMap[name] = newName
+			return newName + "="
+		}
+		return match
+	})
+
+	for original, obfuscated := range o.variableMap {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(original) + `\b`)
+		result = re.ReplaceAllString(result, obfuscated)
+	}
+
+	result = o.obfuscateFunctionNames(result)
+
+	return result
+}
+
+func (o *Obfuscator) obfuscateFunctionNames(code string) string {
+	result := code
+
+	funcPattern := regexp.MustCompile(`\bfunction\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(`)
+	result = funcPattern.ReplaceAllStringFunc(result, func(match string) string {
+		parts := funcPattern.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			funcName := parts[1]
+			if !o.isReservedWord(funcName) && !o.isAlreadyObfuscated(funcName) {
+				newName := o.generateObfuscatedName()
+				o.functionMap[funcName] = newName
+				return fmt.Sprintf("function %s(", newName)
+			}
+		}
+		return match
+	})
+
+	for original, obfuscated := range o.functionMap {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(original) + `\b`)
+		result = re.ReplaceAllString(result, obfuscated)
+	}
+
+	return result
+}
+
+func (o *Obfuscator) applyNameMangling(code string) string {
+	result := code
+
+	classPattern := regexp.MustCompile(`\bclass\s+([a-zA-Z_$][a-zA-Z0-9_$]*)`)
+	result = classPattern.ReplaceAllStringFunc(result, func(match string) string {
+		parts := classPattern.FindStringSubmatch(match)
+		if len(parts) == 2 {
+			className := parts[1]
+			if !o.isReservedWord(className) {
+				newName := o.generateObfuscatedName()
+				o.functionMap[className] = newName
+				return fmt.Sprintf("class %s", newName)
+			}
+		}
+		return match
+	})
+
+	for original, obfuscated := range o.functionMap {
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(original) + `\b`)
+		result = re.ReplaceAllString(result, obfuscated)
+	}
+
+	return result
+}
+
+func (o *Obfuscator) addSelfDestructProtection(code string) string {
+	selfDestruct := `
+;(function(){
+	var _0xSD={
+		triggers:[],
+		register:function(condition,action){
+			this.triggers.push({condition:condition,action:action});
+		},
+		check:function(){
+			for(var i=0;i<this.triggers.length;i++){
+				var t=this.triggers[i];
+				if(t.condition()){
+					t.action();
+					return true;
+				}
+			}
+			return false;
+		},
+		destroy:function(){
+			try{
+				var scripts=document.getElementsByTagName('script');
+				for(var i=scripts.length-1;i>=0;i--){
+					scripts[i].parentNode.removeChild(scripts[i]);
+				}
+				document.documentElement.style.display='none';
+				document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>代码已失效</h1></div>';
+			}catch(e){}
+		}
+	};
+	_0xSD.register(function(){
+		return window.outerWidth-window.innerWidth>160;
+	},_0xSD.destroy);
+	_0xSD.register(function(){
+		return typeof window.__inspect!=='undefined';
+	},_0xSD.destroy);
+	_0xSD.register(function(){
+		try{debugger;}catch(e){return false;}
+		return false;
+	},_0xSD.destroy);
+	setInterval(function(){_0xSD.check();},2000);
+	window.__SD=_0xSD;
+})();
+`
+	return selfDestruct + code
+}
+
+func (o *Obfuscator) addIntegrityCheck(code string) string {
+	hash := HashCode(code)
+
+	integrityCheck := fmt.Sprintf(`
+;(function(){
+	var _0xIH='%s';
+	var _0xCK=setInterval(function(){
+		var _0xH=document.body.innerHTML;
+		if(_0xH.indexOf('__inspect')>-1||_0xH.indexOf('debugger')>-1){
+			document.documentElement.style.display='none';
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;"><h1>完整性检查失败</h1></div>';
+			clearInterval(_0xCK);
+		}
+	},5000);
+	window.__IC=_0xIH;
+})();
+`, hash)
+
+	return code + integrityCheck
+}
+
+func (o *Obfuscator) Obfuscate(code string) (string, error) {
+	if code == "" {
+		return "", errors.New("code cannot be empty")
+	}
+
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	o.variableMap = make(map[string]string)
+	o.functionMap = make(map[string]string)
+	o.usedNames = make(map[string]bool)
+	o.stringCount = 0
+	o.functionCount = 0
+
+	var result string
+
+	if o.config.RemoveComments {
+		result = o.removeComments(code)
+	} else {
+		result = code
+	}
+
+	if o.config.EnableVariableObfuscation {
+		result = o.obfuscateVariables(result)
+	}
+
+	if o.config.EnableStringEncryption {
+		result = o.encryptStrings(result)
+	}
+
+	if o.config.EnableFunctionWrapping {
+		result = o.wrapCode(result)
+	}
+
+	if o.config.EnableControlFlowFlattening {
+		result = o.flattenControlFlow(result)
+	}
+
+	if o.config.EnableDeadCodeInjection {
+		result = o.injectDeadCode(result)
+	}
+
+	if o.config.EnableCodeCompression {
+		result = o.compressCode(result)
+	}
+
+	if o.config.EnableAdvancedAntiDebug {
+		result = InjectAdvancedAntiDebug(result)
+	}
+
+	if o.config.EnableMemoryProtection {
+		result = o.AddMemoryProtection(result)
 	}
 
 	return result, nil

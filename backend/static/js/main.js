@@ -1,5 +1,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log('用户端已加载');
+    
+    initPageLoadProgress();
+    initPerformanceMonitoring();
+    initEnhancedErrorHandling();
+    initSmoothTransitions();
 
     const navLinks = document.querySelectorAll('nav a');
     navLinks.forEach(link => {
@@ -21,6 +26,191 @@ document.addEventListener('DOMContentLoaded', function() {
 
     injectCaptchaStyles();
 });
+
+function initPageLoadProgress() {
+    const progressBar = document.createElement('div');
+    progressBar.id = 'page-load-progress';
+    progressBar.innerHTML = '<div class="page-load-progress-bar"></div>';
+    progressBar.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:3px;z-index:9999;background:rgba(102,126,234,0.1);';
+    const innerBar = progressBar.querySelector('.page-load-progress-bar');
+    innerBar.style.cssText = 'height:100%;background:linear-gradient(90deg,#667eea,#764ba2);width:0%;transition:width 0.3s ease;';
+    document.body.appendChild(progressBar);
+    
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress >= 90) {
+            clearInterval(interval);
+            innerBar.style.width = '90%';
+        } else {
+            innerBar.style.width = progress + '%';
+        }
+    }, 100);
+    
+    window.addEventListener('load', function() {
+        clearInterval(interval);
+        innerBar.style.width = '100%';
+        setTimeout(() => {
+            progressBar.style.opacity = '0';
+            setTimeout(() => progressBar.remove(), 300);
+        }, 200);
+    });
+}
+
+function initPerformanceMonitoring() {
+    if (!window.PerformanceObserver) return;
+    
+    try {
+        const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+                if (entry.entryType === 'navigation') {
+                    const loadTime = Math.round(entry.loadEventEnd - entry.startTime);
+                    console.log('页面加载时间:', loadTime + 'ms');
+                    
+                    if (loadTime > 3000) {
+                        console.warn('页面加载时间较长，建议优化');
+                    }
+                }
+                if (entry.entryType === 'resource') {
+                    if (entry.duration > 1000) {
+                        console.warn('资源加载较慢:', entry.name, Math.round(entry.duration) + 'ms');
+                    }
+                }
+            });
+        });
+        observer.observe({ entryTypes: ['navigation', 'resource'] });
+    } catch (e) {
+        console.log('性能监控不可用');
+    }
+}
+
+function initEnhancedErrorHandling() {
+    const originalError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+        const errorInfo = {
+            message: message,
+            source: source,
+            line: lineno,
+            col: colno,
+            stack: error ? error.stack : ''
+        };
+        console.error('页面错误:', errorInfo);
+        
+        showEnhancedErrorToast('页面发生错误，请刷新重试');
+        
+        if (originalError) {
+            return originalError.apply(this, arguments);
+        }
+        return false;
+    };
+
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('未处理的Promise拒绝:', event.reason);
+        showEnhancedErrorToast('网络请求失败，请重试');
+    });
+}
+
+function showEnhancedErrorToast(message, duration = 5000) {
+    const existing = document.querySelector('.error-toast-enhanced');
+    if (existing) existing.remove();
+    
+    const toast = document.createElement('div');
+    toast.className = 'error-toast-enhanced';
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
+    toast.innerHTML = `
+        <i class="fas fa-exclamation-circle"></i>
+        <span>${message}</span>
+        <button class="toast-dismiss" aria-label="关闭">×</button>
+    `;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #ff4d4f, #ff7875);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 9999;
+        box-shadow: 0 4px 12px rgba(255,77,79,0.4);
+        animation: slideInRight 0.3s ease;
+        max-width: 350px;
+    `;
+    
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .error-toast-enhanced button.toast-dismiss {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            opacity: 0.8;
+            margin-left: auto;
+        }
+        .error-toast-enhanced button.toast-dismiss:hover {
+            opacity: 1;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    const dismissBtn = toast.querySelector('.toast-dismiss');
+    dismissBtn.addEventListener('click', () => {
+        toast.style.animation = 'slideOutRight 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    });
+    
+    document.body.appendChild(toast);
+    
+    if (duration > 0) {
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.style.animation = 'slideOutRight 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, duration);
+    }
+}
+
+function initSmoothTransitions() {
+    const elements = document.querySelectorAll('.card, .btn, .nav-link');
+    elements.forEach(el => {
+        el.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease';
+    });
+    
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-in');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        document.querySelectorAll('.animate-on-scroll').forEach(el => {
+            el.classList.add('animate-prepare');
+            observer.observe(el);
+        });
+    }
+    
+    const animStyle = document.createElement('style');
+    animStyle.textContent = `
+        .animate-prepare { opacity: 0; transform: translateY(20px); }
+        .animate-in { animation: animateIn 0.4s ease forwards; }
+        @keyframes animateIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+    `;
+    document.head.appendChild(animStyle);
+}
 
 function injectCaptchaStyles() {
     if (document.getElementById('captcha-dynamic-styles')) {

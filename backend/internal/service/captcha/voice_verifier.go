@@ -3,6 +3,7 @@ package captcha
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/hjtpx/hjtpx/internal/repository/cache"
@@ -96,20 +97,28 @@ func (v *VoiceVerifierService) getSession(ctx context.Context, sessionID string)
 
 func (v *VoiceVerifierService) incrementVerifyCount(ctx context.Context, sessionID string) {
 	if v.sessionCache != nil {
-		_ = v.sessionCache.IncrementVoiceVerifyCount(ctx, sessionID)
+		if err := v.sessionCache.IncrementVoiceVerifyCount(ctx, sessionID); err != nil {
+			log.Printf("增加语音验证计数失败: %v", err)
+		}
 	}
 
 	if v.captchaRepo != nil {
-		_ = v.captchaRepo.IncrementVoiceVerifyCount(sessionID)
+		if err := v.captchaRepo.IncrementVoiceVerifyCount(sessionID); err != nil {
+			log.Printf("数据库增加语音验证计数失败: %v", err)
+		}
 	}
 }
 
 func (v *VoiceVerifierService) markAsVerified(ctx context.Context, sessionID string) {
 	if v.sessionCache != nil {
-		_ = v.sessionCache.MarkVoiceAsVerified(ctx, sessionID)
+		if err := v.sessionCache.MarkVoiceAsVerified(ctx, sessionID); err != nil {
+			log.Printf("缓存标记语音验证失败: %v", err)
+		}
 	}
 
 	if v.captchaRepo != nil {
-		_ = v.captchaRepo.MarkVoiceAsVerified(sessionID)
+		if err := v.captchaRepo.MarkVoiceAsVerified(sessionID); err != nil {
+			log.Printf("数据库标记语音验证失败: %v", err)
+		}
 	}
 }

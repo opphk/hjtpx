@@ -1,0 +1,329 @@
+name: CI/CD Pipeline Orchestrator
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Pipeline mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - quick
+          - deploy-only
+          - test-only
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  statuses: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIPELINE_MODE: ${{ github.event.inputs.mode || 'full' }}
+
+jobs:
+  pipeline-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      should-run: ${{ steps.check.outputs.should_run }}
+      pipeline-mode: ${{ env.PIPELINE_MODE }}
+    steps:
+      - name: Check pipeline conditions
+        id: check
+        run: |
+          echo "Pipeline mode: ${{ env.PIPELINE_MODE }}"
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          fi
+
+  quick-mode:
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    if: needs.pipeline-status.outputs.should-run == 'true' && needs.pipeline-status.outputs.pipeline-mode == 'quick'
+    timeout-minutes: 15
+    
+    steps:
+      - name: Quick validation mode
+        run: |
+          echo "Running in QUICK mode - basic validation only"
+          echo "This mode is for rapid iteration during development"
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Quick build check
+        run: |
+          cd backend
+          go build -v ./cmd/api/main.go
+
+      - name: Quick test run
+        run: |
+          cd backend
+          go test -short -timeout=5m ./...
+
+      - name: Summary
+        run: |
+          echo "## Quick Mode Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Quick validation completed" >> $GITHUB_STEP_SUMMARY
+          echo "Mode: ${{ needs.pipeline-status.outputs.pipeline-mode }}" >> $GITHUB_STEP_SUMMARY
+
+  test-only-mode:
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    if: needs.pipeline-status.outputs.should-run == 'true' && needs.pipeline-status.outputs.pipeline-mode == 'test-only'
+    timeout-minutes: 30
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: captcha
+          POSTGRES_PASSWORD: captcha123
+          POSTGRES_DB: captcha_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Test only mode
+        run: |
+          echo "Running in TEST-ONLY mode - tests and integration only"
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: go test -v -race -timeout=20m ./...
+        env:
+          DATABASE_URL: postgres://captcha:captcha123@localhost:5432/captcha_db?sslmode=disable
+          REDIS_ADDR: localhost:6379
+          GIN_MODE: test
+
+      - name: Summary
+        run: |
+          echo "## Test-Only Mode Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Test execution completed" >> $GITHUB_STEP_SUMMARY
+
+  deploy-only-mode:
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    if: needs.pipeline-status.outputs.should-run == 'true' && needs.pipeline-status.outputs.pipeline-mode == 'deploy-only'
+    timeout-minutes: 25
+    
+    steps:
+      - name: Deploy only mode
+        run: |
+          echo "Running in DEPLOY-ONLY mode"
+          echo "Skipping tests and quality checks"
+          echo "Deploying directly from existing artifacts"
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: hjtpx/hjtpx:${{ github.ref_name }}
+
+      - name: Summary
+        run: |
+          echo "## Deploy-Only Mode Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployment completed" >> $GITHUB_STEP_SUMMARY
+
+  full-mode:
+    runs-on: ubuntu-latest
+    needs: pipeline-status
+    if: needs.pipeline-status.outputs.should-run == 'true' && needs.pipeline-status.outputs.pipeline-mode == 'full'
+    timeout-minutes: 5
+    
+    outputs:
+      all-jobs-completed: true
+    
+    steps:
+      - name: Full CI/CD Pipeline
+        run: |
+          echo "## CI/CD Pipeline Orchestrator" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Mode: FULL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This pipeline will execute the following workflows:" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Code Quality** - Linting, formatting, and static analysis" >> $GITHUB_STEP_SUMMARY
+          echo "2. **CI** - Unit tests, integration tests, and E2E tests" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Security Scan** - Vulnerability scanning and dependency checks" >> $GITHUB_STEP_SUMMARY
+          echo "4. **CD** - Docker build and deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Trigger Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Repository: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Actor: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Event: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Workflow Dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "```mermaid" >> $GITHUB_STEP_SUMMARY
+          echo "graph TD" >> $GITHUB_STEP_SUMMARY
+          echo "  A[Push/PR] --> B[Code Quality]" >> $GITHUB_STEP_SUMMARY
+          echo "  B --> C[CI Tests]" >> $GITHUB_STEP_SUMMARY
+          echo "  C --> D[Security Scan]" >> $GITHUB_STEP_SUMMARY
+          echo "  D --> E[CD Deploy]" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+
+      - name: Trigger Code Quality workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'code-quality.yml',
+              ref: context.ref
+            })
+
+      - name: Trigger CI workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              ref: context.ref
+            })
+
+      - name: Trigger Security Scan workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'security.yml',
+              ref: context.ref
+            })
+
+      - name: Trigger CD workflow
+        uses: actions/github-script@v7
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        with:
+          script: |
+            github.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'cd.yml',
+              ref: context.ref
+            })
+
+  pipeline-summary:
+    runs-on: ubuntu-latest
+    needs: [pipeline-status, full-mode]
+    if: always()
+    timeout-minutes: 5
+    
+    steps:
+      - name: Generate pipeline summary
+        run: |
+          echo "## CI/CD Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Information" >> $GITHUB_STEP_SUMMARY
+          echo "- Mode: ${{ needs.pipeline-status.outputs.pipeline-mode }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Trigger: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch/Ref: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Pipeline Status | ${{ needs.pipeline-status.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Full Mode | ${{ needs.full-mode.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.pipeline-status.outputs.pipeline-mode }}" == "full" ]]; then
+            echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+            echo "1. Check Code Quality workflow results" >> $GITHUB_STEP_SUMMARY
+            echo "2. Check CI workflow results" >> $GITHUB_STEP_SUMMARY
+            echo "3. Check Security Scan workflow results" >> $GITHUB_STEP_SUMMARY
+            echo "4. Check CD workflow results (for main branch or tags)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  notification:
+    runs-on: ubuntu-latest
+    needs: [pipeline-status, full-mode]
+    if: always() && github.event_name != 'pull_request'
+    timeout-minutes: 5
+    
+    steps:
+      - name: Send pipeline status notification
+        if: secrets.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "*CI/CD Pipeline Status*",
+              "blocks": [
+                {
+                  "type": "section",
+                  "fields": [
+                    {"type": "mrkdwn", "text": "*Pipeline:*\n${{ github.workflow }}"},
+                    {"type": "mrkdwn", "text": "*Mode:*\n${{ needs.pipeline-status.outputs.pipeline-mode }}"},
+                    {"type": "mrkdwn", "text": "*Status:*\n${{ needs.full-mode.result }}"},
+                    {"type": "mrkdwn", "text": "*Branch:*\n${{ github.ref_name }}"}
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

@@ -95,10 +95,6 @@ func HealthCheck(c *gin.Context) {
 	c.JSON(statusCode, status)
 }
 
-func calculateSuccessRate() float64 {
-	return metrics.GetSuccessRate()
-}
-
 func getSystemMetrics() map[string]interface{} {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)

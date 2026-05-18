@@ -1,6 +1,10 @@
 module github.com/hjtpx/hjtpx
 
-go 1.25.1
+go 1.25.0
+
+replace github.com/hjtpx/hjtpx/internal/pkg/logger => ./internal/pkg/logger
+
+replace github.com/hjtpx/hjtpx/pkg/redis => ./pkg/redis
 
 require (
 	github.com/gin-gonic/gin v1.12.0

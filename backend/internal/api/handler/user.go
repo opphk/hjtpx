@@ -27,21 +27,111 @@ func NewUserHandler() *UserHandler {
 	}
 }
 
+// RegisterRequest 用户注册请求
+// @Description 用户注册请求参数
 type RegisterRequest struct {
-	Username     string `json:"username" binding:"required,min=3,max=50"`
-	Email        string `json:"email" binding:"required,email"`
-	Password     string `json:"password" binding:"required,min=6,max=128"`
-	BehaviorData string `json:"behavior_data,omitempty"`
+	Username     string `json:"username" binding:"required,min=3,max=50"` // 用户名
+	Email        string `json:"email" binding:"required,email"`         // 邮箱
+	Password     string `json:"password" binding:"required,min=6,max=128"` // 密码
+	BehaviorData string `json:"behavior_data,omitempty"`                 // 行为数据（可选）
 }
 
+// RegisterResponse 用户注册响应
+// @Description 用户注册响应数据
 type RegisterResponse struct {
-	UserID           uint   `json:"user_id"`
-	Username         string `json:"username"`
-	Email            string `json:"email"`
-	VerificationLink string `json:"verification_link,omitempty"`
-	Message          string `json:"message"`
+	UserID           uint   `json:"user_id"`            // 用户ID
+	Username         string `json:"username"`           // 用户名
+	Email            string `json:"email"`              // 邮箱
+	VerificationLink string `json:"verification_link,omitempty"` // 验证链接
+	Message          string `json:"message"`            // 消息
 }
 
+// LoginRequest 用户登录请求
+// @Description 用户登录请求参数
+type UserLoginRequest struct {
+	Username     string `json:"username" binding:"required"`              // 用户名
+	Password     string `json:"password" binding:"required"`            // 密码
+	CaptchaToken string `json:"captcha_token,omitempty"`                // 验证码令牌
+	BehaviorData string `json:"behavior_data,omitempty"`               // 行为数据
+}
+
+// LoginResponse 用户登录响应
+// @Description 用户登录响应数据
+type UserLoginResponse struct {
+	AccessToken  string                `json:"access_token"`  // 访问令牌
+	RefreshToken string                `json:"refresh_token"` // 刷新令牌
+	ExpiresIn    int64                 `json:"expires_in"`    // 过期时间（秒）
+	User         *service.UserResponse `json:"user"`          // 用户信息
+}
+
+// RefreshRequest 刷新令牌请求
+// @Description 刷新访问令牌请求
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"` // 刷新令牌
+}
+
+// RefreshResponse 刷新令牌响应
+// @Description 刷新令牌响应数据
+type RefreshResponse struct {
+	AccessToken  string `json:"access_token"`  // 新访问令牌
+	RefreshToken string `json:"refresh_token"` // 新刷新令牌
+	ExpiresIn    int64  `json:"expires_in"`    // 过期时间（秒）
+}
+
+// UpdateProfileRequest 更新用户资料请求
+// @Description 更新用户资料请求参数
+type UpdateProfileRequest struct {
+	Nickname string `json:"nickname" binding:"max=100"` // 昵称
+	Avatar   string `json:"avatar" binding:"max=500"`   // 头像URL
+	Phone    string `json:"phone" binding:"max=20"`     // 电话
+	Bio      string `json:"bio" binding:"max=500"`       // 个人简介
+}
+
+// ChangePasswordRequest 修改密码请求
+// @Description 修改密码请求参数
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password" binding:"required"`      // 原密码
+	NewPassword string `json:"new_password" binding:"required,min=6,max=128"` // 新密码
+}
+
+// RequestPasswordResetRequest 请求密码重置请求
+// @Description 请求密码重置请求参数
+type RequestPasswordResetRequest struct {
+	Email string `json:"email" binding:"required,email"` // 邮箱
+}
+
+// PasswordResetResponse 密码重置响应
+// @Description 密码重置响应数据
+type PasswordResetResponse struct {
+	ResetLink string `json:"reset_link,omitempty"` // 重置链接
+	Message   string `json:"message"`              // 消息
+}
+
+// ResetPasswordRequest 重置密码请求
+// @Description 重置密码请求参数
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`                       // 重置令牌
+	NewPassword string `json:"new_password" binding:"required,min=6,max=128"` // 新密码
+}
+
+// ResendVerificationRequest 重新发送验证邮件请求
+// @Description 重新发送验证邮件请求参数
+type ResendVerificationRequest struct {
+	Email string `json:"email" binding:"required,email"` // 邮箱
+}
+
+// Register 用户注册
+// @Summary 用户注册
+// @Description 创建新用户账户
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param body body RegisterRequest true "注册请求参数"
+// @Success 200 {object} RegisterResponse "注册成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 409 {object} map[string]interface{} "用户名或邮箱已存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/register [post]
 func (h *UserHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -69,8 +159,6 @@ func (h *UserHandler) Register(c *gin.Context) {
 			riskScore = h.behaviorService.CalculateRiskScore(nil, bdModels)
 		}
 	}
-
-	_ = behaviorData
 
 	input := &service.RegisterInput{
 		Username: req.Username,
@@ -102,20 +190,19 @@ func (h *UserHandler) Register(c *gin.Context) {
 	})
 }
 
-type UserLoginRequest struct {
-	Username     string `json:"username" binding:"required"`
-	Password     string `json:"password" binding:"required"`
-	CaptchaToken string `json:"captcha_token,omitempty"`
-	BehaviorData string `json:"behavior_data,omitempty"`
-}
-
-type UserLoginResponse struct {
-	AccessToken  string                `json:"access_token"`
-	RefreshToken string                `json:"refresh_token"`
-	ExpiresIn    int64                 `json:"expires_in"`
-	User         *service.UserResponse `json:"user"`
-}
-
+// Login 用户登录
+// @Summary 用户登录
+// @Description 用户使用用户名和密码登录
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param body body UserLoginRequest true "登录请求参数"
+// @Success 200 {object} UserLoginResponse "登录成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "用户名或密码错误"
+// @Failure 403 {object} map[string]interface{} "账户被禁用"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/login [post]
 func (h *UserHandler) Login(c *gin.Context) {
 	var req UserLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -130,7 +217,6 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 
 	var behaviorData []interface{}
-	_ = behaviorData
 
 	if req.BehaviorData != "" {
 		if err := json.Unmarshal([]byte(req.BehaviorData), &behaviorData); err == nil {
@@ -181,16 +267,6 @@ func (h *UserHandler) Login(c *gin.Context) {
 		ExpiresIn:    900,
 		User:         service.ToUserResponse(user),
 	})
-}
-
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
-type RefreshResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"`
 }
 
 func (h *UserHandler) RefreshToken(c *gin.Context) {
@@ -267,6 +343,18 @@ func (h *UserHandler) Logout(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// GetProfile 获取用户资料
+// @Summary 获取用户资料
+// @Description 获取当前登录用户的详细资料
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "用户资料"
+// @Failure 401 {object} map[string]interface{} "未授权"
+// @Failure 404 {object} map[string]interface{} "用户不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -285,13 +373,6 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	response.Success(c, service.ToUserResponse(user))
-}
-
-type UpdateProfileRequest struct {
-	Nickname string `json:"nickname" binding:"max=100"`
-	Avatar   string `json:"avatar" binding:"max=500"`
-	Phone    string `json:"phone" binding:"max=20"`
-	Bio      string `json:"bio" binding:"max=500"`
 }
 
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
@@ -327,11 +408,20 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	response.Success(c, service.ToUserResponse(user))
 }
 
-type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
-}
-
+// ChangePassword 修改密码
+// @Summary 修改密码
+// @Description 修改当前用户的登录密码
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body ChangePasswordRequest true "修改密码请求"
+// @Success 200 {object} map[string]interface{} "修改成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 401 {object} map[string]interface{} "原密码错误"
+// @Failure 404 {object} map[string]interface{} "用户不存在"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/change-password [post]
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -367,15 +457,6 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	response.Success(c, gin.H{"message": "password changed successfully"})
 }
 
-type RequestPasswordResetRequest struct {
-	Email string `json:"email" binding:"required,email"`
-}
-
-type PasswordResetResponse struct {
-	ResetLink string `json:"reset_link,omitempty"`
-	Message   string `json:"message"`
-}
-
 func (h *UserHandler) RequestPasswordReset(c *gin.Context) {
 	var req RequestPasswordResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -406,11 +487,17 @@ func (h *UserHandler) RequestPasswordReset(c *gin.Context) {
 	})
 }
 
-type ResetPasswordRequest struct {
-	Token       string `json:"token" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=6,max=128"`
-}
-
+// ResetPassword 重置密码
+// @Summary 重置密码
+// @Description 使用令牌重置用户密码
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param body body ResetPasswordRequest true "重置密码请求"
+// @Success 200 {object} map[string]interface{} "重置成功"
+// @Failure 400 {object} map[string]interface{} "令牌无效或已过期"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/reset-password [post]
 func (h *UserHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -460,10 +547,18 @@ func (h *UserHandler) VerifyEmail(c *gin.Context) {
 	response.Success(c, gin.H{"message": "email verified successfully"})
 }
 
-type ResendVerificationRequest struct {
-	Email string `json:"email" binding:"required,email"`
-}
-
+// ResendVerification 重新发送验证邮件
+// @Summary 重新发送验证邮件
+// @Description 重新发送邮箱验证链接
+// @Tags 用户认证
+// @Accept json
+// @Produce json
+// @Param body body ResendVerificationRequest true "重新验证请求"
+// @Success 200 {object} map[string]interface{} "发送成功"
+// @Failure 400 {object} map[string]interface{} "请求参数错误"
+// @Failure 400 {object} map[string]interface{} "邮箱已验证"
+// @Failure 500 {object} map[string]interface{} "服务器内部错误"
+// @Router /api/v1/auth/resend-verification [post]
 func (h *UserHandler) ResendVerification(c *gin.Context) {
 	var req ResendVerificationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

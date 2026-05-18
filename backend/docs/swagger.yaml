@@ -1,55 +1,152 @@
 basePath: /
 definitions:
-  github_com_hjtpx_hjtpx_internal_service.QuotaConfig:
+  github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery:
     properties:
-      hardLimit:
-        description: 是否硬限制
-        type: boolean
-      limit:
-        description: 配额限制
-        format: int64
+      conditions:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.SearchCondition'
+        type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      sort:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.SortOption'
+        type: array
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.KeyEvent:
+    properties:
+      key:
+        type: string
+      key_code:
+        type: integer
+      timestamp:
         type: integer
       type:
-        allOf:
-        - $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.QuotaType'
-        description: 配额类型
-      warningThreshold:
-        description: 警告阈值（百分比）
-        format: float64
-        type: number
+        description: keydown, keyup
+        type: string
     type: object
-  github_com_hjtpx_hjtpx_internal_service.QuotaType:
+  github_com_hjtpx_hjtpx_internal_service.KeyboardSample:
+    properties:
+      key_events:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyEvent'
+        type: array
+      timestamp:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.MouseEvent:
+    properties:
+      button:
+        type: integer
+      timestamp:
+        type: integer
+      type:
+        description: mousemove, click, mousedown, mouseup
+        type: string
+      x:
+        type: integer
+      "y":
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.MouseSample:
+    properties:
+      mouse_events:
+        items:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseEvent'
+        type: array
+      timestamp:
+        type: integer
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.SearchCondition:
+    properties:
+      field:
+        type: string
+      operator:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.SearchOperator'
+      value: {}
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.SearchOperator:
     enum:
-    - daily
-    - weekly
-    - monthly
-    - hourly
-    - per_minute
+    - eq
+    - ne
+    - gt
+    - gte
+    - lt
+    - lte
+    - contains
+    - starts_with
+    - ends_with
+    - in
+    - not_in
+    - is_null
+    - is_not_null
+    - between
     type: string
     x-enum-varnames:
-    - QuotaTypeDaily
-    - QuotaTypeWeekly
-    - QuotaTypeMonthly
-    - QuotaTypeHourly
-    - QuotaTypePerMinute
-  github_com_hjtpx_hjtpx_internal_service.TokenBucketConfig:
+    - OpEquals
+    - OpNotEquals
+    - OpGreaterThan
+    - OpGreaterOrEq
+    - OpLessThan
+    - OpLessOrEq
+    - OpContains
+    - OpStartsWith
+    - OpEndsWith
+    - OpIn
+    - OpNotIn
+    - OpIsNull
+    - OpIsNotNull
+    - OpBetween
+  github_com_hjtpx_hjtpx_internal_service.SortOption:
     properties:
-      burstSize:
-        description: 突发流量大小
-        format: float64
-        type: number
-      capacity:
-        description: 桶的最大容量
-        format: float64
-        type: number
-      initialTokens:
-        description: 初始令牌数
-        format: float64
-        type: number
-      rate:
-        description: 每秒填充的令牌数
-        format: float64
-        type: number
+      field:
+        type: string
+      order:
+        description: asc 或 desc
+        type: string
+    type: object
+  github_com_hjtpx_hjtpx_internal_service.UserResponse:
+    properties:
+      avatar:
+        type: string
+      bio:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      is_verified:
+        type: boolean
+      last_login_at:
+        type: string
+      last_login_ip:
+        type: string
+      login_count:
+        type: integer
+      nickname:
+        type: string
+      phone:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+      verified_at:
+        type: string
+    type: object
+  github_com_hjtpx_hjtpx_internal_service_captcha.VoiceVerifyRequest:
+    properties:
+      code:
+        type: string
+      session_id:
+        type: string
+    required:
+    - code
+    - session_id
     type: object
   github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory:
     properties:
@@ -360,81 +457,57 @@ definitions:
       "y":
         type: integer
     type: object
-  internal_api_handler.CheckTokenBucketRequest:
+  internal_api_handler.ChangePasswordRequest:
+    description: 修改密码请求参数
     properties:
-      config:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.TokenBucketConfig'
-      key:
+      new_password:
+        description: 新密码
+        maxLength: 128
+        minLength: 6
+        type: string
+      old_password:
+        description: 原密码
         type: string
     required:
-    - key
+    - new_password
+    - old_password
     type: object
-  internal_api_handler.CheckTokenBucketResponse:
+  internal_api_handler.CreateApplicationRequest:
+    description: 创建新应用的请求参数
     properties:
-      allowed:
-        type: boolean
-      capacity:
-        type: number
-      is_burst:
-        type: boolean
-      retry_after_seconds:
-        type: number
-      tokens:
-        type: number
-      wait_time_seconds:
-        type: number
-    type: object
-  internal_api_handler.CombinedCheckRequest:
-    properties:
-      app_id:
-        type: integer
-      ip:
+      description:
+        description: 应用描述
+        maxLength: 1000
         type: string
-      quota_key:
+      domain:
+        description: 域名
+        maxLength: 255
         type: string
-      token_bucket_config:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.TokenBucketConfig'
-      token_bucket_key:
+      name:
+        description: 应用名称
+        maxLength: 255
+        minLength: 1
         type: string
       user_id:
+        description: 用户ID
         type: integer
-    type: object
-  internal_api_handler.CombinedCheckResponse:
-    properties:
-      allowed:
-        type: boolean
-      quota_result:
-        $ref: '#/definitions/internal_api_handler.ConsumeQuotaResponse'
-      reason:
-        type: string
-      token_bucket_result:
-        $ref: '#/definitions/internal_api_handler.CheckTokenBucketResponse'
-    type: object
-  internal_api_handler.ConsumeQuotaRequest:
-    properties:
-      amount:
-        type: integer
-      key:
+      website:
+        description: 网站URL
+        maxLength: 255
         type: string
     required:
-    - key
+    - name
+    - user_id
     type: object
-  internal_api_handler.ConsumeQuotaResponse:
+  internal_api_handler.CreateVoiceCaptchaRequest:
+    description: 语音验证码创建请求参数
     properties:
-      allowed:
-        type: boolean
-      status:
-        $ref: '#/definitions/internal_api_handler.GetQuotaStatusResponse'
-    type: object
-  internal_api_handler.CreateQuotaRequest:
-    properties:
-      config:
-        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.QuotaConfig'
-      key:
+      language:
+        description: '语言: "zh-CN" 或 "en-US"'
         type: string
-    required:
-    - config
-    - key
+      length:
+        description: 验证码位数，默认4位
+        type: integer
     type: object
   internal_api_handler.DataDeletionRequest:
     properties:
@@ -452,49 +525,53 @@ definitions:
     required:
     - format
     type: object
-  internal_api_handler.DeleteQuotaRequest:
+  internal_api_handler.EnableMFARequest:
     properties:
-      key:
+      email:
+        type: string
+      mfa_type:
+        enum:
+        - totp
+        - sms
+        - email
+        type: string
+      phone:
         type: string
     required:
-    - key
+    - mfa_type
     type: object
-  internal_api_handler.GetBucketStatsResponse:
+  internal_api_handler.EnableTOTPRequest:
     properties:
-      burst_size:
-        type: number
-      capacity:
-        type: number
-      key:
+      secret:
         type: string
-      last_refill:
-        type: string
-      rate:
-        type: number
-      tokens:
-        type: number
+    required:
+    - secret
     type: object
-  internal_api_handler.GetQuotaStatusResponse:
+  internal_api_handler.GenerateTOTPRequest:
     properties:
-      limit:
-        type: integer
-      percentage:
-        type: number
-      remaining:
-        type: integer
-      reset_at:
+      account_name:
         type: string
-      type:
+      issuer:
         type: string
-      used:
-        type: integer
+    required:
+    - account_name
+    - issuer
     type: object
-  internal_api_handler.ListQuotasResponse:
+  internal_api_handler.LogListMapResponse:
     properties:
-      quotas:
+      logs:
         items:
-          $ref: '#/definitions/internal_api_handler.QuotaInfo'
+          additionalProperties: true
+          type: object
         type: array
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
     type: object
   internal_api_handler.LoginRequest:
     properties:
@@ -524,36 +601,107 @@ definitions:
         - $ref: '#/definitions/internal_api_handler.AdminInfo'
         description: 用户信息
     type: object
-  internal_api_handler.QuotaInfo:
+  internal_api_handler.RegisterBiometricProfileRequest:
     properties:
-      key:
-        type: string
-      limit:
-        type: integer
-      percentage:
-        type: number
-      remaining:
-        type: integer
-      reset_at:
-        type: string
-      type:
-        type: string
-      used:
-        type: integer
-    type: object
-  internal_api_handler.ResetQuotaRequest:
-    properties:
-      key:
+      keyboard_sample:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyboardSample'
+      mouse_sample:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseSample'
+      user_id:
         type: string
     required:
-    - key
+    - user_id
     type: object
-  internal_api_handler.ResetTokenBucketRequest:
+  internal_api_handler.RegisterRequest:
+    description: 用户注册请求参数
     properties:
-      key:
+      behavior_data:
+        description: 行为数据（可选）
+        type: string
+      email:
+        description: 邮箱
+        type: string
+      password:
+        description: 密码
+        maxLength: 128
+        minLength: 6
+        type: string
+      username:
+        description: 用户名
+        maxLength: 50
+        minLength: 3
         type: string
     required:
-    - key
+    - email
+    - password
+    - username
+    type: object
+  internal_api_handler.RegisterResponse:
+    description: 用户注册响应数据
+    properties:
+      email:
+        description: 邮箱
+        type: string
+      message:
+        description: 消息
+        type: string
+      user_id:
+        description: 用户ID
+        type: integer
+      username:
+        description: 用户名
+        type: string
+      verification_link:
+        description: 验证链接
+        type: string
+    type: object
+  internal_api_handler.ResendVerificationRequest:
+    description: 重新发送验证邮件请求参数
+    properties:
+      email:
+        description: 邮箱
+        type: string
+    required:
+    - email
+    type: object
+  internal_api_handler.ResetPasswordRequest:
+    description: 重置密码请求参数
+    properties:
+      new_password:
+        description: 新密码
+        maxLength: 128
+        minLength: 6
+        type: string
+      token:
+        description: 重置令牌
+        type: string
+    required:
+    - new_password
+    - token
+    type: object
+  internal_api_handler.SaveSearchRequest:
+    description: 保存搜索的请求参数
+    properties:
+      description:
+        description: 搜索描述
+        type: string
+      name:
+        description: 搜索名称
+        type: string
+      query:
+        allOf:
+        - $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery'
+        description: 搜索查询条件
+    required:
+    - name
+    - query
+    type: object
+  internal_api_handler.SendEmailCodeRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
     type: object
   internal_api_handler.SliderCaptchaRequest:
     properties:
@@ -595,6 +743,57 @@ definitions:
     - position_y
     - session_id
     type: object
+  internal_api_handler.UpdateBlacklistRequest:
+    description: 更新黑名单请求参数
+    properties:
+      action:
+        description: 操作
+        type: string
+      application_ids:
+        description: 应用ID列表
+        items:
+          type: string
+        type: array
+      expiration:
+        description: 过期时间
+        type: string
+      note:
+        description: 备注
+        type: string
+      reason:
+        description: 原因
+        type: string
+      type:
+        description: 类型
+        type: string
+    type: object
+  internal_api_handler.UpdateConfigRequest:
+    description: 更新应用配置的请求参数
+    properties:
+      allowed_ips:
+        description: 允许的IP地址列表
+        items:
+          type: string
+        type: array
+      block_refused_requests:
+        description: 阻止被拒绝的请求
+        type: boolean
+      captcha_types:
+        description: 验证码类型列表
+        items:
+          type: string
+        type: array
+      custom_settings:
+        additionalProperties: true
+        description: 自定义设置
+        type: object
+      max_verify_per_day:
+        description: 每天最大验证次数
+        type: integer
+      max_verify_per_minute:
+        description: 每分钟最大验证次数
+        type: integer
+    type: object
   internal_api_handler.UpdateConsentRequest:
     properties:
       consent_analytics:
@@ -605,6 +804,73 @@ definitions:
         type: boolean
       consent_personalization:
         type: boolean
+    type: object
+  internal_api_handler.UserLoginRequest:
+    description: 用户登录请求参数
+    properties:
+      behavior_data:
+        description: 行为数据
+        type: string
+      captcha_token:
+        description: 验证码令牌
+        type: string
+      password:
+        description: 密码
+        type: string
+      username:
+        description: 用户名
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  internal_api_handler.UserLoginResponse:
+    description: 用户登录响应数据
+    properties:
+      access_token:
+        description: 访问令牌
+        type: string
+      expires_in:
+        description: 过期时间（秒）
+        type: integer
+      refresh_token:
+        description: 刷新令牌
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.UserResponse'
+        description: 用户信息
+    type: object
+  internal_api_handler.VerifyBiometricsRequest:
+    properties:
+      keyboard_sample:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyboardSample'
+      mouse_sample:
+        $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseSample'
+      user_id:
+        type: string
+    required:
+    - user_id
+    type: object
+  internal_api_handler.VerifyCodeRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  internal_api_handler.VerifyGestureCaptchaRequest:
+    description: 手势验证码验证请求参数
+    properties:
+      id:
+        description: 验证码ID
+        type: string
+      pattern:
+        description: 手势模式
+        type: string
+    required:
+    - id
+    - pattern
     type: object
   internal_api_handler.VerifyRequest:
     description: 验证验证码时发送的请求结构，支持滑动验证码和点击验证码
@@ -658,251 +924,1077 @@ info:
   title: HJTPX API
   version: "1.0"
 paths:
-  /api/v1/advanced-rate-limit/combined-check:
-    post:
-      consumes:
-      - application/json
-      description: 同时检查令牌桶和配额
-      parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.CombinedCheckRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_api_handler.CombinedCheckResponse'
-      summary: 综合限流检查
-      tags:
-      - 高级限流
-  /api/v1/advanced-rate-limit/quota/consume:
-    post:
-      consumes:
-      - application/json
-      description: 消费指定键的配额
-      parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.ConsumeQuotaRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_api_handler.ConsumeQuotaResponse'
-      summary: 消费配额
-      tags:
-      - 高级限流-配额
-  /api/v1/advanced-rate-limit/quota/create:
-    post:
-      consumes:
-      - application/json
-      description: 创建新的配额
-      parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.CreateQuotaRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: 创建配额
-      tags:
-      - 高级限流-配额
-  /api/v1/advanced-rate-limit/quota/delete:
-    delete:
-      consumes:
-      - application/json
-      description: 删除指定键的配额
-      parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.DeleteQuotaRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: 删除配额
-      tags:
-      - 高级限流-配额
-  /api/v1/advanced-rate-limit/quota/list:
+  /api/v1/admin/applications:
     get:
       consumes:
       - application/json
-      description: 列出所有配额
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_api_handler.ListQuotasResponse'
-      summary: 列出所有配额
-      tags:
-      - 高级限流-配额
-  /api/v1/advanced-rate-limit/quota/reset:
-    post:
-      consumes:
-      - application/json
-      description: 重置指定键的配额
+      description: 分页获取应用列表
       parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.ResetQuotaRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: 重置配额
-      tags:
-      - 高级限流-配额
-  /api/v1/advanced-rate-limit/quota/status:
-    get:
-      consumes:
-      - application/json
-      description: 获取指定键的配额状态
-      parameters:
-      - description: 配额键
+      - description: 页码，默认1
         in: query
-        name: key
-        required: true
+        name: page
+        type: integer
+      - description: 每页数量，默认10
+        in: query
+        name: page_size
+        type: integer
+      - description: 关键词搜索
+        in: query
+        name: keyword
+        type: string
+      - description: 用户ID
+        in: query
+        name: user_id
+        type: integer
+      - description: 是否启用
+        in: query
+        name: is_active
+        type: boolean
+      - description: 排序字段：name, created_at
+        in: query
+        name: sort_field
+        type: string
+      - description: 排序方式：asc, desc
+        in: query
+        name: sort_order
         type: string
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: 应用列表
           schema:
-            $ref: '#/definitions/internal_api_handler.GetQuotaStatusResponse'
-      summary: 获取配额状态
-      tags:
-      - 高级限流-配额
-  /api/v1/advanced-rate-limit/token-bucket/check:
-    post:
-      consumes:
-      - application/json
-      description: 检查指定键的令牌桶限流状态
-      parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.CheckTokenBucketRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_api_handler.CheckTokenBucketResponse'
-      summary: 检查令牌桶限流
-      tags:
-      - 高级限流
-  /api/v1/advanced-rate-limit/token-bucket/reset:
-    post:
-      consumes:
-      - application/json
-      description: 重置指定键的令牌桶
-      parameters:
-      - description: 请求参数
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.ResetTokenBucketRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
+            additionalProperties: true
             type: object
-      summary: 重置令牌桶
-      tags:
-      - 高级限流
-  /api/v1/advanced-rate-limit/token-bucket/stats:
-    get:
-      consumes:
-      - application/json
-      description: 获取指定键的令牌桶统计信息
-      parameters:
-      - description: 令牌桶键
-        in: query
-        name: key
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_api_handler.GetBucketStatsResponse'
-      summary: 获取令牌桶统计
-      tags:
-      - 高级限流
-  /api/v1/auth/login:
-    post:
-      consumes:
-      - application/json
-      description: 使用用户名和密码进行管理员登录，返回访问令牌
-      parameters:
-      - description: 登录请求参数
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/internal_api_handler.LoginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 登录成功
-          schema:
-            $ref: '#/definitions/internal_api_handler.LoginResponse'
         "400":
           description: 请求参数错误
           schema:
             additionalProperties: true
             type: object
         "401":
-          description: 认证失败
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取应用列表
+      tags:
+      - 应用管理
+    post:
+      consumes:
+      - application/json
+      description: 创建新的应用
+      parameters:
+      - description: 创建应用请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.CreateApplicationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 创建成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 用户不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建应用
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定的应用
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 应用不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除应用
+      tags:
+      - 应用管理
+    get:
+      consumes:
+      - application/json
+      description: 获取指定应用的详细信息
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 应用详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 应用不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取应用详情
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/{id}/config:
+    get:
+      consumes:
+      - application/json
+      description: 获取指定应用的配置信息
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 应用配置
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 应用不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取应用配置
+      tags:
+      - 应用管理
+    put:
+      consumes:
+      - application/json
+      description: 更新指定应用的配置信息
+      parameters:
+      - description: 应用ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新配置请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.UpdateConfigRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 应用不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新应用配置
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/save-search:
+    post:
+      consumes:
+      - application/json
+      description: 保存当前的搜索条件以便后续使用
+      parameters:
+      - description: 保存搜索请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.SaveSearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 保存应用搜索
+      tags:
+      - 应用管理
+  /api/v1/admin/applications/saved-searches/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定保存的搜索条件
+      parameters:
+      - description: 搜索ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除保存的应用搜索
+      tags:
+      - 应用管理
+  /api/v1/admin/blacklist:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取黑名单记录列表
+      parameters:
+      - description: 页码，默认1
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认20
+        in: query
+        name: size
+        type: integer
+      - description: 类型：ip, user_id, device_id, email
+        in: query
+        name: type
+        type: string
+      - description: 来源
+        in: query
+        name: source
+        type: string
+      - description: 状态：active, expired, deleted
+        in: query
+        name: status
+        type: string
+      - description: 关键词搜索
+        in: query
+        name: keyword
+        type: string
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 黑名单列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取黑名单列表
+      tags:
+      - 黑名单
+  /api/v1/admin/blacklist/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取黑名单详细信息
+      parameters:
+      - description: 黑名单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 黑名单详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 黑名单记录不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取黑名单详情
+      tags:
+      - 黑名单
+    put:
+      consumes:
+      - application/json
+      description: 更新指定黑名单记录
+      parameters:
+      - description: 黑名单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 更新黑名单请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.UpdateBlacklistRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 黑名单记录不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新黑名单
+      tags:
+      - 黑名单
+  /api/v1/admin/blacklist/check:
+    get:
+      consumes:
+      - application/json
+      description: 检查指定目标是否已被加入黑名单
+      parameters:
+      - description: 目标值
+        in: query
+        name: target
+        required: true
+        type: string
+      - description: 类型，默认ip
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 检查结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 检查目标是否在黑名单中
+      tags:
+      - 黑名单
+  /api/v1/admin/blacklist/search:
+    post:
+      consumes:
+      - application/json
+      description: 使用高级查询条件搜索黑名单
+      parameters:
+      - description: 高级搜索查询
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜索结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 高级搜索黑名单
+      tags:
+      - 黑名单
+  /api/v1/admin/logs:
+    get:
+      consumes:
+      - application/json
+      description: 分页获取验证码验证日志
+      parameters:
+      - description: 页码，默认1
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认20
+        in: query
+        name: page_size
+        type: integer
+      - description: 应用ID
+        in: query
+        name: application_id
+        type: integer
+      - description: 状态：success, failed, pending
+        in: query
+        name: status
+        type: string
+      - description: 验证码类型：slider, click, voice
+        in: query
+        name: captcha_type
+        type: string
+      - description: 会话ID
+        in: query
+        name: session_id
+        type: string
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      - description: 最小风险评分
+        in: query
+        name: min_risk_score
+        type: number
+      - description: 最大风险评分
+        in: query
+        name: max_risk_score
+        type: number
+      - description: IP地址
+        in: query
+        name: ip_address
+        type: string
+      - description: 风险等级：low, medium, high, critical
+        in: query
+        name: risk_level
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志列表
+          schema:
+            $ref: '#/definitions/internal_api_handler.LogListMapResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取验证日志列表
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据ID获取验证日志详细信息
+      parameters:
+      - description: 日志ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志详情
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 日志不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取日志详情
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/export:
+    get:
+      consumes:
+      - application/json
+      description: 导出符合筛选条件的验证日志
+      parameters:
+      - description: 应用ID
+        in: query
+        name: application_id
+        type: integer
+      - description: 状态：success, failed, pending
+        in: query
+        name: status
+        type: string
+      - description: 验证码类型：slider, click, voice
+        in: query
+        name: captcha_type
+        type: string
+      - description: 开始日期 YYYY-MM-DD
+        in: query
+        name: start_date
+        type: string
+      - description: 结束日期 YYYY-MM-DD
+        in: query
+        name: end_date
+        type: string
+      - description: 风险等级：low, medium, high, critical
+        in: query
+        name: risk_level
+        type: string
+      - description: 导出格式：csv, json，默认csv
+        in: query
+        name: format
+        type: string
+      produces:
+      - json/csv
+      responses:
+        "200":
+          description: CSV文件
+          schema:
+            type: file
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 导出验证日志
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/save-search:
+    post:
+      consumes:
+      - application/json
+      description: 保存当前的搜索条件以便后续使用
+      parameters:
+      - description: 保存搜索请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.SaveSearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 保存结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 保存日志搜索
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/saved-searches:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前用户保存的所有日志搜索条件
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜索列表
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取保存的日志搜索列表
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/saved-searches/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 删除指定保存的搜索条件
+      parameters:
+      - description: 搜索ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 删除结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除保存的日志搜索
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/search:
+    post:
+      consumes:
+      - application/json
+      description: 使用高级查询条件搜索验证日志
+      parameters:
+      - description: 高级搜索查询
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜索结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 高级搜索日志
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/session/{session_id}:
+    get:
+      consumes:
+      - application/json
+      description: 根据会话ID获取所有相关日志
+      parameters:
+      - description: 会话ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日志列表
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取会话日志
+      tags:
+      - 验证日志
+  /api/v1/admin/logs/statistics:
+    get:
+      consumes:
+      - application/json
+      description: 获取验证日志的统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统计数据
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取日志统计
+      tags:
+      - 验证日志
+  /api/v1/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      description: 修改当前用户的登录密码
+      parameters:
+      - description: 修改密码请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 修改成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 原密码错误
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 用户不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 修改密码
+      tags:
+      - 用户认证
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 用户使用用户名和密码登录
+      parameters:
+      - description: 登录请求参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.UserLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            $ref: '#/definitions/internal_api_handler.UserLoginResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 用户名或密码错误
           schema:
             additionalProperties: true
             type: object
@@ -916,9 +2008,243 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: 管理员登录
+      summary: 用户登录
       tags:
-      - 认证
+      - 用户认证
+  /api/v1/auth/profile:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的详细资料
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用户资料
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: 用户不存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户资料
+      tags:
+      - 用户认证
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: 创建新用户账户
+      parameters:
+      - description: 注册请求参数
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 注册成功
+          schema:
+            $ref: '#/definitions/internal_api_handler.RegisterResponse'
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: 用户名或邮箱已存在
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用户注册
+      tags:
+      - 用户认证
+  /api/v1/auth/resend-verification:
+    post:
+      consumes:
+      - application/json
+      description: 重新发送邮箱验证链接
+      parameters:
+      - description: 重新验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.ResendVerificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 发送成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 邮箱已验证
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 重新发送验证邮件
+      tags:
+      - 用户认证
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: 使用令牌重置用户密码
+      parameters:
+      - description: 重置密码请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 重置成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 令牌无效或已过期
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 重置密码
+      tags:
+      - 用户认证
+  /api/v1/biometrics/profile:
+    get:
+      consumes:
+      - application/json
+      description: 获取用户的生物特征档案信息
+      parameters:
+      - description: 用户ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 档案信息
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取生物特征档案
+      tags:
+      - 生物特征
+  /api/v1/biometrics/register:
+    post:
+      consumes:
+      - application/json
+      description: 注册用户键盘和鼠标操作特征，用于后续生物特征验证
+      parameters:
+      - description: 生物特征注册请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.RegisterBiometricProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 注册成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 注册生物特征档案
+      tags:
+      - 生物特征
+  /api/v1/biometrics/verify:
+    post:
+      consumes:
+      - application/json
+      description: 使用已注册的生物特征进行身份验证
+      parameters:
+      - description: 生物特征验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.VerifyBiometricsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 生物特征验证
+      tags:
+      - 生物特征
   /api/v1/captcha/check/{session_id}:
     get:
       consumes:
@@ -1006,6 +2332,60 @@ paths:
             additionalProperties: true
             type: object
       summary: 创建滑动验证码
+      tags:
+      - 验证码
+  /api/v1/captcha/gesture:
+    get:
+      consumes:
+      - application/json
+      description: 生成一个新的手势点连验证码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 手势验证码数据
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 生成手势验证码
+      tags:
+      - 验证码
+  /api/v1/captcha/gesture/verify:
+    post:
+      consumes:
+      - application/json
+      description: 验证用户绘制的手势是否正确
+      parameters:
+      - description: 手势验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.VerifyGestureCaptchaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 验证手势验证码
       tags:
       - 验证码
   /api/v1/captcha/slider:
@@ -1127,6 +2507,66 @@ paths:
       summary: 验证滑动验证码
       tags:
       - 验证码
+  /api/v1/captcha/voice/create:
+    post:
+      consumes:
+      - application/json
+      description: 生成一个新的语音验证码，返回语音文件URL
+      parameters:
+      - description: 语音验证码创建请求
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/internal_api_handler.CreateVoiceCaptchaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 语音验证码数据
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 创建语音验证码
+      tags:
+      - 验证码
+  /api/v1/captcha/voice/verify:
+    post:
+      consumes:
+      - application/json
+      description: 验证用户输入的语音验证码是否正确
+      parameters:
+      - description: 语音验证码验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_hjtpx_hjtpx_internal_service_captcha.VoiceVerifyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证结果
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 验证语音验证码
+      tags:
+      - 验证码
   /api/v1/gdpr/consent:
     get:
       consumes:
@@ -1243,6 +2683,227 @@ paths:
       summary: 请求数据导出
       tags:
       - GDPR
+  /api/v1/mfa/backup-codes/verify:
+    post:
+      consumes:
+      - application/json
+      description: 使用备用验证码进行身份验证
+      parameters:
+      - description: 备用码验证请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.VerifyCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 验证成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 验证备用验证码
+      tags:
+      - MFA
+  /api/v1/mfa/disable:
+    post:
+      consumes:
+      - application/json
+      description: 禁用当前用户的多因素认证
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 禁用成功
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 禁用多因素认证
+      tags:
+      - MFA
+  /api/v1/mfa/email/send:
+    post:
+      consumes:
+      - application/json
+      description: 向用户邮箱发送验证码
+      parameters:
+      - description: 邮箱验证码请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.SendEmailCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 发送成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 发送邮箱验证码
+      tags:
+      - MFA
+  /api/v1/mfa/enable:
+    post:
+      consumes:
+      - application/json
+      description: 为当前用户启用多因素认证
+      parameters:
+      - description: 启用MFA请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.EnableMFARequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 启用成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 启用多因素认证
+      tags:
+      - MFA
+  /api/v1/mfa/totp/enable:
+    post:
+      consumes:
+      - application/json
+      description: 为当前用户启用基于时间的一次性密码(TOTP)认证
+      parameters:
+      - description: 启用TOTP请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.EnableTOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 启用成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 未授权
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 启用TOTP
+      tags:
+      - MFA
+  /api/v1/mfa/totp/generate:
+    post:
+      consumes:
+      - application/json
+      description: 为用户生成新的TOTP认证密钥
+      parameters:
+      - description: TOTP生成请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_api_handler.GenerateTOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: TOTP密钥信息
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 请求参数错误
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 生成TOTP密钥
+      tags:
+      - MFA
 schemes:
 - http
 - https

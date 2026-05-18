@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"strconv"
 	"sync"
 
@@ -385,7 +386,9 @@ func QuotaMiddleware(options *QuotaOptions) gin.HandlerFunc {
 				WarningThreshold: 80,
 				HardLimit:        options.HardLimit,
 			}
-			_ = quotaManagementService.CreateOrUpdateQuota(c.Request.Context(), key, config)
+			if err := quotaManagementService.CreateOrUpdateQuota(c.Request.Context(), key, config); err != nil {
+				log.Printf("创建或更新配额失败: %v", err)
+			}
 		}
 
 		status, allowed, err := quotaManagementService.ConsumeQuota(c.Request.Context(), key, 1)

@@ -22,6 +22,8 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 		aggKey        string
 		windowSecs    int
 		threshold     int
+		severity      string
+		message       string
 		eventCount    int
 		expectedSend  bool
 		expectedCount int
@@ -32,6 +34,8 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 			aggKey:        "test-key-1",
 			windowSecs:    300,
 			threshold:     1,
+			severity:      "warning",
+			message:       "test message",
 			eventCount:    1,
 			expectedSend:  true,
 			expectedCount: 1,
@@ -42,6 +46,8 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 			aggKey:        "test-key-2",
 			windowSecs:    300,
 			threshold:     5,
+			severity:      "warning",
+			message:       "test message",
 			eventCount:    3,
 			expectedSend:  false,
 			expectedCount: 3,
@@ -52,6 +58,8 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 			aggKey:        "test-key-3",
 			windowSecs:    300,
 			threshold:     3,
+			severity:      "critical",
+			message:       "critical message",
 			eventCount:    3,
 			expectedSend:  true,
 			expectedCount: 3,
@@ -62,6 +70,8 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 			aggKey:        "test-key-4",
 			windowSecs:    300,
 			threshold:     2,
+			severity:      "info",
+			message:       "info message",
 			eventCount:    4,
 			expectedSend:  true,
 			expectedCount: 4,
@@ -70,13 +80,13 @@ func TestAlertAggregator_ShouldTriggerAlert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear aggregator before each test
 			aggregator.AlertCounts = make(map[string]*AlertCountItem)
+			aggregator.AlertSummaries = make(map[string]*AlertSummary)
 
 			var shouldSend bool
 			var count int
 			for i := 0; i < tt.eventCount; i++ {
-				shouldSend, count = aggregator.ShouldTriggerAlert(tt.ruleID, tt.aggKey, tt.windowSecs, tt.threshold)
+				shouldSend, count = aggregator.ShouldTriggerAlert(tt.ruleID, tt.aggKey, tt.windowSecs, tt.threshold, tt.severity, tt.message)
 			}
 
 			assert.Equal(t, tt.expectedSend, shouldSend)
@@ -92,7 +102,7 @@ func TestAlertAggregator_WindowExpiry(t *testing.T) {
 	windowSecs := 1 // Very short window for testing
 
 	// First event
-	shouldSend, count := aggregator.ShouldTriggerAlert(ruleID, aggKey, windowSecs, 5)
+	shouldSend, count := aggregator.ShouldTriggerAlert(ruleID, aggKey, windowSecs, 5, "warning", "test message")
 	assert.True(t, shouldSend)
 	assert.Equal(t, 1, count)
 
@@ -100,7 +110,7 @@ func TestAlertAggregator_WindowExpiry(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// New event should reset count
-	shouldSend, count = aggregator.ShouldTriggerAlert(ruleID, aggKey, windowSecs, 5)
+	shouldSend, count = aggregator.ShouldTriggerAlert(ruleID, aggKey, windowSecs, 5, "warning", "test message")
 	assert.True(t, shouldSend)
 	assert.Equal(t, 1, count)
 }
@@ -108,24 +118,23 @@ func TestAlertAggregator_WindowExpiry(t *testing.T) {
 func TestAlertAggregator_Cleanup(t *testing.T) {
 	aggregator := NewAlertAggregator()
 
-	// Add some items
 	aggregator.AlertCounts["key1"] = &AlertCountItem{
 		RuleID:         1,
 		AggregationKey: "key1",
 		Count:          5,
 		LastSeen:       time.Now().Add(-2 * time.Hour),
+		Severity:       "warning",
 	}
 	aggregator.AlertCounts["key2"] = &AlertCountItem{
 		RuleID:         2,
 		AggregationKey: "key2",
 		Count:          3,
 		LastSeen:       time.Now(),
+		Severity:       "critical",
 	}
 
-	// Cleanup old items
 	aggregator.Cleanup(1 * time.Hour)
 
-	// Only recent item should remain
 	assert.Len(t, aggregator.AlertCounts, 1)
 	assert.Contains(t, aggregator.AlertCounts, "key2")
 	assert.NotContains(t, aggregator.AlertCounts, "key1")
