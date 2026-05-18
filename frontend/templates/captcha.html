@@ -14,9 +14,10 @@
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/captcha-ui-optimized.css">
+    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
     
     <script src="/static/js/environment-detector.js" defer></script>
+    <script src="/static/js/captcha-ui-unified.js" defer></script>
     <style>
         :root {
             --captcha-primary: #c9a96e;
@@ -1814,8 +1815,14 @@
             var resultEl = document.getElementById(type + 'Result');
             if (success) {
                 animateSuccess(resultEl);
+                if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
+                    CaptchaUI.toast.success(message || 'Verification successful!', 'Success');
+                }
             } else {
                 animateError(resultEl);
+                if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
+                    CaptchaUI.toast.error(message || 'Verification failed, please try again', 'Error');
+                }
             }
             originalShowResult(type, success, message);
         };

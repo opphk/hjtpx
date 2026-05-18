@@ -10,7 +10,7 @@
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/captcha-ui-optimized.css">
+    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
     <link rel="preconnect" href="https://cdn.bootcdn.net">
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
     <style id="theme-styles">
@@ -623,43 +623,39 @@ result, err := client.<span style="color: #8ab4f8;">VerifyCaptcha</span>(
             });
         }
 
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('error-toast-container');
-            const toastId = 'toast-' + Date.now();
-            
-            const colors = {
-                success: 'bg-success text-white',
-                error: 'bg-danger text-white',
-                warning: 'bg-warning text-dark',
-                info: 'bg-info text-dark'
-            };
-            
-            const icons = {
-                success: 'fa-check-circle',
-                error: 'fa-exclamation-triangle',
-                warning: 'fa-exclamation-circle',
-                info: 'fa-info-circle'
-            };
+        function showToast(message, type) {
+            if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
+                CaptchaUI.toast.show({
+                    type: type,
+                    message: message,
+                    title: type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info'
+                });
+            } else {
+                var container = document.getElementById('error-toast-container');
+                var toastId = 'toast-' + Date.now();
+                
+                var colors = {
+                    success: 'bg-success text-white',
+                    error: 'bg-danger text-white',
+                    warning: 'bg-warning text-dark',
+                    info: 'bg-info text-dark'
+                };
+                
+                var icons = {
+                    success: 'fa-check-circle',
+                    error: 'fa-exclamation-triangle',
+                    warning: 'fa-exclamation-circle',
+                    info: 'fa-info-circle'
+                };
 
-            const toastHtml = `
-                <div id="${toastId}" class="toast ${colors[type]} fade show" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="toast-header">
-                        <i class="fas ${icons[type]} me-2"></i>
-                        <strong class="me-auto">提示</strong>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="关闭"></button>
-                    </div>
-                    <div class="toast-body d-flex justify-content-between align-items-center">
-                        <span>${message}</span>
-                        ${type === 'error' ? '<button class="btn btn-sm btn-light ms-2" onclick="location.reload()">重试</button>' : ''}
-                    </div>
-                </div>
-            `;
-            
-            container.insertAdjacentHTML('beforeend', toastHtml);
-            const toastEl = document.getElementById(toastId);
-            const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
-            toast.show();
-            toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+                var toastHtml = '<div id="' + toastId + '" class="toast ' + colors[type] + ' fade show" role="alert" aria-live="assertive" aria-atomic="true"><div class="toast-header"><i class="fas ' + icons[type] + ' me-2"></i><strong class="me-auto">提示</strong><button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button></div><div class="toast-body d-flex justify-content-between align-items-center"><span>' + message + '</span>' + (type === 'error' ? '<button class="btn btn-sm btn-light ms-2" onclick="location.reload()">Retry</button>' : '') + '</div></div>';
+                
+                container.insertAdjacentHTML('beforeend', toastHtml);
+                var toastEl = document.getElementById(toastId);
+                var toast = new bootstrap.Toast(toastEl, { delay: 5000 });
+                toast.show();
+                toastEl.addEventListener('hidden.bs.toast', function() { toastEl.remove(); });
+            }
         }
 
         function loadCaptcha(type) {
