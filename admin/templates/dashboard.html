@@ -4,17 +4,53 @@
 {% block page_title %}仪表盘{% endblock %}
 
 {% block header_actions %}
-<div class="btn-group">
+<div class="btn-group me-2">
     <button type="button" class="btn btn-default" id="refreshBtn">
         <i class="fas fa-sync"></i> 刷新
     </button>
+</div>
+<div class="btn-group me-2">
     <button type="button" class="btn btn-default dropdown-toggle dropdown-icon" data-toggle="dropdown">
-        <span class="sr-only">导出</span>
+        <span><i class="fas fa-download"></i> 导出</span>
     </button>
     <div class="dropdown-menu" role="menu">
-        <a class="dropdown-item" href="/admin/export?format=csv"><i class="fas fa-file-csv"></i> CSV</a>
-        <a class="dropdown-item" href="/admin/export?format=excel"><i class="fas fa-file-excel"></i> Excel</a>
-        <a class="dropdown-item" href="/admin/export?format=pdf"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a class="dropdown-item" href="#" id="exportCsv"><i class="fas fa-file-csv"></i> CSV</a>
+        <a class="dropdown-item" href="#" id="exportJson"><i class="fas fa-file-code"></i> JSON</a>
+        <a class="dropdown-item" href="#" id="exportExcel"><i class="fas fa-file-excel"></i> Excel</a>
+    </div>
+</div>
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle dropdown-icon" data-toggle="dropdown">
+        <span><i class="fas fa-calendar"></i> 时间范围</span>
+    </button>
+    <div class="dropdown-menu p-3" role="menu" style="min-width: 300px;">
+        <div class="mb-2">
+            <label class="form-label small">快捷选择</label>
+            <div class="btn-group btn-group-sm w-100 mb-2">
+                <button type="button" class="btn btn-outline-secondary" data-preset="today">今天</button>
+                <button type="button" class="btn btn-outline-secondary" data-preset="yesterday">昨天</button>
+                <button type="button" class="btn btn-outline-secondary" data-preset="last7days">最近7天</button>
+            </div>
+            <div class="btn-group btn-group-sm w-100 mb-2">
+                <button type="button" class="btn btn-outline-secondary" data-preset="last30days">最近30天</button>
+                <button type="button" class="btn btn-outline-secondary" data-preset="thisMonth">本月</button>
+                <button type="button" class="btn btn-outline-secondary" data-preset="lastMonth">上月</button>
+            </div>
+        </div>
+        <div class="mb-2">
+            <label class="form-label small">自定义范围</label>
+            <div class="row g-2">
+                <div class="col-6">
+                    <input type="date" class="form-control form-control-sm" id="startDate">
+                </div>
+                <div class="col-6">
+                    <input type="date" class="form-control form-control-sm" id="endDate">
+                </div>
+            </div>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm w-100" id="applyTimeRange">
+            应用时间范围
+        </button>
     </div>
 </div>
 {% endblock %}
@@ -236,11 +272,99 @@
         </div>
     </div>
 </div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-info">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-th me-2"></i>请求热力图</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="heatmapChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-tachometer-alt me-2"></i>性能雷达图</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="radarChart" style="min-height: 350px; height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-project-diagram me-2"></i>验证流程桑基图</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="sankeyChart" style="min-height: 350px; height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-line me-2"></i>高级趋势分析</h3>
+                <div class="card-tools">
+                    <div class="btn-group btn-group-sm me-2">
+                        <button type="button" class="btn btn-secondary active" data-period="hour">小时</button>
+                        <button type="button" class="btn btn-secondary" data-period="day">日</button>
+                        <button type="button" class="btn btn-secondary" data-period="week">周</button>
+                    </div>
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div id="requestTrendChart" style="min-height: 300px; height: 300px;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <div id="realtimeChart" style="min-height: 300px; height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <script>
-let trendChart, pieChart, captchaTypeChart;
+let trendChart, pieChart, captchaTypeChart, heatmapChart, radarChart, sankeyChart;
+let requestTrendChart, realtimeChart;
+let autoRefreshInterval = null;
+let realtimeDataPoints = [];
+let previousStats = null;
+const REALTIME_UPDATE_INTERVAL = 5000;
+const MAX_REALTIME_POINTS = 20;
 const REFRESH_INTERVAL = 30000;
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -248,6 +372,9 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
     loadSystemStatus();
     loadRecentVerifications();
+    loadHeatmapData();
+    loadRadarData();
+    loadSankeyData();
 
     setInterval(loadDashboardData, REFRESH_INTERVAL);
     setInterval(loadSystemStatus, REFRESH_INTERVAL);
@@ -256,13 +383,141 @@ document.addEventListener('DOMContentLoaded', function() {
         loadDashboardData();
         loadSystemStatus();
         loadRecentVerifications();
+        loadHeatmapData();
+        loadRadarData();
+        loadSankeyData();
     });
+
+    setupTimeRangeSelector();
+    setupExportButtons();
+    setupChartPeriodButtons();
 });
+
+function setupTimeRangeSelector() {
+    const applyBtn = document.getElementById('applyTimeRange');
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (startDate && endDate) {
+                loadCustomRangeData(startDate, endDate);
+            }
+        });
+    }
+
+    const presets = document.querySelectorAll('[data-preset]');
+    presets.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const preset = this.dataset.preset;
+            const dates = calculatePresetDates(preset);
+            document.getElementById('startDate').value = dates.start;
+            document.getElementById('endDate').value = dates.end;
+            loadCustomRangeData(dates.start, dates.end);
+        });
+    });
+}
+
+function calculatePresetDates(preset) {
+    const today = new Date();
+    const formatDate = (date) => {
+        return date.toISOString().split('T')[0];
+    };
+
+    let start = new Date(today);
+    switch (preset) {
+        case 'today':
+            break;
+        case 'yesterday':
+            start.setDate(start.getDate() - 1);
+            break;
+        case 'last7days':
+            start.setDate(start.getDate() - 6);
+            break;
+        case 'last30days':
+            start.setDate(start.getDate() - 29);
+            break;
+        case 'thisMonth':
+            start = new Date(today.getFullYear(), today.getMonth(), 1);
+            break;
+        case 'lastMonth':
+            start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            break;
+    }
+
+    return {
+        start: formatDate(start),
+        end: formatDate(today)
+    };
+}
+
+function setupExportButtons() {
+    const exportCsvBtn = document.getElementById('exportCsv');
+    const exportJsonBtn = document.getElementById('exportJson');
+    const exportExcelBtn = document.getElementById('exportExcel');
+
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', () => exportData('csv'));
+    }
+    if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', () => exportData('json'));
+    }
+    if (exportExcelBtn) {
+        exportExcelBtn.addEventListener('click', () => exportData('excel'));
+    }
+}
+
+async function exportData(format) {
+    try {
+        const response = await fetch(`/admin/export?format=${format}`);
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dashboard_export.${format === 'excel' ? 'xlsx' : format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showNotification('导出成功', 'success');
+    } catch (error) {
+        console.error('导出失败:', error);
+        showNotification('导出失败', 'error');
+    }
+}
+
+function setupChartPeriodButtons() {
+    const periodButtons = document.querySelectorAll('[data-period]');
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            const period = this.dataset.period;
+            loadAdvancedAnalytics(period);
+        });
+    });
+}
+
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+    notification.innerHTML = message;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 3000);
+}
 
 function initCharts() {
     initTrendChart();
     initPieChart();
     initCaptchaTypeChart();
+    initHeatmapChart();
+    initRadarChart();
+    initSankeyChart();
+    initRequestTrendChart();
+    initRealtimeChart();
 }
 
 function initTrendChart() {

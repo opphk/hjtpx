@@ -135,3 +135,71 @@ func GetDashboardAlerts(c *gin.Context) {
 		"alerts": alerts,
 	})
 }
+
+func GetDashboardHeatmapData(c *gin.Context) {
+	handler := GetDashboardHandler()
+
+	startDate := c.DefaultQuery("start_date", "")
+	endDate := c.DefaultQuery("end_date", "")
+
+	data, err := handler.dashboardService.GetHeatmapData(startDate, endDate)
+	if err != nil {
+		response.InternalServerError(c, "获取热力图数据失败")
+		return
+	}
+
+	response.Success(c, data)
+}
+
+func GetDashboardRadarData(c *gin.Context) {
+	handler := GetDashboardHandler()
+
+	data, err := handler.dashboardService.GetRadarData()
+	if err != nil {
+		response.InternalServerError(c, "获取雷达图数据失败")
+		return
+	}
+
+	response.Success(c, data)
+}
+
+func GetDashboardSankeyData(c *gin.Context) {
+	handler := GetDashboardHandler()
+
+	data, err := handler.dashboardService.GetSankeyData()
+	if err != nil {
+		response.InternalServerError(c, "获取桑基图数据失败")
+		return
+	}
+
+	response.Success(c, data)
+}
+
+func GetAdvancedAnalytics(c *gin.Context) {
+	handler := GetDashboardHandler()
+
+	period := c.DefaultQuery("period", "hour")
+
+	data, err := handler.dashboardService.GetAdvancedAnalytics(period)
+	if err != nil {
+		response.InternalServerError(c, "获取高级分析数据失败")
+		return
+	}
+
+	response.Success(c, data)
+}
+
+func GetCustomTimeRangeData(c *gin.Context) {
+	handler := GetDashboardHandler()
+
+	startDate := c.DefaultQuery("start_date", "")
+	endDate := c.DefaultQuery("end_date", "")
+
+	data, err := handler.dashboardService.GetCustomRangeData(startDate, endDate)
+	if err != nil {
+		response.InternalServerError(c, "获取自定义时间范围数据失败")
+		return
+	}
+
+	response.Success(c, data)
+}

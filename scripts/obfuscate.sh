@@ -19,6 +19,17 @@ ENABLE_CODE_COMPRESSION="${ENABLE_CODE_COMPRESSION:-true}"
 ENABLE_CONTROL_FLOW_FLATTENING="${ENABLE_CONTROL_FLOW_FLATTENING:-true}"
 ENABLE_DEAD_CODE_INJECTION="${ENABLE_DEAD_CODE_INJECTION:-false}"
 ENABLE_FUNCTION_WRAPPING="${ENABLE_FUNCTION_WRAPPING:-true}"
+ENABLE_SCOPE_MANGLING="${ENABLE_SCOPE_MANGLING:-true}"
+ENABLE_HEX_OBFUSCATION="${ENABLE_HEX_OBFUSCATION:-true}"
+ENABLE_ARRAY_SPLITTING="${ENABLE_ARRAY_SPLITTING:-true}"
+ENABLE_INDIRECT_BRANCHING="${ENABLE_INDIRECT_BRANCHING:-true}"
+ENABLE_BOOLEAN_TO_BITWISE="${ENABLE_BOOLEAN_TO_BITWISE:-true}"
+ENABLE_SELF_DESTRUCT="${ENABLE_SELF_DESTRUCT:-true}"
+ENABLE_DEBUGGER_DETECTION="${ENABLE_DEBUGGER_DETECTION:-true}"
+ENCRYPTION_ALGORITHM="${ENCRYPTION_ALGORITHM:-AES-GCM}"
+MULTI_LAYER_OBFUSCATION="${MULTI_LAYER_OBFUSCATION:-0}"
+MAX_OBFUSCATION="${MAX_OBFUSCATION:-false}"
+ANALYZE_STRENGTH="${ANALYZE_STRENGTH:-false}"
 REMOVE_COMMENTS="${REMOVE_COMMENTS:-true}"
 PRESERVE_CONSOLE="${PRESERVE_CONSOLE:-true}"
 OBFUSCATION_KEY="${OBFUSCATION_KEY:-hjtpx-obfuscate-key-2024}"
@@ -96,34 +107,57 @@ JavaScript代码混淆构建脚本
     -v, --verbose                   详细输出模式
     -d, --dry-run                   模拟运行，不实际执行混淆
     -f, --force                     强制执行，跳过确认提示
-    -l, --level <1-3>               混淆级别 (1=轻量, 2=标准, 3=高级)
+    -l, --level <1-3>               混淆级别 (1=轻量, 2=标准, 3=高级, 4=最强)
     -i, --input <文件或目录>          输入文件或目录
     -o, --output <目录>              输出目录
     -k, --key <密钥>                 混淆密钥
+    -a, --algorithm <算法>            加密算法 (AES-GCM, AES-CBC, RC4, XOR, CHACHA20)
+    -m, --max-obfuscation           启用最强混淆
+    -e, --multi-layer <层数>          多层混淆 (1-5层)
     --no-backup                     禁用备份
     --no-compression                禁用代码压缩
     --no-encryption                禁用字符串加密
     --no-variables                 禁用变量名混淆
     --enable-dead-code              启用死代码注入
+    --enable-scope-mangling        启用作用域混淆
+    --enable-hex-obfuscation       启用十六进制混淆
+    --enable-array-splitting        启用数组拆分
+    --enable-indirect-branching     启用间接分支
+    --enable-boolean-bitwise        启用布尔转位运算
+    --enable-self-destruct         启用自毁机制
+    --enable-debugger-detection     启用调试器检测
     --rollback                      回滚到上一个备份版本
     --list-backups                  列出所有备份
     --status                        显示当前混淆状态
+    --analyze-strength              分析混淆强度
     --config <配置文件>              使用指定的配置文件
 
 混淆级别:
     1 - 轻量级: 仅变量名混淆和代码压缩
     2 - 标准级: 变量混淆 + 字符串加密 + 代码压缩 + 函数包装
     3 - 高级级: 全部功能 + 控制流扁平化 + 死代码注入
+    4 - 最强级: 全部功能 + RC4加密 + 多层混淆 + 自毁机制
+
+加密算法:
+    AES-GCM   - AES-GCM认证加密 (默认)
+    AES-CBC   - AES-CBC块加密
+    RC4       - RC4流加密
+    XOR       - 简单XOR加密
+    CHACHA20  - ChaCha20流加密
 
 示例:
     $0 -l 2 -i ./frontend/static/js/main.js -o ./build/js
     $0 --level 3 --input ./frontend/static/js --output ./build/js
+    $0 --max-obfuscation --algorithm RC4
+    $0 --multi-layer 3
     $0 --rollback
     $0 --config /path/to/obfuscate.yaml
+    $0 --analyze-strength
 
 环境变量:
-    OBFUSCATION_LEVEL              混淆级别 (1-3)
+    OBFUSCATION_LEVEL              混淆级别 (1-4)
     OBFUSCATION_KEY                混淆密钥
+    ENCRYPTION_ALGORITHM           加密算法
     VERBOSE                        详细输出
     DRY_RUN                        模拟运行
 
@@ -317,6 +351,14 @@ apply_obfuscation_level() {
             ENABLE_CONTROL_FLOW_FLATTENING="false"
             ENABLE_DEAD_CODE_INJECTION="false"
             ENABLE_FUNCTION_WRAPPING="false"
+            ENABLE_SCOPE_MANGLING="false"
+            ENABLE_HEX_OBFUSCATION="false"
+            ENABLE_ARRAY_SPLITTING="false"
+            ENABLE_INDIRECT_BRANCHING="false"
+            ENABLE_BOOLEAN_TO_BITWISE="false"
+            ENABLE_SELF_DESTRUCT="false"
+            ENABLE_DEBUGGER_DETECTION="false"
+            ENCRYPTION_ALGORITHM="AES-GCM"
             ;;
         2)
             ENABLE_VARIABLE_OBFUSCATION="true"
@@ -325,6 +367,14 @@ apply_obfuscation_level() {
             ENABLE_CONTROL_FLOW_FLATTENING="false"
             ENABLE_DEAD_CODE_INJECTION="false"
             ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_SCOPE_MANGLING="true"
+            ENABLE_HEX_OBFUSCATION="true"
+            ENABLE_ARRAY_SPLITTING="false"
+            ENABLE_INDIRECT_BRANCHING="false"
+            ENABLE_BOOLEAN_TO_BITWISE="false"
+            ENABLE_SELF_DESTRUCT="false"
+            ENABLE_DEBUGGER_DETECTION="false"
+            ENCRYPTION_ALGORITHM="AES-GCM"
             ;;
         3)
             ENABLE_VARIABLE_OBFUSCATION="true"
@@ -333,8 +383,53 @@ apply_obfuscation_level() {
             ENABLE_CONTROL_FLOW_FLATTENING="true"
             ENABLE_DEAD_CODE_INJECTION="true"
             ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_SCOPE_MANGLING="true"
+            ENABLE_HEX_OBFUSCATION="true"
+            ENABLE_ARRAY_SPLITTING="true"
+            ENABLE_INDIRECT_BRANCHING="true"
+            ENABLE_BOOLEAN_TO_BITWISE="true"
+            ENABLE_SELF_DESTRUCT="true"
+            ENABLE_DEBUGGER_DETECTION="true"
+            ENCRYPTION_ALGORITHM="AES-GCM"
+            ;;
+        4)
+            ENABLE_VARIABLE_OBFUSCATION="true"
+            ENABLE_STRING_ENCRYPTION="true"
+            ENABLE_CODE_COMPRESSION="true"
+            ENABLE_CONTROL_FLOW_FLATTENING="true"
+            ENABLE_DEAD_CODE_INJECTION="true"
+            ENABLE_FUNCTION_WRAPPING="true"
+            ENABLE_SCOPE_MANGLING="true"
+            ENABLE_HEX_OBFUSCATION="true"
+            ENABLE_ARRAY_SPLITTING="true"
+            ENABLE_INDIRECT_BRANCHING="true"
+            ENABLE_BOOLEAN_TO_BITWISE="true"
+            ENABLE_SELF_DESTRUCT="true"
+            ENABLE_DEBUGGER_DETECTION="true"
+            ENCRYPTION_ALGORITHM="RC4"
+            MULTI_LAYER_OBFUSCATION="2"
+            log_info "最强混淆模式: RC4加密 + 多层混淆(2层)"
             ;;
     esac
+
+    if [[ "$MAX_OBFUSCATION" == "true" ]]; then
+        ENABLE_VARIABLE_OBFUSCATION="true"
+        ENABLE_STRING_ENCRYPTION="true"
+        ENABLE_CODE_COMPRESSION="true"
+        ENABLE_CONTROL_FLOW_FLATTENING="true"
+        ENABLE_DEAD_CODE_INJECTION="true"
+        ENABLE_FUNCTION_WRAPPING="true"
+        ENABLE_SCOPE_MANGLING="true"
+        ENABLE_HEX_OBFUSCATION="true"
+        ENABLE_ARRAY_SPLITTING="true"
+        ENABLE_INDIRECT_BRANCHING="true"
+        ENABLE_BOOLEAN_TO_BITWISE="true"
+        ENABLE_SELF_DESTRUCT="true"
+        ENABLE_DEBUGGER_DETECTION="true"
+        ENCRYPTION_ALGORITHM="RC4"
+        MULTI_LAYER_OBFUSCATION="3"
+        log_info "最大混淆模式已启用"
+    fi
 
     log_info "混淆级别 $OBFUSCATION_LEVEL 配置已应用"
 }
@@ -615,7 +710,6 @@ show_status() {
     echo ""
     echo "=== 混淆状态 ==="
     echo ""
-
     echo "当前配置:"
     echo "  混淆级别: $OBFUSCATION_LEVEL"
     echo "  变量混淆: $ENABLE_VARIABLE_OBFUSCATION"
@@ -624,6 +718,15 @@ show_status() {
     echo "  控制流扁平化: $ENABLE_CONTROL_FLOW_FLATTENING"
     echo "  死代码注入: $ENABLE_DEAD_CODE_INJECTION"
     echo "  函数包装: $ENABLE_FUNCTION_WRAPPING"
+    echo "  作用域混淆: $ENABLE_SCOPE_MANGLING"
+    echo "  十六进制混淆: $ENABLE_HEX_OBFUSCATION"
+    echo "  数组拆分: $ENABLE_ARRAY_SPLITTING"
+    echo "  间接分支: $ENABLE_INDIRECT_BRANCHING"
+    echo "  布尔转位运算: $ENABLE_BOOLEAN_TO_BITWISE"
+    echo "  自毁机制: $ENABLE_SELF_DESTRUCT"
+    echo "  调试器检测: $ENABLE_DEBUGGER_DETECTION"
+    echo "  加密算法: $ENCRYPTION_ALGORITHM"
+    echo "  多层混淆: ${MULTI_LAYER_OBFUSCATION}层"
     echo "  备份启用: $BACKUP_ENABLED"
     echo ""
 
@@ -642,6 +745,91 @@ show_status() {
         echo "可用备份数: 0"
     fi
 
+    echo ""
+}
+
+analyze_obfuscation_strength() {
+    local input_file="$1"
+
+    if [[ ! -f "$input_file" ]]; then
+        log_error "文件不存在: $input_file"
+        return 1
+    fi
+
+    log_info "分析混淆强度: $input_file"
+
+    local content=$(cat "$input_file")
+
+    local entropy=$(echo "$content" | tr -cd '[:print:]\n' | awk '{for(i=1;i<=length;i++){c=substr($0,i,1); freq[c]++}}END{for(c in freq){p=freq[c]/length; ent-=p*log(p)/log(2)}}END{printf "%.2f", ent}')
+    log_info "  熵值: $entropy"
+
+    local hex_count=$(echo "$content" | grep -o '0x[0-9a-fA-F]\+' | wc -l)
+    log_info "  十六进制数: $hex_count"
+
+    local obfuscated_vars=$(echo "$content" | grep -oE '_0x[0-9a-f]+' | sort -u | wc -l)
+    log_info "  混淆变量数: $obfuscated_vars"
+
+    local switch_count=$(echo "$content" | grep -c 'switch(' || echo 0)
+    log_info "  控制流扁平化(switch): $switch_count"
+
+    local has_self_destruct=$(echo "$content" | grep -c '__SD' || echo 0)
+    log_info "  自毁机制: $([[ $has_self_destruct -gt 0 ]] && echo '启用' || echo '未启用')"
+
+    local has_anti_debug=$(echo "$content" | grep -c 'devtools\|Firebug' || echo 0)
+    log_info "  反调试: $([[ $has_anti_debug -gt 0 ]] && echo '启用' || echo '未启用')"
+
+    local score=0
+    local entropy_score=$(echo "$entropy > 4.5" | bc)
+    if [[ "$entropy_score" -eq 1 ]]; then
+        score=$((score + 25))
+    fi
+
+    if [[ $obfuscated_vars -gt 10 ]]; then
+        score=$((score + 20))
+    fi
+
+    if [[ $hex_count -gt 5 ]]; then
+        score=$((score + 10))
+    fi
+
+    if [[ $switch_count -gt 0 ]]; then
+        score=$((score + 15))
+    fi
+
+    if [[ $has_self_destruct -gt 0 ]]; then
+        score=$((score + 15))
+    fi
+
+    if [[ $has_anti_debug -gt 0 ]]; then
+        score=$((score + 15))
+    fi
+
+    log_info "  总体强度评分: $score/100"
+
+    local strength_level="minimal"
+    if [[ $score -ge 90 ]]; then
+        strength_level="maximum"
+    elif [[ $score -ge 70 ]]; then
+        strength_level="high"
+    elif [[ $score -ge 50 ]]; then
+        strength_level="medium"
+    elif [[ $score -ge 30 ]]; then
+        strength_level="low"
+    fi
+
+    log_info "  强度级别: $strength_level"
+
+    echo ""
+    echo "=== 混淆强度分析报告 ==="
+    echo "文件: $input_file"
+    echo "评分: $score/100"
+    echo "级别: $strength_level"
+    echo "熵值: $entropy"
+    echo "混淆变量: $obfuscated_vars"
+    echo "十六进制: $hex_count"
+    echo "控制流扁平化: $([[ $switch_count -gt 0 ]] && echo '是' || echo '否')"
+    echo "自毁机制: $([[ $has_self_destruct -gt 0 ]] && echo '是' || echo '否')"
+    echo "反调试: $([[ $has_anti_debug -gt 0 ]] && echo '是' || echo '否')"
     echo ""
 }
 

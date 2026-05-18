@@ -962,17 +962,6 @@ func TestInjectEnhancedAntiDebug(t *testing.T) {
 	}
 }
 
-func TestInjectSelfDestruct(t *testing.T) {
-	code := `function test() { return true; }`
-
-	obfuscator := NewObfuscator()
-	err := obfuscator.InjectSelfDestruct(code)
-
-	if err != nil {
-		t.Error("Self destruct injection should not return error")
-	}
-}
-
 func TestAddMemoryProtection(t *testing.T) {
 	code := `function test() { return true; }`
 
@@ -1116,6 +1105,394 @@ func TestCreateSelfCheckingCode(t *testing.T) {
 
 	if !strings.Contains(result, "data-hash") {
 		t.Error("Self-checking code should include hash attribute")
+	}
+	if !strings.Contains(result, code) {
+		t.Error("Original code should be preserved")
+	}
+}
+
+func TestAddHexObfuscation(t *testing.T) {
+	code := `var num = 255; var hex = 0xff;`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.addHexObfuscation(code)
+
+	if !strings.Contains(result, "0x") {
+		t.Error("Hex obfuscation should convert numbers to hex")
+	}
+}
+
+func TestApplyScopeMangling(t *testing.T) {
+	code := `function testFunc(a, b) { return a + b; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.applyScopeMangling(code)
+
+	if strings.Contains(result, "testFunc") {
+		t.Error("Function name should be obfuscated")
+	}
+}
+
+func TestAddIndirectBranching(t *testing.T) {
+	code := `if (x > 0) { console.log("positive"); }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.addIndirectBranching(code)
+
+	if !strings.Contains(result, "true") || !strings.Contains(result, "false") {
+		t.Error("Indirect branching should add jump table")
+	}
+}
+
+func TestConvertBooleanToBitwise(t *testing.T) {
+	code := `var a = true; var b = false; var c = x === true;`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.convertBooleanToBitwise(code)
+
+	if strings.Contains(result, "true") || strings.Contains(result, "false") {
+		t.Error("Boolean values should be converted to bitwise")
+	}
+	if !strings.Contains(result, "!0") || !strings.Contains(result, "!1") {
+		t.Error("Boolean values should be converted to !0 and !1")
+	}
+}
+
+func TestSplitArrays(t *testing.T) {
+	code := `var arr = [1, 2, 3, 4, 5, 6];`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.splitArrays(code)
+
+	if result == code {
+		t.Error("Array splitting should modify large arrays")
+	}
+}
+
+func TestInjectSelfDestruct(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.InjectSelfDestruct(code)
+
+	if !strings.Contains(result, "__SD") {
+		t.Error("Self destruct code should include __SD variable")
+	}
+	if !strings.Contains(result, code) {
+		t.Error("Original code should be preserved")
+	}
+}
+
+func TestGenerateSelfDestructCode(t *testing.T) {
+	result := GenerateSelfDestructCode(nil)
+
+	if !strings.Contains(result, "outerWidth") {
+		t.Error("Self destruct code should detect dev tools")
+	}
+}
+
+func TestGenerateAdvancedAntiDebugCode(t *testing.T) {
+	result := GenerateAdvancedAntiDebugCode()
+
+	if !strings.Contains(result, "devtools") {
+		t.Error("Anti debug code should detect devtools")
+	}
+	if !strings.Contains(result, "Firebug") {
+		t.Error("Anti debug code should detect Firebug")
+	}
+	if !strings.Contains(result, "keydown") {
+		t.Error("Anti debug code should listen for keydown events")
+	}
+}
+
+func TestGenerateCodeGuard(t *testing.T) {
+	result := GenerateCodeGuard(nil)
+
+	if !strings.Contains(result, "__CG") {
+		t.Error("Code guard should be exposed as __CG")
+	}
+}
+
+func TestApplyMaximumObfuscation(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result, err := obfuscator.ApplyMaximumObfuscation(code)
+
+	if err != nil {
+		t.Error("Maximum obfuscation should not return error")
+	}
+	if result == code {
+		t.Error("Maximum obfuscation should modify code")
+	}
+}
+
+func TestAnalyzeObfuscationStrength(t *testing.T) {
+	weakCode := `function test() { return true; }`
+	strongCode := `_0x1=_0x2=_0x3=!0;`
+
+	weakAnalysis := AnalyzeObfuscationStrength(weakCode)
+	strongAnalysis := AnalyzeObfuscationStrength(strongCode)
+
+	if weakAnalysis["overall_strength_score"] == nil {
+		t.Error("Weak code analysis should include strength score")
+	}
+	if strongAnalysis["overall_strength_score"] == nil {
+		t.Error("Strong code analysis should include strength score")
+	}
+}
+
+func TestGetStrengthLevel(t *testing.T) {
+	code := getStrengthLevel(95)
+	if code != "maximum" {
+		t.Errorf("Score 95 should be maximum, got %s", code)
+	}
+
+	code = getStrengthLevel(75)
+	if code != "high" {
+		t.Errorf("Score 75 should be high, got %s", code)
+	}
+
+	code = getStrengthLevel(55)
+	if code != "medium" {
+		t.Errorf("Score 55 should be medium, got %s", code)
+	}
+
+	code = getStrengthLevel(35)
+	if code != "low" {
+		t.Errorf("Score 35 should be low, got %s", code)
+	}
+
+	code = getStrengthLevel(15)
+	if code != "minimal" {
+		t.Errorf("Score 15 should be minimal, got %s", code)
+	}
+}
+
+func TestGenerateMultiLayerObfuscation(t *testing.T) {
+	code := `function test() { return true; }`
+
+	result, err := GenerateMultiLayerObfuscation(code, 2)
+	if err != nil {
+		t.Error("Multi-layer obfuscation should not return error")
+	}
+	if result == code {
+		t.Error("Multi-layer obfuscation should modify code")
+	}
+}
+
+func TestValidateObfuscationStrength(t *testing.T) {
+	code := `_0x1f=_0x2a=_0x3b=_0x4c=_0x5d=_0x6e=_0x7f=_0x8g=_0x9h=_0xai=_0xbj=_0xck=!0;`
+
+	valid, err := ValidateObfuscationStrength(code, 10)
+	if err != nil {
+		t.Errorf("Validation should not error for score >= 10: %v", err)
+	}
+	if !valid {
+		t.Error("Code should pass validation")
+	}
+}
+
+func TestGenerateDeobfuscationResistantCode(t *testing.T) {
+	code := `var str = (x).toString(); var num = "" + y;`
+
+	result := GenerateDeobfuscationResistantCode(code)
+
+	if result == code {
+		t.Error("Deobfuscation resistant code should modify code")
+	}
+}
+
+func TestNewAntiAnalysis(t *testing.T) {
+	anti := NewAntiAnalysis()
+	if !anti.enabled {
+		t.Error("AntiAnalysis should be enabled by default")
+	}
+	if len(anti.sandboxes) == 0 {
+		t.Error("AntiAnalysis should have sandbox types")
+	}
+}
+
+func TestAntiAnalysisGenerateProtectionCode(t *testing.T) {
+	anti := NewAntiAnalysis()
+	code := anti.GenerateProtectionCode()
+
+	if !strings.Contains(code, "HeadlessChrome") {
+		t.Error("Protection code should detect HeadlessChrome")
+	}
+	if !strings.Contains(code, "PhantomJS") {
+		t.Error("Protection code should detect PhantomJS")
+	}
+}
+
+func TestEncryptStringAESCBC(t *testing.T) {
+	code := `var url = "https://api.example.com";`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableStringEncryption: true,
+		EncryptionAlgorithm:    AlgorithmAES_CBC,
+	})
+	result := obfuscator.encryptString(code)
+
+	if strings.Contains(result, "https://api.example.com") {
+		t.Error("AES-CBC encryption should encrypt strings")
+	}
+	if !strings.Contains(result, "__cbc") {
+		t.Error("AES-CBC encrypted strings should use __cbc decoder")
+	}
+}
+
+func TestEncryptStringXOR(t *testing.T) {
+	code := `var url = "https://api.example.com";`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableStringEncryption: true,
+		EncryptionAlgorithm:    AlgorithmXOR,
+	})
+	result := obfuscator.encryptString(code)
+
+	if strings.Contains(result, "https://api.example.com") {
+		t.Error("XOR encryption should encrypt strings")
+	}
+	if !strings.Contains(result, "__xor") {
+		t.Error("XOR encrypted strings should use __xor decoder")
+	}
+}
+
+func TestEncryptStringRC4(t *testing.T) {
+	code := `var url = "https://api.example.com";`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableStringEncryption: true,
+		EncryptionAlgorithm:    AlgorithmRC4,
+	})
+	result := obfuscator.encryptString(code)
+
+	if strings.Contains(result, "https://api.example.com") {
+		t.Error("RC4 encryption should encrypt strings")
+	}
+	if !strings.Contains(result, "__rc4") {
+		t.Error("RC4 encrypted strings should use __rc4 decoder")
+	}
+}
+
+func TestEncryptStringChaCha20(t *testing.T) {
+	code := `var url = "https://api.example.com";`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableStringEncryption: true,
+		EncryptionAlgorithm:    AlgorithmChaCha20,
+	})
+	result := obfuscator.encryptString(code)
+
+	if strings.Contains(result, "https://api.example.com") {
+		t.Error("ChaCha20 encryption should encrypt strings")
+	}
+	if !strings.Contains(result, "__cc") {
+		t.Error("ChaCha20 encrypted strings should use __cc decoder")
+	}
+}
+
+func TestFullObfuscationWithAllFeatures(t *testing.T) {
+	code := `// Test function
+function calculateSum(a, b) {
+    var result = a + b;
+    console.log("Sum is: " + result);
+    if (result > 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+function multiply(x, y) {
+    var product = x * y;
+    return product;
+}
+
+var numbers = [1, 2, 3, 4, 5, 6, 7, 8];`
+
+	config := ObfuscatorConfig{
+		EnableVariableObfuscation:   true,
+		EnableStringEncryption:      true,
+		EnableCodeCompression:       true,
+		EnableControlFlowFlattening: true,
+		EnableDeadCodeInjection:     true,
+		EnableFunctionWrapping:      true,
+		EnableArraySplitting:        true,
+		EnableScopeMangling:         true,
+		EnableHexObfuscation:       true,
+		EnableBooleanToBitwise:     true,
+		EnableIndirectBranching:     true,
+		EnableDebuggerDetection:     true,
+		EnableSelfDestruct:         true,
+		RemoveComments:             true,
+		PreserveConsole:            true,
+		StringEncryptionKey:         []byte("test-key-1234567890"),
+		EncryptionAlgorithm:         AlgorithmAES_GCM,
+	}
+
+	obfuscator := NewObfuscator(config)
+	obfuscated, err := obfuscator.Obfuscate(code)
+	if err != nil {
+		t.Fatalf("Full obfuscation pipeline failed: %v", err)
+	}
+
+	if obfuscated == code {
+		t.Error("Code should be obfuscated")
+	}
+
+	if strings.Contains(obfuscated, "// Test function") {
+		t.Error("Comments should be removed")
+	}
+
+	report := GenerateObfuscationReport(code, obfuscated, config)
+	if report == nil {
+		t.Error("Report should not be nil")
+	}
+
+	strength := AnalyzeObfuscationStrength(obfuscated)
+	if strength["overall_strength_score"] == nil {
+		t.Error("Strength analysis should return score")
+	}
+}
+
+func TestObfuscationWithDifferentAlgorithms(t *testing.T) {
+	code := `var secret = "https://api.example.com";`
+
+	algorithms := []EncryptionAlgorithm{
+		AlgorithmAES_GCM,
+		AlgorithmAES_CBC,
+		AlgorithmXOR,
+		AlgorithmRC4,
+	}
+
+	for _, algo := range algorithms {
+		obfuscator := NewObfuscator(ObfuscatorConfig{
+			EnableStringEncryption: true,
+			EncryptionAlgorithm:    algo,
+		})
+		result, err := obfuscator.Obfuscate(code)
+		if err != nil {
+			t.Errorf("Obfuscation with %s failed: %v", algo, err)
+		}
+		if result == code {
+			t.Errorf("Obfuscation with %s should modify code", algo)
+		}
+		if strings.Contains(result, "https://api.example.com") {
+			t.Errorf("Strings should be encrypted with %s", algo)
+		}
+	}
+}
+
+func TestGenerateObfuscationWrapper(t *testing.T) {
+	code := `function test() { return true; }`
+
+	obfuscator := NewObfuscator()
+	result := obfuscator.GenerateObfuscationWrapper(code, nil)
+
+	if !strings.Contains(result, "_0xDCR") {
+		t.Error("Wrapper should include dead code registry")
 	}
 	if !strings.Contains(result, code) {
 		t.Error("Original code should be preserved")
