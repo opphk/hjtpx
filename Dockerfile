@@ -24,7 +24,8 @@ ENV CGO_ENABLED=0 \
 
 RUN go build \
     -ldflags="-s -w -X main.Version=${BUILD_VERSION} -X main.BuildTime=${BUILD_TIME}" \
-    -o server ./backend/cmd/api
+    -o server \
+    ./backend/cmd/api
 
 FROM busybox:musl
 
