@@ -2,6 +2,7 @@ let blacklistPage = 1;
 let blacklistPageSize = 10;
 let currentBlacklist = [];
 let currentView = 'table';
+let selectedBlacklistItems = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
     loadBlacklistSummary();
@@ -41,6 +42,7 @@ function setupEventListeners() {
         selectAllCheckbox.addEventListener('change', (e) => {
             const checkboxes = document.querySelectorAll('.bl-checkbox');
             checkboxes.forEach(cb => cb.checked = e.target.checked);
+            toggleSelectAll(e.target.checked);
         });
     }
 
@@ -68,6 +70,21 @@ function setupEventListeners() {
     const form = document.getElementById('blacklistForm');
     if (form) {
         form.addEventListener('submit', handleBlacklistSubmit);
+    }
+
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', () => batchDeleteBlacklist());
+    }
+
+    const batchUnblockBtn = document.getElementById('batchUnblockBtn');
+    if (batchUnblockBtn) {
+        batchUnblockBtn.addEventListener('click', () => batchUnblockBlacklist());
+    }
+
+    const batchUpdateBtn = document.getElementById('batchUpdateBtn');
+    if (batchUpdateBtn) {
+        batchUpdateBtn.addEventListener('click', () => showBatchUpdateModal());
     }
 }
 
@@ -590,4 +607,184 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+function toggleSelectAll(selectAll) {
+    if (selectAll) {
+        currentBlacklist.forEach(item => selectedBlacklistItems.add(item.id));
+    } else {
+        selectedBlacklistItems.clear();
+    }
+    updateBatchToolbar();
+}
+
+function toggleBlacklistSelection(id) {
+    if (selectedBlacklistItems.has(id)) {
+        selectedBlacklistItems.delete(id);
+    } else {
+        selectedBlacklistItems.add(id);
+    }
+    updateBatchToolbar();
+}
+
+function updateBatchToolbar() {
+    const batchToolbar = document.getElementById('batchToolbar');
+    const selectedCount = document.getElementById('selectedBlacklistCount');
+    
+    if (batchToolbar) {
+        if (selectedBlacklistItems.size > 0) {
+            batchToolbar.classList.remove('d-none');
+        } else {
+            batchToolbar.classList.add('d-none');
+        }
+    }
+    
+    if (selectedCount) {
+        selectedCount.textContent = selectedBlacklistItems.size;
+    }
+}
+
+async function batchDeleteBlacklist() {
+    if (selectedBlacklistItems.size === 0) {
+        showToast('请先选择要删除的记录', 'warning');
+        return;
+    }
+    
+    if (!confirm(`确定要删除选中的 ${selectedBlacklistItems.size} 条黑名单记录吗？此操作不可恢复。`)) {
+        return;
+    }
+    
+    try {
+        const deletePromises = Array.from(selectedBlacklistItems).map(id => 
+            auth.request(`/admin/blacklist/${id}`, { method: 'DELETE' })
+        );
+        
+        await Promise.all(deletePromises);
+        showToast(`成功删除 ${selectedBlacklistItems.size} 条记录`, 'success');
+        selectedBlacklistItems.clear();
+        loadBlacklist();
+        loadBlacklistSummary();
+    } catch (error) {
+        showToast('批量删除失败', 'danger');
+    }
+}
+
+async function batchUnblockBlacklist() {
+    if (selectedBlacklistItems.size === 0) {
+        showToast('请先选择要解封的记录', 'warning');
+        return;
+    }
+    
+    if (!confirm(`确定要解封选中的 ${selectedBlacklistItems.size} 条记录吗？`)) {
+        return;
+    }
+    
+    try {
+        const unblockPromises = Array.from(selectedBlacklistItems).map(id => 
+            auth.request(`/admin/blacklist/${id}/unblock`, { method: 'POST' })
+        );
+        
+        await Promise.all(unblockPromises);
+        showToast(`成功解封 ${selectedBlacklistItems.size} 条记录`, 'success');
+        selectedBlacklistItems.clear();
+        loadBlacklist();
+        loadBlacklistSummary();
+    } catch (error) {
+        showToast('批量解封失败', 'danger');
+    }
+}
+
+function showBatchUpdateModal() {
+    if (selectedBlacklistItems.size === 0) {
+        showToast('请先选择要更新的记录', 'warning');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('batchUpdateModal'));
+    document.getElementById('batchUpdateCount').textContent = selectedBlacklistItems.size;
+    modal.show();
+}
+
+async function applyBatchUpdate() {
+    const newAction = document.getElementById('batchNewAction')?.value;
+    const newExpiration = document.getElementById('batchNewExpiration')?.value;
+    
+    if (!newAction && !newExpiration) {
+        showToast('请至少选择一个要更新的字段', 'warning');
+        return;
+    }
+    
+    try {
+        const updateData = {};
+        if (newAction) updateData.action = newAction;
+        if (newExpiration) updateData.expiration = newExpiration;
+        
+        const updatePromises = Array.from(selectedBlacklistItems).map(id => 
+            auth.request(`/admin/blacklist/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updateData)
+            })
+        );
+        
+        await Promise.all(updatePromises);
+        showToast(`成功更新 ${selectedBlacklistItems.size} 条记录`, 'success');
+        
+        bootstrap.Modal.getInstance(document.getElementById('batchUpdateModal'))?.hide();
+        selectedBlacklistItems.clear();
+        loadBlacklist();
+        loadBlacklistSummary();
+    } catch (error) {
+        showToast('批量更新失败', 'danger');
+    }
+}
+
+function exportBlacklist() {
+    const exportItems = selectedBlacklistItems.size > 0 ? 
+        currentBlacklist.filter(item => selectedBlacklistItems.has(item.id)) : 
+        currentBlacklist;
+    
+    if (exportItems.length === 0) {
+        showToast('没有可导出的记录', 'warning');
+        return;
+    }
+    
+    const csvContent = [
+        ['ID', '目标', '类型', '来源', '原因', '处置方式', '过期时间', '状态', '命中次数', '添加时间'].join(','),
+        ...exportItems.map(item => [
+            item.id,
+            `"${escapeHtml(item.target)}"`,
+            item.type,
+            item.source,
+            `"${escapeHtml(item.reason)}"`,
+            item.action,
+            item.expiration === 'permanent' ? '永久' : item.expiration,
+            item.status,
+            item.hitCount,
+            item.createdAt
+        ].join(','))
+    ].join('\n');
+    
+    downloadFile(csvContent, `blacklist_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+    showToast(`已导出 ${exportItems.length} 条记录`, 'success');
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob(['\ufeff' + content], { type: mimeType });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function clearBlacklistSelection() {
+    selectedBlacklistItems.clear();
+    const checkboxes = document.querySelectorAll('.bl-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateBatchToolbar();
+    showToast('已取消选择', 'info');
 }

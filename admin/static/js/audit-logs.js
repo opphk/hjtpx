@@ -5,13 +5,52 @@ let currentAuditView = 'table';
 let selectedAuditLogs = new Set();
 let operationTrendChart = null;
 let operationTypeChart = null;
+let alertEnabled = true;
+let alertRules = [];
 
 document.addEventListener('DOMContentLoaded', () => {
     initAuditLogs();
     setupAuditEventListeners();
     loadAuditSummary();
     loadAuditLogs();
+    initAlertRules();
 });
+
+function initAlertRules() {
+    alertRules = [
+        { type: 'dangerous_ops', pattern: ['delete', 'disable', 'drop'], threshold: 3, window: 3600000, enabled: true },
+        { type: 'failed_login', pattern: ['login'], threshold: 5, window: 300000, enabled: true },
+        { type: 'bulk_ops', pattern: ['delete', 'update'], threshold: 10, window: 600000, enabled: true },
+        { type: 'config_change', pattern: ['config'], threshold: 1, window: 0, enabled: true }
+    ];
+    
+    loadAlertSettings();
+}
+
+function loadAlertSettings() {
+    try {
+        const stored = localStorage.getItem('auditAlertSettings');
+        if (stored) {
+            const settings = JSON.parse(stored);
+            alertEnabled = settings.enabled !== false;
+            alertRules = settings.rules || alertRules;
+        }
+    } catch (error) {
+        console.error('加载告警设置失败:', error);
+    }
+}
+
+function saveAlertSettings() {
+    try {
+        localStorage.setItem('auditAlertSettings', JSON.stringify({
+            enabled: alertEnabled,
+            rules: alertRules
+        }));
+        showAuditToast('告警设置已保存', 'success');
+    } catch (error) {
+        showAuditToast('保存告警设置失败', 'danger');
+    }
+}
 
 function initAuditLogs() {
     initCharts();

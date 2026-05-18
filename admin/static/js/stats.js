@@ -491,7 +491,7 @@ function updateGeoDistributionChart(data) {
 
 function exportStatsReport() {
     const dateRange = document.getElementById('dateRange')?.value || '30d';
-    const format = prompt('请选择导出格式 (1: CSV, 2: JSON, 3: Excel):', '1');
+    const format = prompt('请选择导出格式 (1: CSV, 2: JSON, 3: Excel, 4: PDF):', '1');
     
     const reportData = {
         exportTime: new Date().toLocaleString('zh-CN'),
@@ -514,6 +514,8 @@ function exportStatsReport() {
         exportAsJSON(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}`);
     } else if (format === '3' || format === 'excel') {
         exportAsCSVEnhanced(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`);
+    } else if (format === '4' || format === 'pdf') {
+        exportAsPDF(reportData);
     } else {
         exportAsCSV(reportData, `stats_report_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`);
     }
@@ -660,4 +662,191 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+function exportAsPDF(reportData) {
+    const pdfContent = generatePDFContent(reportData);
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        showToast('无法打开打印窗口，请检查浏览器设置', 'danger');
+        return;
+    }
+    
+    printWindow.document.write(pdfContent);
+    printWindow.document.close();
+    
+    printWindow.onload = function() {
+        setTimeout(() => {
+            printWindow.print();
+            showToast('PDF导出成功，请使用浏览器打印功能保存为PDF', 'success');
+        }, 250);
+    };
+}
+
+function generatePDFContent(reportData) {
+    const currentDate = new Date().toLocaleString('zh-CN');
+    
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>墨盾验证 - 统计分析报表</title>
+    <style>
+        @media print {
+            body { margin: 20px; font-family: Arial, sans-serif; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .header h1 { margin: 0 0 10px 0; color: #333; font-size: 24px; }
+            .header .subtitle { color: #666; font-size: 14px; }
+            .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; }
+            .info-card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; background: #f9f9f9; }
+            .info-card .label { font-size: 12px; color: #666; margin-bottom: 5px; }
+            .info-card .value { font-size: 20px; font-weight: bold; color: #333; }
+            .info-card .change { font-size: 12px; margin-top: 5px; }
+            .positive { color: #10b981; }
+            .negative { color: #ef4444; }
+            .section { margin: 30px 0; }
+            .section h2 { font-size: 16px; color: #333; border-left: 4px solid #3b82f6; padding-left: 10px; margin-bottom: 15px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background: #f5f5f5; font-weight: bold; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 12px; }
+            @page { margin: 20mm; size: A4; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 墨盾验证 - 统计分析报表</h1>
+        <div class="subtitle">
+            <div>生成时间：${currentDate}</div>
+            <div>报表周期：${reportData.dateRange}</div>
+        </div>
+    </div>
+    
+    <div class="info-grid">
+        <div class="info-card">
+            <div class="label">📈 总请求量</div>
+            <div class="value">${reportData.summary.totalRequests}</div>
+            <div class="change ${reportData.changes.requests >= 0 ? 'positive' : 'negative'}">
+                ${reportData.changes.requests >= 0 ? '↑' : '↓'} ${Math.abs(reportData.changes.requests).toFixed(1)}% vs 上期
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="label">⏱️ 平均响应时间</div>
+            <div class="value">${reportData.summary.avgResponse}</div>
+            <div class="change ${reportData.changes.responseTime <= 0 ? 'positive' : 'negative'}">
+                ${reportData.changes.responseTime <= 0 ? '↓' : '↑'} ${Math.abs(reportData.changes.responseTime).toFixed(1)}% vs 上期
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="label">✅ 成功率</div>
+            <div class="value">${reportData.summary.successRate}</div>
+            <div class="change ${reportData.changes.successRate >= 0 ? 'positive' : 'negative'}">
+                ${reportData.changes.successRate >= 0 ? '↑' : '↓'} ${Math.abs(reportData.changes.successRate).toFixed(1)}% vs 上期
+            </div>
+        </div>
+        <div class="info-card">
+            <div class="label">👥 活跃用户</div>
+            <div class="value">${reportData.summary.activeUsers}</div>
+            <div class="change ${reportData.changes.activeUsers >= 0 ? 'positive' : 'negative'}">
+                ${reportData.changes.activeUsers >= 0 ? '↑' : '↓'} ${Math.abs(reportData.changes.activeUsers).toFixed(1)}% vs 上期
+            </div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>📋 指标说明</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>指标名称</th>
+                    <th>当前值</th>
+                    <th>变化率</th>
+                    <th>评估</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>总请求量</td>
+                    <td>${reportData.summary.totalRequests}</td>
+                    <td>${reportData.changes.requests >= 0 ? '+' : ''}${reportData.changes.requests.toFixed(1)}%</td>
+                    <td>${reportData.changes.requests >= 0 ? '✓ 正向' : '✗ 负向'}</td>
+                </tr>
+                <tr>
+                    <td>平均响应时间</td>
+                    <td>${reportData.summary.avgResponse}</td>
+                    <td>${reportData.changes.responseTime >= 0 ? '+' : ''}${reportData.changes.responseTime.toFixed(1)}%</td>
+                    <td>${reportData.changes.responseTime <= 0 ? '✓ 正向' : '✗ 负向'}</td>
+                </tr>
+                <tr>
+                    <td>成功率</td>
+                    <td>${reportData.summary.successRate}</td>
+                    <td>${reportData.changes.successRate >= 0 ? '+' : ''}${reportData.changes.successRate.toFixed(1)}%</td>
+                    <td>${reportData.changes.successRate >= 0 ? '✓ 正向' : '✗ 负向'}</td>
+                </tr>
+                <tr>
+                    <td>活跃用户</td>
+                    <td>${reportData.summary.activeUsers}</td>
+                    <td>${reportData.changes.activeUsers >= 0 ? '+' : ''}${reportData.changes.activeUsers.toFixed(1)}%</td>
+                    <td>${reportData.changes.activeUsers >= 0 ? '✓ 正向' : '✗ 负向'}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>📝 详细说明</h2>
+        <div style="font-size: 13px; line-height: 1.8;">
+            <p><strong>1. 总请求量：</strong>反映系统整体负载情况，是衡量服务使用程度的核心指标。</p>
+            <p><strong>2. 平均响应时间：</strong>越低表示用户体验越好，低于200ms为优秀水平。</p>
+            <p><strong>3. 成功率：</strong>是服务质量的核心指标，95%以上为良好水平。</p>
+            <p><strong>4. 活跃用户数：</strong>体现产品用户规模和活跃度，增长表示产品吸引力提升。</p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>本报表由墨盾验证管理后台自动生成 · 报表版本：v11.0</p>
+        <p>如有问题，请联系技术支持团队</p>
+    </div>
+</body>
+</html>
+    `;
+}
+
+function generateCustomReport(template) {
+    const templates = {
+        daily: {
+            title: '日报表',
+            metrics: ['totalRequests', 'avgResponseTime', 'successRate', 'activeUsers']
+        },
+        weekly: {
+            title: '周报表',
+            metrics: ['totalRequests', 'avgResponseTime', 'successRate', 'activeUsers', 'peakRequests']
+        },
+        monthly: {
+            title: '月报表',
+            metrics: ['totalRequests', 'avgResponseTime', 'successRate', 'activeUsers', 'newUsers', 'revenue']
+        }
+    };
+    
+    const selectedTemplate = templates[template] || templates.daily;
+    console.log('生成自定义报表:', selectedTemplate.title);
+    return selectedTemplate;
+}
+
+function saveReportTemplate(name, config) {
+    const templates = JSON.parse(localStorage.getItem('reportTemplates') || '[]');
+    templates.push({
+        name: name,
+        config: config,
+        createdAt: new Date().toISOString()
+    });
+    localStorage.setItem('reportTemplates', JSON.stringify(templates));
+    showToast('报表模板已保存', 'success');
+}
+
+function loadReportTemplates() {
+    return JSON.parse(localStorage.getItem('reportTemplates') || '[]');
 }

@@ -4,6 +4,8 @@ class AdvancedSearch {
         this.entityType = entityType;
         this.config = {
             apiBase: '/api/admin',
+            maxHistoryItems: 20,
+            historyStorageKey: `search_history_${entityType}`,
             ...config
         };
         this.conditions = [];
@@ -11,7 +13,9 @@ class AdvancedSearch {
         this.page = 1;
         this.pageSize = 20;
         this.savedSearches = [];
+        this.searchHistory = [];
         this.fieldConfigs = this.getFieldConfigs();
+        this.loadSearchHistory();
     }
 
     // 获取不同实体的字段配置
@@ -504,11 +508,209 @@ class AdvancedSearch {
     async init() {
         await this.loadSavedSearches();
         this.renderAddConditionForm();
+        this.renderSearchHistory();
+    }
+
+    // 加载搜索历史
+    loadSearchHistory() {
+        try {
+            const stored = localStorage.getItem(this.config.historyStorageKey);
+            this.searchHistory = stored ? JSON.parse(stored) : [];
+        } catch (error) {
+            this.searchHistory = [];
+        }
+    }
+
+    // 保存搜索历史
+    saveSearchToHistory(query, name = '') {
+        const historyItem = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            name: name || this.generateSearchName(),
+            query: query,
+            resultCount: 0
+        };
+        
+        this.searchHistory.unshift(historyItem);
+        
+        if (this.searchHistory.length > this.config.maxHistoryItems) {
+            this.searchHistory = this.searchHistory.slice(0, this.config.maxHistoryItems);
+        }
+        
+        try {
+            localStorage.setItem(this.config.historyStorageKey, JSON.stringify(this.searchHistory));
+        } catch (error) {
+            console.error('保存搜索历史失败:', error);
+        }
+        
+        this.renderSearchHistory();
+    }
+
+    // 生成搜索名称
+    generateSearchName() {
+        const fieldNames = this.conditions.map(c => {
+            const field = this.fieldConfigs.find(f => f.name === c.field);
+            return field ? field.label : c.field;
+        });
+        return fieldNames.slice(0, 3).join(' + ') || '未命名搜索';
+    }
+
+    // 清空搜索历史
+    clearSearchHistory() {
+        this.searchHistory = [];
+        try {
+            localStorage.removeItem(this.config.historyStorageKey);
+        } catch (error) {
+            console.error('清空搜索历史失败:', error);
+        }
+        this.renderSearchHistory();
+    }
+
+    // 删除单条搜索历史
+    deleteSearchHistoryItem(id) {
+        this.searchHistory = this.searchHistory.filter(item => item.id !== id);
+        try {
+            localStorage.setItem(this.config.historyStorageKey, JSON.stringify(this.searchHistory));
+        } catch (error) {
+            console.error('删除搜索历史失败:', error);
+        }
+        this.renderSearchHistory();
+    }
+
+    // 渲染搜索历史
+    renderSearchHistory(containerId = 'search-history') {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        if (this.searchHistory.length === 0) {
+            container.innerHTML = '<p class="text-muted small">暂无搜索历史</p>';
+            return;
+        }
+        
+        container.innerHTML = this.searchHistory.map(item => {
+            const date = new Date(item.timestamp);
+            const timeAgo = this.getTimeAgo(date);
+            
+            return `
+                <div class="history-item mb-2 p-2 border rounded">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center mb-1">
+                                <i class="fas fa-history me-2 text-muted"></i>
+                                <strong class="me-2">${escapeHtml(item.name)}</strong>
+                                <small class="text-muted">${timeAgo}</small>
+                            </div>
+                            <div class="small text-muted">
+                                ${item.query.conditions?.length || 0} 个条件 · 
+                                ${item.query.sort?.length || 0} 个排序
+                            </div>
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick='search.applySearchHistory(${JSON.stringify(item.query).replace(/'/g, "\\'")})'>
+                                应用
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="search.deleteSearchHistoryItem(${item.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('') + `
+            <button class="btn btn-sm btn-outline-secondary w-100 mt-2" onclick="search.clearSearchHistory()">
+                <i class="fas fa-trash-alt me-1"></i>清空历史
+            </button>
+        `;
+    }
+
+    // 获取相对时间
+    getTimeAgo(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+        
+        if (diffSec < 60) return '刚刚';
+        if (diffMin < 60) return `${diffMin}分钟前`;
+        if (diffHour < 24) return `${diffHour}小时前`;
+        if (diffDay < 7) return `${diffDay}天前`;
+        return date.toLocaleDateString('zh-CN');
+    }
+
+    // 应用搜索历史
+    applySearchHistory(query) {
+        try {
+            this.conditions = query.conditions || [];
+            this.sortOptions = query.sort || [];
+            this.page = query.page || 1;
+            this.pageSize = query.pageSize || 20;
+            
+            this.renderConditions();
+            this.renderSortOptions();
+            this.search();
+        } catch (error) {
+            console.error('应用搜索历史失败:', error);
+            alert('应用搜索失败');
+        }
+    }
+
+    // 导出搜索条件
+    exportSearchConditions() {
+        const query = this.buildQuery();
+        const dataStr = JSON.stringify(query, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+        
+        const exportName = `search_conditions_${new Date().toISOString().slice(0,10)}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportName);
+        linkElement.click();
+        
+        showToast('搜索条件已导出', 'success');
+    }
+
+    // 导入搜索条件
+    async importSearchConditions(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                try {
+                    const query = JSON.parse(e.target.result);
+                    
+                    if (!query.conditions && !query.sort) {
+                        throw new Error('无效的搜索条件文件');
+                    }
+                    
+                    this.conditions = query.conditions || [];
+                    this.sortOptions = query.sort || [];
+                    this.page = query.page || 1;
+                    this.pageSize = query.pageSize || 20;
+                    
+                    this.renderConditions();
+                    this.renderSortOptions();
+                    
+                    resolve(query);
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            
+            reader.onerror = () => reject(new Error('读取文件失败'));
+            reader.readAsText(file);
+        });
     }
 }
 
-// 全局实例（在页面中使用时需要创建具体实例）
-let search = null;
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
 
 // 初始化高级搜索
 function initAdvancedSearch(entityType) {
