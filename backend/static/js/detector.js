@@ -1,3 +1,142 @@
+class AutomationDetector {
+    constructor() {
+        this.detections = {};
+        this.detectAutomationTools();
+        this.detectHeadlessBrowser();
+        this.detectWebDriver();
+    }
+
+    detectAutomationTools() {
+        this.detections.selenium = this.checkSelenium();
+        this.detections.phantomjs = this.checkPhantomJS();
+        this.detections.puppeteer = this.checkPuppeteer();
+        this.detections.playwright = this.checkPlaywright();
+        this.detections.webdriver = this.checkWebDriver();
+    }
+
+    checkSelenium() {
+        const indicators = [
+            window.__selenium,
+            window.document.__selenium,
+            window.callSelenium,
+            window.seleniumObject,
+            navigator.userAgent.includes('selenium'),
+            navigator.userAgent.includes('Selenium'),
+        ];
+        return indicators.some(Boolean);
+    }
+
+    checkPhantomJS() {
+        const indicators = [
+            window.phantom,
+            window._phantom,
+            typeof window.callPhantom === 'function',
+            navigator.userAgent.includes('PhantomJS'),
+            navigator.userAgent.includes('phantom'),
+        ];
+        return indicators.some(Boolean);
+    }
+
+    checkPuppeteer() {
+        const indicators = [
+            window.__puppeteer,
+            window.$cdc_asdjflasutopfhvcZLmcfl_,
+            navigator.userAgent.includes('HeadlessChrome'),
+            navigator.userAgent.includes('puppeteer'),
+            navigator.userAgent.includes('chrome-headless'),
+        ];
+        return indicators.some(Boolean);
+    }
+
+    checkPlaywright() {
+        const indicators = [
+            window.__playwright__,
+            window.__pw_api_hooks__,
+            window.__pw_resume__,
+            navigator.userAgent.includes('playwright'),
+        ];
+        return indicators.some(Boolean);
+    }
+
+    checkWebDriver() {
+        return navigator.webdriver === true || 
+               navigator.webdriver === 'true';
+    }
+
+    detectHeadlessBrowser() {
+        const result = {
+            detected: false,
+            indicators: []
+        };
+
+        if (navigator.userAgent.includes('headless')) {
+            result.detected = true;
+            result.indicators.push('user_agent_headless');
+        }
+
+        if (navigator.plugins && navigator.plugins.length === 0) {
+            result.detected = true;
+            result.indicators.push('no_plugins');
+        }
+
+        if (window.screen.width === 0 || window.screen.height === 0) {
+            result.detected = true;
+            result.indicators.push('zero_screen_size');
+        }
+
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const renderer = gl.getParameter(gl.RENDERER);
+            if (renderer && (renderer.includes('SwiftShader') || 
+                            renderer.includes('llvmpipe') || 
+                            renderer.includes('Mesa'))) {
+                result.detected = true;
+                result.indicators.push('software_renderer');
+            }
+        }
+
+        this.detections.headless = result;
+        return result;
+    }
+
+    detectWebDriver() {
+        const result = {
+            webdriver: navigator.webdriver === true,
+            chromeAutomation: navigator.userAgent.includes('Chrome/') && 
+                            navigator.userAgent.includes('Chrome') &&
+                            !navigator.userAgent.includes('Safari'),
+        };
+        this.detections.webdriver_details = result;
+        return result;
+    }
+
+    getDetectionData() {
+        return {
+            ...this.detections,
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            plugins: Array.from(navigator.plugins || []).map(p => p.name),
+            screen_size: `${window.screen.width}x${window.screen.height}`,
+            webgl_renderer: this.getWebGLRenderer(),
+            webdriver: navigator.webdriver,
+        };
+    }
+
+    getWebGLRenderer() {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+            const ext = gl.getExtension('WEBGL_debug_renderer_info');
+            if (ext) {
+                return gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+            }
+            return gl.getParameter(gl.RENDERER);
+        }
+        return 'no_webgl';
+    }
+}
+
 class AntiDebug {
     constructor(config = {}) {
         this.enabled = config.enabled !== false;
@@ -5,6 +144,7 @@ class AntiDebug {
         this.threshold = config.threshold || 160;
         this.actions = config.actions || ['hide', 'log', 'block'];
         this.debugDetected = false;
+        this.detectionEvidence = [];
         this.init();
     }
 
@@ -16,6 +156,8 @@ class AntiDebug {
         this.obfuscateErrors();
         this.detectDebugging();
         this.protectPrototype();
+        this.detectBreakpoints();
+        this.monitorExecutionTime();
     }
 
     detectDevTools() {
@@ -147,6 +289,131 @@ class AntiDebug {
                 return 'function toString() { [native code] }';
             }
             return originalToString.apply(this, args);
+        };
+
+        this.detectDebuggerStatement();
+    }
+
+    detectDebuggerStatement() {
+        const checkDebugger = () => {
+            let detected = false;
+            try {
+                const fn = new Function('debugger');
+                const toString = fn.toString();
+                if (toString.includes('debugger')) {
+                    const start = performance.now();
+                    debugger;
+                    const end = performance.now();
+                    if (end - start > 100) {
+                        detected = true;
+                    }
+                }
+            } catch (e) {
+                detected = true;
+            }
+            if (detected) {
+                this.onDebugDetected('debugger_statement_blocked');
+            }
+        };
+        setTimeout(checkDebugger, 100);
+    }
+
+    detectBreakpoints() {
+        const self = this;
+        const observer = new PerformanceObserver((entryList) => {
+            for (const entry of entryList.getEntries()) {
+                if (entry.entryType === 'measure') {
+                    const duration = entry.duration;
+                    if (duration > 1000) {
+                        self.onDebugDetected('execution_paused');
+                    }
+                }
+            }
+        });
+        try {
+            observer.observe({ entryTypes: ['measure', 'mark'] });
+        } catch (e) {}
+    }
+
+    monitorExecutionTime() {
+        const self = this;
+        const maxExecutionTime = 5000;
+        
+        const checkExecution = () => {
+            const startTime = performance.now();
+            
+            let iterations = 0;
+            const maxIterations = 1000000;
+            for (let i = 0; i < maxIterations; i++) {
+                iterations++;
+            }
+            
+            const endTime = performance.now();
+            const executionTime = endTime - startTime;
+            
+            const expectedTime = 10;
+            if (executionTime > expectedTime * 10) {
+                self.detectionEvidence.push({
+                    type: 'timing_anomaly',
+                    value: executionTime,
+                    expected: expectedTime
+                });
+                
+                if (executionTime > maxExecutionTime) {
+                    self.onDebugDetected('execution_slow');
+                }
+            }
+            
+            setTimeout(checkExecution, 2000);
+        };
+        
+        setTimeout(checkExecution, 1000);
+    }
+
+    checkCallStackDepth() {
+        try {
+            throw new Error('stack_check');
+        } catch (e) {
+            const stack = e.stack || '';
+            const depth = stack.split('\n').length;
+            if (depth > 50) {
+                this.detectionEvidence.push({
+                    type: 'call_stack_depth',
+                    value: depth
+                });
+            }
+            return depth;
+        }
+    }
+
+    detectDateManipulation() {
+        const originalNow = Date.now;
+        const originalGetTime = Date.prototype.getTime;
+        
+        Date.now = function() {
+            const result = originalNow();
+            const realTime = performance.now();
+            if (Math.abs(result - realTime) > 1000) {
+                window.__debugDetected = true;
+            }
+            return result;
+        };
+        
+        Date.prototype.getTime = function() {
+            const result = originalGetTime.call(this);
+            const realTime = performance.now();
+            if (Math.abs(result - realTime) > 1000) {
+                window.__debugDetected = true;
+            }
+            return result;
+        };
+    }
+
+    getDebuggerStatus() {
+        return {
+            detected: this.debugDetected,
+            evidence: this.detectionEvidence,
+            callStackDepth: this.checkCallStackDepth()
         };
     }
 
@@ -560,6 +827,7 @@ class SecurityManager {
             codeProtection: config.codeProtection !== false,
             parameterEncryption: config.parameterEncryption !== false,
             requestSigning: config.requestSigning !== false,
+            automationDetection: config.automationDetection !== false,
             publicKey: config.publicKey || 'hjtpx-public-key',
             secretKey: config.secretKey || 'hjtpx-secret-key'
         };
@@ -568,6 +836,7 @@ class SecurityManager {
         this.codeProtector = null;
         this.parameterEncryptor = null;
         this.requestSigner = null;
+        this.automationDetector = null;
 
         this.init();
     }
@@ -587,6 +856,10 @@ class SecurityManager {
 
         if (this.config.requestSigning) {
             this.requestSigner = new RequestSigner(this.config.secretKey);
+        }
+
+        if (this.config.automationDetection) {
+            this.automationDetector = new AutomationDetector();
         }
 
         this.setupSecureRequest();
@@ -664,11 +937,28 @@ class SecurityManager {
             debugging: this.isDebugging(),
             codeProtection: this.codeProtector?.isIntegrityVerified() || false,
             parameterEncryption: !!this.parameterEncryptor,
-            requestSigning: !!this.requestSigner
+            requestSigning: !!this.requestSigner,
+            automationDetection: !!this.automationDetector
+        };
+    }
+
+    getAutomationDetectionData() {
+        if (!this.automationDetector) {
+            return null;
+        }
+        return this.automationDetector.getDetectionData();
+    }
+
+    getFullDetectionReport() {
+        return {
+            automation: this.getAutomationDetectionData(),
+            debugger: this.antiDebug?.getDebuggerStatus() || null,
+            security: this.getStatus()
         };
     }
 }
 
+window.AutomationDetector = AutomationDetector;
 window.AntiDebug = AntiDebug;
 window.CodeProtector = CodeProtector;
 window.ParameterEncryptor = ParameterEncryptor;

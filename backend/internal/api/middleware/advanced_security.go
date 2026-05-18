@@ -25,7 +25,15 @@ var defaultHTTPSConfig = HTTPSConfig{
 func HTTPSRedirect(config ...HTTPSConfig) gin.HandlerFunc {
 	cfg := defaultHTTPSConfig
 	if len(config) > 0 {
-		cfg = config[0]
+		// 合并配置，保留未设置的默认值
+		cfg = HTTPSConfig{
+			Enabled:      config[0].Enabled,
+			ExcludePaths: config[0].ExcludePaths,
+			RedirectCode: config[0].RedirectCode,
+		}
+		if cfg.RedirectCode == 0 {
+			cfg.RedirectCode = http.StatusMovedPermanently
+		}
 	}
 
 	return func(c *gin.Context) {
@@ -62,6 +70,9 @@ func HTTPSRedirect(config ...HTTPSConfig) gin.HandlerFunc {
 		host := c.Request.Host
 		if host == "" {
 			host = c.Request.URL.Host
+		}
+		if host == "" {
+			host = "localhost"
 		}
 
 		httpsURL := fmt.Sprintf("https://%s%s", host, c.Request.URL.String())
@@ -245,7 +256,38 @@ var defaultSecurityHeadersConfig = SecurityHeadersMiddlewareConfig{
 func SecurityHeadersMiddleware(config ...SecurityHeadersMiddlewareConfig) gin.HandlerFunc {
 	cfg := defaultSecurityHeadersConfig
 	if len(config) > 0 {
-		cfg = config[0]
+		cfg = SecurityHeadersMiddlewareConfig{
+			Enabled:             config[0].Enabled,
+			ExcludePaths:        config[0].ExcludePaths,
+			CSP:                 config[0].CSP,
+			HSTS:                config[0].HSTS,
+			XFrameOptions:       config[0].XFrameOptions,
+			XContentTypeOptions: config[0].XContentTypeOptions,
+			XSSProtection:       config[0].XSSProtection,
+			ReferrerPolicy:      config[0].ReferrerPolicy,
+			PermissionsPolicy:   config[0].PermissionsPolicy,
+		}
+	}
+	if cfg.CSP == "" {
+		cfg.CSP = defaultSecurityHeadersConfig.CSP
+	}
+	if cfg.HSTS == "" {
+		cfg.HSTS = defaultSecurityHeadersConfig.HSTS
+	}
+	if cfg.XFrameOptions == "" {
+		cfg.XFrameOptions = defaultSecurityHeadersConfig.XFrameOptions
+	}
+	if cfg.XContentTypeOptions == "" {
+		cfg.XContentTypeOptions = defaultSecurityHeadersConfig.XContentTypeOptions
+	}
+	if cfg.XSSProtection == "" {
+		cfg.XSSProtection = defaultSecurityHeadersConfig.XSSProtection
+	}
+	if cfg.ReferrerPolicy == "" {
+		cfg.ReferrerPolicy = defaultSecurityHeadersConfig.ReferrerPolicy
+	}
+	if cfg.PermissionsPolicy == "" {
+		cfg.PermissionsPolicy = defaultSecurityHeadersConfig.PermissionsPolicy
 	}
 
 	return func(c *gin.Context) {

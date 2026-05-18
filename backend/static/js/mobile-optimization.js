@@ -2,14 +2,15 @@
   'use strict';
 
   const MOBILE_CONFIG = {
-    touchFeedbackDuration: 150,
+    touchFeedbackDuration: 120,
     longPressDelay: 500,
-    doubleTapDelay: 300,
-    swipeThreshold: 50,
+    doubleTapDelay: 250,
+    swipeThreshold: 40,
     pinchZoomMin: 1,
     pinchZoomMax: 3,
-    imageCompressionQuality: 0.8,
-    lazyLoadThreshold: 200
+    imageCompressionQuality: 0.85,
+    lazyLoadThreshold: 300,
+    touchTargetMinSize: 44
   };
 
   class MobileOptimizer {
@@ -24,47 +25,66 @@
       this.isScrolling = false;
       this.pinchStartDistance = 0;
       this.currentZoom = 1;
+      this.isTouchDevice = 'ontouchstart' in document.documentElement;
     }
 
     init() {
       console.log('[Mobile] 初始化移动端优化模块');
+      this.setupViewportFix();
+      this.setupFastClick();
       this.setupTouchHandlers();
       this.setupGestureHandlers();
       this.setupPullToRefresh();
       this.setupImageOptimization();
       this.setupLazyLoading();
+      this.setupOrientationHandling();
+      this.setupKeyboardAvoidance();
       this.injectMobileStyles();
-      this.setupViewportFix();
-      this.setupFastClick();
     }
 
     setupViewportFix() {
       const viewport = document.querySelector('meta[name="viewport"]');
       if (viewport) {
         let content = viewport.getAttribute('content');
-        if (!content.includes('user-scalable=no')) {
-          viewport.setAttribute('content', content + ', user-scalable=no');
+        const needsUpdate = !content.includes('viewport-fit=cover') || 
+                           !content.includes('maximum-scale=1.0');
+        
+        if (needsUpdate) {
+          if (!content.includes('viewport-fit=cover')) {
+            content += ', viewport-fit=cover';
+          }
+          if (!content.includes('maximum-scale')) {
+            content += ', maximum-scale=1.0';
+          }
+          viewport.setAttribute('content', content);
         }
       }
     }
 
     setupFastClick() {
-      if ('ontouchstart' in document.documentElement) {
-        document.body.style.cssText += '; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none;';
-        document.querySelectorAll('a, button, [role="button"]').forEach(el => {
-          el.style.cssText += '; -webkit-tap-highlight-color: rgba(0,0,0,0.1);';
+      if (this.isTouchDevice) {
+        document.body.style.cssText += `
+          ; -webkit-tap-highlight-color: transparent;
+          -webkit-touch-callout: none;
+          touch-action: manipulation;
+        `;
+        
+        document.querySelectorAll('a, button, [role="button"], .captcha-slider-button, .captcha-click-marker').forEach(el => {
+          el.style.cssText += '; -webkit-tap-highlight-color: rgba(201, 169, 110, 0.2);';
         });
       }
     }
 
     setupTouchHandlers() {
-      const interactiveElements = document.querySelectorAll('.captcha-slider-button, .captcha-click-marker, .btn, .nav-link, [role="button"]');
+      const interactiveElements = document.querySelectorAll(
+        '.captcha-slider-button, .captcha-click-marker, .btn, .nav-link, [role="button"], .captcha-tab, .captcha-refresh'
+      );
 
       interactiveElements.forEach(el => {
-        el.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        el.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        el.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
-        el.addEventListener('touchcancel', (e) => this.handleTouchCancel(e), { passive: false });
+        el.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: true });
+        el.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: true });
+        el.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: true });
+        el.addEventListener('touchcancel', (e) => this.handleTouchCancel(e), { passive: true });
       });
     }
 
@@ -77,14 +97,13 @@
       target.classList.add('touch-active');
 
       this.longPressTimer = setTimeout(() => {
-        this.triggerHapticFeedback();
+        this.triggerHapticFeedback('medium');
         target.classList.add('long-press-active');
         target.dispatchEvent(new CustomEvent('longpress', { bubbles: true }));
       }, MOBILE_CONFIG.longPressDelay);
 
       if (e.touches.length === 2) {
         this.pinchStartDistance = this.getTouchDistance(e.touches);
-        e.preventDefault();
       }
 
       this.activeTouches = Array.from(e.touches);
@@ -96,7 +115,7 @@
         const deltaX = Math.abs(touch.clientX - this.touchStartPos.x);
         const deltaY = Math.abs(touch.clientY - this.touchStartPos.y);
 
-        if (deltaX > 10 || deltaY > 10) {
+        if (deltaX > 15 || deltaY > 15) {
           clearTimeout(this.longPressTimer);
           this.longPressTimer = null;
           e.currentTarget.classList.remove('long-press-active');
@@ -127,7 +146,7 @@
       const target = e.currentTarget;
       target.classList.remove('touch-active', 'long-press-active');
 
-      if (touchDuration < 300 && Math.abs(deltaX) < 10 && Math.abs(deltaY) < 10) {
+      if (touchDuration < 300 && Math.abs(deltaX) < 15 && Math.abs(deltaY) < 15) {
         this.handleTap(e, target);
       }
 
@@ -163,7 +182,7 @@
       this.lastTapTime = now;
       this.lastTapPos = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
 
-      this.triggerHapticFeedback();
+      this.triggerHapticFeedback('light');
 
       target.dispatchEvent(new CustomEvent('tap', {
         bubbles: true,
@@ -177,9 +196,14 @@
       return Math.sqrt(dx * dx + dy * dy);
     }
 
-    triggerHapticFeedback() {
+    triggerHapticFeedback(intensity = 'light') {
       if ('vibrate' in navigator) {
-        navigator.vibrate(50);
+        const patterns = {
+          light: 10,
+          medium: 25,
+          heavy: 50
+        };
+        navigator.vibrate(patterns[intensity] || patterns.light);
       }
     }
 
@@ -242,7 +266,7 @@
       document.body.style.overscrollBehavior = 'none';
 
       document.addEventListener('touchstart', (e) => {
-        if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+        if (window.scrollY === 0 && e.touches[0].clientY < 100) {
           startY = e.touches[0].clientY;
           isPulling = true;
         }
@@ -276,7 +300,7 @@
     }
 
     setupImageOptimization() {
-      const images = document.querySelectorAll('img');
+      const images = document.querySelectorAll('img[data-src], img:not([data-optimized])');
 
       images.forEach(img => {
         if (!img.hasAttribute('data-optimized')) {
@@ -285,7 +309,7 @@
           if (img.complete) {
             this.optimizeImage(img);
           } else {
-            img.addEventListener('load', () => this.optimizeImage(img));
+            img.addEventListener('load', () => this.optimizeImage(img), { once: true });
           }
         }
       });
@@ -307,7 +331,7 @@
       let width = maxWidth;
       let height = maxHeight;
 
-      const maxDimension = 800;
+      const maxDimension = 600;
       if (width > maxDimension || height > maxDimension) {
         if (width > height) {
           height = (height / width) * maxDimension;
@@ -330,17 +354,18 @@
 
     setupLazyLoading() {
       if ('IntersectionObserver' in window) {
-        const lazyImages = document.querySelectorAll('img[data-src]');
+        const lazyImages = document.querySelectorAll('img[data-src], img.lazy');
 
         const imageObserver = new IntersectionObserver((entries) => {
           entries.forEach(entry => {
             if (entry.isIntersecting) {
               const img = entry.target;
-              const src = img.getAttribute('data-src');
+              const src = img.getAttribute('data-src') || img.getAttribute('data-lazy-src');
 
               if (src) {
                 img.src = src;
                 img.removeAttribute('data-src');
+                img.removeAttribute('data-lazy-src');
                 img.classList.add('lazy-loaded');
                 imageObserver.unobserve(img);
               }
@@ -355,6 +380,45 @@
       }
     }
 
+    setupOrientationHandling() {
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+          window.dispatchEvent(new Event('resize'));
+        }, 100);
+      });
+
+      window.addEventListener('resize', () => {
+        this.adjustLayoutForOrientation();
+      });
+
+      this.adjustLayoutForOrientation();
+    }
+
+    adjustLayoutForOrientation() {
+      const isLandscape = window.innerWidth > window.innerHeight;
+      const captchaContainer = document.querySelector('.captcha-container');
+      
+      if (captchaContainer) {
+        captchaContainer.classList.toggle('landscape', isLandscape);
+      }
+    }
+
+    setupKeyboardAvoidance() {
+      const focusedElement = document.activeElement;
+      if (focusedElement && ['INPUT', 'TEXTAREA'].includes(focusedElement.tagName)) {
+        focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      window.addEventListener('resize', () => {
+        const activeElement = document.activeElement;
+        if (activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName)) {
+          setTimeout(() => {
+            activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+      });
+    }
+
     injectMobileStyles() {
       if (document.getElementById('mobile-optimization-styles')) {
         return;
@@ -364,26 +428,30 @@
       style.id = 'mobile-optimization-styles';
       style.textContent = `
         .touch-active {
-          transform: scale(0.95);
-          opacity: 0.8;
+          transform: scale(0.96);
+          opacity: 0.9;
+          transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
         }
 
         .long-press-active {
-          background-color: rgba(102, 126, 234, 0.2) !important;
+          background-color: rgba(201, 169, 110, 0.25) !important;
+          box-shadow: inset 0 0 20px rgba(201, 169, 110, 0.1);
         }
 
         @media (hover: none) and (pointer: coarse) {
           .captcha-slider-button,
           .captcha-click-marker,
           .btn,
-          .nav-link {
-            min-height: 44px;
-            min-width: 44px;
+          .nav-link,
+          .captcha-tab,
+          .captcha-refresh {
+            min-height: ${MOBILE_CONFIG.touchTargetMinSize}px;
+            min-width: ${MOBILE_CONFIG.touchTargetMinSize}px;
           }
 
           .captcha-refresh {
-            min-width: 44px;
-            min-height: 44px;
+            min-width: ${MOBILE_CONFIG.touchTargetMinSize + 4}px;
+            min-height: ${MOBILE_CONFIG.touchTargetMinSize + 4}px;
           }
         }
 
@@ -391,14 +459,24 @@
           .captcha-container {
             margin: 0 !important;
             border-radius: 0 !important;
+            border-left: none !important;
+            border-right: none !important;
+          }
+
+          .captcha-container.landscape {
+            max-width: 480px;
+            margin: 0 auto !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(201, 169, 110, 0.2) !important;
           }
 
           .page-hero {
-            padding: 6rem 0 3rem !important;
+            padding: 5rem 0 2.5rem !important;
           }
 
           .demo-card {
             margin-bottom: 1rem;
+            border-radius: 10px;
           }
 
           .demo-card-body {
@@ -406,21 +484,21 @@
           }
 
           .captcha-slider-container {
-            height: 48px !important;
-            border-radius: 24px !important;
+            height: 50px !important;
+            border-radius: 25px !important;
           }
 
           .captcha-slider-button {
-            width: 44px !important;
-            height: 44px !important;
+            width: 46px !important;
+            height: 46px !important;
           }
 
           .captcha-slider-track {
-            height: 44px !important;
+            height: 46px !important;
           }
 
           .captcha-slider-text {
-            line-height: 48px !important;
+            line-height: 50px !important;
             font-size: 14px !important;
           }
 
@@ -431,24 +509,42 @@
           }
 
           .nav-link {
-            padding: 0.6rem 0.8rem !important;
+            padding: 0.75rem 1rem !important;
+            font-size: 14px !important;
+          }
+
+          .captcha-tabs {
+            gap: 4px;
+          }
+
+          .captcha-tab {
+            padding: 9px 14px !important;
             font-size: 13px !important;
           }
         }
 
         @media (max-width: 400px) {
           .captcha-image-wrapper {
-            margin-bottom: 8px !important;
+            margin-bottom: 10px !important;
           }
 
           .captcha-actions {
             flex-direction: column !important;
+            gap: 8px !important;
           }
 
           .captcha-btn {
             width: 100% !important;
             justify-content: center !important;
-            margin-bottom: 0.5rem !important;
+            margin-bottom: 0 !important;
+          }
+
+          .captcha-header {
+            padding: 12px !important;
+          }
+
+          .captcha-header h3 {
+            font-size: 16px !important;
           }
         }
 
@@ -458,33 +554,33 @@
           left: 0;
           right: 0;
           height: 0;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #c9a96e 0%, #d4b87a 100%);
           z-index: 10000;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
-          transition: height 0.3s ease;
+          transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .pull-refresh-indicator.active {
-          height: 60px;
+          height: 65px;
         }
 
         .pull-refresh-spinner {
-          width: 24px;
-          height: 24px;
-          border: 3px solid rgba(255,255,255,0.3);
+          width: 28px;
+          height: 28px;
+          border: 3px solid rgba(255,255,255,0.4);
           border-top-color: white;
           border-radius: 50%;
-          animation: mobile-spin 1s linear infinite;
+          animation: mobile-spin 0.8s linear infinite;
         }
 
         @keyframes mobile-spin {
           to { transform: rotate(360deg); }
         }
 
-        img[lazy] {
+        img[lazy], img[data-src] {
           opacity: 0;
           transition: opacity 0.3s ease;
         }
@@ -499,7 +595,8 @@
           .captcha-slider-button,
           .captcha-click-marker,
           .btn,
-          .nav-link {
+          .nav-link,
+          .captcha-tab {
             transition: none !important;
           }
 
@@ -526,12 +623,74 @@
           padding-right: env(safe-area-inset-right);
         }
 
+        .mobile-safe-area-bottom {
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+
         .touch-target-44 {
           min-width: 44px;
           min-height: 44px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+        }
+
+        .touch-target-48 {
+          min-width: 48px;
+          min-height: 48px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .captcha-container.landscape {
+          flex-direction: row;
+          max-width: 600px;
+        }
+
+        .captcha-container.landscape .captcha-header {
+          flex-shrink: 0;
+          min-width: 120px;
+        }
+
+        .captcha-container.landscape .captcha-body {
+          flex: 1;
+        }
+
+        .hide-in-portrait {
+          display: none;
+        }
+
+        .hide-in-landscape {
+          display: block;
+        }
+
+        @media (orientation: landscape) {
+          .hide-in-portrait {
+            display: block;
+          }
+          .hide-in-landscape {
+            display: none;
+          }
+        }
+
+        ::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+          background: #c9a96e;
+          border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+          background: #b8954f;
         }
       `;
 

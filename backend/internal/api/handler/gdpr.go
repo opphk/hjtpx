@@ -56,8 +56,8 @@ type DataDeletionRequest struct {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Success 200 {object} models.UserConsent
-// @Failure 401 {object} response.Response
+// @Success 200 {object} response.Response "获取成功"
+// @Failure 401 {object} response.Response "未授权"
 // @Router /api/v1/gdpr/consent [get]
 func (h *GDPRHandler) GetConsent(c *gin.Context) {
 	userID := middleware.GetUserID(c)
@@ -83,9 +83,9 @@ func (h *GDPRHandler) GetConsent(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param consent body UpdateConsentRequest true "同意设置"
-// @Success 200 {object} models.UserConsent
-// @Failure 400 {object} response.Response
-// @Failure 401 {object} response.Response
+// @Success 200 {object} response.Response "更新成功"
+// @Failure 400 {object} response.Response "请求参数错误"
+// @Failure 401 {object} response.Response "未授权"
 // @Router /api/v1/gdpr/consent [put]
 func (h *GDPRHandler) UpdateConsent(c *gin.Context) {
 	userID := middleware.GetUserID(c)
@@ -127,9 +127,9 @@ func (h *GDPRHandler) UpdateConsent(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body DataExportRequest true "导出请求"
-// @Success 200 {object} models.DataExportRequest
-// @Failure 400 {object} response.Response
-// @Failure 401 {object} response.Response
+// @Success 200 {object} response.Response "请求成功"
+// @Failure 400 {object} response.Response "请求参数错误"
+// @Failure 401 {object} response.Response "未授权"
 // @Router /api/v1/gdpr/data-export [post]
 func (h *GDPRHandler) RequestDataExport(c *gin.Context) {
 	userID := middleware.GetUserID(c)
@@ -247,9 +247,9 @@ func (h *GDPRHandler) DownloadExport(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body DataDeletionRequest true "删除请求"
-// @Success 200 {object} models.DataDeletionRequest
-// @Failure 400 {object} response.Response
-// @Failure 401 {object} response.Response
+// @Success 200 {object} response.Response "请求成功"
+// @Failure 400 {object} response.Response "请求参数错误"
+// @Failure 401 {object} response.Response "未授权"
 // @Router /api/v1/gdpr/data-deletion [post]
 func (h *GDPRHandler) RequestDataDeletion(c *gin.Context) {
 	userID := middleware.GetUserID(c)

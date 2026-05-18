@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/big"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,7 +28,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hjtpx/hjtpx/pkg/crypto"
 	"github.com/hjtpx/hjtpx/pkg/redis"
+	"golang.org/x/crypto/ed25519"
 )
 
 type EnhancedSignatureConfig struct {
@@ -183,7 +186,8 @@ func (n *enhancedNonceCache) shrinkToLimit() {
 func (n *enhancedNonceCache) isUsed(nonce string) bool {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
-	_, exists := n.records[nonce]
+	hashedNonce := hashNonce(nonce)
+	_, exists := n.records[hashedNonce]
 	return exists
 }
 
@@ -953,22 +957,66 @@ type Ed25519Config struct {
 	PrivateKeyPath   string
 	SignatureTTL     time.Duration
 	RequireSignature bool
+	PublicKey        ed25519.PublicKey
+	PrivateKey       ed25519.PrivateKey
 }
 
 func (e *Ed25519Config) Load() error {
+	if e.PublicKeyPath != "" {
+		data, err := os.ReadFile(e.PublicKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read public key file: %w", err)
+		}
+		publicKey, err := crypto.ParseEd25519PublicKeyFromPEM(string(data))
+		if err != nil {
+			return fmt.Errorf("failed to parse public key: %w", err)
+		}
+		e.PublicKey = publicKey
+	}
+
+	if e.PrivateKeyPath != "" {
+		data, err := os.ReadFile(e.PrivateKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read private key file: %w", err)
+		}
+		privateKey, err := crypto.ParseEd25519PrivateKeyFromPEM(string(data))
+		if err != nil {
+			return fmt.Errorf("failed to parse private key: %w", err)
+		}
+		e.PrivateKey = privateKey
+	}
+
 	return nil
 }
 
 func GenerateEd25519KeyPair() ([]byte, []byte, error) {
-	return nil, nil, fmt.Errorf("Ed25519 not supported in standard Go crypto library, use golang.org/x/crypto/ed25519")
+	privateKey, publicKey, err := crypto.GenerateEd25519KeyPair()
+	if err != nil {
+		return nil, nil, err
+	}
+	return privateKey, publicKey, nil
 }
 
 func SignEd25519(message, privateKey []byte) ([]byte, error) {
-	return nil, fmt.Errorf("Ed25519 not supported, use golang.org/x/crypto/ed25519")
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("invalid private key size")
+	}
+	return crypto.SignEd25519(message, ed25519.PrivateKey(privateKey))
 }
 
 func VerifyEd25519(message, signature, publicKey []byte) (bool, error) {
-	return false, fmt.Errorf("Ed25519 not supported, use golang.org/x/crypto/ed25519")
+	if len(publicKey) != ed25519.PublicKeySize {
+		return false, fmt.Errorf("invalid public key size")
+	}
+	return crypto.VerifyEd25519(message, signature, publicKey)
+}
+
+func SignEd25519String(message string, privateKey ed25519.PrivateKey) (string, error) {
+	return crypto.SignEd25519String(message, privateKey)
+}
+
+func VerifyEd25519String(message, signatureBase64 string, publicKey ed25519.PublicKey) (bool, error) {
+	return crypto.VerifyEd25519String(message, signatureBase64, publicKey)
 }
 
 type RequestEncryptionConfig struct {
@@ -1030,9 +1078,9 @@ func EncryptRequestBody(body []byte, config RequestEncryptionConfig) (*Encrypted
 
 	ciphertext := gcm.Seal(nil, nonce, body, nil)
 
-	nonceSize := gcm.NonceSize()
-	encryptedData := ciphertext[nonceSize:]
-	authTag := ciphertext[:nonceSize]
+	authTagSize := gcm.Overhead()
+	authTag := ciphertext[len(ciphertext)-authTagSize:]
+	encryptedData := ciphertext[:len(ciphertext)-authTagSize]
 
 	signature := sha256.Sum256(append(body, nonce...))
 
@@ -1078,7 +1126,7 @@ func DecryptRequestBody(encrypted *EncryptedRequest, config RequestEncryptionCon
 		return nil, err
 	}
 
-	ciphertext := append(authTag, encryptedData...)
+	ciphertext := append(encryptedData, authTag...)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -1218,22 +1266,26 @@ func VerifyDualSignature(message []byte, primarySig, secondarySig string, config
 	if config.PrimaryAlgorithm == "SHA256" {
 		expectedPrimary := hmac.New(sha256.New, config.PrimaryKey)
 		expectedPrimary.Write(message)
-		primaryValid = hmac.Equal([]byte(primarySig), expectedPrimary.Sum(nil))
+		expectedPrimaryHex := hex.EncodeToString(expectedPrimary.Sum(nil))
+		primaryValid = primarySig == expectedPrimaryHex
 	} else if config.PrimaryAlgorithm == "SHA512" {
 		expectedPrimary := hmac.New(sha512.New, config.PrimaryKey)
 		expectedPrimary.Write(message)
-		primaryValid = hmac.Equal([]byte(primarySig), expectedPrimary.Sum(nil))
+		expectedPrimaryHex := hex.EncodeToString(expectedPrimary.Sum(nil))
+		primaryValid = primarySig == expectedPrimaryHex
 	}
 
 	secondaryValid := false
 	if config.SecondaryAlgorithm == "SHA256" {
 		expectedSecondary := hmac.New(sha256.New, config.SecondaryKey)
 		expectedSecondary.Write(message)
-		secondaryValid = hmac.Equal([]byte(secondarySig), expectedSecondary.Sum(nil))
+		expectedSecondaryHex := hex.EncodeToString(expectedSecondary.Sum(nil))
+		secondaryValid = secondarySig == expectedSecondaryHex
 	} else if config.SecondaryAlgorithm == "SHA512" {
 		expectedSecondary := hmac.New(sha512.New, config.SecondaryKey)
 		expectedSecondary.Write(message)
-		secondaryValid = hmac.Equal([]byte(secondarySig), expectedSecondary.Sum(nil))
+		expectedSecondaryHex := hex.EncodeToString(expectedSecondary.Sum(nil))
+		secondaryValid = secondarySig == expectedSecondaryHex
 	}
 
 	return primaryValid, secondaryValid, nil
@@ -1365,4 +1417,203 @@ func EnhancedAntiReplay(config AntiReplayConfig) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// EnhancedAntiReplayConfig 增强的防重放攻击配置
+type EnhancedAntiReplayConfig struct {
+	WindowSize                time.Duration
+	MaxRequestsPerWindow      int
+	EnableSlidingWindow       bool
+	EnableBloomFilter         bool
+	EnableRedisCache          bool
+	BloomFilterSize           int
+	BloomFilterHashCount      int
+	NonceCacheTTL             time.Duration
+	TimestampTolerance        time.Duration
+	StrictNonceValidation     bool
+	EnableClientIDTracking    bool
+	MaxNonceAge               time.Duration
+}
+
+var defaultEnhancedAntiReplayConfig = EnhancedAntiReplayConfig{
+	WindowSize:                1 * time.Minute,
+	MaxRequestsPerWindow:      100,
+	EnableSlidingWindow:       true,
+	EnableBloomFilter:         true,
+	EnableRedisCache:          false,
+	BloomFilterSize:           1000000,
+	BloomFilterHashCount:      7,
+	NonceCacheTTL:             24 * time.Hour,
+	TimestampTolerance:        5 * time.Minute,
+	StrictNonceValidation:     true,
+	EnableClientIDTracking:    false,
+	MaxNonceAge:               15 * time.Minute,
+}
+
+// NonceValidator nonce验证器
+type NonceValidator struct {
+	bloomFilter      *BloomFilter
+	redisEnabled     bool
+	nonceCacheTTL    time.Duration
+	strictValidation bool
+	MaxNonceAge      time.Duration
+	mu               sync.RWMutex
+}
+
+var globalNonceValidator = &NonceValidator{
+	bloomFilter:      NewBloomFilter(1000000, 7),
+	redisEnabled:     false,
+	nonceCacheTTL:    24 * time.Hour,
+	strictValidation: true,
+	MaxNonceAge:      15 * time.Minute,
+}
+
+func (v *NonceValidator) ValidateNonce(nonce string, timestamp int64) error {
+	if nonce == "" {
+		return fmt.Errorf("nonce is required")
+	}
+
+	if v.strictValidation {
+		if len(nonce) < 8 || len(nonce) > 128 {
+			return fmt.Errorf("nonce must be between 8 and 128 characters")
+		}
+
+		for _, c := range nonce {
+			if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+				return fmt.Errorf("nonce contains invalid characters")
+			}
+		}
+	}
+
+	if v.bloomFilter.Contains(nonce) {
+		return fmt.Errorf("nonce already used (potential replay attack)")
+	}
+
+	if v.redisEnabled && redis.Client != nil {
+		ctx := context.Background()
+		key := fmt.Sprintf("anti_replay:nonce:%s", nonce)
+		exists, err := redis.Client.Exists(ctx, key).Result()
+		if err == nil && exists > 0 {
+			return fmt.Errorf("nonce already used in cache (potential replay attack)")
+		}
+		err = redis.Client.Set(ctx, key, "1", v.nonceCacheTTL).Err()
+		if err != nil {
+			fmt.Printf("[AntiReplay] Warning: failed to store nonce in redis: %v\n", err)
+		}
+	}
+
+	v.mu.Lock()
+	v.bloomFilter.Add(nonce)
+	v.mu.Unlock()
+
+	if timestamp > 0 {
+		now := time.Now().Unix()
+		if now-timestamp > int64(v.MaxNonceAge.Seconds()) {
+			return fmt.Errorf("nonce expired (too old)")
+		}
+	}
+
+	return nil
+}
+
+func EnhancedAntiReplayV2(config EnhancedAntiReplayConfig) gin.HandlerFunc {
+	requestCounts := make(map[string]*slidingWindowCounter)
+	mu := sync.Mutex{}
+
+	validator := &NonceValidator{
+		bloomFilter:      NewBloomFilter(config.BloomFilterSize, config.BloomFilterHashCount),
+		redisEnabled:     config.EnableRedisCache,
+		nonceCacheTTL:    config.NonceCacheTTL,
+		strictValidation: config.StrictNonceValidation,
+		MaxNonceAge:      config.MaxNonceAge,
+	}
+
+	return func(c *gin.Context) {
+		nonce := c.GetHeader("X-Nonce")
+		timestampStr := c.GetHeader("X-Timestamp")
+
+		var timestamp int64
+		if timestampStr != "" {
+			var err error
+			timestamp, err = strconv.ParseInt(timestampStr, 10, 64)
+			if err != nil {
+				c.AbortWithStatusJSON(400, gin.H{
+					"error":   "invalid_timestamp",
+					"message": "X-Timestamp must be a valid Unix timestamp",
+				})
+				return
+			}
+		}
+
+		if err := validator.ValidateNonce(nonce, timestamp); err != nil {
+			c.AbortWithStatusJSON(429, gin.H{
+				"error":   "replay_detected",
+				"message": err.Error(),
+			})
+			return
+		}
+
+		if config.EnableSlidingWindow {
+			mu.Lock()
+			clientIP := c.ClientIP()
+
+			counter, exists := requestCounts[clientIP]
+			if !exists {
+				counter = &slidingWindowCounter{
+					requests: make([]time.Time, 0),
+					window:   config.WindowSize,
+				}
+				requestCounts[clientIP] = counter
+			}
+
+			if counter.Count() >= config.MaxRequestsPerWindow {
+				mu.Unlock()
+				c.AbortWithStatusJSON(429, gin.H{
+					"error":   "rate_limit_exceeded",
+					"message": fmt.Sprintf("Maximum %d requests per %v", config.MaxRequestsPerWindow, config.WindowSize),
+				})
+				return
+			}
+
+			counter.AddRequest()
+			mu.Unlock()
+		}
+
+		c.Next()
+	}
+}
+
+type slidingWindowCounter struct {
+	requests []time.Time
+	window   time.Duration
+}
+
+func (c *slidingWindowCounter) AddRequest() {
+	c.requests = append(c.requests, time.Now())
+}
+
+func (c *slidingWindowCounter) Count() int {
+	now := time.Now()
+	windowStart := now.Add(-c.window)
+
+	count := 0
+	for _, t := range c.requests {
+		if t.After(windowStart) {
+			count++
+		}
+	}
+	return count
+}
+
+func (c *slidingWindowCounter) Cleanup() {
+	now := time.Now()
+	windowStart := now.Add(-c.window)
+
+	validRequests := make([]time.Time, 0)
+	for _, t := range c.requests {
+		if t.After(windowStart) {
+			validRequests = append(validRequests, t)
+		}
+	}
+	c.requests = validRequests
 }

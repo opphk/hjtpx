@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -11,20 +12,40 @@ import (
 type SecurityEventType string
 
 const (
-	EventLoginAttempt        SecurityEventType = "login_attempt"
-	EventLoginSuccess        SecurityEventType = "login_success"
-	EventLoginFailure        SecurityEventType = "login_failure"
-	EventAccessDenied        SecurityEventType = "access_denied"
-	EventCSRFDetected        SecurityEventType = "csrf_detected"
-	EventSQLInjection        SecurityEventType = "sql_injection"
-	EventXSSAttempt          SecurityEventType = "xss_attempt"
-	EventRateLimitHit        SecurityEventType = "rate_limit_hit"
-	EventBotDetected         SecurityEventType = "bot_detected"
-	EventDDoSAttempt         SecurityEventType = "ddos_attempt"
-	EventSuspiciousActivity  SecurityEventType = "suspicious_activity"
-	EventPrivilegeEscalation SecurityEventType = "privilege_escalation"
-	EventDataAccess          SecurityEventType = "data_access"
-	EventConfigChange        SecurityEventType = "config_change"
+	EventLoginAttempt           SecurityEventType = "login_attempt"
+	EventLoginSuccess           SecurityEventType = "login_success"
+	EventLoginFailure           SecurityEventType = "login_failure"
+	EventAccessDenied           SecurityEventType = "access_denied"
+	EventCSRFDetected           SecurityEventType = "csrf_detected"
+	EventSQLInjection           SecurityEventType = "sql_injection"
+	EventXSSAttempt             SecurityEventType = "xss_attempt"
+	EventRateLimitHit           SecurityEventType = "rate_limit_hit"
+	EventBotDetected            SecurityEventType = "bot_detected"
+	EventDDoSAttempt            SecurityEventType = "ddos_attempt"
+	EventSuspiciousActivity     SecurityEventType = "suspicious_activity"
+	EventPrivilegeEscalation    SecurityEventType = "privilege_escalation"
+	EventDataAccess             SecurityEventType = "data_access"
+	EventConfigChange           SecurityEventType = "config_change"
+	EventAccountCreated         SecurityEventType = "account_created"
+	EventAccountDeleted         SecurityEventType = "account_deleted"
+	EventPasswordChange         SecurityEventType = "password_change"
+	EventPasswordReset          SecurityEventType = "password_reset"
+	EventAPIKeyGenerated        SecurityEventType = "api_key_generated"
+	EventSessionCreated         SecurityEventType = "session_created"
+	EventSessionExpired         SecurityEventType = "session_expired"
+	EventSessionInvalidated     SecurityEventType = "session_invalidated"
+	EventDataExport             SecurityEventType = "data_export"
+	EventDataImport             SecurityEventType = "data_import"
+	EventBackupCreated          SecurityEventType = "backup_created"
+	EventBackupRestored         SecurityEventType = "backup_restored"
+	EventFirewallBlock          SecurityEventType = "firewall_block"
+	EventIPReputationWarning    SecurityEventType = "ip_reputation_warning"
+	EventAnomalyDetected        SecurityEventType = "anomaly_detected"
+	EventViolationDetected      SecurityEventType = "violation_detected"
+	EventMFAEnabled             SecurityEventType = "mfa_enabled"
+	EventMFAFailed              SecurityEventType = "mfa_failed"
+	EventCertificateExpiry      SecurityEventType = "certificate_expiry"
+	EventDependencyVulnerability SecurityEventType = "dependency_vulnerability"
 )
 
 type SecurityEvent struct {
@@ -41,58 +62,115 @@ type SecurityEvent struct {
 	Details       map[string]interface{} `json:"details,omitempty"`
 	Status        string                 `json:"status"`
 	GeoLocation   map[string]string      `json:"geo_location,omitempty"`
+	ThreatScore   float64                `json:"threat_score,omitempty"`
+	Tags          []string               `json:"tags,omitempty"`
+	RelatedEvents []string               `json:"related_events,omitempty"`
+	ActionTaken   string                 `json:"action_taken,omitempty"`
+	RawData       string                 `json:"raw_data,omitempty"`
+}
+
+type ThreatIntelEntry struct {
+	IP              string
+	ThreatType      string
+	Confidence      float64
+	Source          string
+	LastSeen        time.Time
+	Description     string
 }
 
 type SecurityAuditService struct {
-	events         []*SecurityEvent
-	eventBuffer    chan *SecurityEvent
-	alertHandlers  []func(event *SecurityEvent)
-	mu             sync.RWMutex
-	maxEvents      int
-	severityLevels map[SecurityEventType]string
-	asyncMode      bool // 控制是否使用异步模式，测试时可以设置为false
+	events              []*SecurityEvent
+	eventBuffer         chan *SecurityEvent
+	alertHandlers       []func(event *SecurityEvent)
+	threatIntel         map[string][]*ThreatIntelEntry
+	ipEventCounts       map[string]int
+	geoIPCache          map[string]map[string]string
+	mu                  sync.RWMutex
+	maxEvents           int
+	severityLevels      map[SecurityEventType]string
+	asyncMode           bool // 控制是否使用异步模式，测试时可以设置为false
+	enableThreatIntel   bool
+	maxThreatScore      float64
+	retentionDays       int
+	sensitivePatterns   []*regexp.Regexp
 }
 
 func NewSecurityAuditService() *SecurityAuditService {
 	service := &SecurityAuditService{
-		events:        make([]*SecurityEvent, 0),
-		eventBuffer:   make(chan *SecurityEvent, 1000),
-		alertHandlers: make([]func(event *SecurityEvent), 0),
-		maxEvents:     10000,
-		asyncMode:     true,
+		events:            make([]*SecurityEvent, 0),
+		eventBuffer:       make(chan *SecurityEvent, 1000),
+		alertHandlers:     make([]func(event *SecurityEvent), 0),
+		threatIntel:       make(map[string][]*ThreatIntelEntry),
+		ipEventCounts:     make(map[string]int),
+		geoIPCache:        make(map[string]map[string]string),
+		maxEvents:         10000,
+		asyncMode:         true,
+		enableThreatIntel: true,
+		maxThreatScore:    100.0,
+		retentionDays:     30,
+		sensitivePatterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)(password|secret|token|api[_-]key|credentials)`),
+			regexp.MustCompile(`(?i)(ssn|credit[_-]card|cvv|bank[_-]account)`),
+			regexp.MustCompile(`(?i)(private[_-]key|ssh[_-]key|certificate)`),
+		},
 		severityLevels: map[SecurityEventType]string{
-			EventLoginAttempt:        "info",
-			EventLoginSuccess:        "info",
-			EventLoginFailure:        "warning",
-			EventAccessDenied:        "warning",
-			EventCSRFDetected:        "high",
-			EventSQLInjection:        "critical",
-			EventXSSAttempt:          "high",
-			EventRateLimitHit:        "warning",
-			EventBotDetected:         "medium",
-			EventDDoSAttempt:         "critical",
-			EventSuspiciousActivity:  "medium",
-			EventPrivilegeEscalation: "critical",
-			EventDataAccess:          "info",
-			EventConfigChange:        "high",
+			EventLoginAttempt:           "info",
+			EventLoginSuccess:           "info",
+			EventLoginFailure:           "warning",
+			EventAccessDenied:           "warning",
+			EventCSRFDetected:           "high",
+			EventSQLInjection:           "critical",
+			EventXSSAttempt:             "high",
+			EventRateLimitHit:           "warning",
+			EventBotDetected:            "medium",
+			EventDDoSAttempt:            "critical",
+			EventSuspiciousActivity:     "medium",
+			EventPrivilegeEscalation:    "critical",
+			EventDataAccess:             "info",
+			EventConfigChange:           "high",
+			EventAccountCreated:         "info",
+			EventAccountDeleted:         "warning",
+			EventPasswordChange:         "info",
+			EventPasswordReset:          "warning",
+			EventAPIKeyGenerated:        "high",
+			EventSessionCreated:         "info",
+			EventSessionExpired:         "info",
+			EventSessionInvalidated:     "warning",
+			EventDataExport:             "high",
+			EventDataImport:             "high",
+			EventBackupCreated:          "info",
+			EventBackupRestored:         "warning",
+			EventFirewallBlock:          "medium",
+			EventIPReputationWarning:    "warning",
+			EventAnomalyDetected:        "high",
+			EventViolationDetected:      "high",
+			EventMFAEnabled:             "info",
+			EventMFAFailed:              "warning",
+			EventCertificateExpiry:      "high",
+			EventDependencyVulnerability: "high",
 		},
 	}
 	go service.processEvents()
+	go service.cleanupOldEvents()
 	return service
 }
 
 func (s *SecurityAuditService) LogEvent(eventType SecurityEventType, r *http.Request, details map[string]interface{}) *SecurityEvent {
+	ip := getClientIP(r)
 	event := &SecurityEvent{
 		ID:            generateEventID(),
 		Timestamp:     time.Now(),
 		EventType:     eventType,
 		Severity:      s.severityLevels[eventType],
-		SourceIP:      getClientIP(r),
+		SourceIP:      ip,
 		UserAgent:     r.UserAgent(),
 		RequestPath:   r.URL.Path,
 		RequestMethod: r.Method,
 		Details:       details,
 		Status:        "new",
+		GeoLocation:   s.getGeoIP(ip),
+		ThreatScore:   s.calculateThreatScore(eventType, ip, r),
+		Tags:          s.generateTags(eventType, r),
 	}
 
 	if s.asyncMode {
@@ -101,7 +179,145 @@ func (s *SecurityAuditService) LogEvent(eventType SecurityEventType, r *http.Req
 		s.storeEvent(event)
 		s.checkAlerts(event)
 	}
+
+	s.updateIPEventCount(ip)
+	s.checkThreatIntel(ip, event)
+
 	return event
+}
+
+func (s *SecurityAuditService) calculateThreatScore(eventType SecurityEventType, ip string, r *http.Request) float64 {
+	score := 0.0
+
+	severityWeights := map[string]float64{
+		"info":     5.0,
+		"medium":   25.0,
+		"warning":  50.0,
+		"high":     75.0,
+		"critical": 100.0,
+	}
+
+	if weight, exists := severityWeights[s.severityLevels[eventType]]; exists {
+		score += weight
+	}
+
+	if intel, exists := s.threatIntel[ip]; exists {
+		for _, entry := range intel {
+			score += entry.Confidence * 10
+		}
+	}
+
+	if s.ipEventCounts[ip] > 100 {
+		score += 20.0
+	}
+
+	for _, pattern := range s.sensitivePatterns {
+		if pattern.MatchString(r.URL.Path) || pattern.MatchString(r.URL.RawQuery) {
+			score += 15.0
+			break
+		}
+	}
+
+	if score > s.maxThreatScore {
+		score = s.maxThreatScore
+	}
+
+	return score
+}
+
+func (s *SecurityAuditService) generateTags(eventType SecurityEventType, r *http.Request) []string {
+	tags := []string{string(eventType)}
+
+	if strings.HasPrefix(r.URL.Path, "/admin") {
+		tags = append(tags, "admin")
+	}
+	if strings.HasPrefix(r.URL.Path, "/api") {
+		tags = append(tags, "api")
+	}
+	if strings.HasSuffix(r.URL.Path, "/login") {
+		tags = append(tags, "authentication")
+	}
+
+	severity := s.severityLevels[eventType]
+	if severity == "high" || severity == "critical" {
+		tags = append(tags, "priority")
+	}
+
+	return tags
+}
+
+func (s *SecurityAuditService) getGeoIP(ip string) map[string]string {
+	if geo, exists := s.geoIPCache[ip]; exists {
+		return geo
+	}
+
+	geo := map[string]string{
+		"country": "Unknown",
+		"city":    "Unknown",
+		"region":  "Unknown",
+	}
+
+	if strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "192.168.") {
+		geo["country"] = "Private"
+	}
+
+	s.geoIPCache[ip] = geo
+	return geo
+}
+
+func (s *SecurityAuditService) updateIPEventCount(ip string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ipEventCounts[ip]++
+}
+
+func (s *SecurityAuditService) checkThreatIntel(ip string, event *SecurityEvent) {
+	if !s.enableThreatIntel {
+		return
+	}
+
+	if intel, exists := s.threatIntel[ip]; exists {
+		for _, entry := range intel {
+			if entry.Confidence > 0.7 {
+				event.RelatedEvents = append(event.RelatedEvents, entry.ThreatType)
+				event.ThreatScore += entry.Confidence * 20
+			}
+		}
+	}
+}
+
+func (s *SecurityAuditService) AddThreatIntel(ip, threatType, source, description string, confidence float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entry := &ThreatIntelEntry{
+		IP:          ip,
+		ThreatType:  threatType,
+		Confidence:  confidence,
+		Source:      source,
+		LastSeen:    time.Now(),
+		Description: description,
+	}
+
+	s.threatIntel[ip] = append(s.threatIntel[ip], entry)
+}
+
+func (s *SecurityAuditService) cleanupOldEvents() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.mu.Lock()
+		cutoff := time.Now().Add(-time.Duration(s.retentionDays) * 24 * time.Hour)
+		newEvents := make([]*SecurityEvent, 0)
+		for _, event := range s.events {
+			if event.Timestamp.After(cutoff) {
+				newEvents = append(newEvents, event)
+			}
+		}
+		s.events = newEvents
+		s.mu.Unlock()
+	}
 }
 
 func (s *SecurityAuditService) processEvents() {

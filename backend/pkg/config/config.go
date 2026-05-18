@@ -57,6 +57,14 @@ type ConnectionPoolConfig struct {
 	ConnMaxLifetimeSecs int `yaml:"conn_max_lifetime_secs"`
 	ConnMaxIdleTimeSecs int `yaml:"conn_max_idle_time_secs"`
 	HealthCheckInterval int `yaml:"health_check_interval_secs"`
+	MinIdleConns        int `yaml:"min_idle_conns"`
+	WaitTimeoutSecs     int `yaml:"wait_timeout_secs"`
+	MaxWaitCount        int `yaml:"max_wait_count"`
+	EnableWarmup        bool `yaml:"enable_warmup"`
+	WarmupConns         int `yaml:"warmup_conns"`
+	EnableAutoTuning    bool `yaml:"enable_auto_tuning"`
+	HighLoadThreshold   int  `yaml:"high_load_threshold"`
+	LowLoadThreshold    int  `yaml:"low_load_threshold"`
 }
 
 type DataArchivingConfig struct {
@@ -203,11 +211,19 @@ func LoadConfig() *Config {
 				},
 			},
 			ConnectionPool: ConnectionPoolConfig{
-				MaxOpenConns:        getEnvAsInt("DB_POOL_MAX_OPEN", 100),
-				MaxIdleConns:        getEnvAsInt("DB_POOL_MAX_IDLE", 20),
-				ConnMaxLifetimeSecs: getEnvAsInt("DB_POOL_MAX_LIFETIME", 1800),
+				MaxOpenConns:        getEnvAsInt("DB_POOL_MAX_OPEN", 150),
+				MaxIdleConns:        getEnvAsInt("DB_POOL_MAX_IDLE", 50),
+				ConnMaxLifetimeSecs: getEnvAsInt("DB_POOL_MAX_LIFETIME", 3600),
 				ConnMaxIdleTimeSecs: getEnvAsInt("DB_POOL_MAX_IDLE_TIME", 600),
 				HealthCheckInterval: getEnvAsInt("DB_POOL_HEALTH_CHECK", 30),
+				MinIdleConns:        getEnvAsInt("DB_POOL_MIN_IDLE", 10),
+				WaitTimeoutSecs:     getEnvAsInt("DB_POOL_WAIT_TIMEOUT", 30),
+				MaxWaitCount:        getEnvAsInt("DB_POOL_MAX_WAIT", 500),
+				EnableWarmup:        getEnvAsBool("DB_POOL_WARMUP_ENABLED", true),
+				WarmupConns:         getEnvAsInt("DB_POOL_WARMUP_CONNS", 10),
+				EnableAutoTuning:    getEnvAsBool("DB_POOL_AUTO_TUNING", true),
+				HighLoadThreshold:   getEnvAsInt("DB_POOL_HIGH_LOAD", 80),
+				LowLoadThreshold:    getEnvAsInt("DB_POOL_LOW_LOAD", 20),
 			},
 			DataArchiving: DataArchivingConfig{
 				Enabled:              getEnvAsBool("DB_ARCHIVING_ENABLED", true),

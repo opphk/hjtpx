@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -1493,4 +1494,1418 @@ func (c *CanvasSimilarityAnalyzer) AnalyzeCanvasFingerprint(data map[string]inte
 	}
 
 	return metrics
+}
+
+func (c *CanvasSimilarityAnalyzer) CalculateHistogramSimilarity(hash1, hash2 string) float64 {
+	if hash1 == "" || hash2 == "" {
+		return 0
+	}
+
+	hist1 := c.hashToHistogram(hash1)
+	hist2 := c.hashToHistogram(hash2)
+
+	return c.cosineSimilarity(hist1, hist2) * 100
+}
+
+func (c *CanvasSimilarityAnalyzer) hashToHistogram(hash string) []int {
+	histogram := make([]int, 16)
+	
+	for i := 0; i < len(hash); i++ {
+		nibble := 0
+		if hash[i] >= '0' && hash[i] <= '9' {
+			nibble = int(hash[i] - '0')
+		} else if hash[i] >= 'a' && hash[i] <= 'f' {
+			nibble = int(hash[i] - 'a' + 10)
+		} else if hash[i] >= 'A' && hash[i] <= 'F' {
+			nibble = int(hash[i] - 'A' + 10)
+		}
+		histogram[nibble]++
+	}
+	
+	return histogram
+}
+
+func (c *CanvasSimilarityAnalyzer) cosineSimilarity(vec1, vec2 []int) float64 {
+	dotProduct := 0
+	norm1 := 0
+	norm2 := 0
+	
+	minLen := len(vec1)
+	if len(vec2) < minLen {
+		minLen = len(vec2)
+	}
+	
+	for i := 0; i < minLen; i++ {
+		dotProduct += vec1[i] * vec2[i]
+		norm1 += vec1[i] * vec1[i]
+		norm2 += vec2[i] * vec2[i]
+	}
+	
+	if norm1 == 0 || norm2 == 0 {
+		return 0
+	}
+	
+	return float64(dotProduct) / (math.Sqrt(float64(norm1)) * math.Sqrt(float64(norm2)))
+}
+
+func (c *CanvasSimilarityAnalyzer) CalculateEnhancedSimilarity(hash1, hash2 string) float64 {
+	if hash1 == "" || hash2 == "" {
+		return 0
+	}
+	
+	if hash1 == hash2 {
+		return 100.0
+	}
+	
+	exactMatch := c.CalculateCanvasSimilarity(hash1, hash2)
+	histogramMatch := c.CalculateHistogramSimilarity(hash1, hash2)
+	
+	return (exactMatch*0.6 + histogramMatch*0.4)
+}
+
+func (c *CanvasSimilarityAnalyzer) AnalyzeHashStability(hashSamples []string) *CanvasStabilityResult {
+	result := &CanvasStabilityResult{
+		SampleCount:    len(hashSamples),
+		IsStable:       true,
+		StabilityScore: 100.0,
+		Issues:         make([]string, 0),
+	}
+	
+	if len(hashSamples) < 2 {
+		result.Issues = append(result.Issues, "insufficient_samples")
+		result.IsStable = false
+		result.StabilityScore = 0
+		return result
+	}
+	
+	referenceHash := hashSamples[0]
+	totalSimilarity := 0.0
+	matchCount := 0
+	
+	for i := 1; i < len(hashSamples); i++ {
+		similarity := c.CalculateEnhancedSimilarity(referenceHash, hashSamples[i])
+		totalSimilarity += similarity
+		
+		if hashSamples[i] == referenceHash {
+			matchCount++
+		}
+	}
+	
+	result.AvgSimilarity = totalSimilarity / float64(len(hashSamples)-1)
+	result.ExactMatchRatio = float64(matchCount) / float64(len(hashSamples)-1)
+	
+	if result.AvgSimilarity < 95 {
+		result.IsStable = false
+		result.StabilityScore = result.AvgSimilarity
+		result.Issues = append(result.Issues, "low_average_similarity")
+	}
+	
+	if result.ExactMatchRatio < 0.8 {
+		result.Issues = append(result.Issues, "inconsistent_hash_generation")
+	}
+	
+	if result.AvgSimilarity > 99.9 && len(hashSamples) > 5 {
+		result.Issues = append(result.Issues, "suspiciously_identical_hashes")
+	}
+	
+	return result
+}
+
+type CanvasStabilityResult struct {
+	SampleCount      int      `json:"sample_count"`
+	IsStable         bool     `json:"is_stable"`
+	StabilityScore   float64  `json:"stability_score"`
+	AvgSimilarity    float64  `json:"avg_similarity"`
+	ExactMatchRatio  float64  `json:"exact_match_ratio"`
+	Issues           []string `json:"issues"`
+}
+
+func (c *CanvasSimilarityAnalyzer) DetectHashTampering(hash string, expectedLength int) *TamperingDetection {
+	result := &TamperingDetection{
+		IsTampered:      false,
+		Confidence:      0.0,
+		Indicators:      make([]string, 0),
+	}
+	
+	if hash == "" {
+		result.IsTampered = true
+		result.Confidence = 0.9
+		result.Indicators = append(result.Indicators, "empty_hash")
+		return result
+	}
+	
+	if expectedLength > 0 && len(hash) != expectedLength {
+		result.IsTampered = true
+		result.Confidence = 0.85
+		result.Indicators = append(result.Indicators, "invalid_length")
+	}
+	
+	hexPattern := regexp.MustCompile("^[0-9a-fA-F]+$")
+	if !hexPattern.MatchString(hash) {
+		result.IsTampered = true
+		result.Confidence = 0.95
+		result.Indicators = append(result.Indicators, "non_hex_characters")
+	}
+	
+	if len(hash) > 0 {
+		histogram := c.hashToHistogram(hash)
+		entropy := c.calculateEntropy(histogram)
+		
+		if entropy < 2.0 {
+			result.IsTampered = true
+			result.Confidence = math.Min(0.8 + (2.0-entropy)*0.1, 0.95)
+			result.Indicators = append(result.Indicators, "low_entropy")
+		}
+		
+		if entropy > 3.9 {
+			result.Indicators = append(result.Indicators, "unusually_high_entropy")
+		}
+	}
+	
+	if len(result.Indicators) > 0 {
+		result.IsTampered = true
+		result.Confidence = math.Min(0.5+float64(len(result.Indicators))*0.15, 0.95)
+	}
+	
+	return result
+}
+
+func (c *CanvasSimilarityAnalyzer) calculateEntropy(histogram []int) float64 {
+	total := 0
+	for _, count := range histogram {
+		total += count
+	}
+	
+	if total == 0 {
+		return 0
+	}
+	
+	entropy := 0.0
+	for _, count := range histogram {
+		if count > 0 {
+			prob := float64(count) / float64(total)
+			entropy -= prob * math.Log2(prob)
+		}
+	}
+	
+	return entropy / 4.0
+}
+
+type TamperingDetection struct {
+	IsTampered bool      `json:"is_tampered"`
+	Confidence float64   `json:"confidence"`
+	Indicators []string  `json:"indicators"`
+}
+
+type WebGLAnalyzer struct {
+	database            *FingerprintDatabase
+	knownVendors        map[string]bool
+	knownRenderers      map[string]bool
+	blacklistedPatterns []string
+	expectedExtensions  map[string][]string
+}
+
+func NewWebGLAnalyzer(db *FingerprintDatabase) *WebGLAnalyzer {
+	return &WebGLAnalyzer{
+		database:            db,
+		knownVendors:        initKnownVendors(),
+		knownRenderers:      initKnownRenderers(),
+		blacklistedPatterns: initBlacklistedPatterns(),
+		expectedExtensions:  initExpectedExtensions(),
+	}
+}
+
+func initKnownVendors() map[string]bool {
+	return map[string]bool{
+		"NVIDIA Corporation":             true,
+		"ATI Technologies Inc.":          true,
+		"Advanced Micro Devices, Inc.":   true,
+		"Intel Inc.":                     true,
+		"Intel(R) Corporation":           true,
+		"Google Inc.":                    true,
+		"Microsoft Corporation":          true,
+		"Apple Inc.":                     true,
+		"ARM Ltd.":                       true,
+		"Qualcomm":                       true,
+		"Imagination Technologies":       true,
+		"Mesa project":                   true,
+		"VMware, Inc.":                   true,
+		"VirtualBox":                     true,
+	}
+}
+
+func initKnownRenderers() map[string]bool {
+	return map[string]bool{
+		"GeForce":                        true,
+		"Radeon":                         true,
+		"Intel(R) HD Graphics":           true,
+		"Intel(R) UHD Graphics":          true,
+		"Apple M1":                       true,
+		"Apple M2":                       true,
+		"SwiftShader":                    true,
+		"llvmpipe":                       true,
+		"ANGLE":                          true,
+		"WebKit WebGL":                   true,
+		"Chromium":                       true,
+		"Mesa":                           true,
+		"VirtualBox":                     true,
+		"VMware":                         true,
+		"NVIDIA":                         true,
+	}
+}
+
+func initBlacklistedPatterns() []string {
+	return []string{
+		"fake",
+		"mock",
+		"test",
+		"emulator",
+		"virtual",
+		"spoof",
+		"none",
+		"unknown",
+		"undefined",
+	}
+}
+
+func initExpectedExtensions() map[string][]string {
+	return map[string][]string{
+		"webgl": {
+			"GL_EXT_blend_minmax",
+			"GL_EXT_color_buffer_float",
+			"GL_EXT_frag_depth",
+			"GL_EXT_shader_texture_lod",
+			"GL_EXT_sRGB",
+			"GL_OES_standard_derivatives",
+			"GL_OES_texture_float",
+			"GL_OES_texture_float_linear",
+			"GL_OES_texture_half_float",
+			"GL_OES_texture_half_float_linear",
+			"GL_OES_vertex_array_object",
+			"GL_ANGLE_instanced_arrays",
+			"GL_WEBGL_compressed_texture_s3tc",
+			"GL_WEBGL_depth_texture",
+			"GL_WEBGL_lose_context",
+		},
+		"webgl2": {
+			"GL_EXT_color_buffer_float",
+			"GL_EXT_float_blend",
+			"GL_EXT_frag_depth",
+			"GL_EXT_shader_texture_lod",
+			"GL_EXT_sRGB",
+			"GL_OES_standard_derivatives",
+			"GL_WEBGL_compressed_texture_s3tc",
+			"GL_WEBGL_compressed_texture_s3tc_srgb",
+			"GL_WEBGL_depth_texture",
+			"GL_WEBGL_lose_context",
+		},
+	}
+}
+
+func (w *WebGLAnalyzer) AnalyzeWebGLFingerprint(data map[string]interface{}) *WebGLAnalysisResult {
+	result := &WebGLAnalysisResult{
+		IsTampered:       false,
+		TamperingScore:   0.0,
+		Confidence:       0.0,
+		VendorAnalysis:   &VendorAnalysis{},
+		RendererAnalysis: &RendererAnalysis{},
+		ExtensionsAnalysis: &ExtensionsAnalysis{},
+		Capabilities:     &WebGLCapabilities{},
+		Warnings:         make([]string, 0),
+		Errors:           make([]string, 0),
+	}
+
+	w.analyzeVendor(data, result)
+	w.analyzeRenderer(data, result)
+	w.analyzeExtensions(data, result)
+	w.analyzeCapabilities(data, result)
+
+	if len(result.Errors) > 0 {
+		result.IsTampered = true
+		result.TamperingScore = math.Min(50.0+float64(len(result.Errors))*15.0, 95.0)
+		result.Confidence = math.Min(0.5+float64(len(result.Errors))*0.15, 0.95)
+	} else if len(result.Warnings) > 2 {
+		result.IsTampered = true
+		result.TamperingScore = math.Min(20.0+float64(len(result.Warnings))*10.0, 50.0)
+		result.Confidence = math.Min(0.3+float64(len(result.Warnings))*0.1, 0.7)
+	}
+
+	return result
+}
+
+func (w *WebGLAnalyzer) analyzeVendor(data map[string]interface{}, result *WebGLAnalysisResult) {
+	vendor := getString(data, "webgl_vendor")
+	unmaskedVendor := getString(data, "webgl_unmasked_vendor")
+
+	result.VendorAnalysis.Vendor = vendor
+	result.VendorAnalysis.UnmaskedVendor = unmaskedVendor
+
+	if vendor == "" {
+		result.Errors = append(result.Errors, "missing_vendor")
+		return
+	}
+
+	if unmaskedVendor == "" {
+		result.Warnings = append(result.Warnings, "missing_unmasked_vendor")
+	}
+
+	if !w.knownVendors[vendor] && !w.knownVendors[unmaskedVendor] {
+		result.Warnings = append(result.Warnings, "unknown_vendor:"+vendor)
+	}
+
+	if vendor != unmaskedVendor && vendor != "" && unmaskedVendor != "" {
+		similarity := w.stringSimilarity(vendor, unmaskedVendor)
+		if similarity < 0.5 {
+			result.Warnings = append(result.Warnings, "vendor_mismatch")
+		}
+	}
+
+	for _, pattern := range w.blacklistedPatterns {
+		if strings.Contains(strings.ToLower(vendor), pattern) {
+			result.Errors = append(result.Errors, "blacklisted_vendor_pattern:"+pattern)
+			return
+		}
+	}
+}
+
+func (w *WebGLAnalyzer) analyzeRenderer(data map[string]interface{}, result *WebGLAnalysisResult) {
+	renderer := getString(data, "webgl_renderer")
+	unmaskedRenderer := getString(data, "webgl_unmasked_renderer")
+
+	result.RendererAnalysis.Renderer = renderer
+	result.RendererAnalysis.UnmaskedRenderer = unmaskedRenderer
+
+	if renderer == "" {
+		result.Errors = append(result.Errors, "missing_renderer")
+		return
+	}
+
+	if unmaskedRenderer == "" {
+		result.Warnings = append(result.Warnings, "missing_unmasked_renderer")
+	}
+
+	found := false
+	for knownRenderer := range w.knownRenderers {
+		if strings.Contains(renderer, knownRenderer) || strings.Contains(unmaskedRenderer, knownRenderer) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		result.Warnings = append(result.Warnings, "unknown_renderer:"+renderer)
+	}
+
+	if renderer != unmaskedRenderer && renderer != "" && unmaskedRenderer != "" {
+		similarity := w.stringSimilarity(renderer, unmaskedRenderer)
+		if similarity < 0.3 {
+			result.Errors = append(result.Errors, "renderer_mismatch")
+		}
+	}
+
+	softwarePatterns := []string{"swiftshader", "llvmpipe", "mesa"}
+	for _, pattern := range softwarePatterns {
+		if strings.Contains(strings.ToLower(renderer), pattern) {
+			result.RendererAnalysis.IsSoftwareRenderer = true
+			result.Warnings = append(result.Warnings, "software_renderer:"+pattern)
+			break
+		}
+	}
+
+	virtualPatterns := []string{"virtualbox", "vmware", "qemu", "kvm", "parallels", "hyperv"}
+	for _, pattern := range virtualPatterns {
+		if strings.Contains(strings.ToLower(renderer), pattern) {
+			result.RendererAnalysis.IsVirtualGPU = true
+			result.Warnings = append(result.Warnings, "virtual_gpu:"+pattern)
+			break
+		}
+	}
+}
+
+func (w *WebGLAnalyzer) analyzeExtensions(data map[string]interface{}, result *WebGLAnalysisResult) {
+	var extensions []string
+	if extData, ok := data["webgl_extensions"].([]interface{}); ok {
+		for _, ext := range extData {
+			if extStr, ok := ext.(string); ok {
+				extensions = append(extensions, extStr)
+			}
+		}
+	}
+
+	result.ExtensionsAnalysis.ExtensionCount = len(extensions)
+	result.ExtensionsAnalysis.Extensions = extensions
+
+	if len(extensions) == 0 {
+		result.Errors = append(result.Errors, "no_extensions")
+		return
+	}
+
+	if len(extensions) < 5 {
+		result.Warnings = append(result.Warnings, "unusually_few_extensions")
+	}
+
+	webglVersion := getString(data, "webgl_version")
+	expectedExtensions := w.expectedExtensions[webglVersion]
+	if len(expectedExtensions) > 0 {
+		missingExtensions := make([]string, 0)
+		for _, expected := range expectedExtensions {
+			found := false
+			for _, ext := range extensions {
+				if strings.Contains(ext, expected) || strings.Contains(expected, ext) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingExtensions = append(missingExtensions, expected)
+			}
+		}
+		if len(missingExtensions) > len(expectedExtensions)/2 {
+			result.Warnings = append(result.Warnings, "many_expected_extensions_missing")
+		}
+		result.ExtensionsAnalysis.MissingExpected = missingExtensions
+	}
+
+	suspiciousExtensions := []string{"WEBGL_debug_renderer_info", "WEBGL_lose_context"}
+	foundSuspicious := false
+	for _, ext := range extensions {
+		for _, suspicious := range suspiciousExtensions {
+			if strings.Contains(ext, suspicious) {
+				foundSuspicious = true
+				break
+			}
+		}
+	}
+	if !foundSuspicious && len(extensions) > 0 {
+		result.Warnings = append(result.Warnings, "missing_debug_extensions")
+	}
+}
+
+func (w *WebGLAnalyzer) analyzeCapabilities(data map[string]interface{}, result *WebGLAnalysisResult) {
+	if maxTextureSize, ok := data["webgl_max_texture_size"].(float64); ok {
+		result.Capabilities.MaxTextureSize = int(maxTextureSize)
+		if maxTextureSize < 2048 {
+			result.Warnings = append(result.Warnings, "small_max_texture_size")
+		}
+	}
+
+	if maxRenderbufferSize, ok := data["webgl_max_renderbuffer_size"].(float64); ok {
+		result.Capabilities.MaxRenderbufferSize = int(maxRenderbufferSize)
+	}
+
+	if maxVertexAttribs, ok := data["webgl_max_vertex_attribs"].(float64); ok {
+		result.Capabilities.MaxVertexAttribs = int(maxVertexAttribs)
+		if maxVertexAttribs < 16 {
+			result.Warnings = append(result.Warnings, "limited_vertex_attribs")
+		}
+	}
+
+	if precisionLoss, ok := data["webgl_precision_loss"].(bool); ok && precisionLoss {
+		result.Capabilities.PrecisionLoss = true
+		result.Warnings = append(result.Warnings, "precision_loss_detected")
+	}
+}
+
+func (w *WebGLAnalyzer) stringSimilarity(s1, s2 string) float64 {
+	if s1 == "" || s2 == "" {
+		return 0
+	}
+
+	s1 = strings.ToLower(s1)
+	s2 = strings.ToLower(s2)
+
+	minLen := len(s1)
+	if len(s2) < minLen {
+		minLen = len(s2)
+	}
+
+	matchCount := 0
+	for i := 0; i < minLen; i++ {
+		if s1[i] == s2[i] {
+			matchCount++
+		}
+	}
+
+	avgLen := (len(s1) + len(s2)) / 2
+	return float64(matchCount) / float64(avgLen)
+}
+
+func (w *WebGLAnalyzer) CompareWebGLFingerprints(fp1, fp2 *WebGLMetrics) float64 {
+	if fp1 == nil || fp2 == nil {
+		return 0
+	}
+
+	totalScore := 0.0
+	weightSum := 0.0
+
+	if fp1.Vendor != "" && fp2.Vendor != "" {
+		if fp1.Vendor == fp2.Vendor {
+			totalScore += 25
+		}
+		weightSum += 25
+	}
+
+	if fp1.Renderer != "" && fp2.Renderer != "" {
+		if fp1.Renderer == fp2.Renderer {
+			totalScore += 30
+		}
+		weightSum += 30
+	}
+
+	if fp1.MaxTextureSize > 0 && fp2.MaxTextureSize > 0 {
+		if fp1.MaxTextureSize == fp2.MaxTextureSize {
+			totalScore += 15
+		}
+		weightSum += 15
+	}
+
+	if fp1.MaxRenderbufferSize > 0 && fp2.MaxRenderbufferSize > 0 {
+		if fp1.MaxRenderbufferSize == fp2.MaxRenderbufferSize {
+			totalScore += 10
+		}
+		weightSum += 10
+	}
+
+	if fp1.MaxVertexAttribs > 0 && fp2.MaxVertexAttribs > 0 {
+		if fp1.MaxVertexAttribs == fp2.MaxVertexAttribs {
+			totalScore += 10
+		}
+		weightSum += 10
+	}
+
+	if fp1.SupportedExtensions > 0 && fp2.SupportedExtensions > 0 {
+		diff := float64(intAbs(fp1.SupportedExtensions - fp2.SupportedExtensions))
+		similarity := math.Max(0, 1.0-diff/50.0)
+		totalScore += similarity * 10
+		weightSum += 10
+	}
+
+	if weightSum == 0 {
+		return 0
+	}
+
+	return (totalScore / weightSum) * 100
+}
+
+func intAbs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
+}
+
+type WebGLAnalysisResult struct {
+	IsTampered         bool                `json:"is_tampered"`
+	TamperingScore     float64             `json:"tampering_score"`
+	Confidence         float64             `json:"confidence"`
+	VendorAnalysis     *VendorAnalysis     `json:"vendor_analysis"`
+	RendererAnalysis   *RendererAnalysis   `json:"renderer_analysis"`
+	ExtensionsAnalysis *ExtensionsAnalysis `json:"extensions_analysis"`
+	Capabilities       *WebGLCapabilities  `json:"capabilities"`
+	Warnings           []string            `json:"warnings"`
+	Errors             []string            `json:"errors"`
+}
+
+type VendorAnalysis struct {
+	Vendor         string `json:"vendor"`
+	UnmaskedVendor string `json:"unmasked_vendor"`
+	IsKnownVendor  bool   `json:"is_known_vendor"`
+}
+
+type RendererAnalysis struct {
+	Renderer          string `json:"renderer"`
+	UnmaskedRenderer  string `json:"unmasked_renderer"`
+	IsKnownRenderer   bool   `json:"is_known_renderer"`
+	IsSoftwareRenderer bool  `json:"is_software_renderer"`
+	IsVirtualGPU      bool   `json:"is_virtual_gpu"`
+}
+
+type ExtensionsAnalysis struct {
+	ExtensionCount     int      `json:"extension_count"`
+	Extensions         []string `json:"extensions"`
+	MissingExpected    []string `json:"missing_expected"`
+	HasDebugExtensions bool     `json:"has_debug_extensions"`
+}
+
+type WebGLCapabilities struct {
+	MaxTextureSize      int  `json:"max_texture_size"`
+	MaxRenderbufferSize int  `json:"max_renderbuffer_size"`
+	MaxVertexAttribs    int  `json:"max_vertex_attribs"`
+	PrecisionLoss       bool `json:"precision_loss"`
+}
+
+type FontAnalyzer struct {
+	database             *FingerprintDatabase
+	commonFonts          map[string]bool
+	rareFonts            map[string]bool
+	platformFonts        map[string][]string
+	expectedFontCounts   map[string]int
+}
+
+func NewFontAnalyzer(db *FingerprintDatabase) *FontAnalyzer {
+	return &FontAnalyzer{
+		database:           db,
+		commonFonts:        initCommonFonts(),
+		rareFonts:          initRareFonts(),
+		platformFonts:      initPlatformFonts(),
+		expectedFontCounts: initExpectedFontCounts(),
+	}
+}
+
+func initCommonFonts() map[string]bool {
+	return map[string]bool{
+		"Arial":              true,
+		"Helvetica":          true,
+		"Times New Roman":    true,
+		"Times":              true,
+		"Courier New":        true,
+		"Courier":            true,
+		"Verdana":            true,
+		"Georgia":            true,
+		"Comic Sans MS":      true,
+		"Trebuchet MS":       true,
+		"Arial Black":        true,
+		"Impact":             true,
+		"Lucida Console":     true,
+		"Lucida Sans Unicode": true,
+		"Palatino Linotype":  true,
+		"Garamond":           true,
+		"Book Antiqua":       true,
+		"Microsoft YaHei":    true,
+		"SimHei":             true,
+		"SimSun":             true,
+		"KaiTi":              true,
+		"NSimSun":            true,
+		"STSong":             true,
+		"STHeiti":            true,
+		"Roboto":             true,
+		"Open Sans":          true,
+		"Lato":               true,
+		"Segoe UI":           true,
+		"Ubuntu":             true,
+		"Cantarell":          true,
+		"DejaVu Sans":        true,
+		"DejaVu Serif":       true,
+	}
+}
+
+func initRareFonts() map[string]bool {
+	return map[string]bool{
+		"Comic Neue":         true,
+		"Fira Code":          true,
+		"JetBrains Mono":     true,
+		"SF Pro Display":     true,
+		"SF Pro Text":        true,
+		"SF Mono":            true,
+		"PingFang SC":        true,
+		"PingFang TC":        true,
+		"PingFang HK":        true,
+		"Hiragino Sans":      true,
+		"Yu Gothic":          true,
+		"Yu Mincho":          true,
+		"Meiryo":             true,
+		"Malgun Gothic":      true,
+		"Apple SD Gothic Neo": true,
+	}
+}
+
+func initPlatformFonts() map[string][]string {
+	return map[string][]string{
+		"windows": {
+			"Arial", "Arial Black", "Comic Sans MS", "Courier New",
+			"Georgia", "Impact", "Times New Roman", "Trebuchet MS",
+			"Verdana", "Microsoft YaHei", "SimHei", "SimSun", "KaiTi",
+		},
+		"macos": {
+			"Arial", "Helvetica", "Times New Roman", "Georgia",
+			"Verdana", "SF Pro Display", "SF Pro Text", "PingFang SC",
+			"Hiragino Sans", "Yu Gothic", "Yu Mincho",
+		},
+		"linux": {
+			"DejaVu Sans", "DejaVu Serif", "Ubuntu", "Cantarell",
+			"Liberation Sans", "Liberation Serif",
+		},
+		"android": {
+			"Roboto", "Open Sans", "Noto Sans",
+		},
+		"ios": {
+			"SF Pro Display", "SF Pro Text", "PingFang SC",
+		},
+	}
+}
+
+func initExpectedFontCounts() map[string]int {
+	return map[string]int{
+		"windows": 25,
+		"macos":   20,
+		"linux":   15,
+		"android": 12,
+		"ios":     15,
+	}
+}
+
+func (f *FontAnalyzer) AnalyzeFontFingerprint(data map[string]interface{}) *FontAnalysisResult {
+	result := &FontAnalysisResult{
+		IsTampered:       false,
+		Confidence:       0.0,
+		FontAnalysis:     &DetailedFontAnalysis{},
+		RenderingAnalysis: &FontRenderingAnalysis{},
+		PlatformMatch:    &PlatformFontMatch{},
+		Warnings:         make([]string, 0),
+		Errors:           make([]string, 0),
+	}
+
+	f.extractFontData(data, result)
+	f.analyzeFontPatterns(result)
+	f.analyzeRenderingConsistency(data, result)
+	f.analyzePlatformMatch(data, result)
+
+	f.calculateConfidence(result)
+
+	return result
+}
+
+func (f *FontAnalyzer) extractFontData(data map[string]interface{}, result *FontAnalysisResult) {
+	if fonts, ok := data["detected_fonts"].([]interface{}); ok {
+		for _, font := range fonts {
+			if fontStr, ok := font.(string); ok {
+				result.FontAnalysis.DetectedFonts = append(result.FontAnalysis.DetectedFonts, fontStr)
+			}
+		}
+	}
+	result.FontAnalysis.FontCount = len(result.FontAnalysis.DetectedFonts)
+
+	if hash, ok := data["font_hash"].(string); ok {
+		result.FontAnalysis.FontHash = hash
+	}
+}
+
+func (f *FontAnalyzer) analyzeFontPatterns(result *FontAnalysisResult) {
+	commonCount := 0
+	rareCount := 0
+	missingCommon := make([]string, 0)
+
+	for _, font := range result.FontAnalysis.DetectedFonts {
+		lowerFont := strings.ToLower(font)
+		
+		for common := range f.commonFonts {
+			if strings.Contains(lowerFont, strings.ToLower(common)) {
+				commonCount++
+				break
+			}
+		}
+		
+		for rare := range f.rareFonts {
+			if strings.Contains(lowerFont, strings.ToLower(rare)) {
+				rareCount++
+				break
+			}
+		}
+	}
+
+	for common := range f.commonFonts {
+		found := false
+		for _, font := range result.FontAnalysis.DetectedFonts {
+			if strings.Contains(strings.ToLower(font), strings.ToLower(common)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missingCommon = append(missingCommon, common)
+		}
+	}
+
+	result.FontAnalysis.CommonFontCount = commonCount
+	result.FontAnalysis.RareFontCount = rareCount
+	result.FontAnalysis.MissingCommonFonts = missingCommon
+
+	if len(missingCommon) > 5 {
+		result.Warnings = append(result.Warnings, "many_common_fonts_missing")
+	}
+
+	if commonCount == 0 && result.FontAnalysis.FontCount > 0 {
+		result.Errors = append(result.Errors, "no_common_fonts_detected")
+	}
+
+	if result.FontAnalysis.FontCount < 3 {
+		result.Warnings = append(result.Warnings, "very_few_fonts_detected")
+		result.FontAnalysis.IsLimitedFontSet = true
+	}
+
+	if result.FontAnalysis.FontCount > 0 {
+		fontFamilies := make(map[string]bool)
+		for _, font := range result.FontAnalysis.DetectedFonts {
+			family := strings.Split(font, " ")[0]
+			fontFamilies[family] = true
+		}
+		result.FontAnalysis.FontFamilyDiversity = float64(len(fontFamilies)) / float64(result.FontAnalysis.FontCount)
+	}
+}
+
+func (f *FontAnalyzer) analyzeRenderingConsistency(data map[string]interface{}, result *FontAnalysisResult) {
+	if renderingData, ok := data["font_rendering_data"].([]interface{}); ok {
+		result.RenderingAnalysis.RenderingSamples = len(renderingData)
+		
+		if len(renderingData) > 1 {
+			var variance float64
+			sum := 0.0
+			for _, sample := range renderingData {
+				if val, ok := sample.(float64); ok {
+					sum += val
+				}
+			}
+			avg := sum / float64(len(renderingData))
+			
+			for _, sample := range renderingData {
+				if val, ok := sample.(float64); ok {
+					variance += math.Pow(val-avg, 2)
+				}
+			}
+			variance /= float64(len(renderingData))
+			
+			result.RenderingAnalysis.RenderingVariance = variance
+			
+			if variance < 0.001 {
+				result.Warnings = append(result.Warnings, "rendering_too_consistent")
+				result.RenderingAnalysis.IsSuspiciouslyConsistent = true
+			}
+		}
+	}
+
+	if antialiasing, ok := data["font_antialiasing"].(bool); ok {
+		result.RenderingAnalysis.AntialiasingEnabled = antialiasing
+		if !antialiasing {
+			result.Warnings = append(result.Warnings, "no_antialiasing")
+		}
+	}
+
+	if subpixel, ok := data["font_subpixel_rendering"].(bool); ok {
+		result.RenderingAnalysis.SubpixelRendering = subpixel
+	}
+}
+
+func (f *FontAnalyzer) analyzePlatformMatch(data map[string]interface{}, result *FontAnalysisResult) {
+	platform := getString(data, "platform")
+	if platform == "" {
+		platform = getString(data, "os")
+	}
+	result.PlatformMatch.Platform = platform
+
+	expectedFonts := f.platformFonts[platform]
+	if len(expectedFonts) > 0 {
+		matchCount := 0
+		for _, expected := range expectedFonts {
+			for _, detected := range result.FontAnalysis.DetectedFonts {
+				if strings.Contains(strings.ToLower(detected), strings.ToLower(expected)) {
+					matchCount++
+					break
+				}
+			}
+		}
+		result.PlatformMatch.ExpectedFontCount = len(expectedFonts)
+		result.PlatformMatch.MatchedFontCount = matchCount
+		result.PlatformMatch.MatchRatio = float64(matchCount) / float64(len(expectedFonts))
+
+		if result.PlatformMatch.MatchRatio < 0.3 {
+			result.Warnings = append(result.Warnings, "low_platform_font_match")
+		}
+	}
+
+	expectedCount := f.expectedFontCounts[platform]
+	if expectedCount > 0 {
+		result.PlatformMatch.ExpectedTotalCount = expectedCount
+		if result.FontAnalysis.FontCount < expectedCount/2 {
+			result.Warnings = append(result.Warnings, "font_count_below_expected")
+		}
+	}
+}
+
+func (f *FontAnalyzer) calculateConfidence(result *FontAnalysisResult) {
+	baseScore := 50.0
+
+	if len(result.Errors) > 0 {
+		baseScore -= float64(len(result.Errors)) * 20
+	}
+
+	if len(result.Warnings) > 0 {
+		baseScore -= float64(len(result.Warnings)) * 5
+	}
+
+	if result.FontAnalysis.FontCount >= 10 {
+		baseScore += 15
+	} else if result.FontAnalysis.FontCount >= 5 {
+		baseScore += 5
+	}
+
+	if result.FontAnalysis.CommonFontCount >= 5 {
+		baseScore += 10
+	}
+
+	if result.PlatformMatch.MatchRatio > 0.5 {
+		baseScore += 10
+	}
+
+	if result.FontAnalysis.FontFamilyDiversity > 0.5 {
+		baseScore += 10
+	}
+
+	result.Confidence = math.Max(0, math.Min(100, baseScore))
+
+	if result.Confidence < 30 {
+		result.IsTampered = true
+	}
+}
+
+func (f *FontAnalyzer) CompareFontFingerprints(fp1, fp2 *FontMetrics) float64 {
+	if fp1 == nil || fp2 == nil {
+		return 0
+	}
+
+	if fp1.Hash == "" || fp2.Hash == "" {
+		return 0
+	}
+
+	if fp1.Hash == fp2.Hash {
+		return 100.0
+	}
+
+	totalScore := 0.0
+	weightSum := 0.0
+
+	if fp1.FontCount > 0 && fp2.FontCount > 0 {
+		countDiff := math.Abs(float64(fp1.FontCount - fp2.FontCount))
+		maxFontCount := float64(fp1.FontCount)
+		if float64(fp2.FontCount) > maxFontCount {
+			maxFontCount = float64(fp2.FontCount)
+		}
+		countSimilarity := math.Max(0, 1.0-countDiff/maxFontCount)
+		totalScore += countSimilarity * 30
+		weightSum += 30
+	}
+
+	if len(fp1.DetectedFonts) > 0 && len(fp2.DetectedFonts) > 0 {
+		commonFonts := 0
+		fontSet1 := make(map[string]bool)
+		for _, font := range fp1.DetectedFonts {
+			fontSet1[strings.ToLower(font)] = true
+		}
+		for _, font := range fp2.DetectedFonts {
+			if fontSet1[strings.ToLower(font)] {
+				commonFonts++
+			}
+		}
+		maxLen := len(fp1.DetectedFonts)
+		if len(fp2.DetectedFonts) > maxLen {
+			maxLen = len(fp2.DetectedFonts)
+		}
+		similarity := float64(commonFonts) / float64(maxLen)
+		totalScore += similarity * 50
+		weightSum += 50
+	}
+
+	if fp1.FontFamilyDiversity > 0 && fp2.FontFamilyDiversity > 0 {
+		diff := math.Abs(fp1.FontFamilyDiversity - fp2.FontFamilyDiversity)
+		similarity := math.Max(0, 1.0-diff)
+		totalScore += similarity * 20
+		weightSum += 20
+	}
+
+	if weightSum == 0 {
+		return 0
+	}
+
+	return (totalScore / weightSum) * 100
+}
+
+type FontAnalysisResult struct {
+	IsTampered         bool                      `json:"is_tampered"`
+	Confidence         float64                   `json:"confidence"`
+	FontAnalysis       *DetailedFontAnalysis     `json:"font_analysis"`
+	RenderingAnalysis  *FontRenderingAnalysis    `json:"rendering_analysis"`
+	PlatformMatch      *PlatformFontMatch        `json:"platform_match"`
+	Warnings           []string                  `json:"warnings"`
+	Errors             []string                  `json:"errors"`
+}
+
+type DetailedFontAnalysis struct {
+	FontHash            string   `json:"font_hash"`
+	DetectedFonts       []string `json:"detected_fonts"`
+	FontCount           int      `json:"font_count"`
+	CommonFontCount     int      `json:"common_font_count"`
+	RareFontCount       int      `json:"rare_font_count"`
+	MissingCommonFonts  []string `json:"missing_common_fonts"`
+	FontFamilyDiversity float64  `json:"font_family_diversity"`
+	IsLimitedFontSet    bool     `json:"is_limited_font_set"`
+}
+
+type FontRenderingAnalysis struct {
+	RenderingSamples         int     `json:"rendering_samples"`
+	RenderingVariance        float64 `json:"rendering_variance"`
+	IsSuspiciouslyConsistent bool    `json:"is_suspiciously_consistent"`
+	AntialiasingEnabled      bool    `json:"antialiasing_enabled"`
+	SubpixelRendering        bool    `json:"subpixel_rendering"`
+}
+
+type PlatformFontMatch struct {
+	Platform           string  `json:"platform"`
+	ExpectedFontCount  int     `json:"expected_font_count"`
+	MatchedFontCount   int     `json:"matched_font_count"`
+	MatchRatio         float64 `json:"match_ratio"`
+	ExpectedTotalCount int     `json:"expected_total_count"`
+}
+
+type FingerprintStabilityAnalyzer struct {
+	database       *FingerprintDatabase
+	historyStorage map[string][]*FingerprintAnalysis
+	maxHistorySize int
+}
+
+func NewFingerprintStabilityAnalyzer(db *FingerprintDatabase) *FingerprintStabilityAnalyzer {
+	return &FingerprintStabilityAnalyzer{
+		database:       db,
+		historyStorage: make(map[string][]*FingerprintAnalysis),
+		maxHistorySize: 50,
+	}
+}
+
+func (s *FingerprintStabilityAnalyzer) TrackFingerprint(fp *FingerprintAnalysis) {
+	s.historyStorage[fp.FingerprintID] = append(s.historyStorage[fp.FingerprintID], fp)
+	
+	if len(s.historyStorage[fp.FingerprintID]) > s.maxHistorySize {
+		s.historyStorage[fp.FingerprintID] = s.historyStorage[fp.FingerprintID][1:]
+	}
+}
+
+func (s *FingerprintStabilityAnalyzer) AnalyzeStability(fingerprintID string) *StabilityAnalysisResult {
+	history, exists := s.historyStorage[fingerprintID]
+	if !exists || len(history) < 2 {
+		return &StabilityAnalysisResult{
+			IsStable:            false,
+			StabilityScore:      0.0,
+			InsufficientSamples: true,
+			AnalysisHistory:     make([]*SingleAnalysisResult, 0),
+		}
+	}
+
+	result := &StabilityAnalysisResult{
+		IsStable:      true,
+		StabilityScore: 100.0,
+		AnalysisHistory: make([]*SingleAnalysisResult, 0),
+	}
+
+	reference := history[0]
+	totalSimilarity := 0.0
+	matchCount := 0
+
+	for i := 1; i < len(history); i++ {
+		similarity := s.calculateOverallSimilarity(reference, history[i])
+		totalSimilarity += similarity
+		
+		if similarity == 100.0 {
+			matchCount++
+		}
+
+		singleResult := &SingleAnalysisResult{
+			Timestamp:      history[i].LastSeen,
+			Similarity:     similarity,
+			IsConsistent:   similarity >= 95,
+			DiffFields:     s.findDiffFields(reference, history[i]),
+			ScoreBreakdown: s.calculateScoreBreakdown(reference, history[i]),
+		}
+		result.AnalysisHistory = append(result.AnalysisHistory, singleResult)
+	}
+
+	result.AverageSimilarity = totalSimilarity / float64(len(history)-1)
+	result.ExactMatchRatio = float64(matchCount) / float64(len(history)-1)
+	result.SampleCount = len(history)
+	result.TimeSpanMinutes = history[len(history)-1].LastSeen.Sub(history[0].FirstSeen).Minutes()
+
+	if result.AverageSimilarity < 95 {
+		result.IsStable = false
+		result.StabilityScore = result.AverageSimilarity
+	}
+
+	if result.ExactMatchRatio < 0.7 {
+		result.IsStable = false
+		result.Warnings = append(result.Warnings, "frequent_fingerprint_changes")
+	}
+
+	if result.AverageSimilarity > 99.9 && len(history) > 10 {
+		result.Warnings = append(result.Warnings, "suspiciously_consistent")
+	}
+
+	if len(result.Warnings) > 0 {
+		result.StabilityScore = math.Max(result.StabilityScore-10, 0)
+	}
+
+	return result
+}
+
+func (s *FingerprintStabilityAnalyzer) calculateOverallSimilarity(fp1, fp2 *FingerprintAnalysis) float64 {
+	if fp1 == nil || fp2 == nil {
+		return 0
+	}
+
+	fields := []struct {
+		name   string
+		val1   string
+		val2   string
+		weight float64
+	}{
+		{"canvas", fp1.CanvasHash, fp2.CanvasHash, 25},
+		{"webgl", fp1.WebGLHash, fp2.WebGLHash, 25},
+		{"audio", fp1.AudioHash, fp2.AudioHash, 15},
+		{"fonts", fp1.FontHash, fp2.FontHash, 15},
+		{"user_agent", fp1.UserAgent, fp2.UserAgent, 20},
+		{"screen", fp1.ScreenResolution, fp2.ScreenResolution, 10},
+		{"timezone", fp1.Timezone, fp2.Timezone, 5},
+		{"language", fp1.Language, fp2.Language, 5},
+	}
+
+	totalWeight := 0.0
+	matchWeight := 0.0
+
+	for _, field := range fields {
+		totalWeight += field.weight
+		if field.val1 != "" && field.val2 != "" && field.val1 == field.val2 {
+			matchWeight += field.weight
+		}
+	}
+
+	if totalWeight == 0 {
+		return 0
+	}
+
+	return (matchWeight / totalWeight) * 100
+}
+
+func (s *FingerprintStabilityAnalyzer) findDiffFields(fp1, fp2 *FingerprintAnalysis) []string {
+	diffs := make([]string, 0)
+
+	if fp1.CanvasHash != fp2.CanvasHash {
+		diffs = append(diffs, "canvas")
+	}
+	if fp1.WebGLHash != fp2.WebGLHash {
+		diffs = append(diffs, "webgl")
+	}
+	if fp1.AudioHash != fp2.AudioHash {
+		diffs = append(diffs, "audio")
+	}
+	if fp1.FontHash != fp2.FontHash {
+		diffs = append(diffs, "fonts")
+	}
+	if fp1.UserAgent != fp2.UserAgent {
+		diffs = append(diffs, "user_agent")
+	}
+	if fp1.ScreenResolution != fp2.ScreenResolution {
+		diffs = append(diffs, "screen")
+	}
+	if fp1.Timezone != fp2.Timezone {
+		diffs = append(diffs, "timezone")
+	}
+
+	return diffs
+}
+
+func (s *FingerprintStabilityAnalyzer) calculateScoreBreakdown(fp1, fp2 *FingerprintAnalysis) map[string]float64 {
+	breakdown := make(map[string]float64)
+
+	if fp1.CanvasHash != "" && fp2.CanvasHash != "" {
+		breakdown["canvas"] = map[bool]float64{true: 100, false: 0}[fp1.CanvasHash == fp2.CanvasHash]
+	}
+	if fp1.WebGLHash != "" && fp2.WebGLHash != "" {
+		breakdown["webgl"] = map[bool]float64{true: 100, false: 0}[fp1.WebGLHash == fp2.WebGLHash]
+	}
+	if fp1.AudioHash != "" && fp2.AudioHash != "" {
+		breakdown["audio"] = map[bool]float64{true: 100, false: 0}[fp1.AudioHash == fp2.AudioHash]
+	}
+	if fp1.FontHash != "" && fp2.FontHash != "" {
+		breakdown["fonts"] = map[bool]float64{true: 100, false: 0}[fp1.FontHash == fp2.FontHash]
+	}
+	if fp1.UserAgent != "" && fp2.UserAgent != "" {
+		breakdown["user_agent"] = map[bool]float64{true: 100, false: 0}[fp1.UserAgent == fp2.UserAgent]
+	}
+
+	return breakdown
+}
+
+func (s *FingerprintStabilityAnalyzer) AnalyzeTemporalStability(fingerprintID string) *TemporalStabilityResult {
+	history, exists := s.historyStorage[fingerprintID]
+	if !exists || len(history) < 3 {
+		return &TemporalStabilityResult{
+			IsStable:            false,
+			InsufficientSamples: true,
+		}
+	}
+
+	result := &TemporalStabilityResult{
+		IsStable:          true,
+		TimeSegments:      make([]*TimeSegmentAnalysis, 0),
+		TotalDurationMinutes: history[len(history)-1].LastSeen.Sub(history[0].FirstSeen).Minutes(),
+	}
+
+	segmentSize := 5
+	for i := 0; i < len(history); i += segmentSize {
+		end := i + segmentSize
+		if end > len(history) {
+			end = len(history)
+		}
+
+		segment := history[i:end]
+		if len(segment) < 2 {
+			continue
+		}
+
+		segmentAnalysis := &TimeSegmentAnalysis{
+			Start:    segment[0].FirstSeen,
+			End:      segment[len(segment)-1].LastSeen,
+			Samples:  len(segment),
+		}
+
+		totalSimilarity := 0.0
+		reference := segment[0]
+		for j := 1; j < len(segment); j++ {
+			totalSimilarity += s.calculateOverallSimilarity(reference, segment[j])
+		}
+		segmentAnalysis.AvgSimilarity = totalSimilarity / float64(len(segment)-1)
+		segmentAnalysis.IsStable = segmentAnalysis.AvgSimilarity >= 95
+
+		result.TimeSegments = append(result.TimeSegments, segmentAnalysis)
+
+		if !segmentAnalysis.IsStable {
+			result.IsStable = false
+		}
+	}
+
+	if len(result.TimeSegments) > 1 {
+		similarityChanges := make([]float64, 0)
+		for i := 1; i < len(result.TimeSegments); i++ {
+			change := math.Abs(result.TimeSegments[i].AvgSimilarity - result.TimeSegments[i-1].AvgSimilarity)
+			similarityChanges = append(similarityChanges, change)
+		}
+
+		if len(similarityChanges) > 0 {
+			avgChange := 0.0
+			for _, change := range similarityChanges {
+				avgChange += change
+			}
+			avgChange /= float64(len(similarityChanges))
+			result.AvgSegmentChange = avgChange
+
+			if avgChange > 10 {
+				result.IsStable = false
+				result.Warnings = append(result.Warnings, "significant_temporal_changes")
+			}
+		}
+	}
+
+	result.CalculateOverallScore()
+
+	return result
+}
+
+func (s *FingerprintStabilityAnalyzer) DetectStabilityAnomalies(fingerprintID string) []*StabilityAnomaly {
+	history, exists := s.historyStorage[fingerprintID]
+	if !exists || len(history) < 5 {
+		return nil
+	}
+
+	anomalies := make([]*StabilityAnomaly, 0)
+
+	for i := 1; i < len(history); i++ {
+		similarity := s.calculateOverallSimilarity(history[i-1], history[i])
+		
+		if similarity < 80 {
+			anomaly := &StabilityAnomaly{
+				Timestamp:      history[i].LastSeen,
+				AnomalyType:    "fingerprint_drift",
+				Similarity:     similarity,
+				Threshold:      80,
+				DiffFields:     s.findDiffFields(history[i-1], history[i]),
+				PreviousFP:     history[i-1].FingerprintID,
+				CurrentFP:      history[i].FingerprintID,
+				Severity:       s.calculateSeverity(similarity),
+			}
+			anomalies = append(anomalies, anomaly)
+		}
+	}
+
+	return anomalies
+}
+
+func (s *FingerprintStabilityAnalyzer) calculateSeverity(similarity float64) string {
+	if similarity < 50 {
+		return "critical"
+	} else if similarity < 70 {
+		return "high"
+	} else if similarity < 80 {
+		return "medium"
+	}
+	return "low"
+}
+
+type StabilityAnalysisResult struct {
+	IsStable            bool                    `json:"is_stable"`
+	StabilityScore      float64                 `json:"stability_score"`
+	AverageSimilarity   float64                 `json:"average_similarity"`
+	ExactMatchRatio     float64                 `json:"exact_match_ratio"`
+	SampleCount         int                     `json:"sample_count"`
+	TimeSpanMinutes     float64                 `json:"time_span_minutes"`
+	InsufficientSamples bool                   `json:"insufficient_samples"`
+	AnalysisHistory     []*SingleAnalysisResult `json:"analysis_history"`
+	Warnings            []string                `json:"warnings"`
+}
+
+type SingleAnalysisResult struct {
+	Timestamp      time.Time              `json:"timestamp"`
+	Similarity     float64                `json:"similarity"`
+	IsConsistent   bool                   `json:"is_consistent"`
+	DiffFields     []string               `json:"diff_fields"`
+	ScoreBreakdown map[string]float64     `json:"score_breakdown"`
+}
+
+type TemporalStabilityResult struct {
+	IsStable               bool                     `json:"is_stable"`
+	TotalDurationMinutes   float64                  `json:"total_duration_minutes"`
+	TimeSegments           []*TimeSegmentAnalysis   `json:"time_segments"`
+	AvgSegmentChange       float64                  `json:"avg_segment_change"`
+	InsufficientSamples    bool                    `json:"insufficient_samples"`
+	Warnings               []string                 `json:"warnings"`
+	OverallScore           float64                  `json:"overall_score"`
+}
+
+func (t *TemporalStabilityResult) CalculateOverallScore() {
+	if len(t.TimeSegments) == 0 {
+		t.OverallScore = 0
+		return
+	}
+
+	totalScore := 0.0
+	for _, segment := range t.TimeSegments {
+		totalScore += segment.AvgSimilarity
+	}
+	t.OverallScore = totalScore / float64(len(t.TimeSegments))
+
+	if len(t.Warnings) > 0 {
+		t.OverallScore = math.Max(t.OverallScore-10, 0)
+	}
+}
+
+type TimeSegmentAnalysis struct {
+	Start        time.Time `json:"start"`
+	End          time.Time `json:"end"`
+	Samples      int       `json:"samples"`
+	AvgSimilarity float64  `json:"avg_similarity"`
+	IsStable     bool      `json:"is_stable"`
+}
+
+type StabilityAnomaly struct {
+	Timestamp      time.Time `json:"timestamp"`
+	AnomalyType    string    `json:"anomaly_type"`
+	Similarity     float64   `json:"similarity"`
+	Threshold      float64   `json:"threshold"`
+	DiffFields     []string  `json:"diff_fields"`
+	PreviousFP     string    `json:"previous_fingerprint"`
+	CurrentFP      string    `json:"current_fingerprint"`
+	Severity       string    `json:"severity"`
 }

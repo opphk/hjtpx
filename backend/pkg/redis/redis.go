@@ -481,6 +481,14 @@ func (p *PoolConfigOptimizer) monitorAndAdjust() {
 	}
 }
 
+func (p *PoolConfigOptimizer) MaxOpenConns(val int) {
+	p.maxOpenConns = val
+}
+
+func (p *PoolConfigOptimizer) MinIdleConns(val int) {
+	p.minIdleConns = val
+}
+
 func (p *PoolConfigOptimizer) GetCurrentConfig() map[string]interface{} {
 	return map[string]interface{}{
 		"max_open_conns":     p.maxOpenConns,

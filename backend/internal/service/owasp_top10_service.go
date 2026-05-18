@@ -2,6 +2,8 @@ package service
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"html"
 	"io"
 	"net/http"
@@ -18,8 +20,11 @@ type OWASPRisk struct {
 }
 
 type OWASPService struct {
-	risks      map[string]*OWASPRisk
-	validators map[string]func(*http.Request) (bool, string)
+	risks          map[string]*OWASPRisk
+	validators     map[string]func(*http.Request) (bool, string)
+	knownVulnerableVersions map[string][]string
+	sensitiveHeaders        []string
+	tamperPatterns          []*regexp.Regexp
 }
 
 func NewOWASPService() *OWASPService {
@@ -37,13 +42,35 @@ func NewOWASPService() *OWASPService {
 			"A10": {"A10", "Server-Side Request Forgery", "服务端请求伪造", "High", "Active"},
 		},
 		validators: make(map[string]func(*http.Request) (bool, string)),
+		knownVulnerableVersions: map[string][]string{
+			"WordPress": {"2.0", "2.1", "2.2", "3.0", "3.1", "4.0"},
+			"jQuery":    {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5"},
+			"Apache":    {"1.3", "2.0", "2.2"},
+			"nginx":     {"0.6", "0.7", "0.8", "1.0", "1.2"},
+			"PHP":       {"4.0", "4.1", "4.2", "4.3", "5.0", "5.1", "5.2"},
+			"Node.js":   {"0.10", "0.12", "4.0", "5.0", "6.0"},
+			"OpenSSL":   {"0.9.8", "1.0.0", "1.0.1"},
+		},
+		sensitiveHeaders: []string{
+			"Authorization", "X-Api-Key", "X-Token", "Cookie",
+			"Proxy-Authorization", "X-Csrf-Token", "X-Secret",
+		},
+		tamperPatterns: []*regexp.Regexp{
+			regexp.MustCompile(`(?i)(\.\./|\.\.)`),
+			regexp.MustCompile(`(?i)(%2e%2e|%2e)`),
+			regexp.MustCompile(`(?i)(null|0x00)`),
+		},
 	}
 
 	service.validators["A01"] = service.checkBrokenAccessControl
 	service.validators["A02"] = service.checkCryptographicFailures
 	service.validators["A03"] = service.checkInjection
+	service.validators["A04"] = service.checkInsecureDesign
 	service.validators["A05"] = service.checkSecurityMisconfiguration
+	service.validators["A06"] = service.checkVulnerableComponents
 	service.validators["A07"] = service.checkAuthFailures
+	service.validators["A08"] = service.checkDataIntegrity
+	service.validators["A09"] = service.checkLoggingFailures
 	service.validators["A10"] = service.checkSSRF
 
 	return service
@@ -60,20 +87,82 @@ func (s *OWASPService) CheckRequest(r *http.Request) map[string]bool {
 
 func (s *OWASPService) checkBrokenAccessControl(r *http.Request) (bool, string) {
 	path := r.URL.Path
-	suspiciousPaths := []string{"/admin", "/config", "/backup", "/.env", "/.git"}
-	for _, p := range suspiciousPaths {
+	
+	sensitivePaths := []string{
+		"/admin", "/config", "/backup", "/.env", "/.git",
+		"/api/v1/admin", "/api/admin", "/management", "/system",
+		"/private", "/secret", "/keys", "/token", "/oauth",
+		"/.well-known/acme-challenge", "/cgi-bin", "/phpmyadmin",
+	}
+	
+	for _, p := range sensitivePaths {
 		if strings.Contains(path, p) {
-			return false, "Access to sensitive path: " + p
+			if !s.hasValidAccessControl(r) {
+				return false, "Access to sensitive path without proper authorization: " + p
+			}
 		}
 	}
+	
+	if strings.HasPrefix(path, "/api/") && r.Header.Get("Authorization") == "" {
+		return false, "Missing authorization header for API endpoint"
+	}
+	
 	return true, ""
+}
+
+func (s *OWASPService) hasValidAccessControl(r *http.Request) bool {
+	if r.Header.Get("Authorization") != "" {
+		return true
+	}
+	if r.Header.Get("X-Admin-Token") != "" {
+		return true
+	}
+	return false
 }
 
 func (s *OWASPService) checkCryptographicFailures(r *http.Request) (bool, string) {
 	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
 		return false, "Insecure connection (not HTTPS)"
 	}
+	
+	if r.TLS != nil && r.TLS.CipherSuite != 0 {
+		if s.isWeakCipher(r.TLS.CipherSuite) {
+			return false, "Weak TLS cipher suite detected"
+		}
+	}
+	
+	if r.Header.Get("X-Content-Type-Options") == "" {
+		return false, "Missing X-Content-Type-Options header"
+	}
+	
+	if r.Header.Get("Strict-Transport-Security") == "" {
+		return false, "Missing HSTS header"
+	}
+	
+	if r.Header.Get("X-Frame-Options") == "" {
+		return false, "Missing X-Frame-Options header"
+	}
+	
+	if r.Header.Get("X-XSS-Protection") == "" {
+		return false, "Missing X-XSS-Protection header"
+	}
+	
 	return true, ""
+}
+
+func (s *OWASPService) isWeakCipher(cipher uint16) bool {
+	weakCiphers := []uint16{
+		0x0004, 0x0005, 0x000A, 0x0009, 0x0015, 0x0016,
+		0x0013, 0x0014, 0x002F, 0x0035, 0x003D, 0x003C,
+		0x003B, 0x003A, 0xC007, 0xC008, 0xC011, 0xC012,
+		0x003D, 0x003C, 0x009C, 0x009D, 0x009E, 0x009F,
+	}
+	for _, weak := range weakCiphers {
+		if cipher == weak {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *OWASPService) checkInjection(r *http.Request) (bool, string) {
@@ -82,31 +171,60 @@ func (s *OWASPService) checkInjection(r *http.Request) (bool, string) {
 	body := s.getRequestBody(r)
 	combined := query + path + body
 	
-	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`(?i)(union|select|insert|update|delete|drop|alter)`),
-		regexp.MustCompile(`(?i)(<script|javascript:|on\w+\s*=)`),
-		regexp.MustCompile(`(?i)(exec|system|shell_exec|passthru|eval|base64_decode)`),
-		regexp.MustCompile(`(?i)(/outtmp|/etc/passwd|/etc/shadow|/root/.ssh|/.git/config)`),
-		regexp.MustCompile(`(?i)(sleep\s*\(|benchmark\(|pg_sleep|waitfor\s+delay)`),
-		regexp.MustCompile(`(?i)(load_file|into\s+outfile|into\s+dumpfile)`),
+	sqlPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(union\s+select|select\s+.*from|insert\s+into|update\s+.*set|delete\s+from|drop\s+table|alter\s+table)`),
+		regexp.MustCompile(`(?i)(exec\s+\(|\sproc\s+|execute\s+)`),
+		regexp.MustCompile(`(?i)(sleep\s*\(|benchmark\(|pg_sleep\(|waitfor\s+delay)`),
+		regexp.MustCompile(`(?i)(load_file\(|into\s+outfile|into\s+dumpfile|outfile\s*=)`),
+		regexp.MustCompile(`(?i)(\'\s*or\s*1\s*=\s*1|\'\s*and\s*1\s*=\s*1|1\s*=\s*1\s*--)`),
+		regexp.MustCompile(`(?i)(information_schema|sys\.tables|pg_catalog)`),
 	}
 	
-	for _, pattern := range patterns {
+	for _, pattern := range sqlPatterns {
 		if pattern.MatchString(combined) {
-			return false, "Potential injection detected"
+			return false, "SQL injection attempt detected"
+		}
+	}
+	
+	xssPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(<script[^>]*>.*<\/script>|<script\b)`),
+		regexp.MustCompile(`(?i)(javascript:|vbscript:|data:|blob:)`),
+		regexp.MustCompile(`(?i)(onclick\s*=|onload\s*=|onerror\s*=|onfocus\s*=|onmouseover\s*=)`),
+		regexp.MustCompile(`(?i)(alert\s*\(|prompt\s*\(|confirm\s*\()`),
+		regexp.MustCompile(`(?i)(<iframe[^>]*>|<svg[^>]*>|<embed[^>]*>)`),
+		regexp.MustCompile(`(?i)(<object[^>]*>|<applet[^>]*>|<form[^>]*>)`),
+	}
+	
+	for _, pattern := range xssPatterns {
+		if pattern.MatchString(combined) {
+			return false, "XSS attack attempt detected"
 		}
 	}
 	
 	cmdPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`(?i)(;|\|\||&&)`),
-		regexp.MustCompile(`(?i)(` + "`" + `|\$\(|\$\{)`),
-		regexp.MustCompile(`(?i)(wget|curl|nc|netcat|telnet|ssh|ftp)`),
-		regexp.MustCompile(`(?i)(chmod|chown|useradd|passwd|sudo|su\s)`),
+		regexp.MustCompile(`(?i)(;\s*|&&\s*|\|\|\s*|\|\s*)`),
+		regexp.MustCompile(`(?i)(` + "`" + `|\$\(|\$\{|\beval\b)`),
+		regexp.MustCompile(`(?i)(wget\s+|curl\s+|nc\s+|netcat\s+|telnet\s+|ssh\s+|ftp\s+)`),
+		regexp.MustCompile(`(?i)(chmod\s+|chown\s+|useradd\s+|passwd\s+|sudo\s+|su\s+)`),
+		regexp.MustCompile(`(?i)(/bin/bash|/bin/sh|/usr/bin/perl|/usr/bin/python)`),
 	}
 	
 	for _, pattern := range cmdPatterns {
 		if pattern.MatchString(query) || pattern.MatchString(path) {
-			return false, "Potential command injection detected"
+			return false, "Command injection attempt detected"
+		}
+	}
+	
+	filePathPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)(/etc/passwd|/etc/shadow|/root/\.ssh|/\.git/config)`),
+		regexp.MustCompile(`(?i)(/var/log/|/tmp/|/var/tmp/|/dev/null)`),
+		regexp.MustCompile(`(?i)(\.\./|\.\.)`),
+		regexp.MustCompile(`(?i)(%2e%2e|%2e|%2f|%5c)`),
+	}
+	
+	for _, pattern := range filePathPatterns {
+		if pattern.MatchString(query) || pattern.MatchString(path) {
+			return false, "Path traversal attempt detected"
 		}
 	}
 	
@@ -225,6 +343,119 @@ func (s *OWASPService) GetAllRisks() []*OWASPRisk {
 		risks = append(risks, risk)
 	}
 	return risks
+}
+
+func (s *OWASPService) checkInsecureDesign(r *http.Request) (bool, string) {
+	path := r.URL.Path
+	
+	insecurePaths := []string{
+		"/login", "/register", "/api/login", "/api/register",
+	}
+	
+	for _, p := range insecurePaths {
+		if strings.Contains(path, p) {
+			if r.Method != "POST" {
+				return false, "Security critical endpoint should use POST method"
+			}
+			
+			contentType := r.Header.Get("Content-Type")
+			if contentType != "application/json" && !strings.Contains(contentType, "application/x-www-form-urlencoded") {
+				return false, "Missing proper content type for authentication endpoint"
+			}
+		}
+	}
+	
+	if r.Header.Get("Referer") == "" && !strings.HasSuffix(path, "/public") {
+		return false, "Missing Referer header"
+	}
+	
+	return true, ""
+}
+
+func (s *OWASPService) checkVulnerableComponents(r *http.Request) (bool, string) {
+	userAgent := r.UserAgent()
+	
+	for component, versions := range s.knownVulnerableVersions {
+		if strings.Contains(userAgent, component) {
+			for _, version := range versions {
+				if strings.Contains(userAgent, component+"/"+version) || 
+				   strings.Contains(userAgent, version) && strings.Contains(userAgent, component) {
+					return false, "Vulnerable component detected: " + component + " " + version
+				}
+			}
+		}
+	}
+	
+	xPoweredBy := r.Header.Get("X-Powered-By")
+	if xPoweredBy != "" {
+		return false, "X-Powered-By header exposes technology stack"
+	}
+	
+	return true, ""
+}
+
+func (s *OWASPService) checkDataIntegrity(r *http.Request) (bool, string) {
+	query := r.URL.RawQuery
+	body := s.getRequestBody(r)
+	
+	for _, pattern := range s.tamperPatterns {
+		if pattern.MatchString(query) || pattern.MatchString(body) {
+			return false, "Potential data tampering attempt detected"
+		}
+	}
+	
+	if r.Header.Get("Content-Length") == "" && body != "" {
+		return false, "Missing Content-Length header for request body"
+	}
+	
+	if r.Header.Get("Host") == "" {
+		return false, "Missing Host header"
+	}
+	
+	return true, ""
+}
+
+func (s *OWASPService) checkLoggingFailures(r *http.Request) (bool, string) {
+	path := r.URL.Path
+	
+	criticalPaths := []string{"/login", "/logout", "/api/auth", "/admin"}
+	isCriticalPath := false
+	for _, p := range criticalPaths {
+		if strings.Contains(path, p) {
+			isCriticalPath = true
+			break
+		}
+	}
+	
+	if isCriticalPath {
+		if r.Header.Get("X-Request-ID") == "" {
+			return false, "Missing X-Request-ID header for critical operation"
+		}
+	}
+	
+	return true, ""
+}
+
+func (s *OWASPService) CheckInsecureDesign(r *http.Request) (bool, string) {
+	return s.checkInsecureDesign(r)
+}
+
+func (s *OWASPService) CheckVulnerableComponents(r *http.Request) (bool, string) {
+	return s.checkVulnerableComponents(r)
+}
+
+func (s *OWASPService) CheckDataIntegrity(r *http.Request) (bool, string) {
+	return s.checkDataIntegrity(r)
+}
+
+func (s *OWASPService) CheckLoggingFailures(r *http.Request) (bool, string) {
+	return s.checkLoggingFailures(r)
+}
+
+func (s *OWASPService) GenerateRequestHash(r *http.Request) string {
+	data := r.Method + r.URL.Path + r.URL.RawQuery + s.getRequestBody(r)
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
 }
 
 func (s *OWASPService) CheckCompliance(r *http.Request) map[string]interface{} {

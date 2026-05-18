@@ -817,53 +817,6 @@ func TestObfuscationDeterminism(t *testing.T) {
 	}
 }
 
-func TestFlattenControlFlowAdvanced(t *testing.T) {
-	code := `for (var i = 0; i < 10; i++) { sum += i; }
-while (true) { break; }`
-
-	obfuscator := NewObfuscator(ObfuscatorConfig{
-		EnableControlFlowFlattening: true,
-	})
-	result := obfuscator.flattenControlFlowAdvanced(code)
-
-	if result == code {
-		t.Error("Advanced control flow flattening should modify code")
-	}
-}
-
-func TestAddStateMachineFlattening(t *testing.T) {
-	code := `for (var i = 0; i < 10; i++) { sum += i; }`
-
-	obfuscator := NewObfuscator()
-	result := obfuscator.addStateMachineFlattening(code)
-
-	if !strings.Contains(result, "switch(") {
-		t.Error("State machine should use switch statements")
-	}
-}
-
-func TestAddOpaquePredicate(t *testing.T) {
-	code := `var x = 10;`
-
-	obfuscator := NewObfuscator()
-	result := obfuscator.addOpaquePredicate(code)
-
-	if !strings.Contains(result, "Math.random()") {
-		t.Error("Opaque predicate should use random values")
-	}
-}
-
-func TestAddLoopUnswitching(t *testing.T) {
-	code := `if (x > 0) { console.log("positive"); } else { console.log("non-positive"); }`
-
-	obfuscator := NewObfuscator()
-	result := obfuscator.addLoopUnswitching(code)
-
-	if !strings.Contains(result, "switch(") {
-		t.Error("Loop unswitching should use switch statements")
-	}
-}
-
 func TestEncryptStringsDynamic(t *testing.T) {
 	code := `var url = "https://api.example.com";`
 
@@ -890,64 +843,6 @@ func TestGenerateDynamicDecryptor(t *testing.T) {
 	}
 }
 
-func TestCreateVirtualization(t *testing.T) {
-	code := `function test() { return true; }`
-
-	obfuscator := NewObfuscator()
-	result := obfuscator.createVirtualization(code)
-
-	if result == "" {
-		t.Error("Virtualization should produce output")
-	}
-}
-
-func TestVirtualMachineStructure(t *testing.T) {
-	vm := &VirtualMachine{
-		instructions: make([]string, 0),
-		registers:    make(map[string]int),
-	}
-
-	vm.addInstruction("LOAD_CONST", 0)
-	vm.addInstruction("NOP", 0)
-
-	if len(vm.instructions) != 2 {
-		t.Error("VM should have 2 instructions")
-	}
-
-	loader := vm.generateLoader()
-	if !strings.Contains(loader, "switch") {
-		t.Error("VM loader should use switch statement")
-	}
-}
-
-func TestVirtualMachineCompile(t *testing.T) {
-	vm := &VirtualMachine{
-		instructions: make([]string, 0),
-		registers:    make(map[string]int),
-	}
-
-	code := "test"
-	result := vm.compile(code)
-
-	if !strings.Contains(result, "\\x") {
-		t.Error("Compiled code should use hex escape sequences")
-	}
-}
-
-func TestVirtualMachineWrapVMCode(t *testing.T) {
-	vm := &VirtualMachine{
-		instructions: make([]string, 0),
-		registers:    make(map[string]int),
-	}
-
-	code := "test"
-	result := vm.wrapVMCode(code)
-
-	if !strings.Contains(result, "parseInt") {
-		t.Error("Wrapped VM code should use parseInt")
-	}
-}
-
 func TestInjectEnhancedAntiDebug(t *testing.T) {
 	code := `function test() { return true; }`
 
@@ -957,7 +852,7 @@ func TestInjectEnhancedAntiDebug(t *testing.T) {
 	if !strings.Contains(result, "keydown") {
 		t.Error("Enhanced anti-debug should listen for keydown events")
 	}
-	if !strings.Contains(result, "keyCode==123") {
+	if !strings.Contains(result, "e.key==='F12'") {
 		t.Error("Enhanced anti-debug should detect F12 key")
 	}
 }
@@ -1119,5 +1014,261 @@ func TestCreateSelfCheckingCode(t *testing.T) {
 	}
 	if !strings.Contains(result, code) {
 		t.Error("Original code should be preserved")
+	}
+}
+
+// ========== 增强控制流平坦化测试 ==========
+
+func TestFlattenControlFlowAdvanced(t *testing.T) {
+	code := `if (x > 0) { console.log("positive"); } else { console.log("negative"); }
+for (var i = 0; i < 10; i++) { sum += i; }
+while (true) { break; }`
+
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableControlFlowFlattening: true,
+	})
+	result := obfuscator.flattenControlFlowAdvanced(code)
+
+	if !strings.Contains(result, "switch(") {
+		t.Error("Advanced control flow flattening should use switch statements")
+	}
+	if !strings.Contains(result, "case") {
+		t.Error("Advanced control flow flattening should use case statements")
+	}
+}
+
+func TestFlattenIfStatements(t *testing.T) {
+	code := `if (condition) { doSomething(); } else { doOther(); }`
+	obfuscator := NewObfuscator()
+	result := obfuscator.flattenIfStatements(code)
+
+	if !strings.Contains(result, "switch(") {
+		t.Error("Flattened if statements should use switch")
+	}
+}
+
+func TestFlattenForLoops(t *testing.T) {
+	code := `for (var i = 0; i < 10; i++) { sum += i; }`
+	obfuscator := NewObfuscator()
+	result := obfuscator.flattenForLoops(code)
+
+	if !strings.Contains(result, "for(;;)") {
+		t.Error("Flattened for loops should use infinite loop")
+	}
+}
+
+func TestFlattenWhileLoops(t *testing.T) {
+	code := `while (condition) { doSomething(); }`
+	obfuscator := NewObfuscator()
+	result := obfuscator.flattenWhileLoops(code)
+
+	if !strings.Contains(result, "for(;;)") {
+		t.Error("Flattened while loops should use infinite loop")
+	}
+}
+
+func TestAddOpaquePredicates(t *testing.T) {
+	code := `var x = 10;`
+	obfuscator := NewObfuscator()
+	result := obfuscator.addOpaquePredicates(code)
+
+	if !strings.Contains(result, "Math.random()") {
+		t.Error("Opaque predicates should use random values")
+	}
+}
+
+func TestAddMultiLevelStateMachine(t *testing.T) {
+	code := `var x = 1;`
+	obfuscator := NewObfuscator()
+	result := obfuscator.addMultiLevelStateMachine(code)
+
+	if !strings.Contains(result, "states") {
+		t.Error("Multi-level state machine should have states array")
+	}
+}
+
+// ========== 增强字符串加密测试 ==========
+
+func TestEncryptStringMultiRound(t *testing.T) {
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		StringEncryptionKey: []byte("test-multi-key"),
+	})
+	result := obfuscator.encryptStringMultiRound("hello world")
+
+	if !strings.Contains(result, "__mr") {
+		t.Error("Multi-round encryption should use __mr decoder")
+	}
+	if result == "hello world" {
+		t.Error("Multi-round encryption should modify the string")
+	}
+}
+
+func TestEncryptStringCustomTable(t *testing.T) {
+	obfuscator := NewObfuscator()
+	result := obfuscator.encryptStringCustomTable("test string")
+
+	if !strings.Contains(result, "__ct") {
+		t.Error("Custom table encryption should use __ct decoder")
+	}
+	if result == "test string" {
+		t.Error("Custom table encryption should modify the string")
+	}
+}
+
+func TestEncryptStringAESBase64(t *testing.T) {
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		StringEncryptionKey: []byte("test-aes-base64-key"),
+	})
+	result := obfuscator.encryptStringAESBase64("secret data")
+
+	if !strings.Contains(result, "__ab") {
+		t.Error("AES+Base64 encryption should use __ab decoder")
+	}
+	if result == "secret data" {
+		t.Error("AES+Base64 encryption should modify the string")
+	}
+}
+
+func TestScrambleBytes(t *testing.T) {
+	obfuscator := NewObfuscator()
+	data := []byte{1, 2, 3, 4, 5}
+	result := obfuscator.scrambleBytes(data, 1)
+
+	if len(result) != len(data) {
+		t.Error("Scrambled bytes should have same length")
+	}
+}
+
+// ========== 增强代码虚拟化测试 ==========
+
+func TestCreateVirtualization(t *testing.T) {
+	code := `function test() { return true; }`
+	obfuscator := NewObfuscator(ObfuscatorConfig{
+		EnableCodeVirtualization: true,
+		StringEncryptionKey:      []byte("test-vm-key"),
+	})
+	result := obfuscator.createVirtualization(code)
+
+	if !strings.Contains(result, "_0xVM") {
+		t.Error("Virtualization should include VM object")
+	}
+	if !strings.Contains(result, "atob") {
+		t.Error("Virtualization should use base64 decoding")
+	}
+}
+
+func TestCreateAdvancedVirtualization(t *testing.T) {
+	code := `console.log("test");`
+	obfuscator := NewObfuscator()
+	result := obfuscator.createAdvancedVirtualization(code)
+
+	if !strings.Contains(result, "_0xAVM") {
+		t.Error("Advanced virtualization should include AVM object")
+	}
+	if !strings.Contains(result, "DECODE") {
+		t.Error("Advanced virtualization should have DECODE function")
+	}
+}
+
+// ========== 增强反调试机制测试 ==========
+
+func TestInjectEnhancedAntiDebugWithSixChecks(t *testing.T) {
+	code := `function test() { return true; }`
+	obfuscator := NewObfuscator()
+	result := obfuscator.InjectEnhancedAntiDebug(code)
+
+	checks := []string{
+		"checkWindowSize",
+		"checkDebuggerTiming",
+		"checkConsoleAPI",
+		"checkFunctionToString",
+		"checkFirebug",
+		"checkExceptionHandler",
+	}
+
+	for _, check := range checks {
+		if !strings.Contains(result, check) {
+			t.Errorf("Enhanced anti-debug should contain %s check", check)
+		}
+	}
+}
+
+func TestAntiDebugHasSixDetectionMethods(t *testing.T) {
+	result := GenerateEnhancedAntiDebug()
+
+	checks := []string{
+		"detectDevTools",
+		"window_size",
+		"webkitDebuggerAPI",
+		"firebug",
+		"_commandLineAPI",
+		"function_debugger",
+	}
+
+	count := 0
+	for _, check := range checks {
+		if strings.Contains(result, check) {
+			count++
+		}
+	}
+
+	if count != 6 {
+		t.Errorf("Expected 6 detection methods, found %d", count)
+	}
+}
+
+// ========== 综合测试 ==========
+
+func TestFullAdvancedObfuscation(t *testing.T) {
+	code := `function calculate(a, b) {
+    var result = a + b;
+    console.log("Result: " + result);
+    return result;
+}`
+
+	config := ObfuscatorConfig{
+		EnableVariableObfuscation:   true,
+		EnableStringEncryption:      true,
+		StringEncryptionMethod:      "multi-enc",
+		EnableControlFlowFlattening: true,
+		EnableCodeCompression:       true,
+		EnableFunctionWrapping:      true,
+		EnableAdvancedAntiDebug:     true,
+		EnableCodeVirtualization:    true,
+		StringEncryptionKey:         []byte("test-full-key"),
+	}
+
+	obfuscator := NewObfuscator(config)
+	result, err := obfuscator.ApplyFullProtection(code)
+
+	if err != nil {
+		t.Fatalf("Full obfuscation failed: %v", err)
+	}
+
+	if len(result) == 0 {
+		t.Error("Obfuscated code should not be empty")
+	}
+
+	if result == code {
+		t.Error("Obfuscated code should differ from original")
+	}
+}
+
+func TestMultipleStringEncryptionMethods(t *testing.T) {
+	code := `var msg = "secret message";`
+
+	methods := []string{"aes-gcm", "rc4", "chacha20", "xor", "multi-enc", "custom-table", "aes-base64"}
+
+	for _, method := range methods {
+		obfuscator := NewObfuscator(ObfuscatorConfig{
+			EnableStringEncryption:   true,
+			StringEncryptionMethod:  method,
+			StringEncryptionKey:     []byte("test-method-key"),
+		})
+		result := obfuscator.encryptStrings(code)
+
+		if !strings.Contains(result, "__") {
+			t.Errorf("Method %s should produce encrypted strings with decoder function", method)
+		}
 	}
 }

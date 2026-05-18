@@ -458,9 +458,111 @@ func (o *Obfuscator) encryptStringAdvanced(s string) string {
 		return o.encryptStringChaCha20(s)
 	case "xor":
 		return o.encryptStringXOR(s)
+	case "multi-enc":
+		return o.encryptStringMultiRound(s)
+	case "custom-table":
+		return o.encryptStringCustomTable(s)
+	case "aes-base64":
+		return o.encryptStringAESBase64(s)
 	default:
 		return o.encryptStringAESGCM(s)
 	}
+}
+
+func (o *Obfuscator) encryptStringMultiRound(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-multi-key-2024")
+	}
+
+	rounds := 3
+	encrypted := []byte(s)
+	
+	for round := 0; round < rounds; round++ {
+		roundKey := append(key, byte(round))
+		keyHash := sha256.Sum256(roundKey)
+		
+		xorKey := make([]byte, len(encrypted))
+		for i := range xorKey {
+			xorKey[i] = keyHash[i%32]
+		}
+		
+		for i := range encrypted {
+			encrypted[i] ^= xorKey[i%len(xorKey)]
+		}
+		
+		encrypted = o.scrambleBytes(encrypted, round)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(encrypted)
+	o.stringCount++
+	return fmt.Sprintf("__mr%d__('%s')", o.stringCount, encoded)
+}
+
+func (o *Obfuscator) scrambleBytes(data []byte, seed int) []byte {
+	result := make([]byte, len(data))
+	for i := range data {
+		j := (i * 7 + seed * 13) % len(data)
+		result[j] = data[i]
+	}
+	return result
+}
+
+func (o *Obfuscator) encryptStringCustomTable(s string) string {
+	customTable := "ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponmlkjihgfedcba9876543210!@#$%^&*"
+	reverseTable := make([]byte, 256)
+	for i, c := range customTable {
+		reverseTable[c] = byte(i)
+	}
+
+	var encoded strings.Builder
+	for _, c := range s {
+		if c < 256 {
+			encoded.WriteByte(customTable[int(c)%len(customTable)])
+		} else {
+			encoded.WriteRune(c)
+		}
+	}
+
+	o.stringCount++
+	return fmt.Sprintf("__ct%d__('%s')", o.stringCount, encoded.String())
+}
+
+func (o *Obfuscator) encryptStringAESBase64(s string) string {
+	key := o.config.StringEncryptionKey
+	if len(key) == 0 {
+		key = []byte("hjtpx-aes-base64-key")
+	}
+
+	keyHash := sha256.Sum256(key)
+	encryptionKey := keyHash[:]
+
+	block, err := aes.NewCipher(encryptionKey)
+	if err != nil {
+		return s
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return s
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return s
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, []byte(s), nil)
+	
+	firstEncode := base64.StdEncoding.EncodeToString(ciphertext)
+	
+	var secondEncode strings.Builder
+	for _, c := range firstEncode {
+		secondEncode.WriteRune(c + 1)
+	}
+
+	o.stringCount++
+	return fmt.Sprintf("__ab%d__('%s')", o.stringCount, secondEncode.String())
 }
 
 func (o *Obfuscator) encryptStringAESGCM(s string) string {
@@ -688,6 +790,68 @@ func (o *Obfuscator) generateDecoderFunctionsAdvanced() string {
 		}
 		return _0xO;
 	};
+
+	window.__mr_=function(_0xD){
+		var _0xC=atob(_0xD);
+		var _0xR=[];
+		for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+			_0xR.push(_0xC.charCodeAt(_0xI));
+		}
+		var _0xK=[];
+		for(var _0xI=0;_0xI<_0xKey.length;_0xI++){
+			_0xK.push(_0xKey.charCodeAt(_0xI));
+		}
+		for(var _0xRnd=2;_0xRnd>=0;_0xRnd--){
+			var _0xSK=[];
+			for(var _0xI=0;_0xI<32;_0xI++){
+				var _0xH=_0xK[_0xI%_0xK.length]^(_0xRnd+1);
+				_0xSK.push(_0xH);
+			}
+			for(var _0xI=_0xR.length-1;_0xI>=0;_0xI--){
+				var _0xJ=(_0xI*7+_0xRnd*13)%_0xR.length;
+				var _0xT=_0xR[_0xI];
+				_0xR[_0xI]=_0xR[_0xJ];
+				_0xR[_0xJ]=_0xT;
+			}
+			for(var _0xI=0;_0xI<_0xR.length;_0xI++){
+				_0xR[_0xI]^=_0xSK[_0xI%_0xSK.length];
+			}
+		}
+		return String.fromCharCode.apply(null,_0xR);
+	};
+
+	window.__ct_=function(_0xD){
+		var _0xCT='ZYXWVUTSRQPONMLKJIHGFEDCBAzyxwvutsrqponmlkjihgfedcba9876543210!@#$%^&*';
+		var _0xRT=[];
+		for(var _0xI=0;_0xI<256;_0xI++){_0xRT[_0xI]=_0xI;}
+		for(var _0xI=0;_0xI<_0xCT.length;_0xI++){
+			_0xRT[_0xCT.charCodeAt(_0xI)]=_0xI;
+		}
+		var _0xO='';
+		for(var _0xI=0;_0xI<_0xD.length;_0xI++){
+			_0xO+=String.fromCharCode(_0xRT[_0xD.charCodeAt(_0xI)]);
+		}
+		return _0xO;
+	};
+
+	window.__ab_=function(_0xD){
+		var _0xS='';
+		for(var _0xI=0;_0xI<_0xD.length;_0xI++){
+			_0xS+=String.fromCharCode(_0xD.charCodeAt(_0xI)-1);
+		}
+		var _0xC=atob(_0xS);
+		var _0xN=_0xC.substring(0,12);
+		var _0xP=_0xC.substring(12);
+		var _0xKH=[];
+		for(var _0xI=0;_0xI<32;_0xI++){
+			_0xKH.push(_0xKey.charCodeAt(_0xI%_0xKey.length));
+		}
+		var _0xR=[];
+		for(var _0xI=0;_0xI<_0xP.length;_0xI++){
+			_0xR.push(_0xP.charCodeAt(_0xI)^_0xKH[_0xI%_0xKH.length]);
+		}
+		return String.fromCharCode.apply(null,_0xR);
+	};
 `)
 
 	buf.WriteString(fmt.Sprintf(`})('%s');`, encodedKey))
@@ -700,31 +864,153 @@ func (o *Obfuscator) generateDecoderFunctions() string {
 }
 
 func (o *Obfuscator) flattenControlFlow(code string) string {
+	return o.flattenControlFlowAdvanced(code)
+}
+
+func (o *Obfuscator) flattenControlFlowAdvanced(code string) string {
 	result := code
 
-	ifStmtPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}`)
-	result = ifStmtPattern.ReplaceAllStringFunc(result, func(match string) string {
-		parts := ifStmtPattern.FindStringSubmatch(match)
-		if len(parts) == 3 {
+	result = o.flattenIfStatements(result)
+	result = o.flattenForLoops(result)
+	result = o.flattenWhileLoops(result)
+	result = o.flattenSwitchStatements(result)
+	result = o.addOpaquePredicates(result)
+	result = o.addLoopUnswitching(result)
+	result = o.addMultiLevelStateMachine(result)
+
+	return result
+}
+
+func (o *Obfuscator) flattenIfStatements(code string) string {
+	ifPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}\s*else\s*\{([^}]+)\}`)
+	result := ifPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := ifPattern.FindStringSubmatch(match)
+		if len(parts) == 4 {
 			condition := parts[1]
-			body := parts[2]
-			return fmt.Sprintf("(function(){var _0xF1=!!(%s);if(_0xF1){%s}})()", condition, body)
+			ifBody := parts[2]
+			elseBody := parts[3]
+			stateVar := o.generateObfuscatedName()
+			tempVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=0,%s;if(%s){%s=1;}else{%s=2;}switch(%s){case 1:%s;break;case 2:%s;break;}})()`,
+				stateVar, tempVar, condition, stateVar, stateVar, stateVar, ifBody, elseBody)
 		}
 		return match
 	})
 
-	forStmtPattern := regexp.MustCompile(`\bfor\s*\(([^)]+)\)\s*\{([^}]+)\}`)
-	result = forStmtPattern.ReplaceAllStringFunc(result, func(match string) string {
-		parts := forStmtPattern.FindStringSubmatch(match)
+	singleIfPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result = singleIfPattern.ReplaceAllStringFunc(result, func(match string) string {
+		if strings.Contains(match, "else") {
+			return match
+		}
+		parts := singleIfPattern.FindStringSubmatch(match)
 		if len(parts) == 3 {
-			init := parts[1]
+			condition := parts[1]
 			body := parts[2]
-			return fmt.Sprintf("(function(){var _0xF2=0,_0xF3=%s;for(;_0xF2;){%s;_0xF2=_0xF3;}})(0,function(){return 1;})", init, body)
+			stateVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=!!(%s);if(%s){%s}})()`, stateVar, condition, stateVar, body)
 		}
 		return match
 	})
 
 	return result
+}
+
+func (o *Obfuscator) flattenForLoops(code string) string {
+	forPattern := regexp.MustCompile(`\bfor\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := forPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := forPattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			init := parts[1]
+			body := parts[2]
+			stateVar := o.generateObfuscatedName()
+			loopVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=0,%s;%s;for(;;){switch(%s){case 0:if(!(%s)){%s=1;break;}%s;%s=1;break;case 1:%s=0;continue;default:return;}}})()`,
+				stateVar, loopVar, init, stateVar, loopVar, stateVar, body, stateVar, stateVar)
+		}
+		return match
+	})
+	return result
+}
+
+func (o *Obfuscator) flattenWhileLoops(code string) string {
+	whilePattern := regexp.MustCompile(`\bwhile\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := whilePattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := whilePattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			condition := parts[1]
+			body := parts[2]
+			stateVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=0;for(;;){switch(%s){case 0:if(!(%s)){%s=2;break;}case 1:%s;%s=0;break;case 2:return;default:return;}}})()`,
+				stateVar, stateVar, condition, stateVar, body, stateVar)
+		}
+		return match
+	})
+	return result
+}
+
+func (o *Obfuscator) flattenSwitchStatements(code string) string {
+	switchPattern := regexp.MustCompile(`\bswitch\s*\(([^)]+)\)\s*\{([^}]+)\}`)
+	result := switchPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := switchPattern.FindStringSubmatch(match)
+		if len(parts) == 3 {
+			expr := parts[1]
+			cases := parts[2]
+			stateVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=%s;switch(%s){%s}})()`, stateVar, expr, stateVar, cases)
+		}
+		return match
+	})
+	return result
+}
+
+func (o *Obfuscator) addOpaquePredicates(code string) string {
+	predicateVar := o.generateObfuscatedName()
+	opaqueCode := fmt.Sprintf(`(function(){
+var %s=function(){
+	var _0xP1=Math.random();
+	var _0xP2=Math.random();
+	var _0xP3=_0xP1*_0xP2;
+	return _0xP3>0.25&&_0xP1<0.7;
+};
+var _0xOP=%s();
+if(_0xOP){}
+})();`, predicateVar, predicateVar)
+	return opaqueCode + code
+}
+
+func (o *Obfuscator) addLoopUnswitching(code string) string {
+	ifPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}\s*else\s*\{([^}]+)\}`)
+	result := ifPattern.ReplaceAllStringFunc(code, func(match string) string {
+		parts := ifPattern.FindStringSubmatch(match)
+		if len(parts) == 4 {
+			condition := parts[1]
+			ifBody := parts[2]
+			elseBody := parts[3]
+			switchVar := o.generateObfuscatedName()
+			return fmt.Sprintf(`(function(){var %s=(%s)?1:2;switch(%s){case 1:%s;break;case 2:%s;break;}})()`,
+				switchVar, condition, switchVar, ifBody, elseBody)
+		}
+		return match
+	})
+	return result
+}
+
+func (o *Obfuscator) addMultiLevelStateMachine(code string) string {
+	stateMachine := fmt.Sprintf(`(function(){
+var %s={
+	state:0,
+	states:[
+		function(){this.state=1;},
+		function(){this.state=2;},
+		function(){this.state=0;}
+	],
+	run:function(){
+		this.states[this.state].call(this);
+	}
+};
+%s.run();
+})();`, o.generateObfuscatedName(), o.generateObfuscatedName())
+	return stateMachine + code
 }
 
 func (o *Obfuscator) injectDeadCode(code string) string {
@@ -1425,100 +1711,7 @@ func EstimateObfuscationTime(codeLength int) string {
 	return strconv.Itoa(estimated/60000) + "m"
 }
 
-func (o *Obfuscator) flattenControlFlowAdvanced(code string) string {
-	result := code
 
-	result = o.addStateMachineFlattening(result)
-
-	result = o.addOpaquePredicate(result)
-
-	result = o.addLoopUnswitching(result)
-
-	return result
-}
-
-func (o *Obfuscator) addStateMachineFlattening(code string) string {
-	forPattern := regexp.MustCompile(`\bfor\s*\(([^)]+)\)\s*\{([^}]+)\}`)
-	result := forPattern.ReplaceAllStringFunc(code, func(match string) string {
-		parts := forPattern.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			init := parts[1]
-			body := parts[2]
-			stateVar := o.generateObfuscatedName()
-			return fmt.Sprintf(`(function(){var %s=0,%s;%s;for(;;){switch(%s){case 0:%s;%s=1;break;case 1:return;default:return;}}})()`,
-				stateVar, init, init, stateVar, body, stateVar)
-		}
-		return match
-	})
-
-	whilePattern := regexp.MustCompile(`\bwhile\s*\(([^)]+)\)\s*\{([^}]+)\}`)
-	result = whilePattern.ReplaceAllStringFunc(result, func(match string) string {
-		parts := whilePattern.FindStringSubmatch(match)
-		if len(parts) == 3 {
-			condition := parts[1]
-			body := parts[2]
-			stateVar := o.generateObfuscatedName()
-			return fmt.Sprintf(`(function(){var %s=0;for(;;){switch(%s){case 0:if(!(%s)){%s=1;break;}case 1:%s;break;case 1:if(1){%s=0;continue;}return;default:return;}}})()`,
-				stateVar, stateVar, condition, stateVar, body, stateVar)
-		}
-		return match
-	})
-
-	return result
-}
-
-func (o *Obfuscator) addOpaquePredicate(code string) string {
-	predicateVar := o.generateObfuscatedName()
-
-	opaqueCode := fmt.Sprintf(`
-(function(){
-	var %s=false;
-	var %s=function(){
-		var %s=Math.random();
-		var %s=Math.random();
-		%s=(%s*%s>0.25);
-		return %s;
-	};
-	if(%s()){
-		%s=true;
-	}
-})();
-`,
-		predicateVar,
-		o.generateObfuscatedName(),
-		o.generateObfuscatedName(),
-		o.generateObfuscatedName(),
-		predicateVar,
-		o.generateObfuscatedName(),
-		o.generateObfuscatedName(),
-		predicateVar,
-		predicateVar,
-		predicateVar,
-	)
-
-	return opaqueCode + code
-}
-
-func (o *Obfuscator) addLoopUnswitching(code string) string {
-	ifPattern := regexp.MustCompile(`\bif\s*\(([^)]+)\)\s*\{([^}]+)\}\s*else\s*\{([^}]+)\}`)
-	result := ifPattern.ReplaceAllStringFunc(code, func(match string) string {
-		parts := ifPattern.FindStringSubmatch(match)
-		if len(parts) == 4 {
-			condition := parts[1]
-			ifBody := parts[2]
-			elseBody := parts[3]
-
-			switchVar := o.generateObfuscatedName()
-			tempVar := o.generateObfuscatedName()
-
-			return fmt.Sprintf(`(function(){var %s=0,%s;if(%s){%s=1;}else{%s=2;}switch(%s){case 1:%s;break;case 2:%s;break;}})()`,
-				switchVar, tempVar, condition, ifBody, elseBody, switchVar, ifBody, elseBody)
-		}
-		return match
-	})
-
-	return result
-}
 
 func (o *Obfuscator) encryptStringsDynamic(code string) string {
 	var result strings.Builder
@@ -1612,147 +1805,350 @@ func (o *Obfuscator) encryptStringDynamic(s string, decoderVar string) string {
 
 type VirtualMachine struct {
 	config         ObfuscatorConfig
-	instructions   []string
+	instructions   []vmInstruction
 	registers      map[string]int
 	programCounter int
+	memory         []byte
+}
+
+type vmInstruction struct {
+	opcode   string
+	operand  int
+	encoded  string
 }
 
 func (o *Obfuscator) createVirtualization(code string) string {
 	vm := &VirtualMachine{
 		config:         o.config,
-		instructions:   make([]string, 0),
+		instructions:   make([]vmInstruction, 0),
 		registers:      make(map[string]int),
 		programCounter: 0,
+		memory:         []byte(code),
 	}
 
-	vm.addLoader(vm.generateLoader())
-
-	vm.addInstruction("LOAD_CONST", 0)
-	vm.addInstruction("NOP", 0)
-
-	obfuscated := vm.compile(code)
-
-	return vm.wrapVMCode(obfuscated)
+	return vm.generateFullVM(code)
 }
 
-func (vm *VirtualMachine) generateLoader() string {
-	var loader strings.Builder
-	loader.WriteString(`
+func (vm *VirtualMachine) generateFullVM(code string) string {
+	encodedCode := vm.encodeCode(code)
+	encryptedCode := vm.encryptCode(encodedCode)
+	
+	vmCode := fmt.Sprintf(`
 (function(){
-	var _0xVM=function(_0xP){
-		var _0xR={};
-		var _0xI=0;
-		var _0xOP=[
-		`)
-
-	for i, instr := range vm.instructions {
-		if i > 0 {
-			loader.WriteString(",")
-		}
-		loader.WriteString(fmt.Sprintf("'%s'", instr))
-	}
-
-	loader.WriteString(`];
-		var _0xEXEC=function(_0xOP,_0xR,_0xI){
-			while(_0xI<_0xOP.length){
-				var _0xC=_0xOP[_0xI];
-				switch(_0xC){
-		`)
-
-	loader.WriteString(`
-				case 'NOP':
-					_0xI++;
-					break;
-				case 'LOAD_CONST':
-					_0xR[_0xI]=_0xP.charCodeAt(_0xI);
-					_0xI++;
-					break;
-				case 'RETURN':
-					return _0xR[0];
+	var _0xVM={
+		R:[0,0,0,0,0,0,0,0],
+		PC:0,
+		SP:0,
+		M:[],
+		K:'%s',
+		OP:[],
+		REG:['R0','R1','R2','R3','R4','R5','R6','R7'],
+		init:function(_0xC){
+			this.M=[];
+			var _0xK=this.K;
+			for(var _0xI=0;_0xI<_0xC.length;_0xI++){
+				this.M.push(_0xC.charCodeAt(_0xI)^_0xK.charCodeAt(_0xI%%_0xK.length));
+			}
+			this.OP=this.decodeOps();
+		},
+		decodeOps:function(){
+			var _0xO=[];
+			var _0xOps=['LDC','ADD','SUB','MUL','DIV','XOR','AND','OR','NOT','JMP','JZ','JNZ','LD','ST','CALL','RET','NOP','HALT'];
+			for(var _0xI=0;_0xI<_0xOps.length;_0xI++){
+				var _0xH=0;
+				for(var _0xJ=0;_0xJ<_0xOps[_0xI].length;_0xJ++){
+					_0xH=_0xH*31+_0xOps[_0xI].charCodeAt(_0xJ);
+				}
+				_0xO[_0xH%%256]=_0xOps[_0xI];
+			}
+			return _0xO;
+		},
+		readMem:function(_0xA){
+			return this.M[_0xA]||0;
+		},
+		writeMem:function(_0xA,_0xV){
+			this.M[_0xA]=_0xV;
+		},
+		getReg:function(_0xN){
+			return this.R[_0xN]||0;
+		},
+		setReg:function(_0xN,_0xV){
+			this.R[_0xN]=_0xV;
+		},
+		run:function(){
+			while(this.PC<this.M.length){
+				var _0xOp=this.readMem(this.PC);
+				var _0xOpStr=this.OP[_0xOp]||'NOP';
+				this.PC++;
+				switch(_0xOpStr){
+					case 'LDC':
+						var _0xR=this.readMem(this.PC++);
+						var _0xV=this.readMem(this.PC++);
+						this.setReg(_0xR,_0xV);
+						break;
+					case 'ADD':
+						var _0xR0=this.readMem(this.PC++);
+						var _0xR1=this.readMem(this.PC++);
+						var _0xR2=this.readMem(this.PC++);
+						this.setReg(_0xR0,this.getReg(_0xR1)+this.getReg(_0xR2));
+						break;
+					case 'SUB':
+						var _0xR0=this.readMem(this.PC++);
+						var _0xR1=this.readMem(this.PC++);
+						var _0xR2=this.readMem(this.PC++);
+						this.setReg(_0xR0,this.getReg(_0xR1)-this.getReg(_0xR2));
+						break;
+					case 'XOR':
+						var _0xR0=this.readMem(this.PC++);
+						var _0xR1=this.readMem(this.PC++);
+						var _0xR2=this.readMem(this.PC++);
+						this.setReg(_0xR0,this.getReg(_0xR1)^this.getReg(_0xR2));
+						break;
+					case 'JMP':
+						var _0xA=this.readMem(this.PC);
+						this.PC=_0xA;
+						break;
+					case 'JZ':
+						var _0xR=this.readMem(this.PC++);
+						var _0xA=this.readMem(this.PC);
+						if(this.getReg(_0xR)===0){
+							this.PC=_0xA;
+						}
+						break;
+					case 'LD':
+						var _0xR=this.readMem(this.PC++);
+						var _0xA=this.readMem(this.PC++);
+						this.setReg(_0xR,this.readMem(this.getReg(_0xA)));
+						break;
+					case 'ST':
+						var _0xA=this.readMem(this.PC++);
+						var _0xR=this.readMem(this.PC++);
+						this.writeMem(this.getReg(_0xA),this.getReg(_0xR));
+						break;
+					case 'HALT':
+						return this.getReg(0);
+					case 'NOP':
+					default:
+						break;
 				}
 			}
-		};
-		return _0xEXEC(_0xOP,_0xR,0);
+		},
+		decode:function(){
+			var _0xR='';
+			for(var _0xI=0;_0xI<this.M.length;_0xI++){
+				_0xR+=String.fromCharCode(this.M[_0xI]);
+			}
+			return _0xR;
+		}
 	};
+	_0xVM.init(atob('%s'));
+	var _0xResult=_0xVM.decode();
+	if(typeof eval==='function'){
+		try{eval(_0xResult);}catch(e){}
+	}
 	window.__VM=_0xVM;
 })();
-`)
+`, vm.generateVMKey(), encryptedCode)
 
-	return loader.String()
+	return vmCode
 }
 
-func (vm *VirtualMachine) addInstruction(op string, arg int) {
-	vm.instructions = append(vm.instructions, op)
-	_ = arg
-}
-
-func (vm *VirtualMachine) addLoader(code string) {
-	vm.instructions = append(vm.instructions, "LOAD_CONST")
-}
-
-func (vm *VirtualMachine) compile(code string) string {
-	var result strings.Builder
-	for _, c := range code {
-		result.WriteString(fmt.Sprintf("\\x%02x", c))
+func (vm *VirtualMachine) generateVMKey() string {
+	key := make([]byte, 16)
+	for i := range key {
+		key[i] = byte(GetRandomInt(32, 126))
 	}
-	return result.String()
+	return string(key)
 }
 
-func (vm *VirtualMachine) wrapVMCode(code string) string {
-	key := "hjtpx-vm-key-2024"
-	return fmt.Sprintf(`(function(_0xC,_0xK){var _0xR='';for(var _0xI=0;_0xI<_0xC.length;_0xI+=4){_0xR+=String.fromCharCode(parseInt(_0xC.substr(_0xI,4),16)^_0xK.charCodeAt((_0xI/4)%%_0xK.length));}return _0xR;})('%s','%s');%s`,
-		code, key, code)
+func (vm *VirtualMachine) encodeCode(code string) []byte {
+	result := make([]byte, len(code)*2)
+	for i, c := range code {
+		result[i*2] = byte(c >> 8)
+		result[i*2+1] = byte(c & 0xFF)
+	}
+	return result
+}
+
+func (vm *VirtualMachine) encryptCode(data []byte) string {
+	key := vm.generateVMKey()
+	encrypted := make([]byte, len(data))
+	for i := range data {
+		encrypted[i] = data[i] ^ key[i%len(key)]
+	}
+	return base64.StdEncoding.EncodeToString(encrypted)
+}
+
+func (o *Obfuscator) createAdvancedVirtualization(code string) string {
+	encodedCode := o.encodeForVM(code)
+	virtualizedCode := o.generateVMInterpreter(encodedCode)
+	return virtualizedCode
+}
+
+func (o *Obfuscator) encodeForVM(code string) string {
+	var encoded strings.Builder
+	for _, c := range code {
+		high := (c >> 8) & 0xFF
+		low := c & 0xFF
+		encoded.WriteByte(byte(high ^ 0xAA))
+		encoded.WriteByte(byte(low ^ 0x55))
+	}
+	return base64.StdEncoding.EncodeToString([]byte(encoded.String()))
+}
+
+func (o *Obfuscator) generateVMInterpreter(encodedCode string) string {
+	key := o.generateRandomVMKey()
+	
+	return fmt.Sprintf(`
+;(function(_0xEC,_0xVK){
+	var _0xAVM={
+		M:atob(_0xEC),
+		K:_0xVK,
+		R:[],
+		PC:0,
+		IP:0,
+		DECODE:function(){
+			var _0xR='';
+			for(var _0xI=0;_0xI<this.M.length;_0xI+=2){
+				var _0xH=this.M.charCodeAt(_0xI)^0xAA;
+				var _0xL=this.M.charCodeAt(_0xI+1)^0x55;
+				_0xR+=String.fromCharCode((_0xH<<8)|_0xL);
+			}
+			return _0xR;
+		},
+		EXEC:function(){
+			var _0xCode=this.DECODE();
+			var _0xE=function(_0xS){
+				try{return eval(_0xS);}catch(e){return null;}
+			};
+			_0xE(_0xCode);
+		}
+	};
+	_0xAVM.EXEC();
+	window.__AVM=_0xAVM;
+})('%s','%s');
+`, encodedCode, key)
+}
+
+func (o *Obfuscator) generateRandomVMKey() string {
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(GetRandomInt(0, 255))
+	}
+	return base64.StdEncoding.EncodeToString(key)
 }
 
 func (o *Obfuscator) InjectEnhancedAntiDebug(code string) string {
 	antiDebug := `
 ;(function(){
-	var _0xAD={
-		check:function(){
-			if(window.outerHeight-window.innerHeight>100||window.outerWidth-window.innerWidth>100){
-				_0xAD.trigger();
-			}
-			var _0xT=function(){};
-			_0xT.toString=function(){
-				var _0xD=new Date();
-				var _0xE=_0xD.getTime();
-				debugger;
-				var _0xF=new Date();
-				if(_0xF.getTime()-_0xE>100){
-					_0xAD.trigger();
+	var _0xEAD={
+		version:'3.0',
+		detectionCount:0,
+		maxDetections:3,
+		isBlocked:false,
+		checks:[],
+		// 检测1: 窗口尺寸检测 - 检测开发者工具打开时窗口尺寸变化
+		checkWindowSize:function(){
+			var threshold=160;
+			var wDiff=window.outerWidth-window.innerWidth;
+			var hDiff=window.outerHeight-window.innerHeight;
+			return wDiff>threshold||hDiff>threshold;
+		},
+		// 检测2: Debugger时间检测 - 通过时间差检测debugger是否被断点
+		checkDebuggerTiming:function(){
+			var start=performance.now();
+			debugger;
+			var end=performance.now();
+			return end-start>100;
+		},
+		// 检测3: 控制台API检测 - 检测console._commandLineAPI等调试器API
+		checkConsoleAPI:function(){
+			return typeof console._commandLineAPI!=='undefined'||
+				   typeof console.profiles!=='undefined'||
+				   typeof window.webkitDebuggerAPI!=='undefined';
+		},
+		// 检测4: 函数toString检测 - 检测函数toString是否被调试器修改
+		checkFunctionToString:function(){
+			var result=false;
+			var testFunc=function(){};
+			testFunc.toString=function(){
+				if(window.devtools&&window.devtools.isOpen){
+					result=true;
 				}
 			};
-			setInterval(function(){console.log(_0xT);},1000);
+			console.log(testFunc);
+			return result;
 		},
-		trigger:function(){
+		// 检测5: Firebug检测 - 检测Firebug扩展
+		checkFirebug:function(){
+			return typeof window.firebug!=='undefined'||
+				   typeof Firebug!=='undefined';
+		},
+		// 检测6: 异常捕获检测 - 检测try-catch中debugger语句的异常处理
+		checkExceptionHandler:function(){
+			var errorCaught=false;
+			try{
+				Function('debugger')();
+			}catch(e){
+				errorCaught=true;
+			}
+			return !errorCaught;
+		},
+		runAllChecks:function(){
+			var detections=0;
+			if(this.checkWindowSize())detections++;
+			if(this.checkDebuggerTiming())detections++;
+			if(this.checkConsoleAPI())detections++;
+			if(this.checkFunctionToString())detections++;
+			if(this.checkFirebug())detections++;
+			if(this.checkExceptionHandler())detections++;
+			return detections;
+		},
+		protect:function(){
+			var self=this;
+			setInterval(function(){
+				if(self.isBlocked)return;
+				var count=self.runAllChecks();
+				if(count>0){
+					self.detectionCount++;
+					if(self.detectionCount>=self.maxDetections){
+						self.block();
+					}
+				}
+			},2000);
+		},
+		block:function(){
+			if(this.isBlocked)return;
+			this.isBlocked=true;
 			document.documentElement.style.display='none';
-			document.body.innerHTML='<div style="padding:50px;text-align:center;"><h1>访问受限</h1></div>';
-			throw new Error('Debug detected');
+			document.body.innerHTML='<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;font-family:Arial,sans-serif;"><div><h1>访问受限</h1><p>检测到异常调试行为</p></div></div>';
+			throw new Error('Anti-debug protection triggered');
 		},
-		start:function(){
+		init:function(){
+			var self=this;
+			this.protect();
 			document.addEventListener('keydown',function(e){
-				if(e.keyCode==123){
-					_0xAD.trigger();
+				if(e.key==='F12'||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='I')||
+				   (e.ctrlKey&&e.shiftKey&&e.key==='J')||
+				   (e.ctrlKey&&e.key==='U')){
+					e.preventDefault();
+					self.detectionCount++;
+					if(self.detectionCount>=self.maxDetections){
+						self.block();
+					}
 				}
 			});
 			document.addEventListener('contextmenu',function(e){
 				e.preventDefault();
 			});
-			setInterval(function(){
-				var _0xW=window.outerWidth-window.innerWidth>100;
-				var _0xH=window.outerHeight-window.innerHeight>100;
-				if(_0xW||_0xH){
-					_0xAD.trigger();
-				}
-			},1000);
 		}
 	};
-	if(document.readyState==='complete'){
-		_0xAD.start();
-	}else{
-		window.addEventListener('load',function(){_0xAD.start();});
+	_0xEAD.init();
+	window.__EAD=_0xEAD;
+	if(document.readyState==='loading'){
+		document.addEventListener('DOMContentLoaded',function(){_0xEAD.init();});
 	}
-	_0xAD.check();
 })();
 `
 	return antiDebug + code
@@ -1913,8 +2309,6 @@ func (o *Obfuscator) ApplyAdvancedObfuscation(code string) (string, error) {
 	if o.config.EnableControlFlowFlattening {
 		result = o.flattenControlFlowAdvanced(result)
 	}
-
-	result = o.addStateMachineFlattening(result)
 
 	if o.config.EnableAdvancedAntiDebug {
 		result = InjectAdvancedAntiDebug(result)

@@ -235,6 +235,10 @@ func (o *EnhancedConnectionPoolOptimizer) recordHealthCheckError(err error) {
 	o.metrics.LastError = err
 }
 
+func (o *EnhancedConnectionPoolOptimizer) Optimize() {
+	o.adjustPoolSize(true)
+}
+
 func (o *EnhancedConnectionPoolOptimizer) GetMetrics() *PoolMetrics {
 	o.metrics.mu.RLock()
 	defer o.metrics.mu.RUnlock()

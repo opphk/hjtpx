@@ -93,6 +93,32 @@ type PositionDistribution struct {
 	YEntropy  float64 `json:"y_entropy"`
 	SpreadX   float64 `json:"spread_x"`
 	SpreadY   float64 `json:"spread_y"`
+	
+	// 新增位置分布字段
+	KDEPeaks          []KDEPeak      `json:"kde_peaks"`
+	ClusterCount      int            `json:"cluster_count"`
+	ClusterCenters    []ClusterCenter `json:"cluster_centers"`
+	ClusterAssignments []int          `json:"cluster_assignments"`
+	SpatialEntropy    float64        `json:"spatial_entropy"`
+	GridDistribution  []int          `json:"grid_distribution"`
+	OutlierCount      int            `json:"outlier_count"`
+	OutlierScore      float64        `json:"outlier_score"`
+	ConvexHullArea    float64        `json:"convex_hull_area"`
+	DispersionIndex   float64        `json:"dispersion_index"`
+}
+
+type KDEPeak struct {
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	Density  float64 `json:"density"`
+	IsGlobal bool    `json:"is_global"`
+}
+
+type ClusterCenter struct {
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	PointCount int    `json:"point_count"`
+	Radius    float64 `json:"radius"`
 }
 
 type TimingAnalysis struct {
@@ -108,6 +134,16 @@ type TimingAnalysis struct {
 	IsHumanLike      bool      `json:"is_human_like"`
 	IntervalCoefficientOfVariation float64 `json:"interval_coefficient_of_variation"`
 	AccelerationPattern string  `json:"acceleration_pattern"`
+	
+	// 新增时序分析字段
+	IntervalTrend         float64   `json:"interval_trend"`
+	JerkPattern           string    `json:"jerk_pattern"`
+	TimePressureIndicator float64   `json:"time_pressure_indicator"`
+	AttentionDecay        float64   `json:"attention_decay"`
+	RhythmConsistency     float64   `json:"rhythm_consistency"`
+	ComplexityScore       float64   `json:"complexity_score"`
+	PeriodicityScore      float64   `json:"periodicity_score"`
+	TransientResponse     []float64 `json:"transient_response"`
 }
 
 type AccuracyAnalysis struct {
@@ -237,7 +273,440 @@ func (ca *ClickAnalyzer) analyzePositionDistribution(clicks []ClickData) *Positi
 	distribution.SpreadX = ca.max(xValues) - ca.min(xValues)
 	distribution.SpreadY = ca.max(yValues) - ca.min(yValues)
 
+	// 新增位置分布分析功能
+	distribution.KDEPeaks = ca.calculateKDEPeaks(xValues, yValues)
+	distribution.SpatialEntropy = ca.calculateSpatialEntropy(xValues, yValues)
+	distribution.GridDistribution = ca.calculateGridDistribution(xValues, yValues, 5, 5)
+	
+	if len(clicks) >= 2 {
+		clusters, assignments := ca.performKMeansClustering(xValues, yValues, 3)
+		distribution.ClusterCenters = clusters
+		distribution.ClusterCount = len(clusters)
+		distribution.ClusterAssignments = assignments
+		distribution.OutlierCount, distribution.OutlierScore = ca.detectOutliers(xValues, yValues, clusters, assignments)
+		distribution.ConvexHullArea = ca.calculateConvexHullArea(xValues, yValues)
+		distribution.DispersionIndex = ca.calculateDispersionIndex(xValues, yValues)
+	}
+
 	return distribution
+}
+
+func (ca *ClickAnalyzer) calculateKDEPeaks(xValues, yValues []float64) []KDEPeak {
+	if len(xValues) < 3 {
+		return []KDEPeak{}
+	}
+
+	// 使用高斯核密度估计
+	bandwidth := ca.estimateBandwidth(xValues, yValues)
+	peaks := []KDEPeak{}
+	
+	maxDensity := 0.0
+
+	// 在网格上计算密度
+	gridSize := 20
+	minX, maxXRange := ca.min(xValues), ca.max(xValues)
+	minY, maxYRange := ca.min(yValues), ca.max(yValues)
+	
+	rangeX := maxXRange - minX
+	rangeY := maxYRange - minY
+	if rangeX < 1 {
+		rangeX = 1
+	}
+	if rangeY < 1 {
+		rangeY = 1
+	}
+
+	for i := 0; i < gridSize; i++ {
+		for j := 0; j < gridSize; j++ {
+			gx := minX + rangeX*float64(i)/float64(gridSize-1)
+			gy := minY + rangeY*float64(j)/float64(gridSize-1)
+			
+			density := 0.0
+			for k := 0; k < len(xValues); k++ {
+				dx := xValues[k] - gx
+				dy := yValues[k] - gy
+				density += math.Exp(-(dx*dx + dy*dy) / (2 * bandwidth * bandwidth))
+			}
+			density /= float64(len(xValues)) * bandwidth * math.Sqrt(2*math.Pi)
+			
+			if density > maxDensity {
+				maxDensity = density
+			}
+			
+			// 检测局部峰值
+			isPeak := true
+			for di := -1; di <= 1 && isPeak; di++ {
+				for dj := -1; dj <= 1 && isPeak; dj++ {
+					if di == 0 && dj == 0 {
+						continue
+					}
+					ni, nj := i+di, j+dj
+					if ni >= 0 && ni < gridSize && nj >= 0 && nj < gridSize {
+						nx := minX + rangeX*float64(ni)/float64(gridSize-1)
+						ny := minY + rangeY*float64(nj)/float64(gridSize-1)
+						nDensity := 0.0
+						for k := 0; k < len(xValues); k++ {
+							dx := xValues[k] - nx
+							dy := yValues[k] - ny
+							nDensity += math.Exp(-(dx*dx + dy*dy) / (2 * bandwidth * bandwidth))
+						}
+						nDensity /= float64(len(xValues)) * bandwidth * math.Sqrt(2*math.Pi)
+						if nDensity > density {
+							isPeak = false
+						}
+					}
+				}
+			}
+			
+			if isPeak && density > 0.001 {
+				peaks = append(peaks, KDEPeak{X: gx, Y: gy, Density: density, IsGlobal: false})
+			}
+		}
+	}
+	
+	// 标记全局峰值
+	for i := range peaks {
+		if peaks[i].Density >= maxDensity*0.9 {
+			peaks[i].IsGlobal = true
+		}
+	}
+	
+	return peaks
+}
+
+func (ca *ClickAnalyzer) estimateBandwidth(xValues, yValues []float64) float64 {
+	n := len(xValues)
+	if n < 2 {
+		return 1.0
+	}
+	
+	// 使用 Silverman 法则
+	stdX := ca.stdDev(xValues)
+	stdY := ca.stdDev(yValues)
+	std := math.Max(stdX, stdY)
+	
+	return 1.06 * std * math.Pow(float64(n), -0.2)
+}
+
+func (ca *ClickAnalyzer) calculateSpatialEntropy(xValues, yValues []float64) float64 {
+	if len(xValues) < 2 {
+		return 0
+	}
+	
+	// 使用二维直方图计算空间熵
+	bins := 5
+	grid := make([][]int, bins)
+	for i := range grid {
+		grid[i] = make([]int, bins)
+	}
+	
+	minX, maxX := ca.min(xValues), ca.max(xValues)
+	minY, maxY := ca.min(yValues), ca.max(yValues)
+	
+	rangeX := maxX - minX
+	rangeY := maxY - minY
+	if rangeX == 0 {
+		rangeX = 1
+	}
+	if rangeY == 0 {
+		rangeY = 1
+	}
+	
+	for i := 0; i < len(xValues); i++ {
+		binX := int(((xValues[i] - minX) / rangeX) * float64(bins))
+		binY := int(((yValues[i] - minY) / rangeY) * float64(bins))
+		if binX >= bins {
+			binX = bins - 1
+		}
+		if binY >= bins {
+			binY = bins - 1
+		}
+		if binX < 0 {
+			binX = 0
+		}
+		if binY < 0 {
+			binY = 0
+		}
+		grid[binX][binY]++
+	}
+	
+	entropy := 0.0
+	total := float64(len(xValues))
+	
+	for i := 0; i < bins; i++ {
+		for j := 0; j < bins; j++ {
+			if grid[i][j] > 0 {
+				p := float64(grid[i][j]) / total
+				entropy -= p * math.Log2(p)
+			}
+		}
+	}
+	
+	// 归一化到 [0, 1]
+	maxEntropy := math.Log2(float64(bins * bins))
+	if maxEntropy > 0 {
+		entropy /= maxEntropy
+	}
+	
+	return entropy
+}
+
+func (ca *ClickAnalyzer) calculateGridDistribution(xValues, yValues []float64, gridX, gridY int) []int {
+	if len(xValues) == 0 {
+		return []int{}
+	}
+	
+	distribution := make([]int, gridX*gridY)
+	
+	minX, maxX := ca.min(xValues), ca.max(xValues)
+	minY, maxY := ca.min(yValues), ca.max(yValues)
+	
+	rangeX := maxX - minX
+	rangeY := maxY - minY
+	if rangeX == 0 {
+		rangeX = 1
+	}
+	if rangeY == 0 {
+		rangeY = 1
+	}
+	
+	for i := 0; i < len(xValues); i++ {
+		binX := int(((xValues[i] - minX) / rangeX) * float64(gridX))
+		binY := int(((yValues[i] - minY) / rangeY) * float64(gridY))
+		if binX >= gridX {
+			binX = gridX - 1
+		}
+		if binY >= gridY {
+			binY = gridY - 1
+		}
+		if binX < 0 {
+			binX = 0
+		}
+		if binY < 0 {
+			binY = 0
+		}
+		distribution[binX*gridY+binY]++
+	}
+	
+	return distribution
+}
+
+func (ca *ClickAnalyzer) performKMeansClustering(xValues, yValues []float64, k int) ([]ClusterCenter, []int) {
+	n := len(xValues)
+	if n < k || k < 1 {
+		return []ClusterCenter{}, []int{}
+	}
+	
+	// 随机初始化聚类中心
+	centers := make([]ClusterCenter, k)
+	for i := 0; i < k; i++ {
+		idx := rand.Intn(n)
+		centers[i] = ClusterCenter{X: xValues[idx], Y: yValues[idx]}
+	}
+	
+	assignments := make([]int, n)
+	changed := true
+	iterations := 0
+	
+	for changed && iterations < 100 {
+		changed = false
+		iterations++
+		
+		// 分配点到最近的聚类中心
+		for i := 0; i < n; i++ {
+			minDist := math.MaxFloat64
+			minIdx := 0
+			for j := 0; j < k; j++ {
+				dx := xValues[i] - centers[j].X
+				dy := yValues[i] - centers[j].Y
+				dist := dx*dx + dy*dy
+				if dist < minDist {
+					minDist = dist
+					minIdx = j
+				}
+			}
+			if assignments[i] != minIdx {
+				assignments[i] = minIdx
+				changed = true
+			}
+		}
+		
+		// 更新聚类中心
+		for j := 0; j < k; j++ {
+			sumX, sumY, count := 0.0, 0.0, 0
+			for i := 0; i < n; i++ {
+				if assignments[i] == j {
+					sumX += xValues[i]
+					sumY += yValues[i]
+					count++
+				}
+			}
+			if count > 0 {
+				centers[j].X = sumX / float64(count)
+				centers[j].Y = sumY / float64(count)
+				centers[j].PointCount = count
+			}
+		}
+	}
+	
+	// 计算每个聚类的半径
+	for j := 0; j < k; j++ {
+		maxDist := 0.0
+		for i := 0; i < n; i++ {
+			if assignments[i] == j {
+				dx := xValues[i] - centers[j].X
+				dy := yValues[i] - centers[j].Y
+				dist := math.Sqrt(dx*dx + dy*dy)
+				if dist > maxDist {
+					maxDist = dist
+				}
+			}
+		}
+		centers[j].Radius = maxDist
+	}
+	
+	// 移除空聚类
+	validCenters := []ClusterCenter{}
+	for _, c := range centers {
+		if c.PointCount > 0 {
+			validCenters = append(validCenters, c)
+		}
+	}
+	
+	return validCenters, assignments
+}
+
+func (ca *ClickAnalyzer) detectOutliers(xValues, yValues []float64, clusters []ClusterCenter, assignments []int) (int, float64) {
+	if len(clusters) == 0 || len(assignments) != len(xValues) {
+		return 0, 0
+	}
+	
+	outlierCount := 0
+	totalDistance := 0.0
+	
+	for i := 0; i < len(xValues); i++ {
+		clusterIdx := assignments[i]
+		if clusterIdx >= len(clusters) {
+			outlierCount++
+			continue
+		}
+		
+		dx := xValues[i] - clusters[clusterIdx].X
+		dy := yValues[i] - clusters[clusterIdx].Y
+		distance := math.Sqrt(dx*dx + dy*dy)
+		
+		totalDistance += distance
+		
+		// 如果距离超过聚类半径的2倍，则视为离群点
+		if distance > clusters[clusterIdx].Radius*2 {
+			outlierCount++
+		}
+	}
+	
+	avgDistance := totalDistance / float64(len(xValues))
+	outlierScore := float64(outlierCount) / float64(len(xValues)) * (1 + avgDistance/100)
+	
+	return outlierCount, math.Min(outlierScore, 1.0)
+}
+
+func (ca *ClickAnalyzer) calculateConvexHullArea(xValues, yValues []float64) float64 {
+	if len(xValues) < 3 {
+		return 0
+	}
+	
+	// 使用 Andrew's monotone chain algorithm 计算凸包
+	points := make([][2]float64, len(xValues))
+	for i := 0; i < len(xValues); i++ {
+		points[i] = [2]float64{xValues[i], yValues[i]}
+	}
+	
+	// 按 x 坐标排序，然后按 y 坐标排序
+	for i := 0; i < len(points); i++ {
+		for j := i + 1; j < len(points); j++ {
+			if points[j][0] < points[i][0] || (points[j][0] == points[i][0] && points[j][1] < points[i][1]) {
+				points[i], points[j] = points[j], points[i]
+			}
+		}
+	}
+	
+	// 构建下凸包和上凸包
+	lower := make([][2]float64, 0)
+	for _, p := range points {
+		for len(lower) >= 2 {
+			l := len(lower)
+			if (lower[l-1][0]-lower[l-2][0])*(p[1]-lower[l-2][1]) <= (lower[l-1][1]-lower[l-2][1])*(p[0]-lower[l-2][0]) {
+				lower = lower[:l-1]
+			} else {
+				break
+			}
+		}
+		lower = append(lower, p)
+	}
+	
+	upper := make([][2]float64, 0)
+	for i := len(points) - 1; i >= 0; i-- {
+		p := points[i]
+		for len(upper) >= 2 {
+			l := len(upper)
+			if (upper[l-1][0]-upper[l-2][0])*(p[1]-upper[l-2][1]) <= (upper[l-1][1]-upper[l-2][1])*(p[0]-upper[l-2][0]) {
+				upper = upper[:l-1]
+			} else {
+				break
+			}
+		}
+		upper = append(upper, p)
+	}
+	
+	// 合并凸包（去掉重复点）
+	hull := append(lower[:len(lower)-1], upper[:len(upper)-1]...)
+	
+	// 计算面积
+	if len(hull) < 3 {
+		return 0
+	}
+	
+	area := 0.0
+	for i := 0; i < len(hull); i++ {
+		j := (i + 1) % len(hull)
+		area += hull[i][0] * hull[j][1]
+		area -= hull[j][0] * hull[i][1]
+	}
+	
+	return math.Abs(area) / 2.0
+}
+
+func (ca *ClickAnalyzer) calculateDispersionIndex(xValues, yValues []float64) float64 {
+	if len(xValues) < 2 {
+		return 0
+	}
+	
+	// 计算平均距离和标准差
+	meanX := ca.mean(xValues)
+	meanY := ca.mean(yValues)
+	
+	avgDistance := 0.0
+	for i := 0; i < len(xValues); i++ {
+		dx := xValues[i] - meanX
+		dy := yValues[i] - meanY
+		avgDistance += math.Sqrt(dx*dx + dy*dy)
+	}
+	avgDistance /= float64(len(xValues))
+	
+	if avgDistance == 0 {
+		return 0
+	}
+	
+	// 计算距离的标准差
+	stdDistance := 0.0
+	for i := 0; i < len(xValues); i++ {
+		dx := xValues[i] - meanX
+		dy := yValues[i] - meanY
+		distance := math.Sqrt(dx*dx + dy*dy)
+		stdDistance += (distance - avgDistance) * (distance - avgDistance)
+	}
+	stdDistance = math.Sqrt(stdDistance / float64(len(xValues)))
+	
+	return stdDistance / avgDistance
 }
 
 func (ca *ClickAnalyzer) calculateEntropy(values []float64, bins int) float64 {
@@ -419,7 +888,260 @@ func (ca *ClickAnalyzer) analyzeTiming(verification *ClickVerification) *TimingA
 	timing.IsHumanLike = ca.isHumanLikeTiming(timing)
 	timing.AccelerationPattern = ca.analyzeAccelerationPattern(verification.Clicks)
 
+	// 新增时序分析增强功能
+	timing.IntervalTrend = ca.calculateIntervalTrend(timing.ResponseTimes)
+	timing.JerkPattern = ca.classifyJerkPattern(timing.ResponseTimes)
+	timing.TimePressureIndicator = ca.calculateTimePressureIndicator(timing)
+	timing.AttentionDecay = ca.calculateAttentionDecay(timing.ResponseTimes)
+	timing.RhythmConsistency = ca.calculateRhythmConsistency(timing.ResponseTimes)
+	timing.ComplexityScore = ca.calculateComplexityScore(timing.ResponseTimes)
+	timing.PeriodicityScore = ca.detectPeriodicity(timing.ResponseTimes)
+	timing.TransientResponse = ca.extractTransientResponse(timing.ResponseTimes)
+
 	return timing
+}
+
+func (ca *ClickAnalyzer) calculateIntervalTrend(intervals []float64) float64 {
+	if len(intervals) < 2 {
+		return 0
+	}
+	
+	// 使用线性回归计算趋势
+	n := float64(len(intervals))
+	sumX, sumY, sumXY, sumX2 := 0.0, 0.0, 0.0, 0.0
+	
+	for i, interval := range intervals {
+		x := float64(i)
+		y := interval
+		sumX += x
+		sumY += y
+		sumXY += x * y
+		sumX2 += x * x
+	}
+	
+	denominator := n*sumX2 - sumX*sumX
+	if denominator == 0 {
+		return 0
+	}
+	
+	return (n*sumXY - sumX*sumY) / denominator
+}
+
+func (ca *ClickAnalyzer) classifyJerkPattern(intervals []float64) string {
+	if len(intervals) < 3 {
+		return "unknown"
+	}
+	
+	// 计算加速度变化率（加加速度/Jerk）
+	jerkValues := make([]float64, len(intervals)-2)
+	for i := 1; i < len(intervals)-1; i++ {
+		prevAccel := intervals[i] - intervals[i-1]
+		currAccel := intervals[i+1] - intervals[i]
+		jerkValues[i-1] = currAccel - prevAccel
+	}
+	
+	meanJerk := ca.mean(jerkValues)
+	stdJerk := math.Sqrt(ca.variance(jerkValues))
+	
+	// 根据加加速度模式分类
+	if stdJerk < 20 && math.Abs(meanJerk) < 10 {
+		return "smooth"
+	} else if stdJerk > 100 {
+		return "jerky"
+	} else if meanJerk > 20 {
+		return "increasing"
+	} else if meanJerk < -20 {
+		return "decreasing"
+	}
+	return "variable"
+}
+
+func (ca *ClickAnalyzer) calculateTimePressureIndicator(timing *TimingAnalysis) float64 {
+	if timing.TotalDuration == 0 || timing.AverageDuration == 0 {
+		return 0
+	}
+	
+	basePressure := 1.0 - float64(timing.TotalDuration)/5000.0
+	rhythmPressure := 0.0
+	if timing.IsRhythmic {
+		rhythmPressure = 0.3
+	}
+	
+	variabilityPressure := 0.0
+	if timing.IntervalCoefficientOfVariation < 0.3 {
+		variabilityPressure = 0.2
+	}
+	
+	return math.Min(basePressure+rhythmPressure+variabilityPressure, 1.0)
+}
+
+func (ca *ClickAnalyzer) calculateAttentionDecay(intervals []float64) float64 {
+	if len(intervals) < 3 {
+		return 0
+	}
+	
+	firstThird := intervals[:len(intervals)/3]
+	lastThird := intervals[len(intervals)*2/3:]
+	
+	if len(firstThird) == 0 || len(lastThird) == 0 {
+		return 0
+	}
+	
+	firstMean := ca.mean(firstThird)
+	lastMean := ca.mean(lastThird)
+	
+	if firstMean == 0 {
+		return 0
+	}
+	
+	decay := (lastMean - firstMean) / firstMean
+	return math.Max(-1.0, math.Min(1.0, decay))
+}
+
+func (ca *ClickAnalyzer) calculateRhythmConsistency(intervals []float64) float64 {
+	if len(intervals) < 2 {
+		return 0
+	}
+	
+	mean := ca.mean(intervals)
+	if mean == 0 {
+		return 0
+	}
+	
+	totalDeviation := 0.0
+	for _, interval := range intervals {
+		totalDeviation += math.Abs(interval - mean)
+	}
+	
+	avgDeviation := totalDeviation / float64(len(intervals))
+	return 1.0 - math.Min(avgDeviation/mean, 1.0)
+}
+
+func (ca *ClickAnalyzer) calculateComplexityScore(intervals []float64) float64 {
+	if len(intervals) < 2 {
+		return 0
+	}
+	
+	// 使用样本熵来衡量复杂度
+	return ca.calculateSampleEntropy(intervals)
+}
+
+func (ca *ClickAnalyzer) calculateSampleEntropy(intervals []float64) float64 {
+	if len(intervals) < 4 {
+		return 0
+	}
+	
+	n := len(intervals)
+	m := 2
+	r := 0.2 * ca.stdDev(intervals)
+	
+	if r == 0 {
+		return 0
+	}
+	
+	// 计算模板匹配数
+	counts := make([]int, 2)
+	for i := 0; i <= n-m; i++ {
+		for j := 0; j <= n-m; j++ {
+			if i != j {
+				dist := 0.0
+				for k := 0; k < m; k++ {
+					dist = math.Max(dist, math.Abs(intervals[i+k]-intervals[j+k]))
+				}
+				if dist <= r {
+					counts[0]++
+				}
+			}
+		}
+	}
+	
+	for i := 0; i <= n-m-1; i++ {
+		for j := 0; j <= n-m-1; j++ {
+			if i != j {
+				dist := 0.0
+				for k := 0; k < m+1; k++ {
+					dist = math.Max(dist, math.Abs(intervals[i+k]-intervals[j+k]))
+				}
+				if dist <= r {
+					counts[1]++
+				}
+			}
+		}
+	}
+	
+	if counts[0] == 0 || counts[1] == 0 {
+		return 0
+	}
+	
+	return -math.Log(float64(counts[1]) / float64(counts[0]))
+}
+
+func (ca *ClickAnalyzer) detectPeriodicity(intervals []float64) float64 {
+	if len(intervals) < 4 {
+		return 0
+	}
+	
+	// 使用自相关检测周期性
+	n := len(intervals)
+	maxLag := n / 2
+	if maxLag < 2 {
+		return 0
+	}
+	
+	maxCorrelation := 0.0
+	for lag := 1; lag <= maxLag; lag++ {
+		sumXY, sumX, sumY, sumX2, sumY2 := 0.0, 0.0, 0.0, 0.0, 0.0
+		count := 0
+		for i := 0; i < n-lag; i++ {
+			x := intervals[i]
+			y := intervals[i+lag]
+			sumXY += x * y
+			sumX += x
+			sumY += y
+			sumX2 += x * x
+			sumY2 += y * y
+			count++
+		}
+		
+		if count == 0 {
+			continue
+		}
+		
+		fCount := float64(count)
+		denominator := math.Sqrt((fCount*sumX2-sumX*sumX) * (fCount*sumY2-sumY*sumY))
+		if denominator == 0 {
+			continue
+		}
+		
+		correlation := (fCount*sumXY - sumX*sumY) / denominator
+		if correlation > maxCorrelation {
+			maxCorrelation = correlation
+		}
+	}
+	
+	return maxCorrelation
+}
+
+func (ca *ClickAnalyzer) extractTransientResponse(intervals []float64) []float64 {
+	if len(intervals) < 2 {
+		return []float64{}
+	}
+	
+	// 提取瞬态响应特征：第一个间隔、最后一个间隔、最大间隔、最小间隔
+	transient := make([]float64, 4)
+	transient[0] = intervals[0]
+	transient[1] = intervals[len(intervals)-1]
+	transient[2] = ca.max(intervals)
+	transient[3] = ca.min(intervals)
+	
+	return transient
+}
+
+func (ca *ClickAnalyzer) stdDev(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	return math.Sqrt(ca.variance(values))
 }
 
 func (ca *ClickAnalyzer) isHumanLikeTiming(timing *TimingAnalysis) bool {
@@ -684,12 +1406,17 @@ func (ca *ClickAnalyzer) hungarianAlgorithm(costMatrix [][]float64) []int {
 	usedTargets := make([]bool, m)
 	
 	for {
-		dist := make([]float64, m)
+		// 使用两个数组分别存储 clicks 和 targets 的距离
+		distClick := make([]float64, n)
+		distTarget := make([]float64, m)
 		parent := make([]int, m)
 		visited := make([]bool, m)
 		
-		for i := range dist {
-			dist[i] = math.MaxFloat64
+		for i := range distClick {
+			distClick[i] = math.MaxFloat64
+		}
+		for i := range distTarget {
+			distTarget[i] = math.MaxFloat64
 			parent[i] = -1
 			visited[i] = false
 		}
@@ -698,7 +1425,7 @@ func (ca *ClickAnalyzer) hungarianAlgorithm(costMatrix [][]float64) []int {
 		for i := 0; i < n; i++ {
 			if match[i] < 0 {
 				queue = append(queue, i)
-				dist[i] = 0
+				distClick[i] = 0
 			}
 		}
 		
@@ -708,10 +1435,10 @@ func (ca *ClickAnalyzer) hungarianAlgorithm(costMatrix [][]float64) []int {
 			
 			for targetIdx := 0; targetIdx < m; targetIdx++ {
 				cost := costMatrix[clickIdx][targetIdx]
-				newDist := dist[clickIdx] + cost
+				newDist := distClick[clickIdx] + cost
 				
-				if newDist < dist[targetIdx] {
-					dist[targetIdx] = newDist
+				if newDist < distTarget[targetIdx] {
+					distTarget[targetIdx] = newDist
 					parent[targetIdx] = clickIdx
 					if !visited[targetIdx] {
 						visited[targetIdx] = true
@@ -724,7 +1451,7 @@ func (ca *ClickAnalyzer) hungarianAlgorithm(costMatrix [][]float64) []int {
 		target := -1
 		for t := 0; t < m; t++ {
 			if !usedTargets[t] && parent[t] >= 0 {
-				if target < 0 || dist[t] < dist[target] {
+				if target < 0 || distTarget[t] < distTarget[target] {
 					target = t
 				}
 			}
@@ -1492,6 +2219,18 @@ type PressureFeatures struct {
 	PressureVariance    float64   `json:"pressure_variance"`
 	PressureConsistency float64   `json:"pressure_consistency"`
 	IsBotLike           bool      `json:"is_bot_like"`
+	
+	// 新增压力检测字段
+	PressureTrend         float64   `json:"pressure_trend"`
+	PressurePeaks         []float64 `json:"pressure_peaks"`
+	PressureValleys       []float64 `json:"pressure_valleys"`
+	PressureDerivative    float64   `json:"pressure_derivative"`
+	PressureJerk          float64   `json:"pressure_jerk"`
+	AbnormalPressureRatio float64   `json:"abnormal_pressure_ratio"`
+	PressurePattern       string    `json:"pressure_pattern"`
+	PressureAnomalyScore  float64   `json:"pressure_anomaly_score"`
+	StabilizationTime     float64   `json:"stabilization_time"`
+	ReleaseVelocity       float64   `json:"release_velocity"`
 }
 
 type ClickDataWithPressure struct {
@@ -1509,11 +2248,17 @@ func (cpa *ClickPressureAnalyzer) AnalyzePressure(clickEvents []map[string]inter
 	}
 
 	pressures := make([]float64, 0)
+	timestamps := make([]int64, 0)
+	
 	for _, event := range clickEvents {
 		if pressure, ok := event["pressure"].(float64); ok {
 			pressures = append(pressures, pressure)
 		} else if force, ok := event["force"].(float64); ok {
 			pressures = append(pressures, force)
+		}
+		
+		if ts, ok := event["timestamp"].(int64); ok {
+			timestamps = append(timestamps, ts)
 		}
 	}
 
@@ -1526,11 +2271,312 @@ func (cpa *ClickPressureAnalyzer) AnalyzePressure(clickEvents []map[string]inter
 	features.Pressures = pressures
 	features.MeanPressure = cpa.mean(pressures)
 	features.PressureVariance = cpa.variance(pressures)
-	features.PressureConsistency = 1.0 - math.Min(math.Sqrt(features.PressureVariance)/features.MeanPressure, 1.0)
+	
+	if features.MeanPressure > 0 {
+		features.PressureConsistency = 1.0 - math.Min(math.Sqrt(features.PressureVariance)/features.MeanPressure, 1.0)
+	}
 
 	features.IsBotLike = features.PressureConsistency > 0.95 && features.MeanPressure > 0.8
 
+	// 新增压力检测增强功能
+	features.PressureTrend = cpa.calculatePressureTrend(pressures)
+	features.PressurePeaks, features.PressureValleys = cpa.detectPressureExtrema(pressures)
+	features.PressureDerivative = cpa.calculatePressureDerivative(pressures, timestamps)
+	features.PressureJerk = cpa.calculatePressureJerk(pressures, timestamps)
+	features.AbnormalPressureRatio = cpa.calculateAbnormalPressureRatio(pressures)
+	features.PressurePattern = cpa.classifyPressurePattern(pressures)
+	features.PressureAnomalyScore = cpa.calculatePressureAnomalyScore(features)
+	features.StabilizationTime = cpa.calculateStabilizationTime(pressures)
+	features.ReleaseVelocity = cpa.calculateReleaseVelocity(pressures, timestamps)
+
 	return features
+}
+
+func (cpa *ClickPressureAnalyzer) calculatePressureTrend(pressures []float64) float64 {
+	if len(pressures) < 2 {
+		return 0
+	}
+	
+	n := float64(len(pressures))
+	sumX, sumY, sumXY, sumX2 := 0.0, 0.0, 0.0, 0.0
+	
+	for i, p := range pressures {
+		x := float64(i)
+		y := p
+		sumX += x
+		sumY += y
+		sumXY += x * y
+		sumX2 += x * x
+	}
+	
+	denominator := n*sumX2 - sumX*sumX
+	if denominator == 0 {
+		return 0
+	}
+	
+	return (n*sumXY - sumX*sumY) / denominator
+}
+
+func (cpa *ClickPressureAnalyzer) detectPressureExtrema(pressures []float64) ([]float64, []float64) {
+	if len(pressures) < 3 {
+		return []float64{}, []float64{}
+	}
+	
+	peaks := []float64{}
+	valleys := []float64{}
+	
+	for i := 1; i < len(pressures)-1; i++ {
+		if pressures[i] > pressures[i-1] && pressures[i] > pressures[i+1] {
+			peaks = append(peaks, pressures[i])
+		} else if pressures[i] < pressures[i-1] && pressures[i] < pressures[i+1] {
+			valleys = append(valleys, pressures[i])
+		}
+	}
+	
+	return peaks, valleys
+}
+
+func (cpa *ClickPressureAnalyzer) calculatePressureDerivative(pressures []float64, timestamps []int64) float64 {
+	if len(pressures) < 2 {
+		return 0
+	}
+	
+	derivatives := make([]float64, 0)
+	for i := 1; i < len(pressures); i++ {
+		dt := 1.0
+		if len(timestamps) > i {
+			dt = float64(timestamps[i] - timestamps[i-1])
+			if dt <= 0 {
+				dt = 1.0
+			}
+		}
+		derivatives = append(derivatives, (pressures[i]-pressures[i-1])/dt)
+	}
+	
+	return cpa.mean(derivatives)
+}
+
+func (cpa *ClickPressureAnalyzer) calculatePressureJerk(pressures []float64, timestamps []int64) float64 {
+	if len(pressures) < 3 {
+		return 0
+	}
+	
+	derivatives := make([]float64, 0)
+	for i := 1; i < len(pressures); i++ {
+		dt := 1.0
+		if len(timestamps) > i {
+			dt = float64(timestamps[i] - timestamps[i-1])
+			if dt <= 0 {
+				dt = 1.0
+			}
+		}
+		derivatives = append(derivatives, (pressures[i]-pressures[i-1])/dt)
+	}
+	
+	if len(derivatives) < 2 {
+		return 0
+	}
+	
+	jerks := make([]float64, 0)
+	for i := 1; i < len(derivatives); i++ {
+		dt := 1.0
+		if len(timestamps) > i+1 {
+			dt = float64(timestamps[i+1] - timestamps[i])
+			if dt <= 0 {
+				dt = 1.0
+			}
+		}
+		jerks = append(jerks, (derivatives[i]-derivatives[i-1])/dt)
+	}
+	
+	return cpa.mean(jerks)
+}
+
+func (cpa *ClickPressureAnalyzer) calculateAbnormalPressureRatio(pressures []float64) float64 {
+	if len(pressures) == 0 {
+		return 0
+	}
+	
+	mean := cpa.mean(pressures)
+	std := math.Sqrt(cpa.variance(pressures))
+	
+	abnormalCount := 0
+	for _, p := range pressures {
+		if math.Abs(p-mean) > 2*std {
+			abnormalCount++
+		}
+	}
+	
+	return float64(abnormalCount) / float64(len(pressures))
+}
+
+func (cpa *ClickPressureAnalyzer) classifyPressurePattern(pressures []float64) string {
+	if len(pressures) < 3 {
+		return "unknown"
+	}
+	
+	mean := cpa.mean(pressures)
+	std := math.Sqrt(cpa.variance(pressures))
+	coeffVar := std / mean
+	
+	// 检测各种模式
+	if coeffVar < 0.1 {
+		return "stable"
+	} else if coeffVar > 0.5 {
+		return "volatile"
+	}
+	
+	// 检测递增/递减趋势
+	trend := cpa.calculatePressureTrend(pressures)
+	if trend > 0.01 {
+		return "increasing"
+	} else if trend < -0.01 {
+		return "decreasing"
+	}
+	
+	// 检测周期性模式
+	periodicity := cpa.detectPressurePeriodicity(pressures)
+	if periodicity > 0.7 {
+		return "periodic"
+	}
+	
+	return "variable"
+}
+
+func (cpa *ClickPressureAnalyzer) detectPressurePeriodicity(pressures []float64) float64 {
+	if len(pressures) < 4 {
+		return 0
+	}
+	
+	n := len(pressures)
+	maxLag := n / 2
+	if maxLag < 2 {
+		return 0
+	}
+	
+	maxCorrelation := 0.0
+	for lag := 1; lag <= maxLag; lag++ {
+		sumXY, sumX, sumY, sumX2, sumY2 := 0.0, 0.0, 0.0, 0.0, 0.0
+		count := 0
+		for i := 0; i < n-lag; i++ {
+			x := pressures[i]
+			y := pressures[i+lag]
+			sumXY += x * y
+			sumX += x
+			sumY += y
+			sumX2 += x * x
+			sumY2 += y * y
+			count++
+		}
+		
+		if count == 0 {
+			continue
+		}
+		
+		fCount := float64(count)
+		denominator := math.Sqrt((fCount*sumX2-sumX*sumX) * (fCount*sumY2-sumY*sumY))
+		if denominator == 0 {
+			continue
+		}
+		
+		correlation := (fCount*sumXY - sumX*sumY) / denominator
+		if correlation > maxCorrelation {
+			maxCorrelation = correlation
+		}
+	}
+	
+	return maxCorrelation
+}
+
+func (cpa *ClickPressureAnalyzer) calculatePressureAnomalyScore(features *PressureFeatures) float64 {
+	if !features.HasPressureData {
+		return 0
+	}
+	
+	score := 0.0
+	
+	// 压力一致性过高（机器人特征）
+	if features.PressureConsistency > 0.95 {
+		score += 0.3
+	}
+	
+	// 压力过高或过低
+	if features.MeanPressure > 0.9 || features.MeanPressure < 0.1 {
+		score += 0.2
+	}
+	
+	// 异常压力比例高
+	if features.AbnormalPressureRatio > 0.3 {
+		score += 0.25
+	}
+	
+	// 压力变化过于剧烈
+	if math.Abs(features.PressureJerk) > 0.1 {
+		score += 0.15
+	}
+	
+	// 压力模式异常
+	if features.PressurePattern == "stable" && len(features.Pressures) > 5 {
+		score += 0.1
+	}
+	
+	return math.Min(score, 1.0)
+}
+
+func (cpa *ClickPressureAnalyzer) calculateStabilizationTime(pressures []float64) float64 {
+	if len(pressures) < 3 {
+		return 0
+	}
+	
+	mean := cpa.mean(pressures)
+	std := math.Sqrt(cpa.variance(pressures))
+	threshold := std * 0.1
+	
+	stabilizedIdx := -1
+	for i := len(pressures) - 1; i >= 0; i-- {
+		if math.Abs(pressures[i]-mean) > threshold {
+			stabilizedIdx = i
+			break
+		}
+	}
+	
+	if stabilizedIdx == -1 {
+		return 0
+	}
+	
+	return float64(len(pressures) - stabilizedIdx - 1)
+}
+
+func (cpa *ClickPressureAnalyzer) calculateReleaseVelocity(pressures []float64, timestamps []int64) float64 {
+	if len(pressures) < 2 {
+		return 0
+	}
+	
+	// 找到最大压力点
+	maxIdx := 0
+	maxPressure := pressures[0]
+	for i, p := range pressures {
+		if p > maxPressure {
+			maxPressure = p
+			maxIdx = i
+		}
+	}
+	
+	// 计算从最大压力到释放的速度
+	if maxIdx == len(pressures)-1 {
+		return 0
+	}
+	
+	releaseDuration := 1.0
+	if len(timestamps) > maxIdx+1 {
+		releaseDuration = float64(timestamps[len(timestamps)-1] - timestamps[maxIdx])
+		if releaseDuration <= 0 {
+			releaseDuration = 1.0
+		}
+	}
+	
+	releaseAmount := maxPressure - pressures[len(pressures)-1]
+	return releaseAmount / releaseDuration
 }
 
 func (cpa *ClickPressureAnalyzer) mean(values []float64) float64 {
@@ -1684,6 +2730,107 @@ func NewAnomalyClickDetector() *AnomalyClickDetector {
 				},
 				Weight: 0.3,
 			},
+			// 新增异常模式
+			{
+				Name:        "abnormally_fast",
+				Description: "点击速度异常快",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.TimingPattern == "very_fast" &&
+						result.TimingAnalysis.TotalDuration < 500 &&
+						result.ClickPattern != nil &&
+						result.ClickPattern.ClickCount > 2
+				},
+				Weight: 0.25,
+			},
+			{
+				Name:        "zero_variance",
+				Description: "点击间隔方差为零",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.DurationVariance == 0 &&
+						len(result.TimingAnalysis.ResponseTimes) > 2
+				},
+				Weight: 0.35,
+			},
+			{
+				Name:        "extreme_clustering",
+				Description: "点击位置极度聚集",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.ClickPattern == nil ||
+						result.ClickPattern.PositionDistribution == nil {
+						return false
+					}
+					dist := result.ClickPattern.PositionDistribution
+					return dist.SpatialEntropy < 0.2 &&
+						dist.ClusterCount == 1
+				},
+				Weight: 0.2,
+			},
+			{
+				Name:        "periodic_pattern",
+				Description: "周期性点击模式",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.PeriodicityScore > 0.8 &&
+						result.TimingAnalysis.RhythmConsistency > 0.95
+				},
+				Weight: 0.25,
+			},
+			{
+				Name:        "mechanical_jerk",
+				Description: "机械性加加速度模式",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.JerkPattern == "smooth" &&
+						result.TimingAnalysis.IsRhythmic
+				},
+				Weight: 0.2,
+			},
+			{
+				Name:        "attention_collapse",
+				Description: "注意力急剧下降",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.AttentionDecay > 0.8
+				},
+				Weight: 0.15,
+			},
+			{
+				Name:        "outlier_click",
+				Description: "存在大量离群点击",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.ClickPattern == nil ||
+						result.ClickPattern.PositionDistribution == nil {
+						return false
+					}
+					dist := result.ClickPattern.PositionDistribution
+					return dist.OutlierScore > 0.5
+				},
+				Weight: 0.2,
+			},
+			{
+				Name:        "predictable_pattern",
+				Description: "高度可预测的点击模式",
+				Detector: func(result *ClickAnalysisResult) bool {
+					if result.TimingAnalysis == nil {
+						return false
+					}
+					return result.TimingAnalysis.ComplexityScore < 0.5 &&
+						result.TimingAnalysis.RhythmConsistency > 0.9
+				},
+				Weight: 0.25,
+			},
 		},
 	}
 }
@@ -1701,6 +2848,380 @@ func (acd *AnomalyClickDetector) DetectAnomalies(result *ClickAnalysisResult) (f
 	}
 
 	return totalScore, detectedPatterns
+}
+
+// MLEnhancedAnomalyDetector 使用机器学习增强的异常检测
+type MLEnhancedAnomalyDetector struct {
+	ensembleModels []AnomalyModel
+	weights        []float64
+}
+
+type AnomalyModel interface {
+	Predict(result *ClickAnalysisResult) float64
+}
+
+func NewMLEnhancedAnomalyDetector() *MLEnhancedAnomalyDetector {
+	return &MLEnhancedAnomalyDetector{
+		ensembleModels: []AnomalyModel{
+			NewIsolationForestModel(),
+			NewAutoEncoderModel(),
+			NewOneClassSVMModel(),
+			NewLOFModel(),
+		},
+		weights: []float64{0.25, 0.25, 0.25, 0.25},
+	}
+}
+
+func (med *MLEnhancedAnomalyDetector) Detect(result *ClickAnalysisResult) (float64, []string) {
+	scores := make([]float64, len(med.ensembleModels))
+	detectedPatterns := make([]string, 0)
+
+	for i, model := range med.ensembleModels {
+		scores[i] = model.Predict(result)
+	}
+
+	// 集成预测：加权平均
+	ensembleScore := 0.0
+	for i, score := range scores {
+		ensembleScore += score * med.weights[i]
+	}
+
+	// 检测具体的异常模式
+	if ensembleScore > 0.5 {
+		detectedPatterns = append(detectedPatterns, med.detectSpecificAnomalies(result, scores)...)
+	}
+
+	return ensembleScore, detectedPatterns
+}
+
+func (med *MLEnhancedAnomalyDetector) detectSpecificAnomalies(result *ClickAnalysisResult, scores []float64) []string {
+	patterns := make([]string, 0)
+
+	// 根据各模型的得分判断具体异常类型
+	if scores[0] > 0.7 { // Isolation Forest 检测到的异常
+		patterns = append(patterns, "isolation_forest_outlier: 孤立森林检测到离群点")
+	}
+
+	if scores[1] > 0.7 { // AutoEncoder 检测到的异常
+		patterns = append(patterns, "autoencoder_reconstruction: 自编码器重构误差异常")
+	}
+
+	if scores[2] > 0.7 { // One-Class SVM 检测到的异常
+		patterns = append(patterns, "oneclass_svm_boundary: SVM边界外样本")
+	}
+
+	if scores[3] > 0.7 { // LOF 检测到的异常
+		patterns = append(patterns, "lof_outlier: 局部离群因子异常")
+	}
+
+	return patterns
+}
+
+// IsolationForestModel 孤立森林模型
+type IsolationForestModel struct {
+	trees []isolationTree
+}
+
+type isolationTree struct {
+	splitFeature int
+	splitValue   float64
+	left         *isolationTree
+	right        *isolationTree
+	isLeaf       bool
+	depth        int
+}
+
+func NewIsolationForestModel() *IsolationForestModel {
+	return &IsolationForestModel{
+		trees: buildIsolationForest(100),
+	}
+}
+
+func buildIsolationForest(numTrees int) []isolationTree {
+	trees := make([]isolationTree, numTrees)
+	for i := 0; i < numTrees; i++ {
+		trees[i] = buildIsolationTree(0, 10)
+	}
+	return trees
+}
+
+func buildIsolationTree(depth, maxDepth int) isolationTree {
+	if depth >= maxDepth {
+		return isolationTree{isLeaf: true, depth: depth}
+	}
+	return isolationTree{
+		splitFeature: rand.Intn(8),
+		splitValue:   rand.Float64(),
+		left:         &isolationTree{isLeaf: true, depth: depth + 1},
+		right:        &isolationTree{isLeaf: true, depth: depth + 1},
+		isLeaf:       false,
+		depth:        depth,
+	}
+}
+
+func (ifm *IsolationForestModel) Predict(result *ClickAnalysisResult) float64 {
+	if result == nil {
+		return 0.5
+	}
+
+	features := ifm.extractFeatures(result)
+	if len(features) == 0 {
+		return 0.5
+	}
+
+	avgDepth := 0.0
+	for _, tree := range ifm.trees {
+		avgDepth += float64(ifm.traverseTree(tree, features, 0))
+	}
+	avgDepth /= float64(len(ifm.trees))
+
+	// 计算异常分数
+	n := float64(len(ifm.trees))
+	score := math.Pow(2, -avgDepth/math.Log(float64(n)))
+
+	return score
+}
+
+func (ifm *IsolationForestModel) extractFeatures(result *ClickAnalysisResult) []float64 {
+	features := make([]float64, 0)
+
+	if result.ClickPattern != nil {
+		features = append(features, result.ClickPattern.Regularity)
+		features = append(features, result.ClickPattern.ClusteringScore)
+	}
+
+	if result.TimingAnalysis != nil {
+		features = append(features, float64(result.TimingAnalysis.TotalDuration)/5000.0)
+		features = append(features, result.TimingAnalysis.IntervalCoefficientOfVariation)
+		features = append(features, result.TimingAnalysis.RhythmConsistency)
+	}
+
+	if result.AccuracyAnalysis != nil {
+		features = append(features, result.AccuracyAnalysis.Accuracy)
+		features = append(features, result.AccuracyAnalysis.AverageMissDistance/100.0)
+	}
+
+	return features
+}
+
+func (ifm *IsolationForestModel) traverseTree(tree isolationTree, features []float64, depth int) int {
+	if tree.isLeaf {
+		return depth
+	}
+
+	if tree.splitFeature < len(features) && features[tree.splitFeature] < tree.splitValue {
+		if tree.left != nil {
+			return ifm.traverseTree(*tree.left, features, depth+1)
+		}
+	} else {
+		if tree.right != nil {
+			return ifm.traverseTree(*tree.right, features, depth+1)
+		}
+	}
+
+	return depth
+}
+
+// AutoEncoderModel 自编码器模型
+type AutoEncoderModel struct {
+	weights1 [][]float64
+	weights2 [][]float64
+	bias1    []float64
+	bias2    []float64
+}
+
+func NewAutoEncoderModel() *AutoEncoderModel {
+	return &AutoEncoderModel{
+		weights1: [][]float64{
+			{0.5, 0.3, 0.2},
+			{0.3, 0.5, 0.2},
+			{0.2, 0.3, 0.5},
+		},
+		weights2: [][]float64{
+			{0.5, 0.3, 0.2},
+			{0.3, 0.5, 0.2},
+			{0.2, 0.3, 0.5},
+		},
+		bias1: []float64{0.1, 0.1, 0.1},
+		bias2: []float64{0.1, 0.1, 0.1},
+	}
+}
+
+func (aem *AutoEncoderModel) Predict(result *ClickAnalysisResult) float64 {
+	if result == nil {
+		return 0.5
+	}
+
+	features := aem.extractFeatures(result)
+	if len(features) == 0 {
+		return 0.5
+	}
+
+	// 前向传播
+	hidden := make([]float64, 3)
+	for i := range hidden {
+		sum := aem.bias1[i]
+		for j, f := range features {
+			if j < len(aem.weights1[i]) {
+				sum += f * aem.weights1[i][j]
+			}
+		}
+		hidden[i] = math.Tanh(sum)
+	}
+
+	reconstructed := make([]float64, len(features))
+	for i := range reconstructed {
+		sum := aem.bias2[i%3]
+		for j, h := range hidden {
+			if i < len(aem.weights2[j]) {
+				sum += h * aem.weights2[j][i%3]
+			}
+		}
+		reconstructed[i] = math.Tanh(sum)
+	}
+
+	// 计算重构误差
+	error := 0.0
+	for i, f := range features {
+		if i < len(reconstructed) {
+			error += math.Abs(f - reconstructed[i])
+		}
+	}
+	error /= float64(len(features))
+
+	// 将误差转换为异常分数
+	return math.Min(error*5, 1.0)
+}
+
+func (aem *AutoEncoderModel) extractFeatures(result *ClickAnalysisResult) []float64 {
+	features := make([]float64, 0)
+
+	if result.ClickPattern != nil {
+		features = append(features, result.ClickPattern.Regularity)
+	}
+	if result.TimingAnalysis != nil {
+		features = append(features, result.TimingAnalysis.IntervalCoefficientOfVariation)
+	}
+	if result.AccuracyAnalysis != nil {
+		features = append(features, result.AccuracyAnalysis.Accuracy)
+	}
+
+	return features
+}
+
+// OneClassSVMModel 一类支持向量机模型
+type OneClassSVMModel struct {
+	supportVectors [][]float64
+	weights        []float64
+	bias           float64
+	kernel         string
+}
+
+func NewOneClassSVMModel() *OneClassSVMModel {
+	return &OneClassSVMModel{
+		supportVectors: [][]float64{
+			{0.5, 0.5, 0.5},
+			{0.6, 0.4, 0.5},
+			{0.4, 0.6, 0.5},
+		},
+		weights: []float64{0.33, 0.33, 0.34},
+		bias:    -0.5,
+		kernel:  "rbf",
+	}
+}
+
+func (ocsvm *OneClassSVMModel) Predict(result *ClickAnalysisResult) float64 {
+	if result == nil {
+		return 0.5
+	}
+
+	features := ocsvm.extractFeatures(result)
+	if len(features) == 0 {
+		return 0.5
+	}
+
+	// 计算决策函数值
+	score := ocsvm.bias
+	for i, sv := range ocsvm.supportVectors {
+		score += ocsvm.weights[i] * ocsvm.rbfKernel(features, sv)
+	}
+
+	// 将决策函数值转换为异常分数
+	return 1.0 / (1.0 + math.Exp(score))
+}
+
+func (ocsvm *OneClassSVMModel) rbfKernel(x, y []float64) float64 {
+	sum := 0.0
+	for i := range x {
+		if i < len(y) {
+			sum += (x[i] - y[i]) * (x[i] - y[i])
+		}
+	}
+	return math.Exp(-sum)
+}
+
+func (ocsvm *OneClassSVMModel) extractFeatures(result *ClickAnalysisResult) []float64 {
+	features := make([]float64, 3)
+
+	if result.ClickPattern != nil {
+		features[0] = result.ClickPattern.Regularity
+	}
+	if result.TimingAnalysis != nil {
+		features[1] = result.TimingAnalysis.IntervalCoefficientOfVariation
+	}
+	if result.AccuracyAnalysis != nil {
+		features[2] = result.AccuracyAnalysis.Accuracy
+	}
+
+	return features
+}
+
+// LOFModel 局部离群因子模型
+type LOFModel struct {
+	k int
+}
+
+func NewLOFModel() *LOFModel {
+	return &LOFModel{k: 5}
+}
+
+func (lof *LOFModel) Predict(result *ClickAnalysisResult) float64 {
+	if result == nil {
+		return 0.5
+	}
+
+	// 使用模拟的LOF分数计算
+	score := 0.0
+	count := 0
+
+	if result.ClickPattern != nil {
+		// 高规律性和低聚集性可能表示异常
+		if result.ClickPattern.Regularity > 0.9 {
+			score += 0.3
+			count++
+		}
+		if result.ClickPattern.ClusteringScore < 0.2 {
+			score += 0.25
+			count++
+		}
+	}
+
+	if result.TimingAnalysis != nil {
+		if result.TimingAnalysis.IsRhythmic {
+			score += 0.25
+			count++
+		}
+		if result.TimingAnalysis.IntervalCoefficientOfVariation < 0.2 {
+			score += 0.2
+			count++
+		}
+	}
+
+	if count > 0 {
+		return math.Min(score/float64(count), 1.0)
+	}
+
+	return 0.3
 }
 
 type AdvancedClickAnalyzer struct {

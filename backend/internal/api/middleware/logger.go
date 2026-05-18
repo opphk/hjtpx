@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/rand"
 	"os"
@@ -12,9 +13,11 @@ import (
 )
 
 var (
-	logBuffer   = make([]LogEntry, 0, 1000)
-	logBufferMu sync.Mutex
 	logFile     *os.File
+	logStdout   bool
+	logBuffer   []LogEntry
+	logBufferMu sync.Mutex
+	logChan     chan LogEntry
 )
 
 type LogLevel string
@@ -48,6 +51,29 @@ type LogEntry struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
+var logEntryPool = sync.Pool{
+	New: func() interface{} {
+		return &LogEntry{
+			Metadata: make(map[string]interface{}, 4),
+		}
+	},
+}
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return &bytes.Buffer{}
+	},
+}
+
+var randomSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func init() {
+	logBuffer = make([]LogEntry, 0, 100)
+	logChan = make(chan LogEntry, 1000)
+	logStdout = os.Getenv("LOG_STDOUT") != ""
+	go logWriter()
+}
+
 func InitLogger(logPath string) error {
 	if logPath == "" {
 		logPath = "/var/log/hjtpx/app.log"
@@ -67,8 +93,15 @@ func InitLogger(logPath string) error {
 }
 
 func CloseLogger() {
+	close(logChan)
 	if logFile != nil {
 		logFile.Close()
+	}
+}
+
+func logWriter() {
+	for entry := range logChan {
+		writeLog(entry)
 	}
 }
 
@@ -90,23 +123,27 @@ func Logger() gin.HandlerFunc {
 		if requestID == "" {
 			requestID = generateRequestID()
 		}
-		c.Set("X-Request-ID", requestID)
-		c.Header("X-Request-ID", requestID)
 
-		entry := LogEntry{
-			Timestamp:   start.Format(time.RFC3339Nano),
-			RequestID:   requestID,
-			Method:      method,
-			Path:        path,
-			StatusCode:  statusCode,
-			Latency:     latency.String(),
-			LatencyMs:   latency.Seconds() * 1000,
-			ClientIP:    clientIP,
-			UserAgent:   c.Request.UserAgent(),
-			BodySize:    bodySize,
-			Query:       query,
-			Service:     "hjtpx",
-			Environment: getEnv("GIN_MODE", "production"),
+		entry := logEntryPool.Get().(*LogEntry)
+		entry.Timestamp = start.Format(time.RFC3339Nano)
+		entry.RequestID = requestID
+		entry.Method = method
+		entry.Path = path
+		entry.StatusCode = statusCode
+		entry.Latency = latency.String()
+		entry.LatencyMs = latency.Seconds() * 1000
+		entry.ClientIP = clientIP
+		entry.UserAgent = c.Request.UserAgent()
+		entry.BodySize = bodySize
+		entry.Query = query
+		entry.Service = "hjtpx"
+		entry.Environment = getEnv("GIN_MODE", "production")
+		entry.Error = ""
+		entry.ErrorType = ""
+		entry.TraceID = ""
+		entry.SpanID = ""
+		for k := range entry.Metadata {
+			delete(entry.Metadata, k)
 		}
 
 		if len(c.Errors) > 0 {
@@ -127,38 +164,57 @@ func Logger() gin.HandlerFunc {
 			metrics.IncrementSuccessCount()
 		}
 
+		select {
+		case logChan <- *entry:
+		default:
+			logBufferMu.Lock()
+			logBuffer = append(logBuffer, *entry)
+			if len(logBuffer) >= cap(logBuffer) {
+				flushLogBuffer()
+			}
+			logBufferMu.Unlock()
+		}
+
+		logEntryPool.Put(entry)
+	}
+}
+
+func flushLogBuffer() {
+	for _, entry := range logBuffer {
 		writeLog(entry)
 	}
+	logBuffer = logBuffer[:0]
 }
 
 func writeLog(entry LogEntry) {
-	data, err := json.Marshal(entry)
-	if err != nil {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+
+	encoder := json.NewEncoder(buf)
+	if err := encoder.Encode(entry); err != nil {
+		bufPool.Put(buf)
 		return
 	}
 
+	data := buf.Bytes()
+
 	if logFile != nil {
-		logFile.Write(append(data, '\n'))
+		logFile.Write(data)
 	}
 
-	if len(os.Getenv("LOG_STDOUT")) != 0 {
-		println(string(data))
+	if logStdout {
+		os.Stdout.Write(data)
 	}
+
+	bufPool.Put(buf)
 }
 
 func generateRequestID() string {
-	return time.Now().Format("20060102150405") + "-" + randomString(8)
-}
-
-var randomSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-func randomString(n int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, n)
+	b := make([]byte, 8)
 	for i := range b {
-		b[i] = letters[randomSrc.Intn(len(letters))]
+		b[i] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[randomSrc.Intn(62)]
 	}
-	return string(b)
+	return time.Now().Format("20060102150405") + "-" + string(b)
 }
 
 func getEnv(key, defaultValue string) string {

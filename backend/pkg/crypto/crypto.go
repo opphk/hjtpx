@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ed25519"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -878,4 +879,153 @@ func (sm *SaltManager) autoRotate() {
 			}
 		}
 	}
+}
+
+// Ed25519相关函数
+
+func GenerateEd25519KeyPair() (ed25519.PrivateKey, ed25519.PublicKey, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate Ed25519 key pair: %w", err)
+	}
+	return privateKey, publicKey, nil
+}
+
+func SignEd25519(message []byte, privateKey ed25519.PrivateKey) ([]byte, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, ErrPrivateKeyInvalid
+	}
+	signature := ed25519.Sign(privateKey, message)
+	return signature, nil
+}
+
+func VerifyEd25519(message, signature, publicKeyBytes []byte) (bool, error) {
+	if len(publicKeyBytes) != ed25519.PublicKeySize {
+		return false, ErrPublicKeyInvalid
+	}
+	publicKey := ed25519.PublicKey(publicKeyBytes)
+	return ed25519.Verify(publicKey, message, signature), nil
+}
+
+func SignEd25519String(message string, privateKey ed25519.PrivateKey) (string, error) {
+	signature, err := SignEd25519([]byte(message), privateKey)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(signature), nil
+}
+
+func VerifyEd25519String(message, signatureBase64 string, publicKey ed25519.PublicKey) (bool, error) {
+	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode base64 signature: %w", err)
+	}
+	return ed25519.Verify(publicKey, []byte(message), signature), nil
+}
+
+func ExportEd25519PrivateKeyToPEM(privateKey ed25519.PrivateKey) (string, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return "", ErrPrivateKeyInvalid
+	}
+	derBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	block := &pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: derBytes,
+	}
+	return string(pem.EncodeToMemory(block)), nil
+}
+
+func ExportEd25519PublicKeyToPEM(publicKey ed25519.PublicKey) (string, error) {
+	if len(publicKey) != ed25519.PublicKeySize {
+		return "", ErrPublicKeyInvalid
+	}
+	derBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal public key: %w", err)
+	}
+	block := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: derBytes,
+	}
+	return string(pem.EncodeToMemory(block)), nil
+}
+
+func ParseEd25519PrivateKeyFromPEM(pemData string) (ed25519.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(pemData))
+	if block == nil {
+		return nil, errors.New("failed to parse PEM block")
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+	privateKey, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, ErrPrivateKeyInvalid
+	}
+	return privateKey, nil
+}
+
+func ParseEd25519PublicKeyFromPEM(pemData string) (ed25519.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pemData))
+	if block == nil {
+		return nil, errors.New("failed to parse PEM block")
+	}
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+	publicKey, ok := key.(ed25519.PublicKey)
+	if !ok {
+		return nil, ErrPublicKeyInvalid
+	}
+	return publicKey, nil
+}
+
+// DualSignature 双签名结构
+type DualSignature struct {
+	PrimarySignature   string `json:"primary"`
+	SecondarySignature string `json:"secondary"`
+}
+
+// GenerateDualSignature 使用两种不同算法生成双签名
+func GenerateDualSignature(message []byte, primaryKey, secondaryKey []byte) (*DualSignature, error) {
+	if len(primaryKey) == 0 || len(secondaryKey) == 0 {
+		return nil, errors.New("both keys are required for dual signature")
+	}
+
+	primarySig := hmac.New(sha256.New, primaryKey)
+	primarySig.Write(message)
+	primarySignature := hex.EncodeToString(primarySig.Sum(nil))
+
+	secondarySig := hmac.New(sha512.New, secondaryKey)
+	secondarySig.Write(message)
+	secondarySignature := hex.EncodeToString(secondarySig.Sum(nil))
+
+	return &DualSignature{
+		PrimarySignature:   primarySignature,
+		SecondarySignature: secondarySignature,
+	}, nil
+}
+
+// VerifyDualSignature 验证双签名
+func VerifyDualSignature(message []byte, primarySig, secondarySig string, primaryKey, secondaryKey []byte) (bool, bool, error) {
+	if len(primaryKey) == 0 || len(secondaryKey) == 0 {
+		return false, false, errors.New("both keys are required for dual signature verification")
+	}
+
+	primaryExpected := hmac.New(sha256.New, primaryKey)
+	primaryExpected.Write(message)
+	primaryExpectedHex := hex.EncodeToString(primaryExpected.Sum(nil))
+	primaryValid := primarySig == primaryExpectedHex
+
+	secondaryExpected := hmac.New(sha512.New, secondaryKey)
+	secondaryExpected.Write(message)
+	secondaryExpectedHex := hex.EncodeToString(secondaryExpected.Sum(nil))
+	secondaryValid := secondarySig == secondaryExpectedHex
+
+	return primaryValid, secondaryValid, nil
 }

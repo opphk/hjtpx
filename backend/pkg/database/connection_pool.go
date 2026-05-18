@@ -25,9 +25,13 @@ type PoolStatsRecord struct {
 
 var poolMonitor *PoolMonitor
 var connectionReuseRate atomic.Int64
+var totalWaitCount atomic.Int64
+var lastHighLoadTime time.Time
 
 func init() {
 	connectionReuseRate.Store(0)
+	totalWaitCount.Store(0)
+	lastHighLoadTime = time.Now()
 }
 
 func InitConnectionPool(cfg *config.Config) error {
@@ -36,10 +40,13 @@ func InitConnectionPool(cfg *config.Config) error {
 		return err
 	}
 
-	maxOpenConns := cfg.Database.ConnectionPool.MaxOpenConns
-	maxIdleConns := cfg.Database.ConnectionPool.MaxIdleConns
-	connMaxLifetime := time.Duration(cfg.Database.ConnectionPool.ConnMaxLifetimeSecs) * time.Second
-	connMaxIdleTime := time.Duration(cfg.Database.ConnectionPool.ConnMaxIdleTimeSecs) * time.Second
+	poolConfig := cfg.Database.ConnectionPool
+
+	maxOpenConns := poolConfig.MaxOpenConns
+	maxIdleConns := poolConfig.MaxIdleConns
+	_ = poolConfig.MinIdleConns
+	connMaxLifetime := time.Duration(poolConfig.ConnMaxLifetimeSecs) * time.Second
+	connMaxIdleTime := time.Duration(poolConfig.ConnMaxIdleTimeSecs) * time.Second
 
 	sqlDB.SetMaxOpenConns(maxOpenConns)
 	sqlDB.SetMaxIdleConns(maxIdleConns)
@@ -56,8 +63,111 @@ func InitConnectionPool(cfg *config.Config) error {
 		go startConnectionReuseCalculation()
 	}
 
+	if poolConfig.EnableWarmup {
+		go warmupConnections(cfg, poolConfig.WarmupConns)
+	}
+
+	if poolConfig.EnableAutoTuning {
+		go startAutoTuning(cfg)
+	}
+
 	log.Println("Connection pool configured successfully")
 	return nil
+}
+
+func warmupConnections(cfg *config.Config, warmupConns int) {
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Printf("Failed to get database connection for warmup: %v", err)
+		return
+	}
+
+	log.Printf("Starting connection pool warmup with %d connections", warmupConns)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 5)
+
+	for i := 0; i < warmupConns; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			conn, err := sqlDB.Conn(ctx)
+			if err != nil {
+				log.Printf("Failed to warm up connection %d: %v", i, err)
+				return
+			}
+
+			var result int
+			err = conn.QueryRowContext(ctx, "SELECT 1").Scan(&result)
+			if err != nil {
+				log.Printf("Failed to test warmup connection %d: %v", i, err)
+			}
+
+			conn.Close()
+		}()
+	}
+
+	wg.Wait()
+	log.Printf("Connection pool warmup completed")
+}
+
+func startAutoTuning(cfg *config.Config) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		autoTunePool(cfg)
+	}
+}
+
+func autoTunePool(cfg *config.Config) {
+	metrics, err := GetConnectionPoolMetrics()
+	if err != nil {
+		return
+	}
+
+	poolConfig := cfg.Database.ConnectionPool
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return
+	}
+
+	usagePercent := float64(metrics.ActiveConnections) / float64(metrics.TotalConnections) * 100
+
+	if usagePercent > float64(poolConfig.HighLoadThreshold) && time.Since(lastHighLoadTime) > 5*time.Minute {
+		newMaxOpen := int(float64(metrics.TotalConnections) * 1.2)
+		if newMaxOpen > poolConfig.MaxOpenConns*2 {
+			newMaxOpen = poolConfig.MaxOpenConns * 2
+		}
+
+		sqlDB.SetMaxOpenConns(newMaxOpen)
+		newMaxIdle := newMaxOpen / 2
+		if newMaxIdle > poolConfig.MaxIdleConns {
+			newMaxIdle = poolConfig.MaxIdleConns
+		}
+		sqlDB.SetMaxIdleConns(newMaxIdle)
+
+		lastHighLoadTime = time.Now()
+		log.Printf("[AUTO_TUNE] Increased pool size to MaxOpen=%d, MaxIdle=%d due to high load (%.1f%%)",
+			newMaxOpen, newMaxIdle, usagePercent)
+	} else if usagePercent < float64(poolConfig.LowLoadThreshold) {
+		stats := sqlDB.Stats()
+		if stats.Idle > poolConfig.MinIdleConns {
+			newMaxIdle := stats.Idle - 1
+			if newMaxIdle < poolConfig.MinIdleConns {
+				newMaxIdle = poolConfig.MinIdleConns
+			}
+			sqlDB.SetMaxIdleConns(newMaxIdle)
+			log.Printf("[AUTO_TUNE] Reduced idle connections to %d due to low load (%.1f%%)",
+				newMaxIdle, usagePercent)
+		}
+	}
 }
 
 func startPoolMonitoring(cfg *config.Config) {
@@ -208,6 +318,19 @@ type ConnectionPoolMetrics struct {
 }
 
 func GetConnectionPoolMetrics() (*ConnectionPoolMetrics, error) {
+	if DB == nil {
+		return &ConnectionPoolMetrics{
+			TotalConnections:  0,
+			ActiveConnections: 0,
+			IdleConnections:   0,
+			WaitCount:         0,
+			WaitDuration:      0,
+			MaxIdleClosed:     0,
+			MaxLifetimeClosed: 0,
+			ReuseRate:         0,
+		}, nil
+	}
+
 	sqlDB, err := DB.DB()
 	if err != nil {
 		return nil, err

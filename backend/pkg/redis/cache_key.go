@@ -14,7 +14,7 @@ const (
 	PrefixCaptcha       CacheKeyPrefix = "captcha"
 	PrefixSession       CacheKeyPrefix = "session"
 	PrefixBlacklist     CacheKeyPrefix = "blacklist"
-	PrefixApplication   CacheKeyPrefix = "app"
+	PrefixApplication   CacheKeyPrefix = "application"
 	PrefixStats         CacheKeyPrefix = "stats"
 	PrefixRateLimit     CacheKeyPrefix = "ratelimit"
 	PrefixBehavior      CacheKeyPrefix = "behavior"
@@ -85,9 +85,10 @@ type CacheKeyBuilder struct {
 
 func NewCacheKeyBuilder(prefix CacheKeyPrefix) *CacheKeyBuilder {
 	return &CacheKeyBuilder{
-		prefix:   prefix,
-		segments: make([]string, 0),
-		version:  1,
+		prefix:    prefix,
+		namespace: NamespaceGlobal,
+		segments:  make([]string, 0),
+		version:   1,
 	}
 }
 

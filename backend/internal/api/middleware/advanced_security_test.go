@@ -79,7 +79,13 @@ func TestHTTPSRedirect(t *testing.T) {
 				c.String(http.StatusOK, "OK")
 			})
 
-			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			path := "/test"
+			if tt.name == "exclude path" {
+				path = "/health"
+			}
+
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Host = "localhost"
 			if tt.proto != "" {
 				req.Header.Set("X-Forwarded-Proto", tt.proto)
 			}
@@ -234,9 +240,7 @@ func TestSecurityHeadersMiddleware(t *testing.T) {
 			config: SecurityHeadersMiddlewareConfig{
 				Enabled: false,
 			},
-			expectHeader: map[string]string{
-				"X-Frame-Options": "DENY",
-			},
+			expectHeader: map[string]string{},
 		},
 	}
 

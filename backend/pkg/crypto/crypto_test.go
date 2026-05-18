@@ -219,8 +219,164 @@ func TestConstantTimeCompare(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConstantTimeCompare(tt.a, tt.b)
-			// Just verify it doesn't panic
 			assert.True(t, result == true || result == false)
 		})
 	}
+}
+
+func TestGenerateEd25519KeyPair(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+	assert.NotNil(t, privateKey)
+	assert.NotNil(t, publicKey)
+	assert.Len(t, privateKey, 64)
+	assert.Len(t, publicKey, 32)
+}
+
+func TestSignEd25519(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+
+	message := []byte("test message for Ed25519 signature")
+	signature, err := SignEd25519(message, privateKey)
+	assert.NoError(t, err)
+	assert.NotNil(t, signature)
+	assert.Len(t, signature, 64)
+
+	valid, err := VerifyEd25519(message, signature, publicKey)
+	assert.NoError(t, err)
+	assert.True(t, valid)
+}
+
+func TestSignEd25519InvalidKey(t *testing.T) {
+	invalidKey := []byte("invalid-key")
+	message := []byte("test message")
+
+	_, err := SignEd25519(message, invalidKey)
+	assert.Error(t, err)
+}
+
+func TestVerifyEd25519InvalidKey(t *testing.T) {
+	_, publicKey, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+
+	message := []byte("test message")
+	signature := make([]byte, 64)
+
+	valid, err := VerifyEd25519(message, signature, publicKey)
+	assert.NoError(t, err)
+	assert.False(t, valid)
+}
+
+func TestSignEd25519String(t *testing.T) {
+	privateKey, _, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+
+	message := "test message string"
+	signature, err := SignEd25519String(message, privateKey)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, signature)
+}
+
+func TestVerifyEd25519String(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+
+	message := "test message string"
+	signature, err := SignEd25519String(message, privateKey)
+	assert.NoError(t, err)
+
+	valid, err := VerifyEd25519String(message, signature, publicKey)
+	assert.NoError(t, err)
+	assert.True(t, valid)
+
+	invalid, err := VerifyEd25519String("different message", signature, publicKey)
+	assert.NoError(t, err)
+	assert.False(t, invalid)
+}
+
+func TestExportEd25519KeyToPEM(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+
+	privatePEM, err := ExportEd25519PrivateKeyToPEM(privateKey)
+	assert.NoError(t, err)
+	assert.Contains(t, privatePEM, "PRIVATE KEY")
+
+	publicPEM, err := ExportEd25519PublicKeyToPEM(publicKey)
+	assert.NoError(t, err)
+	assert.Contains(t, publicPEM, "PUBLIC KEY")
+}
+
+func TestParseEd25519KeyFromPEM(t *testing.T) {
+	privateKey, publicKey, err := GenerateEd25519KeyPair()
+	assert.NoError(t, err)
+
+	privatePEM, err := ExportEd25519PrivateKeyToPEM(privateKey)
+	assert.NoError(t, err)
+
+	parsedPrivate, err := ParseEd25519PrivateKeyFromPEM(privatePEM)
+	assert.NoError(t, err)
+	assert.Equal(t, privateKey, parsedPrivate)
+
+	publicPEM, err := ExportEd25519PublicKeyToPEM(publicKey)
+	assert.NoError(t, err)
+
+	parsedPublic, err := ParseEd25519PublicKeyFromPEM(publicPEM)
+	assert.NoError(t, err)
+	assert.Equal(t, publicKey, parsedPublic)
+}
+
+func TestGenerateDualSignature(t *testing.T) {
+	primaryKey := []byte("primary-secret-key-1234567890")
+	secondaryKey := []byte("secondary-secret-key-1234567890")
+	message := []byte("test message for dual signature")
+
+	signature, err := GenerateDualSignature(message, primaryKey, secondaryKey)
+	assert.NoError(t, err)
+	assert.NotNil(t, signature)
+	assert.NotEmpty(t, signature.PrimarySignature)
+	assert.NotEmpty(t, signature.SecondarySignature)
+	assert.Len(t, signature.PrimarySignature, 64)
+	assert.Len(t, signature.SecondarySignature, 128)
+}
+
+func TestVerifyDualSignature(t *testing.T) {
+	primaryKey := []byte("primary-secret-key-1234567890")
+	secondaryKey := []byte("secondary-secret-key-1234567890")
+	message := []byte("test message for dual signature")
+
+	signature, err := GenerateDualSignature(message, primaryKey, secondaryKey)
+	assert.NoError(t, err)
+
+	primaryValid, secondaryValid, err := VerifyDualSignature(
+		message,
+		signature.PrimarySignature,
+		signature.SecondarySignature,
+		primaryKey,
+		secondaryKey,
+	)
+	assert.NoError(t, err)
+	assert.True(t, primaryValid)
+	assert.True(t, secondaryValid)
+
+	invalidPrimary, invalidSecondary, err := VerifyDualSignature(
+		[]byte("different message"),
+		signature.PrimarySignature,
+		signature.SecondarySignature,
+		primaryKey,
+		secondaryKey,
+	)
+	assert.NoError(t, err)
+	assert.False(t, invalidPrimary)
+	assert.False(t, invalidSecondary)
+}
+
+func TestGenerateDualSignatureMissingKey(t *testing.T) {
+	primaryKey := []byte("primary-secret-key")
+	secondaryKey := []byte{}
+	message := []byte("test message")
+
+	_, err := GenerateDualSignature(message, primaryKey, secondaryKey)
+	assert.Error(t, err)
 }

@@ -105,6 +105,9 @@ type WebSocketService struct {
 	broadcast  chan []byte
 }
 
+var wsServiceInstance *WebSocketService
+var wsServiceOnce sync.Once
+
 // NewWebSocketService 创建WebSocket服务
 func NewWebSocketService() *WebSocketService {
 	s := &WebSocketService{
@@ -116,6 +119,14 @@ func NewWebSocketService() *WebSocketService {
 	}
 	go s.run()
 	return s
+}
+
+// GetWebSocketService 获取单例 WebSocket 服务
+func GetWebSocketService() *WebSocketService {
+	wsServiceOnce.Do(func() {
+		wsServiceInstance = NewWebSocketService()
+	})
+	return wsServiceInstance
 }
 
 // run 处理服务生命周期

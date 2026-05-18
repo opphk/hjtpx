@@ -30,10 +30,18 @@ func (e *TraceExtractor) ExtractFeatures(traceData *model.TraceData) (*model.Tra
 	features.MinSpeed = e.calculateMinSpeed(traceData)
 	features.SpeedVariance = e.calculateSpeedVariance(traceData)
 	features.MaxAcceleration = e.calculateMaxAcceleration(traceData)
+	features.AvgAcceleration = e.calculateAvgAcceleration(traceData)
+	features.AccelVariance = e.calculateAccelVariance(traceData)
 	features.Smoothness = e.calculateSmoothness(traceData)
 	features.PauseCount = e.calculatePauseCount(traceData)
 	features.TotalDistance = e.calculateTotalDistance(traceData)
 	features.DirectDistance = e.calculateDirectDistance(traceData)
+	features.AvgCurvature = e.calculateAvgCurvature(traceData)
+	features.MaxCurvature = e.calculateMaxCurvature(traceData)
+	features.JitterFrequency = e.calculateJitterFrequency(traceData)
+	features.JitterAmplitude = e.calculateJitterAmplitude(traceData)
+	features.SpeedChangeRate = e.calculateSpeedChangeRate(traceData)
+	features.DirectionChange = e.calculateDirectionChange(traceData)
 
 	if features.DirectDistance > 0 {
 		features.PathRatio = features.TotalDistance / features.DirectDistance
@@ -219,6 +227,250 @@ func (e *TraceExtractor) calculateMaxAcceleration(traceData *model.TraceData) fl
 	return maxAccel
 }
 
+func (e *TraceExtractor) getAllAccelerations(traceData *model.TraceData) []float64 {
+	var accelerations []float64
+
+	if len(traceData.Points) < 3 {
+		return accelerations
+	}
+
+	for i := 2; i < len(traceData.Points); i++ {
+		prev := traceData.Points[i-2]
+		curr := traceData.Points[i-1]
+		next := traceData.Points[i]
+
+		dx1 := curr.X - prev.X
+		dy1 := curr.Y - prev.Y
+		v1 := math.Sqrt(dx1*dx1 + dy1*dy1)
+
+		dx2 := next.X - curr.X
+		dy2 := next.Y - curr.Y
+		v2 := math.Sqrt(dx2*dx2 + dy2*dy2)
+
+		time := float64(next.Timestamp-prev.Timestamp) / 1000.0
+		if time > 0 && time < 1000 {
+			accel := math.Abs(v2-v1) / time
+			accelerations = append(accelerations, accel)
+		}
+	}
+
+	return accelerations
+}
+
+func (e *TraceExtractor) calculateAvgAcceleration(traceData *model.TraceData) float64 {
+	accelerations := e.getAllAccelerations(traceData)
+	if len(accelerations) == 0 {
+		return 0
+	}
+
+	var sum float64
+	for _, accel := range accelerations {
+		sum += accel
+	}
+
+	return sum / float64(len(accelerations))
+}
+
+func (e *TraceExtractor) calculateAccelVariance(traceData *model.TraceData) float64 {
+	accelerations := e.getAllAccelerations(traceData)
+	if len(accelerations) < 2 {
+		return 0
+	}
+
+	avgAccel := e.calculateAvgAcceleration(traceData)
+
+	var variance float64
+	for _, accel := range accelerations {
+		diff := accel - avgAccel
+		variance += diff * diff
+	}
+
+	return variance / float64(len(accelerations))
+}
+
+func (e *TraceExtractor) calculateAvgCurvature(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 0
+	}
+
+	var totalCurvature float64
+	count := 0
+
+	for i := 1; i < len(traceData.Points)-1; i++ {
+		p0 := traceData.Points[i-1]
+		p1 := traceData.Points[i]
+		p2 := traceData.Points[i+1]
+
+		ax := p1.X - p0.X
+		ay := p1.Y - p0.Y
+		bx := p2.X - p1.X
+		by := p2.Y - p1.Y
+
+		cross := ax*by - ay*bx
+		lenA := math.Sqrt(ax*ax + ay*ay)
+		lenB := math.Sqrt(bx*bx + by*by)
+
+		if lenA > 0 && lenB > 0 {
+			curvature := math.Abs(cross) / (lenA * lenB * (1 + (ax*bx+ay*by)/(lenA*lenB)))
+			totalCurvature += curvature
+			count++
+		}
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalCurvature / float64(count)
+}
+
+func (e *TraceExtractor) calculateMaxCurvature(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 0
+	}
+
+	var maxCurvature float64
+
+	for i := 1; i < len(traceData.Points)-1; i++ {
+		p0 := traceData.Points[i-1]
+		p1 := traceData.Points[i]
+		p2 := traceData.Points[i+1]
+
+		ax := p1.X - p0.X
+		ay := p1.Y - p0.Y
+		bx := p2.X - p1.X
+		by := p2.Y - p1.Y
+
+		cross := ax*by - ay*bx
+		lenA := math.Sqrt(ax*ax + ay*ay)
+		lenB := math.Sqrt(bx*bx + by*by)
+
+		if lenA > 0 && lenB > 0 {
+			curvature := math.Abs(cross) / (lenA * lenB * (1 + (ax*bx+ay*by)/(lenA*lenB)))
+			if curvature > maxCurvature {
+				maxCurvature = curvature
+			}
+		}
+	}
+
+	return maxCurvature
+}
+
+func (e *TraceExtractor) calculateJitterFrequency(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 4 {
+		return 0
+	}
+
+	jitterCount := 0
+	threshold := 0.5
+
+	for i := 2; i < len(traceData.Points)-1; i++ {
+		p0 := traceData.Points[i-2]
+		p1 := traceData.Points[i-1]
+		p2 := traceData.Points[i]
+		p3 := traceData.Points[i+1]
+
+		dx1 := p1.X - p0.X
+		dy1 := p1.Y - p0.Y
+		dx2 := p2.X - p1.X
+		dy2 := p2.Y - p1.Y
+		dx3 := p3.X - p2.X
+		dy3 := p3.Y - p2.Y
+
+		dir1 := math.Atan2(dy1, dx1)
+		dir2 := math.Atan2(dy2, dx2)
+		dir3 := math.Atan2(dy3, dx3)
+
+		change1 := math.Abs(dir2 - dir1)
+		change2 := math.Abs(dir3 - dir2)
+
+		if change1 > threshold && change2 > threshold && change1+change2 > math.Pi {
+			jitterCount++
+		}
+	}
+
+	return float64(jitterCount) / float64(len(traceData.Points)-3)
+}
+
+func (e *TraceExtractor) calculateJitterAmplitude(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 0
+	}
+
+	var totalJitter float64
+	count := 0
+
+	for i := 1; i < len(traceData.Points)-1; i++ {
+		p0 := traceData.Points[i-1]
+		p1 := traceData.Points[i]
+		p2 := traceData.Points[i+1]
+
+		// 计算中点
+		midX := (p0.X + p2.X) / 2
+		midY := (p0.Y + p2.Y) / 2
+
+		// 计算偏离量
+		dx := p1.X - midX
+		dy := p1.Y - midY
+		jitter := math.Sqrt(dx*dx + dy*dy)
+
+		totalJitter += jitter
+		count++
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalJitter / float64(count)
+}
+
+func (e *TraceExtractor) calculateSpeedChangeRate(traceData *model.TraceData) float64 {
+	speeds := e.getAllSpeeds(traceData)
+	if len(speeds) < 2 {
+		return 0
+	}
+
+	var totalChange float64
+	for i := 1; i < len(speeds); i++ {
+		totalChange += math.Abs(speeds[i] - speeds[i-1])
+	}
+
+	return totalChange / float64(len(speeds)-1)
+}
+
+func (e *TraceExtractor) calculateDirectionChange(traceData *model.TraceData) float64 {
+	if len(traceData.Points) < 3 {
+		return 0
+	}
+
+	var totalChange float64
+	count := 0
+
+	for i := 2; i < len(traceData.Points); i++ {
+		p0 := traceData.Points[i-2]
+		p1 := traceData.Points[i-1]
+		p2 := traceData.Points[i]
+
+		dir1 := math.Atan2(p1.Y-p0.Y, p1.X-p0.X)
+		dir2 := math.Atan2(p2.Y-p1.Y, p2.X-p1.X)
+
+		change := math.Abs(dir2 - dir1)
+		if change > math.Pi {
+			change = 2*math.Pi - change
+		}
+
+		totalChange += change
+		count++
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return totalChange / float64(count)
+}
+
 func (e *TraceExtractor) calculateSmoothness(traceData *model.TraceData) float64 {
 	if len(traceData.Points) < 3 {
 		return 0
@@ -349,6 +601,38 @@ func (e *TraceExtractor) detectRiskFactors(features *model.TraceFeatures) []stri
 
 	if features.MoveCount == 0 {
 		riskFactors = append(riskFactors, "无移动轨迹")
+	}
+
+	if features.AccelVariance > 100000 {
+		riskFactors = append(riskFactors, "加速度方差异常")
+	}
+
+	if features.AvgAcceleration > 2000 {
+		riskFactors = append(riskFactors, "平均加速度过高")
+	}
+
+	if features.AvgCurvature < 0.01 && features.TotalTime > 2000 {
+		riskFactors = append(riskFactors, "曲率过于平滑")
+	}
+
+	if features.MaxCurvature > 1.0 {
+		riskFactors = append(riskFactors, "最大曲率异常")
+	}
+
+	if features.JitterFrequency > 0.5 {
+		riskFactors = append(riskFactors, "抖动频率过高")
+	}
+
+	if features.JitterAmplitude > 10 {
+		riskFactors = append(riskFactors, "抖动幅度异常")
+	}
+
+	if features.SpeedChangeRate > 500 {
+		riskFactors = append(riskFactors, "速度变化率异常")
+	}
+
+	if features.DirectionChange > math.Pi/2 {
+		riskFactors = append(riskFactors, "方向变化过于频繁")
 	}
 
 	return riskFactors

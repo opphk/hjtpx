@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -31,13 +32,14 @@ type PerformanceStats struct {
 	TotalRequests int64
 	TotalDuration int64
 	SlowRequests  int64
-	RequestCount  map[string]int64
-	mu            sync.RWMutex
 }
 
-var stats = &PerformanceStats{
-	RequestCount: make(map[string]int64),
-}
+var (
+	totalRequests  atomic.Int64
+	totalDuration  atomic.Int64
+	slowRequests   atomic.Int64
+	pathCounters   sync.Map
+)
 
 func PerformanceMonitoring() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -47,39 +49,47 @@ func PerformanceMonitoring() gin.HandlerFunc {
 		c.Next()
 
 		duration := time.Since(start)
-		stats.recordRequest(path, duration)
+		recordRequest(path, duration)
 
 		c.Header("X-Response-Time", strconv.FormatInt(duration.Milliseconds(), 10)+"ms")
 	}
 }
 
-func (ps *PerformanceStats) recordRequest(path string, duration time.Duration) {
-	ps.mu.Lock()
-	defer ps.mu.Unlock()
+func recordRequest(path string, duration time.Duration) {
+	totalRequests.Add(1)
+	totalDuration.Add(duration.Milliseconds())
 
-	ps.TotalRequests++
-	ps.TotalDuration += duration.Milliseconds()
-	ps.RequestCount[path]++
+	if path != "" {
+		if counter, ok := pathCounters.LoadOrStore(path, &atomic.Int64{}); ok {
+			counter.(*atomic.Int64).Add(1)
+		}
+	}
 
 	if duration > 100*time.Millisecond {
-		ps.SlowRequests++
+		slowRequests.Add(1)
 	}
 }
 
 func GetPerformanceStats() map[string]interface{} {
-	stats.mu.RLock()
-	defer stats.mu.RUnlock()
+	reqCount := totalRequests.Load()
+	durCount := totalDuration.Load()
 
 	avgDuration := int64(0)
-	if stats.TotalRequests > 0 {
-		avgDuration = stats.TotalDuration / stats.TotalRequests
+	if reqCount > 0 {
+		avgDuration = durCount / reqCount
 	}
 
+	requestCount := make(map[string]int64)
+	pathCounters.Range(func(key, value interface{}) bool {
+		requestCount[key.(string)] = value.(*atomic.Int64).Load()
+		return true
+	})
+
 	return map[string]interface{}{
-		"total_requests":  stats.TotalRequests,
+		"total_requests":  reqCount,
 		"avg_duration_ms": avgDuration,
-		"slow_requests":   stats.SlowRequests,
-		"request_count":   stats.RequestCount,
+		"slow_requests":   slowRequests.Load(),
+		"request_count":   requestCount,
 	}
 }
 

@@ -855,3 +855,591 @@ func BenchmarkClickAnalysis(b *testing.B) {
 		_ = analyzer.AnalyzeClickVerification(verification)
 	}
 }
+
+// ==================== 点击时序分析增强测试 ====================
+
+func TestCalculateIntervalTrend(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		intervals []float64
+		expected float64
+	}{
+		{
+			name:     "increasing trend",
+			intervals: []float64{100, 200, 300, 400, 500},
+			expected: 100,
+		},
+		{
+			name:     "decreasing trend",
+			intervals: []float64{500, 400, 300, 200, 100},
+			expected: -100,
+		},
+		{
+			name:     "flat trend",
+			intervals: []float64{300, 300, 300, 300},
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			trend := analyzer.calculateIntervalTrend(tt.intervals)
+			if tt.expected > 0 {
+				assert.Greater(t, trend, 0.0)
+			} else if tt.expected < 0 {
+				assert.Less(t, trend, 0.0)
+			} else {
+				assert.InDelta(t, 0.0, trend, 1.0)
+			}
+		})
+	}
+}
+
+func TestClassifyJerkPattern(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		intervals []float64
+		expected string
+	}{
+		{
+			name:     "smooth pattern",
+			intervals: []float64{300, 310, 320, 315, 325},
+			expected: "smooth",
+		},
+		{
+			name:     "jerky pattern",
+			intervals: []float64{100, 500, 200, 800, 150},
+			expected: "jerky",
+		},
+		{
+			name:     "increasing pattern",
+			intervals: []float64{100, 200, 350, 550, 800},
+			expected: "increasing",
+		},
+		{
+			name:     "variable pattern",
+			intervals: []float64{300, 280, 320, 290, 310},
+			expected: "variable",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pattern := analyzer.classifyJerkPattern(tt.intervals)
+			assert.Equal(t, tt.expected, pattern)
+		})
+	}
+}
+
+func TestCalculateTimePressureIndicator(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		timing   *TimingAnalysis
+		minScore float64
+		maxScore float64
+	}{
+		{
+			name: "high pressure",
+			timing: &TimingAnalysis{
+				TotalDuration:              1000,
+				AverageDuration:            200,
+				IntervalCoefficientOfVariation: 0.1,
+				IsRhythmic:                true,
+			},
+			minScore: 0.7,
+			maxScore: 1.0,
+		},
+		{
+			name: "low pressure",
+			timing: &TimingAnalysis{
+				TotalDuration:              5000,
+				AverageDuration:            1000,
+				IntervalCoefficientOfVariation: 0.5,
+				IsRhythmic:                false,
+			},
+			minScore: 0.0,
+			maxScore: 0.3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			indicator := analyzer.calculateTimePressureIndicator(tt.timing)
+			assert.GreaterOrEqual(t, indicator, tt.minScore)
+			assert.LessOrEqual(t, indicator, tt.maxScore)
+		})
+	}
+}
+
+func TestCalculateAttentionDecay(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		intervals []float64
+		minDecay float64
+		maxDecay float64
+	}{
+		{
+			name:     "increasing decay",
+			intervals: []float64{200, 250, 300, 400, 500, 600},
+			minDecay: 0.5,
+			maxDecay: 1.0,
+		},
+		{
+			name:     "no decay",
+			intervals: []float64{300, 300, 300, 300, 300, 300},
+			minDecay: -0.1,
+			maxDecay: 0.1,
+		},
+		{
+			name:     "decreasing decay",
+			intervals: []float64{600, 500, 400, 300, 250, 200},
+			minDecay: -1.0,
+			maxDecay: -0.5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decay := analyzer.calculateAttentionDecay(tt.intervals)
+			assert.GreaterOrEqual(t, decay, tt.minDecay)
+			assert.LessOrEqual(t, decay, tt.maxDecay)
+		})
+	}
+}
+
+func TestCalculateComplexityScore(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		intervals []float64
+		minScore float64
+		maxScore float64
+	}{
+		{
+			name:     "low complexity",
+			intervals: []float64{300, 300, 300, 300},
+			minScore: 0.0,
+			maxScore: 0.5,
+		},
+		{
+			name:     "high complexity",
+			intervals: []float64{100, 500, 200, 800, 150, 600},
+			minScore: 0.0,
+			maxScore: 1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := analyzer.calculateComplexityScore(tt.intervals)
+			assert.GreaterOrEqual(t, score, tt.minScore)
+			assert.LessOrEqual(t, score, tt.maxScore)
+		})
+	}
+}
+
+func TestDetectPeriodicity(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		intervals []float64
+		minScore float64
+		maxScore float64
+	}{
+		{
+			name:     "periodic pattern",
+			intervals: []float64{300, 500, 300, 500, 300, 500},
+			minScore: 0.7,
+			maxScore: 1.0,
+		},
+		{
+			name:     "non-periodic pattern",
+			intervals: []float64{300, 500, 200, 800, 150, 600},
+			minScore: 0.0,
+			maxScore: 0.8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score := analyzer.detectPeriodicity(tt.intervals)
+			assert.GreaterOrEqual(t, score, tt.minScore)
+			assert.LessOrEqual(t, score, tt.maxScore)
+		})
+	}
+}
+
+// ==================== 点击位置分布优化测试 ====================
+
+func TestCalculateKDEPeaks(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	xValues := []float64{100, 105, 110, 200, 205, 210}
+	yValues := []float64{100, 105, 110, 200, 205, 210}
+
+	peaks := analyzer.calculateKDEPeaks(xValues, yValues)
+	assert.GreaterOrEqual(t, len(peaks), 1)
+}
+
+func TestCalculateSpatialEntropy(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name       string
+		xValues    []float64
+		yValues    []float64
+		minEntropy float64
+		maxEntropy float64
+	}{
+		{
+			name:       "low entropy (clustered)",
+			xValues:    []float64{100, 101, 102, 103, 104},
+			yValues:    []float64{100, 101, 102, 103, 104},
+			minEntropy: 0.0,
+			maxEntropy: 0.6,
+		},
+		{
+			name:       "high entropy (spread)",
+			xValues:    []float64{100, 200, 300, 400, 500},
+			yValues:    []float64{500, 400, 300, 200, 100},
+			minEntropy: 0.4,
+			maxEntropy: 1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entropy := analyzer.calculateSpatialEntropy(tt.xValues, tt.yValues)
+			assert.GreaterOrEqual(t, entropy, tt.minEntropy)
+			assert.LessOrEqual(t, entropy, tt.maxEntropy)
+		})
+	}
+}
+
+func TestCalculateGridDistribution(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	xValues := []float64{100, 105, 200, 205, 300, 305}
+	yValues := []float64{100, 200, 100, 200, 100, 200}
+
+	dist := analyzer.calculateGridDistribution(xValues, yValues, 3, 2)
+	assert.Equal(t, 6, len(dist))
+}
+
+func TestPerformKMeansClustering(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	xValues := []float64{100, 105, 110, 200, 205, 210}
+	yValues := []float64{100, 105, 110, 200, 205, 210}
+
+	clusters, assignments := analyzer.performKMeansClustering(xValues, yValues, 2)
+	assert.GreaterOrEqual(t, len(clusters), 1)
+	assert.Equal(t, len(xValues), len(assignments))
+}
+
+func TestCalculateConvexHullArea(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name     string
+		xValues  []float64
+		yValues  []float64
+		minArea  float64
+		maxArea  float64
+	}{
+		{
+			name:     "small area",
+			xValues:  []float64{100, 105, 110},
+			yValues:  []float64{100, 105, 100},
+			minArea:  0.0,
+			maxArea:  50.0,
+		},
+		{
+			name:     "large area",
+			xValues:  []float64{100, 300, 300, 100},
+			yValues:  []float64{100, 100, 300, 300},
+			minArea:  35000.0,
+			maxArea:  45000.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			area := analyzer.calculateConvexHullArea(tt.xValues, tt.yValues)
+			assert.GreaterOrEqual(t, area, tt.minArea)
+			assert.LessOrEqual(t, area, tt.maxArea)
+		})
+	}
+}
+
+func TestCalculateDispersionIndex(t *testing.T) {
+	analyzer := NewClickAnalyzer()
+
+	tests := []struct {
+		name    string
+		xValues []float64
+		yValues []float64
+		minIdx  float64
+		maxIdx  float64
+	}{
+		{
+			name:    "low dispersion",
+			xValues: []float64{100, 101, 102, 103, 104},
+			yValues: []float64{100, 101, 102, 103, 104},
+			minIdx:  0.0,
+			maxIdx:  0.3,
+		},
+		{
+			name:    "high dispersion",
+			xValues: []float64{100, 200, 300, 400, 500},
+			yValues: []float64{100, 200, 300, 400, 500},
+			minIdx:  0.5,
+			maxIdx:  1.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			idx := analyzer.calculateDispersionIndex(tt.xValues, tt.yValues)
+			assert.GreaterOrEqual(t, idx, tt.minIdx)
+			assert.LessOrEqual(t, idx, tt.maxIdx)
+		})
+	}
+}
+
+// ==================== 点击压力检测增强测试 ====================
+
+func TestClickPressureAnalyzer_EnhancedFeatures(t *testing.T) {
+	analyzer := NewClickPressureAnalyzer()
+
+	clickEvents := []map[string]interface{}{
+		{"pressure": 0.5, "timestamp": int64(1000)},
+		{"pressure": 0.6, "timestamp": int64(1500)},
+		{"pressure": 0.7, "timestamp": int64(2000)},
+		{"pressure": 0.6, "timestamp": int64(2500)},
+		{"pressure": 0.5, "timestamp": int64(3000)},
+	}
+
+	features := analyzer.AnalyzePressure(clickEvents)
+	assert.True(t, features.HasPressureData)
+	assert.Greater(t, features.PressureTrend, -1.0)
+	assert.Less(t, features.PressureTrend, 1.0)
+	assert.GreaterOrEqual(t, len(features.PressurePeaks), 0)
+	assert.GreaterOrEqual(t, len(features.PressureValleys), 0)
+	assert.GreaterOrEqual(t, features.PressureAnomalyScore, 0.0)
+	assert.LessOrEqual(t, features.PressureAnomalyScore, 1.0)
+}
+
+func TestClassifyPressurePattern(t *testing.T) {
+	analyzer := NewClickPressureAnalyzer()
+
+	tests := []struct {
+		name       string
+		pressures  []float64
+		expected   string
+	}{
+		{
+			name:      "stable",
+			pressures: []float64{0.5, 0.51, 0.49, 0.5, 0.52},
+			expected:  "stable",
+		},
+		{
+			name:      "volatile",
+			pressures: []float64{0.1, 0.9, 0.2, 0.8, 0.3},
+			expected:  "volatile",
+		},
+		{
+			name:      "increasing",
+			pressures: []float64{0.3, 0.4, 0.5, 0.6, 0.7},
+			expected:  "increasing",
+		},
+		{
+			name:      "decreasing",
+			pressures: []float64{0.7, 0.6, 0.5, 0.4, 0.3},
+			expected:  "decreasing",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pattern := analyzer.classifyPressurePattern(tt.pressures)
+			assert.Equal(t, tt.expected, pattern)
+		})
+	}
+}
+
+// ==================== 异常点击模式识别测试 ====================
+
+func TestAnomalyClickDetector_EnhancedPatterns(t *testing.T) {
+	detector := NewAnomalyClickDetector()
+
+	// 测试新增的异常模式
+	result := &ClickAnalysisResult{
+		ClickPattern: &ClickPatternAnalysis{
+			Regularity: 0.99,
+			PositionDistribution: &PositionDistribution{
+				SpatialEntropy: 0.1,
+				ClusterCount:   1,
+			},
+		},
+		TimingAnalysis: &TimingAnalysis{
+			IsRhythmic:       true,
+			DurationVariance: 0,
+			PeriodicityScore: 0.9,
+			RhythmConsistency: 0.99,
+			ComplexityScore:  0.3,
+			AttentionDecay:   0.9,
+		},
+		AccuracyAnalysis: &AccuracyAnalysis{
+			Accuracy:    1.0,
+			TotalClicks: 5,
+		},
+	}
+
+	score, patterns := detector.DetectAnomalies(result)
+	t.Logf("Anomaly score: %f, patterns: %v", score, patterns)
+	assert.Greater(t, score, 0.0)
+	assert.GreaterOrEqual(t, len(patterns), 0)
+}
+
+func TestMLEnhancedAnomalyDetector(t *testing.T) {
+	detector := NewMLEnhancedAnomalyDetector()
+
+	tests := []struct {
+		name   string
+		result *ClickAnalysisResult
+	}{
+		{
+			name: "normal human click",
+			result: &ClickAnalysisResult{
+				ClickPattern: &ClickPatternAnalysis{
+					Regularity:      0.6,
+					ClusteringScore: 0.5,
+				},
+				TimingAnalysis: &TimingAnalysis{
+					IntervalCoefficientOfVariation: 0.6,
+				},
+				AccuracyAnalysis: &AccuracyAnalysis{
+					Accuracy: 0.8,
+				},
+			},
+		},
+		{
+			name: "bot click",
+			result: &ClickAnalysisResult{
+				ClickPattern: &ClickPatternAnalysis{
+					Regularity:      0.99,
+					ClusteringScore: 0.1,
+				},
+				TimingAnalysis: &TimingAnalysis{
+					IntervalCoefficientOfVariation: 0.1,
+				},
+				AccuracyAnalysis: &AccuracyAnalysis{
+					Accuracy: 1.0,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, patterns := detector.Detect(tt.result)
+			t.Logf("Test %s: ML score = %f, patterns = %v", tt.name, score, patterns)
+			assert.GreaterOrEqual(t, score, 0.0)
+			assert.LessOrEqual(t, score, 1.0)
+		})
+	}
+}
+
+func TestIsolationForestModel(t *testing.T) {
+	model := NewIsolationForestModel()
+
+	result := &ClickAnalysisResult{
+		ClickPattern: &ClickPatternAnalysis{
+			Regularity:      0.99,
+			ClusteringScore: 0.1,
+		},
+		TimingAnalysis: &TimingAnalysis{
+			TotalDuration:                   1000,
+			IntervalCoefficientOfVariation: 0.1,
+			RhythmConsistency:              0.99,
+		},
+		AccuracyAnalysis: &AccuracyAnalysis{
+			Accuracy:            1.0,
+			AverageMissDistance: 2,
+		},
+	}
+
+	score := model.Predict(result)
+	assert.GreaterOrEqual(t, score, 0.0)
+	assert.LessOrEqual(t, score, 1.0)
+}
+
+func TestAutoEncoderModel(t *testing.T) {
+	model := NewAutoEncoderModel()
+
+	result := &ClickAnalysisResult{
+		ClickPattern: &ClickPatternAnalysis{
+			Regularity: 0.99,
+		},
+		TimingAnalysis: &TimingAnalysis{
+			IntervalCoefficientOfVariation: 0.1,
+		},
+		AccuracyAnalysis: &AccuracyAnalysis{
+			Accuracy: 1.0,
+		},
+	}
+
+	score := model.Predict(result)
+	assert.GreaterOrEqual(t, score, 0.0)
+	assert.LessOrEqual(t, score, 1.0)
+}
+
+func TestOneClassSVMModel(t *testing.T) {
+	model := NewOneClassSVMModel()
+
+	result := &ClickAnalysisResult{
+		ClickPattern: &ClickPatternAnalysis{
+			Regularity: 0.99,
+		},
+		TimingAnalysis: &TimingAnalysis{
+			IntervalCoefficientOfVariation: 0.1,
+		},
+		AccuracyAnalysis: &AccuracyAnalysis{
+			Accuracy: 1.0,
+		},
+	}
+
+	score := model.Predict(result)
+	assert.GreaterOrEqual(t, score, 0.0)
+	assert.LessOrEqual(t, score, 1.0)
+}
+
+func TestLOFModel(t *testing.T) {
+	model := NewLOFModel()
+
+	result := &ClickAnalysisResult{
+		ClickPattern: &ClickPatternAnalysis{
+			Regularity:      0.99,
+			ClusteringScore: 0.1,
+		},
+		TimingAnalysis: &TimingAnalysis{
+			IsRhythmic:                      true,
+			IntervalCoefficientOfVariation: 0.1,
+		},
+	}
+
+	score := model.Predict(result)
+	assert.GreaterOrEqual(t, score, 0.0)
+	assert.LessOrEqual(t, score, 1.0)
+}

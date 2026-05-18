@@ -631,6 +631,15 @@ func (aep *AdaptiveExpirationPolicy) ShouldRefresh(key string, remainingTTL time
 	if remainingTTL <= 0 {
 		return false
 	}
+
+	aep.mu.RLock()
+	accessCount := aep.accessCounts[key]
+	aep.mu.RUnlock()
+
+	if accessCount == 0 {
+		return false
+	}
+
 	threshold := time.Duration(float64(aep.baseTTL) * aep.refreshRatio)
 	return remainingTTL < threshold
 }

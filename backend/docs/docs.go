@@ -23,6 +23,1026 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/adaptive/captcha-difficulty": {
+            "get": {
+                "description": "根据用户ID获取适合的验证码难度级别，支持AB测试模式",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "获取验证码难度",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户ID，不提供则自动生成匿名ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "是否启用AB测试，默认false",
+                        "name": "ab_test",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/adaptive/config": {
+            "get": {
+                "description": "获取自适应难度系统的当前配置参数",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "获取自适应难度配置",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DifficultyConfig"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "更新自适应难度系统的配置参数",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "更新自适应难度配置",
+                "parameters": [
+                    {
+                        "description": "难度配置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.DifficultyConfig"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/adaptive/difficulty": {
+            "get": {
+                "description": "根据用户ID获取当前自适应难度级别和用户档案信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "获取用户难度",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户ID，不提供则自动生成匿名ID",
+                        "name": "user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/adaptive/flag": {
+            "post": {
+                "description": "为用户添加行为标记，用于调整难度评估",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "添加行为标记",
+                "parameters": [
+                    {
+                        "description": "添加行为标记请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.AddBehaviorFlagRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "添加成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/adaptive/profiles": {
+            "get": {
+                "description": "获取系统中所有用户的自适应难度档案（管理端）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "获取所有用户档案",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/adaptive/result": {
+            "post": {
+                "description": "根据验证结果更新用户档案，自动调整难度级别",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "更新用户验证结果",
+                "parameters": [
+                    {
+                        "description": "更新用户验证结果请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.UpdateUserResultRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/adaptive/config": {
+            "get": {
+                "description": "获取自适应难度系统的当前配置参数",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "获取自适应难度配置",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DifficultyConfig"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "更新自适应难度系统的配置参数",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "更新自适应难度配置",
+                "parameters": [
+                    {
+                        "description": "难度配置",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.DifficultyConfig"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/adaptive/profiles": {
+            "get": {
+                "description": "获取系统中所有用户的自适应难度档案（管理端）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "自适应难度"
+                ],
+                "summary": "获取所有用户档案",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts": {
+            "get": {
+                "description": "分页获取告警记录列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，默认1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认20",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "严重等级过滤",
+                        "name": "severity",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/channels": {
+            "get": {
+                "description": "获取所有告警通知通道",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警通道列表",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建新的告警通知通道，支持slack、webhook、email、dingtalk等类型",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "创建告警通道",
+                "parameters": [
+                    {
+                        "description": "创建告警通道请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.CreateAlertChannelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/channels/{id}": {
+            "get": {
+                "description": "获取指定告警通知通道的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警通道详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警通道ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "通道不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "更新指定的告警通知通道信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "更新告警通道",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警通道ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新告警通道请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.UpdateAlertChannelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "通道不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "删除指定的告警通知通道",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "删除告警通道",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警通道ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/rules": {
+            "get": {
+                "description": "获取所有告警规则",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警规则列表",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建新的告警规则，定义告警触发条件和通知方式",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "创建告警规则",
+                "parameters": [
+                    {
+                        "description": "创建告警规则请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.CreateAlertRuleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/rules/{id}": {
+            "get": {
+                "description": "获取指定告警规则的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警规则详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警规则ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "规则不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "更新指定的告警规则信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "更新告警规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警规则ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "更新告警规则请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.UpdateAlertRuleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "更新成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "规则不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "删除指定的告警规则",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "删除告警规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警规则ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/test": {
+            "post": {
+                "description": "发送测试告警消息以验证告警通道配置",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "发送测试告警",
+                "parameters": [
+                    {
+                        "description": "发送测试告警请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.SendTestAlertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "发送成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/{id}": {
+            "get": {
+                "description": "获取指定告警记录的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "告警不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/{id}/history": {
+            "get": {
+                "description": "获取指定告警的处理历史记录",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "获取告警历史",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alerts/{id}/resolve": {
+            "post": {
+                "description": "将指定告警标记为已解决状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "告警管理"
+                ],
+                "summary": "解决告警",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "告警ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "解决告警请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.ResolveAlertRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "解决成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/applications": {
             "get": {
                 "security": [
@@ -140,7 +1160,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.CreateApplicationRequest"
+                            "$ref": "#/definitions/handler.CreateApplicationRequest"
                         }
                     }
                 ],
@@ -208,7 +1228,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.SaveSearchRequest"
+                            "$ref": "#/definitions/handler.SaveSearchRequest"
                         }
                     }
                 ],
@@ -529,7 +1549,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.UpdateConfigRequest"
+                            "$ref": "#/definitions/handler.UpdateConfigRequest"
                         }
                     }
                 ],
@@ -567,6 +1587,314 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/backups": {
+            "get": {
+                "description": "获取所有备份记录列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "获取备份列表",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/service.BackupRecord"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建全量备份或增量备份",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "创建备份",
+                "parameters": [
+                    {
+                        "description": "创建备份请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.CreateBackupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.BackupRecord"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "请求参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/backups/cleanup": {
+            "post": {
+                "description": "根据保留策略清理过期的备份文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "清理旧备份",
+                "responses": {
+                    "200": {
+                        "description": "清理成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/backups/config": {
+            "get": {
+                "description": "获取备份系统的当前配置参数",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "获取备份配置",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/backups/{id}": {
+            "get": {
+                "description": "获取指定备份的详细信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "获取备份详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "备份ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.BackupRecord"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "备份不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "删除指定的备份文件",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "删除备份",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "备份ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/backups/{id}/restore": {
+            "post": {
+                "description": "从指定备份恢复数据",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "恢复备份",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "备份ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "恢复成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/backups/{id}/verify": {
+            "get": {
+                "description": "验证备份文件的完整性",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "备份管理"
+                ],
+                "summary": "验证备份",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "备份ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "验证完成",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -750,7 +2078,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery"
+                            "$ref": "#/definitions/service.AdvancedSearchQuery"
                         }
                     }
                 ],
@@ -882,7 +2210,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.UpdateBlacklistRequest"
+                            "$ref": "#/definitions/handler.UpdateBlacklistRequest"
                         }
                     }
                 ],
@@ -920,6 +2248,231 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard": {
+            "get": {
+                "description": "获取仪表盘统计数据，包括验证次数、成功率、风险评分等",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "获取仪表盘数据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "时间周期：hour, day, week, month，默认hour",
+                        "name": "period",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.DashboardData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard/alerts": {
+            "get": {
+                "description": "获取仪表盘显示的告警信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "获取仪表盘告警",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard/attack-distribution": {
+            "get": {
+                "description": "获取各类攻击类型的分布统计",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "获取攻击类型分布",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard/export": {
+            "get": {
+                "description": "导出仪表盘数据，支持CSV、JSON、Excel格式",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "json/csv"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "导出仪表盘数据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "导出格式：csv, json, excel，默认csv",
+                        "name": "format",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "时间周期：hour, day, week, month，默认month",
+                        "name": "period",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "导出文件",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard/recent": {
+            "get": {
+                "description": "获取最近的验证记录列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "获取最近验证记录",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard/risk-distribution": {
+            "get": {
+                "description": "获取风险评分的分布统计",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "获取风险评分分布",
+                "responses": {
+                    "200": {
+                        "description": "获取成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/dashboard/ws": {
+            "get": {
+                "description": "建立WebSocket连接，实时接收验证事件通知",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "仪表盘"
+                ],
+                "summary": "仪表盘WebSocket连接",
+                "responses": {
+                    "101": {
+                        "description": "WebSocket连接建立成功",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -1021,7 +2574,7 @@ const docTemplate = `{
                     "200": {
                         "description": "日志列表",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.LogListMapResponse"
+                            "$ref": "#/definitions/handler.LogListMapResponse"
                         }
                     },
                     "400": {
@@ -1166,7 +2719,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.SaveSearchRequest"
+                            "$ref": "#/definitions/handler.SaveSearchRequest"
                         }
                     }
                 ],
@@ -1329,7 +2882,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery"
+                            "$ref": "#/definitions/service.AdvancedSearchQuery"
                         }
                     }
                 ],
@@ -1558,7 +3111,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.ChangePasswordRequest"
+                            "$ref": "#/definitions/handler.ChangePasswordRequest"
                         }
                     }
                 ],
@@ -1621,7 +3174,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.UserLoginRequest"
+                            "$ref": "#/definitions/handler.UserLoginRequest"
                         }
                     }
                 ],
@@ -1629,7 +3182,7 @@ const docTemplate = `{
                     "200": {
                         "description": "登录成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.UserLoginResponse"
+                            "$ref": "#/definitions/handler.UserLoginResponse"
                         }
                     },
                     "400": {
@@ -1733,7 +3286,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.RegisterRequest"
+                            "$ref": "#/definitions/handler.RegisterRequest"
                         }
                     }
                 ],
@@ -1741,7 +3294,7 @@ const docTemplate = `{
                     "200": {
                         "description": "注册成功",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.RegisterResponse"
+                            "$ref": "#/definitions/handler.RegisterResponse"
                         }
                     },
                     "400": {
@@ -1788,7 +3341,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.ResendVerificationRequest"
+                            "$ref": "#/definitions/handler.ResendVerificationRequest"
                         }
                     }
                 ],
@@ -1837,7 +3390,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.ResetPasswordRequest"
+                            "$ref": "#/definitions/handler.ResetPasswordRequest"
                         }
                     }
                 ],
@@ -1933,7 +3486,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.RegisterBiometricProfileRequest"
+                            "$ref": "#/definitions/handler.RegisterBiometricProfileRequest"
                         }
                     }
                 ],
@@ -1982,7 +3535,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.VerifyBiometricsRequest"
+                            "$ref": "#/definitions/handler.VerifyBiometricsRequest"
                         }
                     }
                 ],
@@ -2089,6 +3642,16 @@ const docTemplate = `{
                         "description": "点击点数",
                         "name": "points",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "zh-CN",
+                            "en-US"
+                        ],
+                        "type": "string",
+                        "description": "语言设置",
+                        "name": "lang",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -2121,7 +3684,7 @@ const docTemplate = `{
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.SliderCaptchaRequest"
+                            "$ref": "#/definitions/handler.SliderCaptchaRequest"
                         }
                     }
                 ],
@@ -2194,7 +3757,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.VerifyGestureCaptchaRequest"
+                            "$ref": "#/definitions/handler.VerifyGestureCaptchaRequest"
                         }
                     }
                 ],
@@ -2321,7 +3884,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.VerifyRequest"
+                            "$ref": "#/definitions/handler.VerifyRequest"
                         }
                     }
                 ],
@@ -2370,7 +3933,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.SliderVerifyRequest"
+                            "$ref": "#/definitions/handler.SliderVerifyRequest"
                         }
                     }
                 ],
@@ -2418,7 +3981,7 @@ const docTemplate = `{
                         "name": "body",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.CreateVoiceCaptchaRequest"
+                            "$ref": "#/definitions/handler.CreateVoiceCaptchaRequest"
                         }
                     }
                 ],
@@ -2460,7 +4023,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service_captcha.VoiceVerifyRequest"
+                            "$ref": "#/definitions/captcha.VoiceVerifyRequest"
                         }
                     }
                 ],
@@ -2509,15 +4072,15 @@ const docTemplate = `{
                 "summary": "获取用户同意设置",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "获取成功",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.UserConsent"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "未授权",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -2546,27 +4109,27 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.UpdateConsentRequest"
+                            "$ref": "#/definitions/handler.UpdateConsentRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "更新成功",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.UserConsent"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "未授权",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -2597,27 +4160,27 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.DataDeletionRequest"
+                            "$ref": "#/definitions/handler.DataDeletionRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "请求成功",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.DataDeletionRequest"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "未授权",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -2648,27 +4211,27 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.DataExportRequest"
+                            "$ref": "#/definitions/handler.DataExportRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "请求成功",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.DataExportRequest"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "请求参数错误",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "未授权",
                         "schema": {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -2699,7 +4262,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.VerifyCodeRequest"
+                            "$ref": "#/definitions/handler.VerifyCodeRequest"
                         }
                     }
                 ],
@@ -2803,7 +4366,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.SendEmailCodeRequest"
+                            "$ref": "#/definitions/handler.SendEmailCodeRequest"
                         }
                     }
                 ],
@@ -2864,7 +4427,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.EnableMFARequest"
+                            "$ref": "#/definitions/handler.EnableMFARequest"
                         }
                     }
                 ],
@@ -2925,7 +4488,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.EnableTOTPRequest"
+                            "$ref": "#/definitions/handler.EnableTOTPRequest"
                         }
                     }
                 ],
@@ -2981,7 +4544,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_api_handler.GenerateTOTPRequest"
+                            "$ref": "#/definitions/handler.GenerateTOTPRequest"
                         }
                     }
                 ],
@@ -3012,203 +4575,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery": {
-            "type": "object",
-            "properties": {
-                "conditions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.SearchCondition"
-                    }
-                },
-                "page": {
-                    "type": "integer"
-                },
-                "page_size": {
-                    "type": "integer"
-                },
-                "sort": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.SortOption"
-                    }
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.KeyEvent": {
-            "type": "object",
-            "properties": {
-                "key": {
-                    "type": "string"
-                },
-                "key_code": {
-                    "type": "integer"
-                },
-                "timestamp": {
-                    "type": "integer"
-                },
-                "type": {
-                    "description": "keydown, keyup",
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.KeyboardSample": {
-            "type": "object",
-            "properties": {
-                "key_events": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyEvent"
-                    }
-                },
-                "timestamp": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.MouseEvent": {
-            "type": "object",
-            "properties": {
-                "button": {
-                    "type": "integer"
-                },
-                "timestamp": {
-                    "type": "integer"
-                },
-                "type": {
-                    "description": "mousemove, click, mousedown, mouseup",
-                    "type": "string"
-                },
-                "x": {
-                    "type": "integer"
-                },
-                "y": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.MouseSample": {
-            "type": "object",
-            "properties": {
-                "mouse_events": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseEvent"
-                    }
-                },
-                "timestamp": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.SearchCondition": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "operator": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.SearchOperator"
-                },
-                "value": {}
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.SearchOperator": {
-            "type": "string",
-            "enum": [
-                "eq",
-                "ne",
-                "gt",
-                "gte",
-                "lt",
-                "lte",
-                "contains",
-                "starts_with",
-                "ends_with",
-                "in",
-                "not_in",
-                "is_null",
-                "is_not_null",
-                "between"
-            ],
-            "x-enum-varnames": [
-                "OpEquals",
-                "OpNotEquals",
-                "OpGreaterThan",
-                "OpGreaterOrEq",
-                "OpLessThan",
-                "OpLessOrEq",
-                "OpContains",
-                "OpStartsWith",
-                "OpEndsWith",
-                "OpIn",
-                "OpNotIn",
-                "OpIsNull",
-                "OpIsNotNull",
-                "OpBetween"
-            ]
-        },
-        "github_com_hjtpx_hjtpx_internal_service.SortOption": {
-            "type": "object",
-            "properties": {
-                "field": {
-                    "type": "string"
-                },
-                "order": {
-                    "description": "asc 或 desc",
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service.UserResponse": {
-            "type": "object",
-            "properties": {
-                "avatar": {
-                    "type": "string"
-                },
-                "bio": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_verified": {
-                    "type": "boolean"
-                },
-                "last_login_at": {
-                    "type": "string"
-                },
-                "last_login_ip": {
-                    "type": "string"
-                },
-                "login_count": {
-                    "type": "integer"
-                },
-                "nickname": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "verified_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_internal_service_captcha.VoiceVerifyRequest": {
+        "captcha.VoiceVerifyRequest": {
             "type": "object",
             "required": [
                 "code",
@@ -3223,423 +4590,24 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory": {
+        "handler.AddBehaviorFlagRequest": {
             "type": "object",
+            "required": [
+                "flag",
+                "user_id"
+            ],
             "properties": {
-                "application": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application"
-                },
-                "application_id": {
-                    "type": "integer"
-                },
-                "changed_at": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "new_api_key": {
-                    "type": "string"
-                },
-                "old_api_key": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_models.Application": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "type": "string"
-                },
-                "api_key_histories": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.APIKeyHistory"
-                    }
-                },
-                "config": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "domain": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.User"
+                "flag": {
+                    "type": "string",
+                    "example": "suspicious_behavior"
                 },
                 "user_id": {
-                    "type": "integer"
-                },
-                "verifications": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification"
-                    }
-                },
-                "website": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "user123"
                 }
             }
         },
-        "github_com_hjtpx_hjtpx_pkg_models.BehaviorData": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "data": {
-                    "type": "string"
-                },
-                "data_type": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "timestamp": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "verification": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification"
-                },
-                "verification_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_models.DataDeletionRequest": {
-            "type": "object",
-            "properties": {
-                "audit_log": {
-                    "description": "审计日志",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "processed_at": {
-                    "description": "处理时间",
-                    "type": "string"
-                },
-                "processed_by": {
-                    "description": "处理人ID",
-                    "type": "integer"
-                },
-                "reason": {
-                    "description": "删除原因",
-                    "type": "string"
-                },
-                "requested_at": {
-                    "description": "请求时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "pending, processing, completed, rejected",
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.User"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_models.DataExportRequest": {
-            "type": "object",
-            "properties": {
-                "completed_at": {
-                    "description": "完成时间",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "error": {
-                    "description": "错误信息",
-                    "type": "string"
-                },
-                "export_format": {
-                    "description": "json, csv",
-                    "type": "string"
-                },
-                "file_path": {
-                    "description": "导出文件路径",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "requested_at": {
-                    "description": "请求时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "pending, processing, completed, failed",
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.User"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_models.User": {
-            "type": "object",
-            "properties": {
-                "applications": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application"
-                    }
-                },
-                "avatar": {
-                    "type": "string"
-                },
-                "bio": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_verified": {
-                    "type": "boolean"
-                },
-                "last_login_at": {
-                    "type": "string"
-                },
-                "last_login_ip": {
-                    "type": "string"
-                },
-                "login_count": {
-                    "type": "integer"
-                },
-                "nickname": {
-                    "type": "string"
-                },
-                "password_reset_at": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                },
-                "verifications": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.Verification"
-                    }
-                },
-                "verified_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_models.UserConsent": {
-            "type": "object",
-            "properties": {
-                "consent_analytics": {
-                    "description": "分析数据收集同意",
-                    "type": "boolean"
-                },
-                "consent_data_sharing": {
-                    "description": "数据共享同意",
-                    "type": "boolean"
-                },
-                "consent_ip": {
-                    "description": "同意时的IP地址",
-                    "type": "string"
-                },
-                "consent_marketing": {
-                    "description": "营销信息同意",
-                    "type": "boolean"
-                },
-                "consent_personalization": {
-                    "description": "个性化同意",
-                    "type": "boolean"
-                },
-                "consent_updated_at": {
-                    "description": "同意更新时间",
-                    "type": "string"
-                },
-                "consent_user_agent": {
-                    "description": "同意时的User Agent",
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.User"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_models.Verification": {
-            "type": "object",
-            "properties": {
-                "application": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.Application"
-                },
-                "application_id": {
-                    "type": "integer"
-                },
-                "behavior_data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.BehaviorData"
-                    }
-                },
-                "captcha_type": {
-                    "type": "string"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "deletedAt": {
-                    "$ref": "#/definitions/gorm.DeletedAt"
-                },
-                "duration": {
-                    "type": "integer"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "ip_address": {
-                    "type": "string"
-                },
-                "risk_score": {
-                    "type": "number"
-                },
-                "session_id": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_pkg_models.User"
-                },
-                "user_agent": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "github_com_hjtpx_hjtpx_pkg_response.Response": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {},
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "gorm.DeletedAt": {
-            "type": "object",
-            "properties": {
-                "time": {
-                    "type": "string"
-                },
-                "valid": {
-                    "description": "Valid is true if Time is not NULL",
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_api_handler.AdminInfo": {
+        "handler.AdminInfo": {
             "type": "object",
             "properties": {
                 "email": {
@@ -3665,7 +4633,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.BehaviorDataPoint": {
+        "handler.BehaviorDataPoint": {
             "type": "object",
             "properties": {
                 "event": {
@@ -3682,7 +4650,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.ChangePasswordRequest": {
+        "handler.ChangePasswordRequest": {
             "description": "修改密码请求参数",
             "type": "object",
             "required": [
@@ -3702,7 +4670,106 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.CreateApplicationRequest": {
+        "handler.CreateAlertChannelRequest": {
+            "type": "object",
+            "required": [
+                "config",
+                "name",
+                "type"
+            ],
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "用于发送告警通知到Slack频道"
+                },
+                "is_enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "example": "Slack通知"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "slack",
+                        "webhook",
+                        "email",
+                        "dingtalk"
+                    ],
+                    "example": "slack"
+                }
+            }
+        },
+        "handler.CreateAlertRuleRequest": {
+            "type": "object",
+            "required": [
+                "channel_ids",
+                "event_type",
+                "name",
+                "severity"
+            ],
+            "properties": {
+                "aggregation_window": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 300
+                },
+                "channel_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "condition": {
+                    "type": "string",
+                    "example": "risk_score \u003e 80"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "当5分钟内验证失败次数超过5次时触发告警"
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "verification_failed"
+                },
+                "is_enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "example": "高频验证失败告警"
+                },
+                "severity": {
+                    "type": "string",
+                    "enum": [
+                        "info",
+                        "warning",
+                        "error",
+                        "critical"
+                    ],
+                    "example": "warning"
+                },
+                "threshold": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 5
+                }
+            }
+        },
+        "handler.CreateApplicationRequest": {
             "description": "创建新应用的请求参数",
             "type": "object",
             "required": [
@@ -3737,7 +4804,23 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.CreateVoiceCaptchaRequest": {
+        "handler.CreateBackupRequest": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "full",
+                        "incremental"
+                    ],
+                    "example": "full"
+                }
+            }
+        },
+        "handler.CreateVoiceCaptchaRequest": {
             "description": "语音验证码创建请求参数",
             "type": "object",
             "properties": {
@@ -3751,7 +4834,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.DataDeletionRequest": {
+        "handler.DataDeletionRequest": {
             "type": "object",
             "properties": {
                 "reason": {
@@ -3759,7 +4842,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.DataExportRequest": {
+        "handler.DataExportRequest": {
             "type": "object",
             "required": [
                 "format"
@@ -3775,7 +4858,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.EnableMFARequest": {
+        "handler.EnableMFARequest": {
             "type": "object",
             "required": [
                 "mfa_type"
@@ -3797,7 +4880,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.EnableTOTPRequest": {
+        "handler.EnableTOTPRequest": {
             "type": "object",
             "required": [
                 "secret"
@@ -3808,7 +4891,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.GenerateTOTPRequest": {
+        "handler.GenerateTOTPRequest": {
             "type": "object",
             "required": [
                 "account_name",
@@ -3823,7 +4906,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.LogListMapResponse": {
+        "handler.LogListMapResponse": {
             "type": "object",
             "properties": {
                 "logs": {
@@ -3847,7 +4930,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.LoginRequest": {
+        "handler.LoginRequest": {
             "type": "object",
             "required": [
                 "password",
@@ -3864,7 +4947,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.LoginResponse": {
+        "handler.LoginResponse": {
             "type": "object",
             "properties": {
                 "expires_in": {
@@ -3883,30 +4966,30 @@ const docTemplate = `{
                     "description": "用户信息",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/internal_api_handler.AdminInfo"
+                            "$ref": "#/definitions/handler.AdminInfo"
                         }
                     ]
                 }
             }
         },
-        "internal_api_handler.RegisterBiometricProfileRequest": {
+        "handler.RegisterBiometricProfileRequest": {
             "type": "object",
             "required": [
                 "user_id"
             ],
             "properties": {
                 "keyboard_sample": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyboardSample"
+                    "$ref": "#/definitions/service.KeyboardSample"
                 },
                 "mouse_sample": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseSample"
+                    "$ref": "#/definitions/service.MouseSample"
                 },
                 "user_id": {
                     "type": "string"
                 }
             }
         },
-        "internal_api_handler.RegisterRequest": {
+        "handler.RegisterRequest": {
             "description": "用户注册请求参数",
             "type": "object",
             "required": [
@@ -3937,7 +5020,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.RegisterResponse": {
+        "handler.RegisterResponse": {
             "description": "用户注册响应数据",
             "type": "object",
             "properties": {
@@ -3963,7 +5046,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.ResendVerificationRequest": {
+        "handler.ResendVerificationRequest": {
             "description": "重新发送验证邮件请求参数",
             "type": "object",
             "required": [
@@ -3976,7 +5059,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.ResetPasswordRequest": {
+        "handler.ResetPasswordRequest": {
             "description": "重置密码请求参数",
             "type": "object",
             "required": [
@@ -3996,7 +5079,17 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.SaveSearchRequest": {
+        "handler.ResolveAlertRequest": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "已处理，问题已修复"
+                }
+            }
+        },
+        "handler.SaveSearchRequest": {
             "description": "保存搜索的请求参数",
             "type": "object",
             "required": [
@@ -4016,13 +5109,13 @@ const docTemplate = `{
                     "description": "搜索查询条件",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.AdvancedSearchQuery"
+                            "$ref": "#/definitions/service.AdvancedSearchQuery"
                         }
                     ]
                 }
             }
         },
-        "internal_api_handler.SendEmailCodeRequest": {
+        "handler.SendEmailCodeRequest": {
             "type": "object",
             "required": [
                 "email"
@@ -4033,7 +5126,28 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.SliderCaptchaRequest": {
+        "handler.SendTestAlertRequest": {
+            "type": "object",
+            "required": [
+                "event_type",
+                "message"
+            ],
+            "properties": {
+                "context": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "test_event"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "这是一条测试告警消息"
+                }
+            }
+        },
+        "handler.SliderCaptchaRequest": {
             "type": "object",
             "properties": {
                 "height": {
@@ -4054,7 +5168,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.SliderVerifyRequest": {
+        "handler.SliderVerifyRequest": {
             "type": "object",
             "required": [
                 "position_x",
@@ -4085,10 +5199,107 @@ const docTemplate = `{
                 "trace_score": {
                     "description": "轨迹评分",
                     "type": "number"
+                },
+                "trajectory": {
+                    "description": "轨迹数据",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.TrajectoryPoint"
+                    }
                 }
             }
         },
-        "internal_api_handler.UpdateBlacklistRequest": {
+        "handler.TrajectoryPoint": {
+            "type": "object",
+            "properties": {
+                "timestamp": {
+                    "type": "integer"
+                },
+                "x": {
+                    "type": "integer"
+                },
+                "y": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.UpdateAlertChannelRequest": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "is_enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "slack",
+                        "webhook",
+                        "email",
+                        "dingtalk"
+                    ]
+                }
+            }
+        },
+        "handler.UpdateAlertRuleRequest": {
+            "type": "object",
+            "properties": {
+                "aggregation_window": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "channel_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "condition": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "is_enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "severity": {
+                    "type": "string",
+                    "enum": [
+                        "info",
+                        "warning",
+                        "error",
+                        "critical"
+                    ]
+                },
+                "threshold": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
+        "handler.UpdateBlacklistRequest": {
             "description": "更新黑名单请求参数",
             "type": "object",
             "properties": {
@@ -4121,7 +5332,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.UpdateConfigRequest": {
+        "handler.UpdateConfigRequest": {
             "description": "更新应用配置的请求参数",
             "type": "object",
             "properties": {
@@ -4158,7 +5369,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.UpdateConsentRequest": {
+        "handler.UpdateConsentRequest": {
             "type": "object",
             "properties": {
                 "consent_analytics": {
@@ -4175,7 +5386,28 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.UserLoginRequest": {
+        "handler.UpdateUserResultRequest": {
+            "type": "object",
+            "required": [
+                "success",
+                "user_id"
+            ],
+            "properties": {
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "time": {
+                    "type": "integer",
+                    "example": 1500
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "user123"
+                }
+            }
+        },
+        "handler.UserLoginRequest": {
             "description": "用户登录请求参数",
             "type": "object",
             "required": [
@@ -4201,7 +5433,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.UserLoginResponse": {
+        "handler.UserLoginResponse": {
             "description": "用户登录响应数据",
             "type": "object",
             "properties": {
@@ -4221,30 +5453,30 @@ const docTemplate = `{
                     "description": "用户信息",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.UserResponse"
+                            "$ref": "#/definitions/service.UserResponse"
                         }
                     ]
                 }
             }
         },
-        "internal_api_handler.VerifyBiometricsRequest": {
+        "handler.VerifyBiometricsRequest": {
             "type": "object",
             "required": [
                 "user_id"
             ],
             "properties": {
                 "keyboard_sample": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.KeyboardSample"
+                    "$ref": "#/definitions/service.KeyboardSample"
                 },
                 "mouse_sample": {
-                    "$ref": "#/definitions/github_com_hjtpx_hjtpx_internal_service.MouseSample"
+                    "$ref": "#/definitions/service.MouseSample"
                 },
                 "user_id": {
                     "type": "string"
                 }
             }
         },
-        "internal_api_handler.VerifyCodeRequest": {
+        "handler.VerifyCodeRequest": {
             "type": "object",
             "required": [
                 "code"
@@ -4255,7 +5487,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.VerifyGestureCaptchaRequest": {
+        "handler.VerifyGestureCaptchaRequest": {
             "description": "手势验证码验证请求参数",
             "type": "object",
             "required": [
@@ -4273,7 +5505,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_api_handler.VerifyRequest": {
+        "handler.VerifyRequest": {
             "description": "验证验证码时发送的请求结构，支持滑动验证码和点击验证码",
             "type": "object",
             "required": [
@@ -4289,7 +5521,7 @@ const docTemplate = `{
                     "description": "行为分析数据",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/internal_api_handler.BehaviorDataPoint"
+                        "$ref": "#/definitions/handler.BehaviorDataPoint"
                     }
                 },
                 "click_sequence": {
@@ -4324,6 +5556,442 @@ const docTemplate = `{
                 "y": {
                     "description": "滑动验证码 Y 坐标",
                     "type": "integer"
+                }
+            }
+        },
+        "response.Response": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {},
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.AdvancedSearchQuery": {
+            "type": "object",
+            "properties": {
+                "conditions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.SearchCondition"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.SortOption"
+                    }
+                }
+            }
+        },
+        "service.AttackTypeData": {
+            "type": "object",
+            "properties": {
+                "attack_type": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "percentage": {
+                    "type": "number"
+                }
+            }
+        },
+        "service.BackupRecord": {
+            "type": "object",
+            "properties": {
+                "checksum": {
+                    "type": "string"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_path": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/service.BackupStatus"
+                },
+                "type": {
+                    "$ref": "#/definitions/service.BackupType"
+                },
+                "verified": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "service.BackupStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "BackupStatusPending",
+                "BackupStatusRunning",
+                "BackupStatusCompleted",
+                "BackupStatusFailed"
+            ]
+        },
+        "service.BackupType": {
+            "type": "string",
+            "enum": [
+                "full",
+                "incremental"
+            ],
+            "x-enum-varnames": [
+                "BackupTypeFull",
+                "BackupTypeIncremental"
+            ]
+        },
+        "service.CaptchaTypeData": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.DashboardData": {
+            "type": "object",
+            "properties": {
+                "attack_type_distribution": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.AttackTypeData"
+                    }
+                },
+                "captcha_type": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.CaptchaTypeData"
+                    }
+                },
+                "risk_distribution": {
+                    "$ref": "#/definitions/service.RiskDistributionData"
+                },
+                "risk_score_distribution": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.RiskScoreBinData"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/service.Summary"
+                },
+                "trend": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.TrendData"
+                    }
+                }
+            }
+        },
+        "service.DifficultyConfig": {
+            "type": "object",
+            "properties": {
+                "easyThreshold": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "expertThreshold": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "failureWeight": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "hardThreshold": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "mediumThreshold": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "successWeight": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "timePenalty": {
+                    "type": "number",
+                    "format": "float64"
+                }
+            }
+        },
+        "service.KeyEvent": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "key_code": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "keydown, keyup",
+                    "type": "string"
+                }
+            }
+        },
+        "service.KeyboardSample": {
+            "type": "object",
+            "properties": {
+                "key_events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.KeyEvent"
+                    }
+                },
+                "timestamp": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.MouseEvent": {
+            "type": "object",
+            "properties": {
+                "button": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "mousemove, click, mousedown, mouseup",
+                    "type": "string"
+                },
+                "x": {
+                    "type": "integer"
+                },
+                "y": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.MouseSample": {
+            "type": "object",
+            "properties": {
+                "mouse_events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/service.MouseEvent"
+                    }
+                },
+                "timestamp": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RiskDistributionData": {
+            "type": "object",
+            "properties": {
+                "critical": {
+                    "type": "integer"
+                },
+                "high": {
+                    "type": "integer"
+                },
+                "low": {
+                    "type": "integer"
+                },
+                "medium": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.RiskScoreBinData": {
+            "type": "object",
+            "properties": {
+                "bin_end": {
+                    "type": "integer"
+                },
+                "bin_start": {
+                    "type": "integer"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "percentage": {
+                    "type": "number"
+                }
+            }
+        },
+        "service.SearchCondition": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "operator": {
+                    "$ref": "#/definitions/service.SearchOperator"
+                },
+                "value": {}
+            }
+        },
+        "service.SearchOperator": {
+            "type": "string",
+            "enum": [
+                "eq",
+                "ne",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "contains",
+                "starts_with",
+                "ends_with",
+                "in",
+                "not_in",
+                "is_null",
+                "is_not_null",
+                "between"
+            ],
+            "x-enum-varnames": [
+                "OpEquals",
+                "OpNotEquals",
+                "OpGreaterThan",
+                "OpGreaterOrEq",
+                "OpLessThan",
+                "OpLessOrEq",
+                "OpContains",
+                "OpStartsWith",
+                "OpEndsWith",
+                "OpIn",
+                "OpNotIn",
+                "OpIsNull",
+                "OpIsNotNull",
+                "OpBetween"
+            ]
+        },
+        "service.SortOption": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "order": {
+                    "description": "asc 或 desc",
+                    "type": "string"
+                }
+            }
+        },
+        "service.Summary": {
+            "type": "object",
+            "properties": {
+                "active_sessions": {
+                    "type": "integer"
+                },
+                "avg_response_time": {
+                    "type": "integer"
+                },
+                "block_rate": {
+                    "type": "number"
+                },
+                "pass_rate": {
+                    "type": "number"
+                },
+                "total_requests": {
+                    "type": "integer"
+                }
+            }
+        },
+        "service.TrendData": {
+            "type": "object",
+            "properties": {
+                "failed": {
+                    "type": "integer"
+                },
+                "requests": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "integer"
+                },
+                "time": {
+                    "type": "string"
+                }
+            }
+        },
+        "service.UserResponse": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "type": "string"
+                },
+                "bio": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_verified": {
+                    "type": "boolean"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "last_login_ip": {
+                    "type": "string"
+                },
+                "login_count": {
+                    "type": "integer"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "verified_at": {
+                    "type": "string"
                 }
             }
         }

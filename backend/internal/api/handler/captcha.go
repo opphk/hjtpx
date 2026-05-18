@@ -953,7 +953,7 @@ func getIconName(iconStr string) string {
 	if name, ok := iconNames[iconType]; ok {
 		return name
 	}
-	return iconStr
+	return "未知图标"
 }
 
 func drawCharOnImage(img *image.RGBA, x, y int, char string) {
@@ -1583,11 +1583,22 @@ func verifyClickPoints(session *CaptchaSession, req VerifyRequest) (bool, string
 	}
 
 	clickCount := len(req.Points)
-	_ = session.MaxPoints
+
+	if clickCount != session.MaxPoints {
+		return false, "点击数量不匹配"
+	}
+
+	if req.ClickSequence != nil && len(req.ClickSequence) != clickCount {
+		return false, "点击时序长度不匹配"
+	}
 
 	tolerance := session.Tolerance
 	if tolerance <= 0 {
 		tolerance = 35
+	}
+
+	if session.TargetPoints == nil || len(session.TargetPoints) == 0 {
+		return false, "目标点为空"
 	}
 
 	expectedOrder := session.HintOrder

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -201,7 +202,7 @@ func TestClientManager_InitialState(t *testing.T) {
 }
 
 func TestMonitoringService_StartStop(t *testing.T) {
-	ctx := make(chan struct{})
+	ctx := context.Background()
 	
 	StartMonitoringService(ctx)
 	assert.True(t, IsMonitoringServiceRunning())
@@ -210,7 +211,7 @@ func TestMonitoringService_StartStop(t *testing.T) {
 }
 
 func TestIsMonitoringServiceRunning(t *testing.T) {
-	ctx := make(chan struct{})
+	ctx := context.Background()
 	
 	StartMonitoringService(ctx)
 	assert.True(t, IsMonitoringServiceRunning())
