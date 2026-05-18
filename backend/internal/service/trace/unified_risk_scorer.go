@@ -53,6 +53,8 @@ type ComprehensiveRiskResult struct {
 	AnalysisTimestamp    time.Time          `json:"analysis_timestamp"`
 	ProcessingTimeMs     int64              `json:"processing_time_ms"`
 	FeatureCounts        map[string]int     `json:"feature_counts"`
+	IntentRecognition    *IntentRecognitionResult `json:"intent_recognition,omitempty"`
+	AnomalyPatterns      []AnomalyPattern   `json:"anomaly_patterns,omitempty"`
 }
 
 func NewUnifiedRiskScorer() *UnifiedRiskScorer {

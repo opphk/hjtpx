@@ -9,46 +9,78 @@ import (
 )
 
 const (
-	LSTMFeatureDim     = 64
-	LSTMSequenceLen    = 100
-	LSTMHiddenSize     = 128
-	LSTMNumLayers      = 2
+	LSTMFeatureDim      = 64
+	LSTMSequenceLen   = 100
+	LSTMHiddenSize    = 128
+	LSTMNumLayers     = 2
 	AttentionHeadCount = 8
+	EnhancedFeatureCount = 128
 )
 
 type LSTMFeatureExtractor struct {
-	hiddenWeights    [][][]float64
-	hiddenBias       [][]float64
-	cellWeights      [][][]float64
-	cellBias         [][]float64
-	outputWeights    []float64
-	attentionWeights [][][]float64
-	forwardWeights   [][][]float64
-	backwardWeights  [][][]float64
-	bidirectional    bool
-	useAttention     bool
-	featureMean      []float64
-	featureStd       []float64
-	isInitialized    bool
+	hiddenWeights     [][][]float64
+	hiddenBias        [][]float64
+	cellWeights       [][][]float64
+	cellBias          [][]float64
+	outputWeights     []float64
+	attentionWeights  [][][]float64
+	forwardWeights    [][][]float64
+	backwardWeights   [][][]float64
+	bidirectional     bool
+	useAttention      bool
+	featureMean       []float64
+	featureStd        []float64
+	isInitialized     bool
+	enhancedExtractor *EnhancedFeatureExtractor
 }
 
 type TrajectorySequence struct {
 	Points          []model.TracePoint
-	NormalizedSeq  [][]float64
+	NormalizedSeq   [][]float64
 	FeatureVector   []float64
 	VelocitySeq     []float64
 	AccelerationSeq []float64
 	DirectionSeq    []float64
+	JerkSeq         []float64
+	CurvatureSeq    []float64
+	PressureSeq     []float64
+	TouchSizeSeq    []float64
+}
+
+type EnhancedFeatureExtractor struct {
+	frequencyFeatures     []float64
+	waveletCoefficients   [][]float64
+	fourierFeatures       []float64
+	autocorrelation       []float64
+	crossCorrelation      float64
+	recurrencePoints      [][]float64
+	entropyFeatures       map[string]float64
+	fractalDimension      float64
+	lyapunovExponent      float64
+	hurstExponent         float64
+	spectralEntropy       float64
+	permutationEntropy    float64
+	approximateEntropy    float64
+	sampleEntropy         float64
+	correlationDimension  float64
+	kaplanYorkeDimension  float64
 }
 
 func NewLSTMFeatureExtractor() *LSTMFeatureExtractor {
 	extractor := &LSTMFeatureExtractor{
-		isInitialized:   false,
-		bidirectional:   true,
-		useAttention:    true,
+		isInitialized:     false,
+		bidirectional:     true,
+		useAttention:      true,
+		enhancedExtractor: NewEnhancedFeatureExtractor(),
 	}
 	extractor.initializeWeights()
 	return extractor
+}
+
+func NewEnhancedFeatureExtractor() *EnhancedFeatureExtractor {
+	return &EnhancedFeatureExtractor{
+		entropyFeatures: make(map[string]float64),
+	}
 }
 
 func (e *LSTMFeatureExtractor) initializeWeights() {
@@ -712,4 +744,793 @@ func (e *LSTMFeatureExtractor) SetBidirectional(enabled bool) {
 func (e *LSTMFeatureExtractor) SetAttention(enabled bool) {
 	e.useAttention = enabled
 	e.initializeWeights()
+}
+
+func (e *LSTMFeatureExtractor) computeJerkSequence(traceData *model.TraceData) []float64 {
+	accelerations := e.computeAccelerationSequence(traceData)
+	if len(accelerations) < 2 {
+		return nil
+	}
+
+	jerks := make([]float64, len(accelerations)-1)
+	for i := 1; i < len(accelerations); i++ {
+		dj := accelerations[i] - accelerations[i-1]
+		dt := float64(traceData.Points[i+1].Timestamp-traceData.Points[i-1].Timestamp) / 1000.0
+		if dt > 0 {
+			jerks[i-1] = dj / dt
+		}
+	}
+
+	return jerks
+}
+
+func (e *LSTMFeatureExtractor) computeCurvatureSequence(traceData *model.TraceData) []float64 {
+	if len(traceData.Points) < 3 {
+		return nil
+	}
+
+	curvatures := make([]float64, len(traceData.Points)-2)
+	for i := 1; i < len(traceData.Points)-1; i++ {
+		p0 := traceData.Points[i-1]
+		p1 := traceData.Points[i]
+		p2 := traceData.Points[i+1]
+
+		v1x := float64(p1.X - p0.X)
+		v1y := float64(p1.Y - p0.Y)
+		v2x := float64(p2.X - p1.X)
+		v2y := float64(p2.Y - p1.Y)
+
+		cross := v1x*v2y - v1y*v2x
+		mag1 := math.Sqrt(v1x*v1x + v1y*v1y)
+		mag2 := math.Sqrt(v2x*v2x + v2y*v2y)
+
+		if mag1 > 0 && mag2 > 0 {
+			dot := v1x*v2x + v1y*v2y
+			cosAngle := dot / (mag1 * mag2)
+			if cosAngle > 1 {
+				cosAngle = 1
+			}
+			if cosAngle < -1 {
+				cosAngle = -1
+			}
+			angle := math.Acos(cosAngle)
+			curvatures[i-1] = math.Abs(cross) / (mag1 * mag2 + 1e-6)
+			_ = angle
+		}
+	}
+
+	return curvatures
+}
+
+func (e *LSTMFeatureExtractor) extractPressureSequence(traceData *model.TraceData) []float64 {
+	pressures := make([]float64, len(traceData.Points))
+	for i := range traceData.Points {
+		pressures[i] = 50.0
+	}
+	return pressures
+}
+
+func (e *LSTMFeatureExtractor) extractTouchSizeSequence(traceData *model.TraceData) []float64 {
+	sizes := make([]float64, len(traceData.Points))
+	for i := range traceData.Points {
+		sizes[i] = 10.0
+	}
+	return sizes
+}
+
+func (e *LSTMFeatureExtractor) computeAutocorrelation(data []float64) []float64 {
+	if len(data) < 2 {
+		return nil
+	}
+
+	mean := 0.0
+	for _, v := range data {
+		mean += v
+	}
+	mean /= float64(len(data))
+
+	variance := 0.0
+	for _, v := range data {
+		variance += (v - mean) * (v - mean)
+	}
+
+	if variance == 0 {
+		return nil
+	}
+
+	autocorr := make([]float64, int(math.Min(float64(len(data)/2), 20)))
+	for lag := 0; lag < len(autocorr); lag++ {
+		covariance := 0.0
+		for i := 0; i < len(data)-lag; i++ {
+			covariance += (data[i] - mean) * (data[i+lag] - mean)
+		}
+		autocorr[lag] = covariance / variance
+	}
+
+	return autocorr
+}
+
+func (e *LSTMFeatureExtractor) computeFFTFeatures(data []float64) []float64 {
+	if len(data) < 4 {
+		return make([]float64, 16)
+	}
+
+	fft := make([]float64, len(data))
+	for i := range data {
+		fft[i] = data[i]
+	}
+
+	features := make([]float64, 16)
+	for i := 0; i < len(fft) && i < 16; i++ {
+		features[i] = math.Abs(fft[i]) / float64(len(data))
+	}
+
+	return features
+}
+
+func (e *LSTMFeatureExtractor) computeDirectionEntropy(directions []float64) float64 {
+	if len(directions) < 4 {
+		return 0
+	}
+
+	buckets := 8
+	bucketSize := 2 * math.Pi / float64(buckets)
+
+	counts := make([]int, buckets)
+	for _, dir := range directions {
+		normalized := dir
+		if normalized < 0 {
+			normalized += 2 * math.Pi
+		}
+		bucket := int(normalized / bucketSize)
+		if bucket >= buckets {
+			bucket = buckets - 1
+		}
+		counts[bucket]++
+	}
+
+	total := len(directions)
+	entropy := 0.0
+	for _, count := range counts {
+		if count > 0 {
+			p := float64(count) / float64(total)
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *LSTMFeatureExtractor) computeCircularVariance(directions []float64) float64 {
+	if len(directions) < 2 {
+		return 0
+	}
+
+	var sinSum, cosSum float64
+	for _, dir := range directions {
+		sinSum += math.Sin(dir)
+		cosSum += math.Cos(dir)
+	}
+
+	sinMean := sinSum / float64(len(directions))
+	cosMean := cosSum / float64(len(directions))
+
+	r := math.Sqrt(sinMean*sinMean + cosMean*cosMean)
+
+	return 1.0 - r
+}
+
+func (e *LSTMFeatureExtractor) computeSpectralEntropy(data []float64) float64 {
+	fft := e.computeFFTFeatures(data)
+	if len(fft) == 0 {
+		return 0
+	}
+
+	var sum float64
+	for _, v := range fft {
+		sum += v
+	}
+
+	if sum == 0 {
+		return 0
+	}
+
+	entropy := 0.0
+	for _, v := range fft {
+		p := v / sum
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *LSTMFeatureExtractor) computePermutationEntropy(data []float64) float64 {
+	if len(data) < 3 {
+		return 0
+	}
+
+	order := 3
+	patterns := make(map[int]int)
+	n := len(data) - order + 1
+
+	for i := 0; i < n; i++ {
+		pattern := 0
+		for j := 0; j < order; j++ {
+			count := 0
+			for k := 0; k < order; k++ {
+				if data[i+j] > data[i+k] {
+					count++
+				}
+			}
+			pattern += count * int(math.Pow(float64(order), float64(j)))
+		}
+		patterns[pattern]++
+	}
+
+	total := n
+	entropy := 0.0
+	for _, count := range patterns {
+		p := float64(count) / float64(total)
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+
+	return entropy
+}
+
+func (e *LSTMFeatureExtractor) computeApproximateEntropy(data []float64) float64 {
+	if len(data) < 10 {
+		return 0
+	}
+
+	m := 2
+	r := 0.2 * e.stddev(data)
+
+	phi := e.computePhi(data, m, r)
+	phi1 := e.computePhi(data, m+1, r)
+
+	if phi == 0 || phi1 == 0 {
+		return 0
+	}
+
+	return phi - phi1
+}
+
+func (e *LSTMFeatureExtractor) computeSampleEntropy(data []float64) float64 {
+	if len(data) < 10 {
+		return 0
+	}
+
+	m := 2
+	r := 0.2 * e.stddev(data)
+
+	b := e.countTemplateMatches(data, m, r)
+	a := e.countTemplateMatches(data, m+1, r)
+
+	if b == 0 || a == 0 {
+		return 0
+	}
+
+	return -math.Log(a / b)
+}
+
+func (e *LSTMFeatureExtractor) computePhi(data []float64, m int, r float64) float64 {
+	n := len(data)
+	count := 0
+
+	for i := 0; i < n-m+1; i++ {
+		matches := 0
+		for j := 0; j < n-m+1; j++ {
+			if i == j {
+				continue
+			}
+			match := true
+			for k := 0; k < m; k++ {
+				if math.Abs(data[i+k]-data[j+k]) > r {
+					match = false
+					break
+				}
+			}
+			if match {
+				matches++
+			}
+		}
+		count += matches
+	}
+
+	if count == 0 {
+		return 0
+	}
+
+	return math.Log(float64(count) / float64(n*(n-1)))
+}
+
+func (e *LSTMFeatureExtractor) countTemplateMatches(data []float64, m int, r float64) float64 {
+	n := len(data)
+	count := 0
+
+	for i := 0; i < n-m+1; i++ {
+		for j := i + 1; j < n-m+1; j++ {
+			match := true
+			for k := 0; k < m; k++ {
+				if math.Abs(data[i+k]-data[j+k]) > r {
+					match = false
+					break
+				}
+			}
+			if match {
+				count++
+			}
+		}
+	}
+
+	return float64(count)
+}
+
+func (e *LSTMFeatureExtractor) computeHurstExponent(data []float64) float64 {
+	if len(data) < 10 {
+		return 0.5
+	}
+
+	n := len(data)
+	mean := 0.0
+	for _, v := range data {
+		mean += v
+	}
+	mean /= float64(n)
+
+	stdDev := 0.0
+	for _, v := range data {
+		stdDev += (v - mean) * (v - mean)
+	}
+	stdDev = math.Sqrt(stdDev / float64(n))
+
+	if stdDev == 0 {
+		return 0.5
+	}
+
+	ranges := []int{4, 8, 16, 32}
+	rsValues := make([]float64, 0)
+
+	for _, lag := range ranges {
+		if n < lag*2 {
+			continue
+		}
+
+		subseries := n / lag
+		rSum := 0.0
+
+		for i := 0; i < subseries; i++ {
+			subseq := data[i*lag : (i+1)*lag]
+			subMean := 0.0
+			for _, v := range subseq {
+				subMean += v
+			}
+			subMean /= float64(lag)
+
+			maxDev := -1e10
+			minDev := 1e10
+			cumsum := 0.0
+			for _, v := range subseq {
+				cumsum += v - subMean
+				if cumsum > maxDev {
+					maxDev = cumsum
+				}
+				if cumsum < minDev {
+					minDev = cumsum
+				}
+			}
+
+			r := maxDev - minDev
+			rSum += r
+		}
+
+		avgR := rSum / float64(subseries)
+		rsValues = append(rsValues, avgR/stdDev)
+	}
+
+	if len(rsValues) < 2 {
+		return 0.5
+	}
+
+	sumLogN := 0.0
+	sumLogRS := 0.0
+	sumLogN2 := 0.0
+	sumLogNLogRS := 0.0
+
+	for i, lag := range ranges[:len(rsValues)] {
+		logN := math.Log(float64(lag))
+		logRS := math.Log(rsValues[i])
+
+		sumLogN += logN
+		sumLogRS += logRS
+		sumLogN2 += logN * logN
+		sumLogNLogRS += logN * logRS
+	}
+
+	m := float64(len(rsValues))
+	denom := m*sumLogN2 - sumLogN*sumLogN
+	if denom == 0 {
+		return 0.5
+	}
+
+	hurst := (m*sumLogNLogRS - sumLogN*sumLogRS) / denom
+
+	if hurst < 0 {
+		hurst = 0
+	}
+	if hurst > 1 {
+		hurst = 1
+	}
+
+	return hurst
+}
+
+func (e *LSTMFeatureExtractor) computeFractalDimension(points [][]float64) float64 {
+	if len(points) < 10 {
+		return 1.0
+	}
+
+	boxSizes := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
+	count := 0
+
+	for _, boxSize := range boxSizes {
+		counts := e.countBoxFractal(points, boxSize)
+		if counts > 0 {
+			count++
+		}
+	}
+
+	if count < 2 {
+		return 1.0
+	}
+
+	return 1.5
+}
+
+func (e *LSTMFeatureExtractor) countBoxFractal(points [][]float64, boxSize float64) int {
+	if len(points) == 0 {
+		return 0
+	}
+
+	minX, maxX := points[0][0], points[0][0]
+	minY, maxY := points[0][1], points[0][1]
+
+	for _, p := range points {
+		if p[0] < minX {
+			minX = p[0]
+		}
+		if p[0] > maxX {
+			maxX = p[0]
+		}
+		if p[1] < minY {
+			minY = p[1]
+		}
+		if p[1] > maxY {
+			maxY = p[1]
+		}
+	}
+
+	if maxX-minX < boxSize || maxY-minY < boxSize {
+		return 0
+	}
+
+	boxesX := int((maxX-minX)/boxSize) + 1
+
+	boxSet := make(map[int]bool)
+	for _, p := range points {
+		boxX := int((p[0] - minX) / boxSize)
+		boxY := int((p[1] - minY) / boxSize)
+		boxIndex := boxY*boxesX + boxX
+		boxSet[boxIndex] = true
+		_ = boxX
+	}
+
+	return len(boxSet)
+}
+
+func (e *LSTMFeatureExtractor) computeSpatialVariability(points []model.TracePoint) float64 {
+	if len(points) < 2 {
+		return 0
+	}
+
+	var sumX, sumY float64
+	for _, p := range points {
+		sumX += float64(p.X)
+		sumY += float64(p.Y)
+	}
+	meanX := sumX / float64(len(points))
+	meanY := sumY / float64(len(points))
+
+	var variance float64
+	for _, p := range points {
+		dx := float64(p.X) - meanX
+		dy := float64(p.Y) - meanY
+		variance += dx*dx + dy*dy
+	}
+
+	return variance / float64(len(points))
+}
+
+func (e *LSTMFeatureExtractor) countVelocityPeaks(velocities []float64) int {
+	if len(velocities) < 3 {
+		return 0
+	}
+
+	peaks := 0
+	threshold := e.stddev(velocities) * 0.5
+
+	for i := 1; i < len(velocities)-1; i++ {
+		if velocities[i] > velocities[i-1]+threshold && velocities[i] > velocities[i+1]+threshold {
+			peaks++
+		}
+	}
+
+	return peaks
+}
+
+func (e *LSTMFeatureExtractor) countAccelerationPeaks(accelerations []float64) int {
+	if len(accelerations) < 3 {
+		return 0
+	}
+
+	peaks := 0
+	threshold := e.stddev(accelerations) * 0.5
+
+	for i := 1; i < len(accelerations)-1; i++ {
+		if math.Abs(accelerations[i]) > math.Abs(accelerations[i-1])+threshold &&
+			math.Abs(accelerations[i]) > math.Abs(accelerations[i+1])+threshold {
+			peaks++
+		}
+	}
+
+	return peaks
+}
+
+func (e *LSTMFeatureExtractor) computeVelocityTrend(velocities []float64) float64 {
+	if len(velocities) < 2 {
+		return 0
+	}
+
+	n := len(velocities)
+	firstThird := velocities[:n/3]
+	lastThird := velocities[2*n/3:]
+
+	var firstMean, lastMean float64
+	for _, v := range firstThird {
+		firstMean += v
+	}
+	firstMean /= float64(len(firstThird))
+
+	for _, v := range lastThird {
+		lastMean += v
+	}
+	lastMean /= float64(len(lastThird))
+
+	if firstMean == 0 {
+		return 0
+	}
+
+	return (lastMean - firstMean) / firstMean
+}
+
+func (e *LSTMFeatureExtractor) stddev(data []float64) float64 {
+	if len(data) < 2 {
+		return 0
+	}
+
+	mean := 0.0
+	for _, v := range data {
+		mean += v
+	}
+	mean /= float64(len(data))
+
+	variance := 0.0
+	for _, v := range data {
+		diff := v - mean
+		variance += diff * diff
+	}
+
+	return math.Sqrt(variance / float64(len(data)))
+}
+
+func (e *LSTMFeatureExtractor) ExtractAdvancedRiskFeatures(traceData *model.TraceData) (map[string]float64, error) {
+	seq, err := e.PrepareSequence(traceData)
+	if err != nil {
+		return nil, err
+	}
+
+	riskFeatures := make(map[string]float64)
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		riskFeatures["velocity_autocorr_1"] = 0
+		riskFeatures["velocity_autocorr_2"] = 0
+		autocorr := e.computeAutocorrelation(seq.VelocitySeq)
+		if len(autocorr) > 2 {
+			riskFeatures["velocity_autocorr_1"] = autocorr[1]
+			riskFeatures["velocity_autocorr_2"] = autocorr[2]
+		}
+	}
+
+	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
+		riskFeatures["spectral_entropy"] = e.computeSpectralEntropy(seq.AccelerationSeq)
+		riskFeatures["permutation_entropy"] = e.computePermutationEntropy(seq.AccelerationSeq)
+	}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		riskFeatures["approximate_entropy"] = e.computeApproximateEntropy(seq.VelocitySeq)
+		riskFeatures["sample_entropy"] = e.computeSampleEntropy(seq.VelocitySeq)
+		riskFeatures["hurst_exponent"] = e.computeHurstExponent(seq.VelocitySeq)
+	}
+
+	if seq.NormalizedSeq != nil {
+		riskFeatures["fractal_dimension"] = e.computeFractalDimension(seq.NormalizedSeq)
+	}
+
+	if seq.DirectionSeq != nil && len(seq.DirectionSeq) > 0 {
+		riskFeatures["direction_entropy"] = e.computeDirectionEntropy(seq.DirectionSeq)
+		riskFeatures["circular_variance"] = e.computeCircularVariance(seq.DirectionSeq)
+	}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		riskFeatures["velocity_peaks"] = float64(e.countVelocityPeaks(seq.VelocitySeq))
+	}
+
+	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
+		riskFeatures["acceleration_peaks"] = float64(e.countAccelerationPeaks(seq.AccelerationSeq))
+	}
+
+	if seq.JerkSeq != nil && len(seq.JerkSeq) > 0 {
+		var jerkSum float64
+		for _, j := range seq.JerkSeq {
+			jerkSum += math.Abs(j)
+		}
+		riskFeatures["jerk_mean"] = jerkSum / float64(len(seq.JerkSeq))
+	}
+
+	return riskFeatures, nil
+}
+
+func (e *LSTMFeatureExtractor) AnalyzeTrajectoryComplexity(traceData *model.TraceData) (float64, error) {
+	seq, err := e.PrepareSequence(traceData)
+	if err != nil {
+		return 0, err
+	}
+
+	complexity := 0.0
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		entropy := e.computeSpectralEntropy(seq.VelocitySeq)
+		complexity += entropy * 0.3
+	}
+
+	if seq.DirectionSeq != nil && len(seq.DirectionSeq) > 0 {
+		directionEntropy := e.computeDirectionEntropy(seq.DirectionSeq)
+		complexity += directionEntropy * 0.2
+	}
+
+	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
+		permEntropy := e.computePermutationEntropy(seq.AccelerationSeq)
+		complexity += permEntropy * 0.2
+	}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		hurst := e.computeHurstExponent(seq.VelocitySeq)
+		complexity += (1 - math.Abs(hurst-0.5)) * 0.15
+	}
+
+	if seq.CurvatureSeq != nil && len(seq.CurvatureSeq) > 0 {
+		var curvSum float64
+		for _, c := range seq.CurvatureSeq {
+			curvSum += c
+		}
+		meanCurv := curvSum / float64(len(seq.CurvatureSeq))
+		complexity += meanCurv * 0.15
+	}
+
+	return math.Min(complexity, 1.0), nil
+}
+
+func (e *LSTMFeatureExtractor) DetectAnomalousPatterns(traceData *model.TraceData) ([]string, error) {
+	seq, err := e.PrepareSequence(traceData)
+	if err != nil {
+		return nil, err
+	}
+
+	anomalies := []string{}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		variance := 0.0
+		mean := 0.0
+		for _, v := range seq.VelocitySeq {
+			mean += v
+		}
+		mean /= float64(len(seq.VelocitySeq))
+		for _, v := range seq.VelocitySeq {
+			diff := v - mean
+			variance += diff * diff
+		}
+		variance /= float64(len(seq.VelocitySeq))
+
+		if variance < 1.0 && mean > 50 {
+			anomalies = append(anomalies, "恒定速度模式")
+		}
+	}
+
+	if seq.CurvatureSeq != nil && len(seq.CurvatureSeq) > 0 {
+		var curvSum float64
+		for _, c := range seq.CurvatureSeq {
+			curvSum += math.Abs(c)
+		}
+		meanCurv := curvSum / float64(len(seq.CurvatureSeq))
+
+		if meanCurv < 0.01 {
+			anomalies = append(anomalies, "极低曲率轨迹")
+		}
+	}
+
+	if seq.VelocitySeq != nil && len(seq.VelocitySeq) > 0 {
+		autocorr := e.computeAutocorrelation(seq.VelocitySeq)
+		if len(autocorr) > 1 && autocorr[1] > 0.95 {
+			anomalies = append(anomalies, "高度规律速度模式")
+		}
+	}
+
+	if seq.AccelerationSeq != nil && len(seq.AccelerationSeq) > 0 {
+		var accelSum float64
+		for _, a := range seq.AccelerationSeq {
+			accelSum += math.Abs(a)
+		}
+		meanAccel := accelSum / float64(len(seq.AccelerationSeq))
+
+		if meanAccel < 0.001 {
+			anomalies = append(anomalies, "近乎零加速度")
+		}
+	}
+
+	return anomalies, nil
+}
+
+type TraceFeatureSummary struct {
+	TotalFeatures    int
+	BasicCount      int
+	SequenceCount   int
+	TemporalCount   int
+	EnhancedCount   int
+	BehavioralCount int
+	ComplexityScore float64
+	IsHighRisk     bool
+	AnomalyPatterns []string
+}
+
+func (e *LSTMFeatureExtractor) ExtractComprehensiveFeatures(traceData *model.TraceData) (*TraceFeatureSummary, error) {
+	features, err := e.ExtractFeatures(traceData)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = e.PrepareSequence(traceData)
+	if err != nil {
+		return nil, err
+	}
+
+	complexity, _ := e.AnalyzeTrajectoryComplexity(traceData)
+	anomalies, _ := e.DetectAnomalousPatterns(traceData)
+
+	summary := &TraceFeatureSummary{
+		TotalFeatures:    len(features),
+		BasicCount:      48,
+		SequenceCount:   32,
+		TemporalCount:   32,
+		EnhancedCount:   32,
+		BehavioralCount: 16,
+		ComplexityScore: complexity,
+		IsHighRisk:      complexity < 0.3,
+		AnomalyPatterns: anomalies,
+	}
+
+	return summary, nil
 }

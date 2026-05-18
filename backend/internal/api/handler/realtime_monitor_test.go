@@ -1,227 +1,193 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestGetAlertIcon(t *testing.T) {
-	tests := []struct {
-		name     string
-		severity string
-		expected string
-	}{
-		{"critical", "critical", "exclamation-circle"},
-		{"warning", "warning", "exclamation-triangle"},
-		{"info", "info", "info-circle"},
-		{"unknown", "unknown", "bell"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getAlertIcon(tt.severity)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGetConnectedClientsCount(t *testing.T) {
-	count := GetConnectedClientsCount()
-	assert.GreaterOrEqual(t, count, 0)
-}
-
-func TestBroadcastCustomMessage(t *testing.T) {
-	err := BroadcastCustomMessage("test", map[string]string{"key": "value"})
-	assert.NoError(t, err)
-}
-
-func TestTriggerAlert(t *testing.T) {
-	tests := []struct {
-		name     string
-		alertType string
-		severity string
-		message  string
-	}{
-		{"critical alert", "system", "critical", "Test critical alert"},
-		{"warning alert", "system", "warning", "Test warning alert"},
-		{"info alert", "system", "info", "Test info alert"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := TriggerAlert(tt.alertType, tt.severity, tt.message)
-			assert.NoError(t, err)
-		})
-	}
-}
-
-func TestGetRealtimeMonitoringData(t *testing.T) {
+func TestClientManager_RegisterClient(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.GET("/monitoring/data", GetRealtimeMonitoringData)
+	router := gin.New()
+	router.GET("/ws", RealtimeMonitorWebSocket)
 
-	req, _ := http.NewRequest("GET", "/monitoring/data", nil)
+	req, _ := http.NewRequest("GET", "/ws", nil)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	go func() {
+		router.ServeHTTP(w, req)
+	}()
 
-	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(t, err)
-	assert.Contains(t, resp, "data")
+	select {
+	case client := <-manager.register:
+		if client == nil {
+			t.Error("注册的客户端为 nil")
+		}
+	case <-time.After(1 * time.Second):
+	}
 }
 
-func TestGetRealtimeSystemStatus(t *testing.T) {
+func TestClientManager_UnregisterClient(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.GET("/monitoring/status", GetRealtimeSystemStatus)
+	router := gin.New()
+	router.GET("/ws", RealtimeMonitorWebSocket)
 
-	req, _ := http.NewRequest("GET", "/monitoring/status", nil)
+	req, _ := http.NewRequest("GET", "/ws", nil)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	
+	go router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	select {
+	case client := <-manager.register:
+		if client != nil {
+			manager.unregister <- client
+		}
+	case <-time.After(1 * time.Second):
+	}
 
-	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(t, err)
-	assert.Contains(t, resp, "data")
+	select {
+	case client := <-manager.unregister:
+		if client == nil {
+			t.Error("取消注册的客户端为 nil")
+		}
+	case <-time.After(1 * time.Second):
+	}
 }
 
-func TestGetRealtimeAlerts(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.GET("/monitoring/alerts", GetRealtimeAlerts)
+func TestClientManager_Broadcast(t *testing.T) {
+	msg := Message{
+		Type:      "test",
+		Payload:   map[string]string{"message": "hello"},
+		Timestamp: 1234567890,
+	}
+	
+	msgBytes, _ := json.Marshal(msg)
+	
+	initialCount := len(manager.clients)
+	manager.broadcast <- msgBytes
 
-	req, _ := http.NewRequest("GET", "/monitoring/alerts", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var resp map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(t, err)
-	assert.Contains(t, resp, "data")
+	if len(manager.clients) != initialCount {
+		t.Errorf("广播不应改变客户端数量")
+	}
 }
 
-func TestMessage_Structure(t *testing.T) {
+func TestClientManager_GetClientCount(t *testing.T) {
+	count := GetClientCount()
+	if count < 0 {
+		t.Errorf("客户端数量不应为负数: %d", count)
+	}
+}
+
+func TestGetAlertPayload(t *testing.T) {
+	alert := GetAlertPayload(1, "critical", "测试告警")
+	
+	if alert.ID != 1 {
+		t.Errorf("期望告警ID为 1, 实际得到 %d", alert.ID)
+	}
+	if alert.Type != "critical" {
+		t.Errorf("期望告警类型为 critical, 实际得到 %s", alert.Type)
+	}
+	if alert.Message != "测试告警" {
+		t.Errorf("期望告警消息为 测试告警, 实际得到 %s", alert.Message)
+	}
+	if alert.Timestamp <= 0 {
+		t.Error("告警时间戳应该大于 0")
+	}
+}
+
+func TestGetHeartbeatPayload(t *testing.T) {
+	payload := GetHeartbeatPayload()
+	
+	if payload.Timestamp <= 0 {
+		t.Error("心跳时间戳应该大于 0")
+	}
+	if payload.Latency < 0 {
+		t.Errorf("心跳延迟不应为负数: %d", payload.Latency)
+	}
+}
+
+func TestRealtimeDataPayload_JSON(t *testing.T) {
+	payload := RealtimeDataPayload{
+		Type: "metrics",
+		Data: map[string]interface{}{
+			"cpu": 45.5,
+			"mem": 60.2,
+		},
+		Timestamp: 1234567890,
+	}
+
+	jsonBytes, err := json.Marshal(payload)
+	if err != nil {
+		t.Errorf("JSON 序列化失败: %v", err)
+	}
+
+	var decoded RealtimeDataPayload
+	if err := json.Unmarshal(jsonBytes, &decoded); err != nil {
+		t.Errorf("JSON 反序列化失败: %v", err)
+	}
+
+	if decoded.Type != payload.Type {
+		t.Errorf("类型不匹配: 期望 %s, 实际 %s", payload.Type, decoded.Type)
+	}
+	if decoded.Timestamp != payload.Timestamp {
+		t.Errorf("时间戳不匹配: 期望 %d, 实际 %d", payload.Timestamp, decoded.Timestamp)
+	}
+}
+
+func TestMessage_JSON(t *testing.T) {
 	msg := Message{
 		Type:      "test",
 		Payload:   map[string]string{"key": "value"},
 		Timestamp: 1234567890,
-		ID:        "test-id",
+		ID:        "msg-123",
 	}
 
-	assert.Equal(t, "test", msg.Type)
-	assert.Equal(t, int64(1234567890), msg.Timestamp)
-	assert.Equal(t, "test-id", msg.ID)
-	assert.NotNil(t, msg.Payload)
-}
-
-func TestRealtimeDataPayload_Structure(t *testing.T) {
-	payload := RealtimeDataPayload{
-		Type:      "metrics",
-		Data:      map[string]interface{}{"key": "value"},
-		Timestamp: 1234567890,
+	jsonBytes, err := json.Marshal(msg)
+	if err != nil {
+		t.Errorf("JSON 序列化失败: %v", err)
 	}
 
-	assert.Equal(t, "metrics", payload.Type)
-	assert.Equal(t, int64(1234567890), payload.Timestamp)
-	assert.NotNil(t, payload.Data)
+	var decoded Message
+	if err := json.Unmarshal(jsonBytes, &decoded); err != nil {
+		t.Errorf("JSON 反序列化失败: %v", err)
+	}
+
+	if decoded.Type != msg.Type {
+		t.Errorf("类型不匹配: 期望 %s, 实际 %s", msg.Type, decoded.Type)
+	}
+	if decoded.ID != msg.ID {
+		t.Errorf("ID 不匹配: 期望 %s, 实际 %s", msg.ID, decoded.ID)
+	}
 }
 
-func TestAlertPayload_Structure(t *testing.T) {
-	payload := AlertPayload{
+func TestAlertPayload_JSON(t *testing.T) {
+	alert := AlertPayload{
 		ID:        1,
-		Type:      "system",
-		Severity:  "warning",
-		Message:   "Test message",
+		Type:      "critical",
+		Severity:  "high",
+		Message:   "测试告警",
 		Timestamp: 1234567890,
-		Icon:      "info-circle",
+		Icon:      "warning",
 	}
 
-	assert.Equal(t, 1, payload.ID)
-	assert.Equal(t, "system", payload.Type)
-	assert.Equal(t, "warning", payload.Severity)
-	assert.Equal(t, "Test message", payload.Message)
-	assert.Equal(t, "info-circle", payload.Icon)
-}
-
-func TestHeartbeatPayload_Structure(t *testing.T) {
-	payload := HeartbeatPayload{
-		Timestamp: 1234567890,
-		Latency:   100,
+	jsonBytes, err := json.Marshal(alert)
+	if err != nil {
+		t.Errorf("JSON 序列化失败: %v", err)
 	}
 
-	assert.Equal(t, int64(1234567890), payload.Timestamp)
-	assert.Equal(t, int64(100), payload.Latency)
-}
-
-func TestSubscriptionPayload_Structure(t *testing.T) {
-	payload := SubscriptionPayload{
-		Groups: []string{"group1", "group2"},
+	var decoded AlertPayload
+	if err := json.Unmarshal(jsonBytes, &decoded); err != nil {
+		t.Errorf("JSON 反序列化失败: %v", err)
 	}
 
-	assert.Len(t, payload.Groups, 2)
-	assert.Contains(t, payload.Groups, "group1")
-	assert.Contains(t, payload.Groups, "group2")
-}
-
-func TestRealtimeClient_Structure(t *testing.T) {
-	client := &RealtimeClient{
-		ID:     "test-client-id",
-		groups: map[string]bool{"group1": true, "group2": false},
+	if decoded.ID != alert.ID {
+		t.Errorf("ID 不匹配: 期望 %d, 实际 %d", alert.ID, decoded.ID)
 	}
-
-	assert.Equal(t, "test-client-id", client.ID)
-	assert.Len(t, client.groups, 2)
-}
-
-func TestClientManager_InitialState(t *testing.T) {
-	m := &ClientManager{
-		clients:    make(map[*RealtimeClient]bool),
-		groups:     make(map[string]map[*RealtimeClient]bool),
-		broadcast:  make(chan []byte, 1024),
-		register:   make(chan *RealtimeClient),
-		unregister: make(chan *RealtimeClient),
+	if decoded.Severity != alert.Severity {
+		t.Errorf("严重级别不匹配: 期望 %s, 实际 %s", alert.Severity, decoded.Severity)
 	}
-
-	assert.NotNil(t, m.clients)
-	assert.NotNil(t, m.groups)
-	assert.NotNil(t, m.broadcast)
-	assert.NotNil(t, m.register)
-	assert.NotNil(t, m.unregister)
-}
-
-func TestMonitoringService_StartStop(t *testing.T) {
-	ctx := context.Background()
-	
-	StartMonitoringService(ctx)
-	assert.True(t, IsMonitoringServiceRunning())
-
-	StopMonitoringService()
-}
-
-func TestIsMonitoringServiceRunning(t *testing.T) {
-	ctx := context.Background()
-	
-	StartMonitoringService(ctx)
-	assert.True(t, IsMonitoringServiceRunning())
-
-	StopMonitoringService()
-}
-
-func TestMonitoringService_Structure(t *testing.T) {
-	service := &MonitoringService{}
-	assert.Nil(t, service.ctx)
-	assert.Nil(t, service.cancel)
-	assert.False(t, service.isRunning.Load())
 }

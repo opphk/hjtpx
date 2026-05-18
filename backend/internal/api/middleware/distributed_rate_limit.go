@@ -17,26 +17,13 @@ func initDistributedRateLimitService() {
 }
 
 type DistributedRateLimitOptions struct {
-	Type            service.DistributedRateLimitType
-	MaxRequests     int
-	WindowSecs      int
-	KeyPrefix       string
-	ConsistencyMode bool
+	MaxRequests int
+	WindowSecs  int
+	KeyPrefix   string
 }
 
 func DistributedRateLimitMiddleware(options *DistributedRateLimitOptions) gin.HandlerFunc {
 	distributedOnce.Do(initDistributedRateLimitService)
-
-	if options != nil {
-		config := service.DistributedRateLimitConfig{
-			Type:            options.Type,
-			MaxRequests:     options.MaxRequests,
-			WindowSecs:      options.WindowSecs,
-			RedisKeyPrefix:  options.KeyPrefix,
-			ConsistencyMode: options.ConsistencyMode,
-		}
-		distributedRateLimitService.UpdateConfig(config)
-	}
 
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
@@ -47,20 +34,24 @@ func DistributedRateLimitMiddleware(options *DistributedRateLimitOptions) gin.Ha
 			}
 		}
 
-		result, err := distributedRateLimitService.CheckIPRateLimit(c.Request.Context(), ip)
+		key := "ip:" + ip
+		maxRequests := int64(60)
+		if options != nil && options.MaxRequests > 0 {
+			maxRequests = int64(options.MaxRequests)
+		}
+
+		result, err := distributedRateLimitService.Check(c.Request.Context(), key, maxRequests)
 		if err != nil {
 			c.Next()
 			return
 		}
 
-		c.Header("X-RateLimit-Limit", strconv.Itoa(result.Remaining+int(result.TotalCount)))
+		c.Header("X-RateLimit-Limit", strconv.Itoa(result.Remaining+int(maxRequests)))
 		c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
-		c.Header("X-RateLimit-Node", result.NodeID)
-		c.Header("X-RateLimit-Global", strconv.FormatInt(result.GlobalCount, 10))
 
 		if !result.Allowed {
-			c.Header("Retry-After", strconv.FormatInt(int64(result.ResetAt.Unix()-c.GetTime("request_time").Unix()), 10))
+			c.Header("Retry-After", strconv.FormatInt(int64(result.RetryAfter), 10))
 			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
@@ -80,19 +71,24 @@ func DistributedUserRateLimitMiddleware(options *DistributedRateLimitOptions) gi
 			return
 		}
 
-		result, err := distributedRateLimitService.CheckUserRateLimit(c.Request.Context(), userID)
+		key := "user:" + strconv.FormatUint(uint64(userID), 10)
+		maxRequests := int64(100)
+		if options != nil && options.MaxRequests > 0 {
+			maxRequests = int64(options.MaxRequests)
+		}
+
+		result, err := distributedRateLimitService.Check(c.Request.Context(), key, maxRequests)
 		if err != nil {
 			c.Next()
 			return
 		}
 
-		c.Header("X-RateLimit-Limit", strconv.Itoa(result.Remaining+int(result.TotalCount)))
+		c.Header("X-RateLimit-Limit", strconv.Itoa(result.Remaining+int(maxRequests)))
 		c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
-		c.Header("X-RateLimit-Node", result.NodeID)
 
 		if !result.Allowed {
-			c.Header("Retry-After", strconv.FormatInt(int64(result.ResetAt.Unix()-c.GetTime("request_time").Unix()), 10))
+			c.Header("Retry-After", strconv.FormatInt(int64(result.RetryAfter), 10))
 			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
@@ -118,19 +114,24 @@ func DistributedAppRateLimitMiddleware(options *DistributedRateLimitOptions) gin
 			return
 		}
 
-		result, err := distributedRateLimitService.CheckAppRateLimit(c.Request.Context(), uint(appID))
+		key := "app:" + strconv.FormatUint(appID, 10)
+		maxRequests := int64(200)
+		if options != nil && options.MaxRequests > 0 {
+			maxRequests = int64(options.MaxRequests)
+		}
+
+		result, err := distributedRateLimitService.Check(c.Request.Context(), key, maxRequests)
 		if err != nil {
 			c.Next()
 			return
 		}
 
-		c.Header("X-RateLimit-Limit", strconv.Itoa(result.Remaining+int(result.TotalCount)))
+		c.Header("X-RateLimit-Limit", strconv.Itoa(result.Remaining+int(maxRequests)))
 		c.Header("X-RateLimit-Remaining", strconv.Itoa(result.Remaining))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(result.ResetAt.Unix(), 10))
-		c.Header("X-RateLimit-Node", result.NodeID)
 
 		if !result.Allowed {
-			c.Header("Retry-After", strconv.FormatInt(int64(result.ResetAt.Unix()-c.GetTime("request_time").Unix()), 10))
+			c.Header("Retry-After", strconv.FormatInt(int64(result.RetryAfter), 10))
 			response.TooManyRequests(c, "应用请求过于频繁，请稍后再试")
 			c.Abort()
 			return

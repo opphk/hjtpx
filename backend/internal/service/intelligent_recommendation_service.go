@@ -17,7 +17,7 @@ type IntelligentRecommendationService struct {
 
 type CaptchaUserProfile struct {
 	UserID           string
-	DeviceInfo       DeviceInfo
+	DeviceInfo       RecommendationDeviceInfo
 	BehaviorPatterns []CaptchaBehaviorPattern
 	SuccessHistory   []MethodSuccess
 	PreferredMethods []string
@@ -28,7 +28,7 @@ type CaptchaUserProfile struct {
 	UserSegments     []string
 }
 
-type DeviceInfo struct {
+type RecommendationDeviceInfo struct {
 	DeviceType     string
 	OS             string
 	Browser        string
@@ -223,7 +223,7 @@ func (s *IntelligentRecommendationService) UpdateUserProfile(
 	method string,
 	success bool,
 	responseTime float64,
-	deviceInfo *DeviceInfo,
+	deviceInfo *RecommendationDeviceInfo,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -331,7 +331,7 @@ func (s *IntelligentRecommendationService) calculateMethodScores(
 
 func (s *IntelligentRecommendationService) calculateDeviceCompatibility(
 	method string,
-	device *DeviceInfo,
+	device *RecommendationDeviceInfo,
 ) float64 {
 	
 	score := 0.5
@@ -762,7 +762,7 @@ func (s *IntelligentRecommendationService) updateCaptchaStats(
 }
 
 func (s *IntelligentRecommendationService) getUserProfileByDevice(
-	device *DeviceInfo,
+	device *RecommendationDeviceInfo,
 ) *CaptchaUserProfile {
 	return nil
 }

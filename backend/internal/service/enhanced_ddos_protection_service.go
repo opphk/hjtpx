@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +64,9 @@ type EnhancedIPStatistics struct {
 	ErrorRate           float64
 	TotalErrors         int
 	TotalRequests       int64
+	ErrorCounts         map[int]int
+	UniqueUserAgents    map[string]int
+	UniquePathsSet      map[string]bool
 }
 
 type EnhancedDDoSTrafficData struct {
@@ -106,16 +108,16 @@ type EnhancedDDoSProtectionService struct {
 	tokenBuckets      map[string]*TokenBucketDDoS
 	globalRateLimiter *SlidingWindowRateLimiter
 	mu                sync.RWMutex
-	anomalyDetector   *AnomalyDetector
+	anomalyDetector   *DDOSAnomalyDetector
 	patternMatcher    *AttackPatternMatcher
 }
 
-type AnomalyDetector struct {
-	baselineMetrics map[string]*BaselineMetrics
+type DDOSAnomalyDetector struct {
+	baselineMetrics map[string]*DDOSBaselineMetrics
 	mu              sync.RWMutex
 }
 
-type BaselineMetrics struct {
+type DDOSBaselineMetrics struct {
 	MeanInterval     float64
 	StdDevInterval  float64
 	MeanRequestRate  float64
@@ -170,7 +172,7 @@ func NewEnhancedDDoSProtectionService(config ...EnhancedDDoSProtectionConfig) *E
 		connectionCounts:  make(map[string]int),
 		slidingWindows:    make(map[string]*SlidingWindowRateLimiter),
 		tokenBuckets:      make(map[string]*TokenBucketDDoS),
-		anomalyDetector:   NewAnomalyDetector(),
+		anomalyDetector:   NewDDOSAnomalyDetector(),
 		patternMatcher:    NewAttackPatternMatcher(),
 	}
 
@@ -266,19 +268,19 @@ func (tb *TokenBucketDDoS) GetTokens() float64 {
 	return tb.tokens
 }
 
-func NewAnomalyDetector() *AnomalyDetector {
-	return &AnomalyDetector{
-		baselineMetrics: make(map[string]*BaselineMetrics),
+func NewDDOSAnomalyDetector() *DDOSAnomalyDetector {
+	return &DDOSAnomalyDetector{
+		baselineMetrics: make(map[string]*DDOSBaselineMetrics),
 	}
 }
 
-func (ad *AnomalyDetector) UpdateBaseline(ip string, interval time.Duration, rate float64) {
+func (ad *DDOSAnomalyDetector) UpdateBaseline(ip string, interval time.Duration, rate float64) {
 	ad.mu.Lock()
 	defer ad.mu.Unlock()
 
 	metrics, exists := ad.baselineMetrics[ip]
 	if !exists {
-		metrics = &BaselineMetrics{
+		metrics = &DDOSBaselineMetrics{
 			SampleCount: 0,
 		}
 		ad.baselineMetrics[ip] = metrics
@@ -298,7 +300,7 @@ func (ad *AnomalyDetector) UpdateBaseline(ip string, interval time.Duration, rat
 	metrics.LastUpdated = time.Now()
 }
 
-func (ad *AnomalyDetector) DetectAnomaly(ip string, currentInterval time.Duration, currentRate float64) (bool, float64) {
+func (ad *DDOSAnomalyDetector) DetectAnomaly(ip string, currentInterval time.Duration, currentRate float64) (bool, float64) {
 	ad.mu.Lock()
 	defer ad.mu.Unlock()
 
@@ -691,7 +693,6 @@ func (s *EnhancedDDoSProtectionService) analyzeBehaviorLocked(ip string, now tim
 
 func (s *EnhancedDDoSProtectionService) checkAttackPatterns(r *http.Request, stats *EnhancedIPStatistics) {
 	url := r.URL.String()
-	headers := fmt.Sprintf("%s %s %s", r.Method, url, r.Header.Get("User-Agent"))
 
 	matched, pattern := s.patternMatcher.Match(url)
 	if matched {
@@ -762,7 +763,6 @@ func (s *EnhancedDDoSProtectionService) statsUpdateRoutine() {
 
 	for range ticker.C {
 		s.mu.Lock()
-		now := time.Now()
 
 		for ip, stats := range s.ipStats {
 			s.anomalyDetector.UpdateBaseline(ip, stats.AvgRequestInterval, stats.RequestRate)

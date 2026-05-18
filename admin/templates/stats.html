@@ -3,189 +3,1070 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>墨盾验证 · 管理后台 · 统计分析</title>
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <title>HJTPX 管理后台 - 统计分析</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .stats-card {
+            border-left: 4px solid #007bff;
+            transition: all 0.3s ease;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .trend-up { color: #28a745; }
+        .trend-down { color: #dc3545; }
+        .export-dropdown .dropdown-menu {
+            min-width: 200px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 250px;
+            }
+        }
+    </style>
 </head>
-<body>
-    <div class="bg-dark d-flex flex-column">
-        <div class="d-flex align-items-center gap-3 p-3 border-bottom border-secondary">
-            <div class="d-flex align-items-center justify-content-center" style="width:44px;height:44px;background:linear-gradient(135deg,#c23a2b,#8b2a1e);border-radius:10px;font-size:22px;color:#c9a96e;flex-shrink:0;"><i class="fas fa-shield-halved"></i></div>
-            <div>
-                <div style="font-weight:700;font-size:20px;color:#c9a96e;line-height:1.3;">墨盾验证</div>
-                <div style="font-size:11px;color:rgba(201,169,110,0.5);font-weight:300;letter-spacing:2px;">· 管理后台 ·</div>
-            </div>
-        </div>
-        <nav class="d-flex flex-column p-3 gap-1 flex-grow-1">
-            <a class="nav-link" href="/admin/"><i class="fas fa-chart-bar"></i><span>仪表盘</span></a>
-            <a class="nav-link active" href="/admin/stats"><i class="fas fa-chart-line"></i><span>统计分析</span></a>
-            <a class="nav-link" href="/admin/advanced-analytics"><i class="fas fa-chart-pie"></i><span>高级分析</span></a>
-            <a class="nav-link" href="/admin/applications"><i class="fas fa-mobile-alt"></i><span>应用管理</span></a>
-            <a class="nav-link" href="/admin/logs"><i class="fas fa-clipboard-list"></i><span>日志查询</span></a>
-            <a class="nav-link" href="/admin/risk-rules"><i class="fas fa-shield-alt"></i><span>风控规则</span></a>
-            <a class="nav-link" href="/admin/blacklist"><i class="fas fa-ban"></i><span>黑名单</span></a>
-            <hr class="border-secondary my-2 mx-3">
+<body class="hold-transition sidebar-mini">
+    <div class="wrapper">
+        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/admin/" class="nav-link">仪表盘</a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/admin/stats" class="nav-link active">统计分析</a>
+                </li>
+            </ul>
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logout"><i class="fas fa-sign-out-alt"></i> 退出</a>
+                </li>
+            </ul>
         </nav>
-        <div class="border-top border-secondary p-3 mt-auto">
-            <a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>退出登录</span></a>
-        </div>
-    </div>
 
-    <div>
-        <header class="bg-white border-bottom d-flex justify-content-between align-items-center px-4 py-2">
-            <div class="d-flex align-items-center gap-3">
-                <h1 style="font-size:20px;font-weight:700;margin:0;padding-left:16px;position:relative;">统计分析</h1>
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid #c23a2b;color:#c23a2b;font-size:9px;font-weight:900;transform:rotate(-8deg);flex-shrink:0;">墨盾</span>
+        <aside class="main-sidebar sidebar-dark-primary elevation-4">
+            <a href="/admin/" class="brand-link">
+                <span class="brand-text font-weight-light">HJTPX 管理后台</span>
+            </a>
+            <div class="sidebar">
+                <nav class="mt-2">
+                    <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
+                        <li class="nav-item">
+                            <a href="/admin/" class="nav-link"><i class="nav-icon fas fa-tachometer-alt"></i><p>仪表盘</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/stats" class="nav-link active"><i class="nav-icon fas fa-chart-line"></i><p>统计分析</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/advanced-analytics" class="nav-link"><i class="nav-icon fas fa-chart-pie"></i><p>高级分析</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/applications" class="nav-link"><i class="nav-icon fas fa-mobile-alt"></i><p>应用管理</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/logs" class="nav-link"><i class="nav-icon fas fa-clipboard-list"></i><p>日志查询</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/risk-rules" class="nav-link"><i class="nav-icon fas fa-shield-alt"></i><p>风控规则</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/blacklist" class="nav-link"><i class="nav-icon fas fa-ban"></i><p>黑名单</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/config" class="nav-link"><i class="nav-icon fas fa-cog"></i><p>系统配置</p></a>
+                        </li>
+                    </ul>
+                </nav>
             </div>
-            <div class="d-flex align-items-center gap-3">
-                <button id="exportStatsBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出报表</button>
-                <button id="refreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-secondary" id="usernameDisplay">管理员</span>
-                    <div class="bg-danger text-white rounded-circle d-flex align-items-center justify-content-center" id="userAvatar" style="width:36px;height:36px;font-weight:700;font-size:14px;">A</div>
-                </div>
-            </div>
-        </header>
-        <hr style="height:4px;background:linear-gradient(to right,#c9a96e,transparent);border:none;margin:0 0 24px;opacity:0.6;border-radius:2px;">
-        <main class="p-2 p-md-4">
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <div class="row g-2 g-md-3 align-items-end">
-                        <div class="col-6 col-md-3">
-                            <label class="form-label"><i class="fas fa-calendar me-1" style="color:#b8924e;"></i>时间范围</label>
-                            <select class="form-select form-select-sm" id="dateRange">
-                                <option value="7d">最近7天</option>
-                                <option value="30d" selected>最近30天</option>
-                                <option value="90d">最近90天</option>
-                                <option value="1y">最近1年</option>
-                            </select>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label"><i class="fas fa-chart-simple me-1" style="color:#b8924e;"></i>对比周期</label>
-                            <select class="form-select form-select-sm" id="comparePeriod">
-                                <option value="">不对比</option>
-                                <option value="prev">上一周期</option>
-                                <option value="prev_year">去年同期</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-3 col-lg-2">
-                            <button id="applyFilterBtn" class="btn btn-dark w-100 btn-sm"><i class="fas fa-filter me-1"></i>应用筛选</button>
-                        </div>
-                        <div class="col-12 col-md-3 col-lg-4 d-flex justify-content-between justify-content-md-end gap-2">
-                            <button id="exportStatsBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download me-1"></i>导出报表</button>
-                            <button id="refreshBtn" class="btn btn-outline-secondary btn-sm"><i class="fas fa-sync me-1"></i>刷新</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        </aside>
 
-            <div class="row g-2 g-md-4 mb-4">
-                <div class="col-6 col-md-3">
-                    <div class="card shadow-sm border text-center">
-                        <div class="card-body py-2 py-md-3">
-                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">总请求量</div>
-                            <div style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statTotalRequests">0</div>
-                            <div class="text-success" style="font-size:11px;font-size:12px;font-weight:500;" id="statRequestsChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
+        <div class="content-wrapper">
+            <section class="content-header">
+                <div class="container-fluid">
+                    <div class="row mb-2">
+                        <div class="col-sm-6">
+                            <h1>统计分析</h1>
+                        </div>
+                        <div class="col-sm-6">
+                            <ol class="breadcrumb float-sm-right">
+                                <li class="breadcrumb-item"><a href="/admin/">首页</a></li>
+                                <li class="breadcrumb-item active">统计分析</li>
+                            </ol>
                         </div>
                     </div>
                 </div>
-                <div class="col-6 col-md-3">
-                    <div class="card shadow-sm border text-center">
-                        <div class="card-body py-2 py-md-3">
-                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">平均响应</div>
-                            <div style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statAvgResponse">0ms</div>
-                            <div class="text-danger" style="font-size:11px;font-size:12px;font-weight:500;" id="statResponseChange"><i class="fas fa-arrow-down me-1"></i>-0%</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="card shadow-sm border text-center">
-                        <div class="card-body py-2 py-md-3">
-                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">成功率</div>
-                            <div class="text-success" style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statSuccessRate">0%</div>
-                            <div class="text-success" style="font-size:11px;font-size:12px;font-weight:500;" id="statSuccessChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="card shadow-sm border text-center">
-                        <div class="card-body py-2 py-md-3">
-                            <div class="text-muted mb-1" style="font-size:11px;font-size:12px;letter-spacing:0.5px;">活跃用户</div>
-                            <div style="font-weight:700;font-size:20px;font-size:28px;color:#1a1a2e;line-height:1.2;" id="statActiveUsers">0</div>
-                            <div class="text-success" style="font-size:11px;font-size:12px;font-weight:500;" id="statUsersChange"><i class="fas fa-arrow-up me-1"></i>+0%</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </section>
 
-            <div class="row g-4 mb-4">
-                <div class="col-md-8">
-                    <div class="card shadow-sm">
+            <section class="content">
+                <div class="container-fluid">
+                    <div class="card">
                         <div class="card-header">
-                            <h5><i class="fas fa-chart-area me-2" style="color:#b8924e;"></i>请求量趋势</h5>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-secondary active" data-chart-type="line"><i class="fas fa-line-chart"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" data-chart-type="bar"><i class="fas fa-bar-chart"></i></button>
+                            <h3 class="card-title"><i class="fas fa-filter mr-2"></i>筛选条件</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="filterForm" class="form-inline">
+                                <div class="form-group mx-2 mb-2">
+                                    <label class="mr-2">时间范围:</label>
+                                    <select class="form-control form-control-sm" id="dateRange">
+                                        <option value="today">今日</option>
+                                        <option value="7d" selected>最近7天</option>
+                                        <option value="30d">最近30天</option>
+                                        <option value="90d">最近90天</option>
+                                        <option value="1y">最近1年</option>
+                                        <option value="custom">自定义</option>
+                                    </select>
+                                </div>
+                                <div class="form-group mx-2 mb-2" id="customDateRange" style="display: none;">
+                                    <label class="mr-2">开始:</label>
+                                    <input type="date" class="form-control form-control-sm" id="startDate">
+                                    <label class="mx-2">结束:</label>
+                                    <input type="date" class="form-control form-control-sm" id="endDate">
+                                </div>
+                                <div class="form-group mx-2 mb-2">
+                                    <label class="mr-2">应用:</label>
+                                    <select class="form-control form-control-sm" id="appFilter">
+                                        <option value="">全部应用</option>
+                                        <option value="app1">Web应用</option>
+                                        <option value="app2">移动应用</option>
+                                        <option value="app3">API服务</option>
+                                    </select>
+                                </div>
+                                <div class="form-group mx-2 mb-2">
+                                    <label class="mr-2">验证码类型:</label>
+                                    <select class="form-control form-control-sm" id="captchaTypeFilter">
+                                        <option value="">全部类型</option>
+                                        <option value="slider">滑动验证</option>
+                                        <option value="click">点选验证</option>
+                                        <option value="image">图像验证</option>
+                                        <option value="voice">语音验证</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm mx-2 mb-2">
+                                    <i class="fas fa-search mr-1"></i>查询
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm mx-2 mb-2" id="resetBtn">
+                                    <i class="fas fa-redo mr-1"></i>重置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-primary">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="totalRequests">0</h3>
+                                        <small>总请求量</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" id="requestsProgress" style="width: 0%"></div>
+                                    </div>
+                                    <small class="text-muted" id="requestsChange"></small>
+                                </div>
                             </div>
                         </div>
-                        <div class="card-body">
-                            <canvas id="requestTrendChart" height="280"></canvas>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-success">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="successRate">0%</h3>
+                                        <small>成功率</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" id="successProgress" style="width: 0%"></div>
+                                    </div>
+                                    <small class="text-muted" id="successChange"></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-danger">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="avgResponse">0ms</h3>
+                                        <small>平均响应</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" id="responseProgress" style="width: 0%"></div>
+                                    </div>
+                                    <small class="text-muted" id="responseChange"></small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-warning">
+                                <div class="card-body">
+                                    <div class="text-value text-right">
+                                        <h3 id="activeUsers">0</h3>
+                                        <small>活跃用户</small>
+                                    </div>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" id="usersProgress" style="width: 0%"></div>
+                                    </div>
+                                    <small class="text-muted" id="usersChange"></small>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card shadow-sm h-100">
-                        <div class="card-header"><h5><i class="fas fa-chart-pie me-2" style="color:#c23a2b;"></i>请求类型分布</h5></div>
-                        <div class="card-body">
-                            <canvas id="requestTypeChart" height="280"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="row g-4 mb-4">
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-user-plus me-2" style="color:#b8924e;"></i>用户增长趋势</h5></div>
-                        <div class="card-body">
-                            <canvas id="userGrowthChart" height="260"></canvas>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>验证码类型分布</h3>
+                                    <div class="card-tools">
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="captchaTypeChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-chart-bar mr-2"></i>请求趋势</h3>
+                                    <div class="card-tools">
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-tool btn-sm active" data-period="hour">小时</button>
+                                            <button type="button" class="btn btn-tool btn-sm" data-period="day">天</button>
+                                        </div>
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="trendChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-fire mr-2"></i>风险等级分布</h3>
+                                    <div class="card-tools">
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="riskLevelChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-th-large me-2" style="color:#b8924e;"></i>应用分布</h5></div>
-                        <div class="card-body">
-                            <canvas id="appDistributionChart" height="260"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="row g-4">
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-exclamation-circle me-2" style="color:#c23a2b;"></i>错误率分析</h5></div>
-                        <div class="card-body">
-                            <canvas id="errorRateChart" height="260"></canvas>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-chart-line mr-2"></i>性能指标趋势</h3>
+                                    <div class="card-tools">
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="performanceChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-globe mr-2"></i>地域分布</h3>
+                                    <div class="card-tools">
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="geoChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-layer-group mr-2"></i>堆叠面积图 - 请求组成</h3>
+                                    <div class="card-tools">
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="stackChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-broadcast-tower mr-2"></i>雷达图 - 性能评估</h3>
+                                    <div class="card-tools">
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-container">
+                                        <div id="radarChart" style="height: 300px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3 class="card-title"><i class="fas fa-table mr-2"></i>详细数据报表</h3>
+                                    <div class="card-tools">
+                                        <div class="btn-group export-dropdown">
+                                            <button type="button" class="btn btn-tool btn-sm dropdown-toggle" data-toggle="dropdown">
+                                                <i class="fas fa-download"></i> 导出
+                                            </button>
+                                            <div class="dropdown-menu">
+                                                <a class="dropdown-item" href="#" onclick="exportReport('csv'); return false;">
+                                                    <i class="fas fa-file-csv mr-2"></i>导出为CSV
+                                                </a>
+                                                <a class="dropdown-item" href="#" onclick="exportReport('excel'); return false;">
+                                                    <i class="fas fa-file-excel mr-2"></i>导出为Excel
+                                                </a>
+                                                <a class="dropdown-item" href="#" onclick="exportReport('pdf'); return false;">
+                                                    <i class="fas fa-file-pdf mr-2"></i>导出为PDF
+                                                </a>
+                                                <a class="dropdown-item" href="#" onclick="exportReport('json'); return false;">
+                                                    <i class="fas fa-file-code mr-2"></i>导出为JSON
+                                                </a>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <table id="statsTable" class="table table-bordered table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>时间</th>
+                                                <th>应用</th>
+                                                <th>验证类型</th>
+                                                <th>请求数</th>
+                                                <th>成功数</th>
+                                                <th>失败数</th>
+                                                <th>成功率</th>
+                                                <th>平均响应</th>
+                                                <th>风险等级</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="statsTableBody">
+                                            <tr>
+                                                <td colspan="9" class="text-center">加载中...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div class="mt-3">
+                                        <nav>
+                                            <ul class="pagination justify-content-end" id="pagination">
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="card shadow-sm">
-                        <div class="card-header"><h5><i class="fas fa-globe me-2" style="color:#b8924e;"></i>地理分布</h5></div>
-                        <div class="card-body">
-                            <canvas id="geoDistributionChart" height="260"></canvas>
-                        </div>
-                    </div>
-                </div>
+            </section>
+        </div>
+
+        <footer class="main-footer">
+            <div class="float-right d-none d-sm-inline">
+                HJTPX v1.0
             </div>
-        </main>
+            <strong>Copyright &copy; 2024 HJTPX.</strong> All rights reserved.
+        </footer>
     </div>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/js/adminlte.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <script src="/admin/static/js/auth.js"></script>
-    <script src="/admin/static/js/stats.js"></script>
+    <script>
+        let trendChart, captchaTypeChart, riskLevelChart, performanceChart, geoChart, stackChart, radarChart;
+        let currentPeriod = 'day';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            loadStatsData();
+            initEventListeners();
+        });
+
+        function initCharts() {
+            initTrendChart();
+            initCaptchaTypeChart();
+            initRiskLevelChart();
+            initPerformanceChart();
+            initGeoChart();
+            initStackChart();
+            initRadarChart();
+        }
+
+        function initTrendChart() {
+            const container = document.getElementById('trendChart');
+            if (!container) return;
+            
+            trendChart = echarts.init(container);
+            window.addEventListener('resize', () => trendChart.resize());
+            
+            const dates = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                dates.push((date.getMonth() + 1) + '-' + date.getDate());
+            }
+            
+            trendChart.setOption({
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['请求量', '成功', '失败'],
+                    bottom: '0'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    boundaryGap: false
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: '请求量',
+                        type: 'line',
+                        smooth: true,
+                        data: [820, 932, 901, 934, 1290, 1330, 1320],
+                        areaStyle: {
+                            color: {
+                                type: 'linear',
+                                x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(0, 123, 255, 0.5)' },
+                                    { offset: 1, color: 'rgba(0, 123, 255, 0.1)' }
+                                ]
+                            }
+                        },
+                        lineStyle: { color: '#007bff' },
+                        itemStyle: { color: '#007bff' }
+                    },
+                    {
+                        name: '成功',
+                        type: 'line',
+                        smooth: true,
+                        data: [750, 850, 820, 860, 1180, 1220, 1210]
+                    },
+                    {
+                        name: '失败',
+                        type: 'line',
+                        smooth: true,
+                        data: [70, 82, 81, 74, 110, 110, 110]
+                    }
+                ]
+            });
+        }
+
+        function initCaptchaTypeChart() {
+            const container = document.getElementById('captchaTypeChart');
+            if (!container) return;
+            
+            captchaTypeChart = echarts.init(container);
+            window.addEventListener('resize', () => captchaTypeChart.resize());
+            
+            captchaTypeChart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left',
+                    bottom: '0'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    center: ['60%', '50%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{d}%'
+                    },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 16,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    data: [
+                        { value: 3500, name: '滑动验证' },
+                        { value: 2800, name: '点选验证' },
+                        { value: 2100, name: '图像验证' },
+                        { value: 1500, name: '语音验证' }
+                    ]
+                }]
+            });
+        }
+
+        function initRiskLevelChart() {
+            const container = document.getElementById('riskLevelChart');
+            if (!container) return;
+            
+            riskLevelChart = echarts.init(container);
+            window.addEventListener('resize', () => riskLevelChart.resize());
+            
+            riskLevelChart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left',
+                    bottom: '0'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    center: ['60%', '50%'],
+                    roseType: 'radius',
+                    itemStyle: {
+                        borderRadius: 5
+                    },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n{c}'
+                    },
+                    data: [
+                        { value: 4500, name: '低风险' },
+                        { value: 2800, name: '中风险' },
+                        { value: 1500, name: '高风险' },
+                        { value: 600, name: '极高风险' }
+                    ]
+                }]
+            });
+        }
+
+        function initPerformanceChart() {
+            const container = document.getElementById('performanceChart');
+            if (!container) return;
+            
+            performanceChart = echarts.init(container);
+            window.addEventListener('resize', () => performanceChart.resize());
+            
+            const hours = [];
+            for (let i = 23; i >= 0; i--) {
+                hours.push(i + ':00');
+            }
+            
+            performanceChart.setOption({
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['响应时间', '吞吐量'],
+                    bottom: '0'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: hours,
+                    axisLabel: { interval: 3, rotate: 45 }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '响应时间(ms)',
+                        position: 'left'
+                    },
+                    {
+                        type: 'value',
+                        name: '吞吐量',
+                        position: 'right'
+                    }
+                ],
+                series: [
+                    {
+                        name: '响应时间',
+                        type: 'line',
+                        smooth: true,
+                        data: [45, 42, 48, 51, 55, 52, 48, 45, 42, 40, 38, 35, 32, 30, 28, 30, 35, 40, 45, 50, 52, 55, 50, 48]
+                    },
+                    {
+                        name: '吞吐量',
+                        type: 'bar',
+                        yAxisIndex: 1,
+                        data: [120, 115, 125, 130, 145, 150, 145, 140, 135, 130, 125, 120, 115, 110, 105, 110, 120, 130, 140, 150, 155, 150, 140, 130]
+                    }
+                ]
+            });
+        }
+
+        function initGeoChart() {
+            const container = document.getElementById('geoChart');
+            if (!container) return;
+            
+            geoChart = echarts.init(container);
+            window.addEventListener('resize', () => geoChart.resize());
+            
+            const geoData = [
+                { name: '北京', value: 3500 },
+                { name: '上海', value: 3200 },
+                { name: '广州', value: 2800 },
+                { name: '深圳', value: 2600 },
+                { name: '杭州', value: 2100 },
+                { name: '成都', value: 1800 },
+                { name: '武汉', value: 1600 },
+                { name: '西安', value: 1400 }
+            ];
+            
+            geoChart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    center: ['50%', '50%'],
+                    data: geoData.sort(function(a, b) {
+                        return b.value - a.value;
+                    }),
+                    label: {
+                        show: true,
+                        formatter: '{b}: {c}'
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            });
+        }
+
+        function initStackChart() {
+            const container = document.getElementById('stackChart');
+            if (!container) return;
+            
+            stackChart = echarts.init(container);
+            window.addEventListener('resize', () => stackChart.resize());
+            
+            const dates = [];
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                dates.push((date.getMonth() + 1) + '-' + date.getDate());
+            }
+            
+            stackChart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' }
+                },
+                legend: {
+                    data: ['滑动验证', '点选验证', '图像验证', '语音验证'],
+                    bottom: '0'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    boundaryGap: false
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: '滑动验证',
+                        type: 'line',
+                        stack: '总量',
+                        smooth: true,
+                        data: [1200, 1320, 1010, 1340, 1290, 1450, 1200],
+                        areaStyle: {
+                            color: {
+                                type: 'linear',
+                                x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(0, 123, 255, 0.5)' },
+                                    { offset: 1, color: 'rgba(0, 123, 255, 0.1)' }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        name: '点选验证',
+                        type: 'line',
+                        stack: '总量',
+                        smooth: true,
+                        data: [820, 932, 901, 934, 1290, 1330, 1320],
+                        areaStyle: {
+                            color: {
+                                type: 'linear',
+                                x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(40, 167, 69, 0.5)' },
+                                    { offset: 1, color: 'rgba(40, 167, 69, 0.1)' }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        name: '图像验证',
+                        type: 'line',
+                        stack: '总量',
+                        smooth: true,
+                        data: [450, 520, 480, 560, 620, 580, 650],
+                        areaStyle: {
+                            color: {
+                                type: 'linear',
+                                x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(255, 193, 7, 0.5)' },
+                                    { offset: 1, color: 'rgba(255, 193, 7, 0.1)' }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        name: '语音验证',
+                        type: 'line',
+                        stack: '总量',
+                        smooth: true,
+                        data: [180, 210, 195, 230, 250, 220, 240],
+                        areaStyle: {
+                            color: {
+                                type: 'linear',
+                                x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(220, 53, 69, 0.5)' },
+                                    { offset: 1, color: 'rgba(220, 53, 69, 0.1)' }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            });
+        }
+
+        function initRadarChart() {
+            const container = document.getElementById('radarChart');
+            if (!container) return;
+            
+            radarChart = echarts.init(container);
+            window.addEventListener('resize', () => radarChart.resize());
+            
+            radarChart.setOption({
+                radar: {
+                    indicator: [
+                        { name: '响应速度', max: 100 },
+                        { name: '稳定性', max: 100 },
+                        { name: '安全性', max: 100 },
+                        { name: '可用性', max: 100 },
+                        { name: '准确性', max: 100 }
+                    ],
+                    radius: '65%'
+                },
+                series: [{
+                    type: 'radar',
+                    data: [{
+                        value: [85, 90, 88, 92, 87],
+                        name: '系统性能',
+                        areaStyle: {
+                            color: 'rgba(0, 123, 255, 0.3)'
+                        },
+                        lineStyle: {
+                            color: '#007bff'
+                        },
+                        itemStyle: {
+                            color: '#007bff'
+                        }
+                    }]
+                }]
+            });
+        }
+
+        function loadStatsData() {
+            animateValue('totalRequests', 0, 82560, 1500);
+            document.getElementById('successRate').textContent = '92.5%';
+            document.getElementById('avgResponse').textContent = '45ms';
+            animateValue('activeUsers', 0, 12580, 1500);
+            
+            document.getElementById('requestsProgress').style.width = '75%';
+            document.getElementById('successProgress').style.width = '92.5%';
+            document.getElementById('responseProgress').style.width = '45%';
+            document.getElementById('usersProgress').style.width = '60%';
+            
+            document.getElementById('requestsChange').innerHTML = '<span class="trend-up"><i class="fas fa-arrow-up"></i> +12.5%</span>';
+            document.getElementById('successChange').innerHTML = '<span class="trend-up"><i class="fas fa-arrow-up"></i> +2.3%</span>';
+            document.getElementById('responseChange').innerHTML = '<span class="trend-down"><i class="fas fa-arrow-down"></i> -8.2%</span>';
+            document.getElementById('usersChange').innerHTML = '<span class="trend-up"><i class="fas fa-arrow-up"></i> +15.8%</span>';
+            
+            loadStatsTable();
+        }
+
+        function loadStatsTable() {
+            const tbody = document.getElementById('statsTableBody');
+            const mockData = [];
+            
+            for (let i = 0; i < 10; i++) {
+                const date = new Date();
+                date.setHours(date.getHours() - i);
+                mockData.push({
+                    time: date.toLocaleString('zh-CN'),
+                    app: 'App_' + (i % 3 + 1),
+                    type: ['滑动验证', '点选验证', '图像验证', '语音验证'][i % 4],
+                    requests: Math.floor(Math.random() * 500) + 200,
+                    success: Math.floor(Math.random() * 400) + 150,
+                    failed: Math.floor(Math.random() * 100) + 50,
+                    rate: (Math.random() * 15 + 80).toFixed(1) + '%',
+                    response: Math.floor(Math.random() * 50) + 30 + 'ms',
+                    risk: ['低', '中', '高', '极高'][i % 4]
+                });
+            }
+            
+            tbody.innerHTML = mockData.map(item => `
+                <tr>
+                    <td>${item.time}</td>
+                    <td>${item.app}</td>
+                    <td>${item.type}</td>
+                    <td>${item.requests}</td>
+                    <td>${item.success}</td>
+                    <td>${item.failed}</td>
+                    <td><span class="badge badge-success">${item.rate}</span></td>
+                    <td>${item.response}</td>
+                    <td><span class="badge badge-${item.risk === '低' ? 'success' : item.risk === '中' ? 'warning' : 'danger'}">${item.risk}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function animateValue(elementId, start, end, duration) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+                const value = Math.floor(start + (end - start) * easeProgress);
+                element.textContent = formatNumber(value);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function initEventListeners() {
+            document.getElementById('dateRange').addEventListener('change', function() {
+                const customRange = document.getElementById('customDateRange');
+                if (this.value === 'custom') {
+                    customRange.style.display = 'flex';
+                } else {
+                    customRange.style.display = 'none';
+                }
+            });
+
+            document.getElementById('filterForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                loadStatsData();
+            });
+
+            document.getElementById('resetBtn').addEventListener('click', function() {
+                document.getElementById('filterForm').reset();
+                loadStatsData();
+            });
+
+            const periodButtons = document.querySelectorAll('[data-period]');
+            periodButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    periodButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentPeriod = this.dataset.period;
+                    updateTrendChart(currentPeriod);
+                });
+            });
+        }
+
+        function updateTrendChart(period) {
+            if (!trendChart) return;
+            
+            const labels = period === 'hour' ?
+                Array.from({ length: 24 }, (_, i) => i + ':00') :
+                ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+            
+            trendChart.setOption({
+                xAxis: {
+                    data: labels
+                }
+            });
+        }
+
+        function exportReport(format) {
+            const table = document.getElementById('statsTable');
+            const rows = table.querySelectorAll('tr');
+            
+            let content = '';
+            
+            if (format === 'csv') {
+                content = '时间,应用,验证类型,请求数,成功数,失败数,成功率,平均响应,风险等级\n';
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0) {
+                        const rowData = Array.from(cells).map(cell => cell.textContent.trim()).join(',');
+                        content += rowData + '\n';
+                    }
+                });
+                downloadFile(content, 'stats_report.csv', 'text/csv');
+            } else if (format === 'json') {
+                const data = [];
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0) {
+                        data.push({
+                            time: cells[0].textContent.trim(),
+                            app: cells[1].textContent.trim(),
+                            type: cells[2].textContent.trim(),
+                            requests: cells[3].textContent.trim(),
+                            success: cells[4].textContent.trim(),
+                            failed: cells[5].textContent.trim(),
+                            rate: cells[6].textContent.trim(),
+                            response: cells[7].textContent.trim(),
+                            risk: cells[8].textContent.trim()
+                        });
+                    }
+                });
+                content = JSON.stringify(data, null, 2);
+                downloadFile(content, 'stats_report.json', 'application/json');
+            } else if (format === 'excel') {
+                let excelContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
+                excelContent += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet">\n';
+                excelContent += '<Worksheet ss:Name="统计数据">\n<Table>\n';
+                
+                rows.forEach(row => {
+                    excelContent += '<Row>\n';
+                    const cells = row.querySelectorAll('td, th');
+                    cells.forEach(cell => {
+                        excelContent += '<Cell><Data ss:Type="String">' + cell.textContent.trim() + '</Data></Cell>\n';
+                    });
+                    excelContent += '</Row>\n';
+                });
+                
+                excelContent += '</Table>\n</Worksheet>\n</Workbook>';
+                downloadFile(excelContent, 'stats_report.xls', 'application/vnd.ms-excel');
+            } else if (format === 'pdf') {
+                content = '统计分析报表\n';
+                content += '生成时间: ' + new Date().toLocaleString('zh-CN') + '\n\n';
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0) {
+                        const rowData = Array.from(cells).map(cell => cell.textContent.trim()).join(' | ');
+                        content += rowData + '\n';
+                    }
+                });
+                downloadFile(content, 'stats_report.txt', 'text/plain');
+            }
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+    </script>
 </body>
 </html>

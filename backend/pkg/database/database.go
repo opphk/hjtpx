@@ -142,7 +142,7 @@ func InitializeDatabaseFeatures(cfg *config.Config) error {
 
 		enhancedPoolOptimizer := NewEnhancedConnectionPoolOptimizer(DB, nil)
 		enhancedPoolOptimizer.Start()
-		if err := enhancedPoolOptimizer.WarmUpConnections(); err != nil {
+		if err := enhancedPoolOptimizer.WarmUpConnections(5); err != nil {
 			log.Printf("Warning: Connection pool warmup failed: %v", err)
 		}
 	}

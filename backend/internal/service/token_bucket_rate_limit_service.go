@@ -11,8 +11,8 @@ import (
 	"github.com/hjtpx/hjtpx/pkg/redis"
 )
 
-// TokenBucketConfig 令牌桶配置
-type TokenBucketConfig struct {
+// AdvancedTokenBucketConfig 令牌桶配置（与高级限流服务中的 TokenBucketConfig 区分）
+type AdvancedTokenBucketConfig struct {
 	Rate          float64 // 每秒填充的令牌数
 	Capacity      float64 // 桶的最大容量
 	BurstSize     float64 // 突发流量大小
@@ -40,8 +40,8 @@ type TokenBucketStats struct {
 	TokenUsage      float64 // 令牌使用率
 }
 
-// TokenBucket 令牌桶结构
-type TokenBucket struct {
+// AdvancedTokenBucket 令牌桶结构（与高级限流服务中的 TokenBucket 区分）
+type AdvancedTokenBucket struct {
 	mu               sync.Mutex
 	key              string
 	capacity         float64
@@ -55,9 +55,9 @@ type TokenBucket struct {
 	burstRequests    int64
 }
 
-// TokenBucketRateLimitService 令牌桶限流服务
-type TokenBucketRateLimitService struct {
-	buckets         map[string]*TokenBucket
+// AdvancedTokenBucketRateLimitService 令牌桶限流服务
+type AdvancedTokenBucketRateLimitService struct {
+	buckets         map[string]*AdvancedTokenBucket
 	mu              sync.RWMutex
 	redisEnabled    bool
 	globalStats     atomic.Int64
@@ -70,17 +70,17 @@ const (
 	tokenBucketPrefix = "tokenbucket:"
 )
 
-var defaultTokenBucketConfig = TokenBucketConfig{
+var defaultTokenBucketConfig = AdvancedTokenBucketConfig{
 	Rate:          10,
 	Capacity:      100,
 	BurstSize:     50,
 	InitialTokens: 100,
 }
 
-// NewTokenBucketRateLimitService 创建令牌桶限流服务
-func NewTokenBucketRateLimitService() *TokenBucketRateLimitService {
-	service := &TokenBucketRateLimitService{
-		buckets:      make(map[string]*TokenBucket),
+// NewAdvancedTokenBucketRateLimitService 创建令牌桶限流服务
+func NewAdvancedTokenBucketRateLimitService() *AdvancedTokenBucketRateLimitService {
+	service := &AdvancedTokenBucketRateLimitService{
+		buckets:      make(map[string]*AdvancedTokenBucket),
 		redisEnabled: redis.Client != nil,
 	}
 	go service.cleanupExpiredBuckets()
@@ -88,7 +88,7 @@ func NewTokenBucketRateLimitService() *TokenBucketRateLimitService {
 }
 
 // getBucket 获取或创建令牌桶
-func (s *TokenBucketRateLimitService) getBucket(key string, config *TokenBucketConfig) *TokenBucket {
+func (s *AdvancedTokenBucketRateLimitService) getBucket(key string, config *AdvancedTokenBucketConfig) *AdvancedTokenBucket {
 	s.mu.RLock()
 	bucket, exists := s.buckets[key]
 	s.mu.RUnlock()
@@ -98,7 +98,7 @@ func (s *TokenBucketRateLimitService) getBucket(key string, config *TokenBucketC
 		defer s.mu.Unlock()
 		// 再次检查，避免竞态条件
 		if bucket, exists = s.buckets[key]; !exists {
-			bucket = &TokenBucket{
+			bucket = &AdvancedTokenBucket{
 				key:        key,
 				capacity:   config.Capacity,
 				rate:       config.Rate,
@@ -113,7 +113,7 @@ func (s *TokenBucketRateLimitService) getBucket(key string, config *TokenBucketC
 }
 
 // refill 填充令牌
-func (tb *TokenBucket) refill() {
+func (tb *AdvancedTokenBucket) refill() {
 	now := time.Now()
 	elapsed := now.Sub(tb.lastRefill).Seconds()
 	tb.tokens += elapsed * tb.rate
@@ -124,7 +124,7 @@ func (tb *TokenBucket) refill() {
 }
 
 // tryConsume 尝试消耗令牌
-func (tb *TokenBucket) tryConsume(tokens float64) *TokenBucketResult {
+func (tb *AdvancedTokenBucket) tryConsume(tokens float64) *TokenBucketResult {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -170,10 +170,10 @@ func (tb *TokenBucket) tryConsume(tokens float64) *TokenBucketResult {
 }
 
 // CheckTokenBucketRateLimit 检查令牌桶限流（基于内存）
-func (s *TokenBucketRateLimitService) CheckTokenBucketRateLimit(
+func (s *AdvancedTokenBucketRateLimitService) CheckTokenBucketRateLimit(
 	ctx context.Context,
 	key string,
-	config *TokenBucketConfig,
+	config *AdvancedTokenBucketConfig,
 ) (*TokenBucketResult, error) {
 	if config == nil {
 		config = &defaultTokenBucketConfig
@@ -184,10 +184,10 @@ func (s *TokenBucketRateLimitService) CheckTokenBucketRateLimit(
 }
 
 // CheckTokenBucketRateLimitRedis 检查令牌桶限流（基于 Redis）
-func (s *TokenBucketRateLimitService) CheckTokenBucketRateLimitRedis(
+func (s *AdvancedTokenBucketRateLimitService) CheckTokenBucketRateLimitRedis(
 	ctx context.Context,
 	key string,
-	config *TokenBucketConfig,
+	config *AdvancedTokenBucketConfig,
 ) (*TokenBucketResult, error) {
 	if !s.redisEnabled {
 		return s.CheckTokenBucketRateLimit(ctx, key, config)
@@ -281,37 +281,37 @@ func (s *TokenBucketRateLimitService) CheckTokenBucketRateLimitRedis(
 }
 
 // CheckIPTokenBucketLimit IP 级别的令牌桶限流
-func (s *TokenBucketRateLimitService) CheckIPTokenBucketLimit(
+func (s *AdvancedTokenBucketRateLimitService) CheckIPTokenBucketLimit(
 	ctx context.Context,
 	ip string,
-	config *TokenBucketConfig,
+	config *AdvancedTokenBucketConfig,
 ) (*TokenBucketResult, error) {
 	key := fmt.Sprintf("ip:%s", ip)
 	return s.CheckTokenBucketRateLimitRedis(ctx, key, config)
 }
 
 // CheckUserTokenBucketLimit 用户级别的令牌桶限流
-func (s *TokenBucketRateLimitService) CheckUserTokenBucketLimit(
+func (s *AdvancedTokenBucketRateLimitService) CheckUserTokenBucketLimit(
 	ctx context.Context,
 	userID uint,
-	config *TokenBucketConfig,
+	config *AdvancedTokenBucketConfig,
 ) (*TokenBucketResult, error) {
 	key := fmt.Sprintf("user:%d", userID)
 	return s.CheckTokenBucketRateLimitRedis(ctx, key, config)
 }
 
 // CheckAppTokenBucketLimit 应用级别的令牌桶限流
-func (s *TokenBucketRateLimitService) CheckAppTokenBucketLimit(
+func (s *AdvancedTokenBucketRateLimitService) CheckAppTokenBucketLimit(
 	ctx context.Context,
 	appID uint,
-	config *TokenBucketConfig,
+	config *AdvancedTokenBucketConfig,
 ) (*TokenBucketResult, error) {
 	key := fmt.Sprintf("app:%d", appID)
 	return s.CheckTokenBucketRateLimitRedis(ctx, key, config)
 }
 
 // ResetBucket 重置令牌桶
-func (s *TokenBucketRateLimitService) ResetBucket(ctx context.Context, key string) error {
+func (s *AdvancedTokenBucketRateLimitService) ResetBucket(ctx context.Context, key string) error {
 	bucketKey := tokenBucketPrefix + key
 
 	s.mu.Lock()
@@ -325,7 +325,7 @@ func (s *TokenBucketRateLimitService) ResetBucket(ctx context.Context, key strin
 }
 
 // GetBucketStats 获取桶统计信息
-func (s *TokenBucketRateLimitService) GetBucketStats(key string) map[string]interface{} {
+func (s *AdvancedTokenBucketRateLimitService) GetBucketStats(key string) map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -358,7 +358,7 @@ func (s *TokenBucketRateLimitService) GetBucketStats(key string) map[string]inte
 }
 
 // GetGlobalStats 获取全局统计信息
-func (s *TokenBucketRateLimitService) GetGlobalStats() map[string]interface{} {
+func (s *AdvancedTokenBucketRateLimitService) GetGlobalStats() map[string]interface{} {
 	s.mu.RLock()
 	bucketCount := len(s.buckets)
 	s.mu.RUnlock()
@@ -382,7 +382,7 @@ func (s *TokenBucketRateLimitService) GetGlobalStats() map[string]interface{} {
 }
 
 // UpdateBucketConfig 更新桶配置
-func (s *TokenBucketRateLimitService) UpdateBucketConfig(key string, config *TokenBucketConfig) error {
+func (s *AdvancedTokenBucketRateLimitService) UpdateBucketConfig(key string, config *AdvancedTokenBucketConfig) error {
 	bucketKey := tokenBucketPrefix + key
 
 	s.mu.Lock()
@@ -408,7 +408,7 @@ func (s *TokenBucketRateLimitService) UpdateBucketConfig(key string, config *Tok
 }
 
 // GetBucketList 获取所有桶的列表
-func (s *TokenBucketRateLimitService) GetBucketList() []map[string]interface{} {
+func (s *AdvancedTokenBucketRateLimitService) GetBucketList() []map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -447,7 +447,7 @@ func (s *TokenBucketRateLimitService) GetBucketList() []map[string]interface{} {
 }
 
 // cleanupExpiredBuckets 清理过期的桶
-func (s *TokenBucketRateLimitService) cleanupExpiredBuckets() {
+func (s *AdvancedTokenBucketRateLimitService) cleanupExpiredBuckets() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -468,20 +468,20 @@ func (s *TokenBucketRateLimitService) cleanupExpiredBuckets() {
 // TrafficShaper 流量整形器
 type TrafficShaper struct {
 	queue  chan func()
-	bucket *TokenBucket
+	bucket *AdvancedTokenBucket
 	wg     sync.WaitGroup
 	closed bool
 	mu     sync.Mutex
 }
 
 // NewTrafficShaper 创建流量整形器
-func NewTrafficShaper(config *TokenBucketConfig) *TrafficShaper {
+func NewTrafficShaper(config *AdvancedTokenBucketConfig) *TrafficShaper {
 	if config == nil {
 		config = &defaultTokenBucketConfig
 	}
 	shaper := &TrafficShaper{
 		queue: make(chan func(), 1000),
-		bucket: &TokenBucket{
+		bucket: &AdvancedTokenBucket{
 			capacity:   config.Capacity,
 			rate:       config.Rate,
 			tokens:     config.InitialTokens,

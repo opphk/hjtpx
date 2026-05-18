@@ -1,6 +1,6 @@
 # 行为验证系统 Python SDK
 
-功能强大的验证码 SDK，支持多种验证码类型，提供完整的错误处理、连接池管理和自动重试机制。
+功能比较完整的验证码 SDK，支持多种验证码类型，提供完整的错误处理、连接池管理和自动重试机制。
 
 ## 功能特性
 
@@ -21,6 +21,12 @@
   - 连接池管理
   - 自动重试机制
   - 可配置的超时和重试策略
+  - 支持高并发场景的异步客户端
+
+- **异步支持**：
+  - 完整的异步/await兼容版本
+  - 支持高并发批量请求
+  - 内置重试和错误处理
 
 - **用户认证**：
   - 用户注册/登录
@@ -38,14 +44,19 @@
 - Python 3.7+
 - requests >= 2.25.0
 - urllib3 >= 1.26.0
+- aiohttp >= 3.8.0 (仅异步版本需要)
 
 ```bash
+# 同步版本
 pip install requests
+
+# 异步版本
+pip install aiohttp
 ```
 
 ## 快速开始
 
-### 基本用法
+### 同步客户端
 
 ```python
 from captcha import CaptchaClient
@@ -71,6 +82,52 @@ print(f"验证结果: {result.success}")
 
 # 关闭连接
 client.close()
+```
+
+### 异步客户端
+
+```python
+import asyncio
+from async_captcha import AsyncCaptchaClient
+
+async def main():
+    async with AsyncCaptchaClient(base_url="http://localhost:8080") as client:
+        # 获取验证码
+        captcha = await client.get_slider_captcha()
+        print(f"会话ID: {captcha.session_id}")
+
+        # 验证
+        result = await client.verify_slider_captcha(
+            session_id=captcha.session_id,
+            x=150,
+        )
+        print(f"验证结果: {result.success}")
+
+asyncio.run(main())
+```
+
+### 批量并发请求示例
+
+```python
+import asyncio
+from async_captcha import AsyncCaptchaClient
+
+async def batch_example():
+    async with AsyncCaptchaClient(base_url="http://localhost:8080") as client:
+        # 同时获取10个验证码
+        tasks = [
+            client.get_slider_captcha(width=320, height=160)
+            for _ in range(10)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        success_count = sum(
+            1 for r in results
+            if not isinstance(r, Exception)
+        )
+        print(f"成功率: {success_count}/{len(results)}")
+
+asyncio.run(batch_example())
 ```
 
 ### 使用上下文管理器

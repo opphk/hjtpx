@@ -303,10 +303,9 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 		}
 
 		config := &service.TokenBucketConfig{
-			Rate:          options.Rate,
-			Capacity:      options.Capacity,
-			BurstSize:     options.BurstSize,
-			InitialTokens: options.InitialTokens,
+			Capacity:     int64(options.Capacity),
+			RefillRate:  options.Rate,
+			RefillPerSec: options.Rate,
 		}
 
 		result, err := tokenBucketRateLimitService.CheckIPTokenBucketLimit(c.Request.Context(), ip, config)
@@ -315,15 +314,15 @@ func TokenBucketRateLimitMiddleware(options *TokenBucketOptions) gin.HandlerFunc
 			return
 		}
 
-		c.Header("X-TokenBucket-Limit", strconv.FormatFloat(config.Capacity, 'f', 2, 64))
-		c.Header("X-TokenBucket-Remaining", strconv.FormatFloat(result.Tokens, 'f', 2, 64))
+		c.Header("X-TokenBucket-Limit", strconv.FormatInt(config.Capacity, 10))
+		c.Header("X-TokenBucket-Remaining", strconv.Itoa(result.Remaining))
 		if result.RetryAfter > 0 {
-			c.Header("X-TokenBucket-RetryAfter", strconv.FormatFloat(result.RetryAfter.Seconds(), 'f', 2, 64))
+			c.Header("X-TokenBucket-RetryAfter", strconv.Itoa(result.RetryAfter))
 		}
 
 		if !result.Allowed {
 			if result.RetryAfter > 0 {
-				c.Header("Retry-After", strconv.FormatInt(int64(result.RetryAfter.Seconds()), 10))
+				c.Header("Retry-After", strconv.Itoa(result.RetryAfter))
 			}
 			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()

@@ -62,7 +62,7 @@ type DDoSMetrics struct {
 	activeConnections  map[string]int
 }
 
-type DDOSProtectionMiddleware struct {
+type EnhancedDDOSProtectionMiddleware struct {
 	config    EnhancedDDoSConfig
 	service   *service.EnhancedDDoSProtectionService
 	metrics   *DDoSMetrics
@@ -87,7 +87,7 @@ func EnhancedDDoSMiddleware(configs ...EnhancedDDoSConfig) gin.HandlerFunc {
 		cfg = configs[0]
 	}
 
-	middleware := &DDOSProtectionMiddleware{
+	middleware := &EnhancedDDOSProtectionMiddleware{
 		config:       cfg,
 		service:      enhancedDDoSService,
 		metrics:      ddosMetrics,
@@ -97,7 +97,7 @@ func EnhancedDDoSMiddleware(configs ...EnhancedDDoSConfig) gin.HandlerFunc {
 	return middleware.Handler()
 }
 
-func (m *DDOSProtectionMiddleware) Handler() gin.HandlerFunc {
+func (m *EnhancedDDOSProtectionMiddleware) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !m.config.Enabled {
 			c.Next()
@@ -170,7 +170,7 @@ func (m *DDOSProtectionMiddleware) Handler() gin.HandlerFunc {
 	}
 }
 
-func (m *DDOSProtectionMiddleware) getClientIP(c *gin.Context) string {
+func (m *EnhancedDDOSProtectionMiddleware) getClientIP(c *gin.Context) string {
 	ip := c.GetHeader("X-Forwarded-For")
 	if ip != "" {
 		parts := strings.Split(ip, ",")
@@ -190,7 +190,7 @@ func (m *DDOSProtectionMiddleware) getClientIP(c *gin.Context) string {
 	return c.ClientIP()
 }
 
-func (m *DDOSProtectionMiddleware) isWhitelisted(ip string) bool {
+func (m *EnhancedDDOSProtectionMiddleware) isWhitelisted(ip string) bool {
 	stats := m.service.GetIPStats(ip)
 	if stats == nil {
 		return false
@@ -198,7 +198,7 @@ func (m *DDOSProtectionMiddleware) isWhitelisted(ip string) bool {
 	return stats.ThreatScore < -0.5
 }
 
-func (m *DDOSProtectionMiddleware) shouldBlockCountry(c *gin.Context) bool {
+func (m *EnhancedDDOSProtectionMiddleware) shouldBlockCountry(c *gin.Context) bool {
 	country := c.GetHeader("CF-IPCountry")
 	if country == "" {
 		country = c.GetHeader("X-Geo-Country")
@@ -217,7 +217,7 @@ func (m *DDOSProtectionMiddleware) shouldBlockCountry(c *gin.Context) bool {
 	return false
 }
 
-func (m *DDOSProtectionMiddleware) recordBlocked(c *gin.Context, ip string, reason string) {
+func (m *EnhancedDDOSProtectionMiddleware) recordBlocked(c *gin.Context, ip string, reason string) {
 	m.metrics.mu.Lock()
 	defer m.metrics.mu.Unlock()
 
@@ -229,7 +229,7 @@ func (m *DDOSProtectionMiddleware) recordBlocked(c *gin.Context, ip string, reas
 	_ = blockedKey
 }
 
-func (m *DDOSProtectionMiddleware) getStatusCode(result *service.EnhancedDDoSCheckResult) int {
+func (m *EnhancedDDOSProtectionMiddleware) getStatusCode(result *service.EnhancedDDoSCheckResult) int {
 	switch result.Severity {
 	case "critical":
 		return http.StatusForbidden
@@ -242,7 +242,7 @@ func (m *DDOSProtectionMiddleware) getStatusCode(result *service.EnhancedDDoSChe
 	}
 }
 
-func (m *DDOSProtectionMiddleware) abortWithResponse(c *gin.Context, statusCode int, reason string, severity string) {
+func (m *EnhancedDDOSProtectionMiddleware) abortWithResponse(c *gin.Context, statusCode int, reason string, severity string) {
 	retryAfter := 60
 	if result, ok := c.Get("ddos_result"); ok {
 		if r, ok := result.(*service.EnhancedDDoSCheckResult); ok {
@@ -305,8 +305,6 @@ type ConnectionTrackingMiddleware struct {
 	activeConnections map[string][]time.Time
 	mu                sync.RWMutex
 }
-
-import "time"
 
 func NewConnectionTrackingMiddleware(maxConnections int, timeoutSeconds int) *ConnectionTrackingMiddleware {
 	ct := &ConnectionTrackingMiddleware{

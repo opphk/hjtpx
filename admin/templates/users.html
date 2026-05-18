@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HJTPX 管理后台 - 用户管理</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/css/adminlte.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .user-card {
+            transition: all 0.3s ease;
+        }
+        .user-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-active {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+        .status-inactive {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+        }
+        .status-blocked {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+        .role-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .role-admin {
+            background: rgba(0, 123, 255, 0.1);
+            color: #007bff;
+        }
+        .role-user {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+        .role-guest {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stats-card {
+            border-left: 4px solid #007bff;
+            transition: all 0.3s ease;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0, 123, 255, 0.2);
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="hold-transition sidebar-mini">
+    <div class="wrapper">
+        <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a class="nav-link" data-widget="pushmenu" href="#"><i class="fas fa-bars"></i></a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/admin/" class="nav-link">仪表盘</a>
+                </li>
+                <li class="nav-item d-none d-sm-inline-block">
+                    <a href="/admin/users" class="nav-link active">用户管理</a>
+                </li>
+            </ul>
+            <ul class="navbar-nav ml-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/logout"><i class="fas fa-sign-out-alt"></i> 退出</a>
+                </li>
+            </ul>
+        </nav>
+
+        <aside class="main-sidebar sidebar-dark-primary elevation-4">
+            <a href="/admin/" class="brand-link">
+                <span class="brand-text font-weight-light">HJTPX 管理后台</span>
+            </a>
+            <div class="sidebar">
+                <nav class="mt-2">
+                    <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
+                        <li class="nav-item">
+                            <a href="/admin/" class="nav-link"><i class="nav-icon fas fa-tachometer-alt"></i><p>仪表盘</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/stats" class="nav-link"><i class="nav-icon fas fa-chart-line"></i><p>统计分析</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/users" class="nav-link active"><i class="nav-icon fas fa-users"></i><p>用户管理</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/applications" class="nav-link"><i class="nav-icon fas fa-mobile-alt"></i><p>应用管理</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/logs" class="nav-link"><i class="nav-icon fas fa-clipboard-list"></i><p>日志查询</p></a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/admin/config" class="nav-link"><i class="nav-icon fas fa-cog"></i><p>系统配置</p></a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        <div class="content-wrapper">
+            <section class="content-header">
+                <div class="container-fluid">
+                    <div class="row mb-2">
+                        <div class="col-sm-6">
+                            <h1>用户管理</h1>
+                        </div>
+                        <div class="col-sm-6">
+                            <ol class="breadcrumb float-sm-right">
+                                <li class="breadcrumb-item"><a href="/admin/">首页</a></li>
+                                <li class="breadcrumb-item active">用户管理</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="content">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-primary">
+                                <div class="card-body">
+                                    <h3 id="totalUsers">0</h3>
+                                    <p>总用户数</p>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" style="width: 100%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-success">
+                                <div class="card-body">
+                                    <h3 id="activeUsers">0</h3>
+                                    <p>活跃用户</p>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" id="activeProgress" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-warning">
+                                <div class="card-body">
+                                    <h3 id="newUsers">0</h3>
+                                    <p>今日新增</p>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" style="width: 100%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-6">
+                            <div class="card stats-card bg-danger">
+                                <div class="card-body">
+                                    <h3 id="blockedUsers">0</h3>
+                                    <p>封禁用户</p>
+                                    <div class="progress mt-2">
+                                        <div class="progress-bar" id="blockedProgress" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-filter mr-2"></i>筛选与搜索</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="filterForm" class="row">
+                                <div class="col-md-3 mb-2">
+                                    <label>搜索:</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="searchInput" placeholder="搜索用户名、邮箱...">
+                                        <div class="input-group-append">
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label>状态:</label>
+                                    <select class="form-control" id="statusFilter">
+                                        <option value="">全部状态</option>
+                                        <option value="active">活跃</option>
+                                        <option value="inactive">未激活</option>
+                                        <option value="blocked">已封禁</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label>角色:</label>
+                                    <select class="form-control" id="roleFilter">
+                                        <option value="">全部角色</option>
+                                        <option value="admin">管理员</option>
+                                        <option value="user">普通用户</option>
+                                        <option value="guest">访客</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label>注册时间:</label>
+                                    <select class="form-control" id="dateFilter">
+                                        <option value="">全部时间</option>
+                                        <option value="today">今天</option>
+                                        <option value="7d">最近7天</option>
+                                        <option value="30d">最近30天</option>
+                                        <option value="90d">最近90天</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-secondary mr-2" id="resetFilters">
+                                        <i class="fas fa-redo mr-1"></i>重置
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="exportUsers">
+                                        <i class="fas fa-download mr-1"></i>导出
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="fas fa-users mr-2"></i>用户列表</h3>
+                            <div class="card-tools">
+                                <button type="button" class="btn btn-primary btn-sm" id="addUserBtn">
+                                    <i class="fas fa-plus mr-1"></i>添加用户
+                                </button>
+                                <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped" id="usersTable">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="selectAll"></th>
+                                            <th>用户</th>
+                                            <th>邮箱</th>
+                                            <th>角色</th>
+                                            <th>状态</th>
+                                            <th>注册时间</th>
+                                            <th>最后登录</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <tr>
+                                            <td colspan="8" class="text-center">
+                                                <div class="loading-spinner"></div> 加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="dataTables_info">
+                                            显示 <span id="startRecord">0</span> 到 <span id="endRecord">0</span> 共 <span id="totalRecords">0</span> 条记录
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <nav>
+                                            <ul class="pagination justify-content-end" id="pagination">
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <footer class="main-footer">
+            <div class="float-right d-none d-sm-inline">
+                HJTPX v1.0
+            </div>
+            <strong>Copyright &copy; 2024 HJTPX.</strong> All rights reserved.
+        </footer>
+    </div>
+
+    <div class="modal fade" id="userModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="userModalTitle"><i class="fas fa-user-plus mr-2"></i>添加用户</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <form id="userForm">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>用户名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="username" required placeholder="请输入用户名">
+                            <small class="form-text text-muted">3-20个字符，支持字母、数字、下划线</small>
+                        </div>
+                        <div class="form-group">
+                            <label>邮箱 <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="email" required placeholder="请输入邮箱地址">
+                        </div>
+                        <div class="form-group">
+                            <label>密码 <span class="text-danger" id="passwordRequired">*</span></label>
+                            <input type="password" class="form-control" id="password" placeholder="请输入密码">
+                            <small class="form-text text-muted" id="passwordHint">至少8个字符，包含大小写字母和数字</small>
+                        </div>
+                        <div class="form-group">
+                            <label>确认密码 <span class="text-danger" id="confirmPasswordRequired">*</span></label>
+                            <input type="password" class="form-control" id="confirmPassword" placeholder="请再次输入密码">
+                        </div>
+                        <div class="form-group">
+                            <label>角色 <span class="text-danger">*</span></label>
+                            <select class="form-control" id="role" required>
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                                <option value="guest">访客</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>状态</label>
+                            <select class="form-control" id="status">
+                                <option value="active">活跃</option>
+                                <option value="inactive">未激活</option>
+                                <option value="blocked">封禁</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>备注</label>
+                            <textarea class="form-control" id="remark" rows="3" placeholder="可选，添加用户备注信息"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary" id="saveUserBtn">
+                            <i class="fas fa-save mr-1"></i>保存
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="userDetailModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-user-circle mr-2"></i>用户详情</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <div class="user-avatar bg-primary mx-auto mb-3" id="detailAvatar" style="width: 100px; height: 100px; font-size: 40px;">U</div>
+                            <h4 id="detailUsername">用户名</h4>
+                            <span class="role-badge" id="detailRole">用户</span>
+                            <span class="status-badge ml-2" id="detailStatus">状态</span>
+                        </div>
+                        <div class="col-md-8">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="30%">用户ID:</th>
+                                    <td id="detailId">-</td>
+                                </tr>
+                                <tr>
+                                    <th>邮箱:</th>
+                                    <td id="detailEmail">-</td>
+                                </tr>
+                                <tr>
+                                    <th>注册时间:</th>
+                                    <td id="detailCreated">-</td>
+                                </tr>
+                                <tr>
+                                    <th>最后登录:</th>
+                                    <td id="detailLastLogin">-</td>
+                                </tr>
+                                <tr>
+                                    <th>登录次数:</th>
+                                    <td id="detailLoginCount">-</td>
+                                </tr>
+                                <tr>
+                                    <th>用户组:</th>
+                                    <td id="detailGroup">-</td>
+                                </tr>
+                                <tr>
+                                    <th>备注:</th>
+                                    <td id="detailRemark">-</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="editUserBtn">
+                        <i class="fas fa-edit mr-1"></i>编辑
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-exclamation-triangle mr-2"></i>确认操作</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p id="confirmMessage">确定要执行此操作吗？</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmBtn">
+                        <i class="fas fa-check mr-1"></i>确认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/admin-lte/3.2.0/js/adminlte.min.js"></script>
+    <script src="/admin/static/js/auth.js"></script>
+    <script>
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalPages = 1;
+        let currentUserId = null;
+        let isEditMode = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadUsers();
+            initEventListeners();
+        });
+
+        function loadStats() {
+            animateValue('totalUsers', 0, 1256, 1000);
+            animateValue('activeUsers', 0, 1089, 1000);
+            animateValue('newUsers', 0, 15, 1000);
+            animateValue('blockedUsers', 0, 12, 1000);
+            
+            document.getElementById('activeProgress').style.width = '86.7%';
+            document.getElementById('blockedProgress').style.width = '1.0%';
+        }
+
+        function loadUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            const mockUsers = generateMockUsers();
+            
+            tbody.innerHTML = mockUsers.map(user => `
+                <tr>
+                    <td><input type="checkbox" class="user-checkbox" data-id="${user.id}"></td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="user-avatar bg-${user.avatarColor} mr-2">${user.username.charAt(0).toUpperCase()}</div>
+                            <div>
+                                <div class="font-weight-bold">${user.username}</div>
+                                <small class="text-muted">ID: ${user.id}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${user.email}</td>
+                    <td><span class="role-badge role-${user.role}">${getRoleText(user.role)}</span></td>
+                    <td><span class="status-badge status-${user.status}">${getStatusText(user.status)}</span></td>
+                    <td>${user.createdAt}</td>
+                    <td>${user.lastLogin}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-info btn-sm" onclick="viewUser(${user.id})" title="查看详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="editUser(${user.id})" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-${user.status === 'blocked' ? 'success' : 'danger'} btn-sm" onclick="toggleUserStatus(${user.id}, '${user.status}')" title="${user.status === 'blocked' ? '解封' : '封禁'}">
+                                <i class="fas fa-${user.status === 'blocked' ? 'unlock' : 'ban'}"></i>
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="deleteUser(${user.id})" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            
+            updatePagination(mockUsers.length);
+        }
+
+        function generateMockUsers() {
+            const users = [];
+            const statuses = ['active', 'inactive', 'blocked'];
+            const roles = ['admin', 'user', 'guest'];
+            const colors = ['primary', 'success', 'warning', 'info', 'secondary'];
+            
+            for (let i = 1; i <= 50; i++) {
+                const status = statuses[Math.floor(Math.random() * statuses.length)];
+                const role = i === 1 ? 'admin' : roles[Math.floor(Math.random() * roles.length)];
+                const createdDate = new Date();
+                createdDate.setDate(createdDate.getDate() - Math.floor(Math.random() * 365));
+                
+                const lastLoginDate = new Date();
+                lastLoginDate.setHours(lastLoginDate.getHours() - Math.floor(Math.random() * 72));
+                
+                users.push({
+                    id: 1000 + i,
+                    username: 'user_' + (1000 + i),
+                    email: 'user' + (1000 + i) + '@example.com',
+                    role: role,
+                    status: status,
+                    createdAt: createdDate.toLocaleDateString('zh-CN'),
+                    lastLogin: lastLoginDate.toLocaleString('zh-CN'),
+                    avatarColor: colors[Math.floor(Math.random() * colors.length)]
+                });
+            }
+            
+            return users;
+        }
+
+        function getRoleText(role) {
+            const texts = {
+                admin: '管理员',
+                user: '普通用户',
+                guest: '访客'
+            };
+            return texts[role] || role;
+        }
+
+        function getStatusText(status) {
+            const texts = {
+                active: '活跃',
+                inactive: '未激活',
+                blocked: '已封禁'
+            };
+            return texts[status] || status;
+        }
+
+        function animateValue(elementId, start, end, duration) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+                const value = Math.floor(start + (end - start) * easeProgress);
+                element.textContent = formatNumber(value);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function updatePagination(total) {
+            const totalRecords = document.getElementById('totalRecords');
+            const startRecord = document.getElementById('startRecord');
+            const endRecord = document.getElementById('endRecord');
+            const pagination = document.getElementById('pagination');
+            
+            totalRecords.textContent = total;
+            startRecord.textContent = (currentPage - 1) * pageSize + 1;
+            endRecord.textContent = Math.min(currentPage * pageSize, total);
+            
+            let paginationHtml = '';
+            for (let i = 1; i <= Math.ceil(total / pageSize); i++) {
+                paginationHtml += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+                </li>`;
+            }
+            pagination.innerHTML = paginationHtml;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            loadUsers();
+        }
+
+        function initEventListeners() {
+            document.getElementById('addUserBtn').addEventListener('click', function() {
+                isEditMode = false;
+                currentUserId = null;
+                showUserModal();
+            });
+
+            document.getElementById('filterForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                loadUsers();
+            });
+
+            document.getElementById('resetFilters').addEventListener('click', function() {
+                document.getElementById('filterForm').reset();
+                loadUsers();
+            });
+
+            document.getElementById('exportUsers').addEventListener('click', function() {
+                exportUsers();
+            });
+
+            document.getElementById('selectAll').addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('.user-checkbox');
+                checkboxes.forEach(cb => cb.checked = this.checked);
+            });
+
+            document.getElementById('userForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveUser();
+            });
+
+            document.getElementById('editUserBtn').addEventListener('click', function() {
+                $('#userDetailModal').modal('hide');
+                editUser(currentUserId);
+            });
+        }
+
+        function showUserModal(user = null) {
+            const modal = $('#userModal');
+            const title = document.getElementById('userModalTitle');
+            const passwordRequired = document.getElementById('passwordRequired');
+            const confirmPasswordRequired = document.getElementById('confirmPasswordRequired');
+            const passwordHint = document.getElementById('passwordHint');
+            
+            if (isEditMode && user) {
+                title.innerHTML = '<i class="fas fa-user-edit mr-2"></i>编辑用户';
+                passwordRequired.style.display = 'none';
+                confirmPasswordRequired.style.display = 'none';
+                passwordHint.textContent = '留空表示不修改密码';
+                
+                document.getElementById('username').value = user.username;
+                document.getElementById('email').value = user.email;
+                document.getElementById('password').value = '';
+                document.getElementById('confirmPassword').value = '';
+                document.getElementById('role').value = user.role;
+                document.getElementById('status').value = user.status;
+                document.getElementById('remark').value = user.remark || '';
+            } else {
+                title.innerHTML = '<i class="fas fa-user-plus mr-2"></i>添加用户';
+                passwordRequired.style.display = 'inline';
+                confirmPasswordRequired.style.display = 'inline';
+                passwordHint.textContent = '至少8个字符，包含大小写字母和数字';
+                
+                document.getElementById('userForm').reset();
+            }
+            
+            modal.modal('show');
+        }
+
+        function viewUser(userId) {
+            currentUserId = userId;
+            const users = generateMockUsers();
+            const user = users.find(u => u.id === userId);
+            
+            if (user) {
+                document.getElementById('detailAvatar').textContent = user.username.charAt(0).toUpperCase();
+                document.getElementById('detailAvatar').className = `user-avatar bg-${user.avatarColor} mx-auto mb-3`;
+                document.getElementById('detailAvatar').style = 'width: 100px; height: 100px; font-size: 40px;';
+                document.getElementById('detailUsername').textContent = user.username;
+                document.getElementById('detailRole').textContent = getRoleText(user.role);
+                document.getElementById('detailRole').className = `role-badge role-${user.role}`;
+                document.getElementById('detailStatus').textContent = getStatusText(user.status);
+                document.getElementById('detailStatus').className = `status-badge ml-2 status-${user.status}`;
+                document.getElementById('detailId').textContent = user.id;
+                document.getElementById('detailEmail').textContent = user.email;
+                document.getElementById('detailCreated').textContent = user.createdAt;
+                document.getElementById('detailLastLogin').textContent = user.lastLogin;
+                document.getElementById('detailLoginCount').textContent = Math.floor(Math.random() * 500) + 50;
+                document.getElementById('detailGroup').textContent = '默认用户组';
+                document.getElementById('detailRemark').textContent = '暂无备注';
+                
+                $('#userDetailModal').modal('show');
+            }
+        }
+
+        function editUser(userId) {
+            isEditMode = true;
+            currentUserId = userId;
+            const users = generateMockUsers();
+            const user = users.find(u => u.id === userId);
+            
+            if (user) {
+                showUserModal(user);
+            }
+        }
+
+        function saveUser() {
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const role = document.getElementById('role').value;
+            const status = document.getElementById('status').value;
+            const remark = document.getElementById('remark').value;
+            
+            if (!isEditMode && password !== confirmPassword) {
+                alert('两次输入的密码不一致');
+                return;
+            }
+            
+            showToast(isEditMode ? '用户信息已更新' : '用户已添加', 'success');
+            $('#userModal').modal('hide');
+            loadUsers();
+        }
+
+        function toggleUserStatus(userId, currentStatus) {
+            const newStatus = currentStatus === 'blocked' ? 'active' : 'blocked';
+            const message = newStatus === 'blocked' ? '确定要封禁此用户吗？' : '确定要解封此用户吗？';
+            
+            document.getElementById('confirmMessage').textContent = message;
+            $('#confirmModal').modal('show');
+            
+            document.getElementById('confirmBtn').onclick = function() {
+                $('#confirmModal').modal('hide');
+                showToast(newStatus === 'blocked' ? '用户已封禁' : '用户已解封', 'success');
+                loadUsers();
+            };
+        }
+
+        function deleteUser(userId) {
+            document.getElementById('confirmMessage').textContent = '确定要删除此用户吗？此操作不可恢复！';
+            $('#confirmModal').modal('show');
+            
+            document.getElementById('confirmBtn').onclick = function() {
+                $('#confirmModal').modal('hide');
+                showToast('用户已删除', 'success');
+                loadUsers();
+            };
+        }
+
+        function exportUsers() {
+            const users = generateMockUsers();
+            let csv = 'ID,用户名,邮箱,角色,状态,注册时间,最后登录\n';
+            
+            users.forEach(user => {
+                csv += `${user.id},${user.username},${user.email},${getRoleText(user.role)},${getStatusText(user.status)},${user.createdAt},${user.lastLogin}\n`;
+            });
+            
+            downloadFile(csv, 'users_export.csv', 'text/csv');
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function showToast(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show`;
+            toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+            toast.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} mr-2"></i>
+                ${message}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

@@ -15,6 +15,9 @@ type TraceService struct {
 	matcher              *TraceMatcher
 	lstmExtractor        *LSTMFeatureExtractor
 	transformerPredictor *TransformerPredictor
+	intentClassifier     *IntentClassifier
+	anomalyDetector       *AnomalyDetector
+	unifiedRiskScorer    *UnifiedRiskScorer
 	nnService            interface{}
 	enableNN             bool
 	modelMonitor         *ModelPerformanceMonitor
@@ -334,12 +337,15 @@ func (s *TraceService) PrepareVisualizationData(traceData *model.TraceData) (*Tr
 func NewTraceService() *TraceService {
 	monitor := NewModelPerformanceMonitor()
 	service := &TraceService{
-		extractor:            NewTraceExtractor(),
+		extractor:             NewTraceExtractor(),
 		matcher:              NewTraceMatcher(),
 		lstmExtractor:        NewLSTMFeatureExtractor(),
 		transformerPredictor: NewTransformerPredictor(),
-		enableNN:             true,
-		modelMonitor:         monitor,
+		intentClassifier:     NewIntentClassifier(),
+		anomalyDetector:       NewAnomalyDetector(),
+		unifiedRiskScorer:    NewUnifiedRiskScorer(),
+		enableNN:              true,
+		modelMonitor:          monitor,
 	}
 	service.onlineUpdater = NewOnlineModelUpdater(service)
 	return service
@@ -553,4 +559,109 @@ func (s *TraceService) LoadModelWeights(ctx context.Context, lstmPath, transform
 
 func (s *TraceService) GetLastUpdateTime() time.Time {
 	return time.Now()
+}
+
+func (s *TraceService) ProcessTraceWithComprehensiveRisk(ctx context.Context, sessionID string, traceDataJSON []byte) (*ComprehensiveRiskResult, error) {
+	var traceData model.TraceData
+	if err := json.Unmarshal(traceDataJSON, &traceData); err != nil {
+		return nil, errors.New("轨迹数据格式错误: " + err.Error())
+	}
+
+	if len(traceData.Points) < 2 {
+		return nil, errors.New("轨迹数据点不足")
+	}
+
+	if s.unifiedRiskScorer != nil {
+		return s.unifiedRiskScorer.AnalyzeComprehensiveRisk(ctx, &traceData)
+	}
+
+	result := &ComprehensiveRiskResult{
+		TotalRiskScore:  0.5,
+		BotProbability:  0.5,
+		HumanProbability: 0.5,
+		Confidence:     0.5,
+	}
+
+	return result, nil
+}
+
+func (s *TraceService) RecognizeIntent(traceData *model.TraceData) (*IntentRecognitionResult, error) {
+	if s.intentClassifier == nil {
+		s.intentClassifier = NewIntentClassifier()
+	}
+	return s.intentClassifier.RecognizeIntent(traceData)
+}
+
+func (s *TraceService) DetectAnomalies(traceData *model.TraceData) ([]AnomalyPattern, error) {
+	if s.anomalyDetector == nil {
+		s.anomalyDetector = NewAnomalyDetector()
+	}
+	return s.anomalyDetector.DetectAnomalies(traceData)
+}
+
+func (s *TraceService) GetComprehensiveRiskAnalysis(ctx context.Context, traceData *model.TraceData) (*ComprehensiveRiskResult, error) {
+	if s.unifiedRiskScorer == nil {
+		s.unifiedRiskScorer = NewUnifiedRiskScorer()
+	}
+	return s.unifiedRiskScorer.AnalyzeComprehensiveRisk(ctx, traceData)
+}
+
+func (s *TraceService) BatchComprehensiveRiskAnalysis(ctx context.Context, traces []*model.TraceData) ([]*ComprehensiveRiskResult, error) {
+	if s.unifiedRiskScorer == nil {
+		s.unifiedRiskScorer = NewUnifiedRiskScorer()
+	}
+	return s.unifiedRiskScorer.BatchAnalyze(ctx, traces)
+}
+
+func (s *TraceService) GetThresholds() map[string]float64 {
+	if s.unifiedRiskScorer != nil {
+		return s.unifiedRiskScorer.GetThresholds()
+	}
+	return make(map[string]float64)
+}
+
+func (s *TraceService) UpdateThreshold(name string, value float64) error {
+	if s.unifiedRiskScorer != nil {
+		return s.unifiedRiskScorer.UpdateThreshold(name, value)
+	}
+	return errors.New("unified risk scorer not initialized")
+}
+
+func (s *TraceService) ResetRiskScorer() {
+	if s.unifiedRiskScorer != nil {
+		s.unifiedRiskScorer.Reset()
+	}
+}
+
+func (s *TraceService) ExtractTrajectoryComplexity(traceData *model.TraceData) (float64, error) {
+	if s.lstmExtractor == nil {
+		s.lstmExtractor = NewLSTMFeatureExtractor()
+	}
+	return s.lstmExtractor.AnalyzeTrajectoryComplexity(traceData)
+}
+
+func (s *TraceService) DetectAnomalousPatterns(traceData *model.TraceData) ([]string, error) {
+	if s.lstmExtractor == nil {
+		s.lstmExtractor = NewLSTMFeatureExtractor()
+	}
+	return s.lstmExtractor.DetectAnomalousPatterns(traceData)
+}
+
+func (s *TraceService) ExtractComprehensiveFeatures(traceData *model.TraceData) (*TraceFeatureSummary, error) {
+	if s.lstmExtractor == nil {
+		s.lstmExtractor = NewLSTMFeatureExtractor()
+	}
+	return s.lstmExtractor.ExtractComprehensiveFeatures(traceData)
+}
+
+func (s *TraceService) GetUnifiedRiskScorer() *UnifiedRiskScorer {
+	return s.unifiedRiskScorer
+}
+
+func (s *TraceService) GetIntentClassifier() *IntentClassifier {
+	return s.intentClassifier
+}
+
+func (s *TraceService) GetAnomalyDetector() *AnomalyDetector {
+	return s.anomalyDetector
 }

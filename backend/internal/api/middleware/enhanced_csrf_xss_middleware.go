@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -100,7 +99,7 @@ var defaultEnhancedCSPConfig = EnhancedCSPConfig{
 }
 
 var (
-	csrfSecurity      *service.EnhancedCSRFSecurity
+	csrfSecurity      *service.CSRFSecurity
 	csrfSecurityOnce  sync.Once
 	xssSecurity       *service.XSSSecurity
 	xssSecurityOnce   sync.Once
@@ -125,8 +124,8 @@ type sessionCSRFData struct {
 }
 
 var (
-	csrfTokenStore = make(map[string]*sessionCSRFData)
-	csrfStoreMu    sync.RWMutex
+	enhancedCSRFTokenStore = make(map[string]*sessionCSRFData)
+	enhancedCSRFStoreMu    sync.RWMutex
 )
 
 func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
@@ -162,17 +161,17 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 
 		if isSafeMethod {
 			if method == "GET" || method == "HEAD" {
-				sessionID := generateCSRFCSID(c)
+				sessionID := enhancedGenerateCSRFCSID(c)
 
 				token, err := csrfSecurity.GenerateToken()
 				if err == nil {
-					csrfStoreMu.Lock()
-					csrfTokenStore[sessionID] = &sessionCSRFData{
+					enhancedCSRFStoreMu.Lock()
+					enhancedCSRFTokenStore[sessionID] = &sessionCSRFData{
 						Token:     token,
 						ExpiresAt: time.Now().Add(cfg.TokenExpiration),
 						Used:      false,
 					}
-					csrfStoreMu.Unlock()
+					enhancedCSRFStoreMu.Unlock()
 
 					c.Set("csrf_token", token)
 					c.Set("csrf_session_id", sessionID)
@@ -193,7 +192,7 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 			return
 		}
 
-		sessionID := generateCSRFCSID(c)
+		sessionID := enhancedGenerateCSRFCSID(c)
 
 		var token string
 		token = c.GetHeader(cfg.HeaderName)
@@ -218,9 +217,9 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 			return
 		}
 
-		csrfStoreMu.RLock()
-		sessionData, exists := csrfTokenStore[sessionID]
-		csrfStoreMu.RUnlock()
+		enhancedCSRFStoreMu.RLock()
+		sessionData, exists := enhancedCSRFTokenStore[sessionID]
+		enhancedCSRFStoreMu.RUnlock()
 
 		if !exists || sessionData == nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
@@ -232,9 +231,9 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 		}
 
 		if time.Now().After(sessionData.ExpiresAt) {
-			csrfStoreMu.Lock()
-			delete(csrfTokenStore, sessionID)
-			csrfStoreMu.Unlock()
+			enhancedCSRFStoreMu.Lock()
+			delete(enhancedCSRFTokenStore, sessionID)
+			enhancedCSRFStoreMu.Unlock()
 
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "csrf_token_expired",
@@ -267,9 +266,9 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 		}
 
 		if cfg.RotateOnVerification {
-			csrfStoreMu.Lock()
-			delete(csrfTokenStore, sessionID)
-			csrfStoreMu.Unlock()
+			enhancedCSRFStoreMu.Lock()
+			delete(enhancedCSRFTokenStore, sessionID)
+			enhancedCSRFStoreMu.Unlock()
 		}
 
 		c.Set("csrf_verified", true)
@@ -279,7 +278,7 @@ func EnhancedCSRFProtection(configs ...EnhancedCSRFConfig) gin.HandlerFunc {
 	}
 }
 
-func generateCSRFCSID(c *gin.Context) string {
+func enhancedGenerateCSRFCSID(c *gin.Context) string {
 	if sessionID := c.GetHeader("X-Session-ID"); sessionID != "" {
 		return sessionID
 	}
@@ -299,18 +298,6 @@ func EnhancedXSSProtectionMiddleware(configs ...EnhancedXSSConfig) gin.HandlerFu
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-
-	xssConfig := &service.XSSSecurityConfig{
-		EnableHTMLSanitization:   cfg.EnableHTMLSanitization,
-		EnableAttributeFiltering:  cfg.EnableAttributeFiltering,
-		EnableURLValidation:      cfg.EnableURLValidation,
-		EnableJSRemoval:          cfg.EnableJSRemoval,
-		AllowedTags:              cfg.AllowedTags,
-		AllowedAttrs:             cfg.AllowedAttrs,
-		MaxInputLength:           cfg.MaxInputLength,
-	}
-
-	security := service.NewXSSSecurity(xssConfig)
 
 	return func(c *gin.Context) {
 		if !cfg.Enabled {
@@ -338,20 +325,7 @@ func EnhancedCSPMiddleware(configs ...EnhancedCSPConfig) gin.HandlerFunc {
 		cfg = configs[0]
 	}
 
-	cspConfig := service.ContentSecurityPolicyConfig{
-		DefaultSrc:     cfg.DefaultSrc,
-		ScriptSrc:      cfg.ScriptSrc,
-		StyleSrc:       cfg.StyleSrc,
-		ImgSrc:         cfg.ImgSrc,
-		FontSrc:        cfg.FontSrc,
-		ConnectSrc:     cfg.ConnectSrc,
-		FrameSrc:       cfg.FrameSrc,
-		ObjectSrc:      cfg.ObjectSrc,
-		ReportURI:      cfg.ReportURI,
-		EnableNonce:    cfg.EnableNonce,
-	}
-
-	policy := cspConfig.BuildPolicy()
+	cspPolicy := buildCSPPolicy(cfg)
 
 	return func(c *gin.Context) {
 		if !cfg.Enabled {
@@ -367,50 +341,66 @@ func EnhancedCSPMiddleware(configs ...EnhancedCSPConfig) gin.HandlerFunc {
 			}
 		}
 
-		c.Header("Content-Security-Policy", policy)
+		c.Header("Content-Security-Policy", cspPolicy)
 
-		c.Header("X-Content-Security-Policy", policy)
+		c.Header("X-Content-Security-Policy", cspPolicy)
 
 		c.Next()
 	}
+}
+
+func buildCSPPolicy(cfg EnhancedCSPConfig) string {
+	directives := []string{"default-src 'self'"}
+
+	if len(cfg.ScriptSrc) > 0 {
+		directives = append(directives, "script-src "+strings.Join(cfg.ScriptSrc, " "))
+	}
+	if len(cfg.StyleSrc) > 0 {
+		directives = append(directives, "style-src "+strings.Join(cfg.StyleSrc, " "))
+	}
+	if len(cfg.ImgSrc) > 0 {
+		directives = append(directives, "img-src "+strings.Join(cfg.ImgSrc, " "))
+	}
+	if len(cfg.FontSrc) > 0 {
+		directives = append(directives, "font-src "+strings.Join(cfg.FontSrc, " "))
+	}
+	if len(cfg.ConnectSrc) > 0 {
+		directives = append(directives, "connect-src "+strings.Join(cfg.ConnectSrc, " "))
+	}
+	if len(cfg.FrameSrc) > 0 {
+		directives = append(directives, "frame-src "+strings.Join(cfg.FrameSrc, " "))
+	}
+	if len(cfg.ObjectSrc) > 0 {
+		directives = append(directives, "object-src "+strings.Join(cfg.ObjectSrc, " "))
+	}
+
+	if cfg.ReportURI != "" {
+		directives = append(directives, "report-uri "+cfg.ReportURI)
+	}
+
+	return strings.Join(directives, "; ")
 }
 
 func EnhancedSecurityHeadersMiddleware() gin.HandlerFunc {
-	securityConfig := service.SecurityHeadersConfig{
-		EnableCSP:              true,
-		EnableHSTS:             true,
-		HSTSMaxAge:             31536000,
-		HSTSIncludeSubdomains:  true,
-		HSTSPreload:           true,
-		EnableXFrameOptions:    true,
-		XFrameOptions:          "DENY",
-		EnableXContentType:    true,
-		XContentTypeOptions:   "nosniff",
-		EnableXSSProtection:   true,
-		XSSProtectionMode:     "block",
-		EnableReferrerPolicy:  true,
-		ReferrerPolicy:        "strict-origin-when-cross-origin",
-		EnablePermissionsPolicy: true,
-		PermissionsPolicy:     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
-		EnableOtherHeaders:    true,
-	}
-
-	headers := service.BuildSecurityHeaders(securityConfig)
+	securityConfig := service.DefaultSecurityHeaders
 
 	return func(c *gin.Context) {
-		for name, value := range headers {
-			c.Header(name, value)
-		}
+		c.Header("Content-Security-Policy", securityConfig.CSP)
+		c.Header("Strict-Transport-Security", securityConfig.HSTS)
+		c.Header("X-Frame-Options", securityConfig.XFrameOptions)
+		c.Header("X-Content-Type-Options", securityConfig.XContentTypeOptions)
+		c.Header("X-XSS-Protection", securityConfig.XXSSProtection)
+		c.Header("Referrer-Policy", securityConfig.ReferrerPolicy)
 
 		c.Header("X-Permitted-Cross-Domain-Policies", "none")
 		c.Header("X-Download-Options", "noopen")
-		c.Header("X-Request-ID", generateRequestID())
+		c.Header("X-Request-ID", enhancedGenerateRequestID())
 
 		c.Next()
 	}
 }
 
-func generateRequestID() string {
+func enhancedGenerateRequestID() string {
 	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	return fmt.Sprintf("%x", bytes)
@@ -434,7 +424,7 @@ func SetupEnhancedSecurityMiddleware(r *gin.Engine) {
 	r.Use(BehavioralAnalysisMiddlewareHandler())
 }
 
-func GetEnhancedCSRFSecurity() *service.EnhancedCSRFSecurity {
+func GetEnhancedCSRFSecurity() *service.CSRFSecurity {
 	initCSRFSecurity()
 	return csrfSecurity
 }
@@ -450,8 +440,7 @@ func SanitizeInput(input string) string {
 }
 
 func SanitizeHTML(input string) string {
-	initXSSSecurity()
-	return xssSecurity.SanitizeHTML(input)
+	return service.SanitizeHTML(input)
 }
 
 func DetectXSS(input string) (bool, string) {
@@ -459,18 +448,19 @@ func DetectXSS(input string) (bool, string) {
 	return xssSecurity.DetectXSS(input)
 }
 
-type InputValidationMiddlewareConfig struct {
-	Enabled        bool
-	ValidateQuery  bool
-	ValidateForm   bool
-	ValidateJSON   bool
+type EnhancedInputValidationMiddlewareConfig struct {
+	Enabled         bool
+	ValidateQuery   bool
+	ValidateForm    bool
+	ValidateJSON    bool
 	ValidateHeaders bool
-	MaxQueryParams int
-	MaxBodySize    int64
-	ExcludePaths   []string
+	MaxQueryParams  int
+	MaxBodySize     int64
+	ExcludePaths    []string
+	LogViolations   bool
 }
 
-var defaultInputValidationConfig = InputValidationMiddlewareConfig{
+var defaultEnhancedInputValidationConfig = EnhancedInputValidationMiddlewareConfig{
 	Enabled:         true,
 	ValidateQuery:   true,
 	ValidateForm:    true,
@@ -479,10 +469,11 @@ var defaultInputValidationConfig = InputValidationMiddlewareConfig{
 	MaxQueryParams:  50,
 	MaxBodySize:     1024 * 1024 * 10,
 	ExcludePaths:    []string{"/health", "/metrics"},
+	LogViolations:   true,
 }
 
-func InputValidationMiddleware(configs ...InputValidationMiddlewareConfig) gin.HandlerFunc {
-	cfg := defaultInputValidationConfig
+func EnhancedInputValidationMiddleware(configs ...EnhancedInputValidationMiddlewareConfig) gin.HandlerFunc {
+	cfg := defaultEnhancedInputValidationConfig
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}

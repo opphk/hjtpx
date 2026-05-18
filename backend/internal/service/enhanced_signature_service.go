@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"math/big"
 	"net/url"
 	"sort"
 	"strconv"
@@ -354,11 +353,11 @@ func (v *SignatureValidator) validateTimestamp(timestamp int64) bool {
 		diff = -diff
 	}
 
-	if diff > v.config.TimestampTolerance.Seconds() {
+	if float64(diff) > v.config.TimestampTolerance.Seconds() {
 		return false
 	}
 
-	if diff > v.config.MaxClockSkew.Seconds() {
+	if float64(diff) > v.config.MaxClockSkew.Seconds() {
 		return false
 	}
 
@@ -453,7 +452,7 @@ func (v *SignatureValidator) secureCompare(a, b string) bool {
 func (v *SignatureValidator) GenerateSignature(method, path, query string, body []byte) (string, int64, string, error) {
 	timestamp := time.Now().Unix()
 
-	nonce, err := GenerateSecureNonce(16)
+	nonce, err := GenerateSignatureNonce(16)
 	if err != nil {
 		return "", 0, "", err
 	}
@@ -463,7 +462,7 @@ func (v *SignatureValidator) GenerateSignature(method, path, query string, body 
 	return signature, timestamp, nonce, nil
 }
 
-func GenerateSecureNonce(length int) (string, error) {
+func GenerateSignatureNonce(length int) (string, error) {
 	if length < 8 {
 		length = 16
 	}
@@ -570,20 +569,21 @@ func (v *RSASignatureValidator) Sign(message []byte) (string, error) {
 		return "", errors.New("private key not available")
 	}
 
-	var hash hash.Hash
+	var hashType crypto.Hash
 	switch v.config.Algorithm {
 	case "SHA256":
-		hash = sha256.New()
+		hashType = crypto.SHA256
 	case "SHA512":
-		hash = sha512.New()
+		hashType = crypto.SHA512
 	default:
-		hash = sha256.New()
+		hashType = crypto.SHA256
 	}
 
-	hash.Write(message)
+	hash := sha256.New()
+	hash.Write([]byte(message))
 	hashed := hash.Sum(nil)
 
-	signature, err := rsa.SignPKCS1v15(rand.Reader, v.privateKey, crypto.Hash(hash), hashed)
+	signature, err := rsa.SignPKCS1v15(rand.Reader, v.privateKey, hashType, hashed)
 	if err != nil {
 		return "", err
 	}
@@ -601,20 +601,21 @@ func (v *RSASignatureValidator) Verify(message, signatureBase64 string) error {
 		return err
 	}
 
-	var hash hash.Hash
+	var hashType crypto.Hash
 	switch v.config.Algorithm {
 	case "SHA256":
-		hash = sha256.New()
+		hashType = crypto.SHA256
 	case "SHA512":
-		hash = sha512.New()
+		hashType = crypto.SHA512
 	default:
-		hash = sha256.New()
+		hashType = crypto.SHA256
 	}
 
-	hash.Write(message)
+	hash := sha256.New()
+	hash.Write([]byte(message))
 	hashed := hash.Sum(nil)
 
-	return rsa.VerifyPKCS1v15(v.publicKey, crypto.Hash(hash), hashed, signature)
+	return rsa.VerifyPKCS1v15(v.publicKey, hashType, hashed, signature)
 }
 
 func (v *RSASignatureValidator) ValidateNonce(nonce string) bool {
@@ -678,12 +679,12 @@ func (v *DoubleSignatureValidator) ValidateRequest(method, path, query string, h
 }
 
 func (v *DoubleSignatureValidator) GenerateDualSignature(method, path, query string, body []byte) (string, string, int64, error) {
-	sig1, timestamp, nonce1, err := v.primaryValidator.GenerateSignature(method, path, query, body)
+	sig1, timestamp, _, err := v.primaryValidator.GenerateSignature(method, path, query, body)
 	if err != nil {
 		return "", "", 0, err
 	}
 
-	nonce2, _ := GenerateSecureNonce(16)
+	nonce2, _ := GenerateSignatureNonce(16)
 	sig2 := v.secondaryValidator.calculateSignature(method, path, query, timestamp, nonce2, body)
 
 	return sig1, sig2, timestamp, nil

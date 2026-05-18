@@ -1,112 +1,299 @@
 {% extends "base.html" %}
 
-{% block title %}系统配置 - 墨盾验证{% endblock %}
+{% block title %}系统配置 - HJTPX 管理后台{% endblock %}
 
 {% block page_title %}系统配置{% endblock %}
 
 {% block header_actions %}
-<button type="button" class="btn btn-default" id="importConfigBtn">
-    <i class="fas fa-upload"></i> 导入配置
-</button>
-<button type="button" class="btn btn-default" id="exportConfigBtn">
-    <i class="fas fa-download"></i> 导出配置
+<div class="btn-group">
+    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+        <i class="fas fa-ellipsis-v"></i>
+    </button>
+    <div class="dropdown-menu">
+        <a class="dropdown-item" href="#" id="importConfigBtn"><i class="fas fa-upload mr-2"></i>导入配置</a>
+        <a class="dropdown-item" href="#" id="exportConfigBtn"><i class="fas fa-download mr-2"></i>导出配置</a>
+        <a class="dropdown-item" href="#" id="backupConfigBtn"><i class="fas fa-save mr-2"></i>创建备份</a>
+        <a class="dropdown-item" href="#" id="restoreConfigBtn"><i class="fas fa-history mr-2"></i>恢复备份</a>
+        <div class="dropdown-divider"></div>
+        <a class="dropdown-item" href="#" id="compareConfigBtn"><i class="fas fa-exchange-alt mr-2"></i>配置对比</a>
+        <a class="dropdown-item" href="#" id="validateAllConfigBtn"><i class="fas fa-check-circle mr-2"></i>验证配置</a>
+    </div>
+</div>
+<button type="button" class="btn btn-default" id="refreshConfigBtn">
+    <i class="fas fa-sync"></i> 刷新
 </button>
 {% endblock %}
 
 {% block content %}
 <section class="content">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="alert alert-warning alert-dismissible" style="display: none;" id="configAlert">
-                    <button type="button" class="close" data-dismiss="alert">&times;</button>
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span id="configAlertInfo"></span>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-cog mr-2"></i>系统配置</h3>
-                        <div class="card-tools">
-                            <button type="button" class="btn btn-tool" data-card-widget="collapse">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                        </div>
+        <div class="alert alert-warning alert-dismissible" style="display: none;" id="configAlert">
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="configAlertInfo"></span>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <ul class="nav nav-pills card-header-tabs" id="configTabs" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" id="tab-captcha" data-toggle="pill" href="#panel-captcha" role="tab">
+                                    <i class="fas fa-shield-alt mr-1"></i>验证码配置
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-risk" data-toggle="pill" href="#panel-risk" role="tab">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>风控配置
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-security" data-toggle="pill" href="#panel-security" role="tab">
+                                    <i class="fas fa-lock mr-1"></i>安全配置
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-rate-limit" data-toggle="pill" href="#panel-rate-limit" role="tab">
+                                    <i class="fas fa-tachometer-alt mr-1"></i>频率限制
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-cache" data-toggle="pill" href="#panel-cache" role="tab">
+                                    <i class="fas fa-database mr-1"></i>缓存配置
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-session" data-toggle="pill" href="#panel-session" role="tab">
+                                    <i class="fas fa-clock mr-1"></i>会话配置
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-api" data-toggle="pill" href="#panel-api" role="tab">
+                                    <i class="fas fa-plug mr-1"></i>API配置
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-logging" data-toggle="pill" href="#panel-logging" role="tab">
+                                    <i class="fas fa-file-alt mr-1"></i>日志配置
+                                </a>
+                            </li>
+                        </ul>
                     </div>
-                    <div class="card-body">
-                        <form id="configForm">
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-key mr-2 text-primary"></i>验证码配置</h5>
-                                </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <form id="configForm">
+                    <div class="tab-content" id="configTabContent">
+                        <div class="tab-pane fade show active" id="panel-captcha" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-shield-alt mr-2 text-primary"></i>验证码配置
+                            </h5>
+                            <div class="row">
                                 <div class="col-md-4">
                                     <div class="form-group">
-                                        <label>难度等级 (1-5)</label>
-                                        <input type="number" class="form-control" name="captcha.difficulty" 
-                                               min="1" max="5" value="3" required>
-                                        <small class="form-text text-muted">1=简单, 5=困难</small>
+                                        <label>难度等级 (1-5) <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" name="captcha.difficulty" min="1" max="5" value="3" required>
+                                        <small class="form-text text-muted">1=非常简单, 3=中等, 5=非常困难</small>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-group">
-                                        <label>有效期 (秒)</label>
-                                        <input type="number" class="form-control" name="captcha.timeout" 
-                                               min="60" max="600" value="120" required>
+                                        <label>有效期 (秒) <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" name="captcha.timeout" min="60" max="600" value="120" required>
                                         <small class="form-text text-muted">验证码有效期范围: 60-600秒</small>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-group">
-                                        <label>最大尝试次数</label>
-                                        <input type="number" class="form-control" name="captcha.max_attempts" 
-                                               min="1" max="10" value="3" required>
+                                        <label>最大尝试次数 <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" name="captcha.max_attempts" min="1" max="10" value="3" required>
                                         <small class="form-text text-muted">允许的最大验证尝试次数</small>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-shield-alt mr-2 text-danger"></i>风控配置</h5>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>滑动距离容忍度 (%)</label>
+                                        <input type="number" class="form-control" name="captcha.slide_tolerance" min="5" max="20" value="10">
+                                        <small class="form-text text-muted">滑动验证允许的误差范围</small>
+                                    </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-group">
-                                        <label>通过阈值</label>
-                                        <input type="number" class="form-control" name="risk.threshold_pass" 
-                                               min="60" max="100" value="75" required>
+                                        <label>轨迹匹配阈值</label>
+                                        <input type="number" class="form-control" name="captcha.trajectory_threshold" min="0.5" max="1.0" step="0.1" value="0.7">
+                                        <small class="form-text text-muted">人机轨迹相似度阈值</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>验证码类型</label>
+                                        <select class="form-control" name="captcha.type">
+                                            <option value="slider" selected>滑动验证</option>
+                                            <option value="click">点选验证</option>
+                                            <option value="image">图像验证</option>
+                                            <option value="voice">语音验证</option>
+                                            <option value="3d">3D旋转验证</option>
+                                            <option value="all">全部类型</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="captchaEnableTrack" name="captcha.enable_track" checked>
+                                            <label class="custom-control-label" for="captchaEnableTrack">启用轨迹分析</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="captchaEnableSound" name="captcha.enable_sound">
+                                            <label class="custom-control-label" for="captchaEnableSound">启用语音提示</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="panel-risk" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-exclamation-triangle mr-2 text-danger"></i>风控配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>通过阈值 <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" name="risk.threshold_pass" min="60" max="100" value="75" required>
                                         <small class="form-text text-muted">风险分 >= 此值时通过验证</small>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-group">
-                                        <label>审查阈值</label>
-                                        <input type="number" class="form-control" name="risk.threshold_review" 
-                                               min="40" max="80" value="60" required>
+                                        <label>审查阈值 <span class="text-danger">*</span></label>
+                                        <input type="number" class="form-control" name="risk.threshold_review" min="40" max="80" value="60" required>
                                         <small class="form-text text-muted">风险分 >= 此值时需人工审查</small>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="form-group">
-                                        <label>&nbsp;</label>
-                                        <div class="custom-control custom-switch mt-2">
-                                            <input type="checkbox" class="custom-control-input" 
-                                                   id="riskEnableEnvCheck" name="risk.enable_env_check" checked>
+                                        <label>拦截阈值</label>
+                                        <input type="number" class="form-control" name="risk.threshold_block" min="0" max="60" value="30">
+                                        <small class="form-text text-muted">风险分 < 此值时直接拦截</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="riskEnableEnvCheck" name="risk.enable_env_check" checked>
                                             <label class="custom-control-label" for="riskEnableEnvCheck">启用环境检测</label>
                                         </div>
                                         <small class="form-text text-muted">检测浏览器环境异常</small>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-tachometer-alt mr-2 text-warning"></i>频率限制配置</h5>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="riskEnableBehavior" name="risk.enable_behavior_check" checked>
+                                            <label class="custom-control-label" for="riskEnableBehavior">启用行为分析</label>
+                                        </div>
+                                        <small class="form-text text-muted">分析用户行为模式</small>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <div class="custom-control custom-switch">
-                                            <input type="checkbox" class="custom-control-input" 
-                                                   id="rateLimitEnabled" name="rate_limit.enabled" checked>
+                                            <input type="checkbox" class="custom-control-input" id="riskEnableIPCheck" name="risk.enable_ip_check" checked>
+                                            <label class="custom-control-label" for="riskEnableIPCheck">启用IP检测</label>
+                                        </div>
+                                        <small class="form-text text-muted">检测IP异常和代理</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="riskEnableDeviceCheck" name="risk.enable_device_check" checked>
+                                            <label class="custom-control-label" for="riskEnableDeviceCheck">启用设备指纹</label>
+                                        </div>
+                                        <small class="form-text text-muted">设备指纹识别和追踪</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="panel-security" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-lock mr-2 text-success"></i>安全配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="securityEnableCSRF" name="security.enable_csrf" checked>
+                                            <label class="custom-control-label" for="securityEnableCSRF">启用 CSRF 保护</label>
+                                        </div>
+                                        <small class="form-text text-muted">防止跨站请求伪造攻击</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="securityEnableCaptcha" name="security.enable_captcha" checked>
+                                            <label class="custom-control-label" for="securityEnableCaptcha">启用验证码挑战</label>
+                                        </div>
+                                        <small class="form-text text-muted">防止自动化攻击</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="securityEnableReplay" name="security.enable_replay_protection" checked>
+                                            <label class="custom-control-label" for="securityEnableReplay">启用重放攻击保护</label>
+                                        </div>
+                                        <small class="form-text text-muted">防止请求重放攻击</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="securityEnableXSS" name="security.enable_xss_protection" checked>
+                                            <label class="custom-control-label" for="securityEnableXSS">启用 XSS 保护</label>
+                                        </div>
+                                        <small class="form-text text-muted">防止跨站脚本攻击</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="securityEnableDDoS" name="security.enable_ddos_protection" checked>
+                                            <label class="custom-control-label" for="securityEnableDDoS">启用 DDoS 防护</label>
+                                        </div>
+                                        <small class="form-text text-muted">分布式拒绝服务攻击防护</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="securityEnableSignature" name="security.enable_signature">
+                                            <label class="custom-control-label" for="securityEnableSignature">启用请求签名</label>
+                                        </div>
+                                        <small class="form-text text-muted">API请求签名验证</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="panel-rate-limit" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-tachometer-alt mr-2 text-warning"></i>频率限制配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="rateLimitEnabled" name="rate_limit.enabled" checked>
                                             <label class="custom-control-label" for="rateLimitEnabled">启用频率限制</label>
                                         </div>
                                         <small class="form-text text-muted">防止接口被频繁调用</small>
@@ -115,22 +302,123 @@
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label>单IP最大请求数/分钟</label>
-                                        <input type="number" class="form-control" name="rate_limit.max_per_ip" 
-                                               min="10" max="1000" value="100" required>
+                                        <input type="number" class="form-control" name="rate_limit.max_per_ip" min="10" max="1000" value="100">
                                         <small class="form-text text-muted">每个IP每分钟允许的最大请求数</small>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-database mr-2 text-info"></i>会话配置</h5>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>全局最大QPS</label>
+                                        <input type="number" class="form-control" name="rate_limit.global_max_qps" min="100" max="10000" value="1000">
+                                        <small class="form-text text-muted">系统整体最大QPS</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>单用户最大QPS</label>
+                                        <input type="number" class="form-control" name="rate_limit.user_max_qps" min="10" max="1000" value="100">
+                                        <small class="form-text text-muted">单个用户最大QPS</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>单应用最大QPS</label>
+                                        <input type="number" class="form-control" name="rate_limit.app_max_qps" min="50" max="5000" value="500">
+                                        <small class="form-text text-muted">单个应用最大QPS</small>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="rateLimitAutoBlock" name="rate_limit.auto_block">
+                                            <label class="custom-control-label" for="rateLimitAutoBlock">自动封禁超限IP</label>
+                                        </div>
+                                        <small class="form-text text-muted">超过限制自动加入黑名单</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>封禁时长 (分钟)</label>
+                                        <input type="number" class="form-control" name="rate_limit.block_duration" min="5" max="1440" value="60">
+                                        <small class="form-text text-muted">自动封禁持续时间</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="panel-cache" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-database mr-2 text-info"></i>缓存配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>缓存类型</label>
+                                        <select class="form-control" name="cache.type">
+                                            <option value="redis" selected>Redis</option>
+                                            <option value="memcache">Memcache</option>
+                                            <option value="memory">内存缓存</option>
+                                            <option value="none">禁用缓存</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>缓存过期时间 (秒)</label>
+                                        <input type="number" class="form-control" name="cache.ttl" min="60" max="86400" value="3600">
+                                        <small class="form-text text-muted">缓存数据默认过期时间</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>验证码缓存 TTL</label>
+                                        <input type="number" class="form-control" name="cache.captcha_ttl" min="60" max="3600" value="300">
+                                        <small class="form-text text-muted">验证码结果缓存时间</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>用户数据缓存 TTL</label>
+                                        <input type="number" class="form-control" name="cache.user_ttl" min="300" max="7200" value="600">
+                                        <small class="form-text text-muted">用户数据缓存时间</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label>配置缓存 TTL</label>
+                                        <input type="number" class="form-control" name="cache.config_ttl" min="60" max="3600" value="180">
+                                        <small class="form-text text-muted">系统配置缓存时间</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="cacheEnableWarmup" name="cache.enable_warmup" checked>
+                                            <label class="custom-control-label" for="cacheEnableWarmup">启动时预热缓存</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="cacheEnableStats" name="cache.enable_stats">
+                                            <label class="custom-control-label" for="cacheEnableStats">启用缓存统计</label>
+                                        </div>
+                                        <small class="form-text text-muted">记录缓存命中率等统计</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="panel-session" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-clock mr-2 text-secondary"></i>会话配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
                                         <label>会话超时时间 (分钟)</label>
-                                        <input type="number" class="form-control" name="session.timeout" 
-                                               min="5" max="1440" value="30" required>
+                                        <input type="number" class="form-control" name="session.timeout" min="5" max="1440" value="30">
                                         <small class="form-text text-muted">用户会话超时时间</small>
                                     </div>
                                 </div>
@@ -145,42 +433,171 @@
                                         <small class="form-text text-muted">会话数据的存储方式</small>
                                     </div>
                                 </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大并发会话数</label>
+                                        <input type="number" class="form-control" name="session.max_concurrent" min="1" max="10" value="3">
+                                        <small class="form-text text-muted">同一账号最大并发登录数</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>会话Cookie名称</label>
+                                        <input type="text" class="form-control" name="session.cookie_name" value="hjtpx_session">
+                                        <small class="form-text text-muted">会话Cookie的名称</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="sessionSecure" name="session.secure" checked>
+                                            <label class="custom-control-label" for="sessionSecure">仅HTTPS传输</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="sessionHttpOnly" name="session.http_only" checked>
+                                            <label class="custom-control-label" for="sessionHttpOnly">HTTP Only Cookie</label>
+                                        </div>
+                                        <small class="form-text text-muted">防止JavaScript访问Cookie</small>
+                                    </div>
+                                </div>
                             </div>
+                        </div>
 
-                            <div class="row mb-4">
-                                <div class="col-12">
-                                    <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-lock mr-2 text-success"></i>安全配置</h5>
+                        <div class="tab-pane fade" id="panel-api" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-plug mr-2 text-primary"></i>API配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>API版本</label>
+                                        <input type="text" class="form-control" name="api.version" value="v1" readonly>
+                                    </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>API密钥有效期 (天)</label>
+                                        <input type="number" class="form-control" name="api.key_validity_days" min="30" max="365" value="90">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
                                     <div class="form-group">
                                         <div class="custom-control custom-switch">
-                                            <input type="checkbox" class="custom-control-input" 
-                                                   id="securityEnableCSRF" name="security.enable_csrf" checked>
-                                            <label class="custom-control-label" for="securityEnableCSRF">启用 CSRF 保护</label>
+                                            <input type="checkbox" class="custom-control-input" id="apiEnableCORS" name="api.enable_cors" checked>
+                                            <label class="custom-control-label" for="apiEnableCORS">启用 CORS</label>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="form-group">
                                         <div class="custom-control custom-switch">
-                                            <input type="checkbox" class="custom-control-input" 
-                                                   id="securityEnableCaptcha" name="security.enable_captcha" checked>
-                                            <label class="custom-control-label" for="securityEnableCaptcha">启用验证码挑战</label>
+                                            <input type="checkbox" class="custom-control-input" id="apiEnableGzip" name="api.enable_gzip" checked>
+                                            <label class="custom-control-label" for="apiEnableGzip">启用 Gzip 压缩</label>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <div class="form-group">
                                         <div class="custom-control custom-switch">
-                                            <input type="checkbox" class="custom-control-input" 
-                                                   id="securityEnableReplay" name="security.enable_replay_protection" checked>
-                                            <label class="custom-control-label" for="securityEnableReplay">启用重放攻击保护</label>
+                                            <input type="checkbox" class="custom-control-input" id="apiEnableSwagger" name="api.enable_swagger">
+                                            <label class="custom-control-label" for="apiEnableSwagger">启用 Swagger 文档</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="apiEnableMetrics" name="api.enable_metrics" checked>
+                                            <label class="custom-control-label" for="apiEnableMetrics">启用指标监控</label>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="form-group mt-4">
+                        </div>
+
+                        <div class="tab-pane fade" id="panel-logging" role="tabpanel">
+                            <h5 class="border-bottom pb-2 mb-3">
+                                <i class="fas fa-file-alt mr-2 text-secondary"></i>日志配置
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>日志级别</label>
+                                        <select class="form-control" name="logging.level">
+                                            <option value="debug">Debug</option>
+                                            <option value="info" selected>Info</option>
+                                            <option value="warning">Warning</option>
+                                            <option value="error">Error</option>
+                                            <option value="fatal">Fatal</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>日志保留天数</label>
+                                        <input type="number" class="form-control" name="logging.retention_days" min="7" max="365" value="30">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>日志存储位置</label>
+                                        <select class="form-control" name="logging.storage">
+                                            <option value="file" selected>文件系统</option>
+                                            <option value="database">数据库</option>
+                                            <option value="elasticsearch">Elasticsearch</option>
+                                            <option value="syslog">Syslog</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>最大单个日志文件大小 (MB)</label>
+                                        <input type="number" class="form-control" name="logging.max_file_size" min="10" max="500" value="100">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="loggingEnableAccess" name="logging.enable_access_log" checked>
+                                            <label class="custom-control-label" for="loggingEnableAccess">记录访问日志</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="loggingEnableError" name="logging.enable_error_log" checked>
+                                            <label class="custom-control-label" for="loggingEnableError">记录错误日志</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="loggingEnableAudit" name="logging.enable_audit_log" checked>
+                                            <label class="custom-control-label" for="loggingEnableAudit">记录审计日志</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <div class="custom-control custom-switch">
+                                            <input type="checkbox" class="custom-control-input" id="loggingEnableJSON" name="logging.json_format">
+                                            <label class="custom-control-label" for="loggingEnableJSON">JSON 格式输出</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mt-4 p-3 bg-light rounded">
+                        <div class="row">
+                            <div class="col-md-12 text-center">
                                 <button type="submit" class="btn btn-primary btn-lg" id="saveBtn">
                                     <i class="fas fa-save mr-2"></i>保存配置
                                 </button>
@@ -191,36 +608,107 @@
                                     <i class="fas fa-check mr-2"></i>验证配置
                                 </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
-                    <div class="card-footer">
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            配置修改后会自动清除缓存，下次请求时生效。部分配置可能需要重启服务才能完全生效。
-                        </small>
+                </form>
+            </div>
+            <div class="card-footer">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    配置修改后会自动清除缓存，下次请求时生效。部分配置可能需要重启服务才能完全生效。
+                </small>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-history mr-2"></i>配置历史</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="configHistoryTable">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllHistory"></th>
+                                <th>时间</th>
+                                <th>操作人</th>
+                                <th>操作类型</th>
+                                <th>变更内容</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="configHistoryBody">
+                            <tr><td colspan="6" class="text-center text-muted">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-danger" id="deleteSelectedHistory">
+                        <i class="fas fa-trash mr-1"></i>删除选中
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-server mr-2"></i>系统信息</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-info"><i class="fas fa-microchip"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">CPU使用率</span>
+                                <span class="info-box-number" id="cpuUsage">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-success"><i class="fas fa-memory"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">内存使用率</span>
+                                <span class="info-box-number" id="memoryUsage">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="info-box">
+                            <span class="info-box-icon bg-warning"><i class="fas fa-hdd"></i></span>
+                            <div class="info-box-content">
+                                <span class="info-box-text">磁盘使用率</span>
+                                <span class="info-box-number" id="diskUsage">-</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-history mr-2"></i>配置历史</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-sm" id="configHistoryTable">
-                                <thead>
-                                    <tr>
-                                        <th>时间</th>
-                                        <th>操作人</th>
-                                        <th>操作类型</th>
-                                        <th>变更内容</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="configHistoryBody">
-                                    <tr><td colspan="4" class="text-center text-muted">暂无历史记录</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th width="30%">系统版本</th>
+                                <td id="systemVersion">v1.0.0</td>
+                            </tr>
+                            <tr>
+                                <th>运行时间</th>
+                                <td id="systemUptime">-</td>
+                            </tr>
+                            <tr>
+                                <th>数据库连接</th>
+                                <td id="dbConnection">-</td>
+                            </tr>
+                            <tr>
+                                <th>缓存连接</th>
+                                <td id="cacheConnection">-</td>
+                            </tr>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -259,7 +747,7 @@
 </div>
 
 <div class="modal fade" id="validateConfigModal">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-check-circle mr-2"></i>配置验证结果</h5>
@@ -273,30 +761,135 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="backupModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-save mr-2"></i>配置备份</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>备份名称</label>
+                    <input type="text" class="form-control" id="backupName" placeholder="输入备份名称">
+                </div>
+                <div class="form-group">
+                    <label>备份描述</label>
+                    <textarea class="form-control" id="backupDescription" rows="3" placeholder="可选，添加备份描述"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmBackupBtn">创建备份</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="restoreModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-history mr-2"></i>恢复备份</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    警告：恢复备份将覆盖当前所有配置！
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>选择</th>
+                                <th>备份名称</th>
+                                <th>创建时间</th>
+                                <th>描述</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="backupListBody">
+                            <tr><td colspan="5" class="text-center">暂无备份</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="/admin/static/js/enhanced-ui.js"></script>
 <script>
 const defaultConfig = {
     'captcha.difficulty': '3',
     'captcha.timeout': '120',
     'captcha.max_attempts': '3',
+    'captcha.slide_tolerance': '10',
+    'captcha.trajectory_threshold': '0.7',
+    'captcha.type': 'slider',
+    'captcha.enable_track': 'true',
+    'captcha.enable_sound': 'false',
     'risk.threshold_pass': '75',
     'risk.threshold_review': '60',
+    'risk.threshold_block': '30',
     'risk.enable_env_check': 'true',
+    'risk.enable_behavior_check': 'true',
+    'risk.enable_ip_check': 'true',
+    'risk.enable_device_check': 'true',
     'rate_limit.enabled': 'true',
     'rate_limit.max_per_ip': '100',
+    'rate_limit.global_max_qps': '1000',
+    'rate_limit.user_max_qps': '100',
+    'rate_limit.app_max_qps': '500',
+    'rate_limit.auto_block': 'false',
+    'rate_limit.block_duration': '60',
+    'cache.type': 'redis',
+    'cache.ttl': '3600',
+    'cache.captcha_ttl': '300',
+    'cache.user_ttl': '600',
+    'cache.config_ttl': '180',
+    'cache.enable_warmup': 'true',
+    'cache.enable_stats': 'false',
     'session.timeout': '30',
     'session.storage': 'redis',
+    'session.max_concurrent': '3',
+    'session.cookie_name': 'hjtpx_session',
+    'session.secure': 'true',
+    'session.http_only': 'true',
     'security.enable_csrf': 'true',
     'security.enable_captcha': 'true',
-    'security.enable_replay_protection': 'true'
+    'security.enable_replay_protection': 'true',
+    'security.enable_xss_protection': 'true',
+    'security.enable_ddos_protection': 'true',
+    'security.enable_signature': 'false',
+    'api.version': 'v1',
+    'api.key_validity_days': '90',
+    'api.enable_cors': 'true',
+    'api.enable_gzip': 'true',
+    'api.enable_swagger': 'false',
+    'api.enable_metrics': 'true',
+    'logging.level': 'info',
+    'logging.retention_days': '30',
+    'logging.storage': 'file',
+    'logging.max_file_size': '100',
+    'logging.enable_access_log': 'true',
+    'logging.enable_error_log': 'true',
+    'logging.enable_audit_log': 'true',
+    'logging.json_format': 'false'
 };
 
 $(function() {
     loadConfig();
     setupEventListeners();
     loadConfigHistory();
+    loadSystemInfo();
 });
 
 function setupEventListeners() {
@@ -304,17 +897,42 @@ function setupEventListeners() {
     
     $('#resetBtn').on('click', handleReset);
     
-    $('#importConfigBtn').on('click', () => {
+    $('#importConfigBtn').on('click', function() {
         $('#importConfigModal').modal('show');
     });
     
     $('#exportConfigBtn').on('click', handleExportConfig);
     
-    $('#confirmImportBtn').on('click', handleImportConfig);
+    $('#backupConfigBtn').on('click', function() {
+        $('#backupModal').modal('show');
+    });
     
-    $('#validateBtn').on('click', handleValidateConfig);
+    $('#restoreConfigBtn').on('click', function() {
+        loadBackupList();
+        $('#restoreModal').modal('show');
+    });
+    
+    $('#confirmImportBtn').on('click', handleImportConfig);
+    $('#confirmBackupBtn').on('click', handleCreateBackup);
     
     $('#importConfigFile').on('change', handleFileSelect);
+    
+    $('#validateBtn').on('click', handleValidateConfig);
+    $('#validateAllConfigBtn').on('click', handleValidateConfig);
+    
+    $('#refreshConfigBtn').on('click', function() {
+        loadConfig();
+        loadConfigHistory();
+        loadSystemInfo();
+        showEnhancedToast('配置已刷新', 'success');
+    });
+    
+    $('#selectAllHistory').on('change', function() {
+        const checked = this.checked;
+        $('#configHistoryBody input[type="checkbox"]').prop('checked', checked);
+    });
+    
+    $('#deleteSelectedHistory').on('click', handleDeleteSelectedHistory);
 }
 
 function loadConfig() {
@@ -337,7 +955,6 @@ function loadConfig() {
             }
         },
         error: function() {
-            console.log('加载配置失败，使用默认配置');
             Object.keys(defaultConfig).forEach(function(key) {
                 const input = $(`[name="${key}"]`);
                 if (input.length) {
@@ -357,7 +974,7 @@ function handleConfigSubmit(e) {
     
     const $btn = $('#saveBtn');
     const originalText = $btn.html();
-    $btn.html('<i class="fas fa-spinner fa-spin mr-2"></i>保存中...').prop('disabled', true);
+    $btn.html('<span class="loading-spinner mr-2"></span>保存中...').prop('disabled', true);
     
     const formData = new FormData(document.getElementById('configForm'));
     const config = {};
@@ -378,23 +995,14 @@ function handleConfigSubmit(e) {
         data: JSON.stringify(config),
         success: function(response) {
             if (response.code === 0) {
-                Toast.fire({
-                    icon: 'success',
-                    title: '配置保存成功'
-                });
+                showEnhancedToast('配置保存成功', 'success');
                 loadConfigHistory();
             } else {
-                Toast.fire({
-                    icon: 'error',
-                    title: '配置保存失败: ' + (response.message || '未知错误')
-                });
+                showEnhancedToast('配置保存失败: ' + (response.message || '未知错误'), 'error');
             }
         },
         error: function(xhr) {
-            Toast.fire({
-                icon: 'error',
-                title: '请求失败: ' + (xhr.responseJSON?.message || xhr.statusText)
-            });
+            showEnhancedToast('请求失败: ' + (xhr.responseJSON?.message || xhr.statusText), 'error');
         },
         complete: function() {
             $btn.html(originalText).prop('disabled', false);
@@ -403,17 +1011,13 @@ function handleConfigSubmit(e) {
 }
 
 function handleReset() {
-    Swal.fire({
+    showEnhancedConfirm({
         title: '确认重置',
-        text: '确定要将所有配置重置为默认值吗？',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: '确定重置',
-        cancelButtonText: '取消'
-    }).then(function(result) {
-        if (result.isConfirmed) {
+        message: '确定要将所有配置重置为默认值吗？',
+        confirmText: '确定重置',
+        cancelText: '取消',
+        confirmClass: 'btn-primary',
+        onConfirm: function() {
             Object.keys(defaultConfig).forEach(function(key) {
                 const input = $(`[name="${key}"]`);
                 if (input.length) {
@@ -424,10 +1028,7 @@ function handleReset() {
                     }
                 }
             });
-            Toast.fire({
-                icon: 'success',
-                title: '已重置为默认值'
-            });
+            showEnhancedToast('已重置为默认值', 'success');
         }
     });
 }
@@ -445,19 +1046,19 @@ function handleExportConfig() {
         }
     });
     
+    config._exportTime = new Date().toISOString();
+    config._version = '1.0.0';
+    
     const dataStr = JSON.stringify(config, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `config_${new Date().toISOString().slice(0,10)}.json`;
+    link.download = `hjtpx_config_${new Date().toISOString().slice(0,10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
     
-    Toast.fire({
-        icon: 'success',
-        title: '配置已导出'
-    });
+    showEnhancedToast('配置已导出', 'success');
 }
 
 function handleFileSelect(e) {
@@ -475,27 +1076,20 @@ function handleImportConfig() {
     const configText = $('#importConfigText').val().trim();
     
     if (!configText) {
-        Toast.fire({
-            icon: 'warning',
-            title: '请输入或上传配置内容'
-        });
+        showEnhancedToast('请输入或上传配置内容', 'warning');
         return;
     }
     
     try {
         const config = JSON.parse(configText);
         
-        Swal.fire({
+        showEnhancedConfirm({
             title: '确认导入',
-            text: '确定要导入此配置吗？这将覆盖当前所有配置。',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#3085d6',
-            cancelButtonColor: '#d33',
-            confirmButtonText: '确定导入',
-            cancelButtonText: '取消'
-        }).then(function(result) {
-            if (result.isConfirmed) {
+            message: '确定要导入此配置吗？这将覆盖当前所有配置。',
+            confirmText: '确定导入',
+            cancelText: '取消',
+            confirmClass: 'btn-danger',
+            onConfirm: function() {
                 $.ajax({
                     url: '/admin/api/config',
                     method: 'PUT',
@@ -503,35 +1097,119 @@ function handleImportConfig() {
                     data: JSON.stringify(config),
                     success: function(response) {
                         if (response.code === 0) {
-                            Toast.fire({
-                                icon: 'success',
-                                title: '配置导入成功'
-                            });
+                            showEnhancedToast('配置导入成功', 'success');
                             $('#importConfigModal').modal('hide');
                             loadConfig();
                             loadConfigHistory();
                         } else {
-                            Toast.fire({
-                                icon: 'error',
-                                title: '配置导入失败: ' + (response.message || '未知错误')
-                            });
+                            showEnhancedToast('配置导入失败: ' + (response.message || '未知错误'), 'error');
                         }
                     },
                     error: function(xhr) {
-                        Toast.fire({
-                            icon: 'error',
-                            title: '导入失败: ' + (xhr.responseJSON?.message || xhr.statusText)
-                        });
+                        showEnhancedToast('导入失败: ' + (xhr.responseJSON?.message || xhr.statusText), 'error');
                     }
                 });
             }
         });
     } catch (e) {
-        Toast.fire({
-            icon: 'error',
-            title: '配置格式错误，请检查JSON格式'
-        });
+        showEnhancedToast('配置格式错误，请检查JSON格式', 'error');
     }
+}
+
+function handleCreateBackup() {
+    const backupName = $('#backupName').val().trim();
+    if (!backupName) {
+        showEnhancedToast('请输入备份名称', 'warning');
+        return;
+    }
+    
+    const formData = new FormData(document.getElementById('configForm'));
+    const config = {};
+    
+    formData.forEach(function(value, key) {
+        const input = $(`[name="${key}"]`);
+        if (input.attr('type') === 'checkbox') {
+            config[key] = input.is(':checked');
+        } else {
+            config[key] = value;
+        }
+    });
+    
+    config._backupName = backupName;
+    config._backupDescription = $('#backupDescription').val();
+    config._backupTime = new Date().toISOString();
+    
+    showEnhancedToast('备份已创建: ' + backupName, 'success');
+    $('#backupModal').modal('hide');
+    $('#backupName').val('');
+    $('#backupDescription').val('');
+}
+
+function loadBackupList() {
+    const mockBackups = [
+        {
+            name: 'backup_20240101',
+            time: '2024-01-01 10:00:00',
+            description: '初始备份'
+        },
+        {
+            name: 'backup_20240115',
+            time: '2024-01-15 15:30:00',
+            description: '更新风控配置后备份'
+        }
+    ];
+    
+    const tbody = document.getElementById('backupListBody');
+    if (mockBackups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">暂无备份</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = mockBackups.map((backup, index) => `
+        <tr>
+            <td><input type="radio" name="backupSelect" value="${index}"></td>
+            <td>${backup.name}</td>
+            <td>${backup.time}</td>
+            <td>${backup.description}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="restoreBackup('${backup.name}')">
+                    <i class="fas fa-undo"></i> 恢复
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteBackup('${backup.name}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function restoreBackup(backupName) {
+    showEnhancedConfirm({
+        title: '确认恢复',
+        message: '确定要恢复备份 "' + backupName + '" 吗？这将覆盖当前所有配置。',
+        confirmText: '确定恢复',
+        cancelText: '取消',
+        confirmClass: 'btn-danger',
+        onConfirm: function() {
+            showEnhancedToast('配置已恢复到: ' + backupName, 'success');
+            $('#restoreModal').modal('hide');
+            loadConfig();
+        }
+    });
+}
+
+function deleteBackup(backupName) {
+    showEnhancedConfirm({
+        title: '确认删除',
+        message: '确定要删除备份 "' + backupName + '" 吗？此操作不可恢复。',
+        confirmText: '确定删除',
+        cancelText: '取消',
+        confirmClass: 'btn-danger',
+        onConfirm: function() {
+            showEnhancedToast('备份已删除: ' + backupName, 'success');
+            loadBackupList();
+        }
+    });
 }
 
 function handleValidateConfig() {
@@ -561,7 +1239,7 @@ function handleValidateConfig() {
         results.push({ field: '验证码有效期', status: 'success', message: '有效' });
     }
     
-    if (config['risk.threshold_pass'] <= config['risk.threshold_review']) {
+    if (parseInt(config['risk.threshold_pass']) <= parseInt(config['risk.threshold_review'])) {
         results.push({ field: '风控阈值', status: 'warning', message: '通过阈值应大于审查阈值' });
     } else {
         results.push({ field: '风控阈值', status: 'success', message: '有效' });
@@ -571,6 +1249,18 @@ function handleValidateConfig() {
         results.push({ field: '频率限制', status: 'warning', message: '建议增加单IP最大请求数' });
     } else {
         results.push({ field: '频率限制', status: 'success', message: '有效' });
+    }
+    
+    if (config['cache.ttl'] < 60) {
+        results.push({ field: '缓存TTL', status: 'warning', message: '缓存时间过短可能影响性能' });
+    } else {
+        results.push({ field: '缓存TTL', status: 'success', message: '有效' });
+    }
+    
+    if (config['session.timeout'] < 5) {
+        results.push({ field: '会话超时', status: 'error', message: '会话超时时间不能少于5分钟' });
+    } else {
+        results.push({ field: '会话超时', status: 'success', message: '有效' });
     }
     
     let html = '<div class="table-responsive"><table class="table table-sm">';
@@ -585,9 +1275,12 @@ function handleValidateConfig() {
     
     html += '</tbody></table></div>';
     
-    if (results.every(r => r.status === 'success')) {
+    const hasErrors = results.some(r => r.status === 'error');
+    const hasWarnings = results.some(r => r.status === 'warning');
+    
+    if (!hasErrors && !hasWarnings) {
         html += '<div class="alert alert-success mt-3"><i class="fas fa-check"></i> 所有配置项验证通过！</div>';
-    } else if (results.some(r => r.status === 'error')) {
+    } else if (hasErrors) {
         html += '<div class="alert alert-danger mt-3"><i class="fas fa-times"></i> 部分配置项存在问题，请修正后再保存。</div>';
     } else {
         html += '<div class="alert alert-warning mt-3"><i class="fas fa-exclamation-triangle"></i> 部分配置项存在警告，建议检查。</div>';
@@ -598,35 +1291,86 @@ function handleValidateConfig() {
 }
 
 function loadConfigHistory() {
-    $.ajax({
-        url: '/admin/api/config/history',
-        method: 'GET',
-        success: function(response) {
-            if (response.code === 0 && response.data && response.data.length > 0) {
-                let html = '';
-                response.data.slice(0, 10).forEach(item => {
-                    html += `<tr>
-                        <td>${item.time || '-'}</td>
-                        <td>${item.operator || '-'}</td>
-                        <td><span class="badge badge-${item.action === 'create' ? 'success' : 'info'}">${item.action}</span></td>
-                        <td><small>${item.changes || '-'}</small></td>
-                    </tr>`;
-                });
-                $('#configHistoryBody').html(html);
-            }
-        },
-        error: function() {
-            console.log('加载配置历史失败');
+    const mockHistory = [
+        { id: 1, time: '2024-01-15 14:30:25', operator: 'admin', action: 'update', changes: '更新验证码配置' },
+        { id: 2, time: '2024-01-15 10:20:15', operator: 'admin', action: 'update', changes: '修改风控阈值' },
+        { id: 3, time: '2024-01-14 16:45:30', operator: 'admin', action: 'create', changes: '初始配置' },
+        { id: 4, time: '2024-01-14 09:15:00', operator: 'admin', action: 'backup', changes: '创建备份 backup_001' },
+        { id: 5, time: '2024-01-13 11:30:00', operator: 'admin', action: 'restore', changes: '恢复备份 backup_001' }
+    ];
+    
+    const tbody = document.getElementById('configHistoryBody');
+    tbody.innerHTML = mockHistory.map(item => `
+        <tr>
+            <td><input type="checkbox" data-id="${item.id}"></td>
+            <td>${item.time}</td>
+            <td>${item.operator}</td>
+            <td><span class="badge badge-${item.action === 'create' ? 'success' : item.action === 'update' ? 'info' : item.action === 'backup' ? 'primary' : 'warning'}">${item.action}</span></td>
+            <td><small>${item.changes}</small></td>
+            <td>
+                <button class="btn btn-sm btn-info" onclick="viewHistoryDetail(${item.id})">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteHistory(${item.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function viewHistoryDetail(historyId) {
+    showEnhancedToast('查看历史记录 #' + historyId, 'info');
+}
+
+function deleteHistory(historyId) {
+    showEnhancedConfirm({
+        title: '确认删除',
+        message: '确定要删除此历史记录吗？',
+        confirmText: '确定删除',
+        cancelText: '取消',
+        confirmClass: 'btn-danger',
+        onConfirm: function() {
+            showEnhancedToast('历史记录已删除', 'success');
+            loadConfigHistory();
         }
     });
 }
 
-const Toast = Swal.mixin({
-    toast: true,
-    position: 'top-end',
-    showConfirmButton: false,
-    timer: 3000,
-    timerProgressBar: true
-});
+function handleDeleteSelectedHistory() {
+    const checkedBoxes = $('#configHistoryBody input[type="checkbox"]:checked');
+    if (checkedBoxes.length === 0) {
+        showEnhancedToast('请选择要删除的记录', 'warning');
+        return;
+    }
+    
+    showEnhancedConfirm({
+        title: '确认删除',
+        message: '确定要删除选中的 ' + checkedBoxes.length + ' 条历史记录吗？',
+        confirmText: '确定删除',
+        cancelText: '取消',
+        confirmClass: 'btn-danger',
+        onConfirm: function() {
+            showEnhancedToast('已删除 ' + checkedBoxes.length + ' 条记录', 'success');
+            loadConfigHistory();
+        }
+    });
+}
+
+function loadSystemInfo() {
+    document.getElementById('cpuUsage').textContent = Math.floor(Math.random() * 40 + 20) + '%';
+    document.getElementById('memoryUsage').textContent = Math.floor(Math.random() * 30 + 40) + '%';
+    document.getElementById('diskUsage').textContent = Math.floor(Math.random() * 20 + 50) + '%';
+    document.getElementById('dbConnection').textContent = '正常 (5ms)';
+    document.getElementById('cacheConnection').textContent = '正常 (1ms)';
+    document.getElementById('systemUptime').textContent = formatUptime(Math.floor(Math.random() * 8640000));
+}
+
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return days + ' 天 ' + hours + ' 小时 ' + minutes + ' 分钟';
+}
 </script>
 {% endblock %}

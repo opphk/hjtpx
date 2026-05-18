@@ -8,16 +8,63 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>在线体验 - 墨盾验证</title>
+    
+    <!-- DNS预取和预连接以提升加载速度 -->
     <link rel="preconnect" href="https://cdn.bootcdn.net">
     <link rel="dns-prefetch" href="https://cdn.bootcdn.net">
+    
+    <!-- 关键CSS预加载 -->
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" as="style">
     <link rel="preload" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" as="style">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/captcha-ui-unified.css">
     
+    <!-- 异步加载非关键CSS -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/css/bootstrap.min.css" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+    
+    <!-- 核心样式（内联以加速渲染） -->
+    <style>
+        :root {
+            --captcha-primary: #c9a96e;
+            --captcha-success: #28a745;
+            --captcha-danger: #dc3545;
+            --captcha-dark: #1a1a2e;
+            --captcha-light: #f8f9fa;
+            --captcha-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* 关键渲染路径样式 - 首屏快速显示 */
+        .critical-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
+        }
+        
+        .critical-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(201, 169, 110, 0.2);
+            border-top-color: #c9a96e;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 隐藏未加载内容防止布局抖动 */
+        .lazy-content { visibility: hidden; }
+        .lazy-content.loaded { visibility: visible; }
+    </style>
+    
+    <!-- 完整样式表 -->
+    <link rel="stylesheet" href="/static/css/captcha-ui-optimized.css">
+    
+    <!-- 关键JavaScript延迟加载 -->
     <script src="/static/js/environment-detector.js" defer></script>
-    <script src="/static/js/captcha-ui-unified.js" defer></script>
+    
     <style>
         :root {
             --captcha-primary: #c9a96e;
@@ -323,6 +370,7 @@
             cursor: grab;
             transition: var(--captcha-transition);
             color: var(--captcha-primary);
+            touch-action: none;
         }
 
         .rotation-slider-button:hover {
@@ -356,6 +404,7 @@
             border-radius: 6px;
             font-weight: 500;
             transition: var(--captcha-transition);
+            touch-action: manipulation;
         }
 
         .btn:hover {
@@ -510,6 +559,7 @@
             cursor: pointer;
             transition: var(--captcha-transition);
             font-size: inherit;
+            touch-action: manipulation;
         }
 
         .captcha-lang-btn.active {
@@ -542,7 +592,6 @@
             outline-offset: 2px;
         }
 
-        /* 高对比度模式支持 */
         @media (prefers-contrast: high) {
             :root {
                 --captcha-primary: #ffd700;
@@ -557,7 +606,6 @@
             }
         }
 
-        /* 减少动画模式 */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation-duration: 0.01ms !important;
@@ -594,7 +642,6 @@
             to { transform: rotate(360deg); }
         }
 
-        /* 进度指示器样式 */
         .captcha-progress-container {
             display: flex;
             flex-direction: column;
@@ -623,7 +670,6 @@
             text-align: center;
         }
 
-        /* 重试按钮样式 */
         .captcha-retry-btn {
             display: inline-flex;
             align-items: center;
@@ -637,6 +683,7 @@
             cursor: pointer;
             transition: var(--captcha-transition);
             box-shadow: 0 2px 8px rgba(201, 169, 110, 0.3);
+            touch-action: manipulation;
         }
 
         .captcha-retry-btn:hover {
@@ -644,7 +691,6 @@
             box-shadow: 0 4px 12px rgba(201, 169, 110, 0.4);
         }
 
-        /* 错误提示优化 */
         .captcha-error-hint {
             background: rgba(220, 53, 69, 0.1);
             border: 1px solid rgba(220, 53, 69, 0.3);
@@ -678,7 +724,6 @@
             line-height: 1.5;
         }
 
-        /* 性能指标显示 */
         .performance-metrics {
             position: fixed;
             bottom: 1rem;
@@ -691,6 +736,7 @@
             z-index: 9999;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             display: none;
+            backdrop-filter: blur(8px);
         }
 
         .performance-metrics.show {
@@ -724,7 +770,6 @@
             color: #dc3545;
         }
 
-        /* 无障碍辅助功能 */
         .captcha-audio-btn {
             background: rgba(201, 169, 110, 0.1);
             border: 1px solid rgba(201, 169, 110, 0.3);
@@ -737,6 +782,7 @@
             color: var(--captcha-primary);
             cursor: pointer;
             transition: var(--captcha-transition);
+            touch-action: manipulation;
         }
 
         .captcha-audio-btn:hover {
@@ -756,6 +802,7 @@
             color: var(--captcha-primary);
             cursor: pointer;
             transition: var(--captcha-transition);
+            touch-action: manipulation;
         }
 
         .captcha-contrast-toggle:hover {
@@ -768,7 +815,6 @@
             color: white;
         }
 
-        /* 难度指示器 */
         .difficulty-indicator {
             display: flex;
             align-items: center;
@@ -793,29 +839,248 @@
         .difficulty-dot.active {
             background: var(--captcha-primary);
         }
+
+        /* 移动端触摸优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .btn:hover {
+                transform: none;
+            }
+            
+            .demo-card:hover {
+                transform: none;
+            }
+            
+            .captcha-demo-area:hover {
+                border-color: rgba(201,169,110,0.3);
+                background: linear-gradient(135deg, rgba(201,169,110,0.05) 0%, rgba(201,169,110,0.1) 100%);
+            }
+            
+            .captcha-audio-btn:hover,
+            .captcha-contrast-toggle:hover {
+                transform: none;
+            }
+        }
+
+        /* 图片懒加载占位符 */
+        .captcha-lazy-img {
+            background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .captcha-lazy-img::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.5) 50%, transparent 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .captcha-lazy-img.loaded::before {
+            display: none;
+        }
+
+        /* 键盘导航焦点指示器 */
+        .captcha-interactive:focus {
+            outline: 2px solid var(--captcha-primary);
+            outline-offset: 2px;
+        }
+
+        /* Toast通知容器 */
+        .captcha-toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10600;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .captcha-toast {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            animation: toast-in 0.3s ease-out;
+            border-left: 4px solid var(--captcha-primary);
+        }
+
+        @keyframes toast-in {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .captcha-toast.removing {
+            animation: toast-out 0.3s ease-in forwards;
+        }
+
+        @keyframes toast-out {
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        .captcha-toast.success { border-left-color: var(--captcha-success); }
+        .captcha-toast.success .captcha-toast-icon { color: var(--captcha-success); }
+
+        .captcha-toast.error { border-left-color: var(--captcha-danger); }
+        .captcha-toast.error .captcha-toast-icon { color: var(--captcha-danger); }
+
+        .captcha-toast-icon {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .captcha-toast-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .captcha-toast-title {
+            font-weight: 600;
+            color: #212529;
+            margin-bottom: 4px;
+        }
+
+        .captcha-toast-message {
+            color: #6c757d;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .captcha-toast-close {
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--captcha-transition);
+        }
+
+        .captcha-toast-close:hover {
+            color: #212529;
+            transform: scale(1.1);
+        }
+
+        [data-bs-theme="dark"] .captcha-toast {
+            background: #2d2d44;
+        }
+
+        [data-bs-theme="dark"] .captcha-toast-title {
+            color: #f8f9fa;
+        }
+
+        [data-bs-theme="dark"] .captcha-toast-message {
+            color: #adb5bd;
+        }
+
+        /* 网络状态提示 */
+        .captcha-network-status {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            z-index: 10000;
+            display: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .captcha-network-status.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* 骨架屏加载效果 */
+        .captcha-skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeleton-shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        @keyframes skeleton-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
-    
 </head>
 <body>
+    <!-- 跳转到主内容的快捷链接（无障碍访问） -->
     <a href="#main-content" class="sr-only sr-only-focusable">跳转到主要内容</a>
-    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);">
+    
+    <!-- 网络状态提示 -->
+    <div class="captcha-network-status" id="networkStatus" role="alert" aria-live="polite">
+        <i class="fas fa-wifi me-1"></i>
+        <span>网络连接已断开，请检查网络</span>
+    </div>
+    
+    <!-- Toast通知容器 -->
+    <div class="captcha-toast-container" id="toastContainer" role="region" aria-label="通知消息"></div>
+    
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" style="background: rgba(26,26,46,0.95); backdrop-filter: blur(12px);" role="navigation" aria-label="主导航">
         <div class="container">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="/" aria-label="墨盾验证首页">
                 <span class="fw-bold small text-uppercase" style="border: 1px solid #c9a96e; color: #c9a96e; padding: 1px 4px; font-size: 0.7rem;">墨盾</span>
                 <span class="font-serif fw-bold fs-5" style="color: #c9a96e;">墨盾验证</span>
             </a>
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="color: #c9a96e;">
-                <i class="fas fa-bars"></i>
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-expanded="false" aria-label="切换导航菜单" aria-controls="navbarNav">
+                <i class="fas fa-bars" aria-hidden="true"></i>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mx-auto">
-                    <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
-                    <li class="nav-item"><a class="nav-link active" href="/captcha">在线体验</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/about">关于</a></li>
-                    <li class="nav-item"><a class="nav-link" href="https://github.com/opphk/hjtpx" target="_blank">开源</a></li>
+                <ul class="navbar-nav mx-auto" role="menubar">
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="/" role="menuitem">首页</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link active" href="/captcha" role="menuitem" aria-current="page">在线体验</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="/about" role="menuitem">关于</a>
+                    </li>
+                    <li class="nav-item" role="none">
+                        <a class="nav-link" href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" role="menuitem">开源</a>
+                    </li>
                 </ul>
                 <div class="d-flex gap-2 align-items-center">
-                    <button class="theme-toggle" id="themeToggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题">
+                    <button class="theme-toggle" id="themeToggle" title="切换深色/浅色主题" aria-label="切换深色/浅色主题" type="button">
                         <i class="fas fa-moon" id="themeIcon" aria-hidden="true"></i>
                     </button>
                     <div class="captcha-lang-switch" role="group" aria-label="语言切换">
@@ -829,341 +1094,357 @@
         </div>
     </nav>
 
-    <section class="page-hero">
-        <div class="page-hero-particles" id="heroParticles"></div>
-        <div class="container position-relative" style="z-index: 1;">
-            <div class="text-center">
-                <div class="d-inline-flex align-items-center gap-2 mb-3 px-3 py-2" style="background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.2); border-radius: 4px;">
-                    <i class="fas fa-flask" style="color: #c9a96e; font-size: 0.8rem;"></i>
-                    <span style="color: #c9a96e; font-size: 0.85rem; letter-spacing: 1px;">即刻体验 · 无需注册</span>
+    <!-- 主内容区域 -->
+    <main id="main-content">
+        <!-- 英雄区域 -->
+        <section class="page-hero" aria-labelledby="hero-title">
+            <div class="page-hero-particles" id="heroParticles" aria-hidden="true"></div>
+            <div class="container position-relative" style="z-index: 1;">
+                <div class="text-center">
+                    <div class="d-inline-flex align-items-center gap-2 mb-3 px-3 py-2" style="background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.2); border-radius: 4px;">
+                        <i class="fas fa-flask" style="color: #c9a96e; font-size: 0.8rem;" aria-hidden="true"></i>
+                        <span style="color: #c9a96e; font-size: 0.85rem; letter-spacing: 1px;">即刻体验 · 无需注册</span>
+                    </div>
+                    <h1 class="display-4 fw-bold text-white mb-3 font-serif" id="hero-title">
+                        在线体验
+                    </h1>
+                    <div class="hr w-25 mx-auto" style="background: linear-gradient(90deg, transparent, #c9a96e 20%, #c9a96e 80%, transparent); opacity: 0.5;" role="presentation"></div>
+                    <p class="fs-5 mt-3" style="color: rgba(255,255,255,0.6); max-width: 560px; margin-left: auto; margin-right: auto; line-height: 1.8;">
+                        五种验证方式，一次完整体验。<br>
+                        感受 <span style="color: #c9a96e;">墨盾验证</span> 的流畅与安全
+                    </p>
                 </div>
-                <h1 class="display-4 fw-bold text-white mb-3 font-serif">
-                    在线体验
-                </h1>
-                <div class="hr w-25 mx-auto" style="background: linear-gradient(90deg, transparent, #c9a96e 20%, #c9a96e 80%, transparent); opacity: 0.5;"></div>
-                <p class="fs-5 mt-3" style="color: rgba(255,255,255,0.6); max-width: 560px; margin-left: auto; margin-right: auto; line-height: 1.8;">
-                    五种验证方式，一次完整体验。<br>
-                    感受 <span style="color: #c9a96e;">墨盾验证</span> 的流畅与安全
-                </p>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="py-5 bg-light">
-        <div class="container py-4">
-            <div class="text-center mb-5">
-                <span class="font-serif fs-6" style="color: #c9a96e; letter-spacing: 3px;">— 验证方式 —</span>
-                <h2 class="font-serif fw-bold fs-2 mt-2" style="color: #1a1a2e;">选择一种方式体验</h2>
-                <div class="hr w-25 mx-auto mt-3"></div>
-                
-                <!-- 无障碍功能栏 -->
-                <div class="d-flex justify-content-center align-items-center gap-3 mt-4" role="toolbar" aria-label="辅助功能">
-                    <button class="captcha-contrast-toggle" id="contrastToggle" title="切换高对比度模式" aria-pressed="false">
-                        <i class="fas fa-adjust" aria-hidden="true"></i>
-                    </button>
-                    <button class="captcha-audio-btn" id="audioBtn" title="开启音频验证码" aria-pressed="false">
-                        <i class="fas fa-volume-up" aria-hidden="true"></i>
-                    </button>
-                    <button class="captcha-audio-btn" id="perfMetricsBtn" title="显示性能指标" aria-pressed="false">
-                        <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
-                    </button>
-                </div>
-        </div>
-
-        <div class="nav nav-pills justify-content-center mb-4 gap-2" role="tablist" aria-label="验证码类型选择">
-            <button class="nav-link active" data-type="slider" role="tab" aria-selected="true" aria-controls="demoSlider" tabindex="0" onclick="switchCaptchaType('slider')">
-                <i class="fas fa-arrows-alt-h" aria-hidden="true"></i>
-                <span data-i18n="slider">滑块验证</span>
-            </button>
-            <button class="nav-link" data-type="click" role="tab" aria-selected="false" aria-controls="demoClick" tabindex="0" onclick="switchCaptchaType('click')">
-                <i class="fas fa-mouse-pointer" aria-hidden="true"></i>
-                <span data-i18n="click">点选验证</span>
-            </button>
-            <button class="nav-link" data-type="passive" role="tab" aria-selected="false" aria-controls="demoPassive" tabindex="0" onclick="switchCaptchaType('passive')">
-                <i class="fas fa-shield-alt" aria-hidden="true"></i>
-                <span data-i18n="passive">无感验证</span>
-            </button>
-            <button class="nav-link" data-type="rotation" role="tab" aria-selected="false" aria-controls="demoRotation" tabindex="0" onclick="switchCaptchaType('rotation')">
-                <i class="fas fa-undo-alt" aria-hidden="true"></i>
-                <span data-i18n="rotation">旋转验证</span>
-            </button>
-            <button class="nav-link" data-type="gesture" role="tab" aria-selected="false" aria-controls="demoGesture" tabindex="0" onclick="switchCaptchaType('gesture')">
-                <i class="fas fa-paint-brush" aria-hidden="true"></i>
-                <span data-i18n="gesture">手势验证</span>
-            </button>
-        </div>
-
-        <div class="row g-4">
-                <div class="col-lg-4">
-                    <div class="demo-card h-100 shadow-sm fade-in" id="demoSlider" role="region" aria-labelledby="slider-title">
-                        <div class="demo-card-header">
-                            <div class="icon-wrap">
-                                <i class="fas fa-arrows-alt-h" aria-hidden="true"></i>
-                            </div>
-                            <div>
-                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="slider-title" data-i18n="sliderTitle">滑块验证</h5>
-                                <small style="color: #6c757d;" data-i18n="sliderDesc">拖动滑块完成拼图</small>
-                            </div>
-                        </div>
-                        <div class="demo-card-body">
-                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="sliderDescText">
-                                拖动滑块将拼图块对齐到正确位置。系统实时分析滑动轨迹、速度与加速度，精准区分人类与机器。
-                            </p>
-                            <div class="captcha-demo-area" id="sliderDemoArea" role="application" aria-label="滑块验证区域" aria-live="polite">
-                                <div id="captcha-container"></div>
-                            </div>
-                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
-                <button class="btn btn-danger btn-sm" onclick="switchCaptchaType('slider')" aria-label="开始体验滑块验证">
-                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
-                </button>
-                <button class="btn btn-dark btn-sm" onclick="refreshCaptcha()" aria-label="刷新验证码">
-                    <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
-                </button>
-                <div class="result-banner" id="sliderResult" role="status" aria-live="polite">
-                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                    <span id="sliderResultText"></span>
-                </div>
-            </div>
-            
-            <!-- 进度指示器 -->
-            <div class="captcha-progress-container" id="sliderProgressContainer" style="display: none;">
-                <div class="captcha-progress-bar">
-                    <div class="captcha-progress-fill" id="sliderProgressFill" style="width: 0%"></div>
-                </div>
-                <div class="captcha-progress-text" id="sliderProgressText">准备中...</div>
-            </div>
-            
-            <!-- 难度指示器 -->
-            <div class="difficulty-indicator mt-2" id="sliderDifficultyIndicator">
-                <span>难度:</span>
-                <div class="difficulty-dots">
-                    <div class="difficulty-dot active" data-level="1"></div>
-                    <div class="difficulty-dot" data-level="2"></div>
-                    <div class="difficulty-dot" data-level="3"></div>
-                </div>
-            </div>
-                        </div>
+        <!-- 验证方式选择区域 -->
+        <section class="py-5 bg-light" aria-labelledby="captcha-types-title">
+            <div class="container py-4">
+                <div class="text-center mb-5">
+                    <span class="font-serif fs-6" style="color: #c9a96e; letter-spacing: 3px;">— 验证方式 —</span>
+                    <h2 class="font-serif fw-bold fs-2 mt-2" style="color: #1a1a2e;" id="captcha-types-title">选择一种方式体验</h2>
+                    <div class="hr w-25 mx-auto mt-3" role="presentation"></div>
+                    
+                    <!-- 无障碍功能栏 -->
+                    <div class="d-flex justify-content-center align-items-center gap-3 mt-4" role="toolbar" aria-label="辅助功能">
+                        <button class="captcha-contrast-toggle" id="contrastToggle" title="切换高对比度模式" aria-pressed="false" type="button">
+                            <i class="fas fa-adjust" aria-hidden="true"></i>
+                            <span class="sr-only">高对比度模式</span>
+                        </button>
+                        <button class="captcha-audio-btn" id="audioBtn" title="开启音频验证码" aria-pressed="false" type="button">
+                            <i class="fas fa-volume-up" aria-hidden="true"></i>
+                            <span class="sr-only">音频验证码</span>
+                        </button>
+                        <button class="captcha-audio-btn" id="perfMetricsBtn" title="显示性能指标" aria-pressed="false" type="button">
+                            <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+                            <span class="sr-only">性能指标</span>
+                        </button>
                     </div>
                 </div>
 
-                <div class="col-lg-4">
-                    <div class="demo-card h-100 shadow-sm fade-in" id="demoClick" role="region" aria-labelledby="click-title">
-                        <div class="demo-card-header">
-                            <div class="icon-wrap">
-                                <i class="fas fa-mouse-pointer" aria-hidden="true"></i>
-                            </div>
-                            <div>
-                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="click-title" data-i18n="clickTitle">点选验证</h5>
-                                <small style="color: #6c757d;" data-i18n="clickDesc">按序点击指定内容</small>
-                            </div>
-                        </div>
-                        <div class="demo-card-body">
-                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="clickDescText">
-                                根据提示文字，依次点击图片中的对应元素。支持汉字、字母、数字多种模式，乱序点选与时序验证双重防护。
-                            </p>
-                            <div class="captcha-demo-area" id="clickDemoArea" role="application" aria-label="点选验证区域" aria-live="polite">
-                                <div class="text-center" style="color: #6c757d;">
-                                    <i class="fas fa-hand-pointer fa-2x mb-2 pulse" style="color: #c9a96e;" aria-hidden="true"></i>
-                                    <p class="mb-0" style="font-size: 0.9rem;" data-i18n="clickHint">点击上方「开始体验」切换至此模式</p>
-                                </div>
-                            </div>
-                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
-                                <button class="btn btn-danger btn-sm" onclick="switchCaptchaType('click')" aria-label="开始体验点选验证">
-                                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
-                                </button>
-                                <button class="btn btn-dark btn-sm" onclick="refreshCaptcha()" aria-label="刷新验证码">
-                                    <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
-                                </button>
-                                <div class="result-banner" id="clickResult" role="status" aria-live="polite">
-                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                                    <span id="clickResultText"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- 验证类型切换标签 -->
+                <div class="nav nav-pills justify-content-center mb-4 gap-2" role="tablist" aria-label="验证码类型选择">
+                    <button class="nav-link active" data-type="slider" role="tab" aria-selected="true" aria-controls="demoSlider" tabindex="0" onclick="switchCaptchaType('slider')" type="button">
+                        <i class="fas fa-arrows-alt-h" aria-hidden="true"></i>
+                        <span data-i18n="slider">滑块验证</span>
+                    </button>
+                    <button class="nav-link" data-type="click" role="tab" aria-selected="false" aria-controls="demoClick" tabindex="0" onclick="switchCaptchaType('click')" type="button">
+                        <i class="fas fa-mouse-pointer" aria-hidden="true"></i>
+                        <span data-i18n="click">点选验证</span>
+                    </button>
+                    <button class="nav-link" data-type="passive" role="tab" aria-selected="false" aria-controls="demoPassive" tabindex="0" onclick="switchCaptchaType('passive')" type="button">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <span data-i18n="passive">无感验证</span>
+                    </button>
+                    <button class="nav-link" data-type="rotation" role="tab" aria-selected="false" aria-controls="demoRotation" tabindex="0" onclick="switchCaptchaType('rotation')" type="button">
+                        <i class="fas fa-undo-alt" aria-hidden="true"></i>
+                        <span data-i18n="rotation">旋转验证</span>
+                    </button>
+                    <button class="nav-link" data-type="gesture" role="tab" aria-selected="false" aria-controls="demoGesture" tabindex="0" onclick="switchCaptchaType('gesture')" type="button">
+                        <i class="fas fa-paint-brush" aria-hidden="true"></i>
+                        <span data-i18n="gesture">手势验证</span>
+                    </button>
                 </div>
 
-                <div class="col-lg-4">
-                    <div class="demo-card h-100 shadow-sm fade-in" id="demoPassive" role="region" aria-labelledby="passive-title">
-                        <div class="demo-card-header">
-                            <div class="icon-wrap">
-                                <i class="fas fa-shield-alt" aria-hidden="true"></i>
-                            </div>
-                            <div>
-                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="passive-title" data-i18n="passiveTitle">无感验证</h5>
-                                <small style="color: #6c757d;" data-i18n="passiveDesc">后台静默验证</small>
-                            </div>
-                        </div>
-                        <div class="demo-card-body">
-                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="passiveDescText">
-                                通过环境检测、行为分析与风险评分，在后台完成静默验证。用户无需任何操作，零干扰体验，自动识别可信流量与可疑行为。
-                            </p>
-                            <div class="captcha-demo-area" id="passiveDemoArea" role="application" aria-label="无感验证区域" aria-live="polite">
-                                <div class="text-center" style="color: #6c757d;">
-                                    <i class="fas fa-shield-alt fa-2x mb-2 pulse" style="color: #c9a96e;" aria-hidden="true"></i>
-                                    <p class="mb-0" style="font-size: 0.9rem;" data-i18n="passiveHint">点击上方「开始体验」切换至此模式</p>
+                <!-- 验证码卡片网格 -->
+                <div class="row g-4">
+                    <!-- 滑块验证卡片 -->
+                    <div class="col-lg-4">
+                        <div class="demo-card h-100 shadow-sm fade-in" id="demoSlider" role="region" aria-labelledby="slider-title">
+                            <div class="demo-card-header">
+                                <div class="icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-arrows-alt-h"></i>
+                                </div>
+                                <div>
+                                    <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="slider-title" data-i18n="sliderTitle">滑块验证</h5>
+                                    <small style="color: #6c757d;" data-i18n="sliderDesc">拖动滑块完成拼图</small>
                                 </div>
                             </div>
-                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
-                                <button class="btn btn-danger btn-sm" onclick="switchCaptchaType('passive')" aria-label="开始体验无感验证">
-                                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
-                                </button>
-                                <button class="btn btn-dark btn-sm" onclick="refreshCaptcha()" aria-label="刷新验证码">
-                                    <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
-                                </button>
-                                <div class="result-banner" id="passiveResult" role="status" aria-live="polite">
-                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                                    <span id="passiveResultText"></span>
+                            <div class="demo-card-body">
+                                <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="sliderDescText">
+                                    拖动滑块将拼图块对齐到正确位置。系统实时分析滑动轨迹、速度与加速度，精准区分人类与机器。
+                                </p>
+                                <div class="captcha-demo-area" id="sliderDemoArea" role="application" aria-label="滑块验证区域" aria-live="polite">
+                                    <div id="captcha-container"></div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-lg-4">
-                    <div class="demo-card h-100 shadow-sm fade-in" id="demoRotation" role="region" aria-labelledby="rotation-title">
-                        <div class="demo-card-header">
-                            <div class="icon-wrap">
-                                <i class="fas fa-undo-alt" aria-hidden="true"></i>
-                            </div>
-                            <div>
-                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="rotation-title" data-i18n="rotationTitle">旋转验证</h5>
-                                <small style="color: #6c757d;" data-i18n="rotationDesc">拖动旋转图片到正确角度</small>
-                            </div>
-                        </div>
-                        <div class="demo-card-body">
-                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="rotationDescText">
-                                通过拖动滑块旋转图片，将方向校正到正确角度。系统分析旋转轨迹与操作模式，精准识别人类操作。
-                            </p>
-                            <div class="captcha-demo-area" id="rotationDemoArea" role="application" aria-label="旋转验证区域" aria-live="polite">
-                                <div class="rotation-captcha-wrapper" id="rotationCaptchaContainer">
-                                    <div class="rotation-captcha-display">
-                                        <img id="rotationCaptchaImg" alt="旋转验证码" class="rotation-captcha-img" style="min-width:180px;min-height:180px;background:#f0f0f0;" loading="lazy">
+                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                    <button class="btn btn-danger btn-sm captcha-interactive" onclick="switchCaptchaType('slider')" aria-label="开始体验滑块验证" type="button">
+                                        <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                    </button>
+                                    <button class="btn btn-dark btn-sm captcha-interactive" onclick="refreshCaptcha()" aria-label="刷新验证码" type="button">
+                                        <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
+                                    </button>
+                                    <div class="result-banner" id="sliderResult" role="status" aria-live="polite">
+                                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                        <span id="sliderResultText"></span>
                                     </div>
-                                    <div class="rotation-slider-container" id="rotationSliderContainer" role="slider" aria-label="旋转角度控制" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0" tabindex="0">
-                                        <div class="rotation-slider-track" id="rotationSliderTrack"></div>
-                                        <div class="rotation-slider-button" id="rotationSliderButton" aria-hidden="true">
-                                            <i class="fas fa-undo-alt"></i>
+                                </div>
+                                
+                                <!-- 进度指示器 -->
+                                <div class="captcha-progress-container" id="sliderProgressContainer" style="display: none;">
+                                    <div class="captcha-progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                        <div class="captcha-progress-fill" id="sliderProgressFill" style="width: 0%"></div>
+                                    </div>
+                                    <div class="captcha-progress-text" id="sliderProgressText">准备中...</div>
+                                </div>
+                                
+                                <!-- 难度指示器 -->
+                                <div class="difficulty-indicator mt-2" id="sliderDifficultyIndicator" aria-label="难度等级">
+                                    <span>难度:</span>
+                                    <div class="difficulty-dots" role="img" aria-label="当前难度1级，共3级">
+                                        <div class="difficulty-dot active" data-level="1" aria-hidden="true"></div>
+                                        <div class="difficulty-dot" data-level="2" aria-hidden="true"></div>
+                                        <div class="difficulty-dot" data-level="3" aria-hidden="true"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 点选验证卡片 -->
+                    <div class="col-lg-4">
+                        <div class="demo-card h-100 shadow-sm fade-in" id="demoClick" role="region" aria-labelledby="click-title">
+                            <div class="demo-card-header">
+                                <div class="icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-mouse-pointer"></i>
+                                </div>
+                                <div>
+                                    <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="click-title" data-i18n="clickTitle">点选验证</h5>
+                                    <small style="color: #6c757d;" data-i18n="clickDesc">按序点击指定内容</small>
+                                </div>
+                            </div>
+                            <div class="demo-card-body">
+                                <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="clickDescText">
+                                    根据提示文字，依次点击图片中的对应元素。支持汉字、字母、数字多种模式，乱序点选与时序验证双重防护。
+                                </p>
+                                <div class="captcha-demo-area" id="clickDemoArea" role="application" aria-label="点选验证区域" aria-live="polite">
+                                    <div class="text-center" style="color: #6c757d;">
+                                        <i class="fas fa-hand-pointer fa-2x mb-2 pulse" style="color: #c9a96e;" aria-hidden="true"></i>
+                                        <p class="mb-0" style="font-size: 0.9rem;" data-i18n="clickHint">点击上方「开始体验」切换至此模式</p>
+                                    </div>
+                                </div>
+                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                    <button class="btn btn-danger btn-sm captcha-interactive" onclick="switchCaptchaType('click')" aria-label="开始体验点选验证" type="button">
+                                        <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                    </button>
+                                    <button class="btn btn-dark btn-sm captcha-interactive" onclick="refreshCaptcha()" aria-label="刷新验证码" type="button">
+                                        <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
+                                    </button>
+                                    <div class="result-banner" id="clickResult" role="status" aria-live="polite">
+                                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                        <span id="clickResultText"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 无感验证卡片 -->
+                    <div class="col-lg-4">
+                        <div class="demo-card h-100 shadow-sm fade-in" id="demoPassive" role="region" aria-labelledby="passive-title">
+                            <div class="demo-card-header">
+                                <div class="icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <div>
+                                    <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="passive-title" data-i18n="passiveTitle">无感验证</h5>
+                                    <small style="color: #6c757d;" data-i18n="passiveDesc">后台静默验证</small>
+                                </div>
+                            </div>
+                            <div class="demo-card-body">
+                                <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="passiveDescText">
+                                    通过环境检测、行为分析与风险评分，在后台完成静默验证。用户无需任何操作，零干扰体验，自动识别可信流量与可疑行为。
+                                </p>
+                                <div class="captcha-demo-area" id="passiveDemoArea" role="application" aria-label="无感验证区域" aria-live="polite">
+                                    <div class="text-center" style="color: #6c757d;">
+                                        <i class="fas fa-shield-alt fa-2x mb-2 pulse" style="color: #c9a96e;" aria-hidden="true"></i>
+                                        <p class="mb-0" style="font-size: 0.9rem;" data-i18n="passiveHint">点击上方「开始体验」切换至此模式</p>
+                                    </div>
+                                </div>
+                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                    <button class="btn btn-danger btn-sm captcha-interactive" onclick="switchCaptchaType('passive')" aria-label="开始体验无感验证" type="button">
+                                        <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                    </button>
+                                    <button class="btn btn-dark btn-sm captcha-interactive" onclick="refreshCaptcha()" aria-label="刷新验证码" type="button">
+                                        <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
+                                    </button>
+                                    <div class="result-banner" id="passiveResult" role="status" aria-live="polite">
+                                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                        <span id="passiveResultText"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 旋转验证卡片 -->
+                    <div class="col-lg-4">
+                        <div class="demo-card h-100 shadow-sm fade-in" id="demoRotation" role="region" aria-labelledby="rotation-title">
+                            <div class="demo-card-header">
+                                <div class="icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-undo-alt"></i>
+                                </div>
+                                <div>
+                                    <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="rotation-title" data-i18n="rotationTitle">旋转验证</h5>
+                                    <small style="color: #6c757d;" data-i18n="rotationDesc">拖动旋转图片到正确角度</small>
+                                </div>
+                            </div>
+                            <div class="demo-card-body">
+                                <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="rotationDescText">
+                                    通过拖动滑块旋转图片，将方向校正到正确角度。系统分析旋转轨迹与操作模式，精准识别人类操作。
+                                </p>
+                                <div class="captcha-demo-area" id="rotationDemoArea" role="application" aria-label="旋转验证区域" aria-live="polite">
+                                    <div class="rotation-captcha-wrapper" id="rotationCaptchaContainer">
+                                        <div class="rotation-captcha-display">
+                                            <img id="rotationCaptchaImg" alt="旋转验证码" class="rotation-captcha-img captcha-lazy-img" style="min-width:180px;min-height:180px;background:#f0f0f0;" loading="lazy" decoding="async">
                                         </div>
-                                        <div class="rotation-slider-text" id="rotationSliderText" aria-hidden="true" data-i18n="rotationDrag">拖动旋转</div>
+                                        <div class="rotation-slider-container" id="rotationSliderContainer" role="slider" aria-label="旋转角度控制" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0" tabindex="0">
+                                            <div class="rotation-slider-track" id="rotationSliderTrack"></div>
+                                            <div class="rotation-slider-button" id="rotationSliderButton" aria-hidden="true">
+                                                <i class="fas fa-undo-alt"></i>
+                                            </div>
+                                            <div class="rotation-slider-text" id="rotationSliderText" aria-hidden="true" data-i18n="rotationDrag">拖动旋转</div>
+                                        </div>
+                                        <div class="rotation-angle-display">
+                                            <span data-i18n="rotationAngle">旋转角度: </span>
+                                            <span id="rotationAngleValue">0°</span>
+                                        </div>
                                     </div>
-                                    <div class="rotation-angle-display">
-                                        <span data-i18n="rotationAngle">旋转角度: </span>
-                                        <span id="rotationAngleValue">0°</span>
+                                </div>
+                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                    <button class="btn btn-danger btn-sm captcha-interactive" onclick="switchCaptchaType('rotation')" aria-label="开始体验旋转验证" type="button">
+                                        <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                    </button>
+                                    <button class="btn btn-dark btn-sm captcha-interactive" onclick="refreshRotationCaptcha()" aria-label="刷新验证码" type="button">
+                                        <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
+                                    </button>
+                                    <div class="result-banner" id="rotationResult" role="status" aria-live="polite">
+                                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                        <span id="rotationResultText"></span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
-                                <button class="btn btn-danger btn-sm" onclick="switchCaptchaType('rotation')" aria-label="开始体验旋转验证">
-                                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
-                                </button>
-                                <button class="btn btn-dark btn-sm" onclick="refreshRotationCaptcha()" aria-label="刷新验证码">
-                                    <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
-                                </button>
-                                <div class="result-banner" id="rotationResult" role="status" aria-live="polite">
-                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                                    <span id="rotationResultText"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- 手势验证卡片 -->
+                    <div class="col-lg-4">
+                        <div class="demo-card h-100 shadow-sm fade-in" id="demoGesture" role="region" aria-labelledby="gesture-title">
+                            <div class="demo-card-header">
+                                <div class="icon-wrap" aria-hidden="true">
+                                    <i class="fas fa-paint-brush"></i>
+                                </div>
+                                <div>
+                                    <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="gesture-title" data-i18n="gestureTitle">手势验证</h5>
+                                    <small style="color: #6c757d;" data-i18n="gestureDesc">绘制指定手势图案</small>
+                                </div>
+                            </div>
+                            <div class="demo-card-body">
+                                <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="gestureDescText">
+                                    根据提示，在画布上绘制指定的手势图案（如对勾、圆形、三角形等）。系统使用 DTW 算法比对轨迹相似度，结合速度、加速度等特征精准识别。
+                                </p>
+                                <div class="captcha-demo-area" id="gestureDemoArea" role="application" aria-label="手势验证区域" aria-live="polite">
+                                    <div class="text-center" style="color: #6c757d;">
+                                        <i class="fas fa-paint-brush fa-2x mb-2 pulse" style="color: #c9a96e;" aria-hidden="true"></i>
+                                        <p class="mb-0" style="font-size: 0.9rem;" data-i18n="gestureHint">点击上方「开始体验」切换至此模式</p>
+                                    </div>
+                                </div>
+                                <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+                                    <button class="btn btn-danger btn-sm captcha-interactive" onclick="switchCaptchaType('gesture')" aria-label="开始体验手势验证" type="button">
+                                        <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
+                                    </button>
+                                    <button class="btn btn-dark btn-sm captcha-interactive" onclick="refreshCaptcha()" aria-label="刷新验证码" type="button">
+                                        <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
+                                    </button>
+                                    <div class="result-banner" id="gestureResult" role="status" aria-live="polite">
+                                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                        <span id="gestureResultText"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="col-lg-4">
-                    <div class="demo-card h-100 shadow-sm fade-in" id="demoGesture" role="region" aria-labelledby="gesture-title">
-                        <div class="demo-card-header">
-                            <div class="icon-wrap">
-                                <i class="fas fa-paint-brush" aria-hidden="true"></i>
+            </div>
+        </section>
+
+        <!-- 功能优势区域 -->
+        <section class="py-5" style="background: white;" aria-labelledby="features-title">
+            <div class="container py-4">
+                <div class="text-center mb-5">
+                    <span class="font-serif fs-6" style="color: #c9a96e; letter-spacing: 3px;">— 功能优势 —</span>
+                    <h2 class="font-serif fw-bold fs-2 mt-2" style="color: #1a1a2e;" id="features-title">不止于验证</h2>
+                    <div class="hr w-25 mx-auto mt-3" role="presentation"></div>
+                </div>
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
+                            <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;" aria-hidden="true">
+                                <i class="fas fa-brain"></i>
                             </div>
                             <div>
-                                <h5 class="font-serif fw-bold mb-0" style="font-size: 1rem;" id="gesture-title" data-i18n="gestureTitle">手势验证</h5>
-                                <small style="color: #6c757d;" data-i18n="gestureDesc">绘制指定手势图案</small>
+                                <h6 class="font-serif fw-bold mb-1">AI 行为分析</h6>
+                                <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">轨迹平滑算法、路径相似度检测、20+ 维度风险评分</p>
                             </div>
                         </div>
-                        <div class="demo-card-body">
-                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 1rem;" data-i18n="gestureDescText">
-                                根据提示，在画布上绘制指定的手势图案（如对勾、圆形、三角形等）。系统使用 DTW 算法比对轨迹相似度，结合速度、加速度等特征精准识别。
-                            </p>
-                            <div class="captcha-demo-area" id="gestureDemoArea" role="application" aria-label="手势验证区域" aria-live="polite">
-                                <div class="text-center" style="color: #6c757d;">
-                                    <i class="fas fa-paint-brush fa-2x mb-2 pulse" style="color: #c9a96e;" aria-hidden="true"></i>
-                                    <p class="mb-0" style="font-size: 0.9rem;" data-i18n="gestureHint">点击上方「开始体验」切换至此模式</p>
-                                </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
+                            <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;" aria-hidden="true">
+                                <i class="fas fa-bolt"></i>
                             </div>
-                            <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
-                                <button class="btn btn-danger btn-sm" onclick="switchCaptchaType('gesture')" aria-label="开始体验手势验证">
-                                    <i class="fas fa-play me-1" aria-hidden="true"></i>开始体验
-                                </button>
-                                <button class="btn btn-dark btn-sm" onclick="refreshCaptcha()" aria-label="刷新验证码">
-                                    <i class="fas fa-sync me-1" aria-hidden="true"></i>刷新
-                                </button>
-                                <div class="result-banner" id="gestureResult" role="status" aria-live="polite">
-                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                                    <span id="gestureResultText"></span>
-                                </div>
+                            <div>
+                                <h6 class="font-serif fw-bold mb-1">毫秒级响应</h6>
+                                <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">Go 语言核心引擎，Redis 缓存加速，验证体验行云流水</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
+                            <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;" aria-hidden="true">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div>
+                                <h6 class="font-serif fw-bold mb-1">多层风控防护</h6>
+                                <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">IP 限流、异常封禁、黑白名单，全方位抵御自动化攻击</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
 
-    <section class="py-5" style="background: white;">
-        <div class="container py-4">
-            <div class="text-center mb-5">
-                <span class="font-serif fs-6" style="color: #c9a96e; letter-spacing: 3px;">— 功能优势 —</span>
-                <h2 class="font-serif fw-bold fs-2 mt-2" style="color: #1a1a2e;">不止于验证</h2>
-                <div class="hr w-25 mx-auto mt-3"></div>
-            </div>
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
-                        <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;">
-                            <i class="fas fa-brain"></i>
-                        </div>
-                        <div>
-                            <h6 class="font-serif fw-bold mb-1">AI 行为分析</h6>
-                            <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">轨迹平滑算法、路径相似度检测、20+ 维度风险评分</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
-                        <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;">
-                            <i class="fas fa-bolt"></i>
-                        </div>
-                        <div>
-                            <h6 class="font-serif fw-bold mb-1">毫秒级响应</h6>
-                            <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">Go 语言核心引擎，Redis 缓存加速，验证体验行云流水</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="d-flex gap-3 p-3" style="background: #f8f9fa; border-radius: 4px; height: 100%;">
-                        <div class="feature-icon-wrap" style="width: 48px; height: 48px; font-size: 18px; flex-shrink: 0;">
-                            <i class="fas fa-shield-alt"></i>
-                        </div>
-                        <div>
-                            <h6 class="font-serif fw-bold mb-1">多层风控防护</h6>
-                            <p class="mb-0" style="color: #6c757d; font-size: 0.85rem; line-height: 1.6;">IP 限流、异常封禁、黑白名单，全方位抵御自动化攻击</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section class="py-5 bg-light">
-        <div class="container py-4">
-            <div class="row align-items-center g-4">
-                <div class="col-lg-6">
-                    <div style="background: white; border-radius: 4px; padding: 1.5rem; border-left: 3px solid #c9a96e;">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <i class="fas fa-terminal" style="color: #c9a96e;"></i>
-                            <span class="font-serif fw-bold" style="font-size: 0.9rem;">前端集成示例</span>
-                        </div>
-                        <pre style="background: #1a1a2e; color: #e0e0e0; padding: 1.2rem; border-radius: 4px; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;"><span style="color: #c9a96e;">// 初始化验证码</span>
+        <!-- 代码示例区域 -->
+        <section class="py-5 bg-light" aria-labelledby="code-example-title">
+            <div class="container py-4">
+                <div class="row align-items-center g-4">
+                    <div class="col-lg-6">
+                        <div style="background: white; border-radius: 4px; padding: 1.5rem; border-left: 3px solid #c9a96e;">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="fas fa-terminal" style="color: #c9a96e;" aria-hidden="true"></i>
+                                <span class="font-serif fw-bold" style="font-size: 0.9rem;">前端集成示例</span>
+                            </div>
+                            <pre style="background: #1a1a2e; color: #e0e0e0; padding: 1.2rem; border-radius: 4px; font-size: 0.8rem; line-height: 1.7; overflow-x: auto;" aria-label="JavaScript代码示例"><code><span style="color: #c9a96e;">// 初始化验证码</span>
 <span style="color: #8ab4f8;">const</span> captcha = <span style="color: #8ab4f8;">new</span> Captcha(<span style="color: #e8c88a;">'captcha-container'</span>, {
     apiBase: <span style="color: #e8c88a;">'/api/v1'</span>,
     type: <span style="color: #e8c88a;">'slider'</span>,
@@ -1173,30 +1454,31 @@
     onError: <span style="color: #82c882;">function</span>(error) {
         <span style="color: #8ab4f8;">console</span>.<span style="color: #8ab4f8;">log</span>(<span style="color: #e8c88a;">'验证失败:'</span>, error);
     }
-});</pre>
+});</code></pre>
+                        </div>
                     </div>
-                </div>
-                <div class="col-lg-6">
-                    <div style="background: white; border-radius: 4px; padding: 1.5rem; border-left: 3px solid #c9a96e;">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <i class="fas fa-code-branch" style="color: #c9a96e;"></i>
-                            <span class="font-serif fw-bold" style="font-size: 0.9rem;">多种验证类型</span>
+                    <div class="col-lg-6">
+                        <div style="background: white; border-radius: 4px; padding: 1.5rem; border-left: 3px solid #c9a96e;">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <i class="fas fa-code-branch" style="color: #c9a96e;" aria-hidden="true"></i>
+                                <span class="font-serif fw-bold" style="font-size: 0.9rem;">多种验证类型</span>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 mb-3" role="list" aria-label="验证码类型列表">
+                                <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);" role="listitem"><i class="fas fa-arrows-alt-h me-1" aria-hidden="true"></i>slider</span>
+                                <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);" role="listitem"><i class="fas fa-mouse-pointer me-1" aria-hidden="true"></i>click</span>
+                                <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);" role="listitem"><i class="fas fa-undo-alt me-1" aria-hidden="true"></i>rotation</span>
+                                <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);" role="listitem"><i class="fas fa-shield-alt me-1" aria-hidden="true"></i>passive</span>
+                                <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);" role="listitem"><i class="fas fa-paint-brush me-1" aria-hidden="true"></i>gesture</span>
+                            </div>
+                            <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 0;">
+                                通过 <code style="background: #e9ecef; padding: 0.15rem 0.4rem; border-radius: 2px;">type</code> 参数切换验证类型，一行代码即可更换验证方式。所有类型共享统一的接口规范与回调机制。
+                            </p>
                         </div>
-                        <div class="d-flex flex-wrap gap-2 mb-3">
-                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);"><i class="fas fa-arrows-alt-h me-1"></i>slider</span>
-                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);"><i class="fas fa-mouse-pointer me-1"></i>click</span>
-                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);"><i class="fas fa-undo-alt me-1"></i>rotation</span>
-                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);"><i class="fas fa-shield-alt me-1"></i>passive</span>
-                            <span class="tech-badge" style="background: rgba(201,169,110,0.15); color: #c9a96e; border-color: rgba(201,169,110,0.2);"><i class="fas fa-paint-brush me-1"></i>gesture</span>
-                        </div>
-                        <p style="color: #6c757d; font-size: 0.85rem; line-height: 1.7; margin-bottom: 0;">
-                            通过 <code style="background: #e9ecef; padding: 0.15rem 0.4rem; border-radius: 2px;">type</code> 参数切换验证类型，一行代码即可更换验证方式。所有类型共享统一的接口规范与回调机制。
-                        </p>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
+        </section>
+    </main>
 
     <!-- 性能指标显示 -->
     <div class="performance-metrics" id="performanceMetrics" role="region" aria-label="性能指标">
@@ -1214,7 +1496,8 @@
         </div>
     </div>
 
-    <footer style="background: #1a1a2e;">
+    <!-- 页脚 -->
+    <footer style="background: #1a1a2e;" role="contentinfo">
         <div class="container py-5">
             <div class="row g-4">
                 <div class="col-lg-4">
@@ -1227,8 +1510,8 @@
                         致力于为每一个网站提供免费、开源、可靠的行为验证服务。
                     </p>
                     <div class="d-flex gap-3">
-                        <a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); font-size: 1.2rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">
-                            <i class="fab fa-github"></i>
+                        <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" style="color: rgba(255,255,255,0.4); font-size: 1.2rem; transition: color 0.3s;" aria-label="GitHub仓库" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+                            <i class="fab fa-github" aria-hidden="true"></i>
                         </a>
                     </div>
                 </div>
@@ -1237,15 +1520,15 @@
                     <ul class="list-unstyled">
                         <li class="mb-2"><a href="/captcha" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">在线体验</a></li>
                         <li class="mb-2"><a href="/about" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">功能介绍</a></li>
-                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">SDK文档</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">SDK文档</a></li>
                     </ul>
                 </div>
                 <div class="col-6 col-lg-2">
                     <h6 class="fw-bold mb-3" style="color: #c9a96e; font-family: 'Noto Serif SC', serif;">开源</h6>
                     <ul class="list-unstyled">
-                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">GitHub</a></li>
-                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/issues" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">提交Issue</a></li>
-                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/pulls" target="_blank" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">贡献代码</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">GitHub</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/issues" target="_blank" rel="noopener noreferrer" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">提交Issue</a></li>
+                        <li class="mb-2"><a href="https://github.com/opphk/hjtpx/pulls" target="_blank" rel="noopener noreferrer" style="color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.9rem; transition: color 0.3s;" onmouseover="this.style.color='#c9a96e'" onmouseout="this.style.color=''">贡献代码</a></li>
                     </ul>
                 </div>
                 <div class="col-lg-4">
@@ -1259,618 +1542,866 @@
             </div>
             <div class="border-top border-secondary mt-4 pt-4 text-center">
                 <p style="color: rgba(255,255,255,0.3); font-size: 0.85rem; margin-bottom: 0;">
-                    <i class="fas fa-copyright me-1"></i> 2026 墨盾验证 · 以 MIT 许可证开源 · 
-                    <a href="https://github.com/opphk/hjtpx" target="_blank" style="color: #c9a96e; text-decoration: none;">GitHub</a>
+                    <i class="fas fa-copyright me-1" aria-hidden="true"></i> 2026 墨盾验证 · 以 MIT 许可证开源 · 
+                    <a href="https://github.com/opphk/hjtpx" target="_blank" rel="noopener noreferrer" style="color: #c9a96e; text-decoration: none;">GitHub</a>
                 </p>
             </div>
         </div>
     </footer>
 
+    <!-- 关键脚本延迟加载 -->
     <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.8/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/main.js"></script>
-    <script src="/static/js/captcha.js"></script>
-    <script src="/static/js/captcha-ui-enhancer.js"></script>
+    
+    <!-- 核心功能脚本（非关键脚本懒加载） -->
     <script>
         (function() {
-            var container = document.getElementById('heroParticles');
-            if (!container) return;
-            for (var i = 0; i < 20; i++) {
-                var p = document.createElement('div');
-                p.className = 'page-hero-particle';
-                p.style.left = Math.random() * 100 + '%';
-                p.style.top = Math.random() * 100 + '%';
-                p.style.animationDelay = Math.random() * 8 + 's';
-                p.style.animationDuration = (6 + Math.random() * 6) + 's';
-                p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
-                container.appendChild(p);
+            'use strict';
+            
+            // 页面性能监控
+            var pageLoadStart = performance.now();
+            
+            // 英雄区域粒子效果初始化
+            function initHeroParticles() {
+                var container = document.getElementById('heroParticles');
+                if (!container) return;
+                
+                var particleCount = window.innerWidth < 768 ? 10 : 20;
+                for (var i = 0; i < particleCount; i++) {
+                    var p = document.createElement('div');
+                    p.className = 'page-hero-particle';
+                    p.style.left = Math.random() * 100 + '%';
+                    p.style.top = Math.random() * 100 + '%';
+                    p.style.animationDelay = Math.random() * 8 + 's';
+                    p.style.animationDuration = (6 + Math.random() * 6) + 's';
+                    p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+                    p.setAttribute('aria-hidden', 'true');
+                    container.appendChild(p);
+                }
             }
-        })();
-
-        var currentCaptcha = null;
-        var currentType = 'slider';
-        var langManager = null;
-        var rotationState = {
-            isDragging: false,
-            startX: 0,
-            currentAngle: 0,
-            totalAngle: 0,
-            challengeId: '',
-            startTime: 0,
-            trajectoryData: []
-        };
-
-        try {
-            langManager = new CaptchaLanguageManager();
-        } catch (e) {
-            langManager = { getLocale: function() { return 'zh-CN'; } };
-        }
-
-        function initCaptcha(type) {
-            var container = document.getElementById('captcha-container');
-            if (!container) return;
-            if (currentCaptcha && typeof currentCaptcha.destroy === 'function') {
-                currentCaptcha.destroy();
-            }
-            currentType = type;
-            try {
-                currentCaptcha = new Captcha('captcha-container', {
-                    apiBase: '/api/v1',
-                    type: type,
-                    language: langManager.getLocale(),
-                    onSuccess: function(result) {
-                        showResult(type, true, '验证成功！会话ID: ' + result.session_id);
-                        console.log('验证成功:', result);
-                    },
-                    onError: function(error) {
-                        showResult(type, false, '验证失败，请重试');
-                        console.log('验证失败:', error);
-                    },
-                    onRefresh: function() {
-                        hideResult(type);
-                        console.log('验证码已刷新');
+            
+            // 图片懒加载监听
+            function initLazyImages() {
+                var images = document.querySelectorAll('.captcha-lazy-img[loading="lazy"]');
+                images.forEach(function(img) {
+                    if (img.complete) {
+                        img.classList.add('loaded');
+                    } else {
+                        img.addEventListener('load', function() {
+                            this.classList.add('loaded');
+                        });
+                        img.addEventListener('error', function() {
+                            this.classList.add('loaded');
+                        });
                     }
                 });
-                document.querySelectorAll('.demo-card').forEach(function(c) {
-                    c.classList.remove('captcha-active');
-                });
-                var targetCard = document.getElementById('demo' + type.charAt(0).toUpperCase() + type.slice(1));
-                if (targetCard) targetCard.classList.add('captcha-active');
-                updateActiveTab(type);
-            } catch (e) {
-                console.error('Captcha init error:', e);
             }
-        }
-
-        function switchCaptchaType(type) {
-            currentType = type;
-            document.querySelectorAll('.nav-link').forEach(function(t) {
-                t.classList.remove('active');
-            });
-            document.querySelector('.nav-link[data-type="' + type + '"]').classList.add('active');
-            if (currentCaptcha) {
-                currentCaptcha.destroy();
-                currentCaptcha = null;
-            }
-            if (type === 'rotation') {
-                refreshRotationCaptcha();
-                return;
-            }
-            initCaptcha(type);
-        }
-
-        function refreshCaptcha() {
-            hideResult('slider');
-            hideResult('click');
-            hideResult('passive');
-            hideResult('rotation');
-            if (currentType === 'rotation') {
-                refreshRotationCaptcha();
-                return;
-            }
-            if (currentCaptcha && typeof currentCaptcha.refresh === 'function') {
-                currentCaptcha.refresh();
-            } else {
-                initCaptcha(currentType);
-            }
-        }
-
-        function showResult(type, success, message) {
-            var resultEl = document.getElementById(type + 'Result');
-            var textEl = document.getElementById(type + 'ResultText');
-            if (!resultEl || !textEl) return;
-            resultEl.className = 'result-banner show ' + (success ? 'success' : 'error');
-            resultEl.querySelector('i').className = success ? 'fas fa-check-circle' : 'fas fa-times-circle';
-            textEl.textContent = message;
-        }
-
-        function hideResult(type) {
-            var resultEl = document.getElementById(type + 'Result');
-            if (resultEl) resultEl.className = 'result-banner';
-        }
-
-        function updateActiveTab(type) {
-            var tabs = document.querySelectorAll('.nav-link');
-            tabs.forEach(function(tab) {
-                tab.classList.remove('active');
-                if (tab.getAttribute('data-type') === type) {
-                    tab.classList.add('active');
+            
+            // 网络状态监控
+            function initNetworkStatus() {
+                var statusEl = document.getElementById('networkStatus');
+                if (!statusEl) return;
+                
+                function updateNetworkStatus() {
+                    if (!navigator.onLine) {
+                        statusEl.classList.add('show');
+                        announceToScreenReader('网络连接已断开');
+                    } else {
+                        statusEl.classList.remove('show');
+                    }
                 }
-            });
-        }
-
-        function refreshRotationCaptcha() {
-            var img = document.getElementById('rotationCaptchaImg');
-            if (img) {
-                img.style.opacity = '0.5';
+                
+                window.addEventListener('online', updateNetworkStatus);
+                window.addEventListener('offline', updateNetworkStatus);
             }
-            rotationState.currentAngle = 0;
-            rotationState.totalAngle = 0;
-            rotationState.trajectoryData = [];
-            updateRotationAngleDisplay(0);
-            resetRotationSlider();
-
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/api/v1/captcha/rotation?t=' + Date.now(), true);
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    try {
-                        var resp = JSON.parse(xhr.responseText);
-                        var respData = resp.data || resp;
-                        if (respData && respData.image) {
-                            img.src = respData.image;
-                            rotationState.challengeId = respData.challenge_id;
+            
+            // 屏幕阅读器公告
+            function announceToScreenReader(message) {
+                var announcer = document.createElement('div');
+                announcer.setAttribute('aria-live', 'polite');
+                announcer.setAttribute('aria-atomic', 'true');
+                announcer.className = 'sr-only';
+                announcer.textContent = message;
+                document.body.appendChild(announcer);
+                setTimeout(function() {
+                    announcer.remove();
+                }, 1000);
+            }
+            
+            // FPS监控
+            function initFPSMonitor() {
+                var fpsEl = document.getElementById('fpsMetric');
+                if (!fpsEl) return;
+                
+                var frameCount = 0;
+                var lastTime = performance.now();
+                var fps = 0;
+                
+                function countFrame() {
+                    frameCount++;
+                    var currentTime = performance.now();
+                    
+                    if (currentTime - lastTime >= 1000) {
+                        fps = Math.round(frameCount * 1000 / (currentTime - lastTime));
+                        fpsEl.textContent = fps;
+                        fpsEl.className = 'metric-value ' + (fps >= 50 ? 'good' : fps >= 30 ? 'warning' : 'bad');
+                        frameCount = 0;
+                        lastTime = currentTime;
+                    }
+                    
+                    requestAnimationFrame(countFrame);
+                }
+                
+                requestAnimationFrame(countFrame);
+            }
+            
+            // 性能指标更新
+            function updatePerformanceMetrics() {
+                var loadTimeEl = document.getElementById('pageLoadTime');
+                if (loadTimeEl && performance.timing) {
+                    var loadTime = Math.round(performance.timing.loadEventEnd - performance.timing.navigationStart);
+                    loadTimeEl.textContent = loadTime + 'ms';
+                    loadTimeEl.className = 'metric-value ' + (loadTime < 2000 ? 'good' : loadTime < 4000 ? 'warning' : 'bad');
+                }
+            }
+            
+            // 主题切换功能
+            function initTheme() {
+                var themeToggle = document.getElementById('themeToggle');
+                var themeIcon = document.getElementById('themeIcon');
+                var html = document.documentElement;
+                var savedTheme = localStorage.getItem('captcha-theme') || 'light';
+                var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                
+                var initialTheme = savedTheme === 'auto' ? (prefersDark ? 'dark' : 'light') : savedTheme;
+                html.setAttribute('data-bs-theme', initialTheme);
+                updateThemeIcon(initialTheme);
+                
+                if (themeToggle) {
+                    themeToggle.addEventListener('click', toggleTheme);
+                    themeToggle.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleTheme();
                         }
-                        img.style.opacity = '1';
-                    } catch(e) {
-                        img.style.opacity = '1';
+                    });
+                }
+                
+                function toggleTheme() {
+                    var currentTheme = html.getAttribute('data-bs-theme');
+                    var newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-bs-theme', newTheme);
+                    localStorage.setItem('captcha-theme', newTheme);
+                    updateThemeIcon(newTheme);
+                    applyThemeToCards(newTheme);
+                    announceToScreenReader('主题已切换到' + (newTheme === 'dark' ? '深色' : '浅色') + '模式');
+                }
+                
+                function updateThemeIcon(theme) {
+                    if (themeIcon) {
+                        themeIcon.classList.remove('fa-moon', 'fa-sun');
+                        themeIcon.classList.add(theme === 'dark' ? 'fa-sun' : 'fa-moon');
                     }
                 }
+                
+                function applyThemeToCards(theme) {
+                    var cards = document.querySelectorAll('.demo-card');
+                    cards.forEach(function(card) {
+                        if (theme === 'dark') {
+                            card.style.backgroundColor = '#2d2d44';
+                            card.style.color = '#f8f9fa';
+                        } else {
+                            card.style.backgroundColor = 'white';
+                            card.style.color = '';
+                        }
+                    });
+                }
+            }
+            
+            // 高对比度模式切换
+            function initContrastMode() {
+                var contrastToggle = document.getElementById('contrastToggle');
+                if (!contrastToggle) return;
+                
+                var isHighContrast = localStorage.getItem('captcha-high-contrast') === 'true';
+                
+                if (isHighContrast) {
+                    contrastToggle.classList.add('active');
+                    contrastToggle.setAttribute('aria-pressed', 'true');
+                    document.body.classList.add('high-contrast');
+                }
+                
+                contrastToggle.addEventListener('click', function() {
+                    isHighContrast = !isHighContrast;
+                    this.classList.toggle('active', isHighContrast);
+                    this.setAttribute('aria-pressed', isHighContrast);
+                    document.body.classList.toggle('high-contrast', isHighContrast);
+                    localStorage.setItem('captcha-high-contrast', isHighContrast);
+                    announceToScreenReader(isHighContrast ? '高对比度模式已开启' : '高对比度模式已关闭');
+                });
+            }
+            
+            // 性能指标显示切换
+            function initPerformanceMetricsToggle() {
+                var metricsBtn = document.getElementById('perfMetricsBtn');
+                var metricsEl = document.getElementById('performanceMetrics');
+                if (!metricsBtn || !metricsEl) return;
+                
+                metricsBtn.addEventListener('click', function() {
+                    var isVisible = metricsEl.classList.toggle('show');
+                    this.setAttribute('aria-pressed', isVisible);
+                    updatePerformanceMetrics();
+                    initFPSMonitor();
+                });
+            }
+            
+            // 音频模式切换
+            function initAudioMode() {
+                var audioBtn = document.getElementById('audioBtn');
+                if (!audioBtn) return;
+                
+                audioBtn.addEventListener('click', function() {
+                    var isAudioEnabled = this.getAttribute('aria-pressed') === 'true';
+                    this.setAttribute('aria-pressed', !isAudioEnabled);
+                    announceToScreenReader(!isAudioEnabled ? '音频模式已开启' : '音频模式已关闭');
+                });
+            }
+            
+            // 键盘导航初始化
+            function initKeyboardNavigation() {
+                var tabs = document.querySelectorAll('.nav-link[role="tab"]');
+                tabs.forEach(function(tab, index) {
+                    tab.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            this.click();
+                        } else if (e.key === 'ArrowRight') {
+                            e.preventDefault();
+                            var nextIndex = (index + 1) % tabs.length;
+                            tabs[nextIndex].focus();
+                            tabs[nextIndex].click();
+                        } else if (e.key === 'ArrowLeft') {
+                            e.preventDefault();
+                            var prevIndex = (index - 1 + tabs.length) % tabs.length;
+                            tabs[prevIndex].focus();
+                            tabs[prevIndex].click();
+                        }
+                    });
+                });
+            }
+            
+            // 语言切换初始化
+            function initLanguageSwitcher() {
+                var langBtns = document.querySelectorAll('.captcha-lang-btn');
+                langBtns.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var lang = this.getAttribute('data-lang');
+                        langBtns.forEach(function(b) {
+                            b.classList.remove('active');
+                            b.setAttribute('aria-pressed', 'false');
+                        });
+                        this.classList.add('active');
+                        this.setAttribute('aria-pressed', 'true');
+                        switchLanguage(lang);
+                    });
+                });
+                
+                var savedLang = localStorage.getItem('captcha-lang') || 'zh-CN';
+                var langBtn = document.querySelector('.captcha-lang-btn[data-lang="' + savedLang + '"]');
+                if (langBtn) {
+                    langBtn.click();
+                }
+            }
+            
+            // 翻译数据
+            var translations = {
+                'zh-CN': {
+                    slider: '滑块验证',
+                    click: '点选验证',
+                    passive: '无感验证',
+                    rotation: '旋转验证',
+                    sliderTitle: '滑块验证',
+                    clickTitle: '点选验证',
+                    passiveTitle: '无感验证',
+                    rotationTitle: '旋转验证',
+                    sliderDesc: '拖动滑块完成拼图',
+                    clickDesc: '按序点击指定内容',
+                    passiveDesc: '后台静默验证',
+                    rotationDesc: '拖动旋转图片到正确角度',
+                    sliderDescText: '拖动滑块将拼图块对齐到正确位置。系统实时分析滑动轨迹、速度与加速度，精准区分人类与机器。',
+                    clickDescText: '根据提示文字，依次点击图片中的对应元素。支持汉字、字母、数字多种模式，乱序点选与时序验证双重防护。',
+                    passiveDescText: '通过环境检测、行为分析与风险评分，在后台完成静默验证。用户无需任何操作，零干扰体验，自动识别可信流量与可疑行为。',
+                    rotationDescText: '通过拖动滑块旋转图片，将方向校正到正确角度。系统分析旋转轨迹与操作模式，精准识别人类操作。',
+                    clickHint: '点击上方「开始体验」切换至此模式',
+                    passiveHint: '点击上方「开始体验」切换至此模式',
+                    startExperience: '开始体验',
+                    refresh: '刷新',
+                    rotationDrag: '拖动旋转',
+                    rotationAngle: '旋转角度: ',
+                    dragging: '旋转中...',
+                    loading: '加载中...',
+                    verificationSuccess: '验证成功！',
+                    verificationFailed: '验证失败，请重试',
+                    captchaNotLoaded: '验证码未加载，请刷新',
+                    sessionId: '会话ID: '
+                },
+                'en-US': {
+                    slider: 'Slider Verification',
+                    click: 'Click Verification',
+                    passive: 'Passive Verification',
+                    rotation: 'Rotation Verification',
+                    sliderTitle: 'Slider Verification',
+                    clickTitle: 'Click Verification',
+                    passiveTitle: 'Passive Verification',
+                    rotationTitle: 'Rotation Verification',
+                    sliderDesc: 'Drag slider to complete puzzle',
+                    clickDesc: 'Click elements in sequence',
+                    passiveDesc: 'Background silent verification',
+                    rotationDesc: 'Rotate image to correct angle',
+                    sliderDescText: 'Drag the slider to align the puzzle piece to the correct position. The system analyzes sliding trajectory, speed, and acceleration in real-time to precisely distinguish humans from machines.',
+                    clickDescText: 'Click the corresponding elements in the image according to the prompt text. Supports multiple modes including Chinese characters, letters, and numbers, with shuffled click and timing verification for dual protection.',
+                    passiveDescText: 'Through environment detection, behavior analysis, and risk scoring, silent verification is completed in the background. Users need no operation, zero interference experience, automatically identifying trusted and suspicious traffic.',
+                    rotationDescText: 'Rotate the image by dragging the slider to align the direction to the correct angle. The system analyzes rotation trajectory and operation patterns to accurately identify human operations.',
+                    clickHint: 'Click "Start Experience" above to switch to this mode',
+                    passiveHint: 'Click "Start Experience" above to switch to this mode',
+                    startExperience: 'Start',
+                    refresh: 'Refresh',
+                    rotationDrag: 'Drag to rotate',
+                    rotationAngle: 'Angle: ',
+                    dragging: 'Rotating...',
+                    loading: 'Loading...',
+                    verificationSuccess: 'Verification successful!',
+                    verificationFailed: 'Verification failed, please retry',
+                    captchaNotLoaded: 'Captcha not loaded, please refresh',
+                    sessionId: 'Session ID: '
+                }
             };
-            xhr.send();
-        }
-
-        function initRotationSlider() {
-            var button = document.getElementById('rotationSliderButton');
-            var container = document.getElementById('rotationSliderContainer');
-            if (!button || !container) return;
-
-            var startDrag = function(e) {
-                if (rotationState.isDragging) return;
-                rotationState.isDragging = true;
-                rotationState.startX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
-                rotationState.startTime = Date.now();
-                rotationState.trajectoryData = [];
-                button.style.cursor = 'grabbing';
+            
+            // 语言切换函数
+            function switchLanguage(lang) {
+                localStorage.setItem('captcha-lang', lang);
+                document.documentElement.lang = lang;
+                
+                var trans = translations[lang];
+                if (!trans) return;
+                
+                document.querySelectorAll('[data-i18n]').forEach(function(el) {
+                    var key = el.getAttribute('data-i18n');
+                    if (trans[key]) {
+                        el.textContent = trans[key];
+                    }
+                });
+                
+                var resultEls = ['sliderResultText', 'clickResultText', 'passiveResultText', 'rotationResultText'];
+                resultEls.forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el && el.textContent) {
+                        if (el.textContent.indexOf('验证成功') !== -1) {
+                            el.textContent = trans.verificationSuccess;
+                        } else if (el.textContent.indexOf('验证失败') !== -1) {
+                            el.textContent = trans.verificationFailed;
+                        } else if (el.textContent.indexOf('会话ID') !== -1) {
+                            var sessionId = el.textContent.split(': ')[1];
+                            el.textContent = trans.verificationSuccess + trans.sessionId + sessionId;
+                        }
+                    }
+                });
+                
+                announceToScreenReader(lang === 'zh-CN' ? '已切换到中文' : 'Switched to English');
+            }
+            
+            // Toast通知系统
+            var toastContainer = document.getElementById('toastContainer');
+            
+            window.CaptchaToast = {
+                show: function(message, type, duration) {
+                    type = type || 'info';
+                    duration = duration || 5000;
+                    
+                    var toast = document.createElement('div');
+                    toast.className = 'captcha-toast ' + type;
+                    toast.setAttribute('role', 'alert');
+                    toast.setAttribute('aria-live', 'assertive');
+                    
+                    var iconClass = {
+                        success: 'fa-check-circle',
+                        error: 'fa-exclamation-circle',
+                        warning: 'fa-exclamation-triangle',
+                        info: 'fa-info-circle'
+                    }[type];
+                    
+                    var titleText = {
+                        success: '成功',
+                        error: '错误',
+                        warning: '警告',
+                        info: '提示'
+                    }[type];
+                    
+                    toast.innerHTML = 
+                        '<div class="captcha-toast-icon"><i class="fas ' + iconClass + '"></i></div>' +
+                        '<div class="captcha-toast-content">' +
+                            '<div class="captcha-toast-title">' + titleText + '</div>' +
+                            '<div class="captcha-toast-message">' + message + '</div>' +
+                        '</div>' +
+                        '<button class="captcha-toast-close" aria-label="关闭通知" type="button">' +
+                            '<i class="fas fa-times"></i>' +
+                        '</button>';
+                    
+                    toastContainer.appendChild(toast);
+                    
+                    var closeBtn = toast.querySelector('.captcha-toast-close');
+                    closeBtn.addEventListener('click', function() {
+                        removeToast(toast);
+                    });
+                    
+                    if (duration > 0) {
+                        setTimeout(function() {
+                            removeToast(toast);
+                        }, duration);
+                    }
+                    
+                    return toast;
+                },
+                success: function(message, duration) {
+                    return this.show(message, 'success', duration);
+                },
+                error: function(message, duration) {
+                    return this.show(message, 'error', duration);
+                },
+                warning: function(message, duration) {
+                    return this.show(message, 'warning', duration);
+                },
+                info: function(message, duration) {
+                    return this.show(message, 'info', duration);
+                }
             };
-
-            var drag = function(e) {
-                if (!rotationState.isDragging) return;
-                e.preventDefault();
-                var clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
-                var deltaX = clientX - rotationState.startX;
-                var maxWidth = container.offsetWidth - button.offsetWidth - 4;
-                var progress = Math.max(0, Math.min(deltaX / maxWidth, 1));
-                var angleDelta = progress * 360;
-                rotationState.currentAngle = angleDelta;
-                rotationState.totalAngle = (rotationState.totalAngle + angleDelta) % 360;
-                if (rotationState.totalAngle < 0) rotationState.totalAngle += 360;
-
-                var track = document.getElementById('rotationSliderTrack');
-                var text = document.getElementById('rotationSliderText');
-                if (track) track.style.width = (progress * maxWidth) + 'px';
-                button.style.left = (deltaX + 2) + 'px';
-                if (text) text.textContent = '旋转中...';
-
+            
+            function removeToast(toast) {
+                toast.classList.add('removing');
+                setTimeout(function() {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }
+            
+            // 验证码状态管理
+            var currentCaptcha = null;
+            var currentType = 'slider';
+            var langManager = null;
+            
+            try {
+                langManager = new CaptchaLanguageManager();
+            } catch (e) {
+                langManager = { getLocale: function() { return 'zh-CN'; } };
+            }
+            
+            // 初始化验证码
+            function initCaptcha(type) {
+                var container = document.getElementById('captcha-container');
+                if (!container) return;
+                
+                if (currentCaptcha && typeof currentCaptcha.destroy === 'function') {
+                    currentCaptcha.destroy();
+                }
+                
+                currentType = type;
+                
+                try {
+                    currentCaptcha = new Captcha('captcha-container', {
+                        apiBase: '/api/v1',
+                        type: type,
+                        language: langManager.getLocale(),
+                        onSuccess: function(result) {
+                            showResult(type, true, '验证成功！会话ID: ' + result.session_id);
+                            CaptchaToast.success('验证成功！');
+                            console.log('验证成功:', result);
+                        },
+                        onError: function(error) {
+                            showResult(type, false, '验证失败，请重试');
+                            CaptchaToast.error('验证失败，请重试');
+                            console.log('验证失败:', error);
+                        },
+                        onRefresh: function() {
+                            hideResult(type);
+                            console.log('验证码已刷新');
+                        }
+                    });
+                    
+                    document.querySelectorAll('.demo-card').forEach(function(c) {
+                        c.classList.remove('captcha-active');
+                    });
+                    
+                    var targetCard = document.getElementById('demo' + type.charAt(0).toUpperCase() + type.slice(1));
+                    if (targetCard) targetCard.classList.add('captcha-active');
+                    
+                    updateActiveTab(type);
+                } catch (e) {
+                    console.error('Captcha init error:', e);
+                    CaptchaToast.error('验证码初始化失败，请刷新页面');
+                }
+            }
+            
+            // 切换验证码类型
+            window.switchCaptchaType = function(type) {
+                currentType = type;
+                document.querySelectorAll('.nav-link').forEach(function(t) {
+                    t.classList.remove('active');
+                });
+                var activeTab = document.querySelector('.nav-link[data-type="' + type + '"]');
+                if (activeTab) {
+                    activeTab.classList.add('active');
+                }
+                
+                if (currentCaptcha) {
+                    currentCaptcha.destroy();
+                    currentCaptcha = null;
+                }
+                
+                if (type === 'rotation') {
+                    refreshRotationCaptcha();
+                    return;
+                }
+                
+                initCaptcha(type);
+            };
+            
+            // 刷新验证码
+            window.refreshCaptcha = function() {
+                hideResult('slider');
+                hideResult('click');
+                hideResult('passive');
+                hideResult('rotation');
+                
+                if (currentType === 'rotation') {
+                    refreshRotationCaptcha();
+                    return;
+                }
+                
+                if (currentCaptcha && typeof currentCaptcha.refresh === 'function') {
+                    currentCaptcha.refresh();
+                } else {
+                    initCaptcha(currentType);
+                }
+            };
+            
+            // 显示结果
+            function showResult(type, success, message) {
+                var resultEl = document.getElementById(type + 'Result');
+                var textEl = document.getElementById(type + 'ResultText');
+                if (!resultEl || !textEl) return;
+                
+                resultEl.className = 'result-banner show ' + (success ? 'success' : 'error');
+                resultEl.querySelector('i').className = success ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                textEl.textContent = message;
+                
+                if (success) {
+                    animateSuccess(resultEl);
+                } else {
+                    animateError(resultEl);
+                }
+            }
+            
+            // 隐藏结果
+            function hideResult(type) {
+                var resultEl = document.getElementById(type + 'Result');
+                if (resultEl) resultEl.className = 'result-banner';
+            }
+            
+            // 更新活动标签
+            function updateActiveTab(type) {
+                var tabs = document.querySelectorAll('.nav-link');
+                tabs.forEach(function(tab) {
+                    tab.classList.remove('active');
+                    if (tab.getAttribute('data-type') === type) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
+            
+            // 动画函数
+            function animateSuccess(element) {
+                if (!element) return;
+                element.classList.add('captcha-success-bounce');
+                setTimeout(function() {
+                    element.classList.remove('captcha-success-bounce');
+                }, 600);
+            }
+            
+            function animateError(element) {
+                if (!element) return;
+                element.classList.add('captcha-error-shake');
+                setTimeout(function() {
+                    element.classList.remove('captcha-error-shake');
+                }, 500);
+            }
+            
+            // 旋转验证码相关
+            var rotationState = {
+                isDragging: false,
+                startX: 0,
+                currentAngle: 0,
+                totalAngle: 0,
+                challengeId: '',
+                startTime: 0,
+                trajectoryData: []
+            };
+            
+            window.refreshRotationCaptcha = function() {
                 var img = document.getElementById('rotationCaptchaImg');
                 if (img) {
-                    img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
+                    img.style.opacity = '0.5';
                 }
-
-                updateRotationAngleDisplay(rotationState.totalAngle);
-                rotationState.trajectoryData.push({
-                    angle: rotationState.totalAngle,
-                    timestamp: Date.now()
-                });
-            };
-
-            var endDrag = function(e) {
-                if (!rotationState.isDragging) return;
-                rotationState.isDragging = false;
-                button.style.cursor = 'grab';
-
-                var text = document.getElementById('rotationSliderText');
-                if (text) text.textContent = '拖动旋转';
-
-                if (rotationState.totalAngle > 5) {
-                    submitRotationCaptcha();
-                }
+                
+                rotationState.currentAngle = 0;
+                rotationState.totalAngle = 0;
+                rotationState.trajectoryData = [];
+                updateRotationAngleDisplay(0);
                 resetRotationSlider();
-            };
-
-            button.addEventListener('mousedown', startDrag);
-            button.addEventListener('touchstart', startDrag, { passive: false });
-            document.addEventListener('mousemove', drag);
-            document.addEventListener('touchmove', drag, { passive: false });
-            document.addEventListener('mouseup', endDrag);
-            document.addEventListener('touchend', endDrag);
-        }
-
-        function resetRotationSlider() {
-            var button = document.getElementById('rotationSliderButton');
-            var track = document.getElementById('rotationSliderTrack');
-            var text = document.getElementById('rotationSliderText');
-            if (button) button.style.left = '2px';
-            if (track) track.style.width = '0px';
-            if (text) text.textContent = '拖动旋转';
-        }
-
-        function updateRotationAngleDisplay(angle) {
-            var el = document.getElementById('rotationAngleValue');
-            if (el) el.textContent = Math.round(angle) + '°';
-        }
-
-        function submitRotationCaptcha() {
-            if (!rotationState.challengeId) {
-                showResult('rotation', false, '验证码未加载，请刷新');
-                return;
-            }
-
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/v1/captcha/rotation/verify', true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200) {
+                
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/api/v1/captcha/rotation?t=' + Date.now(), true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200) {
                         try {
                             var resp = JSON.parse(xhr.responseText);
                             var respData = resp.data || resp;
-                            if (respData.success) {
-                                showResult('rotation', true, '验证成功！');
-                            } else {
-                                showResult('rotation', false, '验证失败，请重试');
-                                refreshRotationCaptcha();
+                            if (respData && respData.image) {
+                                img.src = respData.image;
+                                rotationState.challengeId = respData.challenge_id;
                             }
+                            img.style.opacity = '1';
+                            img.classList.add('loaded');
                         } catch(e) {
-                            showResult('rotation', false, '验证失败，请重试');
-                            refreshRotationCaptcha();
+                            img.style.opacity = '1';
                         }
-                    } else {
-                        showResult('rotation', false, '验证失败，请重试');
-                        refreshRotationCaptcha();
                     }
-                }
+                };
+                xhr.send();
             };
-            xhr.send(JSON.stringify({
-                challenge_id: rotationState.challengeId,
-                angle: Math.round(rotationState.totalAngle % 360)
-            }));
-        }
-
-        function initTheme() {
-            const themeToggle = document.getElementById('themeToggle');
-            const themeIcon = document.getElementById('themeIcon');
-            const html = document.documentElement;
-            const savedTheme = localStorage.getItem('captcha-theme') || 'light';
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             
-            const initialTheme = savedTheme === 'auto' ? (prefersDark ? 'dark' : 'light') : savedTheme;
-            html.setAttribute('data-bs-theme', initialTheme);
-            updateThemeIcon(initialTheme);
-
-            themeToggle.addEventListener('click', toggleTheme);
-            themeToggle.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
+            function initRotationSlider() {
+                var button = document.getElementById('rotationSliderButton');
+                var container = document.getElementById('rotationSliderContainer');
+                if (!button || !container) return;
+                
+                var startDrag = function(e) {
+                    if (rotationState.isDragging) return;
+                    rotationState.isDragging = true;
+                    rotationState.startX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+                    rotationState.startTime = Date.now();
+                    rotationState.trajectoryData = [];
+                    button.style.cursor = 'grabbing';
+                };
+                
+                var drag = function(e) {
+                    if (!rotationState.isDragging) return;
                     e.preventDefault();
-                    toggleTheme();
-                }
-            });
-
-            function toggleTheme() {
-                const currentTheme = html.getAttribute('data-bs-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                html.setAttribute('data-bs-theme', newTheme);
-                localStorage.setItem('captcha-theme', newTheme);
-                updateThemeIcon(newTheme);
-                applyThemeToCards(newTheme);
-            }
-
-            function updateThemeIcon(theme) {
-                themeIcon.classList.remove('fa-moon', 'fa-sun');
-                themeIcon.classList.add(theme === 'dark' ? 'fa-sun' : 'fa-moon');
-            }
-
-            function applyThemeToCards(theme) {
-                var cards = document.querySelectorAll('.demo-card');
-                cards.forEach(function(card) {
-                    if (theme === 'dark') {
-                        card.style.backgroundColor = '#2d2d44';
-                        card.style.color = '#f8f9fa';
-                    } else {
-                        card.style.backgroundColor = 'white';
-                        card.style.color = '';
+                    var clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+                    var deltaX = clientX - rotationState.startX;
+                    var maxWidth = container.offsetWidth - button.offsetWidth - 4;
+                    var progress = Math.max(0, Math.min(deltaX / maxWidth, 1));
+                    var angleDelta = progress * 360;
+                    rotationState.currentAngle = angleDelta;
+                    rotationState.totalAngle = (rotationState.totalAngle + angleDelta) % 360;
+                    if (rotationState.totalAngle < 0) rotationState.totalAngle += 360;
+                    
+                    var track = document.getElementById('rotationSliderTrack');
+                    var text = document.getElementById('rotationSliderText');
+                    if (track) track.style.width = (progress * maxWidth) + 'px';
+                    button.style.left = (deltaX + 2) + 'px';
+                    if (text) text.textContent = '旋转中...';
+                    
+                    var img = document.getElementById('rotationCaptchaImg');
+                    if (img) {
+                        img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
                     }
-                });
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            initTheme();
-            initCaptcha('slider');
-            initRotationSlider();
-            initLanguageSwitcher();
-            initKeyboardNavigation();
-            initLoadingAnimations();
-            initAccessibilityFeatures();
-            initPerformanceMonitoring();
-            initProgressiveDifficulty();
-            initPreloading();
-        });
-
-        var translations = {
-            'zh-CN': {
-                slider: '滑块验证',
-                click: '点选验证',
-                passive: '无感验证',
-                rotation: '旋转验证',
-                sliderTitle: '滑块验证',
-                clickTitle: '点选验证',
-                passiveTitle: '无感验证',
-                rotationTitle: '旋转验证',
-                sliderDesc: '拖动滑块完成拼图',
-                clickDesc: '按序点击指定内容',
-                passiveDesc: '后台静默验证',
-                rotationDesc: '拖动旋转图片到正确角度',
-                sliderDescText: '拖动滑块将拼图块对齐到正确位置。系统实时分析滑动轨迹、速度与加速度，精准区分人类与机器。',
-                clickDescText: '根据提示文字，依次点击图片中的对应元素。支持汉字、字母、数字多种模式，乱序点选与时序验证双重防护。',
-                passiveDescText: '通过环境检测、行为分析与风险评分，在后台完成静默验证。用户无需任何操作，零干扰体验，自动识别可信流量与可疑行为。',
-                rotationDescText: '通过拖动滑块旋转图片，将方向校正到正确角度。系统分析旋转轨迹与操作模式，精准识别人类操作。',
-                clickHint: '点击上方「开始体验」切换至此模式',
-                passiveHint: '点击上方「开始体验」切换至此模式',
-                startExperience: '开始体验',
-                refresh: '刷新',
-                rotationDrag: '拖动旋转',
-                rotationAngle: '旋转角度: ',
-                dragging: '旋转中...',
-                loading: '加载中...',
-                verificationSuccess: '验证成功！',
-                verificationFailed: '验证失败，请重试',
-                captchaNotLoaded: '验证码未加载，请刷新',
-                sessionId: '会话ID: '
-            },
-            'en-US': {
-                slider: 'Slider Verification',
-                click: 'Click Verification',
-                passive: 'Passive Verification',
-                rotation: 'Rotation Verification',
-                sliderTitle: 'Slider Verification',
-                clickTitle: 'Click Verification',
-                passiveTitle: 'Passive Verification',
-                rotationTitle: 'Rotation Verification',
-                sliderDesc: 'Drag slider to complete puzzle',
-                clickDesc: 'Click elements in sequence',
-                passiveDesc: 'Background silent verification',
-                rotationDesc: 'Rotate image to correct angle',
-                sliderDescText: 'Drag the slider to align the puzzle piece to the correct position. The system analyzes sliding trajectory, speed, and acceleration in real-time to precisely distinguish humans from machines.',
-                clickDescText: 'Click the corresponding elements in the image according to the prompt text. Supports multiple modes including Chinese characters, letters, and numbers, with shuffled click and timing verification for dual protection.',
-                passiveDescText: 'Through environment detection, behavior analysis, and risk scoring, silent verification is completed in the background. Users need no operation, zero interference experience, automatically identifying trusted and suspicious traffic.',
-                rotationDescText: 'Rotate the image by dragging the slider to align the direction to the correct angle. The system analyzes rotation trajectory and operation patterns to accurately identify human operations.',
-                clickHint: 'Click "Start Experience" above to switch to this mode',
-                passiveHint: 'Click "Start Experience" above to switch to this mode',
-                startExperience: 'Start',
-                refresh: 'Refresh',
-                rotationDrag: 'Drag to rotate',
-                rotationAngle: 'Angle: ',
-                dragging: 'Rotating...',
-                loading: 'Loading...',
-                verificationSuccess: 'Verification successful!',
-                verificationFailed: 'Verification failed, please retry',
-                captchaNotLoaded: 'Captcha not loaded, please refresh',
-                sessionId: 'Session ID: '
-            }
-        };
-
-        function initLanguageSwitcher() {
-            var langBtns = document.querySelectorAll('.captcha-lang-btn');
-            langBtns.forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    var lang = this.getAttribute('data-lang');
-                    langBtns.forEach(function(b) {
-                        b.classList.remove('active');
-                        b.setAttribute('aria-pressed', 'false');
+                    
+                    updateRotationAngleDisplay(rotationState.totalAngle);
+                    rotationState.trajectoryData.push({
+                        angle: rotationState.totalAngle,
+                        timestamp: Date.now()
                     });
-                    this.classList.add('active');
-                    this.setAttribute('aria-pressed', 'true');
-                    switchLanguage(lang);
-                });
-            });
-
-            var savedLang = localStorage.getItem('captcha-lang') || 'zh-CN';
-            var langBtn = document.querySelector('.captcha-lang-btn[data-lang="' + savedLang + '"]');
-            if (langBtn) {
-                langBtn.click();
-            }
-        }
-
-        function switchLanguage(lang) {
-            localStorage.setItem('captcha-lang', lang);
-            document.documentElement.lang = lang;
-
-            var trans = translations[lang];
-            if (!trans) return;
-
-            document.querySelectorAll('[data-i18n]').forEach(function(el) {
-                var key = el.getAttribute('data-i18n');
-                if (trans[key]) {
-                    el.textContent = trans[key];
-                }
-            });
-
-            var resultEls = ['sliderResultText', 'clickResultText', 'passiveResultText', 'rotationResultText'];
-            resultEls.forEach(function(id) {
-                var el = document.getElementById(id);
-                if (el && el.textContent) {
-                    if (el.textContent.indexOf('验证成功') !== -1) {
-                        el.textContent = trans.verificationSuccess;
-                    } else if (el.textContent.indexOf('验证失败') !== -1) {
-                        el.textContent = trans.verificationFailed;
-                    } else if (el.textContent.indexOf('会话ID') !== -1) {
-                        var sessionId = el.textContent.split(': ')[1];
-                        el.textContent = trans.verificationSuccess + trans.sessionId + sessionId;
+                };
+                
+                var endDrag = function(e) {
+                    if (!rotationState.isDragging) return;
+                    rotationState.isDragging = false;
+                    button.style.cursor = 'grab';
+                    
+                    var text = document.getElementById('rotationSliderText');
+                    if (text) text.textContent = '拖动旋转';
+                    
+                    if (rotationState.totalAngle > 5) {
+                        submitRotationCaptcha();
                     }
-                }
-            });
-        }
-
-        function getTranslation(key) {
-            var lang = localStorage.getItem('captcha-lang') || 'zh-CN';
-            var trans = translations[lang] || translations['zh-CN'];
-            return trans[key] || key;
-        }
-
-        function initKeyboardNavigation() {
-            var tabs = document.querySelectorAll('.nav-link[role="tab"]');
-            tabs.forEach(function(tab, index) {
-                tab.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    resetRotationSlider();
+                };
+                
+                // 鼠标事件
+                button.addEventListener('mousedown', startDrag);
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', endDrag);
+                
+                // 触摸事件（移动端优化）
+                button.addEventListener('touchstart', startDrag, { passive: false });
+                document.addEventListener('touchmove', drag, { passive: false });
+                document.addEventListener('touchend', endDrag);
+                
+                // 键盘控制
+                container.addEventListener('keydown', function(e) {
+                    if (e.key === 'ArrowRight') {
                         e.preventDefault();
-                        this.click();
-                    } else if (e.key === 'ArrowRight') {
-                        e.preventDefault();
-                        var nextIndex = (index + 1) % tabs.length;
-                        tabs[nextIndex].focus();
-                        tabs[nextIndex].click();
+                        rotationState.totalAngle = (rotationState.totalAngle + 10) % 360;
+                        var img = document.getElementById('rotationCaptchaImg');
+                        if (img) {
+                            img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
+                        }
+                        updateRotationAngleDisplay(rotationState.totalAngle);
                     } else if (e.key === 'ArrowLeft') {
                         e.preventDefault();
-                        var prevIndex = (index - 1 + tabs.length) % tabs.length;
-                        tabs[prevIndex].focus();
-                        tabs[prevIndex].click();
+                        rotationState.totalAngle = (rotationState.totalAngle - 10 + 360) % 360;
+                        var img = document.getElementById('rotationCaptchaImg');
+                        if (img) {
+                            img.style.transform = 'rotate(' + rotationState.totalAngle + 'deg)';
+                        }
+                        updateRotationAngleDisplay(rotationState.totalAngle);
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (rotationState.totalAngle > 5) {
+                            submitRotationCaptcha();
+                        }
                     }
                 });
-            });
-        }
-
-        function initLoadingAnimations() {
-            var demoAreas = document.querySelectorAll('.captcha-demo-area');
-            demoAreas.forEach(function(area) {
-                area.addEventListener('captcha:loading', function() {
-                    showLoadingSpinner(area);
-                });
-                area.addEventListener('captcha:loaded', function() {
-                    hideLoadingSpinner(area);
-                });
-            });
-        }
-
-        function showLoadingSpinner(container) {
-            if (container.querySelector('.captcha-spinner-wrapper')) return;
-
-            var spinnerWrapper = document.createElement('div');
-            spinnerWrapper.className = 'captcha-spinner-wrapper';
-            spinnerWrapper.innerHTML = '<div class="captcha-spinner"></div><div class="captcha-loading-text">' + getTranslation('loading') + '</div>';
-            container.appendChild(spinnerWrapper);
-            container.classList.add('captcha-loading');
-
-            requestAnimationFrame(function() {
-                spinnerWrapper.style.opacity = '1';
-            });
-        }
-
-        function hideLoadingSpinner(container) {
-            var spinner = container.querySelector('.captcha-spinner-wrapper');
-            if (spinner) {
-                spinner.style.opacity = '0';
-                setTimeout(function() {
-                    spinner.remove();
-                    container.classList.remove('captcha-loading');
-                }, 300);
             }
-        }
-
-        function animateSuccess(element) {
-            element.classList.add('captcha-success-bounce');
-            setTimeout(function() {
-                element.classList.remove('captcha-success-bounce');
-            }, 600);
-        }
-
-        function animateError(element) {
-            element.classList.add('captcha-error-shake');
-            setTimeout(function() {
-                element.classList.remove('captcha-error-shake');
-            }, 500);
-        }
-
-        function animateRefresh(btn) {
-            var icon = btn.querySelector('i');
-            if (icon) {
-                icon.classList.add('captcha-refresh-spin');
-                setTimeout(function() {
-                    icon.classList.remove('captcha-refresh-spin');
-                }, 1000);
+            
+            function resetRotationSlider() {
+                var button = document.getElementById('rotationSliderButton');
+                var track = document.getElementById('rotationSliderTrack');
+                var text = document.getElementById('rotationSliderText');
+                if (button) button.style.left = '2px';
+                if (track) track.style.width = '0px';
+                if (text) text.textContent = '拖动旋转';
             }
-        }
-
-        var originalShowResult = showResult;
-        showResult = function(type, success, message) {
-            var resultEl = document.getElementById(type + 'Result');
-            if (success) {
-                animateSuccess(resultEl);
-                if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
-                    CaptchaUI.toast.success(message || 'Verification successful!', 'Success');
-                }
-            } else {
-                animateError(resultEl);
-                if (typeof CaptchaUI !== 'undefined' && CaptchaUI.toast) {
-                    CaptchaUI.toast.error(message || 'Verification failed, please try again', 'Error');
+            
+            function updateRotationAngleDisplay(angle) {
+                var el = document.getElementById('rotationAngleValue');
+                if (el) el.textContent = Math.round(angle) + '°';
+                
+                var slider = document.getElementById('rotationSliderContainer');
+                if (slider) {
+                    slider.setAttribute('aria-valuenow', Math.round(angle));
                 }
             }
-            originalShowResult(type, success, message);
-        };
-
-        var originalRefreshCaptcha = refreshCaptcha;
-        refreshCaptcha = function() {
-            var refreshBtns = document.querySelectorAll('button[onclick="refreshCaptcha()"]');
-            refreshBtns.forEach(function(btn) {
-                animateRefresh(btn);
-            });
-
-            var demoArea = document.getElementById(currentType + 'DemoArea');
-            if (demoArea) {
-                showLoadingSpinner(demoArea);
-                setTimeout(function() {
-                    hideLoadingSpinner(demoArea);
-                }, 500);
+            
+            function submitRotationCaptcha() {
+                if (!rotationState.challengeId) {
+                    showResult('rotation', false, '验证码未加载，请刷新');
+                    CaptchaToast.error('验证码未加载，请刷新');
+                    return;
+                }
+                
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/v1/captcha/rotation/verify', true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                var resp = JSON.parse(xhr.responseText);
+                                var respData = resp.data || resp;
+                                if (respData.success) {
+                                    showResult('rotation', true, '验证成功！');
+                                    CaptchaToast.success('验证成功！');
+                                } else {
+                                    showResult('rotation', false, '验证失败，请重试');
+                                    CaptchaToast.error('验证失败，请重试');
+                                    refreshRotationCaptcha();
+                                }
+                            } catch(e) {
+                                showResult('rotation', false, '验证失败，请重试');
+                                CaptchaToast.error('验证失败，请重试');
+                                refreshRotationCaptcha();
+                            }
+                        } else {
+                            showResult('rotation', false, '验证失败，请重试');
+                            CaptchaToast.error('验证失败，请重试');
+                            refreshRotationCaptcha();
+                        }
+                    }
+                };
+                xhr.send(JSON.stringify({
+                    challenge_id: rotationState.challengeId,
+                    angle: Math.round(rotationState.totalAngle % 360)
+                }));
             }
-
-            originalRefreshCaptcha();
-        };
-
-        var originalRefreshRotationCaptcha = refreshRotationCaptcha;
-        refreshRotationCaptcha = function() {
-            var refreshBtns = document.querySelectorAll('button[onclick="refreshRotationCaptcha()"]');
-            refreshBtns.forEach(function(btn) {
-                animateRefresh(btn);
-            });
-
-            var demoArea = document.getElementById('rotationDemoArea');
-            if (demoArea) {
-                showLoadingSpinner(demoArea);
+            
+            // DOM加载完成后初始化
+            document.addEventListener('DOMContentLoaded', function() {
+                initHeroParticles();
+                initLazyImages();
+                initNetworkStatus();
+                initTheme();
+                initContrastMode();
+                initPerformanceMetricsToggle();
+                initAudioMode();
+                initKeyboardNavigation();
+                initLanguageSwitcher();
+                initCaptcha('slider');
+                initRotationSlider();
+                
+                // 延迟加载非关键脚本
                 setTimeout(function() {
-                    hideLoadingSpinner(demoArea);
-                }, 500);
-            }
-
-            originalRefreshRotationCaptcha();
-        };
-
-        window.CaptchaUI = {
-            showLoading: showLoadingSpinner,
-            hideLoading: hideLoadingSpinner,
-            animateSuccess: animateSuccess,
-            animateError: animateError,
-            getTranslation: getTranslation,
-            switchLanguage: switchLanguage
-        };
+                    var script = document.createElement('script');
+                    script.src = '/static/js/captcha.js';
+                    script.defer = true;
+                    document.body.appendChild(script);
+                }, 100);
+                
+                setTimeout(function() {
+                    var script = document.createElement('script');
+                    script.src = '/static/js/captcha-ui-enhancer.js';
+                    script.defer = true;
+                    document.body.appendChild(script);
+                }, 200);
+                
+                // 页面加载性能记录
+                window.addEventListener('load', function() {
+                    setTimeout(function() {
+                        updatePerformanceMetrics();
+                    }, 100);
+                });
+            });
+            
+            // 导出API供外部使用
+            window.CaptchaUI = {
+                toast: CaptchaToast,
+                showLoading: function(container) {
+                    var spinner = document.createElement('div');
+                    spinner.className = 'captcha-spinner-wrapper';
+                    spinner.innerHTML = '<div class="captcha-spinner"></div><div class="captcha-loading-text">加载中...</div>';
+                    container.appendChild(spinner);
+                    container.classList.add('captcha-loading');
+                },
+                hideLoading: function(container) {
+                    var spinner = container.querySelector('.captcha-spinner-wrapper');
+                    if (spinner) {
+                        spinner.style.opacity = '0';
+                        setTimeout(function() {
+                            spinner.remove();
+                            container.classList.remove('captcha-loading');
+                        }, 300);
+                    }
+                },
+                switchLanguage: switchLanguage,
+                getTranslation: function(key) {
+                    var lang = localStorage.getItem('captcha-lang') || 'zh-CN';
+                    var trans = translations[lang] || translations['zh-CN'];
+                    return trans[key] || key;
+                }
+            };
+            
+        })();
     </script>
 </body>
 </html>

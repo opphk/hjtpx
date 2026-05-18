@@ -161,6 +161,81 @@
 </div>
 
 <div class="row">
+    <div class="col-lg-2 col-6">
+        <div class="info-box bg-gradient-primary">
+            <div class="info-box-content">
+                <span class="info-box-text">API调用</span>
+                <span class="info-box-number" id="apiCalls">0</span>
+                <div class="progress">
+                    <div class="progress-bar" id="apiCallsProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted" id="apiCallsTrend"></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="info-box bg-gradient-success">
+            <div class="info-box-content">
+                <span class="info-box-text">缓存命中</span>
+                <span class="info-box-number" id="cacheHitRate">0%</span>
+                <div class="progress">
+                    <div class="progress-bar" id="cacheHitProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted">缓存命中率</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="info-box bg-gradient-warning">
+            <div class="info-box-content">
+                <span class="info-box-text">活跃设备</span>
+                <span class="info-box-number" id="activeDevices">0</span>
+                <div class="progress">
+                    <div class="progress-bar" id="activeDevicesProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted" id="activeDevicesTrend"></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="info-box bg-gradient-danger">
+            <div class="info-box-content">
+                <span class="info-box-text">风险拦截</span>
+                <span class="info-box-number" id="riskBlocked">0</span>
+                <div class="progress">
+                    <div class="progress-bar" id="riskBlockedProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted" id="riskBlockedTrend"></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="info-box bg-gradient-info">
+            <div class="info-box-content">
+                <span class="info-box-text">平均延迟</span>
+                <span class="info-box-number" id="avgLatency">0ms</span>
+                <div class="progress">
+                    <div class="progress-bar" id="avgLatencyProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted" id="avgLatencyTrend"></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-2 col-6">
+        <div class="info-box bg-gradient-secondary">
+            <div class="info-box-content">
+                <span class="info-box-text">并发连接</span>
+                <span class="info-box-number" id="concurrentConnections">0</span>
+                <div class="progress">
+                    <div class="progress-bar" id="concurrentProgress" style="width: 0%"></div>
+                </div>
+                <small class="text-muted">最大: <span id="maxConnections">0</span></small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
     <div class="col-md-8">
         <div class="card card-primary">
             <div class="card-header">
@@ -199,10 +274,10 @@
 </div>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card card-info">
             <div class="card-header">
-                <h3 class="card-title"><i class="fas fa-bar-chart mr-2"></i>验证码类型分布</h3>
+                <h3 class="card-title"><i class="fas fa-chart-bar mr-2"></i>验证码类型分布</h3>
                 <div class="card-tools">
                     <button type="button" class="btn btn-tool" data-card-widget="collapse">
                         <i class="fas fa-minus"></i>
@@ -214,8 +289,74 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card card-secondary">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-broadcast-tower mr-2"></i>性能雷达图</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="radarChart" style="min-height: 250px; height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-dark">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-area mr-2"></i>地域分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="geoChart" style="min-height: 250px; height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-danger">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-fire mr-2"></i>热力图 - 访问时段分析</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="heatmapChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-warning">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-layer-group mr-2"></i>堆叠面积图 - 请求趋势</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="stackChart" style="min-height: 300px; height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card card-info">
             <div class="card-header">
                 <h3 class="card-title"><i class="fas fa-history mr-2"></i>最近验证记录</h3>
                 <div class="card-tools">
@@ -242,6 +383,21 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-success">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-pie mr-2"></i>应用使用分布</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="appUsageChart" style="min-height: 300px; height: 300px;"></div>
             </div>
         </div>
     </div>
@@ -429,9 +585,11 @@
 
 {% block scripts %}
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/extension/bmap.min.js"></script>
 <script src="/admin/static/js/dashboard-ext.js"></script>
 <script>
 let trendChart, pieChart, captchaTypeChart, realtimeChart, miniChart;
+let radarChart, geoChart, heatmapChart, stackChart, appUsageChart;
 let ws = null;
 let wsConnected = false;
 let realtimeDataPoints = [];
@@ -470,6 +628,11 @@ function initECharts() {
     initCaptchaTypeChart();
     initRealtimeChart();
     initMiniChart();
+    initRadarChart();
+    initGeoChart();
+    initHeatmapChart();
+    initStackChart();
+    initAppUsageChart();
 }
 
 function initTrendChart() {
@@ -510,6 +673,310 @@ function initMiniChart() {
     
     miniChart = echarts.init(container);
     window.addEventListener('resize', () => miniChart.resize());
+}
+
+function initRadarChart() {
+    const container = document.getElementById('radarChart');
+    if (!container) return;
+    
+    radarChart = echarts.init(container);
+    window.addEventListener('resize', () => radarChart.resize());
+    
+    radarChart.setOption({
+        radar: {
+            indicator: [
+                { name: '响应速度', max: 100 },
+                { name: '稳定性', max: 100 },
+                { name: '安全性', max: 100 },
+                { name: '可用性', max: 100 },
+                { name: '准确性', max: 100 }
+            ],
+            radius: '65%'
+        },
+        series: [{
+            type: 'radar',
+            data: [{
+                value: [85, 90, 88, 92, 87],
+                name: '系统性能',
+                areaStyle: {
+                    color: 'rgba(0, 123, 255, 0.3)'
+                },
+                lineStyle: {
+                    color: '#007bff'
+                },
+                itemStyle: {
+                    color: '#007bff'
+                }
+            }]
+        }]
+    });
+}
+
+function initGeoChart() {
+    const container = document.getElementById('geoChart');
+    if (!container) return;
+    
+    geoChart = echarts.init(container);
+    window.addEventListener('resize', () => geoChart.resize());
+    
+    const geoData = [
+        { name: '北京', value: 3500 },
+        { name: '上海', value: 3200 },
+        { name: '广州', value: 2800 },
+        { name: '深圳', value: 2600 },
+        { name: '杭州', value: 2100 },
+        { name: '成都', value: 1800 },
+        { name: '武汉', value: 1600 },
+        { name: '西安', value: 1400 }
+    ];
+    
+    geoChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c}'
+        },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '50%'],
+            data: geoData.sort(function(a, b) {
+                return b.value - a.value;
+            }),
+            label: {
+                show: true,
+                formatter: '{b}: {c}'
+            },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowOffsetX: 0,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+            }
+        }]
+    });
+}
+
+function initHeatmapChart() {
+    const container = document.getElementById('heatmapChart');
+    if (!container) return;
+    
+    heatmapChart = echarts.init(container);
+    window.addEventListener('resize', () => heatmapChart.resize());
+    
+    const hours = ['0时', '1时', '2时', '3时', '4时', '5时', '6时', '7时', '8时', '9时', '10时', '11时',
+                   '12时', '13时', '14时', '15时', '16时', '17时', '18时', '19时', '20时', '21时', '22时', '23时'];
+    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    
+    const data = [];
+    for (let i = 0; i < 7; i++) {
+        for (let j = 0; j < 24; j++) {
+            data.push([j, i, Math.floor(Math.random() * 500) + 100]);
+        }
+    }
+    
+    heatmapChart.setOption({
+        tooltip: {
+            position: 'top',
+            formatter: function(params) {
+                return hours[params.value[0]] + ' ' + days[params.value[1]] + '<br/>访问量: ' + params.value[2];
+            }
+        },
+        grid: {
+            left: '3%',
+            right: '8%',
+            top: '10%',
+            bottom: '15%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: hours,
+            splitArea: { show: true },
+            axisLabel: { color: '#666', interval: 2 }
+        },
+        yAxis: {
+            type: 'category',
+            data: days,
+            splitArea: { show: true },
+            axisLabel: { color: '#666' }
+        },
+        visualMap: {
+            min: 0,
+            max: 600,
+            calculable: true,
+            orient: 'vertical',
+            right: '0',
+            top: 'center',
+            inRange: {
+                color: ['#e8f5e9', '#81c784', '#4caf50', '#2e7d32', '#1b5e20']
+            }
+        },
+        series: [{
+            type: 'heatmap',
+            data: data,
+            label: {
+                show: false
+            },
+            emphasis: {
+                itemStyle: {
+                    shadowBlur: 10,
+                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                }
+            }
+        }]
+    });
+}
+
+function initStackChart() {
+    const container = document.getElementById('stackChart');
+    if (!container) return;
+    
+    stackChart = echarts.init(container);
+    window.addEventListener('resize', () => stackChart.resize());
+    
+    const dates = [];
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        dates.push((date.getMonth() + 1) + '-' + date.getDate());
+    }
+    
+    stackChart.setOption({
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross' }
+        },
+        legend: {
+            data: ['滑动验证', '点选验证', '图形验证'],
+            bottom: '0'
+        },
+        grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '15%',
+            top: '10%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            boundaryGap: false
+        },
+        yAxis: {
+            type: 'value'
+        },
+        series: [
+            {
+                name: '滑动验证',
+                type: 'line',
+                stack: '总量',
+                smooth: true,
+                data: [1200, 1320, 1010, 1340, 1290, 1450, 1200],
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(0, 123, 255, 0.5)' },
+                            { offset: 1, color: 'rgba(0, 123, 255, 0.1)' }
+                        ]
+                    }
+                },
+                lineStyle: { color: '#007bff' },
+                itemStyle: { color: '#007bff' }
+            },
+            {
+                name: '点选验证',
+                type: 'line',
+                stack: '总量',
+                smooth: true,
+                data: [820, 932, 901, 934, 1290, 1330, 1320],
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(40, 167, 69, 0.5)' },
+                            { offset: 1, color: 'rgba(40, 167, 69, 0.1)' }
+                        ]
+                    }
+                },
+                lineStyle: { color: '#28a745' },
+                itemStyle: { color: '#28a745' }
+            },
+            {
+                name: '图形验证',
+                type: 'line',
+                stack: '总量',
+                smooth: true,
+                data: [450, 520, 480, 560, 620, 580, 650],
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0, y: 0, x2: 0, y2: 1,
+                        colorStops: [
+                            { offset: 0, color: 'rgba(255, 193, 7, 0.5)' },
+                            { offset: 1, color: 'rgba(255, 193, 7, 0.1)' }
+                        ]
+                    }
+                },
+                lineStyle: { color: '#ffc107' },
+                itemStyle: { color: '#ffc107' }
+            }
+        ]
+    });
+}
+
+function initAppUsageChart() {
+    const container = document.getElementById('appUsageChart');
+    if (!container) return;
+    
+    appUsageChart = echarts.init(container);
+    window.addEventListener('resize', () => appUsageChart.resize());
+    
+    const appData = [
+        { name: 'App_Web', value: 3500 },
+        { name: 'App_Mobile', value: 2800 },
+        { name: 'App_API', value: 2100 },
+        { name: 'App_Admin', value: 1500 },
+        { name: 'App_Test', value: 800 }
+    ];
+    
+    appUsageChart.setOption({
+        tooltip: {
+            trigger: 'item',
+            formatter: '{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            bottom: '0'
+        },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['60%', '50%'],
+            avoidLabelOverlap: false,
+            itemStyle: {
+                borderRadius: 10,
+                borderColor: '#fff',
+                borderWidth: 2
+            },
+            label: {
+                show: true,
+                formatter: '{d}%'
+            },
+            emphasis: {
+                label: {
+                    show: true,
+                    fontSize: 16,
+                    fontWeight: 'bold'
+                }
+            },
+            data: appData
+        }]
+    });
 }
 
 function initWebSocket() {
@@ -755,6 +1222,97 @@ function updateDashboard(data) {
         
         document.getElementById('passRateProgress').style.width = data.summary.pass_rate + '%';
         document.getElementById('blockRateProgress').style.width = data.summary.block_rate + '%';
+    }
+    
+    if (data.extended) {
+        if (data.extended.total_users) {
+            animateValue('totalUsers', 0, data.extended.total_users, 1000);
+        }
+        if (data.extended.total_apps) {
+            animateValue('totalApps', 0, data.extended.total_apps, 1000);
+        }
+        if (data.extended.current_qps) {
+            animateValue('currentQPSDisplay', 0, data.extended.current_qps, 1000);
+        }
+        if (data.extended.error_rate) {
+            document.getElementById('errorRate').textContent = data.extended.error_rate + '%';
+        }
+        
+        if (data.extended.api_calls !== undefined) {
+            animateValue('apiCalls', 0, data.extended.api_calls, 1000);
+            document.getElementById('apiCallsProgress').style.width = Math.min(data.extended.api_calls / 100, 100) + '%';
+        }
+        
+        if (data.extended.cache_hit_rate !== undefined) {
+            document.getElementById('cacheHitRate').textContent = data.extended.cache_hit_rate + '%';
+            document.getElementById('cacheHitProgress').style.width = data.extended.cache_hit_rate + '%';
+        }
+        
+        if (data.extended.active_devices !== undefined) {
+            animateValue('activeDevices', 0, data.extended.active_devices, 1000);
+            document.getElementById('activeDevicesProgress').style.width = Math.min(data.extended.active_devices / 1000, 100) + '%';
+        }
+        
+        if (data.extended.risk_blocked !== undefined) {
+            animateValue('riskBlocked', 0, data.extended.risk_blocked, 1000);
+            document.getElementById('riskBlockedProgress').style.width = Math.min(data.extended.risk_blocked / 100, 100) + '%';
+        }
+        
+        if (data.extended.avg_latency !== undefined) {
+            document.getElementById('avgLatency').textContent = data.extended.avg_latency + 'ms';
+            document.getElementById('avgLatencyProgress').style.width = Math.min(data.extended.avg_latency / 200, 100) + '%';
+        }
+        
+        if (data.extended.concurrent_connections !== undefined) {
+            animateValue('concurrentConnections', 0, data.extended.concurrent_connections, 1000);
+            document.getElementById('concurrentProgress').style.width = Math.min(data.extended.concurrent_connections / 1000, 100) + '%';
+        }
+        
+        if (data.extended.max_connections !== undefined) {
+            document.getElementById('maxConnections').textContent = data.extended.max_connections;
+        }
+        
+        if (data.extended.user_growth !== undefined) {
+            const userGrowth = data.extended.user_growth;
+            document.getElementById('userGrowth').textContent = userGrowth >= 0 ? '↑ ' + userGrowth + '%' : '↓ ' + Math.abs(userGrowth) + '%';
+            document.getElementById('userGrowth').className = userGrowth >= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        if (data.extended.app_growth !== undefined) {
+            const appGrowth = data.extended.app_growth;
+            document.getElementById('appGrowth').textContent = appGrowth >= 0 ? '↑ ' + appGrowth + '%' : '↓ ' + Math.abs(appGrowth) + '%';
+            document.getElementById('appGrowth').className = appGrowth >= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        if (data.extended.error_growth !== undefined) {
+            const errorGrowth = data.extended.error_growth;
+            document.getElementById('errorTrend').textContent = errorGrowth <= 0 ? '↓ ' + Math.abs(errorGrowth) + '%' : '↑ ' + errorGrowth + '%';
+            document.getElementById('errorTrend').className = errorGrowth <= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        if (data.extended.api_calls_trend !== undefined) {
+            const trend = data.extended.api_calls_trend;
+            document.getElementById('apiCallsTrend').textContent = trend >= 0 ? '↑ ' + trend + '%' : '↓ ' + Math.abs(trend) + '%';
+            document.getElementById('apiCallsTrend').className = trend >= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        if (data.extended.active_devices_trend !== undefined) {
+            const trend = data.extended.active_devices_trend;
+            document.getElementById('activeDevicesTrend').textContent = trend >= 0 ? '↑ ' + trend + '%' : '↓ ' + Math.abs(trend) + '%';
+            document.getElementById('activeDevicesTrend').className = trend >= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        if (data.extended.risk_blocked_trend !== undefined) {
+            const trend = data.extended.risk_blocked_trend;
+            document.getElementById('riskBlockedTrend').textContent = trend >= 0 ? '↑ ' + trend + '%' : '↓ ' + Math.abs(trend) + '%';
+            document.getElementById('riskBlockedTrend').className = trend >= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        if (data.extended.latency_trend !== undefined) {
+            const trend = data.extended.latency_trend;
+            document.getElementById('avgLatencyTrend').textContent = trend <= 0 ? '↓ ' + Math.abs(trend) + '%' : '↑ ' + trend + '%';
+            document.getElementById('avgLatencyTrend').className = trend <= 0 ? 'text-success' : 'text-danger';
+        }
     }
     
     if (data.trend && trendChart) {

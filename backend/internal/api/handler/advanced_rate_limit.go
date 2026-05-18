@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
 	"github.com/hjtpx/hjtpx/pkg/response"
@@ -23,14 +25,13 @@ func NewAdvancedRateLimitHandler() *AdvancedRateLimitHandler {
 }
 
 type AdaptiveRateLimitConfigRequest struct {
-	BaseRate              float64 `json:"base_rate"`
-	BaseCapacity          float64 `json:"base_capacity"`
-	MinCapacity           float64 `json:"min_capacity"`
-	MaxCapacity           float64 `json:"max_capacity"`
-	LoadCheckInterval     int     `json:"load_check_interval"`
-	AdjustmentInterval    int     `json:"adjustment_interval"`
-	HighLoadThreshold     float64 `json:"high_load_threshold"`
-	CriticalLoadThreshold float64 `json:"critical_load_threshold"`
+	BaseLimit      int64 `json:"base_limit"`
+	PeakLimit      int64 `json:"peak_limit"`
+	OffPeakLimit   int64 `json:"off_peak_limit"`
+	OffPeakStart   int   `json:"off_peak_start"`
+	OffPeakEnd     int   `json:"off_peak_end"`
+	EnableDynamic  bool  `json:"enable_dynamic"`
+	CooldownPeriod int   `json:"cooldown_period"`
 }
 
 func (h *AdvancedRateLimitHandler) GetAdaptiveConfig(c *gin.Context) {
@@ -57,19 +58,13 @@ func (h *AdvancedRateLimitHandler) UpdateAdaptiveConfig(c *gin.Context) {
 	}
 
 	config := service.AdaptiveRateLimitConfig{
-		BaseRate:               req.BaseRate,
-		BaseCapacity:           req.BaseCapacity,
-		MinCapacity:            req.MinCapacity,
-		MaxCapacity:           req.MaxCapacity,
-		HighLoadThreshold:      req.HighLoadThreshold,
-		CriticalLoadThreshold: req.CriticalLoadThreshold,
-	}
-
-	if req.LoadCheckInterval > 0 {
-		config.LoadCheckInterval = service.ParseDuration(req.LoadCheckInterval)
-	}
-	if req.AdjustmentInterval > 0 {
-		config.AdjustmentInterval = service.ParseDuration(req.AdjustmentInterval)
+		BaseLimit:      req.BaseLimit,
+		PeakLimit:      req.PeakLimit,
+		OffPeakLimit:   req.OffPeakLimit,
+		OffPeakStart:   req.OffPeakStart,
+		OffPeakEnd:     req.OffPeakEnd,
+		EnableDynamic:  req.EnableDynamic,
+		CooldownPeriod: time.Duration(req.CooldownPeriod) * time.Second,
 	}
 
 	h.adaptiveService.UpdateConfig(config)
@@ -82,11 +77,10 @@ func (h *AdvancedRateLimitHandler) GetAdaptiveStats(c *gin.Context) {
 }
 
 type DistributedRateLimitConfigRequest struct {
-	Type            string `json:"type"`
-	MaxRequests     int    `json:"max_requests"`
-	WindowSecs      int    `json:"window_secs"`
-	SyncInterval    int    `json:"sync_interval"`
-	ConsistencyMode bool   `json:"consistency_mode"`
+	RedisEnabled     bool   `json:"redis_enabled"`
+	ConsistencyLevel string `json:"consistency_level"`
+	Nodes            []string `json:"nodes"`
+	SyncInterval     int    `json:"sync_interval"`
 }
 
 func (h *AdvancedRateLimitHandler) GetDistributedConfig(c *gin.Context) {
@@ -112,31 +106,16 @@ func (h *AdvancedRateLimitHandler) UpdateDistributedConfig(c *gin.Context) {
 		return
 	}
 
-	var limitType service.DistributedRateLimitType
-	switch req.Type {
-	case "fixed_window":
-		limitType = service.DistributedFixedWindow
-	case "sliding_window":
-		limitType = service.DistributedSlidingWindow
-	case "token_bucket":
-		limitType = service.DistributedTokenBucket
-	case "leaky_bucket":
-		limitType = service.DistributedLeakyBucket
-	default:
-		limitType = service.DistributedTokenBucket
-	}
-
-	syncInterval := 5
+	syncInterval := 5 * time.Second
 	if req.SyncInterval > 0 {
-		syncInterval = req.SyncInterval
+		syncInterval = time.Duration(req.SyncInterval) * time.Second
 	}
 
 	config := service.DistributedRateLimitConfig{
-		Type:            limitType,
-		MaxRequests:     req.MaxRequests,
-		WindowSecs:      req.WindowSecs,
-		SyncInterval:    service.ParseDuration(syncInterval),
-		ConsistencyMode: req.ConsistencyMode,
+		RedisEnabled:     req.RedisEnabled,
+		ConsistencyLevel: req.ConsistencyLevel,
+		Nodes:            req.Nodes,
+		SyncInterval:    syncInterval,
 	}
 
 	h.distributedService.UpdateConfig(config)
@@ -165,10 +144,9 @@ func (h *AdvancedRateLimitHandler) ResetDistributedKey(c *gin.Context) {
 }
 
 type TokenBucketConfigRequest struct {
-	Rate          float64 `json:"rate"`
-	Capacity      float64 `json:"capacity"`
-	BurstSize     float64 `json:"burst_size"`
-	InitialTokens float64 `json:"initial_tokens"`
+	RefillRate   float64 `json:"refill_rate"`
+	Capacity     int64   `json:"capacity"`
+	RefillPerSec float64 `json:"refill_per_sec"`
 }
 
 func (h *AdvancedRateLimitHandler) GetTokenBucketStats(c *gin.Context) {
@@ -188,10 +166,10 @@ func (h *AdvancedRateLimitHandler) GetTokenBucketStats(c *gin.Context) {
 }
 
 type TokenBucketUpdateRequest struct {
-	Key      string  `json:"key" binding:"required"`
-	Rate     float64 `json:"rate"`
-	Capacity float64 `json:"capacity"`
-	BurstSize float64 `json:"burst_size"`
+	Key         string  `json:"key" binding:"required"`
+	RefillRate  float64 `json:"refill_rate"`
+	Capacity    int64   `json:"capacity"`
+	RefillPerSec float64 `json:"refill_per_sec"`
 }
 
 func (h *AdvancedRateLimitHandler) UpdateTokenBucketConfig(c *gin.Context) {
@@ -202,9 +180,9 @@ func (h *AdvancedRateLimitHandler) UpdateTokenBucketConfig(c *gin.Context) {
 	}
 
 	config := &service.TokenBucketConfig{
-		Rate:     req.Rate,
-		Capacity: req.Capacity,
-		BurstSize: req.BurstSize,
+		RefillRate:   req.RefillRate,
+		Capacity:     req.Capacity,
+		RefillPerSec: req.RefillPerSec,
 	}
 
 	if err := h.tokenBucketService.UpdateBucketConfig(req.Key, config); err != nil {
@@ -306,10 +284,15 @@ func (h *AdvancedRateLimitHandler) CheckRateLimit(c *gin.Context) {
 
 	switch req.Type {
 	case "adaptive":
-		var adaptiveResult *service.AdaptiveRateLimitResult
+		var adaptiveResult *service.AdvancedRateLimitResult
 		adaptiveResult, err = h.adaptiveService.CheckRateLimitWithTokens(ctx, req.Key, float64(req.Count))
 		if adaptiveResult != nil {
-			result = adaptiveResult
+			result = gin.H{
+				"allowed":     adaptiveResult.Allowed,
+				"remaining":   adaptiveResult.Remaining,
+				"reset_at":    adaptiveResult.ResetAt,
+				"retry_after": adaptiveResult.RetryAfter,
+			}
 		}
 	case "distributed":
 		var distResult *service.DistributedRateLimitResult
@@ -324,13 +307,17 @@ func (h *AdvancedRateLimitHandler) CheckRateLimit(c *gin.Context) {
 			}
 		}
 	case "token_bucket":
-		var tbResult *service.TokenBucketResult
+		var tbResult *service.AdvancedRateLimitResult
 		tbResult, err = h.tokenBucketService.CheckTokenBucketRateLimit(ctx, req.Key, &service.TokenBucketConfig{
-			Rate:     10,
-			Capacity: 100,
+			Capacity:   100,
+			RefillRate: 10,
 		})
 		if tbResult != nil {
-			result = tbResult
+			result = gin.H{
+				"allowed":     tbResult.Allowed,
+				"remaining":   tbResult.Remaining,
+				"reset_at":    tbResult.ResetAt,
+			}
 		}
 	default:
 		response.BadRequest(c, "invalid type, must be: adaptive, distributed, or token_bucket")

@@ -22,11 +22,12 @@ type TokenBucketRateLimitService struct {
 }
 
 type TokenBucket struct {
-	tokens        float64
-	lastRefill    time.Time
-	capacity      int64
-	refillRate    float64
-	maxTokens     float64
+	mu           sync.Mutex
+	tokens       float64
+	lastRefill   time.Time
+	capacity     int64
+	refillRate   float64
+	maxTokens    float64
 }
 
 type SlidingWindowConfig struct {
@@ -47,16 +48,25 @@ type SlidingWindow struct {
 	mu         sync.Mutex
 }
 
-type RateLimitConfig struct {
+type AdvancedRateLimitConfig struct {
 	MaxRequests int
 	WindowSecs  int
 }
 
-type RateLimitResult struct {
+type AdvancedRateLimitResult struct {
 	Allowed   bool
 	Remaining int
 	ResetAt   time.Time
 	RetryAfter int
+}
+
+type DistributedRateLimitResult struct {
+	Allowed   bool
+	Remaining int
+	ResetAt   time.Time
+	RetryAfter int
+	TotalCount int64
+	NodeID    string
 }
 
 type DistributedRateLimitConfig struct {
@@ -71,6 +81,7 @@ type DistributedRateLimitService struct {
 	redisEnabled bool
 	config       DistributedRateLimitConfig
 	nodeID       string
+	mu           sync.RWMutex
 }
 
 func NewTokenBucketRateLimitService() *TokenBucketRateLimitService {
@@ -183,7 +194,7 @@ func (s *TokenBucketRateLimitService) ResetAll() {
 	s.buckets = make(map[string]*TokenBucket)
 }
 
-func (s *TokenBucketRateLimitService) CheckIPTokenBucketLimit(ctx context.Context, ip string, config *TokenBucketConfig) (*RateLimitResult, error) {
+func (s *TokenBucketRateLimitService) CheckIPTokenBucketLimit(ctx context.Context, ip string, config *TokenBucketConfig) (*AdvancedRateLimitResult, error) {
 	key := "ip:" + ip
 
 	if config == nil {
@@ -241,7 +252,7 @@ func (s *TokenBucketRateLimitService) CheckIPTokenBucketLimit(ctx context.Contex
 		remaining = 0
 	}
 
-	return &RateLimitResult{
+	return &AdvancedRateLimitResult{
 		Allowed:    allowed,
 		Remaining:  remaining,
 		ResetAt:    now.Add(time.Duration(float64(config.Capacity)/config.RefillRate) * time.Second),
@@ -280,6 +291,106 @@ func (s *TokenBucketRateLimitService) GetStats() map[string]interface{} {
 		"buckets":       stats,
 		"config":         s.config,
 	}
+}
+
+func (s *TokenBucketRateLimitService) GetGlobalStats() map[string]interface{} {
+	return s.GetStats()
+}
+
+func (s *TokenBucketRateLimitService) GetBucketList() []map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	bucketList := make([]map[string]interface{}, 0, len(s.buckets))
+	for key, bucket := range s.buckets {
+		bucketList = append(bucketList, map[string]interface{}{
+			"key":         key,
+			"tokens":      bucket.tokens,
+			"capacity":    bucket.capacity,
+			"refill_rate": bucket.refillRate,
+		})
+	}
+	return bucketList
+}
+
+func (s *TokenBucketRateLimitService) GetBucketStats(key string) map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	bucket, exists := s.buckets[key]
+	if !exists {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"tokens":      bucket.tokens,
+		"capacity":    bucket.capacity,
+		"refill_rate": bucket.refillRate,
+		"last_refill": bucket.lastRefill,
+	}
+}
+
+func (s *TokenBucketRateLimitService) UpdateBucketConfig(key string, config *TokenBucketConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	bucket, exists := s.buckets[key]
+	if !exists {
+		bucket = &TokenBucket{
+			tokens:     float64(config.Capacity),
+			lastRefill: time.Now(),
+			capacity:   config.Capacity,
+			refillRate: config.RefillRate,
+			maxTokens:  float64(config.Capacity),
+		}
+		s.buckets[key] = bucket
+	} else {
+		bucket.capacity = config.Capacity
+		bucket.refillRate = config.RefillRate
+		bucket.maxTokens = float64(config.Capacity)
+	}
+
+	return nil
+}
+
+func (s *TokenBucketRateLimitService) ResetBucket(ctx context.Context, key string) error {
+	s.Reset(key)
+	return nil
+}
+
+func (s *TokenBucketRateLimitService) CheckTokenBucketRateLimit(ctx context.Context, key string, config *TokenBucketConfig) (*AdvancedRateLimitResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	bucket, exists := s.buckets[key]
+	if !exists {
+		bucket = &TokenBucket{
+			tokens:     float64(s.config.Capacity),
+			lastRefill: time.Now(),
+			capacity:   s.config.Capacity,
+			refillRate: s.config.RefillRate,
+			maxTokens:  float64(s.config.Capacity),
+		}
+		s.buckets[key] = bucket
+	}
+
+	bucket.refill()
+
+	if bucket.tokens >= 1 {
+		bucket.tokens--
+		return &AdvancedRateLimitResult{
+			Allowed:   true,
+			Remaining: int(bucket.tokens),
+			ResetAt:   time.Now().Add(time.Second),
+		}, nil
+	}
+
+	return &AdvancedRateLimitResult{
+		Allowed:    false,
+		Remaining:  0,
+		ResetAt:    time.Now().Add(time.Second),
+		RetryAfter: 1,
+	}, nil
 }
 
 func NewSlidingWindowRateLimitService() *SlidingWindowRateLimitService {
@@ -391,7 +502,7 @@ func (s *SlidingWindowRateLimitService) ResetAll() {
 	s.windows = make(map[string]*SlidingWindow)
 }
 
-func (s *SlidingWindowRateLimitService) CheckSlidingWindow(ctx context.Context, key string, maxRequests int64) (*RateLimitResult, error) {
+func (s *SlidingWindowRateLimitService) CheckSlidingWindow(ctx context.Context, key string, maxRequests int64) (*AdvancedRateLimitResult, error) {
 	s.mu.Lock()
 	window, exists := s.windows[key]
 	if !exists {
@@ -441,7 +552,7 @@ func (s *SlidingWindowRateLimitService) CheckSlidingWindow(ctx context.Context, 
 		}
 	}
 
-	return &RateLimitResult{
+	return &AdvancedRateLimitResult{
 		Allowed:    allowed,
 		Remaining:  int(remaining),
 		ResetAt:    resetAt,
@@ -559,7 +670,7 @@ func (s *DistributedRateLimitService) redisAllow(ctx context.Context, key string
 	return count <= maxRequests, nil
 }
 
-func (s *DistributedRateLimitService) Check(ctx context.Context, key string, maxRequests int64) (*RateLimitResult, error) {
+func (s *DistributedRateLimitService) Check(ctx context.Context, key string, maxRequests int64) (*AdvancedRateLimitResult, error) {
 	if !s.redisEnabled {
 		return s.localService.CheckSlidingWindow(ctx, key, maxRequests)
 	}
@@ -588,12 +699,75 @@ func (s *DistributedRateLimitService) Check(ctx context.Context, key string, max
 		}
 	}
 
-	return &RateLimitResult{
+	return &AdvancedRateLimitResult{
 		Allowed:    count < maxRequests,
 		Remaining:  int(remaining),
 		ResetAt:    resetAt,
 		RetryAfter: retryAfter,
 	}, nil
+}
+
+func (s *DistributedRateLimitService) CheckRateLimitWithCount(ctx context.Context, key string, count int) (*DistributedRateLimitResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := &DistributedRateLimitResult{
+		NodeID: s.nodeID,
+	}
+
+	if !s.redisEnabled {
+		localResult, err := s.localService.CheckSlidingWindow(ctx, key, int64(count))
+		if err != nil {
+			return nil, err
+		}
+		result.Allowed = localResult.Allowed
+		result.Remaining = localResult.Remaining
+		result.ResetAt = localResult.ResetAt
+		result.RetryAfter = localResult.RetryAfter
+		result.TotalCount = int64(count)
+		return result, nil
+	}
+
+	redisKey := fmt.Sprintf("ratelimit:distributed:%s", key)
+	windowKey := fmt.Sprintf("%s:%d", redisKey, time.Now().Truncate(time.Minute).Unix())
+
+	currentCount, err := redis.Client.Get(ctx, windowKey).Int64()
+	if err != nil && err.Error() != "redis: nil" {
+		localResult, err := s.localService.CheckSlidingWindow(ctx, key, int64(count))
+		if err != nil {
+			return nil, err
+		}
+		result.Allowed = localResult.Allowed
+		result.Remaining = localResult.Remaining
+		result.ResetAt = localResult.ResetAt
+		result.TotalCount = int64(count)
+		return result, nil
+	}
+
+	allowed := (currentCount + int64(count)) <= 100
+	remaining := 100 - currentCount - int64(count)
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	ttl, _ := redis.Client.TTL(ctx, windowKey).Result()
+	resetAt := time.Now().Add(ttl)
+
+	retryAfter := 0
+	if !allowed {
+		retryAfter = int(ttl.Seconds())
+		if retryAfter < 1 {
+			retryAfter = 1
+		}
+	}
+
+	result.Allowed = allowed
+	result.Remaining = int(remaining)
+	result.ResetAt = resetAt
+	result.RetryAfter = retryAfter
+	result.TotalCount = currentCount + int64(count)
+
+	return result, nil
 }
 
 func (s *DistributedRateLimitService) Reset(ctx context.Context, key string) error {
@@ -615,6 +789,10 @@ func (s *DistributedRateLimitService) Reset(ctx context.Context, key string) err
 	}
 
 	return nil
+}
+
+func (s *DistributedRateLimitService) ResetKey(ctx context.Context, key string) error {
+	return s.Reset(ctx, key)
 }
 
 func (s *DistributedRateLimitService) syncRoutine() {
@@ -655,12 +833,21 @@ func (s *DistributedRateLimitService) GetNodeID() string {
 }
 
 func (s *DistributedRateLimitService) GetStats() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return map[string]interface{}{
 		"redis_enabled":     s.redisEnabled,
 		"node_id":           s.nodeID,
 		"consistency_level": s.config.ConsistencyLevel,
 		"local_stats":       s.localService.GetStats(),
 	}
+}
+
+func (s *DistributedRateLimitService) UpdateConfig(config DistributedRateLimitConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.config = config
+	s.redisEnabled = config.RedisEnabled && redis.Client != nil
 }
 
 type LeakyBucketConfig struct {
@@ -747,6 +934,34 @@ type AdaptiveRateLimitService struct {
 	distributed *DistributedRateLimitService
 	config      AdaptiveRateLimitConfig
 	mu          sync.RWMutex
+	loadFactor  float64
+}
+
+type LoadLevel int
+
+const (
+	LoadLevelLow LoadLevel = iota
+	LoadLevelNormal
+	LoadLevelMedium
+	LoadLevelHigh
+	LoadLevelCritical
+)
+
+func (l LoadLevel) String() string {
+	switch l {
+	case LoadLevelLow:
+		return "low"
+	case LoadLevelNormal:
+		return "normal"
+	case LoadLevelMedium:
+		return "medium"
+	case LoadLevelHigh:
+		return "high"
+	case LoadLevelCritical:
+		return "critical"
+	default:
+		return "unknown"
+	}
 }
 
 type AdaptiveRateLimitConfig struct {
@@ -814,10 +1029,50 @@ func (s *AdaptiveRateLimitService) UpdateConfig(config AdaptiveRateLimitConfig) 
 }
 
 func (s *AdaptiveRateLimitService) GetStats() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return map[string]interface{}{
 		"token_bucket": s.tokenBucket.GetStats(),
 		"sliding_window": s.slidingWindow.GetStats(),
 		"distributed":  s.distributed.GetStats(),
 		"config":       s.config,
+		"load_factor":  s.loadFactor,
+	}
+}
+
+// CheckRateLimit 检查速率限制
+func (s *AdaptiveRateLimitService) CheckRateLimit(ctx context.Context, key string) (*AdvancedRateLimitResult, error) {
+	s.mu.RLock()
+	limit := s.calculateDynamicLimit()
+	s.mu.RUnlock()
+
+	return s.distributed.Check(ctx, key, limit)
+}
+
+// CheckRateLimitWithTokens 检查指定token数量的速率限制
+func (s *AdaptiveRateLimitService) CheckRateLimitWithTokens(ctx context.Context, key string, tokens float64) (*AdvancedRateLimitResult, error) {
+	return s.CheckRateLimit(ctx, key)
+}
+
+// GetLoadLevel 获取当前负载级别
+func (s *AdaptiveRateLimitService) GetLoadLevel() LoadLevel {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.loadFactor >= 0.9 {
+		return LoadLevelCritical
+	} else if s.loadFactor >= 0.7 {
+		return LoadLevelHigh
+	} else if s.loadFactor >= 0.5 {
+		return LoadLevelMedium
+	} else if s.loadFactor >= 0.3 {
+		return LoadLevelNormal
+	}
+	return LoadLevelLow
+}
+
+// Close 关闭服务
+func (s *AdaptiveRateLimitService) Close() {
+	if s.distributed != nil {
 	}
 }

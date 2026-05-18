@@ -694,7 +694,7 @@ func (pra *ProactiveRiskAssessor) isProxyIP(ip string) bool {
 func (pra *ProactiveRiskAssessor) isSuspiciousUserAgent(ua string) bool {
 	suspicious := []string{"curl", "wget", "python-requests", "scrapy", "bot"}
 	for _, s := range suspicious {
-		if len(ua) > len(s) && (ua[:len(s)] == s || len(ua) > 10 && contains(ua, s)) {
+		if len(ua) > len(s) && (ua[:len(s)] == s || len(ua) > 10 && containsSubstr(ua, s)) {
 			return true
 		}
 	}
@@ -1041,7 +1041,7 @@ func (s *BehaviorPredictionService) UpdateRiskThresholds(thresholds *RiskThresho
 	s.riskAssessor.globalThresholds = thresholds
 }
 
-func contains(s, substr string) bool {
+func containsSubstr(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true

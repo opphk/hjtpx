@@ -1,5 +1,7 @@
 /**
- * 行为验证系统 JavaScript SDK
+ * 行为验证系统 JavaScript SDK - 浏览器端完整版
+ *
+ * 提供浏览器环境下完整的验证码功能，支持多种集成模式
  */
 
 class CaptchaClient {
@@ -7,57 +9,61 @@ class CaptchaClient {
    * 创建验证码客户端
    * @param {string} baseURL - API基础URL
    * @param {Object} options - 配置选项
-   * @param {number} [options.timeout=30000] - 超时时间（毫秒）
-   * @param {string} [options.apiKey] - API密钥
    */
   constructor(baseURL, options = {}) {
     this.baseURL = baseURL;
     this.timeout = options.timeout || 30000;
     this.apiKey = options.apiKey;
+    this.retryCount = options.retryCount || 3;
+    this.retryDelay = options.retryDelay || 1000;
+    this._token = null;
   }
 
   /**
    * 发送请求
-   * @param {string} method - HTTP方法
-   * @param {string} path - API路径
-   * @param {Object} [data] - 请求数据
-   * @param {Object} [params] - URL参数
-   * @returns {Promise<Object>}
    * @private
    */
   async _request(method, path, data = null, params = null) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+    const url = new URL(`${this.baseURL}${path}`);
+
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          url.searchParams.append(key, value);
+        }
+      });
+    }
+
+    const options = {
+      method,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+
+    if (this.apiKey) {
+      options.headers['X-API-Key'] = this.apiKey;
+    }
+
+    if (this._token) {
+      options.headers['Authorization'] = `Bearer ${this._token}`;
+    }
+
+    if (data) {
+      options.body = JSON.stringify(data);
+    }
+
     try {
-      const url = new URL(`${this.baseURL}${path}`);
-      
-      if (params) {
-        Object.entries(params).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            url.searchParams.append(key, value);
-          }
-        });
-      }
-
-      const options = {
-        method,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      };
-
-      if (this.apiKey) {
-        options.headers['X-API-Key'] = this.apiKey;
-      }
-
-      if (data) {
-        options.body = JSON.stringify(data);
-      }
-
       const response = await fetch(url.toString(), options);
       clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw this._createError(response.status, response.statusText);
+      }
 
       const result = await response.json();
 
@@ -68,16 +74,28 @@ class CaptchaClient {
       return result.data;
     } catch (error) {
       clearTimeout(timeoutId);
+
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout');
+      }
+
       throw error;
     }
   }
 
   /**
+   * 创建错误对象
+   * @private
+   */
+  _createError(status, message) {
+    const error = new Error(message || 'Request failed');
+    error.status = status;
+    return error;
+  }
+
+  /**
    * 获取滑块验证码
    * @param {Object} options - 配置选项
-   * @param {number} [options.width=320] - 图片宽度
-   * @param {number} [options.height=160] - 图片高度
-   * @param {number} [options.tolerance=8] - 容差值
    * @returns {Promise<Object>}
    */
   async getSliderCaptcha(options = {}) {
@@ -92,22 +110,39 @@ class CaptchaClient {
   /**
    * 验证滑块验证码
    * @param {Object} data - 验证数据
-   * @param {string} data.session_id - 会话ID
-   * @param {number} data.x - X坐标
-   * @param {number} [data.y] - Y坐标
-   * @param {Array<Object>} [data.trajectory] - 轨迹数据
    * @returns {Promise<Object>}
    */
-  async verifyCaptcha(data) {
-    return await this._request('POST', '/api/v1/captcha/verify', data);
+  async verifySliderCaptcha(data) {
+    return await this._request('POST', '/api/v1/captcha/verify', {
+      type: 'slider',
+      ...data,
+    });
   }
 
   /**
    * 获取点击验证码
+   * @param {Object} options - 配置选项
    * @returns {Promise<Object>}
    */
-  async getClickCaptcha() {
-    return await this._request('GET', '/api/v1/captcha/click');
+  async getClickCaptcha(options = {}) {
+    const { mode = 'number', shuffle = true, points = 3 } = options;
+    return await this._request('GET', '/api/v1/captcha/click', null, {
+      mode,
+      shuffle: shuffle.toString(),
+      points: points.toString(),
+    });
+  }
+
+  /**
+   * 验证点击验证码
+   * @param {Object} data - 验证数据
+   * @returns {Promise<Object>}
+   */
+  async verifyClickCaptcha(data) {
+    return await this._request('POST', '/api/v1/captcha/verify', {
+      type: 'click',
+      ...data,
+    });
   }
 
   /**
@@ -121,12 +156,45 @@ class CaptchaClient {
   /**
    * 验证手势验证码
    * @param {Object} data - 验证数据
-   * @param {string} data.session_id - 会话ID
-   * @param {Array<number>} data.pattern - 手势模式
    * @returns {Promise<Object>}
    */
   async verifyGestureCaptcha(data) {
     return await this._request('POST', '/api/v1/captcha/gesture/verify', data);
+  }
+
+  /**
+   * 获取图形验证码
+   * @param {Object} options - 配置选项
+   * @returns {Promise<Object>}
+   */
+  async getImageCaptcha(options = {}) {
+    const { type = 'mixed', count = 4 } = options;
+    return await this._request('GET', '/api/v1/captcha/image', null, {
+      type,
+      count: count.toString(),
+    });
+  }
+
+  /**
+   * 验证图形验证码
+   * @param {string} challengeId - 挑战ID
+   * @param {string} answer - 用户答案
+   * @returns {Promise<Object>}
+   */
+  async verifyImageCaptcha(challengeId, answer) {
+    return await this._request('POST', '/api/v1/captcha/image/verify', {
+      challenge_id: challengeId,
+      answer,
+    });
+  }
+
+  /**
+   * 通用验证方法
+   * @param {Object} data - 验证数据
+   * @returns {Promise<Object>}
+   */
+  async verifyCaptcha(data) {
+    return await this._request('POST', '/api/v1/captcha/verify', data);
   }
 
   /**
@@ -146,42 +214,68 @@ class CaptchaClient {
   }
 
   /**
+   * 设置访问令牌
+   * @param {string} token - 访问令牌
+   */
+  setToken(token) {
+    this._token = token;
+  }
+
+  /**
    * 记录鼠标/触摸轨迹
    * @param {Function} onTrajectory - 轨迹回调
+   * @param {HTMLElement} element - 监听元素，默认document.body
    * @returns {Object} - 控制对象
    */
-  recordTrajectory(onTrajectory) {
+  recordTrajectory(onTrajectory, element = document.body) {
     let points = [];
     let startTime = Date.now();
+    let isRecording = false;
 
     const handleMove = (event) => {
+      if (!isRecording) return;
+
+      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+      const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
       const point = {
-        x: event.clientX,
-        y: event.clientY,
+        x: clientX,
+        y: clientY,
         t: Date.now() - startTime,
       };
       points.push(point);
-      
+
       if (onTrajectory) {
-        onTrajectory(points);
+        onTrajectory([...points]);
       }
     };
 
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('touchmove', (e) => {
-      const touch = e.touches[0];
-      handleMove({ clientX: touch.clientX, clientY: touch.clientY });
-    });
+    const startRecording = () => {
+      isRecording = true;
+      startTime = Date.now();
+      points = [];
+    };
+
+    const stopRecording = () => {
+      isRecording = false;
+      return [...points];
+    };
+
+    element.addEventListener('mousemove', handleMove);
+    element.addEventListener('touchmove', handleMove, { passive: true });
 
     return {
       getPoints: () => [...points],
+      start: startRecording,
+      stop: stopRecording,
       reset: () => {
         points = [];
         startTime = Date.now();
       },
-      stop: () => {
-        window.removeEventListener('mousemove', handleMove);
-        return [...points];
+      isRecording: () => isRecording,
+      destroy: () => {
+        element.removeEventListener('mousemove', handleMove);
+        element.removeEventListener('touchmove', handleMove);
       },
     };
   }
@@ -206,15 +300,12 @@ class UserAuth {
    */
   setToken(token) {
     this._token = token;
-    this.client.apiKey = token;
+    this.client.setToken(token);
   }
 
   /**
    * 用户注册
    * @param {Object} data - 注册数据
-   * @param {string} data.username - 用户名
-   * @param {string} data.email - 邮箱
-   * @param {string} data.password - 密码
    * @returns {Promise<Object>}
    */
   async register(data) {
@@ -224,9 +315,6 @@ class UserAuth {
   /**
    * 用户登录
    * @param {Object} data - 登录数据
-   * @param {string} data.username - 用户名
-   * @param {string} data.password - 密码
-   * @param {string} [data.captcha_token] - 验证码令牌
    * @returns {Promise<Object>}
    */
   async login(data) {
@@ -234,7 +322,7 @@ class UserAuth {
     if (result.access_token) {
       this._token = result.access_token;
       this._refreshToken = result.refresh_token;
-      this.client.apiKey = result.access_token;
+      this.client.setToken(result.access_token);
     }
     return result;
   }
@@ -253,7 +341,7 @@ class UserAuth {
       if (result.refresh_token) {
         this._refreshToken = result.refresh_token;
       }
-      this.client.apiKey = result.access_token;
+      this.client.setToken(result.access_token);
     }
     return result;
   }
@@ -266,7 +354,7 @@ class UserAuth {
     await this.client._request('POST', '/api/v1/auth/logout');
     this._token = null;
     this._refreshToken = null;
-    this.client.apiKey = null;
+    this.client.setToken(null);
   }
 
   /**
@@ -279,32 +367,12 @@ class UserAuth {
   }
 
   /**
-   * 重新发送验证邮件
-   * @param {string} email - 邮箱
-   * @returns {Promise<Object>}
-   */
-  async resendVerification(email) {
-    return await this.client._request('POST', '/api/v1/auth/resend-verification', { email });
-  }
-
-  /**
    * 请求重置密码
    * @param {string} email - 邮箱
    * @returns {Promise<Object>}
    */
   async requestPasswordReset(email) {
     return await this.client._request('POST', '/api/v1/auth/request-password-reset', { email });
-  }
-
-  /**
-   * 重置密码
-   * @param {Object} data - 重置数据
-   * @param {string} data.token - 重置令牌
-   * @param {string} data.new_password - 新密码
-   * @returns {Promise<Object>}
-   */
-  async resetPassword(data) {
-    return await this.client._request('POST', '/api/v1/auth/reset-password', data);
   }
 }
 
@@ -336,11 +404,11 @@ class Environment {
    */
   async injectDetectionScript(callback) {
     const script = await this.getDetectionScript(callback);
-    
+
     return new Promise((resolve, reject) => {
       const scriptElement = document.createElement('script');
       scriptElement.textContent = script;
-      
+
       if (callback) {
         window[callback] = (data) => {
           resolve(data);
@@ -397,7 +465,6 @@ class Environment {
       timezone_offset: new Date().getTimezoneOffset(),
     };
 
-    // WebGL信息
     try {
       const canvas = document.createElement('canvas');
       const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -408,21 +475,13 @@ class Environment {
       }
     } catch (e) {}
 
-    // 插件信息
     try {
       data.plugins = Array.from(navigator.plugins || []).map(p => p.name).join(',');
     } catch (e) {}
 
-    // 字体检测（简单版本）
     data.fonts = this.detectFonts();
-
-    // Canvas指纹
     data.canvas_hash = this.getCanvasFingerprint();
-
-    // 音频指纹
     data.audio_fingerprint = this.getAudioFingerprint();
-
-    // WebDriver检测
     data.is_webdriver = navigator.webdriver;
 
     return data;
@@ -452,10 +511,10 @@ class Environment {
 
       testFonts.forEach(testFont => {
         if (detected.includes(testFont)) return;
-        
+
         ctx.font = `${testSize} '${testFont}', ${baseFont}`;
         const testWidth = ctx.measureText(testString).width;
-        
+
         if (testWidth !== baseWidth) {
           detected.push(testFont);
         }
@@ -473,7 +532,7 @@ class Environment {
     try {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      
+
       ctx.textBaseline = 'alphabetic';
       ctx.fillStyle = '#f60';
       ctx.fillRect(125, 1, 62, 20);
@@ -483,7 +542,7 @@ class Environment {
       ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
       ctx.font = '18pt Arial';
       ctx.fillText('Cwm fjordbank glyphs vext quiz, 😃', 4, 45);
-      
+
       return canvas.toDataURL();
     } catch (e) {
       return '';
@@ -499,7 +558,7 @@ class Environment {
       const offlineContext = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
       const oscillator = offlineContext.createOscillator();
       const compressor = offlineContext.createDynamicsCompressor();
-      
+
       oscillator.type = 'triangle';
       oscillator.frequency.setValueAtTime(10000, offlineContext.currentTime);
       compressor.threshold.setValueAtTime(-50, offlineContext.currentTime);
@@ -507,11 +566,11 @@ class Environment {
       compressor.ratio.setValueAtTime(12, offlineContext.currentTime);
       compressor.attack.setValueAtTime(0, offlineContext.currentTime);
       compressor.release.setValueAtTime(0.25, offlineContext.currentTime);
-      
+
       oscillator.connect(compressor);
       compressor.connect(offlineContext.destination);
       oscillator.start();
-      
+
       return 'audio_supported';
     } catch (e) {
       return 'audio_not_supported';
@@ -519,70 +578,305 @@ class Environment {
   }
 }
 
-// 导出
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { CaptchaClient, UserAuth, Environment };
-} else if (typeof window !== 'undefined') {
-  window.CaptchaClient = CaptchaClient;
+/**
+ * UI组件：滑块验证码
+ */
+class SliderCaptchaWidget {
+  /**
+   * 创建滑块验证码组件
+   * @param {HTMLElement} container - 容器元素
+   * @param {CaptchaClient} client - 验证码客户端
+   * @param {Object} options - 配置选项
+   */
+  constructor(container, client, options = {}) {
+    this.container = container;
+    this.client = client;
+    this.options = options;
+    this.sessionId = null;
+    this.secretY = null;
+    this.isVerified = false;
+
+    this._init();
+  }
+
+  async _init() {
+    try {
+      const captcha = await this.client.getSliderCaptcha({
+        width: this.options.width || 320,
+        height: this.options.height || 160,
+        tolerance: this.options.tolerance || 8,
+      });
+
+      this.sessionId = captcha.session_id;
+      this.secretY = captcha.secret_y;
+
+      this._render(captcha);
+      this._bindEvents();
+    } catch (error) {
+      this.container.innerHTML = `<div class="captcha-error">加载验证码失败: ${error.message}</div>`;
+    }
+  }
+
+  _render(captcha) {
+    this.container.innerHTML = `
+      <div class="captcha-slider-widget">
+        <div class="captcha-image-container">
+          <img src="${captcha.image_url}" alt="验证码背景" class="captcha-bg" />
+          <div class="captcha-slider-track">
+            <div class="captcha-slider-thumb"></div>
+          </div>
+        </div>
+        <div class="captcha-controls">
+          <span class="captcha-hint">拖动滑块完成拼图</span>
+          <button class="captcha-refresh-btn">刷新</button>
+        </div>
+      </div>
+    `;
+
+    this.sliderElement = this.container.querySelector('.captcha-slider-thumb');
+    this.trackElement = this.container.querySelector('.captcha-slider-track');
+    this.refreshBtn = this.container.querySelector('.captcha-refresh-btn');
+  }
+
+  _bindEvents() {
+    let isDragging = false;
+    let startX = 0;
+    let currentX = 0;
+
+    const handleStart = (e) => {
+      if (this.isVerified) return;
+      isDragging = true;
+      startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+      this.sliderElement.classList.add('dragging');
+    };
+
+    const handleMove = (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+
+      const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+      currentX = clientX - startX;
+
+      const maxX = this.trackElement.offsetWidth - this.sliderElement.offsetWidth;
+      currentX = Math.max(0, Math.min(currentX, maxX));
+
+      this.sliderElement.style.left = `${currentX}px`;
+    };
+
+    const handleEnd = async () => {
+      if (!isDragging) return;
+      isDragging = false;
+      this.sliderElement.classList.remove('dragging');
+
+      const targetX = Math.round(currentX);
+
+      try {
+        const result = await this.client.verifySliderCaptcha({
+          session_id: this.sessionId,
+          x: targetX,
+          y: this.secretY,
+        });
+
+        if (result.success) {
+          this._onSuccess(result);
+        } else {
+          this._onFail(result.message);
+        }
+      } catch (error) {
+        this._onFail(error.message);
+      }
+    };
+
+    this.sliderElement.addEventListener('mousedown', handleStart);
+    this.sliderElement.addEventListener('touchstart', handleStart, { passive: true });
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('touchmove', handleMove, { passive: false });
+
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchend', handleEnd);
+
+    this.refreshBtn.addEventListener('click', () => {
+      this._init();
+    });
+  }
+
+  _onSuccess(result) {
+    this.isVerified = true;
+    this.container.querySelector('.captcha-slider-thumb').classList.add('success');
+    this.container.querySelector('.captcha-hint').textContent = '验证成功！';
+
+    if (this.options.onSuccess) {
+      this.options.onSuccess(result);
+    }
+  }
+
+  _onFail(message) {
+    this.container.querySelector('.captcha-hint').textContent = message || '验证失败，请重试';
+    this.sliderElement.style.left = '0';
+
+    if (this.options.onFail) {
+      this.options.onFail(message);
+    }
+  }
+
+  /**
+   * 重新加载验证码
+   */
+  reload() {
+    this.isVerified = false;
+    this._init();
+  }
 }
 
-// 使用示例
-if (typeof document !== 'undefined') {
+/**
+ * UI组件：点击验证码
+ */
+class ClickCaptchaWidget {
   /**
-   * 示例：滑块验证码完整流程
+   * 创建点击验证码组件
+   * @param {HTMLElement} container - 容器元素
+   * @param {CaptchaClient} client - 验证码客户端
+   * @param {Object} options - 配置选项
    */
-  async function sliderCaptchaExample() {
-    const client = new CaptchaClient('http://localhost:8080');
-    
+  constructor(container, client, options = {}) {
+    this.container = container;
+    this.client = client;
+    this.options = options;
+    this.sessionId = null;
+    this.hintOrder = [];
+    this.clicks = [];
+
+    this._init();
+  }
+
+  async _init() {
     try {
-      // 1. 获取验证码
-      const captcha = await client.getSliderCaptcha({
-        width: 320,
-        height: 160,
-        tolerance: 8,
+      const captcha = await this.client.getClickCaptcha({
+        mode: this.options.mode || 'number',
+        shuffle: this.options.shuffle !== false,
+        points: this.options.points || 3,
       });
-      
-      console.log('验证码获取成功:', captcha.session_id);
-      
-      // 2. 记录用户滑动轨迹
-      const trajectoryRecorder = client.recordTrajectory();
-      
-      // 3. 模拟用户滑动（实际应用中应该是用户真实操作）
-      const result = await client.verifyCaptcha({
-        session_id: captcha.session_id,
-        x: 185,
-        y: captcha.secret_y,
-        trajectory: trajectoryRecorder.stop(),
-      });
-      
-      console.log('验证结果:', result);
-      
-      if (result.success) {
-        alert('验证成功！');
-      } else {
-        alert('验证失败：' + result.message);
-      }
+
+      this.sessionId = captcha.session_id;
+      this.hintOrder = captcha.hint_order || [];
+      this.clicks = [];
+
+      this._render(captcha);
+      this._bindEvents();
     } catch (error) {
-      console.error('验证出错:', error);
+      this.container.innerHTML = `<div class="captcha-error">加载验证码失败: ${error.message}</div>`;
+    }
+  }
+
+  _render(captcha) {
+    this.container.innerHTML = `
+      <div class="captcha-click-widget">
+        <div class="captcha-image-container">
+          <img src="${captcha.image_url}" alt="验证码" class="captcha-img" />
+        </div>
+        <div class="captcha-hint-text">请按顺序点击: ${captcha.hint || ''}</div>
+        <div class="captcha-controls">
+          <button class="captcha-verify-btn">验证</button>
+          <button class="captcha-refresh-btn">刷新</button>
+        </div>
+      </div>
+    `;
+
+    this.imgElement = this.container.querySelector('.captcha-img');
+    this.verifyBtn = this.container.querySelector('.captcha-verify-btn');
+    this.refreshBtn = this.container.querySelector('.captcha-refresh-btn');
+  }
+
+  _bindEvents() {
+    this.imgElement.addEventListener('click', (e) => {
+      const rect = this.imgElement.getBoundingClientRect();
+      const x = Math.round(e.clientX - rect.left);
+      const y = Math.round(e.clientY - rect.top);
+
+      this.clicks.push([x, y]);
+
+      this._drawClickMarker(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    this.verifyBtn.addEventListener('click', async () => {
+      if (this.clicks.length === 0) {
+        return;
+      }
+
+      try {
+        const result = await this.client.verifyClickCaptcha({
+          session_id: this.sessionId,
+          points: this.clicks,
+          click_sequence: this.hintOrder,
+        });
+
+        if (result.success) {
+          this._onSuccess(result);
+        } else {
+          this._onFail(result.message);
+        }
+      } catch (error) {
+        this._onFail(error.message);
+      }
+    });
+
+    this.refreshBtn.addEventListener('click', () => {
+      this._init();
+    });
+  }
+
+  _drawClickMarker(x, y) {
+    const marker = document.createElement('div');
+    marker.className = 'click-marker';
+    marker.style.left = `${x}px`;
+    marker.style.top = `${y}px`;
+    marker.textContent = this.clicks.length;
+    this.imgElement.parentElement.appendChild(marker);
+  }
+
+  _onSuccess(result) {
+    this.verifyBtn.disabled = true;
+    this.container.querySelector('.captcha-hint-text').textContent = '验证成功！';
+
+    if (this.options.onSuccess) {
+      this.options.onSuccess(result);
+    }
+  }
+
+  _onFail(message) {
+    this.container.querySelector('.captcha-hint-text').textContent = message || '验证失败，请重试';
+    this.clicks = [];
+
+    const markers = this.container.querySelectorAll('.click-marker');
+    markers.forEach(m => m.remove());
+
+    if (this.options.onFail) {
+      this.options.onFail(message);
     }
   }
 
   /**
-   * 示例：用户登录流程
+   * 重新加载验证码
    */
-  async function loginExample() {
-    const client = new CaptchaClient('http://localhost:8080');
-    const auth = client.auth();
-    
-    try {
-      const loginResult = await auth.login({
-        username: 'testuser',
-        password: 'password123',
-      });
-      
-      console.log('登录成功:', loginResult);
-    } catch (error) {
-      console.error('登录失败:', error);
-    }
+  reload() {
+    this._init();
   }
+}
+
+// 导出
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    CaptchaClient,
+    UserAuth,
+    Environment,
+    SliderCaptchaWidget,
+    ClickCaptchaWidget,
+  };
+} else if (typeof window !== 'undefined') {
+  window.CaptchaClient = CaptchaClient;
+  window.UserAuth = UserAuth;
+  window.Environment = Environment;
+  window.SliderCaptchaWidget = SliderCaptchaWidget;
+  window.ClickCaptchaWidget = ClickCaptchaWidget;
 }

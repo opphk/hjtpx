@@ -6,504 +6,301 @@ interface TestResult {
   status: 'passed' | 'failed' | 'skipped';
   duration: number;
   error?: string;
-  screenshots?: string[];
-  consoleErrors?: string[];
 }
 
-interface SuiteResult {
+interface TestSuite {
   name: string;
   tests: TestResult[];
   duration: number;
 }
 
-interface ReportData {
-  generatedAt: string;
-  totalTests: number;
-  passed: number;
-  failed: number;
-  skipped: number;
-  duration: number;
-  suites: SuiteResult[];
-  consoleErrors: ConsoleError[];
+interface TestReport {
+  timestamp: string;
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    duration: number;
+  };
+  suites: TestSuite[];
   screenshots: string[];
   recommendations: string[];
 }
 
-interface ConsoleError {
-  message: string;
-  count: number;
-  pages: string[];
-}
-
-export class ReportGenerator {
+class ReportGenerator {
   private resultsDir: string;
+  private reportDir: string;
   private screenshotsDir: string;
 
-  constructor(
-    resultsDir: string = 'test-results',
-    screenshotsDir: string = 'test-screenshots'
-  ) {
-    this.resultsDir = resultsDir;
-    this.screenshotsDir = screenshotsDir;
-    this.ensureDirectories();
+  constructor() {
+    this.resultsDir = path.join(process.cwd(), 'test-results');
+    this.reportDir = path.join(process.cwd(), 'test-reports');
+    this.screenshotsDir = path.join(process.cwd(), 'test-screenshots');
+    
+    this.ensureDir(this.reportDir);
   }
 
-  private ensureDirectories(): void {
-    if (!fs.existsSync(this.resultsDir)) {
-      fs.mkdirSync(this.resultsDir, { recursive: true });
-    }
-    if (!fs.existsSync(this.screenshotsDir)) {
-      fs.mkdirSync(this.screenshotsDir, { recursive: true });
+  private ensureDir(dir: string): void {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
   }
 
-  async generateReport(): Promise<void> {
+  public generateReport(): TestReport {
     console.log('开始生成测试报告...');
-
-    const reportData = await this.collectTestData();
-    await this.saveHTMLReport(reportData);
-    await this.saveMarkdownReport(reportData);
-    await this.saveJSONReport(reportData);
-
-    console.log('测试报告生成完成！');
-    console.log(`HTML报告: ${path.join(this.resultsDir, 'e2e-test-report.html')}`);
-    console.log(`Markdown报告: ${path.join(this.resultsDir, 'e2e-test-report.md')}`);
-    console.log(`JSON报告: ${path.join(this.resultsDir, 'e2e-test-report.json')}`);
-  }
-
-  private async collectTestData(): Promise<ReportData> {
-    const jsonResults = await this.loadJSONResults();
-    const screenshots = this.loadScreenshots();
-    const consoleErrors = this.analyzeConsoleErrors();
-
-    return {
-      generatedAt: new Date().toISOString(),
-      totalTests: jsonResults.length,
-      passed: jsonResults.filter(r => r.status === 'passed').length,
-      failed: jsonResults.filter(r => r.status === 'failed').length,
-      skipped: jsonResults.filter(r => r.status === 'skipped').length,
-      duration: jsonResults.reduce((sum, r) => sum + (r.duration || 0), 0),
-      suites: this.groupTestsBySuite(jsonResults),
-      consoleErrors,
-      screenshots,
-      recommendations: this.generateRecommendations(jsonResults, consoleErrors)
-    };
-  }
-
-  private async loadJSONResults(): Promise<any[]> {
-    const jsonPath = path.join(this.resultsDir, 'results.json');
     
-    if (!fs.existsSync(jsonPath)) {
-      console.log('未找到results.json，使用空数据');
-      return [];
-    }
-
-    try {
-      const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-      return data.stats?.tests || [];
-    } catch (error) {
-      console.error('读取results.json失败:', error);
-      return [];
-    }
+    const testResults = this.loadTestResults();
+    const screenshots = this.getScreenshots();
+    const report = this.createReport(testResults, screenshots);
+    
+    this.saveReport(report);
+    this.saveHTMLReport(report);
+    
+    console.log(`测试报告已生成: ${path.join(this.reportDir, 'test-report.json')}`);
+    console.log(`HTML报告已生成: ${path.join(this.reportDir, 'test-report.html')}`);
+    
+    return report;
   }
 
-  private loadScreenshots(): string[] {
+  private loadTestResults(): any {
+    const resultsFile = path.join(this.resultsDir, 'results.json');
+    
+    if (fs.existsSync(resultsFile)) {
+      const content = fs.readFileSync(resultsFile, 'utf-8');
+      return JSON.parse(content);
+    }
+    
+    return { stats: { total: 0, passed: 0, failed: 0, skipped: 0 } };
+  }
+
+  private getScreenshots(): string[] {
     if (!fs.existsSync(this.screenshotsDir)) {
       return [];
     }
-
-    const files = fs.readdirSync(this.screenshotsDir);
-    return files
-      .filter(f => f.endsWith('.png'))
-      .map(f => path.join(this.screenshotsDir, f))
-      .sort()
-      .reverse()
-      .slice(0, 20);
+    
+    return fs.readdirSync(this.screenshotsDir)
+      .filter(file => file.endsWith('.png'))
+      .map(file => path.join(this.screenshotsDir, file));
   }
 
-  private analyzeConsoleErrors(): ConsoleError[] {
-    const errorMap = new Map<string, ConsoleError>();
+  private createReport(testResults: any, screenshots: string[]): TestReport {
+    const stats = testResults.stats || { total: 0, passed: 0, failed: 0, skipped: 0 };
     
-    const reportFiles = fs.readdirSync(this.screenshotsDir)
-      .filter(f => f.includes('-state.json'));
+    const report: TestReport = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        total: stats.total,
+        passed: stats.passed,
+        failed: stats.failed,
+        skipped: stats.skipped,
+        duration: stats.duration || 0
+      },
+      suites: this.extractSuites(testResults),
+      screenshots: screenshots.map(s => path.basename(s)),
+      recommendations: this.generateRecommendations(stats)
+    };
     
-    for (const file of reportFiles) {
-      try {
-        const content = JSON.parse(
-          fs.readFileSync(path.join(this.screenshotsDir, file), 'utf-8')
-        );
-        
-        if (content.consoleErrors) {
-          for (const error of content.consoleErrors) {
-            const existing = errorMap.get(error);
-            if (existing) {
-              existing.count++;
-              if (!existing.pages.includes(content.url)) {
-                existing.pages.push(content.url);
-              }
-            } else {
-              errorMap.set(error, {
-                message: error,
-                count: 1,
-                pages: [content.url]
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`读取${file}失败:`, error);
-      }
-    }
-
-    return Array.from(errorMap.values())
-      .sort((a, b) => b.count - a.count);
+    return report;
   }
 
-  private groupTestsBySuite(results: any[]): SuiteResult[] {
-    const suites = new Map<string, SuiteResult>();
+  private extractSuites(testResults: any): TestSuite[] {
+    const suites: TestSuite[] = [];
     
-    for (const result of results) {
-      const suiteName = result.title?.split(' ')[0] || 'Unknown';
-      
-      if (!suites.has(suiteName)) {
-        suites.set(suiteName, {
-          name: suiteName,
-          tests: [],
-          duration: 0
+    if (testResults.suites) {
+      for (const suite of testResults.suites) {
+        suites.push({
+          name: suite.title || 'Unknown Suite',
+          tests: suite.specs?.map((spec: any) => ({
+            title: spec.title,
+            status: this.mapStatus(spec.ok),
+            duration: spec.tests?.[0]?.results?.[0]?.duration || 0,
+            error: spec.tests?.[0]?.results?.[0]?.error?.message
+          })) || [],
+          duration: suite.specs?.reduce((sum: number, spec: any) => 
+            sum + (spec.tests?.[0]?.results?.[0]?.duration || 0), 0) || 0
         });
       }
-      
-      const suite = suites.get(suiteName)!;
-      suite.tests.push({
-        title: result.title,
-        status: result.status,
-        duration: result.duration || 0,
-        error: result.error
-      });
-      suite.duration += result.duration || 0;
     }
-
-    return Array.from(suites.values());
+    
+    return suites;
   }
 
-  private generateRecommendations(results: any[], errors: ConsoleError[]): string[] {
+  private mapStatus(ok: boolean | undefined): 'passed' | 'failed' | 'skipped' {
+    if (ok === undefined) return 'skipped';
+    return ok ? 'passed' : 'failed';
+  }
+
+  private generateRecommendations(stats: any): string[] {
     const recommendations: string[] = [];
-
-    const failedTests = results.filter(r => r.status === 'failed');
-    if (failedTests.length > 0) {
-      recommendations.push(`有${failedTests.length}个测试失败，建议检查相关功能`);
+    
+    if (stats.failed > 0) {
+      recommendations.push('存在失败的测试用例，需要修复后再继续开发');
     }
-
-    if (errors.length > 0) {
-      recommendations.push(`检测到${errors.length}种不同的控制台错误，建议修复`);
+    
+    if (stats.duration > 60000) {
+      recommendations.push('测试执行时间较长，建议优化测试性能');
     }
-
-    const slowTests = results.filter(r => r.duration > 30000);
-    if (slowTests.length > 0) {
-      recommendations.push(`有${slowTests.length}个测试执行时间超过30秒，可能需要优化`);
+    
+    if (stats.passed > 0 && stats.failed === 0) {
+      recommendations.push('所有测试通过！系统基本功能运行正常');
     }
-
-    if (recommendations.length === 0) {
-      recommendations.push('所有测试通过，控制台无错误');
-    }
-
+    
+    recommendations.push('建议定期执行E2E测试，确保系统稳定性');
+    recommendations.push('建议添加更多边界条件和异常场景测试');
+    
     return recommendations;
   }
 
-  private async saveHTMLReport(data: ReportData): Promise<void> {
-    const html = this.generateHTML(data);
-    const filepath = path.join(this.resultsDir, 'e2e-test-report.html');
+  private saveReport(report: TestReport): void {
+    const filename = `test-report-${new Date().toISOString().split('T')[0]}.json`;
+    const filepath = path.join(this.reportDir, filename);
+    
+    fs.writeFileSync(filepath, JSON.stringify(report, null, 2), 'utf-8');
+  }
+
+  private saveHTMLReport(report: TestReport): void {
+    const html = this.generateHTML(report);
+    const filename = `test-report-${new Date().toISOString().split('T')[0]}.html`;
+    const filepath = path.join(this.reportDir, filename);
+    
     fs.writeFileSync(filepath, html, 'utf-8');
   }
 
-  private generateHTML(data: ReportData): string {
-    const passRate = data.totalTests > 0 
-      ? ((data.passed / data.totalTests) * 100).toFixed(1) 
-      : '0';
+  private generateHTML(report: TestReport): string {
+    const passRate = report.summary.total > 0 
+      ? ((report.summary.passed / report.summary.total) * 100).toFixed(2)
+      : '0.00';
 
-    return `<!DOCTYPE html>
+    return `
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>E2E测试报告</title>
+  <title>E2E测试报告 - ${report.timestamp}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    .header {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    h1 {
-      color: #333;
-      margin-bottom: 10px;
-    }
-    .summary {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-    .stat-card {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .stat-card h3 {
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 10px;
-    }
-    .stat-card .value {
-      font-size: 32px;
-      font-weight: bold;
-      color: #333;
-    }
-    .stat-card.passed .value { color: #10b981; }
-    .stat-card.failed .value { color: #ef4444; }
-    .stat-card.skipped .value { color: #f59e0b; }
-    .section {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .section h2 {
-      color: #333;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #e5e5e5;
-    }
-    .test-item {
-      padding: 15px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-      background: #f9fafb;
-    }
-    .test-item.passed { border-left: 4px solid #10b981; }
-    .test-item.failed { border-left: 4px solid #ef4444; }
-    .test-item.skipped { border-left: 4px solid #f59e0b; }
-    .test-title {
-      font-weight: 500;
-      color: #333;
-      margin-bottom: 5px;
-    }
-    .test-duration {
-      font-size: 12px;
-      color: #666;
-    }
-    .test-error {
-      margin-top: 10px;
-      padding: 10px;
-      background: #fee;
-      border-radius: 4px;
-      color: #c00;
-      font-size: 12px;
-    }
-    .recommendations {
-      background: #f0f9ff;
-      padding: 20px;
-      border-radius: 8px;
-    }
-    .recommendations ul {
-      list-style: none;
-      padding: 0;
-    }
-    .recommendations li {
-      padding: 10px 0;
-      border-bottom: 1px solid #e5e5e5;
-      color: #333;
-    }
-    .recommendations li:last-child {
-      border-bottom: none;
-    }
-    .screenshot-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 15px;
-    }
-    .screenshot-item {
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .screenshot-item img {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-    .error-list {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-    .error-item {
-      padding: 15px;
-      background: #fef2f2;
-      border-radius: 6px;
-      margin-bottom: 10px;
-    }
-    .error-message {
-      font-weight: 500;
-      color: #991b1b;
-      margin-bottom: 5px;
-    }
-    .error-meta {
-      font-size: 12px;
-      color: #666;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      color: #666;
-      font-size: 12px;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px 8px 0 0; }
+    .header h1 { font-size: 28px; margin-bottom: 10px; }
+    .header .timestamp { opacity: 0.9; font-size: 14px; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 30px; }
+    .stat-card { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }
+    .stat-card.passed { background: #d4edda; }
+    .stat-card.failed { background: #f8d7da; }
+    .stat-card .number { font-size: 36px; font-weight: bold; margin-bottom: 5px; }
+    .stat-card .label { color: #666; font-size: 14px; }
+    .content { padding: 30px; }
+    .section { margin-bottom: 30px; }
+    .section h2 { font-size: 20px; margin-bottom: 15px; color: #333; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+    .test-list { list-style: none; }
+    .test-item { padding: 15px; margin-bottom: 10px; background: #f8f9fa; border-radius: 5px; border-left: 4px solid #ddd; }
+    .test-item.passed { border-left-color: #28a745; }
+    .test-item.failed { border-left-color: #dc3545; }
+    .test-item .title { font-weight: 500; margin-bottom: 5px; }
+    .test-item .meta { font-size: 12px; color: #666; }
+    .test-item .error { color: #dc3545; font-size: 12px; margin-top: 5px; }
+    .screenshot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
+    .screenshot-item { background: #f8f9fa; padding: 10px; border-radius: 5px; text-align: center; }
+    .screenshot-item img { width: 100%; height: auto; border-radius: 5px; margin-bottom: 10px; }
+    .screenshot-item .name { font-size: 12px; color: #666; }
+    .recommendations { background: #e7f3ff; padding: 20px; border-radius: 5px; border-left: 4px solid #2196F3; }
+    .recommendations ul { margin-left: 20px; }
+    .recommendations li { margin-bottom: 10px; line-height: 1.6; }
+    .pass-rate { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+    .pass-rate .rate { font-size: 48px; font-weight: bold; }
+    .pass-rate .label { font-size: 14px; opacity: 0.9; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>E2E自动化测试报告</h1>
-      <p>生成时间: ${new Date(data.generatedAt).toLocaleString('zh-CN')}</p>
+      <h1>E2E测试报告</h1>
+      <div class="timestamp">生成时间: ${report.timestamp}</div>
     </div>
-
+    
     <div class="summary">
       <div class="stat-card">
-        <h3>总测试数</h3>
-        <div class="value">${data.totalTests}</div>
+        <div class="number">${report.summary.total}</div>
+        <div class="label">总测试数</div>
       </div>
       <div class="stat-card passed">
-        <h3>通过</h3>
-        <div class="value">${data.passed}</div>
+        <div class="number">${report.summary.passed}</div>
+        <div class="label">通过</div>
       </div>
       <div class="stat-card failed">
-        <h3>失败</h3>
-        <div class="value">${data.failed}</div>
-      </div>
-      <div class="stat-card skipped">
-        <h3>跳过</h3>
-        <div class="value">${data.skipped}</div>
+        <div class="number">${report.summary.failed}</div>
+        <div class="label">失败</div>
       </div>
       <div class="stat-card">
-        <h3>通过率</h3>
-        <div class="value">${passRate}%</div>
-      </div>
-      <div class="stat-card">
-        <h3>总耗时</h3>
-        <div class="value">${(data.duration / 1000).toFixed(1)}s</div>
+        <div class="number">${(report.summary.duration / 1000).toFixed(2)}s</div>
+        <div class="label">总耗时</div>
       </div>
     </div>
-
-    <div class="section">
-      <h2>测试建议</h2>
-      <div class="recommendations">
-        <ul>
-          ${data.recommendations.map(r => `<li>${r}</li>`).join('')}
-        </ul>
+    
+    <div class="content">
+      <div class="pass-rate">
+        <div class="rate">${passRate}%</div>
+        <div class="label">测试通过率</div>
       </div>
-    </div>
-
-    ${data.consoleErrors.length > 0 ? `
-    <div class="section">
-      <h2>控制台错误 (${data.consoleErrors.length})</h2>
-      <div class="error-list">
-        ${data.consoleErrors.slice(0, 10).map(err => `
-          <div class="error-item">
-            <div class="error-message">${err.message}</div>
-            <div class="error-meta">
-              出现次数: ${err.count} | 影响页面: ${err.pages.length}
-            </div>
+      
+      <div class="section">
+        <h2>测试套件</h2>
+        ${report.suites.map(suite => `
+          <div style="margin-bottom: 20px;">
+            <h3 style="color: #667eea; margin-bottom: 10px;">${suite.name}</h3>
+            <ul class="test-list">
+              ${suite.tests.map(test => `
+                <li class="test-item ${test.status}">
+                  <div class="title">${test.title}</div>
+                  <div class="meta">状态: ${test.status === 'passed' ? '✅ 通过' : test.status === 'failed' ? '❌ 失败' : '⏭️ 跳过'} | 耗时: ${(test.duration / 1000).toFixed(2)}s</div>
+                  ${test.error ? `<div class="error">错误: ${test.error}</div>` : ''}
+                </li>
+              `).join('')}
+            </ul>
           </div>
         `).join('')}
       </div>
-    </div>
-    ` : ''}
-
-    <div class="section">
-      <h2>测试截图 (最近20张)</h2>
-      <div class="screenshot-grid">
-        ${data.screenshots.map(s => `
-          <div class="screenshot-item">
-            <img src="${path.relative(this.resultsDir, s)}" alt="screenshot">
-            <div style="padding: 10px; font-size: 12px; color: #666;">
-              ${path.basename(s)}
-            </div>
+      
+      <div class="section">
+        <h2>截图证据 (${report.screenshots.length}张)</h2>
+        ${report.screenshots.length > 0 ? `
+          <div class="screenshot-grid">
+            ${report.screenshots.map(screenshot => `
+              <div class="screenshot-item">
+                <div class="name">${screenshot}</div>
+              </div>
+            `).join('')}
           </div>
-        `).join('')}
+        ` : '<p>暂无截图</p>'}
       </div>
-    </div>
-
-    <div class="footer">
-      <p>本报告由自动化测试系统生成 | E2E Test Report</p>
+      
+      <div class="section">
+        <h2>建议</h2>
+        <div class="recommendations">
+          <ul>
+            ${report.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
     </div>
   </div>
 </body>
-</html>`;
-  }
-
-  private async saveMarkdownReport(data: ReportData): Promise<void> {
-    const markdown = this.generateMarkdown(data);
-    const filepath = path.join(this.resultsDir, 'e2e-test-report.md');
-    fs.writeFileSync(filepath, markdown, 'utf-8');
-  }
-
-  private generateMarkdown(data: ReportData): string {
-    return `# E2E自动化测试报告
-
-## 测试概览
-
-- **生成时间**: ${new Date(data.generatedAt).toLocaleString('zh-CN')}
-- **总测试数**: ${data.totalTests}
-- **通过**: ${data.passed} ✅
-- **失败**: ${data.failed} ❌
-- **跳过**: ${data.skipped} ⏭️
-- **通过率**: ${data.totalTests > 0 ? ((data.passed / data.totalTests) * 100).toFixed(1) : 0}%
-- **总耗时**: ${(data.duration / 1000).toFixed(1)}秒
-
-## 测试建议
-
-${data.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
-
-${data.consoleErrors.length > 0 ? `
-
-## 控制台错误分析
-
-发现 ${data.consoleErrors.length} 种不同的控制台错误：
-
-${data.consoleErrors.slice(0, 10).map(err => 
-  `- **${err.message}** (出现 ${err.count} 次，影响 ${err.pages.length} 个页面)`
-).join('\n')}
-` : ''}
-
-## 测试截图
-
-已捕获 ${data.screenshots.length} 张测试截图，保存在 \`test-screenshots/\` 目录。
-
----
-
-*本报告由自动化测试系统生成*
-`;
-  }
-
-  private async saveJSONReport(data: ReportData): Promise<void> {
-    const filepath = path.join(this.resultsDir, 'e2e-test-report.json');
-    fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf-8');
+</html>
+    `.trim();
   }
 }
 
 if (require.main === module) {
   const generator = new ReportGenerator();
-  generator.generateReport().catch(console.error);
+  const report = generator.generateReport();
+  console.log('\n测试报告摘要:');
+  console.log(`总测试数: ${report.summary.total}`);
+  console.log(`通过: ${report.summary.passed}`);
+  console.log(`失败: ${report.summary.failed}`);
+  console.log(`通过率: ${((report.summary.passed / report.summary.total) * 100).toFixed(2)}%`);
 }
+
+export { ReportGenerator, TestReport, TestSuite, TestResult };

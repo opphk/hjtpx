@@ -403,9 +403,11 @@ Extracts raw image bytes from a base64 data URI.
 
 ## Error Handling
 
-The SDK provides comprehensive error handling utilities:
+The SDK provides comprehensive error handling utilities for robust production use.
 
 ### Error Types
+
+The SDK defines the following error types:
 
 ```go
 var (
@@ -421,65 +423,355 @@ var (
 )
 ```
 
-### Error Utilities
+### SDKError Structure
+
+The `SDKError` struct provides detailed error information:
 
 ```go
-// Check if an error is an SDKError
-func IsSDKError(err error) bool
-
-// Get the error code from an SDKError
-func GetSDKErrorCode(err error) int
+type SDKError struct {
+    Code    int       // HTTP status code or custom error code
+    Message string    // Human-readable error message
+    Err     error     // Underlying error (optional)
+}
 ```
 
-### Example
+### Error Utilities
+
+The SDK provides the following utility functions:
 
 ```go
-// Using simple client
-client := sdk.NewClient(sdk.WithAPIKey("app-id"), sdk.WithAPISecret("app-secret"))
-defer client.Close()
+// IsSDKError checks if an error is an SDKError
+func IsSDKError(err error) bool
 
-result, err := client.GenerateImageCaptcha(nil)
-if err != nil {
+// GetSDKErrorCode extracts the error code from an SDKError
+func GetSDKErrorCode(err error) int
+
+// WrapError wraps an error with code and message
+func WrapError(code int, message string, err error) error
+
+// ClassifyError classifies HTTP errors into specific error types
+func ClassifyError(statusCode int, responseBody string) error
+
+// IsRetryableError checks if an error should trigger a retry
+func IsRetryableError(err error) bool
+```
+
+### Complete Error Handling Examples
+
+#### Basic Error Handling
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func main() {
+    client := sdk.NewCaptchaClient("app-id", "app-secret", nil)
+    defer client.Close()
+
+    result, err := client.GenerateSliderCaptcha()
+    if err != nil {
+        fmt.Printf("Error: %v\n", err)
+        return
+    }
+    fmt.Printf("Success: %s\n", result.ChallengeID)
+}
+```
+
+#### Detailed Error Handling with Code Classification
+
+```go
+package main
+
+import (
+    "fmt"
+    "net/http"
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func handleError(err error) {
+    if err == nil {
+        return
+    }
+
+    fmt.Printf("Error occurred: %v\n", err)
+
     if sdk.IsSDKError(err) {
         code := sdk.GetSDKErrorCode(err)
+        fmt.Printf("Error code: %d\n", code)
+
         switch code {
-        case 401:
-            fmt.Println("Unauthorized - check credentials")
-        case 429:
-            fmt.Println("Rate limited - wait before retry")
-        case 500:
-            fmt.Println("Server error - try again later")
+        case http.StatusUnauthorized:
+            fmt.Println("Action: Check your API credentials")
+        case http.StatusTooManyRequests:
+            fmt.Println("Action: Wait before retrying, check rate limits")
+        case http.StatusInternalServerError:
+            fmt.Println("Action: Server issue, retry later")
+        case http.StatusBadRequest:
+            fmt.Println("Action: Fix request parameters")
+        case http.StatusServiceUnavailable:
+            fmt.Println("Action: Service temporarily unavailable")
+        case 0:
+            fmt.Println("Action: Check network connectivity")
         default:
-            fmt.Printf("SDK Error %d: %v\n", code, err)
+            fmt.Printf("Action: Handle error code %d appropriately\n", code)
         }
     } else {
-        fmt.Printf("Network error: %v\n", err)
+        fmt.Println("Action: Check network or system errors")
     }
-    return
 }
 
-// Using advanced client
-client := sdk.NewCaptchaClient("app-id", "app-secret", cfg)
-defer client.Close()
+func main() {
+    client := sdk.NewCaptchaClient("app-id", "app-secret", nil)
+    defer client.Close()
 
-result, err := client.GenerateSliderCaptcha()
-if err != nil {
-    if sdk.IsSDKError(err) {
-        code := sdk.GetSDKErrorCode(err)
-        switch code {
-        case 401:
-            fmt.Println("Unauthorized - check credentials")
-        case 429:
-            fmt.Println("Rate limited - wait before retry")
-        case 500:
-            fmt.Println("Server error - try again later")
-        default:
-            fmt.Printf("SDK Error %d: %v\n", code, err)
+    _, err := client.GenerateSliderCaptcha()
+    handleError(err)
+}
+```
+
+#### Error Classification and Retry Logic
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func requestWithRetry(client *sdk.CaptchaClient, maxAttempts int) error {
+    var lastErr error
+
+    for attempt := 1; attempt <= maxAttempts; attempt++ {
+        result, err := client.GenerateSliderCaptcha()
+        if err == nil {
+            fmt.Printf("Success on attempt %d: %s\n", attempt, result.ChallengeID)
+            return nil
+        }
+
+        lastErr = err
+
+        if !sdk.IsRetryableError(err) {
+            fmt.Printf("Non-retryable error on attempt %d: %v\n", attempt, err)
+            return err
+        }
+
+        if attempt < maxAttempts {
+            delay := sdk.RetryStrategy(attempt, 100*time.Millisecond)
+            fmt.Printf("Retryable error on attempt %d, retrying in %v...\n", attempt, delay)
+            time.Sleep(delay)
+        }
+    }
+
+    return fmt.Errorf("all %d attempts failed: %v", maxAttempts, lastErr)
+}
+
+func main() {
+    cfg := &sdk.Config{
+        MaxRetries: 3,
+        RetryDelay: 100 * time.Millisecond,
+    }
+
+    client := sdk.NewCaptchaClient("app-id", "app-secret", cfg)
+    defer client.Close()
+
+    if err := requestWithRetry(client, 3); err != nil {
+        fmt.Printf("All attempts failed: %v\n", err)
+    }
+}
+```
+
+#### Error Wrapping with Context
+
+```go
+package main
+
+import (
+    "fmt"
+    "errors"
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func generateCaptchaWithContext(client *sdk.CaptchaClient, captchaType string) error {
+    var result interface{}
+    var err error
+
+    switch captchaType {
+    case "slider":
+        result, err = client.GenerateSliderCaptcha()
+    case "click":
+        result, err = client.GenerateClickCaptcha()
+    case "image":
+        result, err = client.GenerateImageCaptcha(nil)
+    default:
+        return fmt.Errorf("unsupported captcha type: %s", captchaType)
+    }
+
+    if err != nil {
+        if sdk.IsSDKError(err) {
+            return fmt.Errorf("failed to generate %s captcha (code %d): %w",
+                captchaType, sdk.GetSDKErrorCode(err), err)
+        }
+        return fmt.Errorf("failed to generate %s captcha: %w", captchaType, err)
+    }
+
+    fmt.Printf("Generated %s captcha: %v\n", captchaType, result)
+    return nil
+}
+
+func main() {
+    client := sdk.NewCaptchaClient("app-id", "app-secret", nil)
+    defer client.Close()
+
+    types := []string{"slider", "click", "image", "unknown"}
+
+    for _, captchaType := range types {
+        if err := generateCaptchaWithContext(client, captchaType); err != nil {
+            fmt.Printf("Error for %s: %v\n", captchaType, err)
+
+            if errors.Is(err, sdk.ErrInvalidParams) {
+                fmt.Println("  -> Invalid parameters provided")
+            }
+        }
+    }
+}
+```
+
+#### Verification Error Handling
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func verifyWithDetailedErrors(client *sdk.CaptchaClient, sessionID string, answer string) {
+    result, err := client.VerifySliderCaptcha(sessionID, answer)
+    if err != nil {
+        fmt.Printf("Verification error: %v\n", err)
+
+        if sdk.IsSDKError(err) {
+            code := sdk.GetSDKErrorCode(err)
+            switch code {
+            case 400:
+                fmt.Println("  -> Invalid request format")
+            case 401:
+                fmt.Println("  -> Authentication required")
+            case 404:
+                fmt.Println("  -> Session not found or expired")
+            case 429:
+                fmt.Println("  -> Too many verification attempts")
+            default:
+                fmt.Printf("  -> Server error (code: %d)\n", code)
+            }
+        }
+        return
+    }
+
+    if result.Success {
+        fmt.Printf("Verification successful! Score: %.2f\n", result.Score)
+        if result.RiskLevel != "" {
+            fmt.Printf("Risk level: %s\n", result.RiskLevel)
         }
     } else {
-        fmt.Printf("Network error: %v\n", err)
+        fmt.Printf("Verification failed: %s\n", result.Message)
+        if result.RiskLevel != "" {
+            fmt.Printf("Risk assessment: %s\n", result.RiskLevel)
+        }
     }
-    return
+}
+
+func main() {
+    client := sdk.NewCaptchaClient("app-id", "app-secret", nil)
+    defer client.Close()
+
+    result, _ := client.GenerateSliderCaptcha()
+    if result != nil {
+        verifyWithDetailedErrors(client, result.ChallengeID, "120")
+    }
+}
+```
+
+### Error Status Codes
+
+The SDK defines the following status codes:
+
+```go
+const (
+    StatusOK               = 0      // Success
+    StatusInvalidParams    = 400    // Bad request
+    StatusUnauthorized     = 401    // Authentication required
+    StatusForbidden        = 403    // Access denied
+    StatusNotFound         = 404    // Resource not found
+    StatusMethodNotAllowed = 405    // HTTP method not allowed
+    StatusTimeout          = 408    // Request timeout
+    StatusConflict         = 409    // Conflict
+    StatusRateLimited      = 429    // Rate limit exceeded
+    StatusInternalError    = 500    // Internal server error
+    StatusBadGateway       = 502    // Bad gateway
+    StatusUnavailable      = 503    // Service unavailable
+    StatusTimeoutError     = 504    // Gateway timeout
+)
+```
+
+### Error Handling Best Practices
+
+1. **Always check errors**: Always handle errors returned from SDK methods
+2. **Use appropriate error types**: Use specific error checks for different scenarios
+3. **Implement retry logic**: Use `IsRetryableError` for transient failures
+4. **Log errors with context**: Include session IDs and request details in logs
+5. **Set timeouts**: Configure appropriate timeouts to avoid hanging requests
+6. **Monitor error rates**: Track error patterns for system health
+
+## Complete Examples
+
+### Example 1: Simple Image Captcha Workflow
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+
+    "github.com/hjtpx/hjtpx/sdk/go"
+)
+
+func main() {
+    client := sdk.NewClient(
+        sdk.WithAPIKey("your-api-key"),
+        sdk.WithAPISecret("your-api-secret"),
+        sdk.WithEndpoint("http://localhost:8080"),
+        sdk.WithTimeout(30*time.Second),
+    )
+    defer client.Close()
+
+    captcha, err := client.GenerateImageCaptcha(&sdk.ImageCaptchaRequest{
+        Type:  sdk.CaptchaTypeMixed,
+        Count: 4,
+    })
+    if err != nil {
+        fmt.Printf("Generation failed: %v\n", err)
+        return
+    }
+    fmt.Printf("Image Captcha: %s\n", captcha.ChallengeID)
+
+    verifyResp, err := client.VerifyImageCaptcha(&sdk.VerifyImageCaptchaRequest{
+        ChallengeID: captcha.ChallengeID,
+        Answer:     "user-input",
+    })
+    if err != nil {
+        fmt.Printf("Verification failed: %v\n", err)
+        return
+    }
+    fmt.Printf("Verification: %v\n", verifyResp.Success)
 }
 ```
 

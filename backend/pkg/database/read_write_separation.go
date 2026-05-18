@@ -43,6 +43,8 @@ type SlaveHealthChecker struct {
 	mu            sync.RWMutex
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
+	failoverEnabled bool
+	maxFailCount    int
 }
 
 type SlaveStatus struct {
@@ -121,11 +123,13 @@ func InitReadWriteSeparation(cfg *config.Config) error {
 
 func NewSlaveHealthChecker(router *DBRouter, interval time.Duration) *SlaveHealthChecker {
 	return &SlaveHealthChecker{
-		dbRouter:    router,
-		interval:   interval,
-		enabled:    true,
-		slaveStatus: make(map[int]*SlaveStatus),
-		stopCh:     make(chan struct{}),
+		dbRouter:        router,
+		interval:       interval,
+		enabled:        true,
+		slaveStatus:    make(map[int]*SlaveStatus),
+		stopCh:        make(chan struct{}),
+		failoverEnabled: true,
+		maxFailCount:    3,
 	}
 }
 
@@ -137,6 +141,18 @@ func (shc *SlaveHealthChecker) Start() {
 func (shc *SlaveHealthChecker) Stop() {
 	close(shc.stopCh)
 	shc.wg.Wait()
+}
+
+func (shc *SlaveHealthChecker) SetFailoverEnabled(enabled bool) {
+	shc.mu.Lock()
+	defer shc.mu.Unlock()
+	shc.failoverEnabled = enabled
+}
+
+func (shc *SlaveHealthChecker) SetMaxFailCount(count int) {
+	shc.mu.Lock()
+	defer shc.mu.Unlock()
+	shc.maxFailCount = count
 }
 
 func (shc *SlaveHealthChecker) checkLoop() {
@@ -151,8 +167,50 @@ func (shc *SlaveHealthChecker) checkLoop() {
 			return
 		case <-ticker.C:
 			shc.checkAllSlaves()
+			if shc.failoverEnabled {
+				shc.evaluateFailover()
+			}
 		}
 	}
+}
+
+func (shc *SlaveHealthChecker) evaluateFailover() {
+	shc.mu.RLock()
+	defer shc.mu.RUnlock()
+
+	for i, status := range shc.slaveStatus {
+		if status.FailCount >= shc.maxFailCount && status.Healthy {
+			log.Printf("[HEALTH_CHECKER] 从库 %d 失败次数超过阈值(%d)，标记为不健康", i, shc.maxFailCount)
+			shc.mu.RUnlock()
+			shc.markUnhealthy(i)
+			shc.mu.RLock()
+		}
+	}
+}
+
+func (shc *SlaveHealthChecker) markUnhealthy(index int) {
+	shc.mu.Lock()
+	defer shc.mu.Unlock()
+
+	if status, exists := shc.slaveStatus[index]; exists {
+		status.Healthy = false
+		shc.slaveStatus[index] = status
+	}
+
+	log.Printf("[HEALTH_CHECKER] 从库 %d 已标记为不健康", index)
+}
+
+func (shc *SlaveHealthChecker) markHealthy(index int) {
+	shc.mu.Lock()
+	defer shc.mu.Unlock()
+
+	if status, exists := shc.slaveStatus[index]; exists {
+		status.Healthy = true
+		status.FailCount = 0
+		shc.slaveStatus[index] = status
+	}
+
+	log.Printf("[HEALTH_CHECKER] 从库 %d 已恢复健康", index)
 }
 
 func (shc *SlaveHealthChecker) checkAllSlaves() {
