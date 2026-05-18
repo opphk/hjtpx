@@ -183,12 +183,23 @@ func NewModelUpdateService() *ModelUpdateService {
 }
 
 func (s *ModelUpdateService) Start(ctx context.Context) {
+	s.mu.Lock()
+	s.stopChan = make(chan struct{})
+	s.mu.Unlock()
+
 	s.wg.Add(1)
 	go s.healthCheckLoop(ctx)
 }
 
 func (s *ModelUpdateService) Stop() {
-	close(s.stopChan)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	select {
+	case <-s.stopChan:
+	default:
+		close(s.stopChan)
+	}
 	s.wg.Wait()
 }
 
@@ -645,6 +656,12 @@ func (s *ModelUpdateService) TriggerRollback(ctx context.Context, modelType stri
 
 	history := s.versionHistory[modelType]
 	for i := len(history) - 2; i >= 0; i-- {
+		v := history[i]
+		if v.Status == ModelStatusStable || v.Status == ModelStatusActive {
+			rollbackVersion = v
+			break
+		}
+	}
 
 	if rollbackVersion == nil {
 		for i := len(history) - 2; i >= 0; i-- {
@@ -773,9 +790,11 @@ func (s *ModelUpdateService) RegisterRollbackCallback(modelType string, callback
 func (s *ModelUpdateService) UpdateConfig(cfg *UpdateConfig) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if cfg.AutoRollbackEnabled {
-		s.config.AutoRollbackEnabled = cfg.AutoRollbackEnabled
-	}
+	s.updateConfigInternal(cfg)
+}
+
+func (s *ModelUpdateService) updateConfigInternal(cfg *UpdateConfig) {
+	s.config.AutoRollbackEnabled = cfg.AutoRollbackEnabled
 	if cfg.RollbackThresholdAccuracy > 0 {
 		s.config.RollbackThresholdAccuracy = cfg.RollbackThresholdAccuracy
 	}

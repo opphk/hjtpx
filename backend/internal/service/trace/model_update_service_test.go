@@ -542,6 +542,17 @@ func TestModelUpdateService_AutoRollback(t *testing.T) {
 	})
 
 	t.Run("Auto Rollback With Low Accuracy", func(t *testing.T) {
+		regOld := ModelRegistration{
+			ModelType: "auto-rollback-test",
+			VersionID:  "ar-v0",
+			ModelPath:  "/models/auto/ar-v0",
+			Checksum:   "chk-ar0",
+			CreatedBy:  "test",
+		}
+		_, _ = service.RegisterModel(ctx, regOld)
+		_, _ = service.ActivateVersion(ctx, "auto-rollback-test", "ar-v0")
+		_ = service.MarkVersionStable(ctx, "auto-rollback-test", "ar-v0")
+
 		service.UpdateConfig(&UpdateConfig{
 			AutoRollbackEnabled:       true,
 			RollbackThresholdAccuracy: 0.5,

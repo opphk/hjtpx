@@ -733,7 +733,7 @@ func (g *MLRuleGenerator) ruleMatchesScenario(rule *Rule, scenario *RiskScenario
 
 	ruleDescLower := toLower(rule.Description)
 	for _, keyword := range scenario.Keywords {
-		if contains(ruleDescLower, toLower(keyword)) {
+		if stringContains(ruleDescLower, toLower(keyword)) {
 			return true
 		}
 	}
@@ -753,7 +753,7 @@ func toLower(s string) string {
 	return string(result)
 }
 
-func contains(s, substr string) bool {
+func stringContains(s, substr string) bool {
 	if len(substr) == 0 {
 		return true
 	}

@@ -586,7 +586,7 @@ func TestVerifyCodeSignature(t *testing.T) {
 }
 
 func TestObfuscationOptions(t *testing.T) {
-	opts := NewObfuscationOptions()
+	opts := NewObfuscatorOptions()
 	if opts.Seed != 12345 {
 		t.Error("Default seed should be 12345")
 	}

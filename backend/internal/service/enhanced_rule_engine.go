@@ -1672,7 +1672,7 @@ func (ere *EnhancedRuleEngine) ExportMLRules() []*Rule {
 
 	for _, rule := range ere.rules {
 		mlRule := ConvertEnhancedRuleToMLRule(rule)
-		if mlRule.GeneratedFrom == "converted" || contains(rule.Name, "ml_") {
+		if mlRule.GeneratedFrom == "converted" || stringContains(rule.Name, "ml_") {
 			rules = append(rules, mlRule)
 		}
 	}

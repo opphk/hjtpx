@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -634,7 +635,6 @@ func TestChecksumVerification(t *testing.T) {
 
 func TestMarkerProtectionUniqueness(t *testing.T) {
 	code := `function test() { return true; }`
-	secret := "marker-secret"
 
 	result1 := GenerateMarkerProtection(HashCode(code), 5)
 	result2 := GenerateMarkerProtection(HashCode(code), 5)
