@@ -9,6 +9,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"log"
 	"math"
 	"math/rand"
 	"net/http"
@@ -1521,7 +1522,7 @@ func VerifyCaptcha(c *gin.Context) {
 	}
 
 	if err := db.Create(verification).Error; err != nil {
-		fmt.Printf("Failed to save verification: %v\n", err)
+		log.Printf("Failed to save verification: %v", err)
 	}
 
 	logEntry := &models.VerificationLog{
@@ -1538,7 +1539,7 @@ func VerifyCaptcha(c *gin.Context) {
 	}
 
 	if err := db.Create(logEntry).Error; err != nil {
-		fmt.Printf("Failed to save verification log: %v\n", err)
+		log.Printf("Failed to save verification log: %v", err)
 	}
 
 	message := "验证失败"

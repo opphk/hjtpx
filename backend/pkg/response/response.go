@@ -1,6 +1,7 @@
 package response
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,14 @@ func Error(c *gin.Context, httpStatus int, message string) {
 		Code:    httpStatus,
 		Message: message,
 	})
+}
+
+// ErrorWithLog 错误响应并记录日志
+func ErrorWithLog(c *gin.Context, httpStatus int, message string, err error) {
+	if err != nil {
+		log.Printf("[ERROR] %s: %v (Path: %s, Method: %s)", message, err, c.Request.URL.Path, c.Request.Method)
+	}
+	Error(c, httpStatus, message)
 }
 
 // BadRequest 400错误

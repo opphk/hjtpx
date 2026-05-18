@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"strings"
 	"time"
 
@@ -74,16 +75,18 @@ func recordLoginLog(db *gorm.DB, adminID uint, ip, userAgent, status, failReason
 	if db == nil {
 		return
 	}
-	log := models.AdminLoginLog{
+	loginLog := models.AdminLoginLog{
 		AdminID:   adminID,
 		IPAddress: ip,
 		UserAgent: userAgent,
 		Status:    status,
 	}
 	if failReason != "" {
-		log.FailReason = failReason
+		loginLog.FailReason = failReason
 	}
-	db.Create(&log)
+	if err := db.Create(&loginLog).Error; err != nil {
+		log.Printf("Failed to record login log: %v", err)
+	}
 }
 
 func updateAdminLogin(db *gorm.DB, adminID uint, ip string) {
@@ -91,10 +94,12 @@ func updateAdminLogin(db *gorm.DB, adminID uint, ip string) {
 		return
 	}
 	now := time.Now()
-	db.Model(&models.Admin{}).Where("id = ?", adminID).Updates(map[string]interface{}{
+	if err := db.Model(&models.Admin{}).Where("id = ?", adminID).Updates(map[string]interface{}{
 		"last_login_at": now,
 		"last_login_ip": ip,
-	})
+	}).Error; err != nil {
+		log.Printf("Failed to update admin login info: %v", err)
+	}
 }
 
 // Login 管理员登录

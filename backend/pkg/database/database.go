@@ -234,8 +234,8 @@ func GetPoolStats() (*PoolStats, error) {
 }
 
 func Close() error {
-	if router != nil {
-		router.Close()
+	if DB == nil {
+		return nil
 	}
 
 	sqlDB, err := DB.DB()
