@@ -5,9 +5,9 @@ server:
 postgres:
   host: localhost
   port: 5432
-  user: postgres
-  password: hjtpx_secure_pass_2024
-  db_name: hjtpx_db
+  user: captcha
+  password: captcha_password
+  db_name: captcha_db
   sslmode: disable
   max_open_conns: 100
   max_idle_conns: 20

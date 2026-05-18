@@ -65,6 +65,10 @@ type FaultToleranceResult struct {
 	FallThroughCount  int      `json:"fall_through_count"`
 	PartialMatchCount int      `json:"partial_match_count"`
 	MissDetails       []string `json:"miss_details"`
+	EdgeHitCount      int      `json:"edge_hit_count"`
+	EdgeTolerance     float64  `json:"edge_tolerance"`
+	SmartTolerance    bool     `json:"smart_tolerance"`
+	ContextAware      bool     `json:"context_aware"`
 }
 
 type ClickPatternAnalysis struct {
@@ -100,6 +104,10 @@ type TimingAnalysis struct {
 	HesitationTimes  []float64 `json:"hesitation_times"`
 	TimingPattern    string    `json:"timing_pattern"`
 	IsRhythmic       bool      `json:"is_rhythmic"`
+	ClickSpeedVariation float64 `json:"click_speed_variation"`
+	IsHumanLike      bool      `json:"is_human_like"`
+	IntervalCoefficientOfVariation float64 `json:"interval_coefficient_of_variation"`
+	AccelerationPattern string  `json:"acceleration_pattern"`
 }
 
 type AccuracyAnalysis struct {
@@ -390,6 +398,13 @@ func (ca *ClickAnalyzer) analyzeTiming(verification *ClickVerification) *TimingA
 	if len(timing.ResponseTimes) > 0 {
 		timing.AverageDuration = ca.mean(timing.ResponseTimes)
 		timing.DurationVariance = ca.variance(timing.ResponseTimes)
+		
+		mean := timing.AverageDuration
+		if mean > 0 {
+			timing.IntervalCoefficientOfVariation = math.Sqrt(timing.DurationVariance) / mean
+		}
+		
+		timing.ClickSpeedVariation = timing.DurationVariance / (mean * mean + 1)
 	}
 
 	if len(verification.Clicks) > 0 {
@@ -400,8 +415,71 @@ func (ca *ClickAnalyzer) analyzeTiming(verification *ClickVerification) *TimingA
 
 	timing.TimingPattern = ca.classifyTimingPattern(timing)
 	timing.IsRhythmic = ca.isTimingRhythmic(timing)
+	
+	timing.IsHumanLike = ca.isHumanLikeTiming(timing)
+	timing.AccelerationPattern = ca.analyzeAccelerationPattern(verification.Clicks)
 
 	return timing
+}
+
+func (ca *ClickAnalyzer) isHumanLikeTiming(timing *TimingAnalysis) bool {
+	if timing == nil {
+		return false
+	}
+	
+	if timing.IntervalCoefficientOfVariation > 0.5 && timing.IntervalCoefficientOfVariation < 2.0 {
+		return true
+	}
+	
+	if timing.AverageDuration < 100 || timing.AverageDuration > 5000 {
+		return false
+	}
+	
+	return timing.ClickSpeedVariation < 3.0
+}
+
+func (ca *ClickAnalyzer) analyzeAccelerationPattern(clicks []ClickData) string {
+	if len(clicks) < 3 {
+		return "unknown"
+	}
+	
+	speeds := make([]float64, len(clicks)-1)
+	for i := 1; i < len(clicks); i++ {
+		dx := float64(clicks[i].X - clicks[i-1].X)
+		dy := float64(clicks[i].Y - clicks[i-1].Y)
+		dt := float64(clicks[i].Timestamp - clicks[i-1].Timestamp)
+		if dt > 0 {
+			distance := math.Sqrt(dx*dx + dy*dy)
+			speeds[i-1] = distance / dt * 1000
+		}
+	}
+	
+	if len(speeds) < 2 {
+		return "uniform"
+	}
+	
+	accelerations := make([]float64, len(speeds)-1)
+	for i := 1; i < len(speeds); i++ {
+		accelerations[i-1] = speeds[i] - speeds[i-1]
+	}
+	
+	positiveCount := 0
+	negativeCount := 0
+	for _, acc := range accelerations {
+		if acc > 0 {
+			positiveCount++
+		} else {
+			negativeCount++
+		}
+	}
+	
+	if positiveCount > negativeCount*2 {
+		return "accelerating"
+	} else if negativeCount > positiveCount*2 {
+		return "decelerating"
+	} else {
+		return "variable"
+	}
 }
 
 func (ca *ClickAnalyzer) calculateResponseTimes(clicks []ClickData) []float64 {
@@ -520,39 +598,21 @@ func (ca *ClickAnalyzer) analyzeMultiTarget(verification *ClickVerification) *Mu
 	analysis.TargetCount = len(verification.TargetImages)
 	analysis.ClickCount = len(verification.Clicks)
 
+	costMatrix := ca.buildCostMatrix(verification.Clicks, verification.TargetImages)
+	optimalMatching := ca.hungarianAlgorithm(costMatrix)
+
 	hitTargets := make([]bool, len(verification.TargetImages))
 	correctSequence := make([]int, 0)
 	missedTargets := make([]int, 0)
 	errorPatterns := make([]string, 0)
 
-	for _, click := range verification.Clicks {
-		bestMatch := -1
-		bestDistance := math.MaxFloat64
-
-		for tIdx, target := range verification.TargetImages {
-			if hitTargets[tIdx] {
-				continue
-			}
-
-			targetCenterX := float64(target.X) + float64(target.Width)/2
-			targetCenterY := float64(target.Y) + float64(target.Height)/2
-			dx := float64(click.X) - targetCenterX
-			dy := float64(click.Y) - targetCenterY
-			distance := math.Sqrt(dx*dx + dy*dy)
-
-			hitRadius := float64(target.Width+target.Height) / 4
-
-			if distance <= hitRadius && distance < bestDistance {
-				bestMatch = tIdx
-				bestDistance = distance
-			}
-		}
-
-		if bestMatch >= 0 {
-			hitTargets[bestMatch] = true
-			correctSequence = append(correctSequence, bestMatch)
+	for clickIdx, targetIdx := range optimalMatching {
+		if targetIdx >= 0 && targetIdx < len(verification.TargetImages) {
+			hitTargets[targetIdx] = true
+			correctSequence = append(correctSequence, targetIdx)
 		} else {
-			errorPatterns = append(errorPatterns, fmt.Sprintf("点击(%d,%d)未命中任何目标", click.X, click.Y))
+			errorPatterns = append(errorPatterns, fmt.Sprintf("点击(%d,%d)未匹配到目标",
+				verification.Clicks[clickIdx].X, verification.Clicks[clickIdx].Y))
 		}
 	}
 
@@ -580,12 +640,139 @@ func (ca *ClickAnalyzer) analyzeMultiTarget(verification *ClickVerification) *Mu
 	return analysis
 }
 
+func (ca *ClickAnalyzer) buildCostMatrix(clicks []ClickData, targets []TargetImage) [][]float64 {
+	n := len(clicks)
+	m := len(targets)
+	costMatrix := make([][]float64, n)
+	
+	for i := 0; i < n; i++ {
+		costMatrix[i] = make([]float64, m)
+		for j := 0; j < m; j++ {
+			targetCenterX := float64(targets[j].X) + float64(targets[j].Width)/2
+			targetCenterY := float64(targets[j].Y) + float64(targets[j].Height)/2
+			dx := float64(clicks[i].X) - targetCenterX
+			dy := float64(clicks[i].Y) - targetCenterY
+			distance := math.Sqrt(dx*dx + dy*dy)
+			
+			hitRadius := float64(targets[j].Width+targets[j].Height) / 4
+			if distance <= hitRadius {
+				costMatrix[i][j] = distance
+			} else {
+				costMatrix[i][j] = distance * 2
+			}
+		}
+	}
+	
+	return costMatrix
+}
+
+func (ca *ClickAnalyzer) hungarianAlgorithm(costMatrix [][]float64) []int {
+	n := len(costMatrix)
+	if n == 0 {
+		return []int{}
+	}
+	m := len(costMatrix[0])
+	if m == 0 {
+		return make([]int, n)
+	}
+
+	match := make([]int, n)
+	for i := range match {
+		match[i] = -1
+	}
+
+	usedTargets := make([]bool, m)
+	
+	for {
+		dist := make([]float64, m)
+		parent := make([]int, m)
+		visited := make([]bool, m)
+		
+		for i := range dist {
+			dist[i] = math.MaxFloat64
+			parent[i] = -1
+			visited[i] = false
+		}
+		
+		queue := make([]int, 0)
+		for i := 0; i < n; i++ {
+			if match[i] < 0 {
+				queue = append(queue, i)
+				dist[i] = 0
+			}
+		}
+		
+		for len(queue) > 0 {
+			clickIdx := queue[0]
+			queue = queue[1:]
+			
+			for targetIdx := 0; targetIdx < m; targetIdx++ {
+				cost := costMatrix[clickIdx][targetIdx]
+				newDist := dist[clickIdx] + cost
+				
+				if newDist < dist[targetIdx] {
+					dist[targetIdx] = newDist
+					parent[targetIdx] = clickIdx
+					if !visited[targetIdx] {
+						visited[targetIdx] = true
+						queue = append(queue, targetIdx)
+					}
+				}
+			}
+		}
+		
+		target := -1
+		for t := 0; t < m; t++ {
+			if !usedTargets[t] && parent[t] >= 0 {
+				if target < 0 || dist[t] < dist[target] {
+					target = t
+				}
+			}
+		}
+		
+		if target < 0 {
+			break
+		}
+		
+		for cur := target; cur >= 0; {
+			prev := parent[cur]
+			if prev < 0 {
+				break
+			}
+			nextMatch := match[prev]
+			match[prev] = cur
+			usedTargets[cur] = true
+			cur = nextMatch
+		}
+	}
+	
+	usedTargets = make([]bool, m)
+	for i := 0; i < n; i++ {
+		if match[i] >= 0 && !usedTargets[match[i]] {
+			usedTargets[match[i]] = true
+		} else if match[i] >= 0 {
+			for j := 0; j < m; j++ {
+				if !usedTargets[j] {
+					match[i] = j
+					usedTargets[j] = true
+					break
+				}
+			}
+		}
+	}
+	
+	return match
+}
+
 func (ca *ClickAnalyzer) analyzeFaultTolerance(verification *ClickVerification) *FaultToleranceResult {
 	result := &FaultToleranceResult{
 		Enabled:           true,
 		ToleranceRadius:   25.0,
 		NearMissTolerance: 35.0,
 		MissDetails:       make([]string, 0),
+		EdgeTolerance:     5.0,
+		SmartTolerance:    true,
+		ContextAware:      true,
 	}
 
 	if len(verification.Clicks) == 0 || len(verification.TargetImages) == 0 {
@@ -595,9 +782,10 @@ func (ca *ClickAnalyzer) analyzeFaultTolerance(verification *ClickVerification) 
 
 	nearMissCount := 0
 	partialMatchCount := 0
+	edgeHitCount := 0
 
 	for _, click := range verification.Clicks {
-		_ = -1
+		bestMatchIdx := -1
 		bestDistance := math.MaxFloat64
 
 		for tIdx, target := range verification.TargetImages {
@@ -609,7 +797,17 @@ func (ca *ClickAnalyzer) analyzeFaultTolerance(verification *ClickVerification) 
 
 			if distance < bestDistance {
 				bestDistance = distance
-				_ = tIdx
+				bestMatchIdx = tIdx
+			}
+		}
+
+		if bestMatchIdx >= 0 {
+			target := verification.TargetImages[bestMatchIdx]
+			isEdgeHit := ca.checkEdgeHit(click, target)
+			if isEdgeHit {
+				edgeHitCount++
+				result.MissDetails = append(result.MissDetails,
+					fmt.Sprintf("点击(%d,%d)命中目标边缘，偏移%.1f像素", click.X, click.Y, bestDistance))
 			}
 		}
 
@@ -627,10 +825,39 @@ func (ca *ClickAnalyzer) analyzeFaultTolerance(verification *ClickVerification) 
 	result.NearMissClicks = nearMissCount
 	result.PartialMatchCount = partialMatchCount
 	result.FallThroughCount = partialMatchCount
+	result.EdgeHitCount = edgeHitCount
 
-	result.AcceptedAsValid = nearMissCount <= 1 && partialMatchCount == 0
+	maxNearMissAllowed := 1
+	if len(verification.TargetImages) > 4 {
+		maxNearMissAllowed = 2
+	}
+	result.AcceptedAsValid = nearMissCount <= maxNearMissAllowed && partialMatchCount == 0
 
 	return result
+}
+
+func (ca *ClickAnalyzer) checkEdgeHit(click ClickData, target TargetImage) bool {
+	targetLeft := float64(target.X)
+	targetRight := float64(target.X) + float64(target.Width)
+	targetTop := float64(target.Y)
+	targetBottom := float64(target.Y) + float64(target.Height)
+
+	clickX := float64(click.X)
+	clickY := float64(click.Y)
+
+	distToLeft := math.Abs(clickX - targetLeft)
+	distToRight := math.Abs(clickX - targetRight)
+	distToTop := math.Abs(clickY - targetTop)
+	distToBottom := math.Abs(clickY - targetBottom)
+
+	minDist := math.Min(math.Min(distToLeft, distToRight), math.Min(distToTop, distToBottom))
+
+	return minDist <= ca.calculateEdgeTolerance(target)
+}
+
+func (ca *ClickAnalyzer) calculateEdgeTolerance(target TargetImage) float64 {
+	avgSize := float64(target.Width+target.Height) / 2
+	return avgSize * 0.2
 }
 
 func (cm *ClickMLModel) Predict(result *ClickAnalysisResult) float64 {
