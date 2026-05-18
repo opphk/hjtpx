@@ -355,7 +355,7 @@ func (m *MetricsCollector) GetSystemStatus() map[string]interface{} {
 		"cpu":       cpuStatus,
 		"memory":    memStatus,
 		"disk":      diskStatus,
-		"uptime":    m.systemMetrics.Uptime.String(),
+		"uptime":    m.systemMetrics.Uptime,
 		"procs":     m.systemMetrics.Procs,
 		"load_avg":  m.systemMetrics.LoadAvg,
 		"timestamp": time.Now().Unix(),

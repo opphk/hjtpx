@@ -1,3 +1,5 @@
+// Package middleware 提供HTTP中间件
+// 该包包含各种中间件功能,如HTTPS重定向、安全头、CORS、速率限制等
 package middleware
 
 import (

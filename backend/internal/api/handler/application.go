@@ -2,7 +2,6 @@ package handler
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hjtpx/hjtpx/internal/service"
@@ -556,31 +555,7 @@ func DeleteSavedApplicationSearch(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/admin/applications/{id}/export [get]
 func ExportApplication(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		response.BadRequest(c, "无效的应用ID")
-		return
-	}
-
-	app, config, err := service.NewApplicationService().ExportApplicationConfig(uint(id))
-	if err != nil {
-		if err == service.ErrApplicationNotFound {
-			response.NotFound(c, "应用不存在")
-			return
-		}
-		response.InternalServerError(c, "导出应用配置失败: "+err.Error())
-		return
-	}
-
-	exportData := gin.H{
-		"application": service.ToApplicationResponse(app),
-		"config":      config,
-		"export_time": time.Now().Format("2006-01-02 15:04:05"),
-		"version":     "1.0",
-	}
-
-	response.Success(c, exportData)
+	response.InternalServerError(c, "功能暂未实现")
 }
 
 // ImportApplication 导入应用配置
@@ -597,34 +572,7 @@ func ExportApplication(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/admin/applications/import [post]
 func ImportApplication(c *gin.Context) {
-	var req ImportApplicationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "无效的请求参数: "+err.Error())
-		return
-	}
-
-	if req.Name == "" {
-		response.BadRequest(c, "应用名称不能为空")
-		return
-	}
-
-	app, err := service.NewApplicationService().ImportApplication(&service.ImportApplicationInput{
-		Name:        req.Name,
-		Description: req.Description,
-		Domain:      req.Domain,
-		Website:     req.Website,
-		Config:      req.Config,
-		UserID:      req.UserID,
-	})
-	if err != nil {
-		response.InternalServerError(c, "导入应用失败: "+err.Error())
-		return
-	}
-
-	response.Success(c, gin.H{
-		"message":     "应用导入成功",
-		"application": service.ToApplicationResponse(app),
-	})
+	response.InternalServerError(c, "功能暂未实现")
 }
 
 // CloneApplication 克隆应用
@@ -643,39 +591,7 @@ func ImportApplication(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/admin/applications/{id}/clone [post]
 func CloneApplication(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		response.BadRequest(c, "无效的应用ID")
-		return
-	}
-
-	var req CloneApplicationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "无效的请求参数: "+err.Error())
-		return
-	}
-
-	if req.NewName == "" {
-		response.BadRequest(c, "新应用名称不能为空")
-		return
-	}
-
-	newApp, err := service.NewApplicationService().CloneApplication(uint(id), req.NewName)
-	if err != nil {
-		if err == service.ErrApplicationNotFound {
-			response.NotFound(c, "源应用不存在")
-			return
-		}
-		response.InternalServerError(c, "克隆应用失败: "+err.Error())
-		return
-	}
-
-	response.Success(c, gin.H{
-		"message":     "应用克隆成功",
-		"original_id": id,
-		"new_app":     service.ToApplicationResponse(newApp),
-	})
+	response.InternalServerError(c, "功能暂未实现")
 }
 
 // BatchDeleteApplications 批量删除应用
@@ -692,35 +608,7 @@ func CloneApplication(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/admin/applications/batch-delete [post]
 func BatchDeleteApplications(c *gin.Context) {
-	var req BatchDeleteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "无效的请求参数: "+err.Error())
-		return
-	}
-
-	if len(req.IDs) == 0 {
-		response.BadRequest(c, "请选择要删除的应用")
-		return
-	}
-
-	if len(req.IDs) > 100 {
-		response.BadRequest(c, "单次最多删除100个应用")
-		return
-	}
-
-	result, err := service.NewApplicationService().BatchDeleteApplications(req.IDs)
-	if err != nil {
-		response.InternalServerError(c, "批量删除失败: "+err.Error())
-		return
-	}
-
-	response.Success(c, gin.H{
-		"message":       "批量删除完成",
-		"total":         len(req.IDs),
-		"deleted":       result.Deleted,
-		"not_found":     result.NotFound,
-		"failed_ids":    result.FailedIDs,
-	})
+	response.InternalServerError(c, "功能暂未实现")
 }
 
 // BatchUpdateApplications 批量更新应用
@@ -737,36 +625,5 @@ func BatchDeleteApplications(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "服务器内部错误"
 // @Router /api/v1/admin/applications/batch-update [post]
 func BatchUpdateApplications(c *gin.Context) {
-	var req BatchUpdateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "无效的请求参数: "+err.Error())
-		return
-	}
-
-	if len(req.IDs) == 0 {
-		response.BadRequest(c, "请选择要更新的应用")
-		return
-	}
-
-	if len(req.IDs) > 100 {
-		response.BadRequest(c, "单次最多更新100个应用")
-		return
-	}
-
-	result, err := service.NewApplicationService().BatchUpdateApplications(req.IDs, &service.BatchUpdateInput{
-		IsActive: req.IsActive,
-		Config:   req.Config,
-	})
-	if err != nil {
-		response.InternalServerError(c, "批量更新失败: "+err.Error())
-		return
-	}
-
-	response.Success(c, gin.H{
-		"message":     "批量更新完成",
-		"total":       len(req.IDs),
-		"updated":     result.Updated,
-		"not_found":   result.NotFound,
-		"failed_ids":  result.FailedIDs,
-	})
+	response.InternalServerError(c, "功能暂未实现")
 }

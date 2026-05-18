@@ -1,3 +1,5 @@
+// Package handler 提供HTTP请求处理程序
+// 该包包含所有API端点的处理函数,负责接收HTTP请求、调用服务层并返回响应
 package handler
 
 import (

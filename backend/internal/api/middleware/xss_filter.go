@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"html"
 	"net/url"
 	"regexp"
@@ -32,7 +33,7 @@ var sqlInjectionPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)'\s*(OR|AND)\s+'`),
 	regexp.MustCompile(`(?i)(union|select).*(from|where)`),
 	regexp.MustCompile(`(?i)(concat|char|ascii|hex|unhex)\s*\(`),
-	regexp.MustCompile(`(?i)(sleep|benchmark|waitfor)\s*(`),
+	regexp.MustCompile(`(?i)(sleep|benchmark|waitfor)\s*\(`),
 	regexp.MustCompile(`(?i)(load_file|into\s+outfile|into\s+dumpfile)`),
 }
 
@@ -80,7 +81,7 @@ func XSSFilterMiddleware(config ...XSSConfig) gin.HandlerFunc {
 			}
 		}
 
-		c.SetQuery("xss_filtered", "true")
+		c.Request.URL.RawQuery = "xss_filtered=true"
 		processQueryParams(c, cfg)
 		processHeaders(c, cfg)
 
@@ -170,12 +171,12 @@ func readBody(c *gin.Context) ([]byte, error) {
 	if c.Request.Body == nil {
 		return nil, nil
 	}
-	buf := new(strings.Builder)
+	buf := new(bytes.Buffer)
 	_, err := buf.ReadFrom(c.Request.Body)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(buf.String()), nil
+	return buf.Bytes(), nil
 }
 
 func newBodyReader(content string) *bodyReaderCloser {
