@@ -1872,7 +1872,8 @@ func (g *ImageGenerator) drawEnhancedNoiseTexture(img *image.RGBA) {
 
 			combinedNoise := noise*0.7 + highFreqNoise*0.3
 
-			adjustment := combinedNoise*70 - 35
+			// Increase adjustment range for more variance
+			adjustment := combinedNoise*150 - 75
 
 			r := g.clampUint8(int(baseR) + int(adjustment))
 			gc := g.clampUint8(int(baseG) + int(adjustment))

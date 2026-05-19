@@ -13,8 +13,9 @@ import (
 )
 
 type ARGeneratorService struct {
-	sessionCache *cache.SessionCache
-	captchaRepo  *db.CaptchaRepository
+	sessionCache   *cache.SessionCache
+	captchaRepo    *db.CaptchaRepository
+	inMemoryStore  map[string]*ARSession
 }
 
 type ARCaptchaRequest struct {
@@ -136,8 +137,9 @@ type ARTargetResult struct {
 
 func NewARGeneratorService(sessionCache *cache.SessionCache, captchaRepo *db.CaptchaRepository) *ARGeneratorService {
 	return &ARGeneratorService{
-		sessionCache: sessionCache,
-		captchaRepo:  captchaRepo,
+		sessionCache:  sessionCache,
+		captchaRepo:   captchaRepo,
+		inMemoryStore: make(map[string]*ARSession),
 	}
 }
 
@@ -180,6 +182,9 @@ func (s *ARGeneratorService) Generate(ctx context.Context, req *ARCaptchaRequest
 		UserAgent:     req.UserAgent,
 		Fingerprint:   req.Fingerprint,
 	}
+
+	// Always save to in-memory store first
+	s.inMemoryStore[sessionID] = session
 
 	if err := s.saveSession(ctx, session); err != nil {
 		return nil, fmt.Errorf("failed to save session: %w", err)
@@ -254,6 +259,14 @@ func (s *ARGeneratorService) Verify(ctx context.Context, req *ARVerifyRequest) (
 }
 
 func (s *ARGeneratorService) GetSession(ctx context.Context, sessionID string) (*ARSession, error) {
+	// First check in-memory store
+	if session, ok := s.inMemoryStore[sessionID]; ok {
+		if time.Now().Before(session.ExpiredAt) {
+			return session, nil
+		}
+		delete(s.inMemoryStore, sessionID)
+	}
+
 	if s.sessionCache != nil {
 		session, err := s.getCachedSession(ctx, sessionID)
 		if err == nil && session != nil {
@@ -272,6 +285,9 @@ func (s *ARGeneratorService) GetSession(ctx context.Context, sessionID string) (
 }
 
 func (s *ARGeneratorService) saveSession(ctx context.Context, session *ARSession) error {
+	// Always save to in-memory store first
+	s.inMemoryStore[session.SessionID] = session
+
 	if s.sessionCache != nil {
 		data, err := json.Marshal(session)
 		if err != nil {
@@ -501,6 +517,7 @@ func (s *ARGeneratorService) evaluateInteraction(req *ARVerifyRequest, session *
 
 			distance := calculateDistance3D(req.ObjectPos, obj.TargetPosition)
 			tolerance := 0.2
+			weight := 0.4
 
 			var objScore float64
 			if distance <= tolerance {
@@ -511,17 +528,25 @@ func (s *ARGeneratorService) evaluateInteraction(req *ARVerifyRequest, session *
 				objScore = 0.2
 			}
 
+			foundConstraint := false
 			for _, constraint := range session.SceneConfig.Constraints {
 				if constraint.TargetID == obj.ID && constraint.Type == "distance" {
 					tolerance = constraint.Tolerance
+					weight = constraint.Weight
 					if distance <= tolerance {
 						objScore = 1.0
 					} else {
 						objScore = math.Max(0, 1.0-distance/tolerance)
 					}
-					totalScore += objScore * constraint.Weight
-					weightSum += constraint.Weight
+					totalScore += objScore * weight
+					weightSum += weight
+					foundConstraint = true
 				}
+			}
+
+			if !foundConstraint {
+				totalScore += objScore * weight
+				weightSum += weight
 			}
 		}
 	}

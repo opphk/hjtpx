@@ -136,7 +136,7 @@ func (e *LSTMFeatureExtractor) calculateSmoothness(traceData *model.TraceData) f
 func (e *LSTMFeatureExtractor) calculateNaturalness(traceData *model.TraceData) float64 {
 	humanSpeedRange := 0.1
 	avgSpeed := traceData.AvgSpeed
-	if avgSpeed < humanSpeedRange*0.5 || avgSpeed > humanSpeedRange*3 {
+	if avgSpeed <= humanSpeedRange*0.5 || avgSpeed >= humanSpeedRange*3 {
 		return 0.3
 	}
 	return 0.8
@@ -227,6 +227,11 @@ func (g *EnhancedGPTCaptchaGenerator) GenerateCaptcha(ctx context.Context, scene
 
 	if !g.initialized {
 		return nil, fmt.Errorf("generator not initialized")
+	}
+
+	// Validate and fallback language
+	if _, ok := g.languageModels[language]; !ok {
+		language = "en-US"
 	}
 
 	captchaID := fmt.Sprintf("gpt_%d_%d", time.Now().UnixNano(), rand.Intn(10000))
@@ -361,20 +366,20 @@ func (g *EnhancedGPTCaptchaGenerator) getQuestionTemplates(theme CaptchaThemeTyp
 func (g *EnhancedGPTCaptchaGenerator) generateOptions(theme CaptchaThemeType, difficulty int, language string) []string {
 	baseOptions := map[CaptchaThemeType]map[string][]string{
 		CaptchaThemeNature: {
-			"zh-CN":   {"🍃 树叶", "🌸 花朵", "🌲 树木", "🌊 水流", "🏔️ 山峰"},
-			"en-US":   {"🍃 Leaf", "🌸 Flower", "🌲 Tree", "🌊 Water", "🏔️ Mountain"},
+			"zh-CN":   {"🍃 树叶", "🌸 花朵", "🌲 树木", "🌊 水流", "🏔️ 山峰", "🌺 花卉", "🦋 蝴蝶", "🌻 向日葵"},
+			"en-US":   {"🍃 Leaf", "🌸 Flower", "🌲 Tree", "🌊 Water", "🏔️ Mountain", "🌺 Blossom", "🦋 Butterfly", "🌻 Sunflower"},
 		},
 		CaptchaThemeCity: {
-			"zh-CN":   {"🏢 大楼", "🚗 汽车", "🚦 交通灯", "🏛️ 建筑", "🚌 公交"},
-			"en-US":   {"🏢 Building", "🚗 Car", "🚦 Traffic Light", "🏛️ Monument", "🚌 Bus"},
+			"zh-CN":   {"🏢 大楼", "🚗 汽车", "🚦 交通灯", "🏛️ 建筑", "🚌 公交", "🏪 商店", "🏥 医院", "🏫 学校"},
+			"en-US":   {"🏢 Building", "🚗 Car", "🚦 Traffic Light", "🏛️ Monument", "🚌 Bus", "🏪 Shop", "🏥 Hospital", "🏫 School"},
 		},
 		CaptchaThemeAbstract: {
-			"zh-CN":   {"⚪ 圆形", "🔷 方形", "🔺 三角形", "📦 立方体", "🎯 目标"},
-			"en-US":   {"⚪ Circle", "🔷 Square", "🔺 Triangle", "📦 Cube", "🎯 Target"},
+			"zh-CN":   {"⚪ 圆形", "🔷 方形", "🔺 三角形", "📦 立方体", "🎯 目标", "💎 菱形", "⭐ 星形", "🔶 六边形"},
+			"en-US":   {"⚪ Circle", "🔷 Square", "🔺 Triangle", "📦 Cube", "🎯 Target", "💎 Diamond", "⭐ Star", "🔶 Hexagon"},
 		},
 		CaptchaThemeGame: {
-			"zh-CN":   {"⭐ 星星", "💎 宝石", "🎮 游戏", "🎭 面具", "🎪 马戏团"},
-			"en-US":   {"⭐ Star", "💎 Gem", "🎮 Game", "🎭 Mask", "🎪 Circus"},
+			"zh-CN":   {"⭐ 星星", "💎 宝石", "🎮 游戏", "🎭 面具", "🎪 马戏团", "🎲 骰子", "🎨 艺术", "🎁 礼物"},
+			"en-US":   {"⭐ Star", "💎 Gem", "🎮 Game", "🎭 Mask", "🎪 Circus", "🎲 Dice", "🎨 Art", "🎁 Gift"},
 		},
 	}
 
@@ -387,10 +392,12 @@ func (g *EnhancedGPTCaptchaGenerator) generateOptions(theme CaptchaThemeType, di
 	result := make([]string, 0, numOptions)
 	used := make(map[int]bool)
 
-	for len(result) < numOptions && len(result) < len(options) {
+	for len(result) < numOptions {
 		idx := g.rng.Intn(len(options))
-		if !used[idx] {
-			used[idx] = true
+		if !used[idx] || len(result) >= len(options) {
+			if len(result) < len(options) {
+				used[idx] = true
+			}
 			result = append(result, options[idx])
 		}
 	}
@@ -635,13 +642,13 @@ func (a *EnhancedRiskAssessor) calculateAnomalyScore(features []float64, traceDa
 
 	if traceData != nil {
 		if traceData.SpeedVariance > 0.5 {
-			anomalyScore += 0.3
+			anomalyScore += 0.2
 		}
 		if traceData.DirectionChanges < 2 {
 			anomalyScore += 0.2
 		}
 		if traceData.PointCount < 5 {
-			anomalyScore += 0.3
+			anomalyScore += 0.2
 		}
 		count = 3
 	}
@@ -652,13 +659,13 @@ func (a *EnhancedRiskAssessor) calculateAnomalyScore(features []float64, traceDa
 			zScore = (f - a.featureMeans[i]) / a.featureStds[i]
 		}
 		if math.Abs(zScore) > 2 {
-			anomalyScore += 0.1 * a.featureImportance[i]
+			anomalyScore += 0.05 * a.featureImportance[i]
 			count++
 		}
 	}
 
 	if count > 0 {
-		return math.Min(1.0, anomalyScore)
+		return math.Min(0.8, anomalyScore)
 	}
 
 	return 0.0

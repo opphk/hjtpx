@@ -18,6 +18,7 @@ type ComboService struct {
 	captchaRepo    *db.CaptchaRepository
 	videoGenerator *VideoGeneratorService
 	arGenerator    *ARGeneratorService
+	inMemoryStore  map[string]*ComboCaptchaConfig
 }
 
 type ComboCaptchaConfig struct {
@@ -132,6 +133,7 @@ func NewComboService(
 		captchaRepo:    captchaRepo,
 		videoGenerator: videoGenerator,
 		arGenerator:    arGenerator,
+		inMemoryStore:  make(map[string]*ComboCaptchaConfig),
 	}
 }
 
@@ -207,6 +209,40 @@ func (s *ComboService) generateIntelligentSteps(ctx context.Context, req *Create
 
 	selectedTypes := selector.SelectTypes(maxSteps, difficulty, req.RiskScore)
 	filteredTypes := s.filterAvailableTypes(selectedTypes, availableTypes)
+
+	// Ensure we have at least maxSteps types
+	for len(filteredTypes) < maxSteps {
+		for _, t := range availableTypes {
+			if len(filteredTypes) >= maxSteps {
+				break
+			}
+			// Check if we already have this type
+			hasType := false
+			for _, ft := range filteredTypes {
+				if ft == t {
+					hasType = true
+					break
+				}
+			}
+			if !hasType {
+				filteredTypes = append(filteredTypes, t)
+			}
+		}
+		// If we've exhausted all available types and still need more, reuse types
+		if len(filteredTypes) < maxSteps && len(availableTypes) > 0 {
+			for _, t := range availableTypes {
+				if len(filteredTypes) >= maxSteps {
+					break
+				}
+				filteredTypes = append(filteredTypes, t)
+			}
+		}
+	}
+
+	// Limit to maxSteps
+	if len(filteredTypes) > maxSteps {
+		filteredTypes = filteredTypes[:maxSteps]
+	}
 
 	steps := make([]*ComboStep, len(filteredTypes))
 	for i, captchaType := range filteredTypes {
@@ -579,6 +615,11 @@ func (s *ComboService) Verify(ctx context.Context, req *VerifyComboRequest) (*Ve
 	config.TotalScore = totalScore
 
 	canRetry := len(retrySteps) > 0
+	// For 'all' strategy, if there are failed steps, don't allow retry
+	if config.Strategy == ComboStrategyAll && failedCount > 0 {
+		canRetry = false
+		retrySteps = nil
+	}
 
 	success := s.evaluateSuccess(config, passedCount, failedCount)
 
@@ -652,6 +693,14 @@ func (s *ComboService) generateResultMessage(config *ComboCaptchaConfig, success
 }
 
 func (s *ComboService) GetConfig(ctx context.Context, sessionID string) (*ComboCaptchaConfig, error) {
+	// First check in-memory store
+	if config, ok := s.inMemoryStore[sessionID]; ok {
+		if time.Now().Before(config.ExpiredAt) {
+			return config, nil
+		}
+		delete(s.inMemoryStore, sessionID)
+	}
+
 	if s.sessionCache != nil {
 		data, err := s.sessionCache.GetRaw(ctx, sessionID)
 		if err == nil && data != "" {
@@ -666,6 +715,9 @@ func (s *ComboService) GetConfig(ctx context.Context, sessionID string) (*ComboC
 }
 
 func (s *ComboService) saveConfig(ctx context.Context, config *ComboCaptchaConfig) error {
+	// Always save to in-memory store first
+	s.inMemoryStore[config.SessionID] = config
+
 	if s.sessionCache != nil {
 		data, err := json.Marshal(config)
 		if err != nil {
