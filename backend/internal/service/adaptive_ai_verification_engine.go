@@ -22,13 +22,13 @@ type AdaptiveVerificationEngine struct {
 
 type RealtimeRiskAssessor struct {
 	mu          sync.RWMutex
-	thresholds  RiskThresholds
+	thresholds  AdaptiveRiskThresholds
 	featureWeights map[string]float64
 	historySize int
 	history     []RiskSnapshot
 }
 
-type RiskThresholds struct {
+type AdaptiveRiskThresholds struct {
 	Critical float64
 	High     float64
 	Medium   float64
@@ -68,13 +68,13 @@ type SuccessCriteria struct {
 	RequiredPattern bool  `json:"required_pattern"`
 }
 
-type PersonalizationEngine struct {
+type AdaptivePersonalizationEngine struct {
 	mu          sync.RWMutex
-	userProfiles map[string]*UserProfile
-	modelCache   map[string]*PersonalizationModel
+	userProfiles map[string]*AdaptiveUserProfile
+	modelCache   map[string]*AdaptivePersonalizationModel
 }
 
-type UserProfile struct {
+type AdaptiveUserProfile struct {
 	UserID            string                 `json:"user_id"`
 	InteractionStyle   string                 `json:"interaction_style"`
 	PreferredCaptcha   string                 `json:"preferred_captcha"`
@@ -87,7 +87,7 @@ type UserProfile struct {
 	BehavioralFeatures map[string]float64    `json:"behavioral_features"`
 }
 
-type PersonalizationModel struct {
+type AdaptivePersonalizationModel struct {
 	UserID        string             `json:"user_id"`
 	Features      []float64          `json:"features"`
 	Preferences   map[string]float64 `json:"preferences"`
@@ -98,22 +98,22 @@ type PersonalizationModel struct {
 type SelfLearningEngine struct {
 	mu              sync.RWMutex
 	modelVersion    string
-	trainingData    []TrainingSample
+	trainingData    []FLLearningSample
 	modelParameters map[string]float64
-	feedbackBuffer  []FeedbackEntry
+	feedbackBuffer  []FLFeedbackEntry
 	updateInterval  time.Duration
 	lastUpdate      time.Time
 	learningRate    float64
 }
 
-type TrainingSample struct {
+type FLLearningSample struct {
 	Features   []float64 `json:"features"`
 	Label     bool      `json:"label"`
 	Timestamp time.Time `json:"timestamp"`
 	Context   map[string]interface{} `json:"context"`
 }
 
-type FeedbackEntry struct {
+type FLFeedbackEntry struct {
 	SampleID   string                 `json:"sample_id"`
 	IsCorrect  bool                   `json:"is_correct"`
 	Confidence float64                `json:"confidence"`
@@ -192,7 +192,7 @@ func (e *AdaptiveVerificationEngine) Initialize(ctx context.Context) error {
 
 func NewRealtimeRiskAssessor() *RealtimeRiskAssessor {
 	return &RealtimeRiskAssessor{
-		thresholds: RiskThresholds{
+		thresholds: AdaptiveRiskThresholds{
 			Critical: 0.85,
 			High:     0.70,
 			Medium:   0.50,
@@ -1020,9 +1020,9 @@ func (e *PersonalizationEngine) updateModelCache(userID string, profile *UserPro
 func NewSelfLearningEngine() *SelfLearningEngine {
 	return &SelfLearningEngine{
 		modelVersion:    "v1.0",
-		trainingData:    make([]TrainingSample, 0),
+		trainingData:    make([]FLLearningSample, 0),
 		modelParameters: make(map[string]float64),
-		feedbackBuffer:  make([]FeedbackEntry, 0),
+		feedbackBuffer:  make([]FLFeedbackEntry, 0),
 		updateInterval:  1 * time.Hour,
 		learningRate:    0.01,
 	}
@@ -1047,7 +1047,7 @@ func (e *SelfLearningEngine) RecordSample(ctx context.Context, features []float6
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	
-	sample := TrainingSample{
+	sample := FLLearningSample{
 		Features:   features,
 		Label:      isHuman,
 		Timestamp:  time.Now(),
@@ -1067,7 +1067,7 @@ func (e *SelfLearningEngine) RecordFeedback(ctx context.Context, sampleID string
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	
-	entry := FeedbackEntry{
+	entry := FLFeedbackEntry{
 		SampleID:   sampleID,
 		IsCorrect:  isCorrect,
 		Confidence: confidence,
@@ -1135,7 +1135,7 @@ func (e *SelfLearningEngine) applyLearning() {
 		}
 	}
 	
-	e.feedbackBuffer = make([]FeedbackEntry, 0)
+	e.feedbackBuffer = make([]FLFeedbackEntry, 0)
 }
 
 func (e *SelfLearningEngine) calculateCurrentAccuracy() float64 {
@@ -1179,6 +1179,14 @@ func (e *SelfLearningEngine) detectNewPatterns() int {
 		return 0
 	}
 	
+	recentSamples := e.trainingData[len(e.trainingData)-100:]return 0.0
+}
+
+func (e *SelfLearningEngine) detectNewPatterns() int {
+	if len(e.trainingData) < 100 {
+		return 0
+	}
+	
 	recentSamples := e.trainingData[len(e.trainingData)-100:]
 	
 	var humanCount, botCount int
@@ -1203,8 +1211,7 @@ func (e *SelfLearningEngine) detectNewPatterns() int {
 	return patterns
 }
 
-func (e *AdaptiveVerificationEngine) PerformAdaptiveAssessment(ctx context.Context, riskCtx *model.RiskContext, traceData *model.TraceData, userID string) (map[string]interface{}, error) {
-	if !e.initialized {
+func (e *AdaptiveVerificationEngine) PerformAdaptiveAssessment(ctx context.Context, riskCtx *model.RiskContext, traceData *model.TraceData, userID string) (map[string]interface{}, error) {	if !e.initialized {
 		return nil, fmt.Errorf("engine not initialized")
 	}
 	

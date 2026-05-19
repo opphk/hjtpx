@@ -1,0 +1,33 @@
+{
+  "name": "@hjtpx/sdk",
+  "version": "18.0.0",
+  "description": "Unified SDK for HJTPX Platform v18.0",
+  "main": "unified-sdk.js",
+  "types": "types.d.ts",
+  "bin": {
+    "hjtpx-integrate": "./bin/integrate.js"
+  },
+  "scripts": {
+    "test": "node test/unified-sdk.test.js",
+    "integrate": "node bin/integrate.js",
+    "build": "echo 'No build step required'"
+  },
+  "keywords": [
+    "captcha",
+    "verification",
+    "security",
+    "fingerprint",
+    "risk-management"
+  ],
+  "author": "HJTPX Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hjtpx/hjtpx-sdk"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "peerDependencies": {},
+  "optionalDependencies": {}
+}
