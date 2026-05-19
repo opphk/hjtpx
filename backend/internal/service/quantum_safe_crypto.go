@@ -604,11 +604,19 @@ func (h *HybridCryptoEngine) Initialize(ctx context.Context) error {
 	return nil
 }
 
+// Encrypt 混合加密：使用量子安全密钥封装 + 传统对称加密
 func (h *HybridCryptoEngine) Encrypt(plaintext []byte, quantumKey []byte, scheme string) (*HybridEncryptionResult, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	block, err := aes.NewCipher(quantumKey[:32])
+	// 生成对称密钥
+	symmetricKey := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, symmetricKey); err != nil {
+		return nil, err
+	}
+
+	// 使用 AES-GCM 加密明文
+	block, err := aes.NewCipher(symmetricKey)
 	if err != nil {
 		return nil, err
 	}
@@ -623,11 +631,14 @@ func (h *HybridCryptoEngine) Encrypt(plaintext []byte, quantumKey []byte, scheme
 		return nil, err
 	}
 
-	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
+
+	// 使用量子密钥加密对称密钥（模拟）
+	encryptedKey := h.encryptSymmetricKey(symmetricKey, quantumKey)
 
 	return &HybridEncryptionResult{
 		Ciphertext:       ciphertext,
-		EncryptedKey:     nil,
+		EncryptedKey:     encryptedKey,
 		Algorithm:        "aes-256-gcm",
 		HybridScheme:     scheme,
 		QuantumResistant: true,
@@ -635,11 +646,16 @@ func (h *HybridCryptoEngine) Encrypt(plaintext []byte, quantumKey []byte, scheme
 	}, nil
 }
 
-func (h *HybridCryptoEngine) Decrypt(ciphertext []byte, quantumKey []byte, iv []byte) (*HybridDecryptionResult, error) {
+// Decrypt 混合解密：解密对称密钥 + 解密明文
+func (h *HybridCryptoEngine) Decrypt(ciphertext []byte, encryptedKey []byte, quantumKey []byte, iv []byte) (*HybridDecryptionResult, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	block, err := aes.NewCipher(quantumKey[:32])
+	// 解密对称密钥
+	symmetricKey := h.decryptSymmetricKey(encryptedKey, quantumKey)
+
+	// 使用对称密钥解密密文
+	block, err := aes.NewCipher(symmetricKey)
 	if err != nil {
 		return nil, err
 	}
@@ -649,14 +665,7 @@ func (h *HybridCryptoEngine) Decrypt(ciphertext []byte, quantumKey []byte, iv []
 		return nil, err
 	}
 
-	if len(iv) > len(ciphertext) {
-		return nil, fmt.Errorf("invalid nonce size")
-	}
-
-	nonce := iv
-	actualCiphertext := ciphertext[len(nonce):]
-
-	plaintext, err := gcm.Open(nil, nonce, actualCiphertext, nil)
+	plaintext, err := gcm.Open(nil, iv, ciphertext, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -664,7 +673,83 @@ func (h *HybridCryptoEngine) Decrypt(ciphertext []byte, quantumKey []byte, iv []
 	return &HybridDecryptionResult{
 		Plaintext:    plaintext,
 		Algorithm:    "aes-256-gcm",
-		DecryptedKey: quantumKey[:32],
+		DecryptedKey: symmetricKey,
+	}, nil
+}
+
+// encryptSymmetricKey 使用量子密钥加密对称密钥（模拟）
+func (h *HybridCryptoEngine) encryptSymmetricKey(symmetricKey, quantumKey []byte) []byte {
+	// 简单的 XOR 加密（模拟）
+	result := make([]byte, len(symmetricKey))
+	for i := range symmetricKey {
+		result[i] = symmetricKey[i] ^ quantumKey[i%len(quantumKey)]
+	}
+	return result
+}
+
+// decryptSymmetricKey 使用量子密钥解密对称密钥（模拟）
+func (h *HybridCryptoEngine) decryptSymmetricKey(encryptedKey, quantumKey []byte) []byte {
+	// 简单的 XOR 解密（模拟）
+	result := make([]byte, len(encryptedKey))
+	for i := range encryptedKey {
+		result[i] = encryptedKey[i] ^ quantumKey[i%len(quantumKey)]
+	}
+	return result
+}
+
+// HybridEncryptWithRSA 使用 RSA + Kyber 混合加密
+func (h *HybridCryptoEngine) HybridEncryptWithRSA(plaintext []byte, rsaPub *rsa.PublicKey, kyberPub *KyberPublicKey) (*HybridEncryptionResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// 生成会话密钥
+	sessionKey := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, sessionKey); err != nil {
+		return nil, err
+	}
+
+	// 用 RSA 加密会话密钥
+	encryptedKeyRSA, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaPub, sessionKey, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// 用 Kyber 加密会话密钥（模拟）
+	kyber := NewKyberKeyEncapsulation()
+	_, sharedSecret, err := kyber.Encapsulate(kyberPub)
+	if err != nil {
+		return nil, err
+	}
+	encryptedKeyKyber := h.encryptSymmetricKey(sessionKey, sharedSecret.Key)
+
+	// 组合加密密钥
+	encryptedKey := make([]byte, 0, len(encryptedKeyRSA)+len(encryptedKeyKyber)+4)
+	encryptedKey = append(encryptedKey, byte(len(encryptedKeyRSA)>>24), byte(len(encryptedKeyRSA)>>16), byte(len(encryptedKeyRSA)>>8), byte(len(encryptedKeyRSA)))
+	encryptedKey = append(encryptedKey, encryptedKeyRSA...)
+	encryptedKey = append(encryptedKey, encryptedKeyKyber...)
+
+	// 加密明文
+	block, err := aes.NewCipher(sessionKey)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
+
+	return &HybridEncryptionResult{
+		Ciphertext:       ciphertext,
+		EncryptedKey:     encryptedKey,
+		Algorithm:        "hybrid-rsa-kyber-aes-256-gcm",
+		HybridScheme:     "rsa-kyber",
+		QuantumResistant: true,
+		IV:               nonce,
 	}, nil
 }
 
@@ -809,6 +894,211 @@ func (q *QuantumKeyDistribution) GetChannel(channelID string) (*QKDChannel, erro
 	}
 
 	return channel, nil
+}
+
+// Eavesdrop 模拟窃听攻击
+func (q *QuantumKeyDistribution) Eavesdrop(channelID string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	channel, exists := q.channels[channelID]
+	if !exists {
+		return fmt.Errorf("channel not found")
+	}
+
+	// 模拟窃听：随机翻转一些测量结果
+	for i := range channel.MeasuredBits {
+		if randInt(100) < 15 { // 15% 的窃听概率
+			if channel.MeasuredBits[i] >= 0 {
+				channel.MeasuredBits[i] ^= 1
+			}
+		}
+	}
+
+	return nil
+}
+
+// GenerateKeyWithBB84 使用 BB84 协议生成密钥（增强版）
+func (q *QuantumKeyDistribution) GenerateKeyWithBB84(nodeAID, nodeBID string, photonCount int) (*QKDBB84Result, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	start := time.Now()
+
+	// 创建或获取通道
+	channel, err := q.SetupChannel(nodeAID, nodeBID, photonCount)
+	if err != nil {
+		return nil, err
+	}
+
+	// Alice 发送量子比特
+	aliceBases := make([]string, photonCount)
+	aliceBits := make([]int, photonCount)
+	for i := 0; i < photonCount; i++ {
+		aliceBases[i] = []string{"rectilinear", "diagonal"}[randInt(2)]
+		aliceBits[i] = randInt(2)
+	}
+
+	// Bob 测量量子比特
+	bobBases := make([]string, photonCount)
+	bobBits := make([]int, photonCount)
+	for i := 0; i < photonCount; i++ {
+		bobBases[i] = []string{"rectilinear", "diagonal"}[randInt(2)]
+		if bobBases[i] == aliceBases[i] {
+			bobBits[i] = aliceBits[i]
+		} else {
+			bobBits[i] = randInt(2)
+		}
+	}
+
+	// 基矢比对（经典通信）
+	siftedKey := make([]int, 0)
+	for i := 0; i < photonCount; i++ {
+		if aliceBases[i] == bobBases[i] {
+			siftedKey = append(siftedKey, aliceBits[i])
+		}
+	}
+
+	// 错误检测：随机选择部分位进行比较
+	sampleIndices := make([]int, 0)
+	sampleSize := len(siftedKey) / 4
+	for i := 0; i < sampleSize; i++ {
+		idx := randInt(len(siftedKey))
+		sampleIndices = append(sampleIndices, idx)
+	}
+
+	// 计算错误率
+	errorCount := 0
+	for _, idx := range sampleIndices {
+		if siftedKey[idx] != bobBits[idx] {
+			errorCount++
+		}
+	}
+
+	errorRate := float64(errorCount) / float64(len(sampleIndices))
+
+	// 安全等级评估
+	securityLevel := 1.0 - errorRate*2 // 简单模型
+
+	// 隐私放大
+	finalKey := make([]byte, (len(siftedKey)-len(sampleIndices))/8)
+	if len(finalKey) > 0 {
+		keyIndex := 0
+		for i, bit := range siftedKey {
+			isSample := false
+			for _, idx := range sampleIndices {
+				if i == idx {
+					isSample = true
+					break
+				}
+			}
+			if !isSample && keyIndex < len(finalKey)*8 {
+				if bit == 1 {
+					finalKey[keyIndex/8] |= 1 << (keyIndex % 8)
+				}
+				keyIndex++
+			}
+		}
+	}
+
+	// 更新通道状态
+	channel.Status = "established"
+	channel.ErrorRate = errorRate
+
+	// 更新节点密钥
+	if nodeA, ok := q.nodes[nodeAID]; ok {
+		nodeA.KeyBits = siftedKey
+		nodeA.FinalKey = finalKey
+		nodeA.PhotonsSent = photonCount
+	}
+	if nodeB, ok := q.nodes[nodeBID]; ok {
+		nodeB.KeyBits = siftedKey
+		nodeB.FinalKey = finalKey
+		nodeB.PhotonsReceived = photonCount
+	}
+
+	return &QKDBB84Result{
+		RawKey:         aliceBits,
+		SiftedKey:      siftedKey,
+		FinalKey:       finalKey,
+		ErrorRate:      errorRate,
+		SecurityLevel:  securityLevel,
+		ProcessingTime: time.Since(start),
+	}, nil
+}
+
+// QKDKeyRate 计算密钥生成率
+func (q *QuantumKeyDistribution) QKDKeyRate(channelID string) (float64, error) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	channel, exists := q.channels[channelID]
+	if !exists {
+		return 0, fmt.Errorf("channel not found")
+	}
+
+	// 密钥生成率：有效光子数 / 总光子数
+	validPhotons := 0
+	for _, bit := range channel.MeasuredBits {
+		if bit >= 0 {
+			validPhotons++
+		}
+	}
+
+	rate := float64(validPhotons) / float64(len(channel.MeasuredBits))
+	return rate, nil
+}
+
+// QKDChannelHealth 评估 QKD 通道健康状态
+func (q *QuantumKeyDistribution) QKDChannelHealth(channelID string) (map[string]interface{}, error) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	channel, exists := q.channels[channelID]
+	if !exists {
+		return nil, fmt.Errorf("channel not found")
+	}
+
+	health := make(map[string]interface{})
+	health["status"] = channel.Status
+	health["error_rate"] = channel.ErrorRate
+	health["quantum_ready"] = q.quantumReady
+	
+	// 健康评分
+	score := 1.0
+	if channel.ErrorRate > 0.11 {
+		score *= 0.5
+	}
+	if channel.Status != "established" {
+		score *= 0.7
+	}
+	health["health_score"] = score
+
+	return health, nil
+}
+
+// ListAllChannels 列出所有 QKD 通道
+func (q *QuantumKeyDistribution) ListAllChannels() []*QKDChannel {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	channels := make([]*QKDChannel, 0, len(q.channels))
+	for _, channel := range q.channels {
+		channels = append(channels, channel)
+	}
+	return channels
+}
+
+// ListAllNodes 列出所有 QKD 节点
+func (q *QuantumKeyDistribution) ListAllNodes() []*QKDNode {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	nodes := make([]*QKDNode, 0, len(q.nodes))
+	for _, node := range q.nodes {
+		nodes = append(nodes, node)
+	}
+	return nodes
 }
 
 func (s *QuantumSafeCryptoSystem) EncryptQuantumSafe(ctx context.Context, plaintext string, scheme string) (*QuantumEncryptionResponse, error) {
